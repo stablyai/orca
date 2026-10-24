@@ -43,7 +43,6 @@ import type {
 } from '../../shared/worktree/types'
 
 export type WorktreeApi = {
-  list: (args: { repoId: string }) => Promise<Worktree[]>
   /** Retired names prevent path reuse; fully spent tiers are compacted into a watermark. */
   listRetiredNames: (args: { repoId: string }) => Promise<RetiredNameRegistry>
   listDetected: {
@@ -60,7 +59,6 @@ export type WorktreeApi = {
     args: ForgetRemovedWorktreesForExecutionHostArgs
   ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
   cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
-  listAll: () => Promise<Worktree[]>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */

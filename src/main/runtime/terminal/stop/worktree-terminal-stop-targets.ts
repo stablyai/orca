@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-terminal-sleep'
 import { setsEqual } from '../../runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
@@ -5,6 +6,13 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
+import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+
+// Why: a newer overlapping inventory (e.g. the session republish the exit itself triggers) voids
+// this one; retry within one list budget instead of reporting a confirmed stop as unverifiable.
+const POST_STOP_LIVENESS_RETRY_MS = PTY_CONTROLLER_LIST_TIMEOUT_MS
+const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -71,7 +79,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       }
       stoppedPtyIds.push(ptyId)
     }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const postStopLiveness = await this.refreshPostStopPtyLiveness(resolvedWorktrees)
     if (!postStopLiveness) {
       return {
         stopped: stoppedPtyIds.length,
@@ -101,6 +109,23 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       ...(targetOnly && remainingLivePtyIds.size > 0
         ? { remainingLivePtyIds: [...remainingLivePtyIds].sort() }
         : {})
+    }
+  }
+
+  private async refreshPostStopPtyLiveness(
+    resolvedWorktrees: ResolvedWorktree[]
+  ): Promise<Set<string> | null> {
+    const deadline = Date.now() + POST_STOP_LIVENESS_RETRY_MS
+    for (;;) {
+      const liveness = await this.refreshPtyWorktreeRecordsFromController(
+        resolvedWorktrees,
+        null,
+        deadline
+      )
+      if (liveness || Date.now() + POST_STOP_LIVENESS_RETRY_DELAY_MS >= deadline) {
+        return liveness
+      }
+      await delay(POST_STOP_LIVENESS_RETRY_DELAY_MS)
     }
   }
 

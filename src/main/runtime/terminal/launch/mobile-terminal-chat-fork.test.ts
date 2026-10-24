@@ -237,6 +237,12 @@ it('keeps preparation and runtime failures from starting a terminal', async () =
   const ensure = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')
   for (const [failure, expected] of [
     [
+      new Error(
+        'Could not confirm this conversation was saved. Try again after the agent responds.'
+      ),
+      { message: 'chat_fork_source_unavailable' }
+    ],
+    [
       new Error('This chat has no saved conversation to copy.'),
       { message: 'chat_fork_source_unavailable' }
     ],

@@ -35,8 +35,7 @@ describe('reportSecretProtectionGap', () => {
     reportSecretProtectionGap({ dataFile, log: (m) => void logged.push(m), force })
 
   it('reports a new gap once, then stays quiet on every later launch', () => {
-    // Why this is the point: the gap usually needs a keyring install to fix, so
-    // repeating it every start is nagging the user cannot act on.
+    // Repeat only on change: keyring remediation may not be immediately possible.
     installStore(WEAK)
     expect(report()).toBe(WEAK)
     expect(logged).toHaveLength(1)

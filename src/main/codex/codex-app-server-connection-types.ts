@@ -32,6 +32,9 @@ export type CodexAppServerConnection = {
   resumeReading?: () => void
   /** Resolves true only after the child emitted `exit` or `close`; false is unproven. */
   close: () => Promise<boolean>
+  /** The last close's separate root and workload observations. */
+  readonly closeResult?: ProviderProcessCloseResult | null
   /** The root exited, but the forced kill of its process tree could not prove the tree gone. */
   readonly processTreeUnproven?: boolean
 }
+import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'

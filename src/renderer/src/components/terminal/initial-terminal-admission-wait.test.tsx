@@ -27,6 +27,7 @@ vi.mock('@/store', () => ({
       // A switch-on chat open places the tab in the workspace's root group.
       ensureWorktreeRootGroup: () => 'group-1',
       createUnifiedTab: mocks.createUnifiedTab,
+      readLocalAgentInventory: () => ({ ids: null, state: 'pending' }),
       setActiveTabType: vi.fn()
     })
   })
@@ -59,7 +60,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 )
 
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import type { Tab } from '../../../../shared/tab-types'

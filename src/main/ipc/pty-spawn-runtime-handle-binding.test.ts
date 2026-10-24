@@ -170,7 +170,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1'
     })
 
-    // Why: #7587 — the runtime can only back a stalled mobile create if the spawn threads {tabId, leafId}.
+    // Mobile-create recovery needs tab/leaf identity at runtime registration (#7587).
     expect(runtime.registerPty).toHaveBeenCalledWith(
       expect.any(String),
       'wt-1',
@@ -309,7 +309,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1'
     })
 
-    // Why: legacy numeric pane ids (`pane:N`) aren't leaf ids, so the seam passes a clean `undefined` (no fabricated binding).
+    // Legacy pane:N IDs are not leaf identities; do not fabricate a binding.
     expect(runtime.registerPty).toHaveBeenCalledWith(
       expect.any(String),
       'wt-1',
@@ -441,8 +441,7 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    // Why: no worktreeId, so the reservation key only resolves after env assembly — the
-    // window where a concurrent winner's reservation appears mid-preflight.
+    // Without worktreeId, reservation identity arrives only after environment assembly, allowing a concurrent winner.
     const spawnArgs = {
       cols: 80,
       rows: 24,
@@ -476,7 +475,6 @@ describe('registerPtyHandlers', () => {
     const loserHandle = runtime.prepareClaudeAgentTeamsLeaderForHandle.mock.calls[1]?.[0].handle
     expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledTimes(2)
     expect(runtime.releaseClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith(loserHandle)
-    // The losing request must not grow the team count it can never bind to a PTY.
     expect(teams.getActiveTeamCount()).toBe(1)
   })
   it('releases the Agent Teams leader when its provider spawn fails', async () => {

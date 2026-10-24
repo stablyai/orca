@@ -161,7 +161,7 @@ import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch
-} from './structured-agent-session-provisional-tab'
+} from './agent-session/structured-agent-session-provisional-tab'
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch'
 import {
   discardStructuredLaunchPrompts,

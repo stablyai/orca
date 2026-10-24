@@ -53,6 +53,30 @@ describe('claude subagent sidebar row lifecycle', () => {
   const claudeEvent = (payload: Record<string, unknown>): ReturnType<typeof normalizeHookPayload> =>
     normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
 
+  const spawnTeammate = (
+    name: string,
+    agentId: string,
+    description: string,
+    order: 'start-first' | 'spawn-result-first' = 'start-first'
+  ): void => {
+    const start = () =>
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: agentId, agent_type: name })
+    const spawnResult = () =>
+      claudeEvent({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Agent',
+        tool_input: { description, prompt: `Reply ${name}`, name },
+        tool_response: { status: 'teammate_spawned', agent_id: agentId, name }
+      })
+    if (order === 'start-first') {
+      start()
+      spawnResult()
+    } else {
+      spawnResult()
+      start()
+    }
+  }
+
   it('drops each finished workflow subagent instead of accumulating idle rows', () => {
     claudeEvent({
       hook_event_name: 'UserPromptSubmit',
@@ -411,6 +435,128 @@ describe('claude subagent sidebar row lifecycle', () => {
     expect(failed?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'afirst-1a2b3c4d', state: 'idle' }),
       expect.objectContaining({ id: 'asecond-5e6f7a8b', state: 'working' })
+    ])
+  })
+
+  it('drops teammates stopped with TaskStop while another teammate stays alive', () => {
+    // Shapes captured live on 2.1.308: TaskStop fires no lifecycle hook, and each teammate's
+    // background_tasks entry carries its spawn description under an unrelated `t…` id.
+    const alphaTask = { id: 'tjv37r4y4', type: 'teammate', status: 'running', description: 'Alpha' }
+    const betaTask = { id: 'tjint303j', type: 'teammate', status: 'running', description: 'Beta' }
+    const gammaTask = { id: 'te1pn74jo', type: 'teammate', status: 'running', description: 'Gamma' }
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'start alpha, beta and gamma' })
+    spawnTeammate('alpha', 'aalpha-b1567bb51740a755', 'Alpha')
+    // Hook requests are handled unordered, so the spawn result can land before SubagentStart.
+    spawnTeammate('beta', 'abeta-1917b198710ec27a', 'Beta', 'spawn-result-first')
+    spawnTeammate('gamma', 'agamma-8889833b0c898959', 'Gamma')
+    for (const [name, agentId] of [
+      ['alpha', 'aalpha-b1567bb51740a755'],
+      ['gamma', 'agamma-8889833b0c898959']
+    ]) {
+      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: agentId, agent_type: name })
+      claudeEvent({ hook_event_name: 'TeammateIdle', agent_id: agentId, teammate_name: name })
+    }
+    const listed = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [alphaTask, betaTask, gammaTask]
+    })
+    expect(listed?.payload.state).toBe('working')
+    expect(listed?.payload.subagents).toHaveLength(3)
+
+    // The lead stops idle alpha and still-working beta; only gamma's entry is listed after.
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'stop alpha and beta' })
+    const afterStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [gammaTask] })
+    expect(afterStop?.payload.state).toBe('done')
+    expect(afterStop?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'agamma-8889833b0c898959', state: 'idle' })
+    ])
+  })
+
+  it.each([
+    {
+      kind: 'clipped',
+      spawned: `Review ${'x'.repeat(1100)}`,
+      listed: `Review ${'x'.repeat(993)}… [+107 chars]`
+    },
+    { kind: 'whitespace-collapsed', spawned: ' Review\n  the   diff ', listed: 'Review the diff' }
+  ])(
+    'keeps a working teammate whose inventory description was $kind while reaping a stopped sibling',
+    ({ spawned, listed }) => {
+      spawnTeammate('alpha', 'aalpha-b1567bb51740a755', 'Alpha')
+      spawnTeammate('beta', 'abeta-1917b198710ec27a', spawned)
+
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'tbeta', type: 'teammate', status: 'running', description: listed }
+        ]
+      })
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'abeta-1917b198710ec27a', state: 'working' })
+      ])
+      expect(stop?.payload.state).toBe('working')
+    }
+  )
+
+  it('keeps every teammate when a listed teammate matches no recorded spawn description', () => {
+    spawnTeammate('alpha', 'aalpha-b1567bb51740a755', 'Alpha')
+    spawnTeammate('beta', 'abeta-1917b198710ec27a', 'Beta')
+
+    const stop = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [
+        { id: 'tbeta', type: 'teammate', status: 'running', description: 'Beta' },
+        { id: 'tother', type: 'teammate', status: 'running', description: 'Beta, reworded' }
+      ]
+    })
+    expect(stop?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'aalpha-b1567bb51740a755', state: 'working' }),
+      expect.objectContaining({ id: 'abeta-1917b198710ec27a', state: 'working' })
+    ])
+  })
+
+  it.each(['identical descriptions', 'clipped descriptions'])('keeps ambiguous %s', (kind) => {
+    const prefix = 'Review '.repeat(150)
+    const description = kind === 'identical descriptions' ? 'Review code' : prefix
+    spawnTeammate('alpha', 'aalpha-b1567bb51740a755', description)
+    spawnTeammate(
+      'beta',
+      'abeta-1917b198710ec27a',
+      kind === 'identical descriptions' ? description : `${prefix} with tests`
+    )
+    const listed =
+      kind === 'identical descriptions' ? description : `${prefix.slice(0, 1000)}… [+61 chars]`
+
+    const stop = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [
+        { id: 'tsurvivor', type: 'teammate', status: 'running', description: listed }
+      ]
+    })
+    expect(stop?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'aalpha-b1567bb51740a755', state: 'working' }),
+      expect.objectContaining({ id: 'abeta-1917b198710ec27a', state: 'working' })
+    ])
+    expect(stop?.payload.state).toBe('working')
+  })
+
+  it.each([
+    { evidence: 'missing inventory', tasks: undefined },
+    {
+      evidence: 'undescribed teammate',
+      tasks: [{ id: 'tother', type: 'teammate', status: 'running' }]
+    },
+    {
+      evidence: 'partial inventory',
+      tasks: [{ id: 'tother', type: 'teammate', status: 'running', description: 'Other' }, null]
+    }
+  ])('keeps a confirmed idle teammate with $evidence', ({ tasks }) => {
+    spawnTeammate('alpha', 'aalpha-b1567bb51740a755', 'Alpha')
+    claudeEvent({ hook_event_name: 'TeammateIdle', teammate_name: 'alpha' })
+
+    const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: tasks })
+    expect(stop?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'aalpha-b1567bb51740a755', state: 'idle' })
     ])
   })
 })

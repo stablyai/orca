@@ -81,8 +81,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(mainWindow as never)
 
-    // The local provider would happily report `false` here — it just doesn't
-    // hold the id. Callers read that as "the shell died" (STA-2830).
+    // Local absence cannot prove a remote PTY dead (STA-2830).
     await expect(
       handlers.get('pty:hasPty')!(null, { id: 'remote:env-1@@terminal-1' })
     ).resolves.toBe(null)
@@ -106,8 +105,7 @@ describe('registerPtyHandlers', () => {
   )
   it('reports agent ownership through pty:listSessions so the renderer cannot guess it', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: the renderer's binding map is empty during restore, so agent ownership is the only
-    // positive liveness evidence it has. Dropping it here force-killed live sessions (#8459).
+    // During restore the binding map may be empty; owner evidence must protect live sessions (#8459).
     const owner = {
       claim: {
         digestVersion: AGENT_SESSION_CLAIM_DIGEST_VERSION,
@@ -164,8 +162,7 @@ describe('registerPtyHandlers', () => {
   })
   it('reports unknown ownership when the provider cannot serialize claims', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: a legacy daemon generation or older SSH relay lists no owners for a session that may
-    // have one. Reporting that silence as 'absent' is what let live agent sessions be killed (#8459).
+    // Legacy daemons/relays may omit ownership listings; silence must remain unknown (#8459).
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),

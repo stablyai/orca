@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import { onWatcherChildCapacityAvailable } from './parcel-watcher-child-registry'
+import { onWatcherChildCapacityAvailable } from './filesystem/watcher-process/parcel-watcher-child-registry'
 import type { LocalWatcherCapacityRetry } from './filesystem-watcher-lifecycle-state'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
@@ -43,7 +43,7 @@ export function scheduleLocalCapacityRetry(
             console.error(`[filesystem-watcher] capacity retry failed for ${rootKey}:`, error)
           }
         })
-        // Why: the IPC call returned before this install, so writes in between were never reported.
+        // Writes after IPC returned but before installation require a resync.
         const root = watcherLifecycleState.watchedRoots.get(rootKey)
         if (root?.listeners.has(listener.id) && !listener.isDestroyed()) {
           listener.send('fs:changed', {

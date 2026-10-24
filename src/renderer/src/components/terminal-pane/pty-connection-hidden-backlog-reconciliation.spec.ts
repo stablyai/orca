@@ -167,11 +167,13 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           const { markTerminalFollowOutput, markTerminalPinnedViewport } =
             await import('@/lib/pane-manager/terminal-scroll-intent')
           const parseCallbacks: (() => void)[] = []
-          pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
-            if (callback) {
-              parseCallbacks.push(callback)
+          pane.terminal.write.mockImplementation(
+            (_data: string | Uint8Array, callback?: () => void) => {
+              if (callback) {
+                parseCallbacks.push(callback)
+              }
             }
-          })
+          )
           pane.terminal.buffer.active.viewportY = 42
           pane.terminal.buffer.active.baseY = 100
           markTerminalPinnedViewport(pane.terminal)

@@ -14,7 +14,7 @@ import type {
   JiraMutationResult,
   JiraPriority,
   JiraTransition
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 
 /** Header row for an open Jira issue: key, summary, and workspace actions. */
 export function JiraIssueWorkspaceHeader({

@@ -3553,7 +3553,11 @@
             "downloadOpenWithDefaultApp": "Téléchargez et ouvrez avec l'application par défaut",
             "downloadOpenFailed": "Échec du téléchargement de « {{value0}} ».",
             "openInThisGroup": "Ouvrir dans ce groupe",
-            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe"
+            "openInThisGroupRefused": "Impossible d'ouvrir {{value0}} dans ce groupe",
+            "fileInOtherWorkspace": "Ce fichier se trouve dans {{value0}}",
+            "fileInAnotherWorkspace": "Ce fichier se trouve dans un autre espace de travail",
+            "openInOwningWorkspace": "Ouvrir là-bas",
+            "openedHereReadOnly": "Ouvert ici en lecture seule"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Ouvrir l'Analyseur d'espace disque",
@@ -3685,13 +3689,28 @@
             "removeWorkspaceButton": "Supprimer l'espace de travail"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "Reconnexion au runtime distant",
             "pairingRefusedTitle": "Cet hôte n'accepte plus cet ordinateur",
             "pairingRefusedBody": "Orca n'a pas pu s'associer de nouveau à lui via SSH. Rien n'a été arrêté sur l'hôte. Reconnectez-vous pour réessayer.",
             "disconnectedTitle": "Runtime distant déconnecté",
-            "retryingBody": "Orca réessaie automatiquement. Ce terminal reprendra si la connexion revient.",
             "disconnectedBody": "Les tentatives automatiques sont interrompues. Reconnectez-vous pour reprendre cette session de terminal.",
-            "reconnectButton": "Reconnecter"
+            "reconnectButton": "Reconnecter",
+            "signInTitle": "En attente de la connexion SSH",
+            "signInBody": "Ce terminal reprend tout seul dès que vous vous connectez à l’hôte.",
+            "signInButton": "Se connecter",
+            "serverRestartingTitle": "{{server}} redémarre",
+            "serverRestartingBody": "Orca se reconnectera au retour du serveur, et les terminaux reprendront alors.",
+            "streamStalledTitle": "Le terminal ne répond plus",
+            "streamStalledBody": "{{server}} n'envoie plus la sortie de ce terminal. Orca le reconnecte automatiquement.",
+            "sessionEndedTitle": "Reconnexion du terminal",
+            "sessionEndedBody": "{{server}} a fermé le flux de ce terminal. Orca le reconnecte automatiquement.",
+            "waitingTitle": "En attente de {{server}}",
+            "waitingBody": "Orca reconnectera ce terminal quand le serveur le proposera de nouveau ou que la connexion changera. Cliquez sur Reconnecter pour réessayer maintenant.",
+            "downFor": "Coupé depuis {{duration}}",
+            "tailscaleHint": "Vérifiez le chemin Tailscale :",
+            "fallbackServerName": "le serveur",
+            "connectionLostTitle": "Reconnexion à {{server}}",
+            "connectionLostBody": "La connexion au serveur a été perdue. Orca réessaie automatiquement et les terminaux reprendront à son retour.",
+            "reattachingBody": "Orca reconnecte automatiquement ce terminal à {{server}}."
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Hôte indisponible",
@@ -3701,12 +3720,15 @@
             "restoring": "Restauration du terminal…"
           },
           "AgentLaunchPaneNotice": {
-            "commandNotFound": "Sa commande est introuvable sur cette machine.",
+            "agent": "L’agent",
+            "commandNotFound": "{{agent}} n’a pas pu démarrer car sa commande est introuvable sur cet ordinateur.",
             "copyPrompt": "Copier le prompt",
-            "exitedDuringStart": "Il s'est arrêté pendant le démarrage.",
-            "notStarted": "L'agent n'a pas pu démarrer.",
-            "unconfirmed": "Impossible de confirmer que l'agent a démarré.",
-            "workspaceGone": "Son espace de travail n'est plus disponible."
+            "exitedDuringStart": "{{agent}} s’est arrêté pendant le démarrage.",
+            "notStarted": "{{agent}} n’a pas pu démarrer.",
+            "restoreWorkspace": "Restaurez le dossier de l’espace de travail ou ouvrez un espace de travail disponible, puis réessayez.",
+            "tryInTerminal": "Lancez-le dans un terminal dans ce dossier pour en connaître la raison, puis réessayez.",
+            "unconfirmed": "Impossible de confirmer le démarrage de {{agent}}. Vérifiez son terminal avant de réessayer.",
+            "workspaceGone": "{{agent}} n’a pas pu démarrer car son espace de travail n’est plus disponible."
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "Les restaurations automatiques sont en pause car l'hôte s'est arrêté de façon inattendue. Votre session est enregistrée.",
@@ -8257,6 +8279,11 @@
           "191ac34567": "Orchestration d'agents",
           "nestedWorkerDepthTitle": "Profondeur du travailleur imbriqué",
           "nestedWorkerDepthDescription": "Combien de générations de travailleurs détachés peuvent engendrer leurs propres travailleurs. 1 maintient l'arborescence des agents à plat : un coordinateur répartit les travailleurs, et ces travailleurs ne répartissent pas.",
+          "chatErrorEscalationTitle": "Prévenir le coordinateur des erreurs du chat",
+          "chatErrorEscalationDescription": "Quand un agent assigné rencontre une erreur qui met fin à son tour, envoie l'erreur exacte au coordinateur qui l'a assigné. La tâche reste assignée à l'agent. Fonctionne uniquement pour les agents dans l'interface de chat.",
+          "chatErrorEscalationNeedsChat": "Activez l'interface de chat dans les paramètres expérimentaux pour l'utiliser.",
+          "chatErrorEscalationKeywordError": "erreur",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {
@@ -9894,6 +9921,11 @@
               "modifier": "modificateur",
               "invert": "inverser",
               "opposite": "opposé"
+            },
+            "linkRoutingBackground": {
+              "background": "arrière-plan",
+              "focus": "focus",
+              "tab": "onglet"
             },
             "terminalLinkActions": {
               "terminal": "terminal",
@@ -12026,6 +12058,10 @@
           "titleOrca": "Maintenez Shift pour ouvrir dans Orca",
           "descriptionSystem": "Les liens s'ouvrent dans Orca ; {{chord}}+clic les envoie plutôt à votre navigateur système.",
           "descriptionOrca": "Les liens s'ouvrent dans votre navigateur système. Une fois activé, {{chord}}+clic en ouvre un dans le navigateur intégré d'Orca."
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Ouvrir les liens en arrière-plan",
+          "description": "Les liens du terminal, du chat et du markdown s'ouvrent dans le navigateur sans retirer le focus de l'endroit où vous avez cliqué."
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Afficher les actions de lien du terminal",
@@ -16068,6 +16104,7 @@
           "6c4f1a8d2e": "Les détails de la vérification sont indisponibles."
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "Lecture seule",
           "fb8331694e": "Ouvrir l'aperçu sur le côté",
           "4157f3cbf3": "Ouvrir l'aperçu Markdown",
           "269ce4842b": "Copier le chemin relatif",
@@ -18626,6 +18663,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "L'espace de travail n'est pas connecté à un hôte Orca distant.",
+        "splitSourceUnpublished": "Le volet n'a pas été divisé : son terminal n'a pas encore démarré sur l'hôte.",
         "terminalCreateUnconfirmed": "Orca n'a pas pu confirmer que le nouveau terminal s'est ouvert sur l'hôte."
       },
       "gitlabJobTraceClient": {
@@ -19852,7 +19890,8 @@
     "jiraUserPicker": {
       "select": "Sélectionnez {{value0}}",
       "search": "Rechercher des utilisateurs",
-      "empty": "Aucun utilisateur trouvé"
+      "empty": "Aucun utilisateur trouvé",
+      "useKnownId": "Utiliser l’identifiant utilisateur connu « {{value0}} »"
     },
     "terminalPane": {
       "TerminalContextMenu": {

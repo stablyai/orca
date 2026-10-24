@@ -54,7 +54,6 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
     setupPtyIpcSuite()
 
-  // Why: the cap/flag must never fire in the common case (renderer keeps up), so small output carries no droppedBacklog.
   it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
     vi.useFakeTimers()
     const runtime = {

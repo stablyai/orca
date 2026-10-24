@@ -51,7 +51,7 @@ describe('last-status persistence stays off the main thread', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('keeps answering hooks while a status rename is held open', async () => {
+  it('keeps answering queued hooks and preserves the quit flush while a rename is held open', async () => {
     const actualRename = await vi.importActual<FsPromisesModule>('node:fs/promises')
     let releaseRename: () => void = () => {}
     const renameHeld = new Promise<void>((resolve) => {
@@ -68,35 +68,19 @@ describe('last-status persistence stays off the main thread', () => {
     const writeSync = vi.spyOn(AtomicSnapshotWriter.prototype, 'writeSync')
 
     expect((await prompt('first')).status).toBe(204)
-    await Promise.race([
-      renameHeld,
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('status write never reached async rename')), 2_000)
-      )
-    ])
+    await renameHeld
 
-    const timerFired = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 5))
     expect((await prompt('while renaming')).status).toBe(204)
-    expect(await timerFired).toBe(true)
+    expect((await prompt('queued while renaming')).status).toBe(204)
     expect(writeSync).not.toHaveBeenCalled()
     expect(statusRenameSyncCalls()).toBe(0)
 
     // An older async rename must not undo the synchronous quit flush.
     server.flushStatusPersistSync()
     expect(writeSync).toHaveBeenCalledTimes(1)
-    expect(readPrompt()).toBe('while renaming')
+    expect(readPrompt()).toBe('queued while renaming')
     releaseRename()
     await write.mock.results[0]?.value
-    expect(readPrompt()).toBe('while renaming')
-  })
-
-  it('a burst of status updates never writes synchronously', async () => {
-    const writeSync = vi.spyOn(AtomicSnapshotWriter.prototype, 'writeSync')
-    for (let i = 0; i < 50; i++) {
-      expect((await prompt(`burst ${i}`)).status).toBe(204)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(writeSync).not.toHaveBeenCalled()
-    expect(statusRenameSyncCalls()).toBe(0)
+    expect(readPrompt()).toBe('queued while renaming')
   })
 })

@@ -51,7 +51,7 @@ describe('a paired desktop terminal.create replayed with its pane ids', () => {
     })
     expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
 
-    await expect(create(true)).rejects.toThrow('tab_closed')
+    await expect(create(true)).rejects.toThrow('tab_not_found')
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
   })

@@ -90,7 +90,7 @@ function BrowserNewTabPageLayout({
 }): React.JSX.Element {
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const removeBrowserHistoryEntry = useAppStore((s) => s.removeBrowserHistoryEntry)
-  const restoreBrowserHistoryEntry = useAppStore((s) => s.restoreBrowserHistoryEntry)
+  const restoreBrowserHistory = useAppStore((s) => s.restoreBrowserHistory)
   const suggested = useMemo(
     () =>
       rankBrowserTopSites({
@@ -116,7 +116,8 @@ function BrowserNewTabPageLayout({
       {
         action: {
           label: translate('browser.newTab.undo', 'Undo'),
-          onClick: () => restoreBrowserHistoryEntry(removed)
+          onClick: () =>
+            restoreBrowserHistory({ browserUrlHistory: [removed], workspaceDocHistory: [] })
         }
       }
     )

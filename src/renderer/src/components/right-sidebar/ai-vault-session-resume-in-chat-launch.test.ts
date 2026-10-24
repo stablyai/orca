@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   activeWorktreeId: 'other-worktree'
 }))
 
-vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
   beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner: () => ({ executionHostId: 'local', target: { kind: 'local' } })
 }))

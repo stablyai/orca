@@ -73,7 +73,7 @@ describe('registerPtyHandlers', () => {
         value: 'win32'
       })
       process.env.USERPROFILE = 'C:\\Users\\test'
-      // Why: the spawn path resolves a bare PowerShell name to an absolute exe (PR #6537 / issue #5161); pin the probed install roots for deterministic resolution across host OS.
+      // Pin PowerShell probe roots so bare-name resolution is deterministic across test hosts (#5161).
       for (const key of ['SystemRoot', 'ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)']) {
         savedWindowsResolutionEnv[key] = process.env[key]
       }
@@ -81,7 +81,7 @@ describe('registerPtyHandlers', () => {
       process.env.ProgramW6432 = 'C:\\Program Files'
       process.env.ProgramFiles = 'C:\\Program Files'
       delete process.env['ProgramFiles(x86)']
-      // Why: .exe candidates must report isFile()/size (default mock omits them, collapsing every PowerShell candidate to cmd.exe); dirs must still report isDirectory().
+      // Shell candidates need file/size evidence; directory probes must still report directories.
       statSyncMock.mockImplementation((target: string) => {
         const isExe = /\.exe$/i.test(String(target))
         return {
@@ -186,7 +186,7 @@ describe('registerPtyHandlers', () => {
       )
     })
     it('uses terminalWindowsShell setting over COMSPEC when provided', async () => {
-      // Why: COMSPEC always points to cmd.exe on stock Windows, so without the setting the terminal would ignore the user's shell preference.
+      // Stock COMSPEC selects cmd.exe; the saved shell preference must override it.
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
 
       registerPtyHandlers(

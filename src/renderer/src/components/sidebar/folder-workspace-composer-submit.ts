@@ -21,7 +21,7 @@ import {
 } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
 import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'

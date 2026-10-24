@@ -28,6 +28,7 @@ describe('agentJournalLinkageFields', () => {
     // Absence is the claim these fields make, so a key present with an
     // undefined value is not the same statement as no key at all.
     expect(agentJournalLinkageFields({ agentId: 'task-1' })).toEqual({ agentId: 'task-1' })
+    expect(Object.keys(agentJournalLinkageFields({ agentId: 'task-1' }))).toEqual(['agentId'])
     expect(agentJournalLinkageFields(undefined)).toEqual({})
   })
 

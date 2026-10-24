@@ -126,6 +126,9 @@ describe("a launch pane's verdict in the window", () => {
   it('never touches a pane no launch laid out', () => {
     apply({ kind: 'withdrawn' }, '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d')
     expect(launchTab()).toBeDefined()
+    expect(launchTab()?.agentLaunchPane).toEqual({ leafId: LEAF, operationId: 'op-1' })
+    expect(agentLaunchPanePrompt(tabId)).toBe('fix the build')
+    expect(applyClosedTerminalLeafNotice).not.toHaveBeenCalled()
   })
 })
 

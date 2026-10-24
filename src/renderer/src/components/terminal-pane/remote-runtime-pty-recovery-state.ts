@@ -5,6 +5,7 @@ import {
   REMOTE_RUNTIME_RECOVERY_DELAYS_MS
 } from './remote-runtime-pty-recovery-limits'
 export * from './remote-runtime-pty-recovery-limits'
+export * from './remote-runtime-pty-control-ready-revivers'
 
 export type RemoteRuntimePtyRecoveryPhase =
   | 'idle'
@@ -29,44 +30,6 @@ export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
     }
   }
   return advanced
-}
-
-// Why: a route that returns without an OS `online` event (Tailscale, VPN, a re-keyed link) fires no
-// trigger, so a pane latched past its window stayed dead over a working link. The environment's
-// control socket answering again is positive reachability evidence, as good as a Reconnect click.
-const controlReadyRevivers = new Map<string, Set<() => boolean>>()
-
-export function registerRemoteRuntimePtyControlReadyReviver(
-  environmentId: string,
-  revive: () => boolean
-): () => void {
-  let revivers = controlReadyRevivers.get(environmentId)
-  if (!revivers) {
-    revivers = new Set()
-    controlReadyRevivers.set(environmentId, revivers)
-  }
-  revivers.add(revive)
-  return () => {
-    const current = controlReadyRevivers.get(environmentId)
-    current?.delete(revive)
-    if (current?.size === 0) {
-      controlReadyRevivers.delete(environmentId)
-    }
-  }
-}
-
-export function getControlReadyReviverCountForTests(environmentId: string): number {
-  return controlReadyRevivers.get(environmentId)?.size ?? 0
-}
-
-export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
-  let revived = 0
-  for (const revive of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {
-    if (revive()) {
-      revived += 1
-    }
-  }
-  return revived
 }
 
 export class RemoteRuntimePtyRecoveryState {
@@ -107,6 +70,11 @@ export class RemoteRuntimePtyRecoveryState {
 
   get autoRecoveryDeadlineExpired(): boolean {
     return this.deadlineExpired
+  }
+
+  /** A retry is parked for online/resume/control-ready or a host publish; nothing is in flight. */
+  get awaitingExternalTrigger(): boolean {
+    return this.phase === 'recovering' && this.pendingRetry !== null && this.retryTimer === null
   }
 
   get hasOwnerRefresh(): boolean {
@@ -211,7 +179,12 @@ export class RemoteRuntimePtyRecoveryState {
 
   // Why: a wait that ends with no liveness evidence arms no timer, so park a retry or online/resume/reconnect find nothing to revive.
   parkRetryForExternalTrigger(epoch: number, retry: (epoch: number) => void): boolean {
-    return this.isCurrent(epoch) && this.parkRetry(retry)
+    if (!this.isCurrent(epoch) || !this.parkRetry(retry)) {
+      return false
+    }
+    // Why: the phase stays 'recovering', but the pane must now say it waits rather than retries.
+    this.onChange?.()
+    return true
   }
 
   // Why: the deadline can latch while an attempt is still in flight, before schedule() parked anything,

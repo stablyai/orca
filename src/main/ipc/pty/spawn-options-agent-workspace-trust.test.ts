@@ -64,7 +64,6 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
   }
 }
 
-/** What preflight and env assembly leave for the option builders; both spawn states share it. */
 function seed(
   ctx: Pick<
     PtyIpcSpawnState,

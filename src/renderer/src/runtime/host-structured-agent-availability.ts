@@ -30,6 +30,7 @@ type Resource = {
   executionHostId: string
   holders: number
   model: HostStructuredAgentAvailability
+  first?: Promise<void>
   /** Set while a stream is open; a lost one reopens on the next acquire, keeping the model. */
   close: (() => void) | null
 }
@@ -51,14 +52,18 @@ function availabilityKey(
 }
 
 function open(key: string, resource: Resource, target: RuntimeClientTarget): void {
+  const { promise, resolve: settled } = Promise.withResolvers<void>()
+  resource.first = promise
   let unsubscribe: (() => void) | null = null
   const close = (): void => {
     resource.close = null
+    settled()
     unsubscribe?.()
   }
   // Only this open's stream, while its entry is current, may publish or be lost.
   const live = (): boolean => resources.get(key) === resource && resource.close === close
   const settle = (byAgent: ReadonlyMap<string, AgentSessionAgentAvailability>): void => {
+    settled()
     resource.model = { state: 'received', byAgent }
     publish()
   }
@@ -150,4 +155,14 @@ export function subscribeHostStructuredAgentAvailability(listener: () => void): 
   return () => {
     listeners.delete(listener)
   }
+}
+
+/** Settlement belongs to this open, even while an older snapshot is retained. */
+export function firstHostStructuredAgentAvailability(
+  owner: HostStructuredAgentAvailabilityOwner
+): Promise<void> {
+  return (
+    resources.get(availabilityKey(owner.executionHostId, owner.runtimeId, owner.pairingRevision))
+      ?.first ?? Promise.resolve()
+  )
 }

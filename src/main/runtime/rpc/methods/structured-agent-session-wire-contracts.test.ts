@@ -81,6 +81,10 @@ it.each([
   await call('agentSession.subscribe', { sessionId: SESSION }, client)
   expect(input?.boundedFrames === true).toBe(bounded)
   expect(input?.snapshotCatchUp).toBe(snapshot)
+  const request = { sessionId: SESSION, direction: 'after', cursor: { epoch: 'e', sequence: 1 } }
+  await call('agentSession.history', request, client)
+  const replaceHistory = snapshot && input?.readsCurrentRequests === true
+  expect(hostCalls.history).toHaveBeenCalledWith(request, undefined, replaceHistory)
 })
 
 it('allows the local desktop renderer to replace a missed gap with a snapshot', async () => {

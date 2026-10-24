@@ -7,6 +7,10 @@ import {
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
 import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
+import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels,
   type StructuredAttentionMobileDeliveryDeps
@@ -95,6 +99,10 @@ describe('structured attention mobile delivery', () => {
         title: 'orca / feature - Claude needs input',
         body: 'May I run the migration?',
         worktreeId: SCOPE.workspaceId,
+        paneKey: structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId('session-1'),
+          'session-1'
+        ),
         notificationId: key,
         attentionKey: key,
         agentState: 'blocked'

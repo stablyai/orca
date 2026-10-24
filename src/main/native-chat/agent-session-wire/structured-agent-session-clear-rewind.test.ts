@@ -192,7 +192,6 @@ describe('rewind behind a clear boundary', () => {
       expect(prepared.contextClearOperationId).toBe(
         rig.store.getRecord(SESSION)!.providerContextBoundary!.operationId
       )
-      // The record names the cut; the journal keeps the rows it keeps.
       expect(prepared).not.toHaveProperty('retained')
       return { ok: true }
     })

@@ -75,7 +75,14 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onWriteUnavailable?: () => void
   /** Cumulative host ack of sequenced input through `appliedSeq` (negotiated streams only). */
   onInputAck?: (appliedSeq: number, kind: TerminalInputAckKind) => void
-  onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
+  onTransportClose?: (event: RemoteTerminalTransportCloseEvent) => void
+}
+
+export type RemoteTerminalTransportCloseEvent = {
+  recoverable: boolean
+  retryWithBackoff?: boolean
+  /** This stream stopped answering while the shared connection may be healthy. */
+  stalled?: true
 }
 
 export type RemoteRuntimeSnapshotImage = {

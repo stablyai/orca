@@ -25,8 +25,6 @@ function createMockChannel(): EventEmitter & { stderr: EventEmitter } {
   })
 }
 
-// Recover the PowerShell script from a `powershell.exe ... -EncodedCommand <b64>`
-// command so tests can assert on the actual (UTF-16LE) payload sent to the host.
 function decodeEncodedCommand(command: string): string {
   const match = /-EncodedCommand (\S+)/.exec(command)
   if (!match) {
@@ -184,10 +182,7 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    // Windows OpenSSH exec emits CRLF; the parser must strip \r so directories
-    // aren't misclassified as files with a stray carriage return in the name.
-    // The script emits a forward-slash resolvedPath (the -replace '\\','/' line)
-    // so the renderer's parentPath/joinPath, which only split on `/`, still work.
+    // Windows SSH emits CRLF; forward-slash paths preserve renderer parentPath/joinPath navigation.
     windowsChannel.emit('data', Buffer.from('C:/Users/alice\r\nDesktop/\r\nnotes.txt\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
@@ -208,15 +203,12 @@ describe('registerSshBrowseHandler', () => {
     expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
     expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
 
-    // Decode the -EncodedCommand payload so an accidental switch from the
-    // single-quote-escaped PowerShell literal to raw interpolation (an injection
-    // regression) is caught, and to lock in the UTF-8 output pin.
+    // Decode the payload to verify literal escaping and UTF-8 output.
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
     expect(script).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
     expect(script).toContain("$dir = 'C:/Users/alice'")
     expect(script).toContain('Get-ChildItem -LiteralPath $resolved -Force')
-    // resolvedPath must be emitted with forward slashes so the renderer's
-    // parentPath/joinPath (which only split on `/`) keep working on Windows.
+    // Renderer path helpers require forward slashes.
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
   })
 
@@ -255,10 +247,7 @@ describe('registerSshBrowseHandler', () => {
   })
 
   it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
-    // Regression: real Windows OpenSSH + cmd.exe forwards exit 1 (not 9009) with
-    // localized stderr. The old 9009/English-string trigger silently missed this,
-    // so German/Japanese/etc. hosts never fell back. Keying off the non-zero exit
-    // of a RemoteBrowseError fixes it regardless of OS display language.
+    // Windows SSH reports localized shell rejection with exit 1; fallback cannot depend on 9009 or English text.
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
@@ -269,8 +258,7 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users' })
     await Promise.resolve()
-    // Japanese cmd.exe "not recognized" text — matches none of the removed English
-    // /Spanish substrings, and exit 1 is not the removed 9009 sentinel.
+    // Japanese shell rejection must trigger fallback without English substring matching.
     posixChannel.stderr.emit(
       'data',
       Buffer.from("'exec' は、内部コマンドとして認識されていません。")
@@ -303,9 +291,7 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "C:/O'Brien" })
     await Promise.resolve()
-    // A cmd.exe reject exits 1 over SSH (its 9009 ERRORLEVEL never crosses the
-    // process boundary) with localized German stderr. The fallback must still fire,
-    // since it keys off the non-zero exit, not the (localized, unmatchable) text.
+    // German shell rejection uses exit 1 over SSH; cmd's internal 9009 does not cross the boundary.
     posixChannel.stderr.emit('data', Buffer.from('Der Befehl "exec" ist falsch geschrieben'))
     posixChannel.emit('exit', 1)
     posixChannel.emit('close')
@@ -322,7 +308,6 @@ describe('registerSshBrowseHandler', () => {
       entries: []
     })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
-    // Single quote must be doubled inside the PowerShell literal, not passed raw.
     expect(script).toContain("$dir = 'C:/O''Brien'")
   })
 
@@ -353,18 +338,13 @@ describe('registerSshBrowseHandler', () => {
       pathFlavor: 'win32'
     })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
-    // ~ must expand to $HOME, not be passed literally to Set-Location.
     expect(script).toContain('$dir = $HOME')
   })
 
-  // The renderer rebuilds forward-slash Windows paths with POSIX helpers: the
-  // breadcrumb prepends a spurious leading '/' before the drive, and "Up" from a
-  // first-level dir yields a bare drive letter. Both must be rooted for
-  // Set-Location, or navigation lands in the drive-relative cwd / errors.
+  // Renderer breadcrumbs can add a drive-leading slash or leave a bare drive; normalize both before Set-Location.
   it.each([
     { dirPath: '/C:/Users', expected: "$dir = 'C:/Users'" },
     { dirPath: 'C:', expected: "$dir = 'C:/'" },
-    // Combined strip + root, so a future refactor can't break the ordering.
     { dirPath: '/C:', expected: "$dir = 'C:/'" }
   ])(
     'roots the Windows drive path $dirPath in the PowerShell fallback',
@@ -410,16 +390,14 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
     await Promise.resolve()
-    // A genuine POSIX permission failure exits non-zero; it's indistinguishable
-    // from a Windows shell reject without probing, so the fallback is attempted...
+    // POSIX permission failures also trigger the Windows probe.
     posixChannel.stderr.emit('data', Buffer.from('ls: /root/secret: Permission denied'))
     posixChannel.emit('exit', 1)
     posixChannel.emit('close')
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    // ...but on a POSIX host the login shell can't find powershell.exe (exit 127),
-    // so the original permission error is surfaced, never masked by the retry.
+    // Missing PowerShell proves the retry cannot replace the original POSIX error.
     windowsChannel.stderr.emit('data', Buffer.from('bash: powershell.exe: command not found'))
     windowsChannel.emit('exit', 127)
     windowsChannel.emit('close')
@@ -449,8 +427,7 @@ describe('registerSshBrowseHandler', () => {
     windowsChannel.emit('exit', 1)
     windowsChannel.emit('close')
 
-    // PowerShell exited non-127, so it genuinely ran on a Windows host — its error
-    // is the real cause. Surface it rather than the cmd.exe "not recognized" prose.
+    // A running PowerShell probe provides the authoritative Windows error.
     await expect(resultPromise).rejects.toThrow('Cannot find path')
   })
 
@@ -465,7 +442,6 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
     await Promise.resolve()
-    // A non-zero POSIX failure triggers the fallback probe on any host...
     posixChannel.stderr.emit('data', Buffer.from('exec: command not found'))
     posixChannel.emit('exit', 127)
     posixChannel.emit('close')
@@ -476,8 +452,6 @@ describe('registerSshBrowseHandler', () => {
     windowsChannel.emit('exit', 127)
     windowsChannel.emit('close')
 
-    // The original POSIX failure is the real one — don't mask it with the
-    // misleading "powershell.exe: not found" from the doomed retry.
     await expect(resultPromise).rejects.toThrow('exec: command not found')
   })
 
@@ -494,8 +468,6 @@ describe('registerSshBrowseHandler', () => {
     channel.emit('error', new Error('remote disconnected'))
 
     await expect(resultPromise).rejects.toThrow('remote disconnected')
-    // A transport failure is not a RemoteBrowseError, so it must not trigger a
-    // pointless PowerShell retry.
     expect(exec).toHaveBeenCalledTimes(1)
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('exit')).toBe(0)

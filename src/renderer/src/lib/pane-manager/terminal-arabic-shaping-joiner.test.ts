@@ -229,6 +229,18 @@ describe('registerArabicShapingJoiner', () => {
     webglLive = true
     expect(handler('مرحبا')).toEqual([[0, 5]])
   })
+
+  it('returns RTL runs and Indic clusters from one handler in start order', () => {
+    const host = createJoinerHost()
+    registerArabicShapingJoiner(host.terminal, () => true)
+
+    expect(host.getRegistered()!('বাংলা مرحبا কি')).toEqual([
+      [0, 3],
+      [3, 5],
+      [6, 11],
+      [12, 14]
+    ])
+  })
 })
 
 describe('configureLazyArabicShapingJoiner', () => {
@@ -257,6 +269,60 @@ describe('configureLazyArabicShapingJoiner', () => {
     expect(host.events).toEqual([])
     expect(host.getHandler()).toBeNull()
     cleanup()
+    expect(host.events).toEqual([])
+  })
+
+  it('registers before the first Bengali write and shapes its clusters', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'আমি দেখি')
+
+    expect(host.events).toEqual(['register'])
+    expect(host.getHandler()!('আমি দেখি')).toEqual([
+      [1, 3],
+      [4, 6],
+      [6, 8]
+    ])
+  })
+
+  it('does not register for Indic text that needs no joining', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, '১২৩ কু ।')
+
+    expect(host.events).toEqual([])
+  })
+
+  it('registers when a Bengali spacing vowel sign arrives in the next write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    expect(host.events).toEqual([])
+    ensureArabicShapingJoinerForText(host.terminal, 'ি')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('registers when a conjunct is split after the virama', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক্')
+    ensureArabicShapingJoinerForText(host.terminal, 'ষ')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('does not carry an Indic tail across an ASCII write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    ensureArabicShapingJoinerForText(host.terminal, ' ি')
+
     expect(host.events).toEqual([])
   })
 

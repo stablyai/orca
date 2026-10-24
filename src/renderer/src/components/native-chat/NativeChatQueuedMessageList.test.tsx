@@ -118,6 +118,8 @@ function renderHeldQueue(
   const mutate = vi.fn(async (..._call: [string, string, Record<string, unknown>]) => null)
   function HeldQueue(): React.JSX.Element {
     const owner = useStructuredAgentSessionQueuedMessages({
+      admit: () => null,
+      capturePresentation: () => () => true,
       enabled: true,
       queuedMessages,
       queuePause,

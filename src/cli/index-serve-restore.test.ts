@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -53,6 +53,10 @@ describe('orca serve restore resume', () => {
     spawnMock
   })
 
+  beforeEach(() => {
+    runtimeClientConstructorMock.mockClear()
+  })
+
   it('asks the local Orca to resume and never starts a server', async () => {
     process.env.ORCA_ENVIRONMENT = 'paired-env'
     callMock.mockResolvedValue({
@@ -72,10 +76,13 @@ describe('orca serve restore resume', () => {
     await main(['serve', 'restore', 'resume'], '/tmp/repo')
 
     expect(serveOrcaAppMock).not.toHaveBeenCalled()
-    expect(callMock).toHaveBeenCalledWith('runtime.automaticWork.resume')
-    expect(runtimeClientConstructorMock).toHaveBeenLastCalledWith(null, null)
-    expect(logSpy.mock.calls[0]?.[0]).toContain('Automatic restores resumed')
-    expect(logSpy.mock.calls[0]?.[0]).toContain('stopped unexpectedly')
+    expect(callMock.mock.calls).toEqual([['runtime.automaticWork.resume']])
+    expect(runtimeClientConstructorMock.mock.calls).toEqual([[null, null]])
+    expect(logSpy.mock.calls).toEqual([
+      [
+        'Automatic restores resumed. They were paused at 1970-01-01T00:00:00.000Z because the terminal host stopped unexpectedly.'
+      ]
+    ])
   })
 
   it('says so when nothing was paused, and when the host has no gate', async () => {
@@ -95,8 +102,14 @@ describe('orca serve restore resume', () => {
     })
     await main(['serve', 'restore', 'resume'], '/tmp/repo')
 
-    expect(logSpy.mock.calls[0]?.[0]).toContain('were not paused')
-    expect(logSpy.mock.calls[1]?.[0]).toContain('no automatic-restore gate')
+    expect(callMock.mock.calls).toEqual([
+      ['runtime.automaticWork.resume'],
+      ['runtime.automaticWork.resume']
+    ])
+    expect(logSpy.mock.calls).toEqual([
+      ['Automatic restores were not paused; nothing to resume.'],
+      ['This host has no automatic-restore gate to resume (its terminal host predates it).']
+    ])
   })
 
   it('explains a terminal host that predates the command', async () => {
@@ -108,6 +121,11 @@ describe('orca serve restore resume', () => {
       _meta: { runtimeId: 'runtime-1' }
     })
     await main(['serve', 'restore', 'resume'], '/tmp/repo')
-    expect(logSpy.mock.calls[0]?.[0]).toContain('predates this command')
+    expect(callMock.mock.calls).toEqual([['runtime.automaticWork.resume']])
+    expect(logSpy.mock.calls).toEqual([
+      [
+        'The terminal host running now predates this command, so it cannot clear its pause. Run this again after the terminal host restarts. Until then, opening a sleeping terminal still resumes it.'
+      ]
+    ])
   })
 })

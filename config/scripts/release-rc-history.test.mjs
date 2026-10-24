@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { runProcessSync } from '@orca/process-host'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,11 +10,9 @@ import {
 } from './release-rc-history.mjs'
 
 function git(cwd, args) {
-  return execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe']
-  }).trim()
+  const result = runProcessSync({ program: 'git', args, cwd, timeoutMs: 10_000 })
+  expect(result.code, result.stderr).toBe(0)
+  return result.stdout.trim()
 }
 
 function withGitRepo(run) {
@@ -71,6 +69,8 @@ describe('release RC history', () => {
       // this. Under-reporting rc.6 here lets an explicit 1.4.36-rc.6 cut land
       // below the v1.4.36-rc.6.perf build that clients already run.
       commit(repo, 'release: v1.4.36-rc.6.perf')
+      git(repo, ['tag', 'v1.4.36-rc.6.perf'])
+      git(repo, ['tag', '--delete', 'v1.4.36-rc.6.perf'])
 
       expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(6)
     })
@@ -82,6 +82,8 @@ describe('release RC history', () => {
       commit(repo, 'release: v1.4.36-rc.5')
       git(repo, ['tag', 'v1.4.36-rc.5'])
       commit(repo, 'release: v1.4.36-rc.6')
+      git(repo, ['tag', 'v1.4.36-rc.6'])
+      git(repo, ['tag', '--delete', 'v1.4.36-rc.6'])
 
       expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(6)
     })
@@ -96,6 +98,16 @@ describe('release RC history', () => {
       git(repo, ['checkout', 'HEAD~1'])
 
       expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(6)
+    })
+  })
+  it('counts an RC tag independently of release subjects and returns null without either record', () => {
+    withGitRepo((repo) => {
+      commit(repo, 'initial')
+      expect(highestRcForBase('1.4.36', { cwd: repo })).toBeNull()
+      git(repo, ['tag', 'v1.4.36-rc.7'])
+      expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(7)
+      git(repo, ['tag', '--delete', 'v1.4.36-rc.7'])
+      expect(highestRcForBase('1.4.36', { cwd: repo })).toBeNull()
     })
   })
 })

@@ -184,8 +184,6 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
       Promise.reject(new Error('Skill package management requires the desktop app.')),
     revokeShare: () =>
       Promise.reject(new Error('Skill package management requires the desktop app.')),
-    deletePackageVersion: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
     deletePackage: () =>
       Promise.reject(new Error('Skill package management requires the desktop app.')),
     listWslDistros: () => Promise.resolve([]),

@@ -123,6 +123,11 @@ export const browserPageInteractionAndSessionsApi = {
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
+  onSessionProfilesChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('browser:session:profilesChanged', listener)
+    return () => ipcRenderer.removeListener('browser:session:profilesChanged', listener)
+  },
   prepareSshWorkspacePartition: (args: {
     targetId: string
     expectedSshTargetGeneration?: number

@@ -48,29 +48,11 @@ export function createSetupRunnerScript(
   })
 }
 
-export function createIssueCommandRunnerScript(
-  repo: Repo,
-  worktreePath: string,
-  command: string,
-  projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
-  setupShell?: SetupRunnerShell
-): WorktreeSetupLaunch {
-  // Runner files avoid PTY line-editor wrapping or truncation of long commands.
-  return createWorktreeRunnerScript({
-    repo,
-    worktreePath,
-    script: command,
-    runnerBaseName: 'issue-command-runner',
-    runtimeTarget: getHookRuntimeTarget(projectRuntime),
-    setupShell
-  })
-}
-
 function createWorktreeRunnerScript(args: {
   repo: Repo
   worktreePath: string
   script: string
-  runnerBaseName: 'setup-runner' | 'issue-command-runner'
+  runnerBaseName: 'setup-runner'
   runtimeTarget?: HookRuntimeTarget
   waitForAgentStartup?: boolean
   setupShell?: SetupRunnerShell

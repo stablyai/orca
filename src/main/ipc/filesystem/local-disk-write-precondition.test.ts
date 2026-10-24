@@ -50,14 +50,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    // Why: some volumes (RAM disks, subst and network drives, WSL UNC) fail realpath outright.
+    // Some RAM/subst/network/WSL volumes cannot resolve realpath.
     realpath: async (path: string) => {
       if (path === realpathFailure.path) {
         throw Object.assign(new Error(`EIO: i/o error, realpath '${path}'`), { code: 'EIO' })
       }
       return actual.realpath(path)
     },
-    // Why: 9P and some SMB mounts report inode 0 for every file.
+    // 9P and some SMB mounts expose inode zero for every file.
     stat: async (path: string, options?: { bigint?: boolean }) => {
       if (options?.bigint !== true) {
         return actual.stat(path)
@@ -65,7 +65,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       const stats = await actual.stat(path, { bigint: true })
       return zeroInodes.enabled ? Object.assign(stats, { ino: 0n }) : stats
     },
-    // Why: holds one save between its passed check and its write, where a competing save must wait.
+    // Hold a save after comparison so competing saves must wait before checking.
     writeFile: vi.fn(async (...args: Parameters<typeof actual.writeFile>) => {
       const gate = typeof args[1] === 'string' ? writeGates.get(args[1]) : undefined
       if (gate) {
@@ -80,7 +80,7 @@ vi.mock('./local-regular-file-read', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalRegularFileRead>()
   return {
     ...actual,
-    // Why: reports the size from before a concurrent append, as a stat racing the writer would.
+    // Model stat observing size just before a concurrent append.
     openLocalRegularFile: async (filePath: string) => {
       if (fileRead.openError) {
         throw fileRead.openError
@@ -394,7 +394,7 @@ describe('local provider guarded write', () => {
     expect(await readFile(filePath, 'utf8')).toBe(winner === 0 ? 'client one' : 'client two')
   })
 
-  // Why: creating symlinks needs elevated rights on Windows runners.
+  // Windows symlink creation requires elevated rights or Developer Mode.
   it.skipIf(process.platform === 'win32').each([
     ['a symlink', (target: string, alias: string) => symlink(target, alias)],
     ['a hardlink', (target: string, alias: string) => link(target, alias)]

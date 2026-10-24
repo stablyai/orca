@@ -7,10 +7,10 @@ import {
 } from './filesystem-watcher-event-batch'
 
 describe('queueWatcherEvents', () => {
-  function events(count: number): WatcherEvent[] {
+  function events(count: number, start = 0): WatcherEvent[] {
     return Array.from({ length: count }, (_, index): WatcherEvent => ({
       type: 'update',
-      path: `/repo/file-${index}.ts`
+      path: `/repo/file-${start + index}.ts`
     }))
   }
 
@@ -21,6 +21,14 @@ describe('queueWatcherEvents', () => {
 
     expect(batch.overflowed).toBe(false)
     expect(batch.events.map((event) => event.path)).toEqual(['/repo/file-0.ts', '/repo/file-1.ts'])
+
+    const retained = [...batch.events]
+    const remaining = events(MAX_BATCHED_WATCHER_EVENTS - retained.length, retained.length)
+    queueWatcherEvents(batch, remaining)
+
+    expect(batch.overflowed).toBe(false)
+    expect(batch.events).toEqual([...retained, ...remaining])
+    expect(batch.events).toHaveLength(MAX_BATCHED_WATCHER_EVENTS)
   })
 
   it('marks overflow without retaining oversized event lists', () => {

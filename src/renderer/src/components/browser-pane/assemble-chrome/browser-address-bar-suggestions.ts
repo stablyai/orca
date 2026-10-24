@@ -35,6 +35,8 @@ export type BrowserAddressBarSuggestion = {
   visitCount: number
   isSearch: boolean
   faviconUrl?: string | null
+  /** Set on a visited-page row: the history entry it came from, so the row can be removed. */
+  normalizedUrl?: string
   /** Set on a previewed-document row; selecting it opens the document on a fresh grant. */
   docLocation?: BrowserPageDocLocation
   /** On row 0 when the bar completes the typed text inline to it: the full bar text. */
@@ -51,6 +53,21 @@ function toWorkspaceDocSuggestion(entry: WorkspaceDocHistoryEntry): BrowserAddre
     isSearch: false,
     docLocation: entry.docLocation
   }
+}
+
+function toBrowserHistorySuggestion(entry: BrowserHistoryEntry): BrowserAddressBarSuggestion {
+  return { ...entry, subtitle: entry.url, isSearch: false }
+}
+
+/** Every visited page and previewed document as rows, newest first. */
+export function listBrowserHistoryRecents(
+  browserUrlHistory: readonly BrowserHistoryEntry[],
+  workspaceDocHistory: readonly WorkspaceDocHistoryEntry[]
+): BrowserAddressBarSuggestion[] {
+  return [
+    ...browserUrlHistory.map(toBrowserHistorySuggestion),
+    ...workspaceDocHistory.map(toWorkspaceDocSuggestion)
+  ].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
 }
 
 export function isBrowserAddressBarQueryTooLarge(
@@ -112,13 +129,10 @@ function buildSuggestionRows({
   }
   const trimmed = value.trim()
   if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
-    const recents: BrowserAddressBarSuggestion[] = [
-      ...browserUrlHistory.map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false })),
-      ...workspaceDocHistory.map(toWorkspaceDocSuggestion)
-    ]
-    return recents
-      .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
-      .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
+    return listBrowserHistoryRecents(browserUrlHistory, workspaceDocHistory).slice(
+      0,
+      MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS
+    )
   }
   const documentRows = workspaceDocHistory.map(toWorkspaceDocSuggestion)
   const documentEntries: BrowserHistoryEntry[] = documentRows.map((row) => ({
@@ -130,7 +144,7 @@ function buildSuggestionRows({
   }))
   const rowByEntry = new Map<BrowserHistoryEntry, BrowserAddressBarSuggestion>()
   for (const entry of browserUrlHistory) {
-    rowByEntry.set(entry, { ...entry, subtitle: entry.url, isSearch: false })
+    rowByEntry.set(entry, toBrowserHistorySuggestion(entry))
   }
   documentEntries.forEach((entry, index) => rowByEntry.set(entry, documentRows[index]))
   // Why prepare the caller's array as-is: it is the stable `browserUrlHistory`

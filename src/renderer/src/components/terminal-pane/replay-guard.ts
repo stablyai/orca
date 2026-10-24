@@ -9,6 +9,7 @@ import {
   notifyUndeliverableWrite,
   recordTerminalParseProgress
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 
 // Why this guard exists: xterm auto-replies to query sequences (DA1/DECRQM/OSC 10-11/CPR) via onData → shell stdin, so replaying recorded PTY bytes leaks stray replies onto the new shell's prompt.
@@ -144,7 +145,7 @@ function engageReplayGuard(
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
     try {
       // FIFO certification: this callback runs only after every replay byte queued before it has parsed.
-      terminal.write('', () => {
+      writeXtermParseBarrier(terminal, () => {
         recordTerminalParseProgress(terminal)
         release('lost-completion')
       })
@@ -263,7 +264,7 @@ export function waitForTerminalReplayWritesParsed(
       }
       try {
         // Why: empty write is FIFO after replay bytes; its callback recovers a lost sentinel without changing parser state.
-        terminal.write('', finish)
+        writeXtermParseBarrier(terminal, finish)
       } catch {
         // A disposed terminal cannot parse any remaining replay bytes.
         finish()
@@ -272,7 +273,7 @@ export function waitForTerminalReplayWritesParsed(
     stallTimer = setTimeout(queueProbe, options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS)
     try {
       // Why empty: keep pendingEscapeTailAnsi as the final replay bytes; xterm still orders this completion after earlier writes.
-      terminal.write('', finish)
+      writeXtermParseBarrier(terminal, finish)
     } catch {
       // A disposed terminal cannot parse any remaining replay bytes.
       finish()

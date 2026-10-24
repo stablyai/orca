@@ -13,8 +13,7 @@ import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt'
 
-/** The same process, whatever Orca runtime the store stamped on its record (`runtime`): that stamp
- *  is about who holds the process, not which process it is. */
+/** Runtime labels identify the holder, not process identity. */
 function sameOwnerProcess(
   stored: AgentSessionProcessIdentity,
   acquired: AgentSessionProcessIdentity
@@ -24,8 +23,7 @@ function sameOwnerProcess(
   return isDeepStrictEqual(storedProcess, acquiredProcess)
 }
 
-/** A reservation with no process behind it is only a promise to spawn; the
- * adapter makes it real and the store then grants the writer. */
+/** Spawn makes a reservation real; the store grants write authority afterward. */
 export async function acquireOwner(
   input: AttachFlowInput,
   record: AgentSessionRecord
@@ -45,14 +43,14 @@ export async function acquireOwner(
       throw new AgentSessionPreSpawnError(error)
     }
     const permissionMode = await input.launchPermissionMode?.(record)
-    // Right before the spawn: a close, Stop or quit that landed during any wait above launches nothing.
+    // Recheck after waits so Stop/close/quit cannot spawn a late child.
     if (input.acquireSignal?.aborted) {
       throw new AgentSessionPreSpawnError(abortSignalReason(input.acquireSignal))
     }
     const attempt = mintStructuredAgentSessionStartupAttempt({
       record,
       identity: journalIdentityFor(record, input.params),
-      // Retries must recover the original reservation, not mint a second child.
+      // Retry the existing reservation instead of spawning a second child.
       spawnToken,
       ...(permissionMode ? { permissionMode } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {}),
@@ -84,7 +82,6 @@ export async function acquireOwner(
     } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
     }
-    // The process owns the lease now; a handle the provider answers with is returned by `open`.
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,

@@ -8,7 +8,7 @@ import {
 // Cache transcript content verbatim; outbound snippet policy belongs at the transport boundary.
 
 // Bump to discard and rebuild this transcript-derived cache.
-export const SESSION_SEARCH_SCHEMA_VERSION = 7
+export const SESSION_SEARCH_SCHEMA_VERSION = 8
 
 // Keep paths and C++ intact; omit # so #123 also matches 123.
 const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`

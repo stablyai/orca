@@ -5,6 +5,11 @@ import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  measureSettingsWork,
+  expectSettingsWorkScale
+} from '../../../../shared/global-settings-test-fixture'
+import * as profile from '../../../../shared/tui-agent-launch-defaults'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import {
@@ -36,6 +41,28 @@ const server = projectAgentLaunchSettings({
   defaultTuiAgent: 'codex',
   disabledTuiAgents: ['opencode']
 })
+const raw = {
+  ...server,
+  agentPermissionDefault: 'ask' as const,
+  agentDefaultEnv: {
+    claude: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`K${i}`, 'private']))
+  }
+}
+const payloadWork = { entries: 0, bytes: 0, count: 0 }
+const compositions = vi.spyOn(profile, 'composeAgentLaunchProfile')
+function payload(source: Parameters<typeof projectAgentLaunchSettings>[0] = raw) {
+  const before = compositions.mock.calls.length,
+    { value: settings, work } = measureSettingsWork(() => projectAgentLaunchSettings(source))
+  expect(compositions.mock.calls.length - before).toBe(1)
+  const result = { settings },
+    text = JSON.stringify(result)
+  expect(text).not.toContain('private')
+  payloadWork.count++
+  payloadWork.entries += work.entries + work.visits + 14 * 20
+  payloadWork.bytes += text.length + work.bytes
+  return result
+}
+
 function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   return {
     status: {
@@ -51,7 +78,8 @@ function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   }
 }
 beforeEach(() => {
-  rpc.call.mockReset().mockResolvedValue({ settings: server })
+  Object.assign(payloadWork, { entries: 0, bytes: 0, count: 0 })
+  rpc.call.mockReset().mockImplementation(() => payload())
   rpc.supports.mockReset().mockResolvedValue(true)
   replaceRuntimeEnvironmentRevisions([{ id: 'alpha', createdAt: 7 }])
   setLocalRuntimeCapabilitiesForTests([CHAT, CLIENT])
@@ -171,38 +199,47 @@ it('ignores old reads across host switches, restarts, and re-pairing', async () 
   )
 })
 
-it('refreshes after a save, fences the earlier read, and refreshes on reopening', async () => {
-  const old = Promise.withResolvers<{ settings: typeof server }>()
-  rpc.call.mockReturnValueOnce(old.promise)
-  const hook = renderHook(
-    ({ open }) => useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' }),
-    { initialProps: { open: true } }
-  )
-  await act(async () => {})
-  await act(async () => {
-    await mutateHostAgentLaunchSettings(
+it.each([20, 200])('bounds %s menu owners across save/open', async (n) => {
+  const notify = () =>
+    mutateHostAgentLaunchSettings(
       { environmentId: 'alpha', pairingRevision: 7 },
       { type: 'availability', agent: 'opencode', enabled: false }
     )
+  const old = Promise.withResolvers<void>()
+  rpc.call.mockImplementationOnce(() => {
+    const earlier = payload({ ...raw, disabledTuiAgents: ['codex'] })
+    return old.promise.then(() => earlier)
   })
-  await act(async () =>
-    old.resolve({ settings: projectAgentLaunchSettings({ disabledTuiAgents: ['codex'] }) })
+  const hooks = Array.from({ length: n }, () =>
+    renderHook(
+      ({ open }) => useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' }),
+      { initialProps: { open: true } }
+    )
   )
+  const hook = hooks[0]
+  await act(async () => {})
+  await act(notify)
+  await act(async () => old.resolve())
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'codex'
   )
-  hook.rerender({ open: false })
-  rpc.call.mockResolvedValue({
-    settings: projectAgentLaunchSettings({
-      defaultTuiAgent: 'claude',
-      disabledTuiAgents: ['codex']
-    })
-  })
-  hook.rerender({ open: true })
+  expect(rpc.call).toHaveBeenCalledTimes(2 * n + 1)
+  hooks.forEach((h) => h.rerender({ open: false }))
+  await act(notify)
+  expect(rpc.call).toHaveBeenCalledTimes(2 * n + 2)
+  rpc.call.mockImplementation(() =>
+    payload({ ...raw, defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] })
+  )
+  hooks.forEach((h) => h.rerender({ open: true }))
   await act(async () => {})
   expect(hook.result.current.state === 'settled' && hook.result.current.rows[0]?.agent).toBe(
     'claude'
   )
+  hooks.forEach((h) => h.unmount())
+  await act(notify)
+  expect(rpc.call).toHaveBeenCalledTimes(3 * n + 3)
+  expect(payloadWork.count).toBe(3 * n + 3)
+  expectSettingsWorkScale('menu', n, [payloadWork.entries, payloadWork.bytes])
 })
 
 it('keeps this runtime’s last preferences through a failed reconnect refresh', async () => {

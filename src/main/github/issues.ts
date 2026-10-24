@@ -11,31 +11,13 @@ import {
 // prettier-ignore
 import { ghExecFileAsync, acquire, release, classifyListIssuesError } from './gh-utils'
 
-// Why: distinguishes a successful-empty listing from a failed fetch. The
-// previous `catch { return [] }` conflated a 403 on a private upstream with an
-// empty backlog. Callers decide how to surface `error`.
-//
-// Why no `fellBack` here: the fell-back signal for the renderer toast rides on
-// `ListWorkItemsResult.issueSourceFellBack` (the Tasks list's envelope). The
-// only consumer of `listIssues` — the `gh:listIssues` IPC handler — unwraps
-// to `.items` and has no UI hook to surface a fallback toast. Adding a dead
-// `fellBack` field here invited drift between the JSDoc promise and reality.
+// Keep successful-empty and failed listings distinguishable; fallback toasts belong to the Tasks envelope.
 export type IssueListResult = {
   items: IssueInfo[]
   error?: ClassifiedError
 }
 
-/**
- * Get a single issue by number.
- * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
- *
- * Why this path doesn't take a preference: linked-issue lookups persist a
- * number to a worktree at creation time. Routing detail lookups through the
- * live per-repo preference would silently flip an existing link to a
- * different repo after the user toggled the selector — the opposite of what
- * #1186 / the parent design doc guard against. List and create paths honor
- * preference; number-resolution stays on the heuristic.
- */
+/** Linked issue numbers keep heuristic source resolution; changing list preference must not retarget existing links. */
 export async function getIssue(
   repoPath: string,
   issueNumber: number,
@@ -48,8 +30,7 @@ export async function getIssue(
     connectionId,
     localGitOptions
   )
-  // Why: a connection-backed request has no local cwd, so the non-GitHub
-  // fallback below would let gh target its default repository. Refuse instead.
+  // Without local cwd, unresolved connection-backed requests could target gh's default repository.
   if (connectionId && !ownerRepo) {
     return null
   }
@@ -68,7 +49,7 @@ export async function getIssue(
       const data = JSON.parse(stdout)
       return mapIssueInfo(data)
     }
-    // Fallback for non-GitHub remotes
+    // Local compatibility path relies on gh repository discovery.
     const { stdout } = await ghExecFileAsync(
       ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels,body'],
       ghOptions
@@ -82,17 +63,7 @@ export async function getIssue(
   }
 }
 
-/**
- * List issues for a repo.
- * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
- *
- * Why: returns a structured result so a 403 (e.g. fork contributor without
- * read access to a private upstream) surfaces as an error the UI can render
- * instead of collapsing to "No issues". The empty-list-on-error behavior this
- * replaces was explicitly flagged as a merge-blocker in the parent design doc
- * (§3) — silently hiding failures re-creates the same silent-source-switch
- * class of wrongness #1186 warned against, one level deeper.
- */
+/** Return classified failures separately so unavailable repositories cannot look like empty backlogs. */
 export async function listIssues(
   repoPath: string,
   limit = 20,
@@ -114,8 +85,7 @@ export async function listIssues(
     connectionId,
     localGitOptions
   )
-  // Why: a connection-backed request has no local cwd, so the non-GitHub
-  // fallback below would let gh list its default repository. Refuse instead.
+  // Refuse unresolved remote identities rather than listing gh's default repository.
   if (connectionId && !ownerRepo) {
     return {
       items: [],
@@ -138,17 +108,14 @@ export async function listIssues(
         ghOptions
       )
       const data = JSON.parse(stdout) as Record<string, unknown>[]
-      // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
-      // pull requests alongside issues (PRs carry a `pull_request` key).
-      // Strip them here so `listIssues` only returns true issues, matching the
-      // filter applied in `listRecentWorkItems` (src/main/github/client.ts).
+      // GitHub REST issues includes PRs; exclude them from this issue-only result.
       return {
         items: data
           .filter((d) => !('pull_request' in d))
           .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
       }
     }
-    // Fallback for non-GitHub remotes
+    // Local compatibility path relies on gh repository discovery.
     const { stdout } = await ghExecFileAsync(
       ['issue', 'list', '--json', 'number,title,state,url,labels', '--limit', String(limit)],
       ghOptions

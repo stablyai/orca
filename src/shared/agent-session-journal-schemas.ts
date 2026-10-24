@@ -302,7 +302,7 @@ export const AgentJournalProducerLinkageFields = {
 } as const
 
 /** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
- *  the row malformed. A reader places only `turn` with an id; anything else reads as `thread`. */
+ *  the row malformed. Unknown membership preserves content without claiming a turn boundary. */
 export const AgentJournalTurnScopeSchema = z.object({
   kind: z.string().min(1),
   turnItemId: z.string().min(1).optional()

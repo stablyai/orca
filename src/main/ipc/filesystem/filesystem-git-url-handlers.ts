@@ -15,7 +15,7 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
       _event,
       args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
     ): Promise<string | null> => {
-      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
+      // Remote URL construction needs the owning SSH host's .git/config.
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
@@ -30,7 +30,7 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
       args: { worktreePath: string; sha: string; connectionId?: string }
     ): Promise<string | null> => {
       const sha = validateFullGitObjectId(args.sha, 'sha')
-      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
+      // Remote URL construction needs the owning SSH host's .git/config.
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })

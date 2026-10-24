@@ -1,10 +1,4 @@
-/**
- * WSL-native file watcher for WSL paths.
- *
- * Why: polling \\wsl.localhost from Windows keeps waking the distro after
- * `wsl --shutdown`, which can make WSL look wedged. Keep the polling process
- * inside the distro so shutdown kills it instead of Orca restarting WSL.
- */
+/** Poll inside WSL so distro shutdown kills the watcher instead of Windows UNC polling repeatedly waking it. */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { WebContents } from 'electron'
@@ -12,7 +6,7 @@ import type { Event as WatcherEvent } from '@parcel/watcher'
 import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
-import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import * as watcherChildRegistry from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
@@ -24,8 +18,7 @@ export type WatchedRoot = {
   subscription: WatcherSubscription
   listeners: Map<number, WebContents>
   batch: DebouncedBatch
-  // Why: the real on-disk path. Never substitute the watcher's rootKey — that is
-  // a comparison key (case/Unicode folded) and would reach the renderer as a path.
+  // Renderer paths must use real spelling, never folded comparison keys.
   rootPath: string
 }
 
@@ -151,7 +144,6 @@ export async function createWslWatcher(
   deps: WslWatcherDeps,
   signal?: AbortSignal
 ): Promise<WatchedRoot> {
-  // Why: honor local-install cancellation before spawning a WSL snapshot process.
   if (signal?.aborted) {
     throw new DOMException('WSL watcher subscription aborted', 'AbortError')
   }
@@ -238,17 +230,15 @@ export async function createWslWatcher(
   }
 
   let child: ChildProcessWithoutNullStreams
-  const releaseChildReservation = reserveWatcherChild()
+  const releaseChildReservation = watcherChildRegistry.reserveWatcherChild()
   if (!releaseChildReservation) {
-    throw new WatcherChildCapacityError()
+    throw new watcherChildRegistry.WatcherChildCapacityError()
   }
   try {
     child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
-      // Why explicit (#16463): the watched directory rides in argv, and an
-      // inherited cwd is a worktree that can be deleted -- after which every
-      // watcher start fails `spawn wsl.exe ENOENT`.
+      // Inherited cwd may be a deleted worktree, causing spawn wsl.exe ENOENT (#16463).
       cwd: resolveWslInteropSpawnCwd()
     })
   } catch (error) {
@@ -256,8 +246,7 @@ export async function createWslWatcher(
     throw error instanceof Error ? error : new Error(String(error))
   }
 
-  // Why: the physical-exit owner releases the shared process reservation on
-  // exactly the same close/error proof that settles destructive cleanup.
+  // Release process capacity only on the same physical-exit proof required for destructive cleanup.
   const processExit = createWslWatcherProcessExit(child, worktreePath, releaseChildReservation)
 
   const onAbort = (): void => {
@@ -272,8 +261,7 @@ export async function createWslWatcher(
   }, STARTUP_TIMEOUT_MS)
 
   child.stdin.on('error', (error) => {
-    // Why: WSL can exit before reading the script; handle EPIPE here so the
-    // startup failure rejects the watcher instead of crashing on a stream error.
+    // Early WSL exit can break stdin; reject setup on EPIPE instead of crashing on a stream error.
     if (!startup.settled) {
       startup.settle(error)
     }
@@ -306,8 +294,7 @@ export async function createWslWatcher(
   })
 
   child.once('error', (error) => {
-    // Why: a child that never acquired a pid has no OS owner to await. Kill
-    // errors for an already-spawned child still require the close event.
+    // Failed spawns without a PID need no exit wait; spawned children still require close proof.
     if (child.pid === undefined) {
       processExit.markPhysicalExit()
     }
@@ -338,8 +325,7 @@ export async function createWslWatcher(
     child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
     await startup.ready
   } catch (error) {
-    // Why: cancellation is part of destructive removal. Do not let the failed
-    // install disappear from ownership until WSL confirms the child exited.
+    // Destructive cancellation must retain ownership until WSL confirms physical exit.
     startup.settle(error instanceof Error ? error : new Error(String(error)))
     await startup.ready.catch(() => undefined)
     await processExit.stopAndWait()

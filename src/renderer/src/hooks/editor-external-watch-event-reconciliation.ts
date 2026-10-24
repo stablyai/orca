@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
+import type { AppState } from '@/store/types'
 import { basename } from '@/lib/path'
 import { canAutoSaveOpenFile } from '@/components/editor/editor-autosave'
 import { indexEditorExternalWatchBatchPaths } from '@/components/editor/editor-external-watch-path-index'
@@ -96,8 +98,10 @@ export function buildEditorExternalWatchEventHandler(
 
   const reconcileTarget = (payload: FsChangedPayload, target: EditorExternalWatchTarget): void => {
     // Why: one batch index keeps local WSL alias normalization out of event×tab loops.
-    const openFilesAtStart = useAppStore.getState().openFiles
+    const stateAtStart = useAppStore.getState()
+    const openFilesAtStart = stateAtStart.openFiles
     const batchPaths = indexEditorExternalWatchBatchPaths(payload, openFilesAtStart, {
+      catalog: stateAtStart,
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId,
@@ -125,7 +129,7 @@ export function buildEditorExternalWatchEventHandler(
     const deletedOpenEditorIds = deletedOpenEditors.map(({ file }) => file.id)
     const hasPairedCreate =
       deletedOpenEditorIds.length > 0 &&
-      hasRenameCorrelatedCreate(payload, target.worktreeId, deletedOpenEditorIds, openFilesAtStart)
+      hasRenameCorrelatedCreate(payload, target.worktreeId, deletedOpenEditorIds, stateAtStart)
     if (deletedOpenEditorIds.length > 0) {
       if (hasPairedCreate) {
         const setExternalMutation = useAppStore.getState().setExternalMutation
@@ -165,7 +169,7 @@ export function buildEditorExternalWatchEventHandler(
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
         if (
-          file.worktreeId === target.worktreeId &&
+          openFileOwnerWorktreeId(file, state) === target.worktreeId &&
           getOpenFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
@@ -262,16 +266,16 @@ function hasRenameCorrelatedCreate(
   payload: FsChangedPayload,
   worktreeId: string,
   deletedOpenEditorIds: string[],
-  openFiles: OpenFile[]
+  state: AppState
 ): boolean {
   if (deletedOpenEditorIds.length === 0) {
     return false
   }
   const deletedIdSet = new Set(deletedOpenEditorIds)
   const deletedBasenames = new Set<string>()
-  for (const file of openFiles) {
+  for (const file of state.openFiles) {
     if (
-      file.worktreeId !== worktreeId ||
+      openFileOwnerWorktreeId(file, state) !== worktreeId ||
       (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
       !deletedIdSet.has(file.id)
     ) {

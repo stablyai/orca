@@ -477,7 +477,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
   })
 
   it('omits the marker when nothing was shed and never stamps the caller envelope', () => {
-    const primary = makeBoundedClient(65536)
+    const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     try {
       const envelope = makeEnvelope({ lastAssistantMessage: 128, subagents: 2 })
@@ -486,6 +486,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
 
       const shedding = makeEnvelope({ lastAssistantMessage: 20_000, subagents: 2 })
       publishAgentHookEnvelope(dispatcher, shedding)
+      expect(decodeEnvelopes(primary)[1].shedFields).toEqual(['lastAssistantMessage'])
       // The hook server replays this exact object, so the marker must live on the wire copy only.
       expect((shedding as PublishedEnvelope).shedFields).toBeUndefined()
       expect(shedding.payload.lastAssistantMessage).toBe('a'.repeat(20_000))
@@ -590,6 +591,13 @@ describe('publishAgentHookEnvelope redelivery', () => {
         publishAgentHookEnvelope(dispatcher, envelope)
       }
 
+      const refreshed = makeEnvelope({})
+      refreshed.paneKey = 'tab-1:4f1b0f4e-0000-4000-8000-000000000001'
+      publishAgentHookEnvelope(dispatcher, refreshed)
+      const newest = makeEnvelope({})
+      newest.paneKey = 'tab-1:4f1b0f4e-0000-4000-8000-000000000065'
+      publishAgentHookEnvelope(dispatcher, newest)
+
       primary.blocked = false
       primary.drain()
       vi.advanceTimersByTime(1_000)
@@ -598,6 +606,9 @@ describe('publishAgentHookEnvelope redelivery', () => {
       expect(redelivered).toHaveLength(64)
       expect(redelivered).toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000064')
       expect(redelivered).not.toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000000')
+      expect(redelivered).toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000001')
+      expect(redelivered).not.toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000002')
+      expect(redelivered).toContain('tab-1:4f1b0f4e-0000-4000-8000-000000000065')
     } finally {
       dispatcher.dispose()
     }

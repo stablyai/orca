@@ -15,6 +15,10 @@ describe('mobile-native-chat-terminal-write-lock', () => {
     expect(acquireMobileNativeChatTerminalWrite('terminal-a')).toBe(false)
 
     releaseMobileNativeChatTerminalWrite('terminal-a')
+    expect(acquireMobileNativeChatTerminalWrite('terminal-a')).toBe(true)
+    expect(acquireMobileNativeChatTerminalWrite('terminal-b')).toBe(false)
+    releaseMobileNativeChatTerminalWrite('terminal-a')
     releaseMobileNativeChatTerminalWrite('terminal-b')
+    expect(acquireMobileNativeChatTerminalWrite('terminal-b')).toBe(true)
   })
 })

@@ -297,8 +297,8 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     const second = await store.assign(IDENTITY, 'us-central1')
 
     // Identical, not merely same-celled: the clock has not moved, so every
-    // field including the lease deadline must match.
-    expect(second).toEqual(first)
+    // field including the lease deadline must match; only the first was placed.
+    expect(second).toEqual({ ...first, placed: undefined })
     // One row read answers both the stranded rule and the roll-stamp check.
     expect(counter.count('relay_cell_admission')).toBe(1)
     expect(counter.count('relay_assignment_migrations')).toBe(0)
@@ -315,10 +315,9 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     await park(first.cellId, 'migration-only')
 
     expect(await rollIsolatedAt(first.cellId)).toBeNull()
-    expect(await store.assign(IDENTITY, 'us-central1')).toMatchObject({
-      cellId: first.cellId,
-      assignmentEpoch: first.assignmentEpoch
-    })
+    const pinned = await store.assign(IDENTITY, 'us-central1')
+    expect(pinned).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
+    expect(pinned.placed).toBeUndefined()
   })
 
   it('re-places a host once the roll stamp is set', async () => {
@@ -332,13 +331,13 @@ describe('re-placing a host off a cell isolated for a roll', () => {
 
     expect(moved.cellId).not.toBe(first.cellId)
     expect(moved.assignmentEpoch).toBe(first.assignmentEpoch + 1)
+    expect(moved.placed).toBe(true)
     expect(counter.count('relay_assignment_migrations')).toBeGreaterThan(0)
 
     // Durable: the next dial does not bounce back to the isolated cell.
-    expect(await store.assign(IDENTITY, 'us-central1')).toMatchObject({
-      cellId: moved.cellId,
-      assignmentEpoch: moved.assignmentEpoch
-    })
+    const kept = await store.assign(IDENTITY, 'us-central1')
+    expect(kept).toMatchObject({ cellId: moved.cellId, assignmentEpoch: moved.assignmentEpoch })
+    expect(kept.placed).toBeUndefined()
   })
 
   it.each([
@@ -584,7 +583,7 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       const regionReserve = vi.fn(async () => onReserve)
       await expect(
         store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { regionReserve })
-      ).resolves.toEqual(onReserve)
+      ).resolves.toEqual({ ...onReserve, placed: true })
       expect(regionReserve).toHaveBeenCalledOnce()
       expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toEqual([
         {
@@ -639,10 +638,32 @@ describe('re-placing a host off a cell isolated for a roll', () => {
       warn.mockClear()
       await expect(
         store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { placeFresh: async () => onReserve })
-      ).resolves.toEqual(onReserve)
+      ).resolves.toEqual({ ...onReserve, placed: true })
       expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toMatchObject([
         { fromCellId: first.cellId, toCellId: 'asia-reserve', via: 'reserve' }
       ])
+    })
+
+    describe('when no database cell has room anywhere', () => {
+      const onUsReserve = { ...onReserve, cellId: 'us-reserve', region: 'us-central1' as const }
+      const isolateWithNoDatabaseRoom = async () => {
+        const harness = await setup()
+        const first = await harness.store.assign(IDENTITY, 'asia-east2')
+        await harness.isolateForRoll(first.cellId)
+        for (const cell of CELLS.filter((entry) => entry.region === 'us-central1')) {
+          await harness.park(cell.id, 'migration-only')
+        }
+        return { ...harness, first }
+      }
+
+      // Today's rule: a live isolated cell keeps a host no other cell can take.
+      it('keeps the pin and never asks the spill', async () => {
+        const { store, first } = await isolateWithNoDatabaseRoom()
+        const reserveSpill = vi.fn(async () => onUsReserve)
+        const kept = await store.assign(IDENTITY, 'asia-east2', 'asia-east2', undefined, { reserveSpill })
+        expect(kept).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
+        expect(reserveSpill).not.toHaveBeenCalled()
+      })
     })
 
     it('does not hold a host whose preferred region is elsewhere', async () => {

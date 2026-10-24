@@ -13,7 +13,7 @@ export async function commitChanges(
     await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
     return { success: true }
   } catch (error) {
-    // Why: useful message may be on stderr (hook/GPG failures) or stdout ("nothing to commit"), so try both then message.
+    // Hook/GPG failures use stderr; nothing-to-commit output can be on stdout.
     const readStringField = (field: string): string | null => {
       if (typeof error === 'object' && error && field in error) {
         const v = (error as Record<string, unknown>)[field]

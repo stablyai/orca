@@ -1,5 +1,4 @@
-// Reads a `queued_messages` row an earlier build wrote (`journal-queue-import.ts`): a row this build
-// cannot re-materialize is dropped, never shown as an empty message, and stays on disk.
+// Unreadable legacy cards remain on disk and must never appear as empty messages.
 
 import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -11,8 +10,6 @@ import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-
 export const LEGACY_QUEUED_MESSAGE_COLUMNS =
   'message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json'
 
-/** A `queued_messages` row as the legacy SELECTs return it; null when it cannot be read back, or
- *  its body could not be written to the journal. */
 export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | null {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows come from the legacy SELECTs (`LEGACY_QUEUED_MESSAGE_COLUMNS`), which name exactly these columns; better-sqlite3 types them as unknown.
   const record = row as {
@@ -34,8 +31,6 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked by readAgentJournalMessageBody just below before any use.
     body = JSON.parse(record.body_json) as AgentJournalMessageItem
   } catch {
-    // Our own writer stringified it; an unreadable body is corruption, and a
-    // row we cannot re-materialize must not masquerade as an empty message.
     return null
   }
   const state = record.state
@@ -63,7 +58,7 @@ export function readStoredQueuedMessageRow(row: unknown): QueuedMessageRow | nul
   }
 }
 
-/** A bad value only loses the choices the send carried, never the card. */
+/** Invalid execution options must not discard the card. */
 function storedOptions(json: string | null): Pick<QueuedMessageRow, 'options'> {
   if (json === null) {
     return {}
@@ -76,8 +71,7 @@ function storedOptions(json: string | null): Pick<QueuedMessageRow, 'options'> {
   }
 }
 
-/** Holds an earlier build stored that this one derives instead: a kept send (`kept`) waits under
- *  the reopen's pause, a Stop's (`stopped`) under the Stop's. */
+/** Legacy per-card reasons now derive from queue pauses. */
 const QUEUED_MESSAGE_RETIRED_HOLD_REASONS: ReadonlySet<string> = new Set(['kept', 'stopped'])
 
 function storedHoldReason(stored: string | null): string | null {
@@ -91,7 +85,7 @@ function storedRejection(json: string | null): UnreadAgentSessionFailureFact | n
   try {
     return readStoredRejectionFact(JSON.parse(json)) ?? null
   } catch {
-    // The refusal stays readable from `returned_reason`; a bad fact must not lose the card.
+    // Preserve readable refusal text when the typed fact is malformed.
     return null
   }
 }

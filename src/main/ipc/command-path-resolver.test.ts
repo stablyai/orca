@@ -74,11 +74,7 @@ describe('isCommandOnLocalPath', () => {
     let dir = ''
     beforeAll(async () => {
       dir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-win32-'))
-      // Why: the fixture extension matches a PATHEXT entry's case exactly so these
-      // tests are filesystem-portable. Real Windows resolves `.CMD` vs `.cmd`
-      // case-insensitively via the FS itself (same as where.exe); we deliberately
-      // do NOT emulate that in the resolver, so we must not depend on a
-      // case-insensitive FS here — this suite also runs on case-sensitive Linux CI.
+      // Match PATHEXT case in fixtures; real Windows handles filename case while Linux test filesystems do not.
       await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
     })
     afterAll(async () => {
@@ -113,9 +109,7 @@ describe('isCommandOnLocalPath', () => {
     })
   })
 
-  // Why the full list exists (#22975): a dead version-manager shim passes the
-  // same executable check as the binary it shadows, so a winner-only lookup can
-  // only ever hand the caller the shim. The copies behind it are the answer.
+  // Executable-but-broken shims can shadow working binaries; retain later PATH candidates (#22975).
   describe.skipIf(process.platform === 'win32')('listLocalCommandPaths', () => {
     let front = ''
     let middle = ''
@@ -132,8 +126,6 @@ describe('isCommandOnLocalPath', () => {
       back = await mkdtemp(path.join(tmpdir(), 'cmd-list-back-'))
       await executable(front, 'gh', '#!/usr/bin/env bash\nexec /nope/asdf exec "gh" "$@"\n')
       await executable(back, 'gh', "#!/bin/sh\nprintf 'gh version 2.98.0\\n'\n")
-      // Both a non-executable file and a directory in the middle: neither is a
-      // match, and neither may end the scan.
       await writeFile(path.join(middle, 'gh'), 'not executable\n')
       await chmod(path.join(middle, 'gh'), 0o644)
       await mkdir(path.join(middle, 'glab'))
@@ -186,12 +178,7 @@ describe('isCommandOnLocalPath', () => {
     })
 
     it('drops a relative match the filesystem would otherwise find', async () => {
-      // Why a second relative case: `path.posix.join('.', 'gh')` collapses to
-      // `gh`, so the case above is unaffected by deleting the gate. `fs.access`
-      // resolves a relative candidate against the process cwd, so only a PATH
-      // entry that really reaches a fixture proves the filter — and the `access`
-      // proves that reach first, making this fail loudly instead of going
-      // vacuous if the suite is ever run from a directory that hides it.
+      // Ensure this relative PATH entry actually reaches a fixture before asserting the absolute-only filter.
       const relative = path.relative(process.cwd(), back)
       await expect(access(path.join(relative, 'gh'))).resolves.toBeUndefined()
       await expect(
@@ -200,8 +187,7 @@ describe('isCommandOnLocalPath', () => {
     })
 
     it('lists a PATH entry that repeats only once', async () => {
-      // Why it matters: callers spawn each entry, and `/usr/local/bin` appearing
-      // twice in a real PATH is normal — a doomed shim must not be probed twice.
+      // Duplicate PATH directories must not probe doomed shims repeatedly.
       await expect(
         listLocalCommandPaths('gh', {
           platform: 'linux',

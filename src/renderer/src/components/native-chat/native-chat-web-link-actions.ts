@@ -7,6 +7,7 @@ import {
 import type { TerminalLinkClickBehavior } from '@/components/terminal-pane/terminal-link-click-behavior'
 import {
   buildHttpLinkActions,
+  httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
   type HttpLinkDestination
@@ -59,11 +60,7 @@ export function handleNativeChatWebLink(
 
   if (isTerminalLinkDirectActivation(event)) {
     event.preventDefault()
-    open(
-      event.shiftKey
-        ? (deps.destinations.alternate ?? deps.destinations.primary)
-        : deps.destinations.primary
-    )
+    open(httpLinkDirectClickDestination(deps.destinations, event.shiftKey))
     return true
   }
   if (!isTerminalLinkActionActivation(event)) {

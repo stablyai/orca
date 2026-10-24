@@ -5,12 +5,7 @@ export const CRASH_FUSE_COOLDOWN_MAX_MS = 60 * 60_000
 // A trial child whose canary confirms delivery this long resets the escalation.
 export const CRASH_FUSE_TRIAL_STABLE_MS = 10 * 60_000
 
-/**
- * Opens after repeated child crashes, then half-opens after an exponential
- * cooldown so native watching is retried instead of staying off until restart.
- * Native watching is paused while the fuse is open; only callers with their
- * own polling fallback keep seeing changes.
- */
+/** Retry native watching after exponential cooldown; callers need their own polling while the fuse is open. */
 export class WatcherProcessCrashFuse {
   private crashTimes: number[] = []
   private openUntil: number | null = null
@@ -23,8 +18,7 @@ export class WatcherProcessCrashFuse {
     if (this.openUntil !== null) {
       return
     }
-    // Why: a crash during the trial means the fault persists; don't spend
-    // another three restarts rediscovering it.
+    // A failed trial trips immediately instead of spending three more restarts.
     if (this.trialStartedAt !== null) {
       this.trip(now)
       return
@@ -86,8 +80,7 @@ export class WatcherProcessCrashFuse {
         '[parcel-watcher-process] crash fuse cooldown elapsed; retrying native file watching'
       )
     }
-    // Why: surviving is not enough; a trial child whose canary never armed or
-    // delivered has not shown the fault is gone.
+    // Survival alone is insufficient: an unarmed or silent canary has not proved recovery.
     if (
       this.trialStartedAt !== null &&
       this.healthySince !== null &&

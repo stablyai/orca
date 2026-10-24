@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeJiraSettings } from '@/runtime/runtime-jira-target'
 import type { TaskPageLinearBoardModel } from './task-page/linear/use-task-page-linear-board'

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, MessageSquarePlus } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -51,6 +52,8 @@ export function AgentSessionContinuationDialog({
   onOpenChange,
   onStarted
 }: AgentSessionContinuationDialogProps): React.JSX.Element {
+  const workspace = request ? worktreeLaunchWorkspace(request.worktreeId) : null
+  const abortRef = useRef<AbortController | null>(null)
   const settings = useAppStore((state) => state.settings)
   const [pick, setPick] = useState<{
     request: AgentSessionContinuationRequest | null
@@ -76,36 +79,38 @@ export function AgentSessionContinuationDialog({
   const disabledAgents = settings?.disabledTuiAgents ?? EMPTY_DISABLED_AGENTS
 
   const observation = useAgentMenuObservation(
-    request
-      ? {
-          workspace: {
-            kind: workspaceKindForWorktreeId(request.worktreeId),
-            worktreeId: request.worktreeId
-          },
-          launchCwd: request.initialCwd
-        }
-      : null,
+    workspace ? { workspace, launchCwd: request?.initialCwd } : null,
     open && Boolean(request),
     detectionTarget
   )
   const { detectedIds, detectionFailed } = observation.detection
   const detecting =
     detectedIds === null && !detectionFailed && !observation.detection.needsServerUpdate
-  const agents = useMemo(
-    () =>
-      getAgentCatalog().filter(
-        (agent) => detectedIds?.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
-      ),
-    [detectedIds, disabledAgents]
+  // Agents whose chat opens without their CLI are listed too; their rows decide what is pickable.
+  const offered = workspace
+    ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
+    : []
+  const agents = getAgentCatalog().filter(
+    (agent) => offered.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
   )
+  const rows = observation.model.state === 'settled' ? observation.model.rows : []
+  const pickable = agents
+    .map((agent) => agent.id)
+    .filter((agent) => rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable'))
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
-  const currentPick =
-    pick?.request === request && agents.some((agent) => agent.id === pick?.agent) ? pick : null
+  useEffect(() => {
+    const abort = open && request ? new AbortController() : null
+    abortRef.current = abort
+    return () => abort?.abort()
+  }, [open, request])
+
+  const currentPick = pick?.request === request && pickable.includes(pick.agent) ? pick : null
   const selectedAgent =
     currentPick?.agent ??
     chooseInitialContinuationAgent({
-      availableAgents: agents.map((agent) => agent.id),
+      availableAgents: pickable,
+      automaticAgents: pickable.filter((agent) => detectedIds?.includes(agent)),
       sourceAgent: request?.source.sourceAgent ?? null,
       defaultAgent: settings?.defaultTuiAgent
     })
@@ -137,7 +142,8 @@ export function AgentSessionContinuationDialog({
       groupId: request.groupId,
       initialCwd: request.initialCwd,
       launchChoice: selection.choice,
-      launchSource: request.launchSource
+      launchSource: request.launchSource,
+      signal: abortRef.current?.signal
     })
     setStarting(false)
     if (launched) {

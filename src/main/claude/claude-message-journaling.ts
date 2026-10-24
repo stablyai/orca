@@ -121,7 +121,7 @@ export function journalClaudeMessage(
     if (terminalIdentity) {
       writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
     } else {
-      ctx.sink.appendItem(identity, body, stamp(identity, body))
+      ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
     }
     changed = true
   }
@@ -136,7 +136,10 @@ export function journalClaudeMessage(
     }
     const toolIdentity = claudeToolIdentity(envelope.sessionId, tool.id)
     const toolBody = claudeToolBody({ tool })
-    ctx.sink.appendItem(toolIdentity, toolBody, stamp(toolIdentity, toolBody))
+    ctx.sink.appendItem(toolIdentity, toolBody, {
+      ...stamp(toolIdentity, toolBody),
+      lifecycle: true
+    })
     changed = true
   }
   for (const result of results) {
@@ -147,7 +150,10 @@ export function journalClaudeMessage(
     }
     const resultIdentity = claudeToolIdentity(envelope.sessionId, result.toolUseId)
     const resultBody = claudeToolBody({ tool, result })
-    ctx.sink.appendItem(resultIdentity, resultBody, stamp(resultIdentity, resultBody))
+    ctx.sink.appendItem(resultIdentity, resultBody, {
+      ...stamp(resultIdentity, resultBody),
+      lifecycle: true
+    })
     if (
       results.length === 1 &&
       envelope.parentToolUseId === null &&

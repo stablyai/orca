@@ -130,6 +130,31 @@ describe('focusTerminalTabSurface', () => {
     expect(mocks.requestNativeChatComposerFocus).toHaveBeenCalledWith('tab-1')
   })
 
+  it('keeps unclaimed chat focus replayable unless the caller asks for a one-shot rename return', () => {
+    flushAnimationFrames()
+    const body = {}
+    vi.stubGlobal('document', {
+      body,
+      activeElement: body,
+      querySelector: vi.fn((selector: string) =>
+        selector === '[data-terminal-tab-id="tab-1"]'
+          ? { getAttribute: (name: string) => (name === 'data-terminal-chat-view' ? 'true' : null) }
+          : null
+      )
+    })
+
+    focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenLastCalledWith('tab-1')
+
+    focusTerminalTabSurface('tab-1', null, {
+      onlyIfFocusUnclaimed: true,
+      oneShotChatComposerFocus: true
+    })
+    expect(mocks.requestNativeChatComposerFocus).toHaveBeenLastCalledWith('tab-1', {
+      onlyIfFocusUnclaimed: true
+    })
+  })
+
   it('skips the chat leaf helper when a split chat tab has an active terminal leaf', () => {
     flushAnimationFrames()
     const coveredTextarea = { focus: vi.fn() }

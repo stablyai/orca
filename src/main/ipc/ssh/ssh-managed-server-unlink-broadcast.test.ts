@@ -37,7 +37,7 @@ describe('clearing a host’s managed server once it is unlinked', () => {
     })
     clearPublishedManagedServer('ssh-1')
     expect(getSshHostServerStatus('ssh-1')).toBeUndefined()
-    // The runtime's notify is what drops the host's cached worktree scans.
+    // Runtime notifications invalidate cached worktree scans for this host.
     const [, published] = mocks.notify.mock.calls[0] ?? []
     expect(published).toMatchObject({ targetId: 'ssh-1', status: 'connected' })
     expect(published).not.toHaveProperty('managedServer')

@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-// Why: stands in for a detected Windows Git checkout, so every Git call here runs minimal-stat.
+// Simulate a Windows Git drive checkout so calls use minimal stat.
 vi.mock('../wsl-windows-checkout-git-config', async (importOriginal) => {
   const actual = await importOriginal<typeof CheckoutGitConfig>()
   return {
@@ -123,7 +123,7 @@ describe('drive checkout suspect writes with real Git', () => {
 
   it('stages a suspect that minimal-stat add treats as unchanged', async () => {
     await rewriteSuspect('c d.txt', 'bbbb\n')
-    // Why assert the miss: proves the plain minimal-stat add is the silent no-op.
+    // Demonstrate that minimal-stat add misses the rewrite.
     await git(['-c', 'core.checkStat=minimal', 'add', '--', 'c d.txt'])
     expect(await stagedPaths()).toEqual([])
 

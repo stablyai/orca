@@ -5,6 +5,10 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
+  'src/shared/tui-agent-permission-choice.test.ts',
+  'src/renderer/src/components/settings/agent-permission-conversion-persistence.test.tsx',
+  'src/main/runtime/rpc/methods/repo.test.ts',
+  'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/shared/native-chat-tool-attribution-allocation.test.ts',
@@ -24,8 +28,13 @@ const contracts = [
   'src/main/claude-usage/scanner-incremental-append.test.ts',
   'src/main/claude-usage/store-checkpoint-persistence.test.ts'
 ]
+// Wall-clock budgets with no CI job yet; `pnpm test:perf:benchmarks` runs them.
+const benchmarks = [
+  'src/renderer/src/components/editor/monaco-content-sync.bench.ts',
+  'src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts'
+]
 
-for (const contract of contracts) {
+for (const contract of [...contracts, ...benchmarks]) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
   }
@@ -39,6 +48,7 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: contracts,
+    benchmark: { include: benchmarks },
     fileParallelism: false,
     retry: 0
   }

@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type * as AttachmentUploadModule from './native-chat-attachment-upload'
+import {
+  holdBrowserAttachmentFiles,
+  takeBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
 
 const mocks = vi.hoisted(() => ({
   storeState: { tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] } },
@@ -358,6 +362,17 @@ describe('useNativeChatExternalAttachments', () => {
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 
+  it('releases browser files a refused attach held, so none stay pinned in the page', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'remote' })
+    const file = new File(['a'], 'a.txt')
+    const [token] = holdBrowserAttachmentFiles([file])
+    const probe = await renderProbe({ attachResolvedPaths: vi.fn(), setNotice: vi.fn() })
+    await act(async () => {
+      probe.latest().attachExternalPaths([token!])
+    })
+    expect(takeBrowserAttachmentFile(token!)).toBeNull()
+  })
+
   it('ignores local attachment insertion while already disabled', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()
@@ -367,6 +382,15 @@ describe('useNativeChatExternalAttachments', () => {
 
     expect(mocks.resolveNativeChatAttachmentOwner).not.toHaveBeenCalled()
     expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('releases browser files a picker returns to an already disabled composer', async () => {
+    const [token] = holdBrowserAttachmentFiles([new File(['a'], 'a.txt')])
+    const probe = await renderProbe({ disabled: true, attachResolvedPaths: vi.fn() })
+
+    act(() => probe.latest().attachExternalPaths([token!]))
+
+    expect(takeBrowserAttachmentFile(token!)).toBeNull()
   })
 
   describe('a structured chat on a paired server', () => {

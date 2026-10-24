@@ -4,6 +4,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
+  terminalWriteText,
   LEAF_1,
   createMockTransport,
   createPane,
@@ -242,7 +243,8 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       pane.terminal.buffer.active.viewportY = 100
       markTerminalFollowOutput(pane.terminal)
       const parseCallbacks: (() => void)[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         parseCallbacks.push(() => {
           if (data === 'post-snapshot-live') {
             pane.terminal.buffer.active.baseY = 200
@@ -289,7 +291,8 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       pane.terminal.buffer.active.viewportY = 100
       markTerminalFollowOutput(pane.terminal)
       const parseCallbacks: { data: string; run: () => void }[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         parseCallbacks.push({
           data,
           run: () => {
@@ -343,7 +346,8 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       pane.terminal.buffer.active.viewportY = 100
       markTerminalFollowOutput(pane.terminal)
       const parseCallbacks: { data: string; run: () => void }[] = []
-      pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+        data = terminalWriteText(data)
         parseCallbacks.push({
           data,
           run: () => {

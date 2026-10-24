@@ -171,7 +171,6 @@ describe('Electron runtime package contract', () => {
           for (const cancelled of [false, true]) {
             const needs = {
               cut: { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } },
-              'dependency-security': { result: 'success' },
               build: { result: matrix },
               'build-mac': { result: dispatch },
               'verify-mac-build': { result: verification },
@@ -194,7 +193,6 @@ describe('Electron runtime package contract', () => {
     }
     for (const prerequisite of [
       'cut',
-      'dependency-security',
       'skill-sharing-linux-floor-release-gate',
       'skill-sharing-release-gate',
       'terminal-rendering-golden'
@@ -203,7 +201,6 @@ describe('Electron runtime package contract', () => {
         ['cut', { result: 'success', outputs: { should_release: 'true', tag: 'v1.5.0' } }],
         ...[
           'build',
-          'dependency-security',
           'build-mac',
           'verify-mac-build',
           'skill-sharing-linux-floor-release-gate',

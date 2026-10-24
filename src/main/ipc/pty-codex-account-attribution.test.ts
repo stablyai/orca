@@ -215,8 +215,7 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    // Why: the resume deliberately overrides the selection, so the pane really
-    // is on account-a. Recording that is what makes the restart prompt appear.
+    // Resume overrides account selection; record the actual origin so restart notices target the right pane.
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-resumed', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }]
     ])
@@ -266,14 +265,11 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    // Why: an unowned home cannot be named, so guessing here would raise a
-    // restart notice that blocks a correctly-signed-in pane's input.
+    // Guessing an unowned home could block a correctly authenticated pane with a false restart notice.
     expect(recordCodexPaneAccountMock).not.toHaveBeenCalled()
     expect(forgetCodexPaneAccountMock).toHaveBeenCalledWith('pty-resumed')
   })
-  // Why: the runtime controller is the CLI/relay resume path, and it repeats the
-  // same recording call the ipc handler makes. Without its own coverage a revert
-  // there is invisible.
+  // Cover the independent CLI/relay controller path as well as renderer IPC.
   it('records the origin account for a resumed Codex pane spawned by the runtime controller', async () => {
     type RuntimeSpawnController = {
       spawn(args: Record<string, unknown>): Promise<{ id: string }>

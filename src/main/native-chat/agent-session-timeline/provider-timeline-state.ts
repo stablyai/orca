@@ -1,9 +1,4 @@
-// What the assembler knows about the session: one state, in admission order.
-//
-// An event changes it only when the sink admits the event, so a refused event changed nothing and
-// re-applying it is the retry. For this producer's own rows admission order is write order (the
-// sink is a FIFO queue), so the state never has to be re-read from the journal. Facts other
-// writers own (a person's Stop, a client's answer) are read from the journal by key, never copied.
+// FIFO admission tracks this producer’s writes; read other writers’ facts by journal key, never copy them.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -14,9 +9,9 @@ import { requiresTerminalSettlement } from '../agent-session-journal/journal-ter
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import type { ProviderTimelineRowId, ProviderTimelineTurnRef } from './provider-timeline-rows'
 
-/** Closed items remembered so a repeat close is dropped; past this the journal decides alone. */
+/** Bound duplicate-close memory; older rows defer to the journal. */
 const MAX_CLOSED_ITEMS = 512
-/** Sends waiting for a turn; a provider that never opens one cannot grow this without bound. */
+/** Bound unanswered opener metadata even if the provider never opens a turn. */
 const MAX_PENDING_INPUTS = 64
 const MAX_PENDING_INPUT_BYTES = 64 * 1024
 
@@ -28,45 +23,40 @@ export type ProviderTimelineOpenTurn = ProviderTimelineTurnRef & {
   running: AgentJournalTurnLifecycle
 }
 
-/** Orca's send, waiting for the turn it opens. */
 export type ProviderTimelinePendingInput = {
   userItemId: string
   requestedAt: number
-  /** The turn row the provider said it opens; absent: the next turn to open. */
+  /** Absent means the next turn to open. */
   turnItemId?: string
 }
 
-/** Work this acquisition holds open (a running tool, a pending request), or an item it closed. */
 export type ProviderTimelineOpenItem = {
   kind: 'item' | 'request'
-  /** The row; a request's is chosen by its write, which records it here. */
+  /** Request rows are chosen later by their queued write. */
   row: ProviderTimelineRowId | null
-  /** The turn whose end settles it; null for a row in no turn. */
   turnItemId: string | null
   bytes: number
-  /** Closed here: holds no budget; a repeat close is dropped and an open reopens it. */
+  /** Closed items hold no budget; reopen permits new work. */
   closed: boolean
 }
 
 export class ProviderTimelineState {
   ended = false
   open: ProviderTimelineOpenTurn | null = null
-  /** The turn that ended last, for context facts that arrive after it. */
+  /** Retain ended turns for trailing context facts. */
   latest: ProviderTimelineTurnRef | null = null
-  /** The turn another writer settled (a person's Stop) that the provider has not ended yet: its
-   *  running work is the provider's until then. */
+  /** External settlement leaves running tools for the provider’s own turn end. */
   stopped: ProviderTimelineTurnRef | null = null
   inputs: ProviderTimelinePendingInput[] = []
-  /** Keyed by row id (an item) or `request:<key>` (a request, whatever its incarnation). */
+  /** Items use row IDs; requests use request:key across incarnations. */
   items = new Map<string, ProviderTimelineOpenItem>()
-  /** Minted keys and settlement ids; taken only by admitted events. */
+  /** Advance only on admission. */
   serial = 0
 
   get scope(): AgentJournalTurnScope {
     return this.open ? { kind: 'turn', turnItemId: this.open.itemId } : AGENT_JOURNAL_THREAD_SCOPE
   }
 
-  /** Serials for one event: committed with it, so a refused event takes none. */
   serials(): { next(): number; commit(): void } {
     let taken = this.serial
     return {
@@ -77,20 +67,18 @@ export class ProviderTimelineState {
     }
   }
 
-  /** Whether the journal shows the work under `key` settled by any writer (a client's answer).
-   *  Work whose write is still queued stays open. */
+  /** Read any writer’s settlement; queued writes without rows remain open. */
   settledInJournal(key: string, journal: StructuredAgentSessionTransitionJournal): boolean {
     const entry = this.items.get(key)
     if (!entry || entry.closed || !entry.row) {
       return false
     }
     const body = journal.itemBody(entry.row.itemId)
-    // A request write that found its turn over left no row: nothing is pending.
+    // Request-open may have skipped a turn already ended.
     return body === null ? entry.kind === 'request' : !requiresTerminalSettlement(body)
   }
 
-  /** A user message waiting for its turn; past the bounds the oldest is forgotten (its turn opens
-   *  as the provider's own). */
+  /** Evict oldest pending sends at the bound; later turns then use provider-owned openers. */
   wait(pending: ProviderTimelinePendingInput): void {
     this.inputs.push(pending)
     const size = (input: ProviderTimelinePendingInput) =>
@@ -105,7 +93,6 @@ export class ProviderTimelineState {
     }
   }
 
-  /** The message that opens `turnItemId`: the one that named it, else the oldest that named none. */
   opener(turnItemId: string): ProviderTimelinePendingInput | undefined {
     return (
       this.inputs.find((input) => input.turnItemId === turnItemId) ??
@@ -113,7 +100,6 @@ export class ProviderTimelineState {
     )
   }
 
-  /** Closed here, in the turn it joined; past the bound the oldest closed items are forgotten. */
   close(key: string, turnItemId: string | null): void {
     this.items.delete(key)
     this.items.set(key, { kind: 'item', row: null, turnItemId, bytes: 0, closed: true })
@@ -123,7 +109,6 @@ export class ProviderTimelineState {
     }
   }
 
-  /** The turn is over, and so is everything in it: its end settled that work. */
   endTurn(turn: ProviderTimelineTurnRef): void {
     if (this.open?.itemId === turn.itemId) {
       this.open = null
@@ -135,8 +120,7 @@ export class ProviderTimelineState {
     this.forget(turn, () => true)
   }
 
-  /** Another writer settled the open turn: it is over here and its prompts were cancelled with it,
-   *  but its running work stays open until the provider ends the turn. */
+  /** Cancel prompts after external settlement; keep running work until the provider ends the turn. */
   stopTurn(turn: ProviderTimelineTurnRef): void {
     if (this.open?.itemId === turn.itemId) {
       this.open = null

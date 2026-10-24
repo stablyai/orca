@@ -4,8 +4,7 @@ import { type Mock, vi } from 'vitest'
 /** Loose signature: these mocks stand in for many unrelated module exports. */
 type IpcMock = Mock<(...args: any[]) => unknown>
 
-// Why: paths are resolved via path.resolve() in production code, so test
-// data must use resolved paths to avoid Unix-vs-Windows mismatches.
+// Resolve fixture paths like production for cross-platform comparisons.
 export const REPO_PATH = path.resolve('/workspace/repo')
 export const WORKSPACE_DIR = path.resolve('/workspace')
 export const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
@@ -208,7 +207,6 @@ const ALL_MOCKS = [
   pullRequestLinkedIssueMock
 ].flatMap(collectMocks)
 
-/** A FileHandle double over `content`: positional reads copy from it, and stat reports its size. */
 export function localFileHandleMock(
   content: Buffer,
   { isFile = true, size = content.byteLength }: { isFile?: boolean; size?: number } = {}
@@ -238,7 +236,6 @@ export function localFileHandleMock(
   }
 }
 
-/** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
   handlers.clear()
   for (const mock of ALL_MOCKS) {

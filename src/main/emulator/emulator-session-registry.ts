@@ -19,8 +19,7 @@ export class EmulatorSessionRegistry {
       pid: info.helperPid,
       managed: options.managed === true,
       initialized: true,
-      // Why: default to the iOS/serve-sim contract so existing callers that
-      // predate multi-backend keep their prior behavior.
+      // Preserve iOS defaults for callers predating multiple backends.
       backend: info.backend ?? options.backend ?? 'ios',
       streamCodec: info.streamCodec ?? 'mjpeg'
     })

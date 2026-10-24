@@ -29,12 +29,14 @@ function claudeHook(hookEventName: string, promptId: string, extra: Record<strin
   }
 }
 
-function postHook(port: number, token: string, payload: Record<string, unknown>) {
-  return fetch(`http://127.0.0.1:${port}/hook/claude`, {
+async function postHook(port: number, token: string, payload: Record<string, unknown>) {
+  const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
     body: JSON.stringify({ paneKey: PANE_KEY, payload })
   })
+  expect(response.status).toBe(204)
+  return response
 }
 
 function turnEnvelope(): AgentHookRelayEnvelope {

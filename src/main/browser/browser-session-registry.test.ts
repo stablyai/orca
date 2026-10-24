@@ -376,6 +376,34 @@ describe('BrowserSessionRegistry', () => {
     expect(recreated?.partition).not.toBe(first.partition)
   })
 
+  it('announces each profile change after the list reflects it', async () => {
+    const seen: string[][] = []
+    browserSessionRegistry.onProfilesChanged = () =>
+      seen.push(browserSessionRegistry.listProfiles().map((profile) => profile.label))
+    try {
+      const made = await browserSessionRegistry.createProfile('isolated', 'Made by CLI')
+      const managed = await ensureManagedBrowserProfile({ kind: 'repo', id: 'announce' }, 'Repo')
+      if (!made || !managed) {
+        throw new Error('Expected created profiles')
+      }
+      browserSessionRegistry.updateProfileSource(made.id, {
+        browserFamily: 'manual',
+        importedAt: 1
+      })
+      await browserSessionRegistry.deleteProfile(made.id)
+      await browserSessionRegistry.deleteProfile('default')
+      await browserSessionRegistry.createProfile('default', 'Refused')
+
+      expect(seen).toHaveLength(4)
+      expect(seen[0]).toContain('Made by CLI')
+      expect(seen[1]).toContain('Repo')
+      expect(seen[2]).toContain('Made by CLI')
+      expect(seen[3]).not.toContain('Made by CLI')
+    } finally {
+      browserSessionRegistry.onProfilesChanged = null
+    }
+  })
+
   it('refuses to delete the default profile', async () => {
     const deleted = await browserSessionRegistry.deleteProfile('default')
     expect(deleted).toBe(false)

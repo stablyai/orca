@@ -264,6 +264,33 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('persists only an explicit opt-in to Windows proxy connection reuse', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-proxy-reuse-on',
+      label: 'Proxy reuse on',
+      host: 'proxied.example.com',
+      port: 22,
+      username: 'dev',
+      systemSshProxyConnectionReuse: true
+    })
+    store.addSshTarget({
+      id: 'ssh-proxy-reuse-off',
+      label: 'Proxy reuse off',
+      host: 'direct.example.com',
+      port: 22,
+      username: 'dev',
+      systemSshProxyConnectionReuse: false
+    })
+    store.flush()
+
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const on = persisted.sshTargets?.find((t) => t.id === 'ssh-proxy-reuse-on')
+    const off = persisted.sshTargets?.find((t) => t.id === 'ssh-proxy-reuse-off')
+    expect(on?.systemSshProxyConnectionReuse).toBe(true)
+    expect(off).not.toHaveProperty('systemSshProxyConnectionReuse')
+  })
+
   it('persists known relay runtime choices and drops unknown ones', async () => {
     const store = await createStore()
     store.addSshTarget({

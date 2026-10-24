@@ -84,7 +84,7 @@ export function externalChangeRecordViewIds(
   target: EditorPathMutationTarget
 ): Set<string> {
   const storeFiles = state?.openFiles ?? []
-  const matched = getOpenFilesForExternalFileChange([...panelFiles, ...storeFiles], target)
+  const matched = getOpenFilesForExternalFileChange([...panelFiles, ...storeFiles], target, state)
   return new Set(
     matched.flatMap((file) =>
       state && storeFiles.some((tab) => tab.id === file.id)

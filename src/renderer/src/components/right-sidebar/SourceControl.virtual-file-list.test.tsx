@@ -328,7 +328,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-000.ts')?.className).toContain('bg-accent/60')
   })
 
-  it('collapses and re-expands a virtualized section', () => {
+  it('retains a collapsed virtualized section across panel remount', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: manyEntries(500) }
     })
@@ -346,8 +346,17 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(mountedRows().length).toBe(0)
     expect(virtualList()).toBeNull()
 
+    act(() => root.unmount())
+    root = createRoot(container)
+    renderSourceControl()
+    expect(mountedRows().length).toBe(0)
+    expect(virtualList()).toBeNull()
+
+    const remountedHeader = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Changes')
+    )
     act(() => {
-      changesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      remountedHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(mountedRows().length).toBeGreaterThan(0)
     expect(mountedRows().length).toBeLessThanOrEqual(MAX_MOUNTED_ROWS)

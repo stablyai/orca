@@ -135,7 +135,7 @@ describe('CursorHookService', () => {
     } else {
       // Stdin avoids oversized curl command lines that trigger EDR.
       expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }

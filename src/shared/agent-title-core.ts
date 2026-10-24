@@ -48,15 +48,16 @@ const STRONG_WORKING_KEYWORDS = ['working', 'thinking', 'running'] as const
 
 // Why: plain `\b` matches inside hyphenated tokens and cwd paths such as
 // "~/codex/ready"; the left side also blocks path separators for Windows/Unix.
+// Safari before 16.4 needs a consuming boundary; global cleanup restores its capture.
 export const STRONG_IDLE_KEYWORDS_RE = new RegExp(
-  `(?<![\\w./\\\\-])(${STRONG_IDLE_KEYWORDS.join('|')})(?![\\w\\-])`,
+  `(^|[^\\w./\\\\-])(${STRONG_IDLE_KEYWORDS.join('|')})(?![\\w\\-])`,
   'i'
 )
 
 // Why: mirrors the idle matcher so titles like "reworking" or
 // "is-thinking-cap" do not drive false active-agent UI.
 export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
-  `(?<![\\w./\\\\-])(${STRONG_WORKING_KEYWORDS.join('|')})(?![\\w\\-])`,
+  `(^|[^\\w./\\\\-])(${STRONG_WORKING_KEYWORDS.join('|')})(?![\\w\\-])`,
   'i'
 )
 

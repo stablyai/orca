@@ -19,6 +19,8 @@ export function resolveAgentMenuSelection(input: {
   settings: NewTabAgentMenuSettings | null | undefined
   executionHostId?: ExecutionHostId
   inventoryReady: boolean
+  /** No CLI was detected, so only a chat route can start this agent. */
+  cliMissing?: boolean
   answer: HostChatAnswer
   chatPending: boolean
   plain: boolean
@@ -35,7 +37,7 @@ export function resolveAgentMenuSelection(input: {
   const route =
     wantsChat && !pending && answer === 'yes' ? 'structured-native-chat' : 'terminal-tui'
   return {
-    ready: input.inventoryReady && !pending,
+    ready: input.inventoryReady && !pending && !(input.cliMissing && route === 'terminal-tui'),
     cli: !pending && !input.plain && route === 'terminal-tui',
     choice: {
       agent,

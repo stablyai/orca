@@ -13,6 +13,7 @@ import {
 import { NORMAL_BUFFER_PROLOGUE } from './pty-connection-test-constants'
 import { createRect } from './pty-connection-test-dom'
 import {
+  terminalWriteText,
   createMockTransport,
   createPane,
   createManager,
@@ -653,7 +654,8 @@ describe('connectPanePty', () => {
     pane.terminal.cols = 80
     pane.terminal.rows = 24
     const writes: string[] = []
-    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+    pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+      data = terminalWriteText(data)
       writes.push(data)
       callback?.()
     })
@@ -776,7 +778,7 @@ describe('connectPanePty', () => {
 
     const heldCallbacks: (() => void)[] = []
     pane.terminal.write.mockImplementation(function write(
-      data: string,
+      data: string | Uint8Array,
       callback?: () => void
     ): void {
       if (callback) {

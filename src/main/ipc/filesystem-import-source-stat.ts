@@ -13,7 +13,7 @@ export async function classifyImportSource(
   sourcePath: string,
   resolvedSource: string
 ): Promise<{ stat: Stats } | { rejection: ImportSourceRejection }> {
-  // Why: lstat the unresolved path before canonicalization so top-level symlinks are rejected, not dereferenced.
+  // lstat before canonicalization so top-level symlinks are rejected, not followed.
   let stat: Stats
   try {
     stat = await lstat(resolvedSource)
@@ -26,7 +26,7 @@ export async function classifyImportSource(
     }
     return { rejection: { sourcePath, status: 'failed', reason: errorMessage(error) } }
   }
-  // Why: symlink copy semantics differ across platforms, and following one can escape the dropped subtree.
+  // Symlinks can escape the dropped subtree and differ across platforms.
   if (stat.isSymbolicLink()) {
     return { rejection: { sourcePath, status: 'skipped', reason: 'symlink' } }
   }

@@ -1,8 +1,4 @@
-/**
- * The port a managed orcad actually listens on. orcad asks for its preferred port but moves to a
- * free one when another runtime (a desktop Orca, `orca serve`) holds it, so a tunnel that assumed
- * the preferred port would reach that other runtime instead. The slot's readiness says which.
- */
+// Preferred ports may belong to other runtimes; tunnel to the active slot's published bound port.
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
@@ -52,7 +48,6 @@ async function readManagedOrcadSlotReadiness(
   return parsed.state === 'ready' ? parsed.readiness : null
 }
 
-/** What the active slot publishes now, over SSH or WSL; null when none is active or ready. */
 export async function readActiveManagedOrcadReadiness(input: {
   target: OrcadHostTarget
   connection: OrcadHostTransport
@@ -70,7 +65,6 @@ export async function readActiveManagedOrcadReadiness(input: {
   })
 }
 
-/** The bound port the active slot's readiness names now; null when it names none. */
 async function readActiveSlotBoundPort(input: OrcadTunnelPortInput): Promise<number | null> {
   if (!input.environment.orcadDeployment) {
     return null
@@ -79,7 +73,6 @@ async function readActiveSlotBoundPort(input: OrcadTunnelPortInput): Promise<num
   return readiness ? orcadBoundPort(readiness) : null
 }
 
-/** Where a tunnel to this environment must point; independent SSH access keeps its own port. */
 export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput): Promise<number> {
   const access = getRuntimeSshAccess(input.environment)
   if (!access) {
@@ -88,7 +81,7 @@ export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput)
   try {
     return (await readActiveSlotBoundPort(input)) ?? access.remotePort
   } catch (error) {
-    // Why fall back: the identity check after the forward still catches a wrong server.
+    // Post-forward identity validation still detects a wrong server when falling back.
     console.warn(
       '[ssh] Could not read the managed Orca server port; trying the preferred one:',
       error
@@ -97,10 +90,7 @@ export async function resolveManagedOrcadTunnelPort(input: OrcadTunnelPortInput)
   }
 }
 
-/**
- * The port the host says its server is bound to now, whichever desktop restarted it; null when
- * the host names none (older builds) or cannot be read, which is never a reason to move a tunnel.
- */
+/** Missing or unreadable published ports never justify moving an existing tunnel. */
 export async function readManagedOrcadPublishedPort(
   input: OrcadTunnelPortInput
 ): Promise<number | null> {

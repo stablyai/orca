@@ -481,7 +481,7 @@ describe('managed data accounts', () => {
     openCodeSource('session_v2')
     const databasePath = join(source, 'opencode', 'opencode.db')
     const db = new SyncDatabase(databasePath)
-    // Synthetic orphans exercise damaged/FK-off files, not normal CLI writes.
+    // Model damaged/FK-disabled stores; ordinary CLI writes would not create these orphans.
     db.exec(`CREATE TABLE ${table} (data TEXT)`)
     db.prepare(`INSERT INTO ${table} VALUES (?)`).run('private-conversation-content')
     db.close()

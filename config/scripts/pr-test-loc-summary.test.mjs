@@ -122,6 +122,12 @@ describe('PR test LoC summary', () => {
   })
 
   it('retries transient GitHub errors when updating the PR body', async () => {
+    const body = '## Description\n'
+    const totals = {
+      test: { files: 1, added: 2, deleted: 0 },
+      nonTest: { files: 0, added: 0, deleted: 0 }
+    }
+    const delays = []
     const responses = [
       { ok: false, status: 503, statusText: 'Service Unavailable' },
       { ok: true, status: 200, statusText: 'OK' }
@@ -132,28 +138,35 @@ describe('PR test LoC summary', () => {
       repo: 'orca',
       pullNumber: 14656,
       token: 'test-token',
-      totals: {
-        test: { files: 1, added: 2, deleted: 0 },
-        nonTest: { files: 0, added: 0, deleted: 0 }
-      },
+      totals,
       fetchImpl: async (url, options) => {
         requests.push({ url, options })
         if (requests.length === 1) {
           return {
             ok: true,
             status: 200,
-            json: async () => ({ body: '## Description\n' })
+            json: async () => ({ body })
           }
         }
         return responses.shift()
       },
-      sleepImpl: async () => {}
+      sleepImpl: async (milliseconds) => {
+        delays.push(milliseconds)
+      }
     })
 
     expect(result).toBe(0)
     expect(requests).toHaveLength(3)
-    expect(requests[1].options.method).toBe('PATCH')
-    expect(requests[2].options.method).toBe('PATCH')
+    expect(requests.map(({ url }) => url)).toEqual(
+      Array(3).fill('https://api.github.com/repos/stablyai/orca/pulls/14656')
+    )
+    for (const { options } of requests.slice(1)) {
+      expect(options.method).toBe('PATCH')
+      expect(JSON.parse(options.body)).toEqual({
+        body: `${renderLocBlock(totals)}\n\n${body}`
+      })
+    }
+    expect(delays).toEqual([1000])
   })
 
   it('colors added cells green and deleted or negative-net cells red', () => {

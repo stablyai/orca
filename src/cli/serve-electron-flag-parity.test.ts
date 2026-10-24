@@ -5,13 +5,17 @@ import { SERVE_COMMAND_SPECS } from './specs/serve'
 
 // The main tsconfig cannot import CLI specs, so test the duplicated serve flag lists from here.
 
-// Help is refused; pairing selectors pass through; force and supervise apply only to the CLI parent.
+// Help is refused; pairing selectors pass through; force, supervise and the stale-lock
+// reclaim flags apply only to the CLI parent, which starts no runtime for a reclaim.
 const UNTRANSLATED_GLOBAL_FLAGS = new Set([
   'help',
   'pairing-code',
   'environment',
   'force',
-  'supervise'
+  'supervise',
+  'reclaim-stale-lock',
+  'data-root',
+  'yes'
 ])
 
 const serveSpec = SERVE_COMMAND_SPECS.find((spec) => spec.path.join(' ') === 'serve')

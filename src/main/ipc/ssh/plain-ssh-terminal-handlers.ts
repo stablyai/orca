@@ -27,7 +27,7 @@ const deps: PlainSshTerminalDeps = {
   findSsh: findSystemSsh,
   mayConfigClaimAlias: mayUserSshConfigClaimAlias,
   loadPtySpawn: async () => {
-    // Why: a packaged macOS build can lose node-pty's spawn-helper exec bit; the pane paths repair it too.
+    // Packaged macOS updates can lose the node-pty spawn-helper executable bit.
     ensureNodePtySpawnHelperExecutable()
     return (await import('node-pty')).spawn
   },
@@ -37,7 +37,7 @@ const deps: PlainSshTerminalDeps = {
 
 const watchedOwners = new Set<number>()
 
-/** A reload, a crash or a closed window can't show its sessions again, so they end with it. */
+/** Plain SSH sessions cannot reattach after owner reload, crash or close. */
 function endSessionsWithOwner(sender: WebContents): void {
   if (watchedOwners.has(sender.id)) {
     return

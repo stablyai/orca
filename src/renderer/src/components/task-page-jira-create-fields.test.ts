@@ -13,7 +13,7 @@ import {
   isJiraUserCreateField,
   isVisibleJiraCreateField
 } from './task-page-jira-create-fields'
-import type { JiraCreateField } from '../../../shared/jira-types'
+import type { JiraCreateField } from '../../../shared/jira/jira-types'
 
 function field(overrides: Partial<JiraCreateField> = {}): JiraCreateField {
   return { key: 'customfield_1', name: 'Custom', required: true, ...overrides }

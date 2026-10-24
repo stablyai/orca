@@ -55,8 +55,9 @@ describe('pty transcript secret scan', () => {
   })
 
   it('claims a span once, so a token inside an email is not double-reported', () => {
-    const findings = scanTranscriptForSecrets('longlivedaccountname@corp.internal')
-    expect(findings).toHaveLength(1)
+    const email = 'longlivedaccountnamefortycharacterslongenough@corp.internal'
+    const findings = scanTranscriptForSecrets(email)
+    expect(findings).toMatchObject([{ kind: 'email', match: email, index: 0 }])
   })
 
   it('passes a fixture that is already scrubbed, so "prove it is gone" can succeed', () => {
@@ -84,7 +85,7 @@ describe('redaction', () => {
 
   it('leaves the rest of the screen byte-for-byte untouched', () => {
     const text = 'line one\nuser@corp.io\nline three'
-    expect(redactTranscript(text).text.split('\n')[2]).toBe('line three')
+    expect(redactTranscript(text).text).toBe('line one\nXXXXXXXXXXXX\nline three')
   })
 })
 
@@ -96,7 +97,7 @@ describe('committed transcripts', () => {
 
   it.each(transcripts)('%s carries no account identifier or credential', (name) => {
     const findings = scanTranscriptForSecrets(readFileSync(join(fixtureDir, name), 'utf8'))
-    expect(formatFindings(name, findings)).toContain('clean')
+    expect(findings, formatFindings(name, findings)).toEqual([])
   })
 })
 

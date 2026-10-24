@@ -6,6 +6,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { createNotificationDeliveryService } from './notification-delivery-service'
+import { toWebTerminalSurfaceTabId } from '../../shared/terminal-surface-id'
 import type { NotificationDeliveryDependencies } from './notification-delivery-service'
 import type {
   NotificationDispatchRequest,
@@ -26,6 +27,8 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     ...overrides
   }
 }
+
+const LEAF = '11111111-1111-4111-8111-111111111111'
 
 function makeRequest(
   overrides: Partial<NotificationDispatchRequest> = {}
@@ -277,8 +280,14 @@ it('reports a muted host before a disabled source', () => {
   ).toEqual({ delivered: false, reason: 'host-muted' })
 })
 
-it("tells the phone which server runs the workspace, through the gateway's push", async () => {
-  for (const executionHost of [undefined, 'runtime:qa'] as const) {
+it("tells the phone which server and pane raised it, through the gateway's push", async () => {
+  const cases = [
+    [undefined, `tab-1:${LEAF}`, `tab-1:${LEAF}`],
+    ['runtime:qa', `${toWebTerminalSurfaceTabId('host-tab')}:${LEAF}`, `host-tab:${LEAF}`],
+    // A per-surface mirror tab encodes the server's `tab::leaf` surface id.
+    ['runtime:qa', `${toWebTerminalSurfaceTabId(`host-tab::${LEAF}`)}:${LEAF}`, `host-tab:${LEAF}`]
+  ] as const
+  for (const [executionHost, paneKey, pushedPaneKey] of cases) {
     const push = createPushHarness({
       devices: [{ deviceId: 'phone', pushRegistration: registration() }]
     })
@@ -286,10 +295,11 @@ it("tells the phone which server runs the workspace, through the gateway's push"
     harness.deps.dispatchMobileNotification = (event) =>
       push.dispatcher.enqueue({ ...event, notificationSeq: 1, notificationEpoch: 'epoch' })
     createNotificationDeliveryService(harness.deps).dispatch(
-      makeRequest({ agentState: 'done', ...(executionHost ? { executionHost } : {}) })
+      makeRequest({ agentState: 'done', paneKey, ...(executionHost ? { executionHost } : {}) })
     )
     await flush()
     expect(push.sends[0]?.notification.worktreeId).toBe('wt-1')
+    expect(push.sends[0]?.notification.paneKey).toBe(pushedPaneKey)
     expect(push.sends[0]?.notification.executionHost).toBe(executionHost)
   }
 })

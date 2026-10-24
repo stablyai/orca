@@ -29,6 +29,7 @@ function execute(snapshots) {
   let now = 0
   let index = 0
   const calls = []
+  const delays = []
   const github = {
     rest: { actions: { listJobsForWorkflowRun: 'jobs' } },
     async paginate(endpoint, input) {
@@ -38,12 +39,14 @@ function execute(snapshots) {
   }
   return {
     calls,
+    delays,
     result: new AsyncFunction('github', 'context', 'Date', 'setTimeout', step.with.script)(
       github,
       { repo: { owner: 'owner', repo: 'repo' }, runId: 42 },
       { now: () => now },
-      (resolve) => {
-        now += 5000
+      (resolve, delay) => {
+        delays.push(delay)
+        now += delay
         index++
         resolve()
       }
@@ -57,12 +60,19 @@ describe('early template assembly qualification gate', () => {
     async (prefix) => {
       const incomplete = lanes(prefix)
       incomplete[1] = { ...incomplete[1], status: 'in_progress', conclusion: null }
-      const { calls, result } = execute([incomplete, lanes(prefix)])
+      const { calls, delays, result } = execute([incomplete, lanes(prefix)])
       await result
       expect(calls).toHaveLength(2)
-      expect(calls.every(({ input }) => input.filter === 'latest' && input.run_id === 42)).toBe(
-        true
-      )
+      expect(delays).toEqual([15_000])
+      for (const { endpoint, input } of calls) {
+        expect(endpoint).toBe('jobs')
+        expect(input).toMatchObject({
+          owner: 'owner',
+          repo: 'repo',
+          filter: 'latest',
+          run_id: 42
+        })
+      }
     }
   )
   it.each(['failure', 'cancelled', 'skipped', 'timed_out', 'action_required', 'startup_failure'])(

@@ -113,6 +113,33 @@ export type NativeChatTabSession = {
   agent: AgentType | undefined
 }
 
+export type NativeChatCliForkIdentity = {
+  workspaceId: string
+  sessionId: string
+  executionHostScope: ExecutionHostScope
+}
+
+export function resolveNativeChatCliForkIdentity(
+  state: AppState,
+  args: { tab: Pick<TerminalTab, 'id' | 'worktreeId'>; nativeChat: NativeChatTabSession }
+): NativeChatCliForkIdentity | null {
+  const { nativeChat, tab } = args
+  if (
+    !nativeChat.agent ||
+    !agentForksConversations(nativeChat.agent) ||
+    !resolveAiVaultTargetWorkspacePath(state, tab.worktreeId)
+  ) {
+    return null
+  }
+  const executionHostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, tab.worktreeId),
+    tab.worktreeId
+  ).defaultExecutionHostScope
+  return canHostOfferTabSessionMove('chat', executionHostScope)
+    ? { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
+    : null
+}
+
 export function resolveTabSessionHistorySubject(
   state: AppState,
   args: {
@@ -134,11 +161,18 @@ export function resolveTabSessionHistorySubject(
   }
   if (args.nativeChat) {
     // A chat tab's only move is opening a copy in its CLI.
-    const target =
-      args.nativeChat.agent && agentForksConversations(args.nativeChat.agent)
-        ? workspace(args.tab.worktreeId, 'chat')
-        : null
-    return target ? { ...target, kind: 'chat', sessionId: args.nativeChat.sessionId } : null
+    const identity = resolveNativeChatCliForkIdentity(state, {
+      ...args,
+      nativeChat: args.nativeChat
+    })
+    return identity
+      ? {
+          kind: 'chat',
+          workspaceId: identity.workspaceId,
+          sessionId: identity.sessionId,
+          request: resolveAiVaultPanelSessionListRequest(state, identity.workspaceId)
+        }
+      : null
   }
   // The pane-to-conversation mapping tab titles use, for the agents a chat can take over, limited to
   // agents still running: once the agent exits, the tab title keeps its conversation but the move is

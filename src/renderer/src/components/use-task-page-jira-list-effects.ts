@@ -19,7 +19,7 @@ import { JIRA_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-con
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
-import { restrictJiraQueryToProject } from '../../../shared/jira-project-reference'
+import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
     accountBackedTaskSourceHostId,

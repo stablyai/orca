@@ -1,5 +1,6 @@
 import { rebrandPiStateTitle } from './pi-state-title-marker'
 import { detectAgentStatusFromTitle, getAgentLabel } from './agent-detection'
+import { STRONG_IDLE_KEYWORDS_RE } from './agent-title-core'
 import type { AgentStatusEntry, AgentType } from './agent-status-types'
 import {
   getSyntheticAgentTitleProfile,
@@ -23,8 +24,6 @@ export type CompatibleAgentOwnerOptions = {
   /** Whether the owner comes from explicit launch intent. */
   ownerIsLaunch?: boolean
 }
-
-const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
 
 /**
  * Resolves the synthetic title profile matching a given agent label.
@@ -109,8 +108,7 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
 function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
   return (
-    normalizedTitle === sourceProfile.idleLabel.toLowerCase() ||
-    COMPATIBLE_IDLE_TITLE_RE.test(title)
+    normalizedTitle === sourceProfile.idleLabel.toLowerCase() || STRONG_IDLE_KEYWORDS_RE.test(title)
   )
 }
 

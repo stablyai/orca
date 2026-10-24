@@ -15,12 +15,11 @@ function findManagedProfile(owner: ManagedBrowserProfileOwner): BrowserSessionPr
     .find((profile) => isManagedBrowserProfileOf(profile, owner))
 }
 
-/** A repo's or workspace's own profile, created on first use; concurrent callers share one creation. */
+/** Coalesce first-use profile creation for each owner. */
 export async function ensureManagedBrowserProfile(
   owner: ManagedBrowserProfileOwner,
   label: string
 ): Promise<BrowserSessionProfile | null> {
-  // Why: this is an IPC boundary, so the renderer's values are checked before they are persisted.
   if (
     (owner?.kind !== 'repo' && owner?.kind !== 'worktree') ||
     typeof owner.id !== 'string' ||

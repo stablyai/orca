@@ -1,11 +1,16 @@
+import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
+import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
+import {
+  type AgentLaunchRouteView,
+  agentLaunchRouteInputsChanged,
+  selectAgentLaunchRouteView
+} from '@/lib/agent-launch-route-input'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { launchDashboardAgent } from './launch-dashboard-agent'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
@@ -38,13 +43,16 @@ export function repoIconsUnchanged(
   return nextIds.every((id) => id in previous && next[id] === previous[id])
 }
 
-type DashboardSnapshotWatchState = DashboardSnapshotState & Pick<AppState, 'agentStatusEpoch'>
+type DashboardSnapshotWatchState = DashboardSnapshotState &
+  Pick<AppState, 'agentStatusEpoch'> &
+  AgentLaunchRouteView
 
 export function dashboardSnapshotInputsChanged(
   state: DashboardSnapshotWatchState,
   previousState: DashboardSnapshotWatchState
 ): boolean {
   return (
+    agentLaunchRouteInputsChanged(state, previousState) ||
     state.repos !== previousState.repos ||
     selectWorktreesByRepo(state) !== selectWorktreesByRepo(previousState) ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||
@@ -93,13 +101,19 @@ export function dashboardSnapshotInputsChanged(
 /** Watches the store for snapshot-relevant writes. Lives outside the effect
  *  because react-doctor's effect-needs-cleanup false-positives on `subscribe`
  *  inside an effect body; the caller's cleanup does unsubscribe. */
-function watchSnapshotInputs(onChanged: () => void): () => void {
-  return useAppStore.subscribe((state, previousState) => {
+export function watchSnapshotInputs(onChanged: () => void): () => void {
+  const unsubscribeStore = useAppStore.subscribe((state, previousState) => {
     // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
     if (dashboardSnapshotInputsChanged(state, previousState)) {
       onChanged()
     }
   })
+  // Launch options also read host chat facts held outside the store.
+  const unsubscribeChatFacts = subscribeChatProgramFacts(onChanged)
+  return () => {
+    unsubscribeStore()
+    unsubscribeChatFacts()
+  }
 }
 
 /**
@@ -111,24 +125,6 @@ function watchSnapshotInputs(onChanged: () => void): () => void {
  *     the agent's worktree and focus its pane in this (main) window.
  */
 export function useDashboardPopoutBridge(enabled: boolean): void {
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    return window.api.dashboard.onSpawnAgent?.(launchDashboardAgent)
-  }, [enabled])
-
-  // Sleeping from the popout runs the shared teardown here, where the store and
-  // the live terminal panes are — the popout only names the workspace.
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    return window.api.dashboard.onSleepWorkspace?.(({ worktreeId }) => {
-      void runSleepWorktree(worktreeId)
-    })
-  }, [enabled])
-
   useEffect(() => {
     if (!enabled) {
       return
@@ -157,6 +153,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     }
     let open = false
     let disposed = false
+    const chatOwners = createDashboardChatProgramHolds()
     let unsubscribeStore: (() => void) | null = null
     let trailingTimer: ReturnType<typeof setTimeout> | null = null
     let lastPublishAt = 0
@@ -171,7 +168,9 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
+      chatOwners.reconcile(state)
       const snapshot = buildDashboardSnapshot(state, lastPublishAt, {
+        launchRouteStore: selectAgentLaunchRouteView(state),
         rowsCache,
         rowsGeneration: state.agentStatusEpoch
       })
@@ -221,6 +220,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
         }
         publishNow(true)
       } else {
+        chatOwners.release()
         unsubscribeStore?.()
         unsubscribeStore = null
         if (trailingTimer) {
@@ -247,6 +247,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
 
     return () => {
       disposed = true
+      chatOwners.release()
       offOpenChanged?.()
       offRequested?.()
       unsubscribeStore?.()

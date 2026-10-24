@@ -1,7 +1,3 @@
-// Send now, Delete and Resume accept through their own command receipt, committed with the draft or
-// row they change: no ledger policy decides them, a retry answers from that receipt, and an id
-// another command already used is refused.
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -71,7 +67,7 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** Simulates an older host retiring the whole epoch, including its unsent submissions. */
+/** Retire the epoch and unsent submissions, as older hosts could. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
@@ -80,7 +76,6 @@ async function rewindConversation(): Promise<void> {
   await journal.rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
 }
 
-/** A stop that leaves a waiting card paused, which only a Resume lifts. */
 async function pausedQueue(): Promise<void> {
   await rig.workingSend()
   await queuedDraft('held by stop')
@@ -159,7 +154,6 @@ describe('Send now', () => {
       replayed: false,
       value: { clientMessageId: first }
     })
-    // The provider refuses the first hand-off: the card comes back, and another Send takes it.
     await rig.settleRejected(first, 'nope')
     const later = opId()
     expect(await rig.sendNow(draftId, later)).toMatchObject({
@@ -249,8 +243,7 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    // The dropped hand-off was never handed over, so its card waits again; it never goes out
-    // under the retried id.
+    // A never-dispatched handoff returns to waiting without redelivery under the retried ID.
     const { submissions } = await rig.host.journalSnapshot(SESSION)
     expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
   })
@@ -519,7 +512,7 @@ describe('an id reused across commands', () => {
     expect(await rig.deleteQueued(draftId, id)).toMatchObject(conflict)
     expect(await rig.resume(id)).toMatchObject(conflict)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    // Only the Stop's own receipt: neither refused action committed anything over it.
+    // Refused actions cannot overwrite the Stop receipt.
     expect(receipt(id)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.cancel', result: { kind: 'journal-row' } }

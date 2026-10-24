@@ -83,10 +83,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return null
     }
-    // Why reject rather than coerce: the RPC door validates against z.enum(['clean', 'native'])
-    // and rejects. Coercing an unrecognized value to 'clean' made one concept answer an unknown
-    // value two different ways, and reported success for a mode that was quietly replaced —
-    // silently downgrading a future mode name the caller believed was honoured.
+    // Match RPC rejection: silently coercing future modes would report false success.
     if (mode !== 'clean' && mode !== 'native') {
       throw new Error(`Unsupported browser identity mode: ${String(mode)}`)
     }
@@ -197,8 +194,7 @@ export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:importFromBrowser')
   ipcMain.removeHandler('browser:session:importFromBrowserForClientHost')
 
-  // Why: client-hosted pages render on this desktop, so their logins must be
-  // detected and imported here -- the remote runtime is usually headless.
+  // Client-hosted pages import this desktop's logins; the remote runtime is usually headless.
   ipcMain.handle(
     'browser:session:importFromBrowserForClientHost',
     async (
@@ -224,8 +220,7 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   ipcMain.removeHandler('browser:session:clientRouteImportSources')
 
-  // Why: the server's profile records can't know what this desktop imported into
-  // its client-hosted jars; the settings view overlays these onto the RPC list.
+  // Overlay desktop imports unavailable to the server's profile records.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
     (event, args: { environmentId: string }) => {
@@ -243,8 +238,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     return detectedBrowserPickerEntries()
   })
 
-  // Why: the picker must list the machine the import will actually read from, and for a
-  // client-hosted environment that is this desktop — never the (usually headless) remote.
+  // List browsers on the machine whose cookie store import will read.
   ipcMain.handle(
     'browser:session:detectBrowsersForClientHost',
     (event, args: { environmentId: string }): DetectedBrowserPickerEntry[] | null => {
@@ -272,9 +266,7 @@ export function registerBrowserSessionProfileHandlers(): void {
         return { ok: false, reason: 'Session profile not found.' }
       }
 
-      // Why: browserProfile comes from the renderer and is used to construct
-      // a filesystem path. Reject traversal characters to prevent a compromised
-      // renderer from reading arbitrary files via the cookie import pipeline.
+      // Renderer profile names become paths; reject traversal before cookie import.
       if (
         args.browserProfile &&
         (/[/\\]/.test(args.browserProfile) || args.browserProfile.includes('..'))
@@ -288,8 +280,6 @@ export function registerBrowserSessionProfileHandlers(): void {
         return { ok: false, reason: 'Browser not found on this system.' }
       }
 
-      // Why: if the user selected a non-default profile from the picker,
-      // resolve the cookies path for that specific profile.
       if (args.browserProfile && args.browserProfile !== browser.selectedProfile) {
         const reselected = selectBrowserProfile(browser, args.browserProfile)
         if (!reselected) {
@@ -325,9 +315,7 @@ type DetectedBrowserPickerEntry = {
   selectedProfile: string
 }
 
-// Why: the renderer only needs family/label/profiles for the UI picker. Strip cookiesPath,
-// keychainService, and keychainAccount to avoid exposing filesystem paths and credential store
-// identifiers to the renderer.
+// Return picker metadata only; keep cookie paths and keychain identifiers in main.
 function detectedBrowserPickerEntries(): DetectedBrowserPickerEntry[] {
   return detectInstalledBrowsers().map((browser) => ({
     family: browser.family,

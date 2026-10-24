@@ -1,5 +1,7 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcessHandle as ChildProcess } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import { connect } from 'node:net'
+import { createSshOperationAbortError } from '../connection/ssh-exec-options'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 import { reserveLocalForwardPort } from './system-ssh-forward-port-reservation'
@@ -37,9 +39,10 @@ export function spawnSystemSshPortForward(
   const args = buildSystemSshPortForwardArgs(target, localPort, remoteHost, remotePort, options)
   // Why: port-forward ssh processes are not wired to Orca credential prompts;
   // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
-  return spawn(sshPath, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true
+  return spawnProcess({
+    program: sshPath,
+    args,
+    stdio: ['ignore', 'ignore', 'pipe']
   })
 }
 
@@ -81,13 +84,16 @@ export function startSystemSshPortForwardProcess(
   localPort: number,
   remoteHost: string,
   remotePort: number,
-  options?: SystemSshBuildArgsOptions
+  options?: SystemSshBuildArgsOptions,
+  signal?: AbortSignal
 ): Promise<SystemSshPortForwardProcess> {
+  signal?.throwIfAborted()
   const orphanArgs =
     localPort === 0
       ? undefined
       : buildSystemSshPortForwardArgs(target, localPort, remoteHost, remotePort, options)
   return reserveLocalForwardPort(localPort, orphanArgs).then((boundPort) => {
+    signal?.throwIfAborted()
     const process = spawnSystemSshPortForward(target, boundPort, remoteHost, remotePort, options)
     stopOnOwnListenFailure(process, boundPort)
     return {
@@ -135,9 +141,12 @@ function stopOnOwnListenFailure(process: ChildProcess, localPort: number): void 
   process.once('exit', stop)
 }
 
+/** `listenerTimeoutMs` requires a listener by then instead of accepting a still-silent forward. */
 export function waitForSystemSshForwardStartup(
   process: ChildProcess,
-  localPort: number
+  localPort: number,
+  listenerTimeoutMs?: number,
+  signal?: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = ''
@@ -151,6 +160,7 @@ export function waitForSystemSshForwardStartup(
       if (graceTimer) {
         clearTimeout(graceTimer)
       }
+      signal?.removeEventListener('abort', onAbort)
       process.off('error', onError)
       process.off('exit', onExit)
       process.stderr?.off('data', onStderr)
@@ -163,6 +173,7 @@ export function waitForSystemSshForwardStartup(
       cleanup()
       callback()
     }
+    const onAbort = (): void => finish(() => reject(createSshOperationAbortError()))
     const onStderr = (chunk: Buffer): void => {
       stderr += chunk.toString('utf-8')
     }
@@ -174,7 +185,7 @@ export function waitForSystemSshForwardStartup(
     }
     const scheduleProbe = (): void => {
       probeTimer = setTimeout(() => {
-        probeLocalForward(localPort).then(
+        probeLocalForward(localPort, signal).then(
           () => finish(resolve),
           () => {
             if (!settled) {
@@ -189,8 +200,23 @@ export function waitForSystemSshForwardStartup(
     process.once('error', onError)
     process.once('exit', onExit)
     graceTimer = setTimeout(() => {
-      finish(resolve)
-    }, SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS)
+      if (listenerTimeoutMs === undefined) {
+        finish(resolve)
+        return
+      }
+      finish(() =>
+        reject(
+          new Error(
+            `System SSH port forward did not listen on 127.0.0.1:${localPort} within ${listenerTimeoutMs}ms`
+          )
+        )
+      )
+    }, listenerTimeoutMs ?? SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
     scheduleProbe()
   })
 }
@@ -273,14 +299,16 @@ function bestErrorLine(stderr: string): string {
   )
 }
 
-function probeLocalForward(localPort: number): Promise<void> {
+function probeLocalForward(localPort: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: '127.0.0.1', port: localPort })
     const cleanup = (): void => {
+      signal?.removeEventListener('abort', onAbort)
       socket.off('connect', onConnect)
       socket.off('error', onError)
       socket.off('timeout', onTimeout)
     }
+    const onAbort = (): void => onError(createSshOperationAbortError())
     const onConnect = (): void => {
       cleanup()
       socket.destroy()
@@ -300,5 +328,9 @@ function probeLocalForward(localPort: number): Promise<void> {
     socket.once('connect', onConnect)
     socket.once('error', onError)
     socket.once('timeout', onTimeout)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
   })
 }

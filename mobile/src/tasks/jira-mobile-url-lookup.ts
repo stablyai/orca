@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraSite } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../src/shared/jira/jira-types'
 import {
   getMatchingJiraSites,
   isResolvedJiraIssueMatch,

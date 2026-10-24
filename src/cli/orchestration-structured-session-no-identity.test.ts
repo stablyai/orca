@@ -81,5 +81,9 @@ describe('a structured chat session with no orchestration identity', () => {
     callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
     await invoke('orchestration check')
     expect(getTerminalHandleMock).toHaveBeenCalled()
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.check',
+      expect.objectContaining({ terminal: 'term_sibling' })
+    )
   })
 })

@@ -62,4 +62,18 @@ describe('shortcut groups', () => {
       expect.stringContaining('Go to File')
     ])
   })
+
+  it('reports a saved terminal override that main intercepts first', () => {
+    const catalog = buildShortcutDefinitionCatalog({
+      disabledTuiAgents: [],
+      pluginCommands: [],
+      keybindings: { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] },
+      platform: 'darwin',
+      missionControlConflictMessage: 'Blocked by Mission Control.'
+    })
+
+    expect(catalog.conflictByAction.get('terminal.splitRight')).toEqual([
+      expect.stringContaining('Worktree History Forward')
+    ])
+  })
 })

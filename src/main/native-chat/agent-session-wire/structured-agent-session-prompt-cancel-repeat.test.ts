@@ -27,7 +27,7 @@ describe('a prompt Cancel pressed again', () => {
     const first = Promise.withResolvers<undefined>()
     cancelTurn.mockImplementationOnce(async () => {
       await first.promise
-      // As a provider does: interrupting the turn cancels the prompt it was waiting on.
+      // Model provider cancellation of its prompt during turn interrupt.
       acquire.mock.calls.at(-1)?.[0].events?.appendItem(
         identity,
         {

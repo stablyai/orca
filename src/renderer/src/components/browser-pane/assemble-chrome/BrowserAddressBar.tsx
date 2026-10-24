@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { findPage } from '@/store/slices/browser-page-records'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
@@ -14,9 +15,15 @@ import { useBrowserAddressBarEditHandoff } from './use-browser-address-bar-edit-
 import { useBrowserAddressBarOverlay } from './browser-address-bar-expansion'
 import { useBrowserAddressBarClickSelect } from './use-browser-address-bar-click-select'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
+import { useBrowserAddressBarEscape } from './use-browser-address-bar-escape'
+import { useBrowserAddressBarSuggestionPreview } from './use-browser-address-bar-suggestion-preview'
+import { useRemoveSuggestionRow } from './use-browser-address-bar-row-removal'
+import { isRemovableHistoryRow, isRemoveRowShortcut } from '../history/browser-history-row-removal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 import { BrowserLoadProgress } from './browser-load-progress'
+import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import BrowserHistoryDialog from '../history/BrowserHistoryDialog'
 
 function clearTimerRef(timerRef: { current: number | null }): void {
   if (timerRef.current !== null) {
@@ -29,6 +36,10 @@ type BrowserAddressBarProps = {
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
   pageId: string
   value: string
+  /** What Escape reverts an edit to; the page's own address when omitted. */
+  committedValue?: string
+  /** Where the last Escape goes once nothing is left to undo; the page itself by default. */
+  onLeave?: () => void
   onChange: (value: string) => void
   onSubmit: () => void
   onNavigate: (url: string) => void
@@ -50,6 +61,8 @@ type BrowserAddressBarProps = {
 export default function BrowserAddressBar({
   pageId,
   value,
+  committedValue,
+  onLeave,
   onChange,
   onSubmit,
   onNavigate,
@@ -71,6 +84,9 @@ export default function BrowserAddressBar({
   const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
+  const pageAddress = useAppStore((s) =>
+    toDisplayUrl(findPage(s.browserPagesByWorkspace, pageId)?.url ?? '')
+  )
   const closingRef = useRef(false)
   const addressBarClickSelect = useBrowserAddressBarClickSelect()
   const openedAtRef = useRef(0)
@@ -124,67 +140,24 @@ export default function BrowserAddressBar({
     [buildSuggestions, autocompleteQuery, inlineText]
   )
 
-  const clearSuggestionPreview = useCallback((): void => {
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-  }, [clearInline])
-
-  const previewSuggestion = useCallback(
-    (url: string): void => {
-      if (prePreviewValueRef.current === null) {
-        prePreviewValueRef.current = autocompleteQuery
-      }
-      setSelectedValueOverride(url)
-      onChange(url)
-    },
-    [autocompleteQuery, onChange]
-  )
-
-  const selectSuggestionAtIndex = useCallback(
-    (index: number): void => {
-      const suggestion = suggestions[index]
-      if (!suggestion) {
-        return
-      }
-      if (suggestion.isSearch) {
-        // Why: the search row is what Enter does with the typed query, so the bar keeps the
-        // typed text instead of the search URL.
-        prePreviewValueRef.current = null
-        clearInline()
-        setSelectedValueOverride(suggestion.url)
-        onChange(autocompleteQuery)
-        return
-      }
-      if (suggestion.inlineText !== undefined) {
-        // Why: like Chrome, the completion comes back as typed text plus a selected tail, so
-        // Escape still restores what was typed.
-        setSelectedValueOverride(suggestion.url)
-        showInline(autocompleteQuery, suggestion.inlineText)
-        onChange(suggestion.inlineText)
-        return
-      }
-      previewSuggestion(suggestion.url)
-    },
-    [autocompleteQuery, clearInline, onChange, previewSuggestion, showInline, suggestions]
-  )
-
-  const restoreTypedQuery = useCallback((): void => {
-    const typed = prePreviewValueRef.current
-    if (typed === null) {
-      return
-    }
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-    onChange(typed)
-  }, [clearInline, onChange])
+  const { clearSuggestionPreview, selectSuggestionAtIndex, restoreTypedQuery } =
+    useBrowserAddressBarSuggestionPreview({
+      prePreviewValueRef,
+      autocompleteQuery,
+      suggestions,
+      setSelectedValueOverride,
+      onChange,
+      clearInline,
+      showInline
+    })
 
   const dismissSuggestions = useCallback((): void => {
     clearTimerRef(blurCloseTimerRef)
     restoreTypedQuery()
     setOpen(false)
   }, [restoreTypedQuery])
+
+  const removeSuggestion = useRemoveSuggestionRow(restoreTypedQuery)
 
   const switchToTab = useBrowserAddressBarSwitchToTab({
     pageId,
@@ -194,6 +167,23 @@ export default function BrowserAddressBar({
     onNavigate
   })
 
+  const { handleEscapeKeyDown, noteTyped } = useBrowserAddressBarEscape({
+    pageId,
+    inputRef,
+    value,
+    committedValue: committedValue ?? pageAddress,
+    open,
+    previewing:
+      prePreviewValueRef.current !== null && !(inlineText !== null && value === inlineText),
+    restoreTypedQuery: () => {
+      // Why: like Chrome's revert of an arrowed row, the row's Switch to tab button lets go too.
+      switchToTab.clearFocus()
+      restoreTypedQuery()
+    },
+    closeSuggestions: dismissSuggestions,
+    onChange,
+    onLeave
+  })
   // Why nothing for an empty bar: row 0 always shows what Enter does, and there Enter does nothing.
   const selectedValue =
     selectedValueOverride &&
@@ -246,6 +236,7 @@ export default function BrowserAddressBar({
       closingRef.current = true
       setOpen(false)
       clearSuggestionPreview()
+      noteTyped(null)
       // Why looked up by row: a workspace-doc suggestion opens on a fresh grant instead of
       // navigating; its url is the document's path, so even the fallback routes via detection.
       const docLocation = suggestions.find(
@@ -262,7 +253,7 @@ export default function BrowserAddressBar({
         closingRef.current = false
       }, 100)
     },
-    [clearSuggestionPreview, onNavigate, onOpenWorkspaceDoc, suggestions]
+    [clearSuggestionPreview, noteTyped, onNavigate, onOpenWorkspaceDoc, suggestions]
   )
 
   const submitTypedValue = useCallback((): void => {
@@ -272,13 +263,18 @@ export default function BrowserAddressBar({
     }
     setOpen(false)
     clearSuggestionPreview()
+    noteTyped(null)
     onSubmit()
-  }, [clearSuggestionPreview, onSubmit, value])
+  }, [clearSuggestionPreview, noteTyped, onSubmit, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Escape') {
-        dismissSuggestions()
+      if (handleEscapeKeyDown(event)) {
+        return
+      }
+      if (open && selectedRow && isRemovableHistoryRow(selectedRow) && isRemoveRowShortcut(event)) {
+        event.preventDefault()
+        removeSuggestion(selectedRow)
         return
       }
 
@@ -340,7 +336,8 @@ export default function BrowserAddressBar({
       switchFocused,
       selectSuggestionAtIndex,
       restoreTypedQuery,
-      dismissSuggestions,
+      handleEscapeKeyDown,
+      removeSuggestion,
       submitTypedValue
     ]
   )
@@ -436,6 +433,7 @@ export default function BrowserAddressBar({
                 if (completed !== null) {
                   prePreviewValueRef.current = nextValue
                 }
+                noteTyped(nextValue)
                 onChange(completed ?? nextValue)
               }}
               role="combobox"
@@ -466,10 +464,16 @@ export default function BrowserAddressBar({
               hasSwitchTarget={switchToTab.hasSwitchTarget}
               switchFocusedUrl={switchFocused ? selectedValue : null}
               onSwitchToTab={switchToTab.switchToTab}
+              onRemove={removeSuggestion}
             />
           </PopoverContent>
         )}
       </Popover>
+      <BrowserHistoryDialog
+        pageId={pageId}
+        onNavigate={onNavigate}
+        onOpenWorkspaceDoc={onOpenWorkspaceDoc}
+      />
     </div>
   )
 }

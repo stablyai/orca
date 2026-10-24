@@ -77,3 +77,9 @@ describe('resolveQuickWorkspaceAgentSelection', () => {
     ).toEqual({ quickAgent: 'claude', quickAgentOverride: 'claude' })
   })
 })
+
+it('keeps an explicit or default pick of a chat without its CLI; the automatic pick stays on detected agents', () => {
+  const offered = new Set(['claude', 'antigravity'] as const)
+  expect(pickQuickWorkspaceAgent('antigravity', ['claude'], [], offered)).toBe('antigravity')
+  expect(pickQuickWorkspaceAgent(null, [], [], offered)).toBeNull()
+})

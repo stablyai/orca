@@ -118,7 +118,13 @@ export function captureEditorOpenLinkIntent(
   }
 }
 
-function liveLayoutGroupIds(state: LinkPlacementState, worktreeId: string): Set<string> {
+export function liveLayoutGroupIds(
+  state: {
+    layoutByWorktree?: LinkPlacementState['layoutByWorktree']
+    groupsByWorktree?: Record<string, readonly Pick<TabGroup, 'id'>[]>
+  },
+  worktreeId: string
+): Set<string> {
   const layout = state.layoutByWorktree?.[worktreeId]
   const groupIds = new Set((state.groupsByWorktree?.[worktreeId] ?? []).map((group) => group.id))
   if (!layout) {

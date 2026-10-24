@@ -8,8 +8,7 @@ export function seedHeadlessTerminalFromSpawnResult(
   result: PtySpawnResult,
   paneKey: string | null
 ): void {
-  // A mounted renderer owns richer history than the provider snapshot, unless main owns the
-  // layout: then the host's history is the only source (a view repaints from main's copy).
+  // Renderer-owned layout prefers its richer history; main-owned layout must seed the host copy every view restores.
   if (
     !runtime ||
     (!ORCA_LAYOUT_OWNER_IS_MAIN && paneKey && pendingByPaneKey.has(paneKey)) ||

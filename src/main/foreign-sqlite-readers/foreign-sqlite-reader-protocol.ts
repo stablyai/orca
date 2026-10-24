@@ -1,4 +1,4 @@
-// Type-only and electron-free: the worker entry and the main-process client both import it.
+// Keep this Electron-free so both worker and main-process clients can import it.
 
 import type { OpenCodeSessionCursor } from './opencode-binder-sessions-result'
 

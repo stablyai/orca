@@ -6,6 +6,7 @@ import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-req
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
+import { CLAUDE_STOP_GRACE_MS } from './claude-request-end-wait'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
 
@@ -20,24 +21,38 @@ export async function cancelClaudeTurn(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   isCurrent: ClaudeTurnCancellationGuard = () => true,
-  onDispatchSettledLate?: ClaudeLateDispatchSettlement
+  onDispatchSettledLate?: ClaudeLateDispatchSettlement,
+  stoppedAt?: number
 ): Promise<{ cancelled: boolean }> {
   // Interrupt is session-scoped; recheck ownership immediately before sending.
-  if (!isCurrent()) {
+  const remaining = () =>
+    stoppedAt === undefined
+      ? timeoutMs
+      : Math.min(timeoutMs ?? CLAUDE_STOP_GRACE_MS, stoppedAt + CLAUDE_STOP_GRACE_MS - Date.now())
+  const interruptTimeout = remaining()
+  if (!isCurrent() || (interruptTimeout !== undefined && interruptTimeout <= 0)) {
     return { cancelled: false }
   }
   const cancelQueued = supportsClaudeQueuedInterruptCancellation(session)
   try {
     const receipt = await session.connection.interrupt({
       ...(cancelQueued ? { cancelQueued: true } : {}),
-      timeoutMs
+      timeoutMs: interruptTimeout
     })
     if (cancelQueued) {
       settleCancelledClaudeDispatchWaiters(session, receipt?.cancelled ?? [], onDispatchSettledLate)
     } else {
       const withdrawn: string[] = []
       for (const uuid of receipt?.still_queued ?? []) {
-        if (await session.connection.cancelAsyncMessage(uuid, { timeoutMs }).catch(() => false)) {
+        const withdrawalTimeout = remaining()
+        if (!isCurrent() || (withdrawalTimeout !== undefined && withdrawalTimeout <= 0)) {
+          break
+        }
+        if (
+          await session.connection
+            .cancelAsyncMessage(uuid, { timeoutMs: withdrawalTimeout })
+            .catch(() => false)
+        ) {
           withdrawn.push(uuid)
         }
       }

@@ -23,7 +23,8 @@ It shares complete Electron distributions through the repository cache and remov
 `out/electron-dev` bundles, which development rebuilds on demand. It also removes tracked
 `.cache/vite` dependency caches unused for 30 days. With `--tests-stopped`, it also
 removes stamped historical test checkouts and shared seeds older than 30 days; tests regenerate them when needed. It leaves source files,
-dependency installs, worktree registrations, and other build output alone. Reported sizes are
+worktree registrations and branches intact. The manual command also includes old dependency
+installs and build output as described below. Reported sizes are
 logical file data; APFS clones and hardlinks mean actual disk savings can be smaller.
 
 Use `--release-cache-min-age-days 7` to shorten historical-cache retention, or `0` to select all
@@ -43,6 +44,36 @@ Use `--repo DIRECTORY` to choose another local repository. Git's worktree list d
 including registered worktrees outside Orca's workspace directory. Folder workspaces without Git
 have no repository-wide sweep. These commands run on the local host: they do not inspect or delete
 anything on SSH hosts. Run maintenance on the execution host when maintaining remote repositories.
+
+## Old dependency installs and build output
+
+Old generated files are included in the normal manual command. Stop apps, agents, package
+installs, builds and tests in the repository's sibling worktrees before applying:
+
+```sh
+pnpm reclaim-space
+pnpm reclaim-space --apply
+```
+
+This manual pass retains the selected repository worktree, the invoking worktree, and any
+`--exclude-worktree` directory. It removes ignored, completely untracked `node_modules`, `out`,
+`dist`, and `build` directories older than 30 days. Recognized package roots are the repository
+root, `mobile`, `native/*`, `src/packages/*`, `cloud/apps/*`, and `cloud/packages/*`, each with a
+regular `package.json`. It does not search arbitrary folders or the user's home directory.
+Use `--generated-min-age-days 14` to shorten retention, or `0` to include recent generated
+directories. Age is the directory modification time, not proof that an install is unused;
+stop sibling work before applying even when its dependencies were installed long ago.
+
+Preview leaves files in place. Apply rechecks Git tracking, parent paths, directory identity
+and modification time before deleting. Symlinked directories, symlinked package parents, nested
+repositories and directories containing tracked files are retained. Read-only generated
+directories can be made writable for removal; hardlinked package files are never chmodded.
+Source files, local changes, worktree registrations, branches, and shared pnpm stores remain
+intact. Generated files are recreated by installing dependencies or rebuilding in that worktree.
+APFS clones and hardlinks mean directory sizes can greatly overstate the actual space reclaimed.
+
+The automatic worker never runs this pass. Machine-wide caches, Docker images/volumes, downloads and simulator data remain
+outside this repository-scoped command.
 
 ## Keeping installs shared
 

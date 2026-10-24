@@ -3,6 +3,7 @@ import { qoderHookService } from '../qoder/hook-service'
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
+import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -31,13 +32,6 @@ import {
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
 
-type FakeFs = {
-  files: Map<string, string>
-  dirs: Set<string>
-  modes: Map<string, number>
-  failRenameTo: Set<string>
-}
-
 const EXPECTED_CURSOR_HOOK_RESPONSES = {
   beforeSubmitPrompt: '{"continue":true}',
   stop: '{}',
@@ -49,88 +43,18 @@ const EXPECTED_CURSOR_HOOK_RESPONSES = {
   afterAgentResponse: '{}'
 } satisfies Record<CursorEvent, string>
 
-function createFakeSftp(initialFiles: Record<string, string> = {}): {
-  sftp: SFTPWrapper
-  fs: FakeFs
-} {
-  const fs: FakeFs = {
-    files: new Map(Object.entries(initialFiles)),
-    dirs: new Set(['/']),
-    modes: new Map(),
-    failRenameTo: new Set()
-  }
-  const noEntryError = (path: string) => ({ code: 2, message: `ENOENT ${path}` })
-  const fakeStats = (mode: number): { mode: number } => ({ mode })
-
-  const sftp = {
-    readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
-      if (v === undefined) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, v)
-    },
-    writeFile: (
-      path: string,
-      content: string,
-      options: string | { mode?: number },
-      cb: (err: unknown) => void
-    ): void => {
-      fs.files.set(path, content)
-      if (typeof options !== 'string' && options.mode !== undefined) {
-        fs.modes.set(path, options.mode)
-      }
-      cb(null)
-    },
-    rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
-      if (fs.failRenameTo.has(dst)) {
-        cb({ code: 4, message: `rename failed ${dst}` })
-        return
-      }
-      const v = fs.files.get(src)
-      if (v === undefined) {
-        cb(noEntryError(src))
-        return
-      }
-      fs.files.set(dst, v)
-      fs.files.delete(src)
-      const mode = fs.modes.get(src)
-      if (mode !== undefined) {
-        fs.modes.set(dst, mode)
-        fs.modes.delete(src)
-      }
-      cb(null)
-    },
-    unlink: (path: string, cb: (err: unknown) => void): void => {
-      fs.files.delete(path)
-      fs.modes.delete(path)
-      cb(null)
-    },
-    chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
-      fs.modes.set(path, mode)
-      cb(null)
-    },
-    stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
-        cb(noEntryError(path))
-        return
-      }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
-    },
-    readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
-      if (fs.dirs.has(path)) {
-        cb(null, [])
-        return
-      }
-      cb(noEntryError(path))
-    },
-    mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
+function createFakeSftp(initialFiles: Record<string, string> = {}) {
+  const { sftp, fs } = createAgentHookMemorySftp(initialFiles)
+  const failRenameTo = new Set<string>()
+  const rename = sftp.rename.bind(sftp)
+  sftp.rename = (source, destination, callback) => {
+    if (failRenameTo.has(destination)) {
+      callback(Object.assign(new Error(`rename failed ${destination}`), { code: 4 }))
+      return
     }
-  } as unknown as SFTPWrapper
-  return { sftp, fs }
+    rename(source, destination, callback)
+  }
+  return { sftp, fs: { ...fs, failRenameTo } }
 }
 
 describe('remote hook service installers', () => {
@@ -715,13 +639,34 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/qoder-hook.sh')).toContain('/hook/qoder')
   })
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
-    const { sftp } = createFakeSftp()
+    const { sftp, fs } = createFakeSftp()
     const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
       agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
     })
     const byAgent = new Map(results.map((r) => [r.agent, r.state]))
     expect(byAgent.get('droid')).toBe('installed')
     expect(byAgent.get('copilot')).toBe('installed')
+    expect(JSON.parse(fs.files.get('/home/dev/.factory/settings.json') ?? '{}')).toMatchObject({
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              { command: expect.stringContaining('/home/dev/.orca/agent-hooks/droid-hook.sh') }
+            ]
+          }
+        ]
+      }
+    })
+    expect(JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json') ?? '{}')).toMatchObject({
+      hooks: {
+        Stop: [{ bash: expect.stringContaining('/home/dev/.orca/agent-hooks/copilot-hook.sh') }]
+      }
+    })
+    for (const agent of ['droid', 'copilot']) {
+      const path = `/home/dev/.orca/agent-hooks/${agent}-hook.sh`
+      expect(fs.files.get(path)).toContain(`/hook/${agent}`)
+      expect(fs.modes.get(path)).toBe(0o755)
+    }
   })
 
   it('installs only positively detected remote agents', async () => {

@@ -33,7 +33,7 @@ import {
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { readClaudeTranscriptEntryUuid } from './claude-transcript-entry-uuid'
-import { persistClaudeTurnResumePoint } from './claude-structured-resume-point'
+import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../observability/agent-session-instrumentation'
 import { resolveClaudeAcquisitionLaunch } from './claude-structured-acquisition-launch'
 import {
@@ -80,6 +80,8 @@ export async function acquireClaudeSession({
         ? liveSession.backgroundTasks.goalBackgroundWork
         : 'unverifiable'
   )
+  const contextActivity = translator?.contextActivity ?? 0
+  const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -98,13 +100,10 @@ export async function acquireClaudeSession({
       }
     }
     observedLeafUuid = readClaudeTranscriptEntryUuid(message) ?? observedLeafUuid
+    const leafAtFrame = observedLeafUuid
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
-      // Late results after exit cannot update the resume point.
-      if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
-        persistClaudeTurnResumePoint(sessionId, liveSession, deps)
-      }
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
         settleClaudeTurnEndWaiters(liveSession)
       }
@@ -150,6 +149,8 @@ export async function acquireClaudeSession({
           ...(startedSend ? { startedSend } : {}),
           ...observedAt
         })
+        // Final snapshots and the turn settlement must reach the journal before its leaf can move.
+        recordTurnEnd(liveSession, message, leafAtFrame)
       })
     } finally {
       try {
@@ -264,6 +265,13 @@ export async function acquireClaudeSession({
         proof: initProof,
         account: launch.account,
         resumesTranscript: launch.resumesTranscript,
+        claudeConfigDir: launch.claudeConfigDir,
+        cwd: launch.cwd,
+        history: {
+          leafUuid: launch.resumeLeafUuid,
+          covered: !launch.resumesTranscript || launch.resumeLeafUuid === null,
+          contextActivity
+        },
         onLateRefusal: (error) => callbacks.handleExit(sessionId, attempt, error)
       },
       ...(deps.mintLinkId ? { linkId: deps.mintLinkId() } : {}),
@@ -289,7 +297,7 @@ export async function acquireClaudeSession({
     return publication.acquisition
   } catch (error) {
     unbindReadingControl?.()
-    const acquisitionError = await resolveClaudeAcquisitionError({
+    throw await resolveClaudeAcquisitionError({
       error,
       sessionId,
       sessions,
@@ -298,7 +306,6 @@ export async function acquireClaudeSession({
       prompts,
       releaseAcquisition: () => acquisitions.deleteIfCurrent(sessionId, attempt)
     })
-    throw acquisitionError
   } finally {
     attempt.finish()
   }
