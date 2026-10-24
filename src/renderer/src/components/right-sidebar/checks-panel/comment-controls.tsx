@@ -3,7 +3,6 @@ import {
   Bot,
   Check,
   Copy,
-  ExternalLink,
   MoreHorizontal,
   LoaderCircle,
   Pencil,
@@ -226,11 +225,10 @@ export function CommentMoreMenu({
   // Why: the override is an escape hatch for bots the heuristics miss, so hide
   // the action when the author is already detected as a bot without it.
   const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
-  const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
   const hasQueue = Boolean(onQueueForAgent)
-  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
+  if (!hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
     return null
   }
 
@@ -260,17 +258,7 @@ export function CommentMoreMenu({
             )}
           </DropdownMenuItem>
         ) : null}
-        {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
-        {hasGoToComment && (
-          <DropdownMenuItem onSelect={() => window.api.shell.openUrl(comment.url)}>
-            <ExternalLink />
-            {translate(
-              'auto.components.right.sidebar.checks.panel.content.d3923d18fe',
-              'Go to comment'
-            )}
-          </DropdownMenuItem>
-        )}
-        {hasGoToComment && (hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
+        {hasQueue && (hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasEdit ? (
           <DropdownMenuItem
             onSelect={(event) => {
@@ -290,7 +278,7 @@ export function CommentMoreMenu({
         ) : null}
         {hasMarkAsBot ? (
           <>
-            {(hasQueue || hasGoToComment || hasEdit || hasDelete) && <DropdownMenuSeparator />}
+            {(hasQueue || hasEdit || hasDelete) && <DropdownMenuSeparator />}
             <DropdownMenuItem
               onSelect={() => setPRBotAuthorOverride(comment.author, !isOverriddenBot)}
             >
