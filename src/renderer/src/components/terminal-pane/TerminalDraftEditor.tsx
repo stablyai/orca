@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   clearRecoveredDraft,
@@ -6,10 +6,8 @@ import {
   resolveDraftRecovery,
   writeRecoveredDraft
 } from './terminal-draft-recovery'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Send, X } from 'lucide-react'
 import { TerminalDraftTrigger } from './TerminalDraftTrigger'
+import { TerminalDraftPanel } from './TerminalDraftPanel'
 import type {
   TerminalDraftSaveResult,
   TerminalDraftSubmitResult
@@ -44,11 +42,15 @@ export function TerminalDraftEditor({
   const [holder, setHolder] = useState<string | null>(null)
   const [conflictText, setConflictText] = useState<string | null>(null)
   const [actionsLocked, setActionsLocked] = useState(false)
+  const clientIdRef = useRef(createBrowserUuid())
   const epochRef = useRef(0)
   const baseTokenRef = useRef('')
   const ptyIdRef = useRef<string | null>(null)
   const remoteTextRef = useRef('')
   const textRef = useRef('')
+  const dirtyRef = useRef(false)
+  const cleanupRef = useRef<() => void>(() => {})
+  dirtyRef.current = dirty
 
   const updateText = useCallback((value: string) => {
     textRef.current = value
@@ -59,9 +61,17 @@ export function TerminalDraftEditor({
   const releaseLease = useCallback(() => {
     const ptyId = ptyIdRef.current
     if (ptyId && epochRef.current > 0) {
-      void releaseDesktopTerminalDraft(ptyId, epochRef.current).catch(() => {})
+      void releaseDesktopTerminalDraft(ptyId, clientIdRef.current, epochRef.current).catch(() => {})
     }
   }, [])
+
+  cleanupRef.current = () => {
+    if (dirtyRef.current) {
+      writeRecoveredDraft(recoveryKey, { text: textRef.current, remoteText: remoteTextRef.current })
+    }
+    releaseLease()
+  }
+  useEffect(() => () => cleanupRef.current(), [])
 
   const open = useCallback(
     async (force = false) => {
@@ -77,7 +87,7 @@ export function TerminalDraftEditor({
       setStatus('')
       setActionsLocked(false)
       try {
-        const result = await beginDesktopTerminalDraft(ptyId, force)
+        const result = await beginDesktopTerminalDraft(ptyId, clientIdRef.current, force)
         if (!result.ok) {
           if (result.reason === 'locked') {
             setPhase('locked')
@@ -141,15 +151,28 @@ export function TerminalDraftEditor({
   const applySaveResult = useCallback((result: TerminalDraftSaveResult): boolean => {
     if (result.ok) {
       baseTokenRef.current = result.sourceToken
-      remoteTextRef.current = textRef.current
+      if (typeof result.text === 'string') {
+        remoteTextRef.current = result.text
+        textRef.current = result.text
+        setText(result.text)
+      } else {
+        remoteTextRef.current = textRef.current
+      }
       setDirty(false)
       setActionsLocked(false)
       setStatus(
-        result.replayed ? 'This draft was already saved to the terminal.' : 'Saved to terminal.'
+        result.normalized
+          ? 'Saved; the agent expanded tabs or line endings.'
+          : result.replayed
+            ? 'This draft was already saved to the terminal.'
+            : 'Saved to terminal.'
       )
       return true
     }
     if (result.status === 'conflict') {
+      // The conflict's token is the current terminal version, so either explicit choice can proceed.
+      baseTokenRef.current = result.conflict.sourceToken
+      remoteTextRef.current = result.conflict.text
       setConflictText(result.conflict.text)
       setPhase('conflict')
       setStatus('The terminal draft changed. Choose which version to keep.')
@@ -180,6 +203,7 @@ export function TerminalDraftEditor({
       applySaveResult(
         await saveDesktopTerminalDraft({
           ptyId,
+          clientId: clientIdRef.current,
           epoch: epochRef.current,
           baseToken: baseTokenRef.current,
           text: textRef.current,
@@ -203,6 +227,7 @@ export function TerminalDraftEditor({
     try {
       const result: TerminalDraftSubmitResult = await submitDesktopTerminalDraft({
         ptyId,
+        clientId: clientIdRef.current,
         epoch: epochRef.current,
         baseToken: baseTokenRef.current,
         text: textRef.current,
@@ -220,6 +245,11 @@ export function TerminalDraftEditor({
       }
       if (result.ok && result.status === 'saved_not_submitted') {
         baseTokenRef.current = result.sourceToken
+        if (typeof result.text === 'string') {
+          remoteTextRef.current = result.text
+          textRef.current = result.text
+          setText(result.text)
+        }
         setDirty(false)
         setActionsLocked(true)
         setStatus('Saved, but the terminal refused Enter. Submit from the terminal.')
@@ -227,6 +257,11 @@ export function TerminalDraftEditor({
       }
       if (result.ok && result.status === 'submit_unknown') {
         baseTokenRef.current = result.sourceToken
+        if (typeof result.text === 'string') {
+          remoteTextRef.current = result.text
+          textRef.current = result.text
+          setText(result.text)
+        }
         setDirty(false)
         setActionsLocked(true)
         setStatus('Enter may not have been delivered. Check the terminal before retrying.')
@@ -264,132 +299,24 @@ export function TerminalDraftEditor({
     return <TerminalDraftTrigger onOpen={() => void open()} />
   }
 
-  const unsupported = phase === 'unsupported'
-  const locked = phase === 'locked'
-  const conflict = phase === 'conflict'
-
   return (
-    <div
-      className="absolute inset-x-3 bottom-3 z-30 flex max-h-[55%] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg"
-      role="dialog"
-      aria-label="Terminal draft editor"
-      onMouseDown={(event) => event.stopPropagation()}
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">Terminal draft</div>
-          <div className="truncate text-xs text-muted-foreground" role="status">
-            {status || (phase === 'loading' ? 'Reading the agent draft…' : '')}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {phase === 'editing' && (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => void open()}
-                disabled={busy}
-                aria-label="Reload the terminal draft"
-              >
-                Reload
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => void save()}
-                disabled={busy || actionsLocked || !dirty}
-                aria-label="Save draft to terminal without submitting"
-              >
-                {busy ? <Loader2 className="animate-spin" /> : null}
-                Save
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void submit()}
-                disabled={busy || actionsLocked}
-                aria-label="Write draft and press Enter once"
-              >
-                {busy ? <Loader2 className="animate-spin" /> : <Send />}
-                Send
-              </Button>
-            </>
-          )}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            onClick={close}
-            aria-label="Close terminal draft editor"
-          >
-            <X />
-          </Button>
-        </div>
-      </div>
-
-      {unsupported || locked ? (
-        <div className="space-y-3 px-3 py-4 text-sm">
-          <p className="text-muted-foreground">
-            {locked
-              ? `Another device is editing this terminal draft (${holder}).`
-              : (reason ?? 'Draft editing is unavailable for this terminal.')}
-          </p>
-          {locked && (
-            <Button type="button" size="sm" onClick={() => void open(true)} disabled={busy}>
-              Take over editing
-            </Button>
-          )}
-          {!locked && (
-            <p className="text-xs text-muted-foreground">
-              Type in the terminal as usual. Nothing was changed.
-            </p>
-          )}
-        </div>
-      ) : (
-        <>
-          {conflict && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-destructive/10 px-3 py-2 text-xs">
-              <span className="text-destructive">The terminal draft was changed elsewhere.</span>
-              <Button type="button" size="xs" variant="outline" onClick={useTerminalVersion}>
-                Use terminal version
-              </Button>
-              <Button type="button" size="xs" variant="outline" onClick={keepMine}>
-                Keep my text
-              </Button>
-            </div>
-          )}
-          <Textarea
-            value={text}
-            onChange={(event) => updateText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault()
-                void submit()
-              } else if (event.key.toLowerCase() === 's' && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault()
-                void save()
-              }
-            }}
-            variant="code"
-            className="min-h-24 flex-1"
-            placeholder="Write the prompt here. Enter adds a line; Send presses Enter in the terminal."
-            aria-label="Terminal draft text"
-            spellCheck={false}
-            disabled={phase === 'loading' || busy}
-            autoFocus
-          />
-          <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-            <span>
-              {dirty ? 'Unsaved local changes' : 'Matches the terminal draft'} · Enter adds a line,
-              ⌘/Ctrl+Enter sends
-            </span>
-            <span>{Array.from(text).length} chars</span>
-          </div>
-        </>
-      )}
-    </div>
+    <TerminalDraftPanel
+      phase={phase}
+      status={status}
+      text={text}
+      dirty={dirty}
+      busy={busy}
+      actionsLocked={actionsLocked}
+      holder={holder}
+      reason={reason}
+      onTextChange={updateText}
+      onReload={() => void open()}
+      onSave={() => void save()}
+      onSubmit={() => void submit()}
+      onClose={close}
+      onTakeOver={() => void open(true)}
+      onUseTerminalVersion={useTerminalVersion}
+      onKeepMine={keepMine}
+    />
   )
 }

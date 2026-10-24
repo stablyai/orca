@@ -1,5 +1,4 @@
 import { defineMethod } from '../../core'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
 import {
   TerminalDraftBegin,
   TerminalDraftRelease,
@@ -7,14 +6,7 @@ import {
   TerminalDraftSubmit
 } from '../../../../../shared/rpc-contract/terminal-draft-params'
 import { assertTerminalSendTextWithinLimit } from './terminal-input-delivery'
-import { TerminalDraftCoordinator } from '../../../terminal/draft/terminal-draft-coordinator'
-
-let coordinator: TerminalDraftCoordinator | null = null
-
-function drafts(): TerminalDraftCoordinator {
-  coordinator ??= new TerminalDraftCoordinator(getAppEnvironment().getPath('userData'))
-  return coordinator
-}
+import { getTerminalDraftCoordinator } from '../../../terminal/draft/terminal-draft-service'
 
 /**
  * Draft editing is an additive capability. Old hosts answer "unsupported method", which clients
@@ -30,7 +22,11 @@ export const TERMINAL_DRAFT_METHODS = [
       if (!ptyId) {
         return { ok: false, supported: false, reason: 'not_live' }
       }
-      return drafts().begin({ ptyId, client: params.client, force: params.force })
+      return getTerminalDraftCoordinator().begin({
+        ptyId,
+        client: params.client,
+        force: params.force
+      })
     }
   }),
   defineMethod({
@@ -43,7 +39,7 @@ export const TERMINAL_DRAFT_METHODS = [
         return { ok: false, status: 'unsupported', reason: 'not_live' }
       }
       await assertTerminalSendTextWithinLimit(params.text)
-      return drafts().save({
+      return getTerminalDraftCoordinator().save({
         ptyId,
         client: params.client,
         epoch: params.epoch,
@@ -63,7 +59,7 @@ export const TERMINAL_DRAFT_METHODS = [
         return { ok: false, status: 'unsupported', reason: 'not_live' }
       }
       await assertTerminalSendTextWithinLimit(params.text)
-      return drafts().submit({
+      return getTerminalDraftCoordinator().submit({
         ptyId,
         client: params.client,
         epoch: params.epoch,
@@ -86,7 +82,11 @@ export const TERMINAL_DRAFT_METHODS = [
     handler: async (params, { runtime }) => {
       const ptyId = runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId
       return ptyId
-        ? drafts().release({ ptyId, epoch: params.epoch, client: params.client })
+        ? getTerminalDraftCoordinator().release({
+            ptyId,
+            epoch: params.epoch,
+            client: params.client
+          })
         : { ok: false }
     }
   })

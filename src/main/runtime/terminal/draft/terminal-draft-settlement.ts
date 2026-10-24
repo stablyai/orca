@@ -9,7 +9,13 @@ export function settleDraftReplace(
     return { ok: false, status: 'unknown', reason: 'bridge_timeout' }
   }
   if (response.ok && response.sourceToken) {
-    return { ok: true, status: 'applied', sourceToken: response.sourceToken }
+    return {
+      ok: true,
+      status: 'applied',
+      sourceToken: response.sourceToken,
+      ...(typeof response.text === 'string' ? { text: response.text } : {}),
+      ...(response.normalized === true ? { normalized: true } : {})
+    }
   }
   if (response.error === 'conflict' && typeof response.text === 'string' && response.sourceToken) {
     return {

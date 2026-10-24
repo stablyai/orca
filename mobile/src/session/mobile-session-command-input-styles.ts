@@ -151,6 +151,15 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
+  inputBarMultiline: {
+    alignItems: 'flex-end'
+  },
+  textInputMultiline: {
+    minHeight: 72,
+    height: 'auto',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm
+  },
   textInput: {
     flex: 1,
     height: 34,

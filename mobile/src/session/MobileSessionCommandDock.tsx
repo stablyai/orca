@@ -322,7 +322,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoCorrect={false}
               spellCheck={false}
               smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
               autoComplete="off"
               keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
               returnKeyType="default"
@@ -332,10 +331,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             />
           </View>
         ) : (
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, remoteDraftSession && styles.inputBarMultiline]}>
             <TextInput
               ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
               key={
                 hostOs() === 'android'
                   ? autocompleteEnabled
@@ -343,8 +341,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                     : 'cmd-input-ac-off'
                   : 'cmd-input'
               }
-              style={styles.textInput}
+              style={[styles.textInput, remoteDraftSession && styles.textInputMultiline]}
               value={bufferedTerminalDraftState.input}
+              multiline={Boolean(remoteDraftSession)}
+              textAlignVertical={remoteDraftSession ? 'top' : 'center'}
               // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
               onChangeText={bufferedTerminalDraftState.setInput}
               placeholder="Type a command…"
@@ -353,14 +353,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoCorrect={autocompleteEnabled}
               spellCheck={autocompleteEnabled}
               smartInsertDelete={false}
-              // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
               autoComplete="off"
               keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
-              returnKeyType="send"
+              returnKeyType={remoteDraftSession ? 'default' : 'send'}
               blurOnSubmit={false}
               // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
+              // Why: in draft mode Return must insert a newline; the arrow is the only submit.
+              onSubmitEditing={remoteDraftSession ? undefined : () => void handleSend()}
             />
             <MobileTerminalInputActions
               canSend={canSend}

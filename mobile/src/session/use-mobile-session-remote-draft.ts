@@ -3,10 +3,11 @@ import { Alert } from 'react-native'
 import {
   terminalDraftBegin,
   terminalDraftRelease,
-  terminalDraftSave,
-  terminalDraftSubmit
+  terminalDraftSave
 } from '../terminal/mobile-terminal-operations'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import { useMobileRemoteDraftResolution } from './use-mobile-remote-draft-resolution'
+import { useMobileRemoteDraftSubmit } from './use-mobile-remote-draft-submit'
 
 export type MobileRemoteDraftSession = {
   handle: string
@@ -45,7 +46,9 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
   } = scope
   const [session, setSession] = useState<MobileRemoteDraftSession | null>(null)
   const [conflict, setConflict] = useState<MobileRemoteDraftConflict | null>(null)
+  const [uncertain, setUncertain] = useState(false)
   const sessionRef = useRef<MobileRemoteDraftSession | null>(null)
+  const loadSeqRef = useRef(0)
   sessionRef.current = session
 
   const release = useCallback((target: MobileRemoteDraftSession | null) => {
@@ -87,16 +90,24 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         showToast('Connect to the host before loading its draft', 1800)
         return
       }
-      const response = await terminalDraftBegin.request(
-        rpc,
-        {
-          terminal: handle,
-          client: { id: deviceToken, type: 'mobile' },
-          ...(force ? { force: true } : {})
-        },
-        { failWhenDisconnected: true }
-      )
-      const result = terminalDraftBegin.interpret(response)
+      loadSeqRef.current += 1
+      const seq = loadSeqRef.current
+      let result
+      try {
+        const response = await terminalDraftBegin.request(
+          rpc,
+          {
+            terminal: handle,
+            client: { id: deviceToken, type: 'mobile' },
+            ...(force ? { force: true } : {})
+          },
+          { failWhenDisconnected: true }
+        )
+        result = terminalDraftBegin.interpret(response)
+      } catch {
+        showToast('Could not read the terminal draft — check the connection', 2200)
+        return
+      }
       if (!result) {
         showToast("This Orca host doesn't support draft editing yet", 2200)
         return
@@ -122,6 +133,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         return
       }
       if (
+        seq !== loadSeqRef.current ||
         handle !== activeHandleRef.current ||
         result.epoch === undefined ||
         typeof result.text !== 'string' ||
@@ -137,6 +149,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       }
       setSession(next)
       setConflict(null)
+      setUncertain(false)
       bufferedTerminalDraftState.setInput(result.text)
       showToast('Loaded terminal draft', 1200)
     },
@@ -172,27 +185,50 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       showToast('Load the terminal draft first', 1600)
       return
     }
-    const response = await terminalDraftSave.request(
-      rpc,
-      {
-        terminal: current.handle,
-        client: { id: deviceToken, type: 'mobile' },
-        epoch: current.epoch,
-        baseToken: current.baseToken,
-        text: bufferedTerminalDraftState.input,
-        operationId: operationId()
-      },
-      { failWhenDisconnected: true }
-    )
-    const result = terminalDraftSave.interpret(response)
+    const sentText = bufferedTerminalDraftState.input
+    let result
+    try {
+      const response = await terminalDraftSave.request(
+        rpc,
+        {
+          terminal: current.handle,
+          client: { id: deviceToken, type: 'mobile' },
+          epoch: current.epoch,
+          baseToken: current.baseToken,
+          text: bufferedTerminalDraftState.input,
+          operationId: operationId()
+        },
+        { failWhenDisconnected: true }
+      )
+      result = terminalDraftSave.interpret(response)
+    } catch {
+      setUncertain(true)
+      showToast('Result unknown — check the terminal before retrying', 2600)
+      return
+    }
+    if (activeHandleRef.current !== current.handle || sessionRef.current?.epoch !== current.epoch) {
+      return
+    }
     if (result?.ok) {
+      const actualText = typeof result.text === 'string' ? result.text : sentText
+      if (bufferedTerminalDraftState.input === sentText && actualText !== sentText) {
+        bufferedTerminalDraftState.setInput(actualText)
+      }
       const next = {
         ...current,
         baseToken: result.sourceToken ?? current.baseToken,
-        remoteText: bufferedTerminalDraftState.input
+        remoteText: actualText
       }
       setSession(next)
-      showToast(result.replayed ? 'Already saved to terminal' : 'Saved to terminal', 1400)
+      setUncertain(false)
+      showToast(
+        result.normalized
+          ? 'Saved; the agent expanded tabs or line endings'
+          : result.replayed
+            ? 'Already saved to terminal'
+            : 'Saved to terminal',
+        1600
+      )
       return
     }
     if (result?.status === 'conflict' && result.conflict) {
@@ -208,106 +244,38 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     )
   }, [bufferedTerminalDraftState.input, client, showToast])
 
-  const submitRemoteDraft = useCallback(
-    async (text: string): Promise<MobileRemoteDraftSubmitOutcome> => {
-      const current = sessionRef.current
-      const rpc = client
-      const deviceToken = deviceTokenRef.current
-      if (!current || !rpc || !deviceToken) {
-        return { applied: false }
-      }
-      const response = await terminalDraftSubmit.request(
-        rpc,
-        {
-          terminal: current.handle,
-          client: { id: deviceToken, type: 'mobile' },
-          epoch: current.epoch,
-          baseToken: current.baseToken,
-          text,
-          operationId: operationId()
-        },
-        { failWhenDisconnected: true }
-      )
-      const result = terminalDraftSubmit.interpret(response)
-      if (!result) {
-        showToast("This Orca host doesn't support draft editing yet", 2200)
-        return { applied: false }
-      }
-      if (result.ok && result.status === 'submitted') {
-        release(current)
-        setSession(null)
-        setConflict(null)
-        showToast('Sent to the terminal', 1200)
-        return { applied: true, status: 'submitted' }
-      }
-      if (result.ok && result.status === 'saved_not_submitted') {
-        if (result.sourceToken) {
-          setSession({ ...current, baseToken: result.sourceToken })
-        }
-        showToast('Saved, but Enter was refused. Check the terminal.', 2400)
-        return { applied: true, status: 'saved_not_submitted' }
-      }
-      if (result.ok && result.status === 'submit_unknown') {
-        // Why: an unknown Enter must not be retried by a second tap; drop the lease and leave it there.
-        setSession(null)
-        release(current)
-        showToast('Result unknown — check the terminal before sending again', 2600)
-        return { applied: true, status: 'submit_unknown' }
-      }
-      if (result.status === 'conflict' && result.conflict) {
-        setConflict(result.conflict)
-        showToast('Terminal draft changed elsewhere', 2200)
-        return { applied: false }
-      }
-      showToast(
-        result.status === 'unknown'
-          ? 'Result unknown — check the terminal before retrying'
-          : 'Could not write the draft',
-        2400
-      )
-      return { applied: false }
-    },
-    [client, release, showToast]
-  )
+  const submitRemoteDraft = useMobileRemoteDraftSubmit({
+    client,
+    deviceTokenRef,
+    activeHandleRef,
+    sessionRef,
+    setSession,
+    setConflict,
+    setUncertain,
+    release,
+    showToast
+  })
 
-  const reloadConflict = useCallback(() => {
-    const current = sessionRef.current
-    if (!current || !conflict) {
-      return
-    }
-    bufferedTerminalDraftState.setInput(conflict.text)
-    setSession({ ...current, baseToken: conflict.sourceToken, remoteText: conflict.text })
-    setConflict(null)
-    showToast('Loaded the terminal version', 1400)
-  }, [bufferedTerminalDraftState, conflict])
-
-  const exitRemoteDraft = useCallback(() => {
-    const current = sessionRef.current
-    release(current)
-    setSession(null)
-    setConflict(null)
-    showToast('Stopped editing the terminal draft', 1400)
-  }, [release, showToast])
-
-  const keepConflictMine = useCallback(() => {
-    const current = sessionRef.current
-    if (!current || !conflict) {
-      return
-    }
-    setSession({ ...current, baseToken: conflict.sourceToken })
-    setConflict(null)
-    showToast('Saving will overwrite the terminal draft', 1800)
-  }, [conflict])
+  const resolution = useMobileRemoteDraftResolution({
+    conflict,
+    sessionRef,
+    setSession,
+    setConflict,
+    setUncertain,
+    setInput: (value) => bufferedTerminalDraftState.setInput(value),
+    input: bufferedTerminalDraftState.input,
+    release,
+    showToast
+  })
 
   return {
     remoteDraftSession: session,
     remoteDraftConflict: conflict,
+    remoteDraftUncertain: uncertain,
     loadRemoteDraft,
     saveRemoteDraft,
     submitRemoteDraft,
-    exitRemoteDraft,
-    reloadConflict,
-    keepConflictMine
+    ...resolution
   }
 }
 

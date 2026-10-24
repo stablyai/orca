@@ -68,14 +68,12 @@ const bridgeQueues = new Map<string, Promise<unknown>>()
 async function runExclusive<T>(dir: string, task: () => Promise<T>): Promise<T> {
   const previous = bridgeQueues.get(dir) ?? Promise.resolve()
   const next = previous.then(task, task)
-  bridgeQueues.set(
-    dir,
-    next.catch(() => {})
-  )
+  const guarded = next.catch(() => {})
+  bridgeQueues.set(dir, guarded)
   try {
     return await next
   } finally {
-    if (bridgeQueues.get(dir) === next) {
+    if (bridgeQueues.get(dir) === guarded) {
       bridgeQueues.delete(dir)
     }
   }

@@ -31,7 +31,8 @@ export const PiDraftBridgeResponseSchema = z.looseObject({
   ok: z.boolean(),
   text: z.string().optional(),
   sourceToken: z.string().optional(),
-  error: z.enum(['conflict', 'invalid', 'unavailable']).optional()
+  error: z.enum(['conflict', 'invalid', 'unavailable']).optional(),
+  normalized: z.boolean().optional()
 })
 
 export type PiDraftBridgeSession = z.infer<typeof PiDraftBridgeSessionSchema>

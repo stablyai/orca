@@ -23,7 +23,7 @@ afterEach(() => {
   }
 })
 
-function createExtensionHarness() {
+function createExtensionHarness(normalize: (text: string) => string = (text) => text) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-draft-extension-'))
   roots.push(dir)
   const token = 'bridge-token'
@@ -60,7 +60,7 @@ function createExtensionHarness() {
     ui: {
       getEditorText: () => editor.text,
       setEditorText: (text: string) => {
-        editor.text = text
+        editor.text = normalize(text)
       }
     },
     sessionManager: { getSessionId: () => 'session-1' }
@@ -128,6 +128,42 @@ describe('Pi draft bridge extension', () => {
       error: 'conflict',
       text: 'line one\nline two EDITED\nline three!'
     })
+    await harness.handlers.session_shutdown?.()
+  })
+
+  it('reports Pi normalization instead of claiming the exact text was written', async () => {
+    const harness = createExtensionHarness((text) => text.replaceAll('\t', '    '))
+    await harness.handlers.session_start?.({}, harness.contextObject)
+    harness.editor.text = 'a\tb'
+    const capture = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const captured = await waitResponse(harness.dir, capture.id)
+    const replace = sendRequest(harness.dir, harness.token, {
+      op: 'replace',
+      text: 'line\twith tab',
+      baseToken: captured!.sourceToken
+    })
+    expect(await waitResponse(harness.dir, replace.id)).toMatchObject({
+      ok: true,
+      text: 'line    with tab',
+      normalized: true
+    })
+    expect(harness.editor.text).toBe('line    with tab')
+    await harness.handlers.session_shutdown?.()
+  })
+
+  it('fences an undo back to earlier text with a new revision token', async () => {
+    const harness = createExtensionHarness()
+    await harness.handlers.session_start?.({}, harness.contextObject)
+    harness.editor.text = 'original'
+    const first = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const firstToken = (await waitResponse(harness.dir, first.id))!.sourceToken
+    harness.editor.text = 'changed'
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    harness.editor.text = 'original'
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    const second = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const secondToken = (await waitResponse(harness.dir, second.id))!.sourceToken
+    expect(secondToken).not.toBe(firstToken)
     await harness.handlers.session_shutdown?.()
   })
 

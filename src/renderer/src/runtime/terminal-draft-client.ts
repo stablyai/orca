@@ -7,7 +7,9 @@ import type {
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
 
-const DESKTOP_DRAFT_CLIENT: TerminalDraftClient = { id: 'orca-desktop-draft', type: 'desktop' }
+function draftClient(clientId: string): TerminalDraftClient {
+  return { id: clientId, type: 'desktop' }
+}
 
 /**
  * Draft editing is a paired-runtime capability: the adapter lives beside the agent process.
@@ -26,19 +28,21 @@ function requireRemoteDraftTarget(ptyId: string): {
 
 export function beginDesktopTerminalDraft(
   ptyId: string,
+  clientId: string,
   force = false
 ): Promise<TerminalDraftBeginResult> {
   const owner = requireRemoteDraftTarget(ptyId)
   return callRuntimeRpc<TerminalDraftBeginResult>(
     owner.target,
     'terminal.draft.begin',
-    { terminal: owner.terminal, client: DESKTOP_DRAFT_CLIENT, ...(force ? { force: true } : {}) },
+    { terminal: owner.terminal, client: draftClient(clientId), ...(force ? { force: true } : {}) },
     { timeoutMs: 15_000 }
   )
 }
 
 export function saveDesktopTerminalDraft(input: {
   ptyId: string
+  clientId: string
   epoch: number
   baseToken: string
   text: string
@@ -50,7 +54,7 @@ export function saveDesktopTerminalDraft(input: {
     'terminal.draft.save',
     {
       terminal: owner.terminal,
-      client: DESKTOP_DRAFT_CLIENT,
+      client: draftClient(input.clientId),
       epoch: input.epoch,
       baseToken: input.baseToken,
       text: input.text,
@@ -62,6 +66,7 @@ export function saveDesktopTerminalDraft(input: {
 
 export function submitDesktopTerminalDraft(input: {
   ptyId: string
+  clientId: string
   epoch: number
   baseToken: string
   text: string
@@ -73,7 +78,7 @@ export function submitDesktopTerminalDraft(input: {
     'terminal.draft.submit',
     {
       terminal: owner.terminal,
-      client: DESKTOP_DRAFT_CLIENT,
+      client: draftClient(input.clientId),
       epoch: input.epoch,
       baseToken: input.baseToken,
       text: input.text,
@@ -83,12 +88,16 @@ export function submitDesktopTerminalDraft(input: {
   )
 }
 
-export function releaseDesktopTerminalDraft(ptyId: string, epoch: number): Promise<unknown> {
+export function releaseDesktopTerminalDraft(
+  ptyId: string,
+  clientId: string,
+  epoch: number
+): Promise<unknown> {
   const owner = requireRemoteDraftTarget(ptyId)
   return callRuntimeRpc(
     owner.target,
     'terminal.draft.release',
-    { terminal: owner.terminal, client: DESKTOP_DRAFT_CLIENT, epoch },
+    { terminal: owner.terminal, client: draftClient(clientId), epoch },
     { timeoutMs: 5_000 }
   )
 }

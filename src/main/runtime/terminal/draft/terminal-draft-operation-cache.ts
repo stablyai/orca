@@ -38,4 +38,18 @@ export class TerminalDraftOperationCache {
   rememberSubmit(ptyId: string, operationId: string, result: TerminalDraftSubmitResult): void {
     rememberBounded(this.submits, operationKey(ptyId, operationId), result, ptyId)
   }
+
+  dispose(ptyId: string): void {
+    const prefix = `${ptyId}\u0000`
+    for (const key of this.saves.keys()) {
+      if (key.startsWith(prefix)) {
+        this.saves.delete(key)
+      }
+    }
+    for (const key of this.submits.keys()) {
+      if (key.startsWith(prefix)) {
+        this.submits.delete(key)
+      }
+    }
+  }
 }

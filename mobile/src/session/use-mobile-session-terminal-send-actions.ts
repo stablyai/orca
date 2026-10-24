@@ -46,6 +46,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
     sendingRef,
     bufferedTerminalDraftState,
     remoteDraftSession,
+    remoteDraftUncertain,
     submitRemoteDraft,
     getSendCompletionGeneration,
     getLiveInteractionGeneration,
@@ -115,6 +116,11 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
     if (editingTerminalDraft && text.trim().length === 0) {
       sendingRef.current = false
       showToast('Write the draft before sending', 1600)
+      return
+    }
+    if (editingTerminalDraft && remoteDraftUncertain) {
+      sendingRef.current = false
+      showToast('Check the terminal before sending again', 2000)
       return
     }
     const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(

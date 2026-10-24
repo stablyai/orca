@@ -37,7 +37,9 @@ const draftSettlementFields = {
   conflict: salvagedOptional('conflict', draftConflictSchema),
   epoch: salvagedOptional('epoch', z.number().int().nonnegative()),
   reason: salvagedOptional('reason', z.string()),
-  submitRefused: salvagedOptional('submitRefused', z.boolean())
+  submitRefused: salvagedOptional('submitRefused', z.boolean()),
+  text: salvagedOptional('text', z.string()),
+  normalized: salvagedOptional('normalized', z.boolean())
 }
 
 export const terminalDraftSaveSchema = z.looseObject(draftSettlementFields)

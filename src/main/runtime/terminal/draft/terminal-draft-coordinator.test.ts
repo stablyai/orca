@@ -257,6 +257,95 @@ describe('TerminalDraftCoordinator', () => {
     expect(saved).toMatchObject({ ok: false, status: 'stale_lease' })
   })
 
+  it('collapses overlapping submissions with the same operation id to one Enter', async () => {
+    const harness = createHarness()
+    const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!begun.ok) {
+      throw new Error('expected begin')
+    }
+    let releaseEnter: (() => void) | undefined
+    const submitInput = vi.fn(
+      () =>
+        new Promise<{ accepted: boolean }>((resolve) => {
+          releaseEnter = () => resolve({ accepted: true })
+        })
+    )
+    const input = {
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: begun.sourceToken,
+      text: 'send once',
+      operationId: 'op-overlap',
+      submitInput
+    }
+    const first = harness.coordinator.submit(input)
+    const second = harness.coordinator.submit(input)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    releaseEnter?.()
+    const results = await Promise.all([first, second])
+    expect(results[0]).toMatchObject({ ok: true, status: 'submitted' })
+    expect(results[1]).toMatchObject({ ok: true, status: 'submitted', replayed: true })
+    expect(submitInput).toHaveBeenCalledTimes(1)
+  })
+
+  it('serializes a takeover behind an in-flight save and fences the old epoch afterwards', async () => {
+    const harness = createHarness()
+    const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!begun.ok) {
+      throw new Error('expected begin')
+    }
+    const saving = harness.coordinator.save({
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: begun.sourceToken,
+      text: 'desktop save',
+      operationId: 'op-inflight'
+    })
+    const takingOver = harness.coordinator.begin({
+      ptyId: 'pty-1',
+      client: mobile,
+      force: true
+    })
+    expect(await saving).toMatchObject({ ok: true, status: 'applied' })
+    const taken = await takingOver
+    expect(taken).toMatchObject({ ok: true })
+    if (!taken.ok) {
+      throw new Error('expected takeover')
+    }
+    expect(taken.epoch).toBeGreaterThan(begun.epoch)
+    const stale = await harness.coordinator.save({
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: taken.sourceToken,
+      text: 'desktop after takeover',
+      operationId: 'op-after-takeover'
+    })
+    expect(stale).toMatchObject({ ok: false, status: 'stale_lease' })
+  })
+
+  it('does not reuse an epoch after release', async () => {
+    const harness = createHarness()
+    const first = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!first.ok) {
+      throw new Error('expected begin')
+    }
+    expect(
+      await harness.coordinator.release({
+        ptyId: 'pty-1',
+        epoch: first.epoch,
+        client: desktop
+      })
+    ).toEqual({ ok: true })
+    const second = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!second.ok) {
+      throw new Error('expected reacquire')
+    }
+    expect(second.epoch).toBeGreaterThan(first.epoch)
+  })
+
   it('expires an abandoned lease without writing anything', async () => {
     const harness = createHarness()
     const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })

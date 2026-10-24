@@ -5,18 +5,13 @@ import type {
   TerminalDraftSaveResult,
   TerminalDraftSubmitResult
 } from '../../../../shared/terminal-draft-contract'
+import type { PiDraftBridgePaths } from '../../../pi/draft-bridge-directory'
 import {
-  readPiDraftBridgeCapability,
-  requestPiDraftCapture,
-  requestPiDraftReplace,
-  type PiDraftBridgeCapability
-} from '../../../pi/draft-bridge-client'
-import {
-  readPiDraftBridgeSession,
-  type PiDraftBridgePaths
-} from '../../../pi/draft-bridge-directory'
-import type { PiDraftBridgeResponse } from '../../../pi/draft-bridge-protocol'
-import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
+  createPiTerminalDraftDeps,
+  type TerminalDraftBridgeDeps,
+  type TerminalDraftSubmitInput
+} from './terminal-draft-bridge-deps'
+import { buildSubmitResult } from './terminal-draft-submit-result'
 import { TerminalDraftOperationCache } from './terminal-draft-operation-cache'
 import { settleDraftReplace } from './terminal-draft-settlement'
 
@@ -30,31 +25,6 @@ type Lease = {
   updatedAt: number
 }
 
-export type TerminalDraftBridgeDeps = {
-  readSession: (ptyId: string) => PiDraftBridgePaths | null
-  readCapability: (paths: PiDraftBridgePaths) => Promise<PiDraftBridgeCapability>
-  capture: (paths: PiDraftBridgePaths) => Promise<PiDraftBridgeResponse | null>
-  replace: (
-    paths: PiDraftBridgePaths,
-    text: string,
-    baseToken: string
-  ) => Promise<PiDraftBridgeResponse | null>
-  now: () => number
-}
-
-export type TerminalDraftSubmitInput = () => Promise<{
-  accepted: boolean
-  writeSettlement?: WriteSettlement
-}>
-
-const defaultDeps = (userDataPath: string): TerminalDraftBridgeDeps => ({
-  readSession: (ptyId) => readPiDraftBridgeSession(userDataPath, ptyId),
-  readCapability: (paths) => readPiDraftBridgeCapability(paths),
-  capture: (paths) => requestPiDraftCapture(paths),
-  replace: (paths, text, baseToken) => requestPiDraftReplace(paths, text, baseToken),
-  now: () => Date.now()
-})
-
 function holderOf(lease: Lease): TerminalDraftHolder {
   return { clientId: lease.clientId, clientType: lease.clientType }
 }
@@ -67,13 +37,15 @@ function holderOf(lease: Lease): TerminalDraftHolder {
 export class TerminalDraftCoordinator {
   private readonly leases = new Map<string, Lease>()
   private readonly operations = new TerminalDraftOperationCache()
+  private readonly epochCounters = new Map<string, number>()
+  private readonly queues = new Map<string, Promise<unknown>>()
   private readonly deps: TerminalDraftBridgeDeps
 
   constructor(userDataPath: string, deps?: Partial<TerminalDraftBridgeDeps>) {
-    this.deps = { ...defaultDeps(userDataPath), ...deps }
+    this.deps = { ...createPiTerminalDraftDeps(userDataPath), ...deps }
   }
 
-  async begin(input: {
+  private async beginLocked(input: {
     ptyId: string
     client: TerminalDraftClient
     force?: boolean
@@ -109,7 +81,7 @@ export class TerminalDraftCoordinator {
       }
     }
     const sameHolder = active?.clientId === input.client.id
-    const epoch = sameHolder && active ? active.epoch : (existing?.epoch ?? 0) + 1
+    const epoch = sameHolder && active ? active.epoch : this.nextEpoch(input.ptyId)
     const response = await this.deps.capture(paths)
     if (!response?.ok || typeof response.text !== 'string' || !response.sourceToken) {
       return {
@@ -138,7 +110,9 @@ export class TerminalDraftCoordinator {
     }
   }
 
-  release(input: { ptyId: string; epoch: number; client: TerminalDraftClient }): { ok: boolean } {
+  private releaseLocked(input: { ptyId: string; epoch: number; client: TerminalDraftClient }): {
+    ok: boolean
+  } {
     const lease = this.leases.get(input.ptyId)
     if (
       !lease ||
@@ -152,6 +126,72 @@ export class TerminalDraftCoordinator {
     return { ok: true }
   }
 
+  begin(input: {
+    ptyId: string
+    client: TerminalDraftClient
+    force?: boolean
+  }): Promise<TerminalDraftBeginResult> {
+    return this.runExclusive(input.ptyId, () => this.beginLocked(input))
+  }
+
+  release(input: {
+    ptyId: string
+    epoch: number
+    client: TerminalDraftClient
+  }): Promise<{ ok: boolean }> {
+    return this.runExclusive(input.ptyId, () => this.releaseLocked(input))
+  }
+
+  save(input: {
+    ptyId: string
+    client: TerminalDraftClient
+    epoch: number
+    baseToken: string
+    text: string
+    operationId: string
+  }): Promise<TerminalDraftSaveResult> {
+    return this.runExclusive(input.ptyId, () => this.saveLocked(input))
+  }
+
+  submit(input: {
+    ptyId: string
+    client: TerminalDraftClient
+    epoch: number
+    baseToken: string
+    text: string
+    operationId: string
+    submitInput: TerminalDraftSubmitInput
+  }): Promise<TerminalDraftSubmitResult> {
+    return this.runExclusive(input.ptyId, () => this.submitLocked(input))
+  }
+
+  dispose(ptyId: string): void {
+    this.leases.delete(ptyId)
+    this.epochCounters.delete(ptyId)
+    this.queues.delete(ptyId)
+    this.operations.dispose(ptyId)
+  }
+
+  private nextEpoch(ptyId: string): number {
+    const next = (this.epochCounters.get(ptyId) ?? 0) + 1
+    this.epochCounters.set(ptyId, next)
+    return next
+  }
+
+  private async runExclusive<T>(ptyId: string, task: () => Promise<T> | T): Promise<T> {
+    const previous = this.queues.get(ptyId) ?? Promise.resolve()
+    const next = previous.then(task, task)
+    const guarded = next.catch(() => {})
+    this.queues.set(ptyId, guarded)
+    try {
+      return await next
+    } finally {
+      if (this.queues.get(ptyId) === guarded) {
+        this.queues.delete(ptyId)
+      }
+    }
+  }
+
   isCurrentLease(ptyId: string, epoch: number, client: TerminalDraftClient): boolean {
     const lease = this.leases.get(ptyId)
     return (
@@ -162,7 +202,7 @@ export class TerminalDraftCoordinator {
     )
   }
 
-  async save(input: {
+  private async saveLocked(input: {
     ptyId: string
     client: TerminalDraftClient
     epoch: number
@@ -185,7 +225,7 @@ export class TerminalDraftCoordinator {
     return result
   }
 
-  async submit(input: {
+  private async submitLocked(input: {
     ptyId: string
     client: TerminalDraftClient
     epoch: number
@@ -219,32 +259,9 @@ export class TerminalDraftCoordinator {
     }
     let result: TerminalDraftSubmitResult
     try {
-      const written = await input.submitInput()
-      const settlement = written.writeSettlement
-      if (settlement?.outcome === 'unverifiable') {
-        result = {
-          ok: true,
-          status: 'submit_unknown',
-          sourceToken: replaced.sourceToken,
-          reason: settlement.reason
-        }
-      } else if (written.accepted) {
-        result = { ok: true, status: 'submitted', sourceToken: replaced.sourceToken }
-      } else {
-        result = {
-          ok: true,
-          status: 'saved_not_submitted',
-          sourceToken: replaced.sourceToken,
-          submitRefused: true
-        }
-      }
+      result = buildSubmitResult({ replaced, written: await input.submitInput() })
     } catch (error) {
-      result = {
-        ok: true,
-        status: 'submit_unknown',
-        sourceToken: replaced.sourceToken,
-        reason: error instanceof Error ? error.message : 'submit_failed'
-      }
+      result = buildSubmitResult({ replaced, error })
     }
     this.operations.rememberSubmit(input.ptyId, input.operationId, result)
     return result

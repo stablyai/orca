@@ -138,6 +138,59 @@ describe('TerminalDraftEditor', () => {
     expect(container.textContent).toContain('Unsaved local changes')
   })
 
+  it('adopts the conflict token so an explicit keep-mine save can proceed', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 5,
+      text: 'remote',
+      sourceToken: 'token-1'
+    })
+    saveDesktopTerminalDraft
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 'conflict',
+        conflict: { text: 'remote changed', sourceToken: 'token-2' }
+      })
+      .mockResolvedValueOnce({ ok: true, status: 'applied', sourceToken: 'token-3' })
+    renderEditor()
+    await openEditor()
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'my local text')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    container
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Save draft to terminal without submitting"]'
+      )
+      ?.click()
+    for (let index = 0; index < 5; index += 1) {
+      await tick()
+    }
+    expect(container.textContent).toContain('The terminal draft was changed elsewhere.')
+    const keepButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Keep my draft text"]'
+    )
+    keepButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    for (let index = 0; index < 20; index += 1) {
+      await tick()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const saveAgain = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Save draft to terminal without submitting"]'
+    )
+    expect(saveAgain).not.toBeNull()
+    saveAgain?.click()
+    for (let index = 0; index < 5; index += 1) {
+      await tick()
+    }
+    expect(saveDesktopTerminalDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ baseToken: 'token-2', text: 'my local text' })
+    )
+  })
+
   it('offers an explicit takeover instead of writing over another device lease', async () => {
     beginDesktopTerminalDraft.mockResolvedValueOnce({
       ok: false,

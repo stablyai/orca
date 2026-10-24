@@ -55,6 +55,9 @@ export type TerminalDraftSaveResult =
       sourceToken: string
       /** False when a previous write applied and the answer was lost; the caller must not retry. */
       replayed?: boolean
+      /** The editor's actual text after the write; differs when the CLI normalized tabs/newlines. */
+      text?: string
+      normalized?: boolean
     }
   | { ok: false; status: 'conflict'; conflict: TerminalDraftConflict }
   | { ok: false; status: 'stale_lease'; epoch: number }
@@ -75,8 +78,18 @@ export type TerminalDraftSubmitResult =
       /** Present when the Enter write itself was refused, so no turn started. */
       submitRefused: boolean
       replayed?: boolean
+      text?: string
+      normalized?: boolean
     }
-  | { ok: true; status: 'submit_unknown'; sourceToken: string; reason: string; replayed?: boolean }
+  | {
+      ok: true
+      status: 'submit_unknown'
+      sourceToken: string
+      reason: string
+      replayed?: boolean
+      text?: string
+      normalized?: boolean
+    }
   | { ok: false; status: 'conflict'; conflict: TerminalDraftConflict }
   | { ok: false; status: 'stale_lease'; epoch: number }
   | { ok: false; status: 'unsupported'; reason: TerminalDraftUnavailableReason }
