@@ -196,7 +196,7 @@ export function MobileHeroPairingStep({
           <strong>
             {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
           </strong>
-          {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
+          {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan this pairing QR.')}
         </p>
         <MachineNameField id="mobile-hero-machine-name" className="mp-pairing-machine" />
       </div>

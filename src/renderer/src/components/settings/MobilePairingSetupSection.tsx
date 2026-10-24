@@ -127,7 +127,7 @@ export function MobilePairingSetupSection({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.MobilePairingSetupSection.overview',
-            'Generate a QR code, then scan it in Orca Mobile under Pair Desktop.'
+            'Generate a desktop pairing QR code, then scan it in Orca Mobile under Pair Desktop.'
           )}
         </p>
       </div>
@@ -197,11 +197,11 @@ export function MobilePairingSetupSection({
             {hasQrCode
               ? translate(
                   'auto.components.settings.MobilePairingSetupSection.regenerate',
-                  'Regenerate QR code'
+                  'Regenerate pairing QR code'
                 )
               : translate(
                   'auto.components.settings.MobilePairingSetupSection.generate',
-                  'Generate QR code'
+                  'Generate pairing QR code'
                 )}
           </Button>
         </div>

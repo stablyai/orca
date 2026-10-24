@@ -5,11 +5,11 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 const ONBOARDING_STEPS = [
   {
     title: 'Open Orca desktop',
-    desc: 'Go to Settings → Mobile and generate a pairing QR code.'
+    desc: 'Go to Settings → Mobile and generate a desktop pairing QR code.'
   },
   {
-    title: 'Scan the code',
-    desc: 'Tap the button above to open the scanner. Point at the QR code on your screen.'
+    title: 'Scan the pairing QR',
+    desc: 'Tap the button above to open the scanner. Point it at the desktop pairing QR on your screen.'
   },
   {
     title: "You're connected",
