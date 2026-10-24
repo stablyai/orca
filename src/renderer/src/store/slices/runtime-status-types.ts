@@ -24,6 +24,7 @@ export type RuntimeStatusSlice = {
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
   refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  refreshRuntimeEnvironmentCatalog: () => Promise<void>
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }
 
