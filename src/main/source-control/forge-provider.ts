@@ -11,12 +11,7 @@ import {
   getAzureDevOpsRepoSlug
 } from '../azure-devops/client'
 import { createAzureDevOpsPullRequest } from '../azure-devops/pull-request-creation'
-import {
-  getBitbucketPullRequest,
-  getBitbucketPullRequestForBranchOrThrow,
-  getBitbucketRepoSlug
-} from '../bitbucket/client'
-import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
+import { bitbucketForgeProvider } from './bitbucket-forge-provider'
 import {
   getGiteaPullRequest,
   getGiteaPullRequestForBranchOrThrow,
@@ -33,14 +28,12 @@ import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
 import {
   mapAzureDevOpsReview,
-  mapBitbucketReview,
   mapGiteaReview,
   mapGitHubReview,
   mapGitLabReview
 } from './forge-review-mappers'
-import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
+import { forgeConnectionId, hostedReviewExecutionArgs } from './forge-provider-execution'
 import {
-  hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
@@ -78,19 +71,6 @@ export type ForgeProvider = {
     executionHostId: ExecutionHostId,
     options?: HostedReviewExecutionOptions
   ): Promise<CreateHostedReviewResult>
-}
-
-/** The forge CLIs (`gh`, `glab`, the REST clients) run here; only their git reads are host-routed. */
-function forgeConnectionId(context: ForgeProviderRepositoryContext): string | null {
-  return hostedReviewSshConnectionId(context.executionHostId)
-}
-
-function hostedReviewExecutionArgs(
-  options: HostedReviewExecutionOptions
-): [] | [HostedReviewExecutionOptions] {
-  return hasHostedReviewLocalGitOptions(options)
-    ? [{ localGitExecOptions: getHostedReviewLocalGitOptions(options) }]
-    : []
 }
 
 const gitLabForgeProvider = {
@@ -211,39 +191,6 @@ const gitHubForgeProvider = {
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   createReview: createGitHubPullRequest
-} satisfies ForgeProvider
-
-const bitbucketForgeProvider = {
-  id: 'bitbucket',
-  supportsReviewCreation: true,
-  resolveRepository: (context) =>
-    getBitbucketRepoSlug(
-      context.repoPath,
-      forgeConnectionId(context),
-      ...hostedReviewExecutionArgs(context)
-    ),
-  async getReviewForBranch(input) {
-    // Why: surface a real lookup failure so eligibility records `unavailable`
-    // instead of a false "No pull request found".
-    const pr = await getBitbucketPullRequestForBranchOrThrow(
-      input.repoPath,
-      input.branch,
-      input.linkedReviewNumber ?? null,
-      forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
-    )
-    return pr ? mapBitbucketReview(pr) : null
-  },
-  async getReviewByNumber(input) {
-    const pr = await getBitbucketPullRequest(
-      input.repoPath,
-      input.number,
-      forgeConnectionId(input),
-      ...hostedReviewExecutionArgs(input)
-    )
-    return pr ? mapBitbucketReview(pr) : null
-  },
-  createReview: createBitbucketPullRequest
 } satisfies ForgeProvider
 
 const azureDevOpsForgeProvider = {

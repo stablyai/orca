@@ -1,4 +1,8 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  PRMergeableState,
+  PRReviewDecision
+} from '../../shared/github/pull-request-types'
 
 export type RawBitbucketPullRequest = {
   id?: number
@@ -33,6 +37,7 @@ export type BitbucketPullRequestInfo = {
   status: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
   headSha?: string
 }
 

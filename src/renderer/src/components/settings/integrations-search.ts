@@ -96,6 +96,38 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.integrations.search.bitbucketServerTitle',
+      'Bitbucket Data Center Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.bitbucketServerDescription',
+      'Bitbucket Data Center and Server authentication with a personal access token or environment variables.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.50d20817f7',
+        'bitbucket'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.bitbucketServerKeywordDataCenter',
+        'data center'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.bitbucketServerKeywordServer',
+        'server'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.8c568d761c',
+        'pull request'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.af5ae87847',
+        'access token'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.integrations.search.af6611fa6e',
       'Azure DevOps Integration'
     ),
