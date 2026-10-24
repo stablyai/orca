@@ -19,8 +19,7 @@ export const DEVIN_EVENTS = [
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PostCompaction', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: Devin treats matchers as regexes and says omitted means "all";
-  // Claude's "*" matcher is not a valid Devin regex.
+  // Omit matchers: Devin expects regexes, so Claude's "*" is invalid.
   { eventName: 'PreToolUse', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PostToolUse', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'PermissionRequest', definition: { hooks: [{ type: 'command', command: '' }] } }

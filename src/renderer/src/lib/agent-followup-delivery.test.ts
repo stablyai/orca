@@ -51,7 +51,11 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
       const delivered = await delivery
 
       expect(delivered).toBe(true)
-      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', 'ship it\r', 'launch')
+      expect(sendRuntimePtyInputVerified).toHaveBeenCalledExactlyOnceWith(
+        'pty-1',
+        'ship it\r',
+        'launch'
+      )
     })
 
     it(`still refuses to type into a bare ${agent} shell foreground`, async () => {

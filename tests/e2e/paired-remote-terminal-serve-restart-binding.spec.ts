@@ -292,14 +292,12 @@ async function callRuntime<TResult>(
   ) as Promise<TResult>
 }
 
-async function showClient(app: ElectronApplication, page: Page): Promise<void> {
+// Why not shown: automated launches keep windows hidden; the resize step needs only a known size.
+async function sizeClientWindow(app: ElectronApplication, page: Page): Promise<void> {
   const window = await app.browserWindow(page)
   await window.evaluate((browserWindow) => {
     browserWindow.setSize(1100, 720)
-    browserWindow.show()
-    browserWindow.focus()
   })
-  await expect.poll(() => window.evaluate((browserWindow) => browserWindow.isVisible())).toBe(true)
 }
 
 async function waitForWorktree(host: HeadlessPairedRuntimeHost, repoId: string): Promise<string> {
@@ -582,7 +580,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
     const worktreeId = await waitForWorktree(host, added.result.repo.id)
     client = await launchPairedElectronClient(host.offer, testInfo, 'serve-restart-binding')
     client.page.on('pageerror', (error) => pageErrors.push(String(error)))
-    await showClient(client.app, client.page)
+    await sizeClientWindow(client.app, client.page)
     await waitForClientWorktree(client.page, worktreeId)
 
     terminal = await createMirroredTerminal(client, worktreeId)

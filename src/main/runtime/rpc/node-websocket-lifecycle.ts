@@ -32,7 +32,7 @@ export function attachNodeWebSocketLifecycle(args: {
 }): void {
   const { ws } = args
   let finalized = false
-  const onPong = (): void => args.heartbeat.noteAlive(ws)
+  const onPong = (): void => args.heartbeat.notePong(ws)
   const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
     // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
     args.heartbeat.noteAlive(ws)
@@ -89,6 +89,7 @@ export function attachNodeWebSocketLifecycle(args: {
   ws.on('error', onError)
   // Why: install lifecycle ownership before periodic heartbeat ticks can observe this socket.
   args.heartbeatConnections.add(ws)
+  args.heartbeat.track(ws)
   args.heartbeat.noteAlive(ws)
   if (args.heartbeatConnections.size === 1) {
     // Unauthenticated sockets are protected by the pre-auth timeout; heartbeat probes begin only

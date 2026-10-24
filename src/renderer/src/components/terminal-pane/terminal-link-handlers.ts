@@ -1,4 +1,5 @@
 import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from '@/lib/terminal-links'
@@ -8,10 +9,8 @@ import {
   buildCandidateLogicalLinesForBufferPosition,
   openFilePathLinkAtBufferPosition
 } from './terminal-file-link-hit-testing'
-import {
-  isHtmlFilePath,
-  shouldOpenTerminalFileWithSystemDefault
-} from './terminal-file-open-routing'
+import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
+import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -45,7 +44,7 @@ export type LinkHandlerDeps = {
   getPaneLinkCwd?: (paneId: number) => string | null
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
-  pathExistsCache: Map<string, boolean>
+  pathExistsCache: TerminalPathExistsCache
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
   wslDistro?: string | null
@@ -180,7 +179,7 @@ export function createFilePathLinkProvider(
                       ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
                       : canOpenWithSystemDefault
                         ? isHtmlFilePath(mappedPath)
-                          ? getTerminalHtmlFileOpenHint(showActions)
+                          ? getTerminalHtmlFileOpenHint(localHtmlFileDestinations(), showActions)
                           : showActions
                             ? openLinkHint
                             : getTerminalFileOpenHint(false)

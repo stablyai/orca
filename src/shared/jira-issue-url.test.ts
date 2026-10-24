@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue, JiraSite } from './jira-types'
+import type { JiraIssue, JiraSite } from './jira/jira-types'
 import { getMatchingJiraSites, isResolvedJiraIssueMatch, parseJiraIssueUrl } from './jira-issue-url'
 
 function site(id: string, siteUrl: string): JiraSite {

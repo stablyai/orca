@@ -15,6 +15,7 @@ import type { TerminalPaneStartupController } from './use-terminal-pane-startup-
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { notePendingPaneTitleRename } from '@/runtime/pending-pane-title-renames'
+import { retireLeavesFromTerminalLayout } from '../../../../shared/terminal-layout-leaf-retirement'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
@@ -37,6 +38,9 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     terminalTab,
     worktreeId
   } = controller
+  // Leaves a host-authoritative layout dropped whose panes are still mounted, kept out of every
+  // write so a persist cannot re-add one while its PTY is still ending.
+  const hostRetiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
   const chatOwnerRef = useRef({ chatLeafId, isChatViewMode })
   useLayoutEffect(() => {
     chatOwnerRef.current = { chatLeafId, isChatViewMode }
@@ -50,7 +54,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       }
       const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
       const leafIdByPaneId = manager.getLeafIdMap()
-      const layout = serializeTerminalLayout(
+      let layout = serializeTerminalLayout(
         container,
         activePaneId,
         expandedPaneIdRef.current,
@@ -124,6 +128,11 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       }
       if (Object.keys(titlesByLeafId).length > 0) {
         layout.titlesByLeafId = titlesByLeafId
+      }
+      const hostRetiredLeafIds = hostRetiredLeafIdsRef.current
+      if (hostRetiredLeafIds.size > 0) {
+        // Why: never retire the last pane here; the host drops a whole tab by itself.
+        layout = retireLeavesFromTerminalLayout(layout, hostRetiredLeafIds) ?? layout
       }
       setTabLayout(tabId, layout)
       const hasRemotePane = Object.values(mergedPtyIds).some(
@@ -297,6 +306,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
   return {
+    hostRetiredLeafIdsRef,
     persistLayoutSnapshot,
     clearPaneScrollback,
     changePaneTitle,

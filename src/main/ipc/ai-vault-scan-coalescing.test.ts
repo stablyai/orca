@@ -108,8 +108,7 @@ describe('Agent Session History scan coalescing', () => {
     registerAiVaultHandlers()
     const list = ipcHandler('aiVault:listSessions')
 
-    // The local leg degrades like the SSH legs above: a rejection reaches the
-    // renderer as a raw string painted over the list instead of an issue row.
+    // Like SSH failures, local failures must become issue rows instead of rejected IPC calls.
     const result = await list(
       { sender: Object.assign(new EventEmitter(), { id: 1 }) },
       { executionHostScope: 'local', requestToken: 'scan' }

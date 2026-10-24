@@ -513,8 +513,29 @@ describe('"Move anyway"', () => {
     ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_migration_terminals' })
   })
 
-  it('refuses while relay terminals may still run, says why, and keeps the host connectable', async () => {
-    const loaded = load(savedStateOnly())
+  it('refuses when resolving saved copies would omit a running terminal, keeping the host connectable', async () => {
+    const state = savedStateOnly()
+    state.workspaceSession.terminalLayoutsByTabId['older-tab'] = {
+      root: { type: 'leaf', leafId: LEAF },
+      activeLeafId: LEAF,
+      expandedLeafId: null
+    }
+    state.sshRemotePtyLeases = [
+      {
+        targetId: TARGET.id,
+        ptyId: 'old-pane',
+        worktreeId,
+        tabId: 'older-tab',
+        leafId: LEAF,
+        state: 'detached',
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const loaded = load(state)
+    expect(leaveBehindClearsOrcadMigrationBlockers(loaded.store, TARGET.id, ['old-pane'])).toBe(
+      false
+    )
     confirmed(loaded)
     const result = await connectMove(loaded, { verdict: 'live', count: 1 })
     expect(result).toMatchObject({

@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import type { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
+import type { WatcherCancellationTracker } from './filesystem/watcher-process/parcel-watcher-cancellation-tracker'
 import {
   handleWatcherHostMessage,
   type PendingWatcherUnsubscribe,
@@ -9,7 +9,7 @@ import {
 import {
   startInterruptedSubscribeTimeout,
   startPendingSubscribeTimeout
-} from './parcel-watcher-pending-subscribe'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { WatcherToHostMessage } from './parcel-watcher-process-protocol'
 import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
@@ -50,14 +50,12 @@ export function handleWatcherSupervisorMessage(
   if (message.op === 'watch-error' && record) {
     const error = new WatcherProcessFailure(message.message, 'subscription', 'subscribe_failed')
     if (record.pendingSubscribe) {
-      // Why: an error before readiness means native setup failed. Cancel the
-      // physical crawl so a later subscribed ack cannot expose a dead root.
+      // Setup failed before readiness; cancel the crawl so a late ack cannot expose a dead root.
       context.cancelPendingSubscribe(record, error)
       return
     }
     if (record.interrupted && record.crawlStarted) {
-      // Why: crash recovery has no pending caller promise, but its replacement
-      // crawl is equally unready and must not accept a later subscribed ack.
+      // Recovery has no pending caller, but its unready replacement must also reject late acks.
       context.cancelInterruptedSubscribe(record, error)
       return
     }

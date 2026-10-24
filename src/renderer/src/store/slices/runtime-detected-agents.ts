@@ -20,6 +20,7 @@ import {
 // Records are keyed by getRuntimeAgentInventoryKey: the environment alone for
 // the host-default list, or environment + workspace for a workspace's list.
 export type RuntimeDetectedAgentsSlice = {
+  runtimeAgentInventoryOutcome: (key: string) => 'pending' | 'successful' | 'failed'
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
@@ -46,6 +47,7 @@ export type RuntimeDetectedAgentsSlice = {
 // Why: these are module-scoped (not in the store) so we can deduplicate
 // concurrent callers without storing a Promise in Zustand state.
 const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const latestOutcome = new Map<string, 'pending' | 'successful' | 'failed'>()
 const runtimeRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
@@ -151,6 +153,7 @@ export const createRuntimeDetectedAgentsSlice: (
         }
       }
     }
+    ;[...latestOutcome.keys()].filter(dropKey).forEach((key) => latestOutcome.delete(key))
     set((s) => {
       const runtimeDetectedAgentIds = withoutKeys(s.runtimeDetectedAgentIds, dropKey)
       const isDetectingRuntimeAgents = withoutKeys(s.isDetectingRuntimeAgents, dropKey)
@@ -190,6 +193,7 @@ export const createRuntimeDetectedAgentsSlice: (
 
   // Commits a settled detection; an old host commits an empty list, never its default.
   const commitDetection = (key: string, agents: TuiAgent[], needsServerUpdate: boolean): void => {
+    latestOutcome.set(key, 'successful')
     set((s) => ({
       runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [key]: agents },
       isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
@@ -201,6 +205,7 @@ export const createRuntimeDetectedAgentsSlice: (
   }
 
   return {
+    runtimeAgentInventoryOutcome: (key) => latestOutcome.get(key) ?? 'pending',
     runtimeDetectedAgentIds: {},
     isDetectingRuntimeAgents: {},
     isRefreshingRuntimeAgents: {},
@@ -224,6 +229,7 @@ export const createRuntimeDetectedAgentsSlice: (
         return inflight
       }
 
+      latestOutcome.set(key, 'pending')
       set((s) => ({
         isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: true }
       }))
@@ -255,6 +261,7 @@ export const createRuntimeDetectedAgentsSlice: (
           if (error instanceof RuntimeAgentDetectionNeedsServerUpdateError) {
             commitDetection(key, [], true)
           } else {
+            latestOutcome.set(key, 'failed')
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false }
             }))
@@ -281,6 +288,7 @@ export const createRuntimeDetectedAgentsSlice: (
       // Why: a refresh is newer and authoritative; detach an older detect so its
       // late result cannot overwrite the freshly hydrated PATH result.
       runtimeDetectPromises.delete(key)
+      latestOutcome.set(key, 'pending')
       set((s) => ({
         isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: true }
       }))
@@ -322,6 +330,7 @@ export const createRuntimeDetectedAgentsSlice: (
           // Why: a disconnected runtime must keep Refresh retryable and must not
           // wipe the last known agent list.
           if (runtimeRefreshPromises.get(key) === pending) {
+            latestOutcome.set(key, 'failed')
             set((s) => ({
               isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [key]: false },
               isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [key]: false }

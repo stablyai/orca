@@ -56,6 +56,7 @@ function api(next: OrcadDeltaMovePreview, result: OrcadDeltaMoveResult): Managed
     rollback: unused,
     recover: unused,
     restart: unused,
+    reclaimStaleLock: unused,
     stop: unused,
     cancelStop: unused,
     forget: unused,

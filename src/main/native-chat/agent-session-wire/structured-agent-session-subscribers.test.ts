@@ -226,9 +226,7 @@ describe('AgentSessionSubscribers', () => {
   })
 
   it('settles a session nobody is reading, from running to idle', async () => {
-    // The defect this whole feed exists for: status used to come from a transcript reader, so a
-    // session with no open pane had no reader and froze on whatever it last said. Nothing here
-    // ever calls `subscribers.open`.
+    // Never open a subscriber: status must publish independently of transcript readers.
     const journal = await journals.open({
       identity: {
         sessionId: SESSION,
@@ -407,8 +405,7 @@ describe('AgentSessionSubscribers', () => {
       },
       stateDirectory: journalDir
     })
-    // A row admitted before identity bounding: its removal id alone exceeds
-    // the outbound cap, so no catch-up batch can ever carry it.
+    // A legacy removal ID exceeds the outbound cap alone, making catch-up impossible.
     const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
     const resumeCursor = seeded.cursor()
     const seq = resumeCursor.sequence
@@ -435,8 +432,7 @@ describe('AgentSessionSubscribers', () => {
         ts: 2_001
       }
     ]
-    // Staged straight into the session database, exactly as a previous writer
-    // would have committed them.
+    // Direct writes model legacy persisted rows.
     await seeded.close()
     const opened = openTestJournalHostDatabase(journalDir)
     try {
@@ -470,7 +466,6 @@ describe('AgentSessionSubscribers', () => {
       emit: (event) => events.push(event)
     })
 
-    // Every event a remote subscriber receives must fit the outbound channel.
     for (const event of events) {
       expect(Buffer.byteLength(serializeRemoteRuntimePayload(event), 'utf8')).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -479,8 +474,7 @@ describe('AgentSessionSubscribers', () => {
     const reset = events.find((event) => event.type === 'reset')
     expect(reset).toBeDefined()
 
-    // Forward progress: the reset advanced the subscriber past the unsendable
-    // row, so the next publish has nothing stale to re-deliver.
+    // Reset must advance past the unsendable row so later publications make progress.
     const settled = events.length
     subscribers.publish(SESSION, journal)
     expect(events.slice(settled).filter((event) => event.type === 'reset')).toEqual([])

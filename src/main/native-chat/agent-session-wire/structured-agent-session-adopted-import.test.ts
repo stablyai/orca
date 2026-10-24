@@ -1,5 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Source validation must finish before a new session claims the provider conversation.
 
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -28,7 +27,6 @@ import {
 import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
 
-// The OpenCode reader's worker, run in process.
 vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (importOriginal) => {
   const query = await import('../transcript-opencode-sqlite-query')
   return {
@@ -57,7 +55,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** A minimal Codex rollout the legacy transcript decoder can read back. */
 async function writeCodexRollout(path: string, text: string): Promise<void> {
   const lines = [
     JSON.stringify({
@@ -135,7 +132,7 @@ function adapter(): StructuredAgentSessionAdapter {
           observedAt: NOW
         }
       })),
-    // Proven released, so the failure rethrows its own cause rather than an unproven-exit wrapper.
+    // Proven release preserves the original failure instead of wrapping unproven exit.
     releaseAcquisition: vi.fn(async () => true),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
@@ -181,8 +178,7 @@ describe('adopting a provider conversation on create', () => {
     const result = await attach(transcriptPath, sessionAdapter)
 
     expect(result).toMatchObject({ ok: true })
-    // The adapter was asked to resume, not to start: the seeded chain is what tells it which
-    // conversation this session owns.
+    // The seeded chain must resume the adopted conversation.
     const page = (result as { value: { page: { items: unknown[] } } }).value.page
     expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
   })
@@ -233,7 +229,7 @@ describe('adopting a provider conversation on create', () => {
       if (!definition) {
         throw new Error(`this build registers no ${agent} chats`)
       }
-      // A Pi chat's handle names its session file; the others name the conversation id.
+      // Pi handles name session files; other providers use conversation IDs.
       const handle = {
         transport: definition.handleTransport,
         agent,
@@ -386,7 +382,6 @@ describe('adopting a provider conversation on create', () => {
         body
       }
     )
-    // The failed attach kept the conversation's own journal open, so the send is recorded.
     expect(sent).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     await host.flushAllStreamedEvents()
   })

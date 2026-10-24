@@ -35,13 +35,10 @@ import {
   deliverCodexUnhandledFrame,
   translateCodexNotification
 } from './codex-structured-provider-events'
-import {
-  codexDispatchRejection,
-  noteCodexTurnOpened,
-  settleCodexSendsInEndedTurn
-} from './codex-structured-turn-end-settlement'
+import * as turnEnd from './codex-structured-turn-end-settlement'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import { startCodexTerminalStopProbe } from './codex-background-terminals'
 import { codexBackgroundTaskStops, stopCodexBackgroundTasks } from './codex-background-task-stops'
@@ -141,7 +138,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     event: CodexStructuredSessionEvent
   ): CodexJournalTranslationAdmission {
     if (event.type === 'notification') {
-      noteCodexTurnOpened(session, event.method, event.params)
+      turnEnd.noteCodexTurnOpened(session, event.method, event.params)
       if (event.method === 'skills/changed') {
         session.skillReport?.refresh(true)
       }
@@ -152,7 +149,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
-      settleCodexSendsInEndedTurn(session, event, (settlement) =>
+      turnEnd.settleCodexSendsInEndedTurn(session, event, (settlement) =>
         this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
       )
       // Child records observe refused frames only after a retry reaches the journal.
@@ -161,6 +158,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       session.backgroundTasks.publishChildWork()
       startCodexTerminalStopProbe(this.sessions, event.sessionId, session, this.deps)
     }
+    settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
     return admission
   }
@@ -246,6 +244,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       return await dispatchCodexTurn(session, { ...input, turnOptions }, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
+      settleCodexRequestEndWaiters(session)
     }
   }
 
@@ -255,6 +254,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       sessions: this.sessions,
       requestTimeoutMs: this.deps.requestTimeoutMs
     })
+
+  awaitStoppedRequestEnd = codexStoppedRequestEndWait(this.sessions)
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'
@@ -283,7 +284,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       if (isCodexAppServerRequestError(error)) {
         return {
           state: 'rejected',
-          ...codexDispatchRejection(
+          ...turnEnd.codexDispatchRejection(
             agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
           )
         }
@@ -326,7 +327,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (sessionId) =>
     this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (sessionId) =>
+    this.teardown.close(sessionId)
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

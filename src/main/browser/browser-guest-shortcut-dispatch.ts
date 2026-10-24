@@ -133,6 +133,8 @@ export function forwardGuestShortcutInput(
     keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
   ) {
     renderer.send('ui:focusBrowserAddressBar', { browserPageId: browserTabId })
+  } else if (keybindingMatchesAction('browser.showHistory', input, process.platform, keybindings)) {
+    renderer.send('ui:showBrowserHistory', { browserPageId: browserTabId })
   } else if (keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)) {
     // The renderer owns the parked webview used for reload.
     renderer.send('ui:hardReloadBrowserPage', { browserPageId: browserTabId })

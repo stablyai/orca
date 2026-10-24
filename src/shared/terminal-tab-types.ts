@@ -22,6 +22,8 @@ export type TerminalPaneRecoveryReason =
   // binding. pty:data for the old id then lands in the pre-handler buffer, which
   // ACKs it — main's delivery health stays green while the pane shows nothing.
   | 'spawn-left-pane-unbound'
+  // A pane ended on its host's exit record, then the host bound a new process to it.
+  | 'host-rebound-exited-pane'
 
 export type TerminalPaneRecoveryOutcome =
   | 'pending'

@@ -50,7 +50,7 @@ export type PtyIpcSessionOptions = {
   prepareCodexSessionResume?: PrepareCodexSessionResume
   awaitLocalPtyStartup?: () => Promise<void>
   awaitLocalPtyProviderStartup?: () => Promise<void>
-  // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+  // Recovery reload must preserve live in-process PTYs until restore re-adopts them (#5787).
   isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   onPtyExit?: (id: string, exitSequence: number) => void
@@ -259,7 +259,7 @@ export function createPtyIpcSession(args: {
   session.pendingData = new PtyPendingDataDrainQueue(
     (id) => {
       const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
-      // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
+      // Hidden delivery can retire even when renderer credit is exhausted.
       if (shouldDropHiddenRendererPtyData(id, session.getSettings?.())) {
         return runnableLane
       }

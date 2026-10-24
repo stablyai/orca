@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,6 +28,12 @@ function spawnLine(threadId: string, agentPath: string): string {
 }
 
 describe('AgentHookServer Codex subagent transcript polling', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+  })
+
   const dirs: string[] = []
 
   afterEach(() => {
@@ -35,6 +41,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       rmSync(dir, { recursive: true, force: true })
     }
     dirs.length = 0
+    vi.useRealTimers()
   })
 
   it('publishes rollout-only children and removes them after their task completes', async () => {
@@ -64,6 +71,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Connection: 'close',
           'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
@@ -85,12 +93,8 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       ])
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-        },
-        { timeout: 2_000, interval: 50 }
-      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
       server.stop()
     }
@@ -115,6 +119,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Connection: 'close',
           'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
@@ -132,22 +137,14 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
 
       appendFileSync(parentPath, spawnLine(SECOND_CHILD_ID, '/root/perf_audit'))
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(2)
-        },
-        { timeout: 3_000, interval: 50 }
-      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(2)
 
       const complete = line({ type: 'event_msg', payload: { type: 'task_complete' } })
       appendFileSync(childPath, complete)
       appendFileSync(secondChildPath, complete)
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-        },
-        { timeout: 3_000, interval: 50 }
-      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
       server.stop()
     }
@@ -170,6 +167,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Connection: 'close',
             'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', worktreeId: 'wt-1', payload })
@@ -193,12 +191,8 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
-      await vi.waitFor(
-        () => {
-          expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-        },
-        { timeout: 3_000, interval: 50 }
-      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
     } finally {
       server.stop()
     }

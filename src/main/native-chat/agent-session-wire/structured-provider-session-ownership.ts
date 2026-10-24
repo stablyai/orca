@@ -11,8 +11,7 @@ export type StructuredProviderSessionOwnership = {
   lease: AgentSessionLease
 }
 
-/** Which chat owns each conversation, under the Session History row id its agent's registration
- *  names: the one index both the duplicate-adoption check and Session History ownership read. */
+/** Use registration-defined History row IDs for both ownership display and duplicate-adoption checks. */
 export function listStructuredProviderSessionOwnership(
   records: readonly AgentSessionRecord[]
 ): StructuredProviderSessionOwnership[] {

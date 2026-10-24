@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraConnectionStatus } from '../../../shared/jira-types'
+import type { JiraConnectionStatus } from '../../../shared/jira/jira-types'
 import { getJiraSelfUser } from './jira-self-user'
 
 const viewer = {

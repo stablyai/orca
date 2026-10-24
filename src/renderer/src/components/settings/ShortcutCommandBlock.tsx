@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { TruncatedSidebarLabel } from '../sidebar/truncated-sidebar-label'
 import { SearchableSetting } from './SearchableSetting'
 import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
@@ -122,14 +123,12 @@ export function ShortcutCommandBlock({
     >
       <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            className={cn(
-              'truncate text-sm',
-              isDisabled ? 'text-muted-foreground' : 'text-foreground'
-            )}
-          >
-            {item.title}
-          </span>
+          <TruncatedSidebarLabel
+            text={item.title}
+            className={cn('text-sm', isDisabled ? 'text-muted-foreground' : 'text-foreground')}
+            tooltipSide="top"
+            tooltipSideOffset={4}
+          />
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
               {translate('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified')}

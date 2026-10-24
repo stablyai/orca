@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
-  hostStackHostRoute,
-  hostStackRouteHref,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
@@ -71,7 +69,7 @@ describe('host stack navigation', () => {
     const push = vi.fn()
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
     harness.setState(committedHostState(encodeURIComponent('host/one')))
@@ -134,7 +132,10 @@ describe('host stack navigation', () => {
     })
 
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-    expect(replace).toHaveBeenCalledWith(hostStackRouteHref(TARGET))
+    expect(replace).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/tasks',
+      params: { hostId: 'host/one' }
+    })
     expect(harness.listenerCount()).toBe(0)
   })
 

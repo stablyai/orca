@@ -1,7 +1,3 @@
-// Folding one item write into the render model: the revision, tombstone and creating-write rules
-// the reducer header states. Turn scope is the creating write's too, with one exception, which the
-// submission fold owns: a queued message's scope and position are its handover's.
-
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -28,8 +24,7 @@ export function upsertJournalItem(
   itemId: string,
   revision: number,
   next: AgentJournalRenderItem,
-  /** The write's fence, and the provenance it states (`JournalItemRow.ownerFence`), which only
-   *  creation reads: a revision keeps the item's. A stated `executionOwner` moves on any write. */
+  /** Creation fixes ownerFence; revisions retain it, while explicit executionOwner may change. */
   fences: { fence: number; ownerFence?: number; executionOwner?: number }
 ): void {
   const tombstoned = state.tombstones.get(itemId)
@@ -50,11 +45,7 @@ export function upsertJournalItem(
     state.tombstones.delete(itemId)
     return
   }
-  // Creation sequence is the ordering key; a revision refreshes content only.
-  // `observedAt` is pinned with it: clients sort the timeline by that timestamp,
-  // so letting a revision advance it makes the row jump past everything that
-  // landed in between — the provider's own echo of a send revises the submission
-  // row, which relocated the user's bubble below later rows.
+  // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
   const submitted =
     existing.body.kind === 'message' &&
     existing.body.role === 'user' &&
@@ -62,8 +53,7 @@ export function upsertJournalItem(
   const { sequenceIndex: _revisedAt, ...revised } = next
   state.items.set(itemId, {
     ...revised,
-    // Settlements, prompt answers and reopen sweeps revise rows any agent wrote
-    // without naming one; each would otherwise hand a subagent's row to the session.
+    // Host bookkeeping without explicit producer must retain subagent linkage.
     ...(namesAgentJournalProducer(next) ? {} : agentJournalLinkageFields(existing)),
     // Provider history may normalize text or omit local attachments from the original send.
     body: submitted ? existing.body : next.body,

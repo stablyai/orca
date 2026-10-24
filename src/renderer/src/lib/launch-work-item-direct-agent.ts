@@ -13,7 +13,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import {
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  type AgentLaunchProfileSettings
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 
@@ -23,11 +24,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   settings:
-    | {
-        agentCmdOverrides?: Partial<Record<TuiAgent, string>>
-        agentDefaultArgs?: Partial<Record<TuiAgent, string>>
-        agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
-      }
+    | ({ agentCmdOverrides?: Partial<Record<TuiAgent, string>> } & AgentLaunchProfileSettings)
     | null
     | undefined
   launchPlatform: NodeJS.Platform
@@ -47,9 +44,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 
   const effectiveAgentArgs =
     args.agentArgs === undefined
-      ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
+      ? resolveTuiAgentLaunchArgs(args.agent, args.settings)
       : args.agentArgs
-  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
+  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings, args.launchPlatform)
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null

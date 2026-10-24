@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState } from 'react'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   getTaskSourceCacheScope,

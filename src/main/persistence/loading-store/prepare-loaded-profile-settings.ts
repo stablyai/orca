@@ -17,6 +17,8 @@ import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cu
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -49,6 +51,8 @@ export type PreparedLoadedProfileSettings = {
     GlobalSettings,
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
   >
+  /** The same launch profile with permissions moved into the stored choice; this is what's saved. */
+  migratedAgentPermission: ReturnType<typeof migrateAgentPermissionChoice>
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
   loadedCompactWorktreeCards: boolean
@@ -146,8 +150,17 @@ export function prepareLoadedProfileSettings(
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+  const migratedAgentPermission = migrateAgentPermissionChoice(
+    {
+      ...migratedAgentYoloDefaults,
+      agentPermissionDefault: parsed.settings?.agentPermissionDefault,
+      agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
+    },
+    process.platform
+  )
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
+    !hasTypedAgentPermission(parsed.settings) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
@@ -257,6 +270,7 @@ export function prepareLoadedProfileSettings(
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
     migratedAgentYoloDefaults,
+    migratedAgentPermission,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,

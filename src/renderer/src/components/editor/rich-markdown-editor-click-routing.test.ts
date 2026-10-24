@@ -33,7 +33,7 @@ vi.mock('@/lib/workspace-browser-tab-open', () => ({
 const openUrl = vi.fn()
 const openFileUri = vi.fn()
 const createBrowserTab = vi.fn()
-const openOwnedBrowser = vi.fn(async () => {})
+const openOwnedBrowser = vi.fn(async (): Promise<string | null> => null)
 const activateMarkdownLink = vi.fn()
 let editor: Editor | null = null
 

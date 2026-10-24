@@ -23,10 +23,16 @@ export class CliCommandInspection extends CliInstallLocation {
       const stats = await lstat(commandPath)
       if (!stats.isSymbolicLink()) {
         if (stats.isFile()) {
-          const currentContent = await readFile(commandPath, 'utf8')
-          const managedTarget =
-            extractManagedUnixLauncherTarget(currentContent) ??
-            extractLegacyAppImageCliWrapperTarget(currentContent)
+          const currentContent = await readFile(commandPath, 'utf8').catch((error: unknown) => {
+            if (isPermissionError(error)) {
+              return null
+            }
+            throw error
+          })
+          const managedTarget = currentContent
+            ? (extractManagedUnixLauncherTarget(currentContent) ??
+              extractLegacyAppImageCliWrapperTarget(currentContent))
+            : null
           if (managedTarget) {
             return this.buildStatus({
               commandPath,

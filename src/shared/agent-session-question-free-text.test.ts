@@ -14,18 +14,22 @@ describe('provider free-text question metadata', () => {
     freeTextInput: { allowEmpty: true, multiline: true, initialValue: 'first\nsecond' }
   }
 
-  it.each(['', '  ', ' first\nsecond\u2028third\u2029fourth '])(
-    'preserves the exact answer %j across the older wire form',
-    (other) => {
-      const answers = [{ questionId: 'editor:1', optionIds: [], other }]
-      const encoded = legacyAgentSessionSelectedOptionId(body, answers)
-      expect(encoded).not.toBeNull()
-      expect(legacyAgentSessionQuestionAnswers(body, encoded!)).toEqual(answers)
-      expect(isValidAgentSessionQuestionAnswers(agentSessionPromptQuestions(body), answers)).toBe(
-        true
-      )
-    }
-  )
+  it.each([
+    ['', 'editor%3A1:'],
+    ['  ', 'editor%3A1:%20%20'],
+    [
+      ' first\nsecond\u2028third\u2029fourth ',
+      'editor%3A1:%20first%0Asecond%E2%80%A8third%E2%80%A9fourth%20'
+    ]
+  ])('preserves the exact answer %j across the older wire form', (other, expectedEncoded) => {
+    const answers = [{ questionId: 'editor:1', optionIds: [], other }]
+    const encoded = legacyAgentSessionSelectedOptionId(body, answers)
+    expect(encoded).toBe(expectedEncoded)
+    expect(legacyAgentSessionQuestionAnswers(body, encoded!)).toEqual(answers)
+    expect(isValidAgentSessionQuestionAnswers(agentSessionPromptQuestions(body), answers)).toBe(
+      true
+    )
+  })
 
   it('requires an explicitly supplied answer even when empty is allowed', () => {
     expect(

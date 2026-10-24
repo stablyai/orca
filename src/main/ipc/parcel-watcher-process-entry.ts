@@ -1,9 +1,4 @@
-// Forked (ELECTRON_RUN_AS_NODE) child that hosts its assigned @parcel/watcher
-// subscriptions. Why: watcher.node has native teardown races that fail-fast
-// the hosting process (issue #7547, 0xc0000409 on Windows; same class as
-// #5377/#6635). Running the native module here turns a watcher fault into a
-// contained child crash the host can recover from, instead of killing the app
-// and every agent session in it.
+// Isolate native watcher teardown crashes so they cannot kill the app and its agent sessions (#7547).
 import type * as ParcelWatcher from '@parcel/watcher'
 import { loadParcelWatcher } from './parcel-watcher-module-loader'
 import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
@@ -54,9 +49,7 @@ function main(): void {
     })
   }
 
-  // Subscribe promises are kept (not just subscriptions) so an unsubscribe
-  // that races a still-crawling subscribe awaits it instead of leaking the
-  // native handle — on Windows a leaked handle keeps the worktree dir locked.
+  // Keep pending subscribes so racing unsubscribe waits for the handle and releases Windows directory locks.
   const subscriptions = new Map<number, Promise<WatcherSubscription | null>>()
   const liveSubscriptionIds = new Set<number>()
   const eventDeliveries = new Map<number, WatcherProcessEventDeliveryQueue>()
@@ -115,9 +108,7 @@ function main(): void {
         send({ op: 'subscribe-started', id })
         try {
           if (opts.mode === 'shallow') {
-            // Why: registration succeeding proves nothing on a host whose
-            // notification path is dead. Fail the subscribe so the caller falls
-            // back to polling rather than going quietly stale.
+            // Successful registration does not prove delivery; fail so callers can poll.
             if (!(await detectShallowWatchDelivery())) {
               throw new Error('Shallow watcher delivery unavailable on this host')
             }
@@ -155,8 +146,7 @@ function main(): void {
           finishSubscriptionCrawl()
         }
       })
-      // An unsubscribe can remove the record while subscribe() is crawling.
-      // Only advertise it as live if it is still owned by this process.
+      // Unsubscribe may have removed ownership while subscribe was crawling.
       const stillOwned = subscriptions.has(id)
       if (stillOwned) {
         liveSubscriptionIds.add(id)
@@ -177,8 +167,7 @@ function main(): void {
   }
 
   const handleUnsubscribe = async (id: number): Promise<void> => {
-    // Why: invalidate a probe already in flight, but keep future probes active.
-    // A native teardown deadlock is the failure the canary exists to recover.
+    // Invalidate this probe, but keep future probes armed to catch teardown deadlocks.
     subscriptionActivityRevision++
     const pending = subscriptions.get(id)
     subscriptions.delete(id)
@@ -186,8 +175,7 @@ function main(): void {
     eventDeliveries.get(id)?.close()
     eventDeliveries.delete(id)
     try {
-      // Why: Parcel already serializes crawl and teardown on one backend mutex.
-      // Mirror that ordering here so neither operation can mask a canary miss.
+      // Mirror Parcel's crawl/teardown mutex ordering so neither masks a canary miss.
       await runNativeWatcherLifecycleExclusive(async () => {
         const subscription = await pending
         await subscription?.unsubscribe()
@@ -204,8 +192,7 @@ function main(): void {
   }
 
   const handleCancelSubscribe = (id: number): void => {
-    // Why: an in-flight native crawl cannot be cancelled safely; ask the host to
-    // kill this child instead of risking the Parcel teardown deadlock.
+    // In-flight native crawls cannot be cancelled safely; have the host kill this child.
     if (activeSubscriptionCrawlId === id) {
       subscriptions.delete(id)
       liveSubscriptionIds.delete(id)
@@ -214,9 +201,7 @@ function main(): void {
       send({ op: 'cancel-requires-restart', id })
       return
     }
-    // Why: cancel can race a crawl that already finished. Reuse unsubscribe
-    // teardown so a live native handle is released instead of leaked (Windows
-    // keeps the worktree locked while the handle stays open).
+    // A completed crawl still owns a handle; reuse unsubscribe to release it and any Windows directory lock.
     void handleUnsubscribe(id)
   }
 
@@ -250,9 +235,7 @@ function main(): void {
     (state) => send({ op: 'delivery-health', state })
   )
 
-  // Why: if the host dies (or kills us during shutdown), exit immediately —
-  // process death releases every native watcher handle without running the
-  // crash-prone napi teardown at all.
+  // Process death releases watcher handles without crash-prone native teardown.
   process.on('disconnect', () => {
     process.exit(0)
   })

@@ -35,7 +35,8 @@ const SidecarEntrySchema = z.object({
   binding: SidecarBindingSchema,
   // The store state a two-file rebind is moving to; the entry stays current through a crash between them.
   pendingBinding: SidecarBindingSchema.optional(),
-  // The runtime a link verified; it outlives the link like a learned runtimeId would.
+  // The runtime a link verified, used only until the store learns one. orcad mints a new id at
+  // every start, so a different stored id is a restart, not a different server (#32957).
   runtimeId: z.string().min(1).optional(),
   sshAccess: SidecarSshAccessSchema.optional(),
   pendingSshAccessOperation: RuntimeSshAccessOperationSchema.optional(),
@@ -145,13 +146,6 @@ export function overlayRuntimeEnvironmentSidecar(
   }
   const basePairingRevision = environment.pairingRevision ?? environment.createdAt
   const access = entry.sshAccess
-  if (
-    entry.runtimeId !== undefined &&
-    environment.runtimeId !== null &&
-    environment.runtimeId !== entry.runtimeId
-  ) {
-    return base
-  }
   const pairingRevision = Math.max(
     basePairingRevision,
     entry.pairingRevisionFloor ?? basePairingRevision

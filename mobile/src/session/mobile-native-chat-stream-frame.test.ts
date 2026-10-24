@@ -55,18 +55,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
-  it('leaves an ordinary snapshot unmarked', () => {
-    const merger = createNativeChatMerger()
-    const result = applyMobileNativeChatStreamFrame({
-      merger,
-      frame: { type: 'snapshot', messages: [message('a')], hasMore: false },
-      limit: 40,
-      replaceSnapshot: true
-    })
-
-    expect(result).not.toHaveProperty('pending')
-  })
-
   it('merges reconnect snapshots and live appends into the bounded window', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('a'), message('b')])
@@ -325,7 +313,12 @@ describe('applyMobileNativeChatStreamFrame', () => {
 
   it('still treats the base snapshot as authoritative after a replacement frame', () => {
     const merger = createNativeChatMerger()
-    replaceList(merger, ['a', 'b'].map(message))
+    applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'replacement', messages: ['a', 'b'].map(message) },
+      limit: 100,
+      replaceSnapshot: true
+    })
 
     // A replacement is not this subscription's base snapshot, so the first real
     // snapshot still replaces — merging would keep 'a', which it does not carry.

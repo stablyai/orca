@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraProjectStatusOrder, JiraStatus } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder, JiraStatus } from '../../../shared/jira/jira-types'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: React.ReactNode }) => children,

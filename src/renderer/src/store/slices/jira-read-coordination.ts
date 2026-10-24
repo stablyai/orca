@@ -6,7 +6,7 @@ import type {
   JiraConnectionStatus,
   JiraIssue,
   JiraSiteSelection
-} from '../../../../shared/jira-types'
+} from '../../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,

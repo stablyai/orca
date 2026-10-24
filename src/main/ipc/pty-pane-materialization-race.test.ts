@@ -146,7 +146,6 @@ describe('registerPtyHandlers', () => {
     releaseClaim()
     await expect(mounted).resolves.toMatchObject({ id: 'pty-after-runtime-claim' })
     expect(providerSpawn).toHaveBeenCalledOnce()
-    // C6 keeps "the joiner prepares before": the window prepares its launch only after the claim settles.
     expect(preparedAfterRelease).toEqual([true])
   })
   it('adopts a runtime reservation created during renderer preflight', async () => {

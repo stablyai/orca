@@ -23,7 +23,7 @@ import {
   reserveWatcherChild,
   resetWatcherChildRegistryForTest,
   WatcherChildCapacityError
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -76,7 +76,7 @@ describe('native filesystem watcher capacity recovery', () => {
 
     releases.pop()?.()
     await vi.waitFor(() => expect(subscribeViaWatcherProcessMock).toHaveBeenCalledTimes(2))
-    // Why: the IPC call returned before this install, so a write in between needs a resync.
+    // Writes between IPC completion and delayed installation require a resync.
     await vi.waitFor(() =>
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/tmp/native-capacity-root',

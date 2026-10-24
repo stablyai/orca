@@ -40,7 +40,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       _event,
       args: { dirPath: string; connectionId?: string; followSymlinks?: boolean }
     ): Promise<DirEntry[]> => {
-      // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
+      // Record throw site and redacted path shape because fs:readDir IPC errors otherwise lack context.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
         if (args.connectionId) {

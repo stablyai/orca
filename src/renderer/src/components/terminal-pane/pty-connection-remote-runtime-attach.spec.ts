@@ -141,7 +141,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(2)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(2)
       const deps = createDeps()
 
@@ -262,7 +264,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       } as StoreState
 
       const pane = createPane(1)
-      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
+      pane.terminal.write.mockImplementation((_data: string | Uint8Array, callback?: () => void) =>
+        callback?.()
+      )
       const manager = createManager(1)
       const deps = createDeps({
         restoredLeafId: LEAF_1,

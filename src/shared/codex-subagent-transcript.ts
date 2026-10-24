@@ -251,6 +251,12 @@ export function reconcileCodexSubagentTranscript(
     parentRecords === undefined
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
+  // Hook-only and restored children may predate the bounded parent transcript read.
+  for (const [id, child] of roster) {
+    if (!state.subagents.has(id)) {
+      state.subagents.set(id, { offset: 0, carry: '', startedAt: child.startedAt })
+    }
+  }
   for (const recordValue of parentRecords ?? []) {
     const turnEnd = readTurnEnd(recordValue)
     if (turnEnd) {

@@ -36,6 +36,7 @@ vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
   readHostStructuredAgents: () =>
     decodeAgentSessionAgentsResult({ agents: [{ agent: 'grok', capabilities: {} }] }) ?? []
 }))
+vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('../../store', () => ({
   useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
     getState: () => state

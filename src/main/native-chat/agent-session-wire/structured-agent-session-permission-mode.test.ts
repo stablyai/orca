@@ -1,6 +1,3 @@
-// A chat's permission mode is the record's: a pick writes only the record, even with the agent
-// running, and the next send after a change goes to an agent started with the new mode.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
@@ -175,7 +172,6 @@ describe('a chat permission mode', () => {
 
   it('refuses a mode the agent does not offer', async () => {
     await foundRestTestChat(rig)
-    // Codex has no edits-only mode.
     expect(await pick('accept-edits')).toMatchObject({ ok: false })
     expect(await pick('bypassPermissions')).toMatchObject({ ok: false })
     expect(rig.store.getRecord(SESSION)?.permissionMode).toBeUndefined()

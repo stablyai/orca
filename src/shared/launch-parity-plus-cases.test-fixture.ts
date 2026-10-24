@@ -1,5 +1,5 @@
 // Test-only (never imported by production code): the window-lane launch parity table for row 1, the
-// "+" launches C2 moves onto the pane trigger. One row per "+" entry point; local hosts only.
+// "+" launches C2 moves onto the pane trigger. Covers each "+" entry point; local hosts only.
 import { POSIX_PATH, WIN_PATH } from './launch-parity-window-cases.test-fixture'
 import type {
   LaunchClient,
@@ -37,7 +37,7 @@ function plus(
     producer: { kind: 'plus', agent: 'claude', via },
     request,
     provider,
-    settings: { agentDefaultArgs: { claude: ARGS } }
+    settings: { agentDefaultArgs: { claude: ARGS }, agentPermissionOverrides: { claude: 'own' } }
   }
 }
 
@@ -55,5 +55,5 @@ export const PLUS_LAUNCH_CASES: WindowLaunchCase[] = [
     },
     { shellOverride: 'powershell.exe', terminalWindowsWslDistro: null }
   ),
-  plus('dashboard', 'Linux repo', 'linux', { kind: 'repo', path: POSIX_PATH }, quoted(posix), ZSH)
+  plus('menu', 'Linux repo', 'linux', { kind: 'repo', path: POSIX_PATH }, quoted(posix), ZSH)
 ]

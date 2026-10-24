@@ -1,3 +1,5 @@
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+export type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from './agent-session-provider-context'
 // ─── Canonical agent-session journal: cross-process wire shapes ─────────────
 // The host-owned timeline for a structured agent session. Everything here must
@@ -413,11 +415,6 @@ export type AgentJournalProducerLinkage = {
    *  this answers "which run of it", and is deliberately not part of the identity. */
   attempt?: number
 }
-
-/** Which turn a row belongs to, stated by the write that created it. `turn` names the turn
- *  record's journal key; `thread` is a row that belongs to no turn — a notice about the
- *  conversation, or a message not yet delivered into one. Turn records themselves are `thread`. */
-export type AgentJournalTurnScope = { kind: 'turn'; turnItemId: string } | { kind: 'thread' }
 
 export const AGENT_JOURNAL_THREAD_SCOPE: AgentJournalTurnScope = { kind: 'thread' }
 

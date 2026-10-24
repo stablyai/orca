@@ -6,7 +6,6 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 type Facts = { resumed?: boolean; unavailable?: boolean; dropped?: boolean; isReattach?: boolean }
 
-/** What a committed spawn tells its start, from a start that did or did not ask to resume. */
 function reply({ resumed = false, unavailable = false, dropped = false, isReattach }: Facts) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the report reads no deps.
   const deps = {} as unknown as PtyRuntimeControllerDeps

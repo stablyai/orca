@@ -26,6 +26,8 @@ import {
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
 } from '../../shared/agent-launch-settings'
+import { legacyLaunchTextUpdates } from '../../shared/agent-launch-permission-updates'
+import { composeAgentLaunchProfile } from '../../shared/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,
@@ -51,13 +53,16 @@ export class RuntimeClientSettingsController {
       throw new Error('runtime_unavailable')
     }
     const settings = this.store.getSettings()
+    // Why composed: paired clients (the phone's resume, legacy-host chat checks) read the flag in
+    // this text as the permission, as every client before the stored choice did.
+    const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
-      agentDefaultArgs: settings.agentDefaultArgs ?? {},
-      agentDefaultEnv: settings.agentDefaultEnv ?? {},
+      agentDefaultArgs: launchProfile.agentDefaultArgs,
+      agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       // Why projected: mobile's terminal Copy honours this, and a host predating
       // the setting sends no key, which the client reads as on (#19770).
@@ -114,6 +119,17 @@ export class RuntimeClientSettingsController {
     this.store.updateSettings(
       {
         ...updates,
+        // An older client writes Arguments as it reads them, flag included.
+        ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
+          ? legacyLaunchTextUpdates(
+              beforeSettings,
+              {
+                agentDefaultArgs: updates.agentDefaultArgs,
+                agentDefaultEnv: updates.agentDefaultEnv
+              },
+              process.platform
+            )
+          : {}),
         ...(updates.nativeChatPermissionMode !== undefined
           ? { agentNativeChatPermissionModes: {} }
           : {}),
@@ -147,7 +163,7 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
-    return projectAgentLaunchSettings(this.store.getSettings())
+    return projectAgentLaunchSettings(this.store.getSettings(), process.platform)
   }
 
   async mutateAgentLaunch(mutation: AgentLaunchSettingsMutation): Promise<AgentLaunchSettings> {
@@ -163,7 +179,7 @@ export class RuntimeClientSettingsController {
       const applied = store.getSettings()
       return {
         value: {
-          settings: projectAgentLaunchSettings(applied),
+          settings: projectAgentLaunchSettings(applied, process.platform),
           reconcileHooks:
             updates.disabledTuiAgents !== undefined &&
             !haveSameDisabledTuiAgents(before.disabledTuiAgents, applied.disabledTuiAgents)

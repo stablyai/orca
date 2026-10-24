@@ -3520,13 +3520,28 @@
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "Reconectando con el entorno de ejecución remoto",
             "pairingRefusedTitle": "Este host ya no acepta este equipo",
             "pairingRefusedBody": "Orca no pudo volver a emparejarse con él por SSH. No se detuvo nada en el host. Vuelve a conectar para intentarlo de nuevo.",
             "disconnectedTitle": "Remote runtime disconnected",
-            "retryingBody": "Orca está reintentando automáticamente. Este terminal se reanudará si vuelve la conexión.",
             "disconnectedBody": "Se detuvieron los reintentos automáticos. Vuelva a conectarse para reanudar esta sesión de terminal.",
-            "reconnectButton": "Reconnect"
+            "reconnectButton": "Reconectar",
+            "signInTitle": "Esperando el inicio de sesión SSH",
+            "signInBody": "Este terminal continuará por sí solo cuando inicie sesión en el host.",
+            "signInButton": "Iniciar sesión",
+            "serverRestartingTitle": "{{server}} se está reiniciando",
+            "serverRestartingBody": "Orca se reconectará cuando el servidor vuelva, y los terminales se reanudarán entonces.",
+            "streamStalledTitle": "El terminal dejó de responder",
+            "streamStalledBody": "{{server}} dejó de enviar la salida de este terminal. Orca lo está reconectando automáticamente.",
+            "sessionEndedTitle": "Reconectando el terminal",
+            "sessionEndedBody": "{{server}} cerró el flujo de este terminal. Orca lo está reconectando automáticamente.",
+            "waitingTitle": "Esperando a {{server}}",
+            "waitingBody": "Orca reconectará este terminal cuando el servidor vuelva a ofrecerlo o cambie la conexión. Pulsa Reconectar para intentarlo ahora.",
+            "downFor": "Sin conexión desde hace {{duration}}",
+            "tailscaleHint": "Comprueba la ruta de Tailscale:",
+            "fallbackServerName": "el servidor",
+            "connectionLostTitle": "Reconectando con {{server}}",
+            "connectionLostBody": "Se perdió la conexión con el servidor. Orca está reintentando automáticamente y los terminales se reanudarán cuando vuelva.",
+            "reattachingBody": "Orca está reconectando automáticamente este terminal a {{server}}."
           },
           "TerminalRestoringPlaceholder": {
             "restoring": "Restaurando terminal…"
@@ -3550,19 +3565,26 @@
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
             "openInThisGroup": "Abrir en este grupo",
-            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
+            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo",
+            "fileInOtherWorkspace": "Este archivo está en {{value0}}",
+            "fileInAnotherWorkspace": "Este archivo está en otro espacio de trabajo",
+            "openInOwningWorkspace": "Abrir allí",
+            "openedHereReadOnly": "Abierto aquí en modo de solo lectura"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Anfitrión no disponible",
             "54f29b7c0d": "Cargando host…"
           },
           "AgentLaunchPaneNotice": {
-            "commandNotFound": "Su comando no se encontró en este equipo.",
+            "agent": "El agente",
+            "commandNotFound": "{{agent}} no pudo iniciarse porque no se encontró su comando en este equipo.",
             "copyPrompt": "Copiar prompt",
-            "exitedDuringStart": "Se cerró mientras se iniciaba.",
-            "notStarted": "El agente no pudo iniciarse.",
-            "unconfirmed": "No se pudo confirmar que el agente se iniciara.",
-            "workspaceGone": "Su espacio de trabajo ya no está disponible."
+            "exitedDuringStart": "{{agent}} se cerró durante el inicio.",
+            "notStarted": "{{agent}} no pudo iniciarse.",
+            "restoreWorkspace": "Restaura la carpeta del espacio de trabajo o abre un espacio de trabajo disponible y vuelve a intentarlo.",
+            "tryInTerminal": "Ejecútalo en una terminal en esta carpeta para ver el motivo y vuelve a intentarlo.",
+            "unconfirmed": "No se pudo confirmar que {{agent}} se haya iniciado. Revisa su terminal antes de volver a intentarlo.",
+            "workspaceGone": "{{agent}} no pudo iniciarse porque su espacio de trabajo ya no está disponible."
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "Las restauraciones automáticas están en pausa porque el host se detuvo de forma inesperada. Tu sesión está guardada.",
@@ -8078,6 +8100,11 @@
           "191ac34567": "Orquestación de agentes",
           "nestedWorkerDepthTitle": "Profundidad del trabajador anidado",
           "nestedWorkerDepthDescription": "¿Cuántas generaciones de trabajadores despedidos pueden engendrar sus propios trabajadores? 1 mantiene el árbol de agentes plano: un coordinador envía trabajadores y esos trabajadores no envían.",
+          "chatErrorEscalationTitle": "Avisar al coordinador de los errores del chat",
+          "chatErrorEscalationDescription": "Cuando un agente asignado encuentra un error que termina su turno, envía el error exacto al coordinador que lo asignó. La tarea sigue asignada al agente. Solo funciona con agentes que se ejecutan en la interfaz de chat.",
+          "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
+          "chatErrorEscalationKeywordError": "error",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {
@@ -9705,6 +9732,11 @@
               "modifier": "modificador",
               "invert": "invertir",
               "opposite": "opuesto"
+            },
+            "linkRoutingBackground": {
+              "background": "segundo plano",
+              "focus": "foco",
+              "tab": "pestaña"
             },
             "72c58f7792": "vista web",
             "82ba1c80ea": "localhost",
@@ -11901,6 +11933,10 @@
           "titleOrca": "Mantenga presionada la tecla Mayús para abrir en Orca",
           "descriptionSystem": "Los enlaces se abren en Orca, por lo que {{chord}}+clic envía uno al navegador de su sistema.",
           "descriptionOrca": "Los enlaces se abren en el navegador de su sistema. Cuando está habilitado, {{chord}}+clic abre uno en el navegador integrado de Orca."
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Abrir enlaces en segundo plano",
+          "description": "Los enlaces de la terminal, el chat y markdown se abren en el navegador sin quitar el foco de donde hiciste clic."
         },
         "PluginConsentDialog": {
           "workerTrust": "Proceso en segundo plano — se ejecuta en su propio proceso",
@@ -15921,6 +15957,7 @@
           "6c4f1a8d2e": "Los detalles del check no están disponibles."
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "Solo lectura",
           "fb8331694e": "Abrir vista previa al lado",
           "4157f3cbf3": "Abrir vista previa de Markdown",
           "269ce4842b": "Copiar ruta relativa",
@@ -18483,6 +18520,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "El espacio de trabajo no está conectado a un host Orca remoto.",
+        "splitSourceUnpublished": "El panel no se dividió: su terminal aún no se ha iniciado en el host.",
         "terminalCreateUnconfirmed": "Orca no pudo confirmar que la nueva terminal se abrió en el host."
       },
       "gitlabJobTraceClient": {
@@ -19742,7 +19780,8 @@
     "jiraUserPicker": {
       "select": "Seleccione {{value0}}",
       "search": "Buscar usuarios",
-      "empty": "No se encontraron usuarios"
+      "empty": "No se encontraron usuarios",
+      "useKnownId": "Usar el ID de usuario conocido \"{{value0}}\""
     },
     "status": {
       "bar": {

@@ -76,16 +76,36 @@ describe('browser screencast binary protocol', () => {
     expect(decodeBrowserScreencastFrame(encoded)).toBeNull()
   })
 
-  it('rejects oversized metadata before decoding it', () => {
-    const encoded = new Uint8Array(16 + BROWSER_SCREENCAST_MAX_METADATA_BYTES + 1)
-    const view = new DataView(encoded.buffer)
-    encoded[0] = 0x62
-    encoded[1] = 1
-    encoded[2] = BrowserScreencastOpcode.Frame
-    encoded[3] = 1
-    view.setUint32(8, BROWSER_SCREENCAST_MAX_METADATA_BYTES + 1, true)
+  it('rejects oversized valid metadata before decoding it', () => {
+    const metadata = { deviceWidth: 1280, padding: '' }
+    metadata.padding = 'x'.repeat(
+      BROWSER_SCREENCAST_MAX_METADATA_BYTES -
+        new TextEncoder().encode(JSON.stringify(metadata)).byteLength
+    )
+    const withinBudget = encodeBrowserScreencastFrame({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: 1,
+      format: 'jpeg',
+      metadata,
+      image: new Uint8Array([1])
+    })
+    expect(decodeBrowserScreencastFrame(withinBudget)?.metadata).toEqual({ deviceWidth: 1280 })
 
-    expect(decodeBrowserScreencastFrame(encoded)).toBeNull()
+    const oversizedMetadata = { ...metadata, padding: `${metadata.padding}x` }
+    const oversized = encodeBrowserScreencastFrame({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: 1,
+      format: 'jpeg',
+      metadata: oversizedMetadata,
+      image: new Uint8Array([1])
+    })
+    const decode = vi.spyOn(TextDecoder.prototype, 'decode')
+    try {
+      expect(decodeBrowserScreencastFrame(oversized)).toBeNull()
+      expect(decode).not.toHaveBeenCalled()
+    } finally {
+      decode.mockRestore()
+    }
   })
 
   it('rejects excessive metadata nesting before JSON.parse', () => {

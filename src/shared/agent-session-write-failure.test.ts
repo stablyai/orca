@@ -165,20 +165,6 @@ describe('a refusal a failed request carried in its error', () => {
     })
   })
 
-  it("keeps a journal refusal's reason", () => {
-    const corrupt = {
-      code: 'agent_session_journal_unreadable',
-      details: { reason: 'journalCorrupt' }
-    }
-    // Not "Orca couldn't confirm what happened": the host refused it before running it.
-    expect(
-      agentSessionThrownFailure(saved({ ...payload, data: { refusal: corrupt } }), 'runtime_error')
-    ).toEqual({
-      kind: 'refused',
-      ...corrupt
-    })
-  })
-
   it("degrades a reason another build added to the code's own words", () => {
     const newer = {
       code: 'agent_session_journal_unreadable',

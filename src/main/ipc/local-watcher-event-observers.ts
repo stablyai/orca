@@ -5,10 +5,7 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 
-/**
- * Main-process consumers of the renderer-driven local watchers. Observers ride
- * an existing subscription; they never start or keep a watcher alive.
- */
+/** Observe existing renderer-driven subscriptions without starting or retaining watchers. */
 export type LocalWatcherEventObserver = {
   onEvents(root: WatchedRoot, events: readonly WatcherEvent[]): void
   /** Overflow, child restart, or watcher error: path precision was lost. */
@@ -34,7 +31,6 @@ export function notifyLocalWatcherInterrupted(root: WatchedRoot): void {
   }
 }
 
-/** The live local watcher whose root is `targetPath` or its nearest watched ancestor. */
 export function findCoveringLocalWatchRoot(targetPath: string): WatchedRoot | null {
   if (watcherLifecycleState.watchedRoots.size === 0) {
     return null

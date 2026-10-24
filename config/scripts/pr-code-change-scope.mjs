@@ -1,9 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { isLayoutOracleSource } from './pr-layout-oracle-route.mjs'
-import { LINUX_PACKAGE_TESTS, WINDOWS_PACKAGE_TESTS } from './pr-package-test-paths.mjs'
+import {
+  isCloudTestRunnerInput,
+  isWindowsProcessProbePath,
+  LINUX_PACKAGE_TESTS,
+  WINDOWS_PACKAGE_TESTS
+} from './pr-package-test-paths.mjs'
 
 const DOCS_ONLY_FILES = new Set([
   'README.md',
@@ -476,13 +480,11 @@ function readFormatIgnoredPrefixes() {
 const FORMAT_IGNORED_PREFIXES = readFormatIgnoredPrefixes()
 
 export function isDocsOnlyPath(file) {
-  if (DOCS_ONLY_FILES.has(file)) {
-    return true
-  }
-  if (DOCS_ONLY_PREFIXES.some((prefix) => file.startsWith(prefix))) {
-    return true
-  }
-  return /^README\.[^/]+\.md$/.test(file)
+  return (
+    DOCS_ONLY_FILES.has(file) ||
+    DOCS_ONLY_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
+    /^README\.[^/]+\.md$/.test(file)
+  )
 }
 
 export function shouldRunPrChecks(changedFiles) {
@@ -507,8 +509,7 @@ export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-  'config/scripts/process-host-build-dist.test.mjs',
-  'src/main/codex/codex-app-server-connection.test.ts'
+  'config/scripts/process-host-build-dist.test.mjs'
 ])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
@@ -562,6 +563,7 @@ export function classifyPrJobs(
   return {
     should_run: shouldRun,
     mobile_ci_tools: mobileCiTools,
+    windows_process_probe: shouldRun && (forceAll || changedFiles.some(isWindowsProcessProbePath)),
     // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
     relay_integration:
       shouldRun &&
@@ -617,14 +619,15 @@ function isLinuxPackagePath(file) {
 }
 
 function isWindowsPackagePath(file) {
-  return WINDOWS_PACKAGE_TESTS.includes(file) || isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
+  return (
+    WINDOWS_PACKAGE_TESTS.includes(file) ||
+    isWindowsProcessProbePath(file) ||
+    isProductBundlePath(file, WINDOWS_PACKAGE_PREFIXES)
+  )
 }
 
 function isProductBundlePath(file, extraPrefixes) {
-  if (isTestFile(file)) {
-    return false
-  }
-  return file.startsWith('src/') || matchesPrefix(file, extraPrefixes)
+  return !isTestFile(file) && (file.startsWith('src/') || matchesPrefix(file, extraPrefixes))
 }
 
 // These shared fixtures are consumed only by unit tests.
@@ -654,7 +657,9 @@ function isDesktopIrrelevantPath(file) {
 function isStaticAnalysisScannedPath(file) {
   // Fail closed: roots we failed to parse must keep the gate, not silently drop it.
   return (
-    STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 || matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES)
+    STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 ||
+    matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES) ||
+    isCloudTestRunnerInput(file)
   )
 }
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   appendFileSync,
   mkdirSync,
@@ -22,9 +22,14 @@ const reviewRecords = readFileSync(
   .split('\n')
 const event = (payload: Record<string, unknown>): string =>
   `${JSON.stringify({ type: 'event_msg', payload })}\n`
-const settle = (ms = 1_200) => new Promise((resolve) => setTimeout(resolve, ms))
 
 describe('Codex turn completion without Stop', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+  })
+
   let desktop: AgentHookServer
   let relay: RelayAgentHookServer | undefined
   let directory: string
@@ -54,6 +59,7 @@ describe('Codex turn completion without Stop', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Connection: 'close',
             'X-Orca-Agent-Hook-Token': coordinates.token
           },
           body: JSON.stringify(body)
@@ -66,6 +72,7 @@ describe('Codex turn completion without Stop', () => {
     desktop.stop()
     relay?.stop()
     relay = undefined
+    vi.useRealTimers()
     rmSync(directory, { recursive: true, force: true })
   })
 
@@ -85,19 +92,16 @@ describe('Codex turn completion without Stop', () => {
     })
 
     appendFileSync(childPath, `${reviewRecords[1]}\n`)
-    await vi.waitFor(
-      () =>
-        expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-          state: 'done',
-          mainAgent: { state: 'done' }
-        }),
-      { timeout: 3_000 }
-    )
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      mainAgent: { state: 'done' }
+    })
     // Desktops that predate host-owned turn verdicts still recognize a labelled Stop.
     expect(published.at(-1)).toBe('Stop')
 
     await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
-    await settle()
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(published.at(-1)).toBe('SessionStart')
     appendFileSync(childPath, event({ type: 'task_started', turn_id: 'next-turn' }))
     await hook({
@@ -106,7 +110,7 @@ describe('Codex turn completion without Stop', () => {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'Next'
     })
-    await settle()
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
     await hook({ ...review, hook_event_name: 'PostToolUse', tool_name: 'Bash' })
     expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
@@ -115,7 +119,7 @@ describe('Codex turn completion without Stop', () => {
     await hook({ ...review, turn_id: 'next-turn', hook_event_name: 'Stop' })
     await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
     appendFileSync(childPath, event({ type: 'task_complete', turn_id: 'next-turn' }))
-    await settle()
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(published.slice(-2)).toEqual(['Stop', 'SessionStart'])
   })
 
@@ -142,18 +146,15 @@ describe('Codex turn completion without Stop', () => {
 
       appendFileSync(childPath, event({ type: 'task_complete', turn_id: 'child-turn' }))
       if (separatePolls) {
-        await settle()
+        await vi.advanceTimersByTimeAsync(5_000)
       }
       const failure = { error: { message: 'usage limit' } }
       appendFileSync(rootPath, event({ type: 'task_complete', turn_id: 'root-turn', ...failure }))
-      await vi.waitFor(
-        () =>
-          expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-            state: 'done',
-            mainAgent: { state: 'done', outcome: 'failure' }
-          }),
-        { timeout: 3_000 }
-      )
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        mainAgent: { state: 'done', outcome: 'failure' }
+      })
       // Legacy desktops interpret labelled Stops as success; leave failures unlabelled.
       expect(published.at(-1)).toBeUndefined()
     }

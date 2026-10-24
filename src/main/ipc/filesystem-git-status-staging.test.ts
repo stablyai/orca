@@ -67,8 +67,7 @@ import {
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -82,14 +81,13 @@ describe('registerFilesystemHandlers', () => {
       filePath: './src/../src/file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
+    // Expected Git paths use the host's path.relative separators.
     expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'), {
       admissionTier: 'interactive'
     })
   })
 
-  it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
+  it('uses worktree roots seeded by worktree listing without rebuilding the cache', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [] })
 

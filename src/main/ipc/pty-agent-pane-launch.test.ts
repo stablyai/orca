@@ -145,8 +145,7 @@ describe('a pane that starts its own agent launch', () => {
     })
   })
 
-  // The command was quoted for the plan's runtime, so the PTY must run that runtime's shell. The tab's
-  // shell is inferred, not asked for, and would make the planner refuse a WSL-share repo.
+  // Planned command quoting requires the planner's runtime shell; an inferred tab shell can reject WSL-share repos.
   it("runs the plan's runtime shell, not the tab's, as a host launch does", async () => {
     const providerSpawn = vi.fn(async (_options: { shellOverride?: string }) => ({
       id: 'pty-agent'

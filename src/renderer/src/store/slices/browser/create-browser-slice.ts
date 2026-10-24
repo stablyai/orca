@@ -38,6 +38,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserSessionImportState: null,
   browserUrlHistory: [],
   workspaceDocHistory: [],
+  browserHistoryPageId: null,
   defaultBrowserSessionProfileId: null,
   defaultBrowserSessionProfileIdByHostId: {},
   detectedBrowsers: [],

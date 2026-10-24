@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
-import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime-shared-control-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { RuntimeEnvironmentStoreSchema } from '../../../shared/runtime-environments'
 
 const runLiveBenchmark = isFederatedReadBenchmarkEnabled(process.env.ORCA_FEDERATED_READ_BENCH)

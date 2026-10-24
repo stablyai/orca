@@ -1,5 +1,3 @@
-// A rewind commits its durable fork's head with the shortened journal, including at rest.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -193,7 +191,7 @@ describe('rewinding a chat whose agent forks', () => {
     })
     const record = store.getRecord(HOST_TEST_SESSION)!
     const fork = record.rewind!.providerFork!
-    // These are the fields v1.4.233 reads; it ignores providerFork entirely.
+    // Preserve fields read by v1.4.233, which ignores providerFork.
     expect(agentSessionProviderHandleChainHead(record.providerHandleChain)).toMatchObject({
       origin: 'forked',
       handle: claudeProviderHandle(fork.sessionId, 'fork-answer-1')

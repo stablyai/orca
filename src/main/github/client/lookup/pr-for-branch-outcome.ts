@@ -22,7 +22,7 @@ export async function getPRForBranchOutcome(
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRRefreshOutcome> {
   const branchName = branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD can't use branch lookup, but an exact linked/fallback PR number is still safe to query and keeps review state visible.
+  // Detached HEAD cannot discover by branch, but explicit PR numbers remain safe.
   if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }

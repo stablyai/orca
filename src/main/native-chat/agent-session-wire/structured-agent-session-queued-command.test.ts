@@ -50,8 +50,6 @@ async function queuedId(
 }
 
 describe('a /compact in flight', () => {
-  /** A /compact the provider took: a queued message, then its own turn, running until the
-   *  provider ends it (`finishCompact`). */
   async function compactRunning(): Promise<void> {
     expect(await command('compact')).toMatchObject({ ok: true, value: { command: 'compact' } })
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
@@ -61,7 +59,6 @@ describe('a /compact in flight', () => {
     await compactRunning()
     const draftId = await queuedId(rig.send('sent while compacting', 'queue-if-active').result)
     expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
-    // The compaction's turn owes work, so the drain waits behind it like any turn.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(await rig.handoff(draftId)).toBeUndefined()
     rig.finishCompact()
@@ -74,7 +71,6 @@ describe('a /compact in flight', () => {
     const deletedId = await queuedId(rig.send('deleted while compacting', 'queue-if-active').result)
     const sentId = await queuedId(rig.send('sent now while compacting', 'queue-if-active').result)
     const hung = new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 2_000))
-    // Nothing holds the session's lane for the compaction's length any more.
     expect(await Promise.race([rig.deleteQueued(deletedId), hung])).toMatchObject({
       ok: true,
       value: { deleted: true }
@@ -83,7 +79,6 @@ describe('a /compact in flight', () => {
       ok: true,
       value: { submission: { queuedMessageId: sentId } }
     })
-    // Accepted, then handed over only once the compaction ends — the order every send keeps.
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(rig.dispatch).toHaveBeenCalledTimes(0)
     rig.finishCompact()

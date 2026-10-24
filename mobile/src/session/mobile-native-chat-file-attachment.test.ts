@@ -41,6 +41,7 @@ describe('uploadPickedNativeChatFiles', () => {
   function run(files: AsyncIterable<PickedMobileFile>, failName?: string) {
     const chips = new Map<string, PendingNativeChatFile>()
     const errors: string[] = []
+    const pickedChips: PendingNativeChatFile[] = []
     let id = 0
     const done = uploadPickedNativeChatFiles({
       picked: files,
@@ -51,7 +52,10 @@ describe('uploadPickedNativeChatFiles', () => {
         return { path: `/store/${file.name}`, name: file.name, byteLength: 1 }
       },
       nextId: () => `file-${(id += 1)}`,
-      onPicked: (file) => chips.set(file.id, file),
+      onPicked: (file) => {
+        pickedChips.push(file)
+        chips.set(file.id, file)
+      },
       onStored: (fileId, stored) => {
         const chip = chips.get(fileId)
         if (chip) {
@@ -61,12 +65,18 @@ describe('uploadPickedNativeChatFiles', () => {
       onFailed: (fileId) => chips.delete(fileId),
       onError: (message) => errors.push(message)
     })
-    return { chips, errors, done }
+    return { chips, errors, pickedChips, done }
   }
 
   it('keeps every stored file as a chip with its host path', async () => {
-    const { chips, errors, done } = run(pickedFiles([picked('a.txt'), picked('b.txt')]))
+    const { chips, errors, pickedChips, done } = run(
+      pickedFiles([picked('a.txt'), picked('b.txt')])
+    )
     await done
+    expect(pickedChips).toEqual([
+      { id: 'file-1', name: 'a.txt', mime: 'text/plain', byteLength: 1, path: null },
+      { id: 'file-2', name: 'b.txt', mime: 'text/plain', byteLength: 1, path: null }
+    ])
     expect([...chips.values()].map((chip) => chip.path)).toEqual(['/store/a.txt', '/store/b.txt'])
     expect(errors).toEqual([])
   })

@@ -247,6 +247,7 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
       const calls = journal.snapshot().items.filter((item) => item.body.kind === 'tool-call')
       const mutations: JournalLifecycleMutationInput[] = calls.map((item, index) => ({
         kind: 'item',
+        observedAt: index + 1,
         identity: { provider: 'orca', clientMessageId: `call-${index}` },
         body: {
           kind: 'tool-call',
@@ -277,6 +278,16 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
       expect(
         settled.items.filter((item) => item.body.kind === 'tool-call').map((item) => item.body)
       ).toEqual(mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : [])))
+      expect(
+        rows()
+          .slice(-2)
+          .map((row) => row.ts)
+      ).toEqual([1, 2])
+      expect(
+        settled.items
+          .filter((item) => item.body.kind === 'tool-call')
+          .map((item) => item.observedAt)
+      ).toEqual(calls.map((item) => item.observedAt))
       expect(published).toEqual([settled])
       await journal.appendLifecycleBatch(input)
       expect(journal.snapshot()).toEqual(settled)

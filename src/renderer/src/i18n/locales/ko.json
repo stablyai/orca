@@ -3505,13 +3505,28 @@
             "removeWorkspaceButton": "워크트리 제거"
           },
           "TerminalRemoteRuntimeReconnectBanner": {
-            "retryingTitle": "원격 런타임에 다시 연결 중",
             "pairingRefusedTitle": "이 호스트가 더 이상 이 컴퓨터를 허용하지 않습니다",
             "pairingRefusedBody": "Orca가 SSH로 다시 페어링하지 못했습니다. 호스트에서는 아무것도 중지되지 않았습니다. 다시 연결하여 재시도하세요.",
             "disconnectedTitle": "원격 런타임 연결 끊김",
-            "retryingBody": "Orca가 자동으로 재시도합니다. 연결이 복원되면 이 터미널이 재개됩니다.",
             "disconnectedBody": "자동 재시도가 중지되었습니다. 이 터미널 세션을 재개하려면 다시 연결하세요.",
-            "reconnectButton": "다시 연결"
+            "reconnectButton": "다시 연결",
+            "signInTitle": "SSH 로그인 대기 중",
+            "signInBody": "호스트에 로그인하면 이 터미널이 자동으로 계속됩니다.",
+            "signInButton": "로그인",
+            "serverRestartingTitle": "{{server}} 다시 시작 중",
+            "serverRestartingBody": "서버가 돌아오면 Orca가 다시 연결하고 터미널도 재개됩니다.",
+            "streamStalledTitle": "터미널이 응답하지 않음",
+            "streamStalledBody": "{{server}}에서 이 터미널의 출력을 더 이상 보내지 않습니다. Orca가 자동으로 다시 연결하고 있습니다.",
+            "sessionEndedTitle": "터미널 다시 연결 중",
+            "sessionEndedBody": "{{server}}에서 이 터미널의 스트림을 닫았습니다. Orca가 자동으로 다시 연결하고 있습니다.",
+            "waitingTitle": "{{server}} 응답 대기 중",
+            "waitingBody": "서버가 이 터미널을 다시 제공하거나 연결이 바뀌면 Orca가 다시 연결합니다. 지금 시도하려면 다시 연결을 누르세요.",
+            "downFor": "연결 끊김 {{duration}}",
+            "tailscaleHint": "Tailscale 경로 확인:",
+            "fallbackServerName": "서버",
+            "connectionLostTitle": "{{server}}에 다시 연결하는 중",
+            "connectionLostBody": "서버와의 연결이 끊겼습니다. Orca가 자동으로 다시 시도하고 있으며, 연결이 복구되면 터미널이 재개됩니다.",
+            "reattachingBody": "Orca가 이 터미널을 {{server}}에 자동으로 다시 연결하고 있습니다."
           },
           "TerminalLinkActionPopover": {
             "openLink": "링크 열기",
@@ -3532,7 +3547,11 @@
             "downloadOpenWithDefaultApp": "기본 앱 다운로드 및 열기",
             "downloadOpenFailed": "'{{value0}}'을(를) 다운로드하지 못했습니다.",
             "openInThisGroup": "이 그룹에서 열기",
-            "openInThisGroupRefused": "이 그룹에서 {{value0}}을(를) 열 수 없습니다"
+            "openInThisGroupRefused": "이 그룹에서 {{value0}}을(를) 열 수 없습니다",
+            "fileInOtherWorkspace": "이 파일은 {{value0}}에 있습니다",
+            "fileInAnotherWorkspace": "이 파일은 다른 워크스페이스에 있습니다",
+            "openInOwningWorkspace": "거기서 열기",
+            "openedHereReadOnly": "여기서는 읽기 전용으로 열렸습니다"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "호스트를 사용할 수 없음",
@@ -3542,12 +3561,15 @@
             "restoring": "터미널 복원 중…"
           },
           "AgentLaunchPaneNotice": {
-            "commandNotFound": "이 컴퓨터에서 명령을 찾을 수 없습니다.",
+            "agent": "에이전트",
+            "commandNotFound": "이 컴퓨터에서 명령을 찾을 수 없어 {{agent}} 시작에 실패했습니다.",
             "copyPrompt": "프롬프트 복사",
-            "exitedDuringStart": "시작하는 중에 종료되었습니다.",
-            "notStarted": "에이전트를 시작하지 못했습니다.",
-            "unconfirmed": "에이전트가 시작되었는지 확인하지 못했습니다.",
-            "workspaceGone": "작업 공간을 더 이상 사용할 수 없습니다."
+            "exitedDuringStart": "{{agent}} 시작 중 종료되었습니다.",
+            "notStarted": "{{agent}} 시작에 실패했습니다.",
+            "restoreWorkspace": "워크스페이스 폴더를 복원하거나 사용 가능한 워크스페이스를 연 다음 다시 시도하세요.",
+            "tryInTerminal": "이 폴더의 터미널에서 실행하여 원인을 확인한 후 다시 시도하세요.",
+            "unconfirmed": "{{agent}} 시작 여부를 확인할 수 없습니다. 다시 시도하기 전에 터미널을 확인하세요.",
+            "workspaceGone": "워크스페이스를 더 이상 사용할 수 없어 {{agent}} 시작에 실패했습니다."
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "호스트가 예기치 않게 중지되어 자동 복원이 일시 중지되었습니다. 세션이 저장되었습니다.",
@@ -8047,6 +8069,11 @@
           "191ac34567": "에이전트 오케스트레이션",
           "nestedWorkerDepthTitle": "하위 에이전트 최대 생성 단계",
           "nestedWorkerDepthDescription": "하위 에이전트를 몇 단계까지 생성할 수 있는지 설정합니다. 1이면 조율 에이전트만 하위 에이전트를 생성할 수 있고, 생성된 하위 에이전트는 자신의 하위 에이전트를 생성할 수 없습니다.",
+          "chatErrorEscalationTitle": "채팅 오류를 코디네이터에게 알리기",
+          "chatErrorEscalationDescription": "할당된 에이전트가 턴을 끝내는 오류를 만나면 그 오류를 그대로 할당한 코디네이터에게 보냅니다. 작업은 에이전트에게 계속 할당됩니다. 채팅 UI에서 실행되는 에이전트에서만 작동합니다.",
+          "chatErrorEscalationNeedsChat": "사용하려면 실험적 기능 설정에서 채팅 UI를 켜세요.",
+          "chatErrorEscalationKeywordError": "오류",
+          "chatErrorEscalationKeywordChat": "채팅",
           "7bc082f4de": "설치 명령 복사"
         },
         "OrchestrationSetupCard": {
@@ -9674,6 +9701,11 @@
               "modifier": "수정자",
               "invert": "반전",
               "opposite": "반대"
+            },
+            "linkRoutingBackground": {
+              "background": "백그라운드",
+              "focus": "포커스",
+              "tab": "탭"
             },
             "72c58f7792": "웹뷰",
             "82ba1c80ea": "로컬호스트",
@@ -11885,6 +11917,10 @@
           "titleOrca": "Shift를 누른 채 클릭하면 Orca에서 열기",
           "descriptionSystem": "링크가 Orca에서 열리므로, {{chord}}+클릭 시 시스템 기본 브라우저에서 대신 열립니다.",
           "descriptionOrca": "링크가 시스템 기본 브라우저에서 열립니다. 활성화하면 {{chord}}+클릭 시 Orca 내장 브라우저에서 대신 열립니다."
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "링크를 백그라운드에서 열기",
+          "description": "터미널, 채팅, 마크다운의 링크를 클릭한 위치에서 포커스를 옮기지 않고 브라우저에서 엽니다."
         },
         "PluginConsentDialog": {
           "workerTrust": "백그라운드 워커 — 자체 프로세스 실행",
@@ -15905,6 +15941,7 @@
           "6c4f1a8d2e": "체크 세부 정보를 사용할 수 없습니다."
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "읽기 전용",
           "fb8331694e": "측면으로 미리보기 열기",
           "4157f3cbf3": "Markdown 미리보기 열기",
           "269ce4842b": "상대 경로 복사",
@@ -18482,6 +18519,7 @@
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "워크스페이스가 원격 Orca 호스트에 연결되어 있지 않습니다.",
+        "splitSourceUnpublished": "창을 분할하지 못했습니다: 호스트에서 터미널이 아직 시작되지 않았습니다.",
         "terminalCreateUnconfirmed": "Orca가 호스트에서 새 터미널이 열렸는지 확인할 수 없습니다."
       },
       "gitlabJobTraceClient": {
@@ -19700,7 +19738,8 @@
     "jiraUserPicker": {
       "select": "{{value0}}을(를) 선택하세요",
       "search": "사용자 검색",
-      "empty": "사용자를 찾을 수 없습니다."
+      "empty": "사용자를 찾을 수 없습니다.",
+      "useKnownId": "알고 있는 사용자 ID \"{{value0}}\" 사용"
     },
     "status": {
       "bar": {

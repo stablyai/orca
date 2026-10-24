@@ -84,7 +84,7 @@ describe('registerPtyHandlers', () => {
       const rawReadyListener = readyCall[1] as (event: unknown) => void
       vi.advanceTimersByTime(1)
 
-      // Why: a straggler handshake from a dying window must not reopen the gate (or trigger the destructive reconcile) for the new page.
+      // A dying page's handshake must not reopen or reconcile the replacement page's gate.
       handleRendererLoading()
       mainWindow.webContents.send.mockClear()
       rawReadyListener({ sender: { isDestroyed: () => false } })
@@ -95,7 +95,6 @@ describe('registerPtyHandlers', () => {
         rendererPtyDispatcherReady: false
       })
 
-      // The genuine main-window handshake still opens the gate and drains.
       rawReadyListener({ sender: mainWindow.webContents })
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -121,7 +120,7 @@ describe('registerPtyHandlers', () => {
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
       vi.advanceTimersByTime(1)
 
-      // A timely handshake must cancel the reload watchdog so no orphaned ~10s timer lingers (forced-count guard can't catch it — the watchdog no-ops once ready).
+      // Assert timer cleanup too: an orphaned watchdog can no-op without incrementing forced-ready.
       handleRendererLoading()
       handleRendererDispatcherReady()
       vi.advanceTimersByTime(0)
@@ -131,7 +130,6 @@ describe('registerPtyHandlers', () => {
         rendererDispatcherReadyForcedCount: 0
       })
 
-      // Advancing well past the watchdog window leaves the forced counter at zero.
       vi.advanceTimersByTime(20_000)
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererPtyDispatcherReady: true,
@@ -154,15 +152,13 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(1)
       expect(vi.getTimerCount()).toBe(0)
 
-      // A reload closes the gate and arms the ~10s self-heal watchdog on THIS registration's closure.
       handleRendererLoading()
       expect(vi.getTimerCount()).toBe(1)
 
-      // Re-registering must cancel the prior closure's watchdog (cross-registration bridge) or it later force-opens a dead window's gate.
+      // Re-registration must cancel the outgoing closure's watchdog before it can reopen the old gate.
       registerPtyHandlers(mainWindow as never)
       expect(vi.getTimerCount()).toBe(0)
 
-      // And no orphaned ~10s watchdog fires later (removing the bridge cancel turns this red).
       vi.advanceTimersByTime(20_000)
       expect(vi.getTimerCount()).toBe(0)
     } finally {
@@ -266,9 +262,7 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Answered in the query's own turn. A cooked tty echoes the reply as well as
-      // delivering it, and the echo is contained by the output-side projections (#12112);
-      // withholding the write is what let replies overtake each other (#15559).
+      // Reply in the query's turn to preserve order; output projections contain cooked-tty echo (#12112, #15559).
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
@@ -306,7 +300,6 @@ describe('registerPtyHandlers', () => {
       const sourceData = '\x1b]10;?;?\x1b\\ready'
       mockProc.emitData(sourceData)
 
-      // Both slots of a duplicate-slot query are answered in that same turn.
       expect(mockProc.proc.write).toHaveBeenCalledTimes(2)
       vi.advanceTimersByTime(2)
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')

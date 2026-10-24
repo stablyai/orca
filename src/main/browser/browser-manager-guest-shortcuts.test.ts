@@ -284,6 +284,15 @@ describe('browserManager', () => {
         control: !isDarwin,
         alt: false,
         shift: true
+      },
+      {
+        type: 'keyDown',
+        code: isDarwin ? 'KeyY' : 'KeyH',
+        key: isDarwin ? 'y' : 'h',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
       }
     ]
 
@@ -309,6 +318,9 @@ describe('browserManager', () => {
       browserPageId: 'browser-1'
     })
     expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage', {
+      browserPageId: 'browser-1'
+    })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(11, 'ui:showBrowserHistory', {
       browserPageId: 'browser-1'
     })
   })

@@ -11,9 +11,11 @@ import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'
  */
 export function AgentLaunchPaneNotice({
   refusal,
+  agentId,
   tabId
 }: {
   refusal: AgentLaunchPaneOutcome
+  agentId?: string | null
   tabId: string
 }): React.JSX.Element {
   const prompt = agentLaunchPanePrompt(tabId)
@@ -22,7 +24,7 @@ export function AgentLaunchPaneNotice({
       data-agent-launch-pane-notice={refusal.kind}
       className="pointer-events-auto absolute inset-x-3 bottom-3 z-50 flex items-start justify-between gap-3 rounded-md border border-border bg-popover px-3.5 py-2.5 text-xs text-popover-foreground"
     >
-      <span className="min-w-0">{agentLaunchPaneNoticeText(refusal)}</span>
+      <span className="min-w-0">{agentLaunchPaneNoticeText(refusal, agentId)}</span>
       {prompt ? (
         <Button
           variant="outline"
@@ -42,11 +44,13 @@ export function AgentLaunchPaneNotice({
 /** The notice in the active pane, when that pane's error is a launch's. */
 export function AgentLaunchPaneNoticePortal({
   refusal,
+  agentId,
   isActive,
   pane,
   tabId
 }: {
   refusal: AgentLaunchPaneOutcome | null
+  agentId?: string | null
   isActive: boolean
   pane: { id: number; container: HTMLElement } | null | undefined
   tabId: string
@@ -55,7 +59,7 @@ export function AgentLaunchPaneNoticePortal({
     return null
   }
   return createPortal(
-    <AgentLaunchPaneNotice refusal={refusal} tabId={tabId} />,
+    <AgentLaunchPaneNotice refusal={refusal} agentId={agentId} tabId={tabId} />,
     pane.container,
     `agent-launch-pane-notice-${pane.id}`
   )

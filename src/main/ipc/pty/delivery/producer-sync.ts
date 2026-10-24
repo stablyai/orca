@@ -20,8 +20,7 @@ export function syncPtyBackgroundedDelivery(
   id: string,
   caller: string
 ): void {
-  // Why runtime-owned: a runtime background spawn has no pane to report visibility, but must pace
-  // like a renderer hidden-at-spawn PTY; any visible report still wins.
+  // Runtime spawns have no visibility reporter; pace them as hidden unless a renderer reports visible.
   const knownHidden =
     session.rendererPtyIsKnownHidden(id) ||
     (isRuntimeOwnedHiddenRendererPty(id) && !visibleRendererPtys.has(id))
@@ -45,7 +44,7 @@ export function syncPtyBackgroundedDelivery(
   try {
     provider.setPtyBackgrounded(id, background)
   } catch (error) {
-    // Why: a recorded state the provider never took would short-circuit every later sync for this PTY.
+    // Roll back failed provider changes so later syncs retry instead of trusting an unapplied state.
     if (previous === undefined) {
       session.backgroundedDeliverySyncByPty.delete(id)
     } else {

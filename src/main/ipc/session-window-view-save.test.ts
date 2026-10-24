@@ -89,7 +89,7 @@ describe('a window save in a layout-owner build', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
     store = createStore()
-    // Main's reconnect facts are pinned elsewhere (window-save-reconnect-facts.test.ts): kept as saved.
+    // Reconnect facts are covered separately in window-save-reconnect-facts.test.ts.
     const runtime = {
       shutdownReconnectFactsFor: (session: WorkspaceSessionState) => ({
         activeWorktreeIdsOnShutdown: session.activeWorktreeIdsOnShutdown,
@@ -137,7 +137,6 @@ describe('a window save in a layout-owner build', () => {
 
     const layout = store.getWorkspaceSession('local').terminalLayoutsByTabId['tab-a']
     expect(layout?.root).toEqual(mainSession().terminalLayoutsByTabId['tab-a']!.root)
-    // The Store moves a saved buffer into a scrollback snapshot.
     expect(Object.keys(layout?.scrollbackRefsByLeafId ?? {})).toEqual([leaf(1)])
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
   })

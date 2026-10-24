@@ -4,7 +4,6 @@ import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -20,6 +19,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { useSortableTabRename } from './use-sortable-tab-rename'
+import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { translate } from '@/i18n/i18n'
@@ -159,6 +159,15 @@ export default function SortableTab({
     customTitle: tab.customTitle,
     onSetCustomTitle
   })
+  const { renameOwnerRef, onRenameKeyDown } = useTabRenameReturnFocus({
+    commitRename,
+    cancelRename,
+    tabId: tab.id,
+    unifiedTabId,
+    worktreeId: tab.worktreeId,
+    groupId,
+    isNativeChat: nativeChat !== undefined
+  })
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
@@ -267,19 +276,7 @@ export default function SortableTab({
           )}
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
-          onKeyDown={(event) => {
-            // Why: an Enter confirming a CJK IME candidate must not commit the rename; wait for a non-composition Enter.
-            if (isImeCompositionKeyDown(event)) {
-              return
-            }
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              commitRename()
-            } else if (event.key === 'Escape') {
-              event.preventDefault()
-              cancelRename()
-            }
-          }}
+          onKeyDown={onRenameKeyDown}
           // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => {
@@ -363,6 +360,7 @@ export default function SortableTab({
   return (
     <>
       <div
+        ref={renameOwnerRef}
         {...slotProps}
         onContextMenuCapture={(event) => {
           // The hover card is portalled: React still routes its events through this slot.

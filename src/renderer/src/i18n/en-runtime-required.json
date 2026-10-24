@@ -1409,6 +1409,10 @@
           "274af61bc0": "system",
           "d3756cf5bc": "disabled"
         },
+        "OrchestrationPane": {
+          "chatErrorEscalationKeywordChat": "chat",
+          "chatErrorEscalationKeywordError": "error"
+        },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
@@ -2612,7 +2616,9 @@
             "f7c3d7d5af": "Split Right"
           },
           "QuickLaunchButton": {
-            "chatLoading": "Checking chat support…"
+            "chatLoading": "Checking chat support…",
+            "hostUnreachable": "Can’t reach this workspace’s host to list its agents",
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
           },
           "SortableTabContextMenu": {
             "0ce4bae39d": "Split Left",

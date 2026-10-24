@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { JiraPriority } from '../../../shared/jira-types'
+import type { JiraPriority } from '../../../shared/jira/jira-types'
 import { useTaskPageJiraListState } from './use-task-page-jira-list-state'
 
 const transport = vi.hoisted(() => ({ priorities: vi.fn() }))

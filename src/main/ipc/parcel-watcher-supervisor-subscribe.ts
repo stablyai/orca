@@ -1,13 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { sendToWatcherChild } from './parcel-watcher-child-messaging'
+import { sendToWatcherChild } from './filesystem/watcher-process/parcel-watcher-child-messaging'
 import { createHostWatcherSubscription } from './parcel-watcher-host-subscriptions'
 import type { PendingWatcherUnsubscribe } from './parcel-watcher-host-subscriptions'
 import { subscribeWithInProcessWatcher } from './parcel-watcher-in-process-fallback'
 import {
   installPendingSubscribeControls,
   resetPendingSubscribeAttempt
-} from './parcel-watcher-pending-subscribe'
+} from './filesystem/watcher-process/parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import { rewriteWatcherEvents, resolveWatcherRootPaths } from './watcher-event-root-path-rewrite'
 import type {
@@ -97,15 +97,11 @@ export function subscribeThroughWatcherSupervisor({
       )
     )
   }
-  // Why: a symlinked or differently-cased root is unwatchable on Linux
-  // (IN_ONLYDIR) and misreported on macOS (FSEvents canonicalizes). Watch the
-  // resolved directory, then restore the caller's spelling on the way out --
-  // this is the one boundary every desktop, runtime, and relay watch passes.
+  // Watch the resolved directory, then restore caller spelling for desktop/runtime/relay paths; native backends reject or canonicalize aliases.
   const { watchRoot, rewriteEventPath } = resolveWatcherRootPaths(dir)
   const callback: WatcherProcessCallback = (error, events) =>
     rawCallback(error, rewriteWatcherEvents(events, rewriteEventPath))
-  // Why: under Vitest we cannot fork a real watcher child, so exercise the
-  // subscription path in-process (against mocked @parcel/watcher) instead.
+  // Vitest mocks Parcel in-process instead of forking a watcher child.
   if (process.env.VITEST && useInProcessVitestFallback) {
     return subscribeWithInProcessWatcher(watchRoot, callback, opts, hooks)
   }

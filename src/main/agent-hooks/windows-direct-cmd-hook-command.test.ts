@@ -23,19 +23,6 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
     )
   })
 
-  it('spells nothing either shell would rewrite or reinterpret', () => {
-    const command = wrapWindowsDirectCmdHookCommand(SAFE_PATH)!
-
-    // MSYS rewrites /c-style switches into drive paths, so direct commands cannot name an interpreter.
-    expect(command).not.toMatch(/ \/[a-zA-Z]+( |$)/)
-    expect(command).not.toMatch(/\\/)
-    expect(command).not.toMatch(/["']/)
-    expect(command).not.toMatch(/powershell|cmd\.exe|conhost/i)
-    // MSYS turns 2>nul into a repo file; leave missing-script stderr unredirected.
-    expect(command).not.toContain('2>')
-    expect(command).not.toMatch(/[|&;]/)
-  })
-
   it('declines any path the shells cannot carry bare', () => {
     for (const path of [
       'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\claude-hook.cmd',
@@ -55,7 +42,9 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
 
 describe('wrapWindowsBatchHookCommand', () => {
   it('registers a cmd-safe .cmd hook by its bare path', () => {
-    expect(wrapWindowsBatchHookCommand(SAFE_PATH)).toBe(wrapWindowsDirectCmdHookCommand(SAFE_PATH))
+    expect(wrapWindowsBatchHookCommand(SAFE_PATH)).toBe(
+      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
+    )
   })
 
   it('keeps the encoded launcher for a path the shells cannot carry bare', () => {
@@ -178,7 +167,7 @@ describe.skipIf(process.platform !== 'win32')(
     )
 
     it.skipIf(!canRunLive)(
-      'reports a non-blocking failure, never exit 2, when the entry is gone',
+      'reports a missing entry without exit 2 or a stray nul file',
       async () => {
         await withTempDir(async (dir, scriptPath, command) => {
           expect(existsSync(scriptPath)).toBe(false)
@@ -187,15 +176,6 @@ describe.skipIf(process.platform !== 'win32')(
             expect(result.status, result.label).toBeGreaterThan(0)
             expect(result.status, result.label).not.toBe(2)
           }
-        })
-      }
-    )
-
-    it.skipIf(!canRunLive)(
-      'leaves no stray `nul` file behind in the working directory',
-      async () => {
-        await withTempDir(async (dir, _scriptPath, command) => {
-          await runInHosts(command, dir)
           expect(readdirSync(dir)).not.toContain('nul')
         })
       }

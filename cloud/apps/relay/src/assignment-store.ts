@@ -148,6 +148,8 @@ export type AssignOptions = {
   placeFresh?: () => Promise<RelayAssignment | null>
   // A reserve cell in the placement region with room: the database lane leaves the region only after it.
   regionReserve?: () => Promise<RelayAssignment | null>
+  // No database cell had room anywhere: a reserve seat in either region before the refusal.
+  reserveSpill?: (input: { skipOwnRegion: boolean; rowEpoch: number }) => Promise<RelayAssignment | null>
   hostRequested?: boolean
 }
 
@@ -188,6 +190,9 @@ export type RelayAssignment = AssignmentIdentity & {
   leaseExpiresAt: number
   region?: RelayRegion
 }
+
+// `placed`: this assign minted the answer (a new epoch or a reserve booking); absent for the existing row.
+export type AssignedRelayAssignment = RelayAssignment & { placed?: true }
 
 // Set only by reconnect verification, for a host whose home cell is isolated for
 // a roll right now: its next assign re-places it rather than re-granting the pin.
@@ -291,22 +296,14 @@ export type CellEvacuationCapacity = {
   availableTargetUnits: number
 }
 
-export type CellDeploymentStatus = {
+// Rows the cell heartbeats itself: true in either admit mode.
+export type CellDeploymentBaseStatus = {
   cellId: string
   cellUrl: string
   region: RelayRegion
   enabled: boolean
   admissionState: CellAdmissionState
   capacityRequests: number
-  reservedRequests: number
-  assignments: number
-  activityLeases: number
-  activityRequestUnits: number
-  restartBlockingActivityLeases: number
-  restartBlockingActivityRequestUnits: number
-  restartBlockingReservedRequests: number
-  outgoingMigrations: number
-  incomingMigrations: number
   connectionCapacity: null | {
     hardCap: number
     controlRebindReserve: number
@@ -331,6 +328,25 @@ export type CellDeploymentStatus = {
     regionalRehomeProtocol: number
   }
 }
+
+// Per-host rows: a reserve-mode cell's are a lagging mirror, so they are never reported for one.
+export type CellPerHostCounts = {
+  reservedRequests: number
+  assignments: number
+  activityLeases: number
+  activityRequestUnits: number
+  restartBlockingActivityLeases: number
+  restartBlockingActivityRequestUnits: number
+  restartBlockingReservedRequests: number
+  outgoingMigrations: number
+  incomingMigrations: number
+}
+
+export type CellDeploymentStatus = CellDeploymentBaseStatus & CellPerHostCounts
+
+export type ReserveAwareCellDeploymentStatus =
+  | { admitMode: 'db'; status: CellDeploymentStatus }
+  | { admitMode: 'reserve'; status: CellDeploymentBaseStatus }
 
 export type CellFenceAttemptEvidence = {
   attemptId: string
@@ -545,6 +561,15 @@ class AssignmentRegionFull extends Error {
   // Set when the host is leaving a roll-isolated cell in that region.
   constructor(readonly isolatedSource?: { cellId: string; region: RelayRegion }) {
     super('assignment_region_full')
+  }
+}
+
+// No database cell anywhere had room; nothing was written. Same message, so callers and
+// the public answer are unchanged.
+class AssignmentCapacityExhausted extends Error {
+  // The host row's epoch read in that attempt (0 for none): a reserve spill mints above it.
+  constructor(readonly rowEpoch: number) {
+    super('relay_capacity_exhausted')
   }
 }
 
@@ -1015,21 +1040,13 @@ export class RelayAssignmentStore {
     // Step 5: a fresh placement may first be booked on a reserve-mode cell, outside any
     // transaction; and a database mint stays above every epoch the director's map knew.
     step5: AssignOptions = {}
-  ): Promise<RelayAssignment> {
+  ): Promise<AssignedRelayAssignment> {
     const sticky = await this.assignStickyWithLockRetry(identity, lockMode, preferredRegion)
     if (sticky && !('isolatedFrom' in sticky)) return sticky
     let isolatedFrom = sticky?.isolatedFrom
-    // Off a roll-isolated cell: the canary counts the move whichever pool takes it, and a
-    // throttled reserve cell is no room, so the drain does not wait on reserve intake.
-    const bookReserve = async (book: () => Promise<RelayAssignment | null>) => {
-      let reserved: RelayAssignment | null
-      try {
-        reserved = await book()
-      } catch (error) {
-        if (!(isolatedFrom && error instanceof ReservePaceError)) throw error
-        reserved = null
-      }
-      if (reserved && isolatedFrom) {
+    // Off a roll-isolated cell: the canary counts the move whichever pool takes it.
+    const reservedOn = (reserved: RelayAssignment) => {
+      if (isolatedFrom) {
         console.warn(
           JSON.stringify({
             event: 'orca_relay_sticky_replaced_off_isolated_cell',
@@ -1042,7 +1059,20 @@ export class RelayAssignmentStore {
           })
         )
       }
-      return reserved
+      return { ...reserved, placed: true as const }
+    }
+    // A throttled reserve cell is no room, so the drain does not wait on reserve intake.
+    const bookReserve = async (book: () => Promise<RelayAssignment | null>) => {
+      let reserved: RelayAssignment | null
+      try {
+        reserved = await book()
+      } catch (error) {
+        if (!(isolatedFrom && error instanceof ReservePaceError)) {
+          throw error
+        }
+        reserved = null
+      }
+      return reserved && reservedOn(reserved)
     }
     const booked = step5.placeFresh ? await bookReserve(step5.placeFresh) : null
     if (booked) return booked
@@ -1062,15 +1092,32 @@ export class RelayAssignmentStore {
             keepRegion
           )
       )
+    // Its own catch: bookReserve would turn an isolated host's pace into a refusal here.
+    const placeOrSpill = async (skipOwnRegion: boolean) => {
+      try {
+        return await placeOnDatabase(false)
+      } catch (error) {
+        if (!(error instanceof AssignmentCapacityExhausted) || !step5.reserveSpill) {
+          throw error
+        }
+        const spilled = await step5.reserveSpill({ skipOwnRegion, rowEpoch: error.rowEpoch })
+        if (!spilled) {
+          throw error
+        }
+        return reservedOn(spilled)
+      }
+    }
     const regionReserve = step5.regionReserve
-    if (!regionReserve) return await placeOnDatabase(false)
+    if (!regionReserve) {
+      return await placeOrSpill(false)
+    }
     try {
       return await placeOnDatabase(true)
     } catch (error) {
       if (!(error instanceof AssignmentRegionFull)) throw error
       isolatedFrom ??= error.isolatedSource
     }
-    return (await bookReserve(regionReserve)) ?? (await placeOnDatabase(false))
+    return (await bookReserve(regionReserve)) ?? (await placeOrSpill(true))
   }
 
   private async assignStickyWithLockRetry(
@@ -1092,7 +1139,7 @@ export class RelayAssignmentStore {
     epochFloor = 0,
     hostRequested = false,
     keepRegion = false
-  ): Promise<RelayAssignment> {
+  ): Promise<AssignedRelayAssignment> {
     const deadline = Date.now() + ASSIGNMENT_LOCK_RETRY_DEADLINE_MS
     let inventoryScope: AssignmentInventoryScope = 'none'
     while (true) {
@@ -1386,7 +1433,7 @@ export class RelayAssignmentStore {
     hostRequested = false,
     // Refuse to spill out of placementRegion: AssignmentRegionFull instead.
     keepRegion = false
-  ): Promise<RelayAssignment> {
+  ): Promise<AssignedRelayAssignment> {
     const now = this.now()
     // An isolated retry takes its tier's rows before anything reassigns this,
     // so a lock timeout there must retry the same tier, not fall to 'all'.
@@ -1654,7 +1701,9 @@ export class RelayAssignmentStore {
           keepRegion ? 'require' : 'prefer'
         ))
       if (!target) {
-        throw keepRegion ? new AssignmentRegionFull() : new Error('relay_capacity_exhausted')
+        throw keepRegion
+          ? new AssignmentRegionFull()
+          : new AssignmentCapacityExhausted(existing ? integer(existing, 'assignment_epoch') : 0)
       }
       if (deadReserveSource) {
         events.push(
@@ -1771,7 +1820,7 @@ export class RelayAssignmentStore {
         now
       )
       return {
-        assignment: { ...identity, ...target, assignmentEpoch, leaseExpiresAt },
+        assignment: { ...identity, ...target, assignmentEpoch, leaseExpiresAt, placed: true as const },
         events
       }
     }).catch((error: unknown) => {
@@ -3897,63 +3946,41 @@ export class RelayAssignmentStore {
   // Its host counts here are stale for a reserve-mode cell, so tooling must not read it as empty.
   async cellDeploymentStatus(cellId: string): Promise<CellDeploymentStatus> {
     await this.refuseReserveCell(cellId)
+    const base = await this.cellDeploymentBaseStatus(cellId)
+    return { ...base, ...(await this.cellPerHostCounts(cellId)) }
+  }
+
+  // For tooling that knows a reserve-mode cell: it gets no per-host counts, rather than stale ones.
+  async reserveAwareCellDeploymentStatus(cellId: string): Promise<ReserveAwareCellDeploymentStatus> {
+    const reserveCells = await this.reserveModeCells()
+    if (reserveCells === null) throw new RelayCellInReserveModeError(null)
+    const base = await this.cellDeploymentBaseStatus(cellId)
+    if (reserveCells.has(cellId)) return { admitMode: 'reserve', status: base }
+    return { admitMode: 'db', status: { ...base, ...(await this.cellPerHostCounts(cellId)) } }
+  }
+
+  private async cellDeploymentBaseStatus(cellId: string): Promise<CellDeploymentBaseStatus> {
     const cellRow = (
       await this.database.query(
-        `WITH activity AS (
-           SELECT COUNT(*) AS activity_lease_count,
-             COALESCE(SUM(request_units), 0) AS activity_request_units,
-             COALESCE(SUM(CASE WHEN activity_kind = 'control'
-                                    AND activity_id LIKE 'control-pending:%'
-                                    AND request_units = 1
-                               THEN 1 ELSE 0 END), 0) AS pending_control_units
-           FROM relay_assignment_activity_leases WHERE cell_id = ?
-         )
-         SELECT cell.*, runtime.cell_url AS runtime_cell_url,
+        `SELECT cell.*, runtime.cell_url AS runtime_cell_url,
            admission.admission_state,
            runtime.cell_incarnation AS runtime_cell_incarnation,
            runtime.started_at AS runtime_started_at, runtime.ready AS runtime_ready,
            runtime.observed_requests AS runtime_observed_requests,
            runtime.last_heartbeat_at AS runtime_last_heartbeat_at,
            COALESCE(capabilities.regional_rehome_protocol, 0)
-             AS runtime_regional_rehome_protocol,
-           activity.activity_lease_count, activity.activity_request_units,
-           activity.activity_lease_count - activity.pending_control_units
-             AS restart_blocking_activity_leases,
-           activity.activity_request_units - activity.pending_control_units
-             AS restart_blocking_activity_request_units,
-           cell.reserved_requests - activity.pending_control_units
-             AS restart_blocking_reserved_requests
+             AS runtime_regional_rehome_protocol
          FROM relay_cells cell
-         CROSS JOIN activity
          LEFT JOIN relay_cell_admission admission ON admission.cell_id = cell.cell_id
          LEFT JOIN relay_cell_runtime runtime ON runtime.cell_id = cell.cell_id
          LEFT JOIN relay_cell_capabilities capabilities
            ON capabilities.cell_id = runtime.cell_id
           AND capabilities.cell_incarnation = runtime.cell_incarnation
          WHERE cell.cell_id = ?`,
-        [cellId, cellId]
+        [cellId]
       )
     )[0]
     if (!cellRow) throw new Error('cell_not_found')
-    const assignmentRow = (
-      await this.database.query(
-        `SELECT COUNT(*) AS assignment_count FROM relay_assignments WHERE cell_id = ?`,
-        [cellId]
-      )
-    )[0]!
-    const migrationRow = (
-      await this.database.query(
-        `SELECT
-           COALESCE(SUM(CASE WHEN source_cell_id = ? THEN 1 ELSE 0 END), 0)
-             AS outgoing_migrations,
-           COALESCE(SUM(CASE WHEN target_cell_id = ? THEN 1 ELSE 0 END), 0)
-             AS incoming_migrations
-         FROM relay_assignment_migrations
-         WHERE completed_at IS NULL AND aborted_at IS NULL
-           AND (source_cell_id = ? OR target_cell_id = ?)`,
-        [cellId, cellId, cellId, cellId]
-      )
-    )[0]!
     const connectionRow = (
       await this.database.query(
         `SELECT limits.hard_cap, limits.unobserved_bound,
@@ -3987,24 +4014,6 @@ export class RelayAssignmentStore {
       enabled: integer(cellRow, 'enabled') === 1,
       admissionState: parseCellAdmissionState(text(cellRow, 'admission_state')),
       capacityRequests: integer(cellRow, 'capacity_requests'),
-      reservedRequests: integer(cellRow, 'reserved_requests'),
-      assignments: integer(assignmentRow, 'assignment_count'),
-      activityLeases: integer(cellRow, 'activity_lease_count'),
-      activityRequestUnits: integer(cellRow, 'activity_request_units'),
-      restartBlockingActivityLeases: integer(
-        cellRow,
-        'restart_blocking_activity_leases'
-      ),
-      restartBlockingActivityRequestUnits: integer(
-        cellRow,
-        'restart_blocking_activity_request_units'
-      ),
-      restartBlockingReservedRequests: integer(
-        cellRow,
-        'restart_blocking_reserved_requests'
-      ),
-      outgoingMigrations: integer(migrationRow, 'outgoing_migrations'),
-      incomingMigrations: integer(migrationRow, 'incoming_migrations'),
       connectionCapacity: connectionRow
           ? {
             hardCap: integer(connectionRow, 'hard_cap'),
@@ -4052,6 +4061,74 @@ export class RelayAssignmentStore {
                 'runtime_regional_rehome_protocol'
               )
             }
+    }
+  }
+
+  private async cellPerHostCounts(cellId: string): Promise<CellPerHostCounts> {
+    const activityRow = (
+      await this.database.query(
+        `WITH activity AS (
+           SELECT COUNT(*) AS activity_lease_count,
+             COALESCE(SUM(request_units), 0) AS activity_request_units,
+             COALESCE(SUM(CASE WHEN activity_kind = 'control'
+                                    AND activity_id LIKE 'control-pending:%'
+                                    AND request_units = 1
+                               THEN 1 ELSE 0 END), 0) AS pending_control_units
+           FROM relay_assignment_activity_leases WHERE cell_id = ?
+         )
+         SELECT cell.reserved_requests,
+           activity.activity_lease_count, activity.activity_request_units,
+           activity.activity_lease_count - activity.pending_control_units
+             AS restart_blocking_activity_leases,
+           activity.activity_request_units - activity.pending_control_units
+             AS restart_blocking_activity_request_units,
+           cell.reserved_requests - activity.pending_control_units
+             AS restart_blocking_reserved_requests
+         FROM relay_cells cell
+         CROSS JOIN activity
+         WHERE cell.cell_id = ?`,
+        [cellId, cellId]
+      )
+    )[0]
+    if (!activityRow) throw new Error('cell_not_found')
+    const assignmentRow = (
+      await this.database.query(
+        `SELECT COUNT(*) AS assignment_count FROM relay_assignments WHERE cell_id = ?`,
+        [cellId]
+      )
+    )[0]!
+    const migrationRow = (
+      await this.database.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN source_cell_id = ? THEN 1 ELSE 0 END), 0)
+             AS outgoing_migrations,
+           COALESCE(SUM(CASE WHEN target_cell_id = ? THEN 1 ELSE 0 END), 0)
+             AS incoming_migrations
+         FROM relay_assignment_migrations
+         WHERE completed_at IS NULL AND aborted_at IS NULL
+           AND (source_cell_id = ? OR target_cell_id = ?)`,
+        [cellId, cellId, cellId, cellId]
+      )
+    )[0]!
+    return {
+      reservedRequests: integer(activityRow, 'reserved_requests'),
+      assignments: integer(assignmentRow, 'assignment_count'),
+      activityLeases: integer(activityRow, 'activity_lease_count'),
+      activityRequestUnits: integer(activityRow, 'activity_request_units'),
+      restartBlockingActivityLeases: integer(
+        activityRow,
+        'restart_blocking_activity_leases'
+      ),
+      restartBlockingActivityRequestUnits: integer(
+        activityRow,
+        'restart_blocking_activity_request_units'
+      ),
+      restartBlockingReservedRequests: integer(
+        activityRow,
+        'restart_blocking_reserved_requests'
+      ),
+      outgoingMigrations: integer(migrationRow, 'outgoing_migrations'),
+      incomingMigrations: integer(migrationRow, 'incoming_migrations')
     }
   }
 
@@ -4207,6 +4284,16 @@ export class RelayAssignmentStore {
   private idleRegionalCandidateCursor: IdleRehomeHostCursor = null
   private regionalRehomeSqlFailuresBreach: RegionalRehomeSqlFailuresBreach = null
   private readonly regionalRehomePollTelemetry = new RegionalRehomePollTelemetry()
+
+  // The operator's regional rehome switch, for rehome on reconnect; null without the row.
+  async regionRehomeSwitch(): Promise<{ enabled: boolean; notBefore: number } | null> {
+    const control = (
+      await this.database.query(
+        `SELECT enabled, not_before FROM relay_region_rehome_control WHERE control_id = 'global'`
+      )
+    )[0]
+    return control ? { enabled: Number(control.enabled) === 1, notBefore: Number(control.not_before) } : null
+  }
 
   async selectIdleRegionalRehomeCandidates(
     processSafety?: RegionalRehomeSafetySnapshot

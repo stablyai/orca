@@ -118,10 +118,10 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
     seedPtyRendererDeliveryPeaksFromCurrentState(session)
   })
   setResetRendererDeliveryAccountingForLifecycleReset(() => {
-    // Why lossless: pendingData bytes were bound for the dead page; the replacement repaints from main's authoritative sources, which superset it.
+    // Replacement views restore from main's authoritative history, so dead-page pending delivery can be discarded.
     session.lastLifecycleResetClearedChars = session.rendererInFlightTotalChars
     session.rendererLifecycleResetCount += 1
-    // Why release before clearing: pending bytes and credits belonged to the dead page; releasing producer pauses first keeps no shell wedged.
+    // Resume producers before discarding the dead page's pending bytes and credits.
     session.producerFlowControl.releaseAll()
     session.clearDeliveryResyncProbe()
     session.deliveryResyncUnansweredWarnLogged = false
@@ -130,12 +130,12 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
     session.clearPendingPtyData()
     session.pendingOverflowMarkedPtys.clear()
     session.rendererDeliveryRestoreNeededPtys.clear()
-    // Why hold sends: the reloading page's pty:data listener is gone until it re-registers/handshakes, so bytes would drop into a listener-less page and re-pin the gate.
+    // Hold sends until the replacement dispatcher exists, or dropped sends recreate permanent debt.
     session.rendererPtyDispatcherReady = false
-    // Why: arm the self-heal watchdog so a never-arriving handshake can't hold the gate forever; the real handshake cancels it.
+    // Recover if the readiness handshake never arrives; a real handshake cancels the watchdog.
     session.armDispatcherReadyWatchdog()
   })
-  // Why the bridge: let a later re-registration cancel this closure's watchdog (armed via a hoisted fn, so this assignment can precede its definition).
+  // Re-registration must be able to cancel this closure's readiness watchdog.
   setClearRendererDispatcherReadyWatchdog(session.clearDispatcherReadyWatchdog)
   setInvalidatePendingPtyDrainPriority((id, schedule) =>
     invalidatePendingPtyDrainClassification(session, id, schedule)

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/editor-external-watch-path-index'
 import { isExternalReloadableEditorTab } from '@/components/editor/editor-autosave'
@@ -88,8 +89,9 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync:
   const state = useAppStore.getState()
   const probes: EditTabProbe[] = []
   for (const file of state.openFiles) {
+    const ownerScope = openFileOwnerScope(file, state)
     if (
-      file.worktreeId !== target.worktreeId ||
+      ownerScope.worktreeId !== target.worktreeId ||
       getOpenFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
       !isExternalReloadableEditorTab(file)
     ) {
@@ -114,7 +116,7 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync:
     const notification: EditorExternalWatchNotification = {
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
-      relativePath: file.relativePath,
+      relativePath: ownerScope.relativePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
       ...getLocalWindowsWslAliasOption(target)
     }

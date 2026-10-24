@@ -13,8 +13,6 @@ export type AndroidBootOptions = {
   sleep: (ms: number) => Promise<void>
 }
 
-// Returns the running adb serial for a device/AVD, booting the AVD (detached)
-// and polling sys.boot_completed when it is not already running.
 export async function bootAndroidDevice(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
@@ -29,8 +27,7 @@ export async function bootAndroidDevice(
   if (existing) {
     return existing
   }
-  // Validate the target is a real AVD before spawning, so a stale/offline serial
-  // doesn't launch an invalid `-avd` and burn the full boot timeout.
+  // Reject stale serials before launching an invalid AVD and waiting out the boot timeout.
   const avds = parseAvdList((await runner(sdk.emulator, listAvdsArgs)).stdout)
   if (!avds.includes(deviceOrName)) {
     throw new EmulatorError(
@@ -43,19 +40,13 @@ export async function bootAndroidDevice(
   return waitForNewBootedSerial(runner, sdk, deviceOrName, known, options)
 }
 
-// Launches the emulator with spawn (NOT the command runner: execFile would kill
-// the long-running, verbose emulator at its timeout / stdout maxBuffer). It is
-// NOT detached: DETACHED_PROCESS gives the console-subsystem emulator no console,
-// so it (and its qemu/netsim children) pop their own visible one. windowsHide
-// gives it a hidden console instead; unref lets the app exit without waiting, and
-// managed emulators are shut down on quit anyway. -no-window keeps it headless.
+// Use an unrefed, hidden spawn: detached Windows emulators open consoles; execFile bounds long-running output.
 function launchAvd(emulatorPath: string, avdName: string): void {
   const child = spawn(emulatorPath, [...bootAvdArgs(avdName), '-no-window'], {
     stdio: 'ignore',
     windowsHide: true
   })
-  // An unhandled 'error' (ENOENT/EACCES) on a ChildProcess crashes the main
-  // process; swallow + log it so the boot wait surfaces a timeout instead.
+  // Handle spawn errors here so the boot poll reports failure instead of crashing main.
   child.on('error', (error) => emulatorProbeError('emulator.launch.fail', error, { avdName }))
   child.unref()
 }

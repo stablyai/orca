@@ -1,6 +1,6 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
