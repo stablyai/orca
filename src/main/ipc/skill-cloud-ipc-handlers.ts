@@ -14,6 +14,7 @@ import {
 import { SkillRemoteInstallCancellation } from '../skills/skill-remote-install-cancellation'
 import { classifySkillCloudInstallTarget } from '../skills/skill-cloud-install-target'
 import { assertSkillCloudGrantVersion } from '../skills/skill-cloud-grant-version'
+import { authorizeSkillDownload } from '../skills/skill-install-operation-error'
 import { SkillSharePreparationService } from '../skills/skill-share-preparation-service'
 import {
   supportsSkillRuntimeBundleInstall,
@@ -152,10 +153,12 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillDownloadGrant(input.shareId, {
-      versionId: input.versionId,
-      installTarget
-    })
+    const grant = await authorizeSkillDownload(() =>
+      runtime.createSkillDownloadGrant(input.shareId, {
+        versionId: input.versionId,
+        installTarget
+      })
+    )
     if (grant.status === 'ok') {
       assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
@@ -174,10 +177,12 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillDownloadGrant(input.shareId, {
-      versionId: input.versionId,
-      installTarget
-    })
+    const grant = await authorizeSkillDownload(() =>
+      runtime.createSkillDownloadGrant(input.shareId, {
+        versionId: input.versionId,
+        installTarget
+      })
+    )
     if (grant.status === 'ok') {
       assertSkillCloudGrantVersion(grant.value, input.versionId)
       sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'installing' })
@@ -199,10 +204,10 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillPackageVersionDownloadGrant(
-      input.packageId,
-      input.versionId,
-      { installTarget }
+    const grant = await authorizeSkillDownload(() =>
+      runtime.createSkillPackageVersionDownloadGrant(input.packageId, input.versionId, {
+        installTarget
+      })
     )
     if (grant.status === 'ok') {
       assertSkillCloudGrantVersion(grant.value, input.versionId)
@@ -222,10 +227,10 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillPackageVersionDownloadGrant(
-      input.packageId,
-      input.versionId,
-      { installTarget }
+    const grant = await authorizeSkillDownload(() =>
+      runtime.createSkillPackageVersionDownloadGrant(input.packageId, input.versionId, {
+        installTarget
+      })
     )
     if (grant.status === 'ok') {
       assertSkillCloudGrantVersion(grant.value, input.versionId)
