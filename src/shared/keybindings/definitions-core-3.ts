@@ -218,8 +218,8 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'terminal', 'copy', 'selection'],
     defaultBindings: {
       darwin: ['Mod+C'],
-      linux: ['Ctrl+Shift+C', 'Ctrl+C'],
-      win32: ['Ctrl+Shift+C', 'Ctrl+C']
+      linux: ['Ctrl+Shift+C', 'Ctrl+C', 'Ctrl+Insert'],
+      win32: ['Ctrl+Shift+C', 'Ctrl+C', 'Ctrl+Insert']
     }
   },
   {

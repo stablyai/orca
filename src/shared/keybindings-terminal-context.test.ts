@@ -163,11 +163,25 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it.each(['linux', 'win32'] as const)(
+    'copies the terminal selection on Ctrl+Insert on %s',
+    (platform) => {
+      expect(
+        keybindingMatchesAction(
+          'terminal.copySelection',
+          { key: 'Insert', code: 'Insert', control: true, meta: false, alt: false, shift: false },
+          platform
+        )
+      ).toBe(true)
+    }
+  )
+
   it('keeps terminal clipboard shortcuts platform-native without stealing bare Ctrl+A', () => {
     expect(getEffectiveKeybindingsForAction('terminal.copySelection', 'darwin')).toEqual(['Mod+C'])
     expect(getEffectiveKeybindingsForAction('terminal.copySelection', 'linux')).toEqual([
       'Ctrl+Shift+C',
-      'Ctrl+C'
+      'Ctrl+C',
+      'Ctrl+Insert'
     ])
     expect(getEffectiveKeybindingsForAction('terminal.selectAll', 'darwin')).toEqual(['Mod+A'])
     expect(getEffectiveKeybindingsForAction('terminal.selectAll', 'linux')).toEqual([

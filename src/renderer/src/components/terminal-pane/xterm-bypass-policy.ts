@@ -342,6 +342,9 @@ export function shouldBypassXtermKeyboardEvent(
   if (matchesClipboardBinding('Ctrl+C', event, 'linux') && hasSelection) {
     return true
   }
+  if (matchesClipboardBinding('Ctrl+Insert', event, 'linux') && hasSelection) {
+    return true
+  }
   if (
     matchesClipboardBinding('Ctrl+V', event, 'linux') ||
     matchesClipboardBinding('Ctrl+Shift+V', event, 'linux')
