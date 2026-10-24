@@ -12,6 +12,19 @@ const build = (params: Record<string, unknown>) =>
   buildManagedWorktreeCreateArgs(WorktreeCreate.parse(params), PROVENANCE)
 
 describe('buildManagedWorktreeCreateArgs', () => {
+  it('carries explicit existing intent through the RPC schema without inferring it for legacy names', () => {
+    const request = {
+      repo: 'repo-1',
+      name: 'feature/test',
+      baseBranch: 'origin/main',
+      branchNameOverride: 'feature/test'
+    }
+    expect(build(request)).not.toHaveProperty('branchIntent')
+    expect(build({ ...request, branchIntent: 'open-existing' })).toMatchObject({
+      branchIntent: 'open-existing'
+    })
+  })
+
   it('omits name provenance when the client did not claim a generated name', () => {
     // Why: absent must mean user-typed. A truthy default would let the host permanently retire
     // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".

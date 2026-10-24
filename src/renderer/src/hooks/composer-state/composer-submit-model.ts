@@ -29,6 +29,7 @@ export type QuickSubmitSource = {
 }
 
 export type PreparedQuickSubmit = QuickSubmitSource & {
+  branchIntent?: WorktreeCreationRequest['branchIntent']
   effectiveSetupDecision: SetupDecision
   hookPreparation: WorktreeCreationRequest['hookPreparation']
   linkedLinearIssue: string | undefined

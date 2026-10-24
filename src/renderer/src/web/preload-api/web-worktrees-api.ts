@@ -65,6 +65,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
+        ...(args.branchIntent ? { branchIntent: args.branchIntent } : {}),
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),

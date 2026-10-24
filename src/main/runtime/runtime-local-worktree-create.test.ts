@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   hasBase: vi.fn(),
   branchName: vi.fn(),
   canCheckout: vi.fn(),
+  pathExists: vi.fn(),
   branchConflict: vi.fn(),
   githubPr: vi.fn(),
   consume: vi.fn(),
@@ -64,7 +65,7 @@ vi.mock('./runtime-worktree-create-git', () => ({
   getLocalGitHubPrForBranch: mocks.githubPr,
   getSelectedHostedReviewForBranch: vi.fn()
 }))
-vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: async () => false }))
+vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: mocks.pathExists }))
 vi.mock('../worktree-create-preparation', () => ({ consumePreparedWorktreeCreate: mocks.consume }))
 vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
@@ -96,6 +97,12 @@ import type { SparsePreset } from '../../shared/worktree/create-types'
 import { withoutInFlightWorktreeCreates } from '../worktree-create-in-flight'
 
 const worktreePath = resolve('/worktrees', 'app')
+
+const pickedBranch = {
+  baseBranch: 'origin/main',
+  branchNameOverride: 'main',
+  branchIntent: 'open-existing'
+} as const
 
 const writtenMeta: Partial<WorktreeMeta>[] = []
 const WEB_PRESET: SparsePreset = {
@@ -163,6 +170,7 @@ beforeEach(() => {
   mocks.hasBase.mockResolvedValue(true)
   mocks.branchName.mockResolvedValue('app')
   mocks.canCheckout.mockResolvedValue(false)
+  mocks.pathExists.mockResolvedValue(false)
   mocks.branchConflict.mockResolvedValue(null)
   mocks.githubPr.mockResolvedValue(null)
   mocks.consume.mockResolvedValue({ status: 'hit', result: {}, rearm: mocks.rearm })
@@ -341,9 +349,14 @@ describe('runtime create timing', () => {
     })
     const timing = createWorktreeCreateTimingRecorder()
 
-    await createWorktree({}, undefined, timing)
+    mocks.branchName.mockResolvedValue('main')
+    await createWorktree(pickedBranch, undefined, timing)
 
-    expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ timing }))
+    expect(mocks.consume).toHaveBeenCalledWith(
+      expect.objectContaining({ timing, branch: 'main', baseBranch: 'origin/main' })
+    )
+    expect(mocks.add).not.toHaveBeenCalled()
+    expect(mocks.consume.mock.calls[0][0].options).toEqual({})
     const finished = timing.finish()
     expect(finished.phases.map((phase) => phase.phase)).toEqual(
       expect.arrayContaining([
@@ -491,7 +504,79 @@ describe('runtime create PR conflict probe', () => {
   }
 
   beforeEach(() => {
-    mocks.branchName.mockImplementation(async (_path, _override, name: string) => name)
+    mocks.branchName.mockImplementation(async (_path, override, name: string) => override ?? name)
+  })
+
+  it.each([1, 10])(
+    'keeps the selected name and source through %i occupied paths, without PR eligibility',
+    async (occupied) => {
+      const options = { wslDistro: 'Ubuntu' }
+      mocks.routing.mockReturnValue(options)
+      mocks.remoteBase.mockResolvedValue(remoteTrackingBase)
+      mocks.githubPr.mockResolvedValue({ number: 42 })
+      let pathChecks = 0
+      mocks.pathExists.mockImplementation(async () => pathChecks++ < occupied)
+
+      await createWorktree({ ...pickedBranch, sparseCheckout: { directories: ['src'] } })
+
+      expect(mocks.remoteBase.mock.calls).toEqual([['/repo', 'origin/main', options]])
+      expect(mocks.branchName).toHaveBeenCalledOnce()
+      expect(mocks.branchConflict.mock.calls).toEqual([['/repo', 'main', 'origin/main', options]])
+      expect(mocks.pathExists).toHaveBeenCalledTimes(occupied + 1)
+      expect(mocks.githubPr).not.toHaveBeenCalled()
+      expect(mocks.consume).not.toHaveBeenCalled()
+      expect(mocks.addSparse).toHaveBeenCalledExactlyOnceWith(
+        '/repo',
+        resolve('/worktrees', `app-${occupied + 1}`),
+        'main',
+        ['src'],
+        remoteTrackingBase.base,
+        false,
+        expect.objectContaining({ remoteTrackingBase, ...options })
+      )
+    }
+  )
+
+  it.each([true, false])(
+    'keeps local eligibility with picker intent (reusable: %s)',
+    async (reusable) => {
+      mocks.branchConflict.mockImplementation(async (_path, branch: string) =>
+        branch === 'main' ? 'local' : null
+      )
+      mocks.canCheckout.mockImplementation(
+        async (_path, branch: string) => reusable && branch === 'main'
+      )
+      mocks.pathExists.mockImplementation(async (path) => path === worktreePath)
+      mocks.consume.mockResolvedValue({ status: 'miss', reason: 'not_prepared' })
+
+      await createWorktree(pickedBranch)
+
+      expect(mocks.add).toHaveBeenCalledWith(
+        '/repo',
+        resolve('/worktrees', 'app-2'),
+        reusable ? 'main' : 'main-2',
+        'origin/main',
+        false,
+        false,
+        expect.objectContaining(reusable ? { checkoutExistingBranch: true } : {})
+      )
+      expect(mocks.githubPr.mock.calls.map(([, branch]) => branch)).toEqual(
+        reusable ? [] : ['main-2']
+      )
+      expect(mocks.add.mock.calls[0][6].checkoutExistingBranch ?? false).toBe(reusable)
+    }
+  )
+
+  it('keeps unflagged legacy, mobile New branch and Advanced collisions on baseline allocation', async () => {
+    mocks.consume.mockResolvedValue({ status: 'miss', reason: 'not_prepared' })
+    mocks.branchName.mockImplementation(async (_path, override, name: string) => override ?? name)
+    mocks.branchConflict.mockImplementation(async (_path, branch: string) =>
+      branch === 'feature/test' ? 'remote' : null
+    )
+
+    await createWorktree({ branchNameOverride: 'feature/test', baseBranch: 'origin/main' })
+
+    expect(mocks.add.mock.calls[0][2]).toBe('feature/test-2')
   })
 
   it('runs the first name PR lookup while the base fetch is still in flight', async () => {

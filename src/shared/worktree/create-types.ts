@@ -110,6 +110,8 @@ export type CreateWorktreeArgs = {
    *  name. Used when creating from an existing branch whose local branch name
    *  legitimately contains `/` while the worktree directory must not. */
   branchNameOverride?: string
+  /** Only an explicit existing-branch pick opts out of new-branch allocation. */
+  branchIntent?: 'open-existing'
   setupDecision?: SetupDecision
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean

@@ -10,6 +10,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'setBaseBranch'
   | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
   | 'setForkPushWarning'
@@ -38,6 +39,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     setBaseBranch,
     setBaseBranchNamesWorkspace,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
     setForkPushWarning,
@@ -81,6 +83,13 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         setBranchNameOverride(selection.branchNameOverride)
         branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
       }
+      if (
+        selection.branchNameOverride &&
+        refName !== localBranchName &&
+        refName !== `refs/heads/${localBranchName}`
+      ) {
+        setBranchIntent('open-existing')
+      }
     },
     [
       name,
@@ -91,6 +100,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       setBaseBranch,
       setBaseBranchNamesWorkspace,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
       setForkPushWarning,

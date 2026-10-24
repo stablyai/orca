@@ -38,7 +38,8 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
     linkedLinearIssue: undefined,
     linkedLinearIssueWorkspaceId: undefined,
     linkedLinearIssueOrganizationUrlKey: undefined,
-    effectiveBranchNameOverride: undefined,
+    effectiveBranchNameOverride: 'feature/test',
+    branchIntent: 'open-existing',
     submitBaseBranch: undefined,
     createDisplayName: undefined,
     pendingFirstAgentMessageRename: false,
@@ -105,7 +106,9 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
       expect(request).toMatchObject({
         agent: 'opencode',
         agentLaunchRoute: route,
-        quickPrompt: 'Fix the checkout'
+        quickPrompt: 'Fix the checkout',
+        branchNameOverride: 'feature/test',
+        branchIntent: 'open-existing'
       })
       if (route === 'terminal-tui') {
         expect(request.startup).toMatchObject({
