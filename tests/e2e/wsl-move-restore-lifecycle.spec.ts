@@ -31,8 +31,9 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
-  getTerminalContent,
+  splitActiveTerminalPane,
   waitForActivePanePtyId,
+  waitForPaneCount,
   waitForTerminalOutput
 } from './helpers/terminal'
 import {
@@ -353,10 +354,10 @@ test('a moved pane shows its own history once, in its folder, across three reloa
   }
 })
 
-test('"Use on this computer again" brings back a slept pane live, with its history once', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
+test('"Use on this computer again" after reloads and a restart brings back slept panes live, each with its history once', async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {
   test.skip(process.platform === 'win32', 'POSIX shell commands')
-  test.setTimeout(600_000)
+  test.setTimeout(900_000)
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-restore-lifecycle-undo-'))
   const repoPath = realpathSync(createMovedRepo(root))
   const session = createRestartSession(testInfo, { [WSL_HOSTS_INTERNAL_GATE_ENV]: '1' })
@@ -366,25 +367,53 @@ test('"Use on this computer again" brings back a slept pane live, with its histo
     await waitForSessionReady(launched.page)
     const worktreeId = await attachRepoAndOpenTerminal(launched.page, repoPath)
     await ensureTerminalVisible(launched.page)
-    const ptyId = await waitForActivePanePtyId(launched.page)
+    const firstPty = await waitForActivePanePtyId(launched.page)
     // The variable keeps the printed lines out of the echoed command.
-    await execInTerminal(launched.page, ptyId, `M=UNDO; seq -f "\${M}X-%04g" 1 ${LINES}`)
-    await waitForTerminalOutput(launched.page, `UNDOX-${LINES}`, 30_000)
-    // The move's pause: Sleep, which keeps the pane's identity and its final checkpoint.
-    await launched.page.evaluate(async (id) => {
-      const state = window.__store!.getState()
-      await state.shutdownWorktreeBrowsers(id)
-      await state.shutdownWorktreeTerminals(id, { keepIdentifiers: true })
-    }, worktreeId)
+    await execInTerminal(launched.page, firstPty, `M=UNDO; seq -f "\${M}A-%04g" 1 ${LINES}`)
+    await waitForTerminalOutput(launched.page, `UNDOA-${LINES}`, 30_000)
+    await splitActiveTerminalPane(launched.page, 'vertical')
+    await waitForPaneCount(launched.page, 2, 30_000)
+    const secondPty = await waitForActivePanePtyId(launched.page)
+    expect(secondPty).not.toBe(firstPty)
+    await execInTerminal(launched.page, secondPty, `M=UNDO; seq -f "\${M}B-%04g" 1 ${LINES}`)
+    await waitForTerminalOutput(launched.page, `UNDOB-${LINES}`, 30_000)
+    // The move's pause is main's own Sleep: it keeps each pane's identity and final checkpoint.
+    const slept = await launched.page.evaluate(
+      (id) =>
+        window.api.runtime.call({ method: 'worktree.sleep', params: { worktree: `id:${id}` } }),
+      worktreeId
+    )
+    expect(slept.ok).toBe(true)
+    await expect
+      .poll(
+        () =>
+          launched!.page.evaluate((id) => {
+            const state = window.__store!.getState()
+            return (state.tabsByWorktree[id] ?? []).reduce(
+              (n, tab) => n + (state.ptyIdsByTabId[tab.id]?.length ?? 0),
+              0
+            )
+          }, worktreeId),
+        { timeout: 30_000 }
+      )
+      .toBe(0)
     const repoId = worktreeId.split('::')[0]
     await session.close(launched.app)
     launched = undefined
 
-    // The move committed and its source is retained here, frozen as the pause left it.
+    // The move committed: startup runs its desktop rewrite and retention, as after a real move.
     seedWslMoveCutover(
       session.userDataDir,
-      wslMoveCutoverFixture('move-1', 'retained', {}, { repoIds: [repoId] })
+      wslMoveCutoverFixture('move-1', 'destination-committed', {}, { repoIds: [repoId] })
     )
+    // Moved: the window reloads three times and the app restarts once before the undo.
+    launched = await session.launch()
+    await waitForSessionReady(launched.page)
+    for (let reload = 0; reload < 3; reload += 1) {
+      await launched.page.reload()
+      await waitForSessionReady(launched.page)
+    }
+    await session.close(launched.app)
     launched = await session.launch()
     const { page } = launched
     await waitForSessionReady(page)
@@ -396,18 +425,57 @@ test('"Use on this computer again" brings back a slept pane live, with its histo
     await reloaded
     await waitForSessionReady(page)
 
+    // Back here as a slept workspace: nothing runs until it is opened...
+    const livePtys = (): Promise<number> =>
+      page.evaluate((id) => {
+        const state = window.__store!.getState()
+        return (state.tabsByWorktree[id] ?? []).reduce(
+          (n, tab) => n + (state.ptyIdsByTabId[tab.id]?.length ?? 0),
+          0
+        )
+      }, worktreeId)
+    expect(await livePtys()).toBe(0)
+    // ...and opening it wakes both panes from their checkpoints.
     await page.evaluate((id) => window.__store!.getState().setActiveWorktree(id), worktreeId)
     await ensureTerminalVisible(page)
-    await waitForTerminalOutput(page, `UNDOX-${LINES}`, 60_000)
-    const restored = await getTerminalContent(page, 1_000_000)
-    console.log(
-      `[restore-lifecycle] undo: first=${count(restored, 'UNDOX-0001')} last=${count(restored, `UNDOX-${LINES}`)}`
-    )
-    expect.soft(count(restored, `UNDOX-${LINES}`)).toBe(1)
-    // A live pane: what is typed now runs.
-    const live = await waitForActivePanePtyId(page)
-    await execInTerminal(page, live, 'echo "ALIVE-$((40 + 2))"')
-    await waitForTerminalOutput(page, 'ALIVE-42', 30_000)
+    await waitForPaneCount(page, 2, 60_000)
+    const readPanes = (): Promise<string[]> =>
+      page.evaluate(() => {
+        const state = window.__store!.getState()
+        const manager = state.activeTabId ? window.__paneManagers?.get(state.activeTabId) : null
+        return (manager?.getPanes?.() ?? []).map((pane) => pane.serializeAddon?.serialize?.() ?? '')
+      })
+    await expect
+      .poll(
+        async () =>
+          (await readPanes()).map((text) =>
+            ['UNDOA', 'UNDOB'].filter((marker) => text.includes(`${marker}-${LINES}`)).join()
+          ),
+        { timeout: 60_000, message: 'a woken pane never showed its history' }
+      )
+      .toEqual(['UNDOA', 'UNDOB'])
+    for (const [index, text] of (await readPanes()).entries()) {
+      const marker = ['UNDOA', 'UNDOB'][index]
+      console.log(
+        `[restore-lifecycle] undo ${marker}: first=${count(text, `${marker}-0001`)} last=${count(text, `${marker}-${LINES}`)}`
+      )
+      expect.soft(count(text, `${marker}-${LINES}`)).toBe(1)
+    }
+    // Live panes: what is typed in each now runs there.
+    const ptyIds = await page.evaluate(() => {
+      const state = window.__store!.getState()
+      return state.activeTabId ? (state.ptyIdsByTabId[state.activeTabId] ?? []) : []
+    })
+    expect(ptyIds).toHaveLength(2)
+    for (const [index, ptyId] of ptyIds.entries()) {
+      await execInTerminal(page, ptyId, `echo "ALIVE-${index}-$((40 + 2))"`)
+    }
+    await expect
+      .poll(async () => (await readPanes()).filter((text) => /ALIVE-\d-42/.test(text)).length, {
+        timeout: 30_000,
+        message: 'a woken pane did not run what was typed'
+      })
+      .toBe(2)
   } finally {
     if (launched) {
       await session.close(launched.app)
