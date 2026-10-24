@@ -150,6 +150,32 @@ describe('OpenCode native title detection', () => {
   )
 })
 
+describe('Codex native session title detection', () => {
+  it.each([
+    ['ads_public | Ready | ads: Garvee US | main', 'idle'],
+    ['ads_public | Ready | 否定词阶段 | main', 'idle'],
+    ['ads_public | Starting | ads: MERACH US | main', 'working'],
+    ['yes-no-mystery | Thinking | 查找并继续多人游戏会话 | main', 'working']
+  ] as const)('classifies %j as title-derived %s Codex', (title, status) => {
+    expect(getAgentLabel(title)).toBe('Codex')
+    expect(detectAgentStatusFromTitle(title)).toBe(status)
+  })
+
+  it('does not let a spinner-decorated Ready-less Codex frame become Claude', () => {
+    const title = '\u2839 ads_public | Starting | ads: MERACH US | main'
+    expect(getAgentLabel(title)).toBe('Codex')
+    expect(detectAgentStatusFromTitle(title)).toBe('working')
+  })
+
+  it.each(['ads_public | Ready', 'foo | Ready to ship | main', 'timestamp ready'])(
+    'does not treat the lookalike title %j as an agent',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
 describe('Pi-compatible title detection', () => {
   it.each([
     ['\u280b OMP', 'OMP', 'working'],

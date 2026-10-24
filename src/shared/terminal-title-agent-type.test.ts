@@ -54,6 +54,12 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('* Review Codex behavior')).toBeNull()
   })
 
+  it('resolves Codex native session titles that omit the codex token', () => {
+    expect(resolveExplicitTerminalTitleAgentType('ads_public | Ready | ads: Garvee US | main')).toBe(
+      'codex'
+    )
+  })
+
   it('resolves OpenCode native abbreviated session titles before task-text identities', () => {
     expect(resolveExplicitTerminalTitleAgentType('OC | Understand about the plugin')).toBe(
       'opencode'
