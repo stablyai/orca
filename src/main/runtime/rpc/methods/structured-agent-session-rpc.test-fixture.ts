@@ -1,3 +1,4 @@
+import { createPublishingAttachStub } from './structured-agent-session-attach-publication.test-fixture'
 // The `agentSession.*` dispatcher harness, shared by the suites that exercise the wire
 // boundary. `hostCalls` and `runtimeCalls` keep one identity for the process and are
 // repopulated per test, so a suite can read `hostCalls.close` without re-importing it.
@@ -131,29 +132,7 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
 export function hostStub(): StructuredAgentSessionHost {
   reset(hostCalls)
   Object.assign(hostCalls, {
-    attach: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        sessionId: SESSION,
-        fence: 1,
-        page: {
-          sessionId: SESSION,
-          epoch: 'epoch-a',
-          direction: 'tail',
-          items: [],
-          removedItemIds: [],
-          submissions: [],
-          window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-a', sequence: 0 } },
-          liveCursor: { epoch: 'epoch-a', sequence: 0 },
-          hasOlder: false,
-          hasNewer: false
-        },
-        unconfirmedClientMessageIds: []
-      }
-    })),
+    attach: createPublishingAttachStub(SESSION),
     rewind: vi.fn(async () => ({ ok: true, value: { itemId: 'chosen', epoch: 'next' } })),
     send: vi.fn(async () => ({
       ok: true,

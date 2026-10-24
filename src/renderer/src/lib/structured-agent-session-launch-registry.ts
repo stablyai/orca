@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
+export { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
+
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
@@ -11,6 +13,7 @@ import type {
 } from './structured-agent-session-launch-callers'
 import {
   deleteStructuredAgentLaunchRecord,
+  markStructuredAgentLaunchCancelledPersisted,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
   structuredAgentLaunchRecordFor,
@@ -28,6 +31,7 @@ import {
   retireStructuredAgentLaunchCancellation
 } from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { cancelDesktopCreateOnClose } from './structured-agent-session-desktop-create-close'
 import {
   cancelStructuredAgentLaunchOnLocalHost,
   resetStructuredAgentLocalLaunchCancelsForTests
@@ -64,12 +68,18 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(): void {
-  for (const state of structuredLaunchesBySessionId.values()) {
-    persistStructuredLaunchState(state)
+export function notifyStructuredLaunchListeners(persist = true): void {
+  if (persist) {
+    for (const state of structuredLaunchesBySessionId.values()) {
+      persistStructuredLaunchState(state)
+    }
   }
   for (const listener of structuredLaunchListeners) {
-    listener()
+    try {
+      listener()
+    } catch (error) {
+      console.warn('[structured-agent-launch] observer failed', error)
+    }
   }
 }
 
@@ -132,21 +142,6 @@ export function structuredLaunchStates(): IterableIterator<StructuredLaunchState
   return structuredLaunchesBySessionId.values()
 }
 
-export function launchStateLifecycle(
-  state: StructuredLaunchState
-): StructuredAgentSessionLaunchLifecycle {
-  if (state.cancelled || state.callers.outcome === 'cancelled') {
-    return 'cancelled'
-  }
-  if (state.callers.outcome === 'published') {
-    return 'published'
-  }
-  if (state.visibilityUnknown || state.callers.outcome === 'unknown') {
-    return 'visibility-unknown'
-  }
-  return state.callers.outcome === 'failed' ? 'failed' : 'pending'
-}
-
 function matchesLaunchWorktree(
   state: StructuredLaunchState | undefined,
   worktreeId: string
@@ -165,7 +160,11 @@ export function getStructuredAgentSessionLaunchLifecycle(
   if (state && matchesLaunchWorktree(state, worktreeId)) {
     return launchStateLifecycle(state)
   }
-  return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
+  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  if (record?.desktopCreate && record.desktopCreate.worktreeId !== worktreeId) {
+    return null
+  }
+  return record?.lifecycle ?? null
 }
 
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
@@ -199,28 +198,6 @@ export function getStructuredAgentSessionLaunchFailure(
     : null
 }
 
-export function useStructuredAgentSessionLaunchFailure(
-  worktreeId: string,
-  sessionId: string
-): StructuredLaunchFailure | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
-    () => null
-  )
-}
-
-export function useStructuredAgentSessionLaunchLifecycle(
-  worktreeId: string,
-  sessionId: string
-): StructuredAgentSessionLaunchLifecycle | null {
-  return useSyncExternalStore(
-    subscribeStructuredAgentLaunchStatus,
-    () => getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId),
-    () => null
-  )
-}
-
 export function shouldRetainStructuredAgentSessionLaunchTab(
   worktreeId: string,
   sessionId: string
@@ -235,6 +212,15 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   executionHostId: ExecutionHostId,
   owner: StructuredLaunchSlotOwner | undefined
 ): boolean {
+  const outer = getPersistedStructuredAgentLaunchRecord(sessionId)
+  if (outer?.desktopCreate) {
+    markStructuredAgentLaunchCancelledPersisted(sessionId, outer.executionHostId)
+    cancelDesktopCreateOnClose(outer)
+    if (owner) {
+      notifyStructuredLaunchListeners()
+    }
+    return true
+  }
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
   const surfaceAddress =

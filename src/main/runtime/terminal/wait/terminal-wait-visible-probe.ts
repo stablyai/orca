@@ -25,7 +25,6 @@ import {
   buildTerminalWaitBlockedResult,
   buildTerminalWaitResult
 } from '../../terminal-wait-results'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
@@ -129,12 +128,10 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     const exitAbort = new AbortController()
     return await new Promise<{ exitCode: number | null }>((resolve, reject) => {
       let settled = false
-      let unsubscribe: (() => void) | null = null
       const onAbort = (): void => {
         fail(signal?.reason ?? new Error('request_aborted'))
       }
       const cleanup = (): void => {
-        unsubscribe?.()
         exitAbort.abort()
         signal?.removeEventListener('abort', onAbort)
       }
@@ -144,7 +141,6 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         }
         settled = true
         cleanup()
-        this.setupCompletionTokenByPtyId.delete(ptyId)
         resolve({ exitCode })
       }
       const fail = (error: unknown): void => {
@@ -160,15 +156,8 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         return
       }
       signal?.addEventListener('abort', onAbort, { once: true })
-      const scanner = completionToken ? createSetupCompletionScanner(completionToken, finish) : null
-
-      if (scanner) {
-        unsubscribe = this.subscribeToTerminalData(ptyId, scanner.scan)
-      }
-      // Why: setup can finish before the observer is registered on fast local worktrees.
-      const replay = this.recentPtyOutputById.get(ptyId)?.read()
-      if (scanner && replay) {
-        scanner.scan(replay)
+      if (completionToken) {
+        void completionToken.completion.then((result) => finish(result.exitCode), fail)
       }
       if (!settled) {
         void this.waitForTerminal(handle, {

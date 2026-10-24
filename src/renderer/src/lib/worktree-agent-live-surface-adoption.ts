@@ -1,4 +1,5 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { indexTerminalSurfaceBindings } from './terminal-surface-binding-index'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
@@ -41,18 +42,25 @@ function layoutContainsLeaf(
 export function bindLivePtyToExactSurface(
   store: LiveSurfaceAdoptionStore,
   worktreeId: string,
-  terminal: { paneKey: string; ptyId: string; tabId: string }
+  terminal: { paneKey: string; ptyId: string; tabId: string },
+  options?: Parameters<LiveSurfaceAdoptionStore['createTab']>[3],
+  census?: ReturnType<typeof indexTerminalSurfaceBindings>
 ): boolean {
   const pane = parsePaneKey(terminal.paneKey)
   if (!pane || pane.tabId !== terminal.tabId) {
     return false
   }
-  const ownerEntries = Object.entries(store.tabsByWorktree).flatMap(([ownerWorktreeId, tabs]) =>
-    tabs.filter((tab) => tab.id === terminal.tabId).map((tab) => ({ ownerWorktreeId, tab }))
-  )
-  const competingBinding = Object.entries(store.ptyIdsByTabId).some(
-    ([tabId, ptyIds]) => tabId !== terminal.tabId && ptyIds.includes(terminal.ptyId)
-  )
+  const ownerEntries = census
+    ? (census.owners.get(terminal.tabId) ?? [])
+    : Object.entries(store.tabsByWorktree).flatMap(([ownerWorktreeId, tabs]) =>
+        tabs.filter((tab) => tab.id === terminal.tabId).map((tab) => ({ ownerWorktreeId, tab }))
+      )
+  const ptyOwners = census?.ptyOwners.get(terminal.ptyId)
+  const competingBinding = census
+    ? ptyOwners && (ptyOwners.size > 1 || !ptyOwners.has(terminal.tabId))
+    : Object.entries(store.ptyIdsByTabId).some(
+        ([tabId, ptyIds]) => tabId !== terminal.tabId && ptyIds.includes(terminal.ptyId)
+      )
   if (ownerEntries.length > 1 || competingBinding) {
     return false
   }
@@ -65,18 +73,34 @@ export function bindLivePtyToExactSurface(
     ) {
       return false
     }
+    if (
+      census &&
+      existing.tab.ptyId != null &&
+      !existing.tab.pendingActivationSpawn &&
+      ptyOwners?.has(terminal.tabId) &&
+      layout?.ptyIdsByLeafId?.[pane.leafId] === terminal.ptyId
+    ) {
+      return true
+    }
     store.updateTabPtyId(terminal.tabId, terminal.ptyId)
     store.replaceTerminalLayoutPanePtyId(terminal.tabId, pane.leafId, terminal.ptyId)
+    census?.noteBinding(terminal.tabId, terminal.ptyId)
     return true
   }
   const created = store.createTab(worktreeId, undefined, undefined, {
+    ...options,
     id: terminal.tabId,
     initialLeafId: pane.leafId,
     initialPtyId: terminal.ptyId,
     activate: false,
     recordInteraction: false
   })
-  return created.id === terminal.tabId
+  if (created.id !== terminal.tabId) {
+    return false
+  }
+  census?.owners.set(created.id, [{ ownerWorktreeId: worktreeId, tab: created }])
+  census?.noteBinding(created.id, terminal.ptyId)
+  return true
 }
 
 function tabExists(store: LiveSurfaceAdoptionStore, tabId: string): boolean {

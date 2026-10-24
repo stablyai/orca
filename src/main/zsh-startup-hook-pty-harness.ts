@@ -13,7 +13,7 @@ export const ZSH_PATH = hasZsh
 
 export const MARKERS = {
   identity: /\]777;orca-shell-start:\d+/,
-  ready: ']777;orca-shell-ready',
+  ready: ']777;orca-shell-ready:posix',
   promptStart: ']133;A',
   commandStart: ']133;C',
   commandDone: /\]133;D;\d+/

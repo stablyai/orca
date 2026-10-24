@@ -164,4 +164,38 @@ describe('writeStartupCommandWhenShellReady', () => {
 
     expect(proc._writes).toEqual(['echo one\recho two\r'])
   })
+  it('native observation follows the proved family and cleanup wins a late ready result', async () => {
+    const proc = createMockProc()
+    const ready = Promise.resolve({
+      postMarkerBytesObserved: true,
+      nativeSetupShell: 'fish' as const
+    })
+    writeStartupCommandWhenShellReady(ready, proc, 'bash /setup.sh', () => {}, {
+      nativeSetupToken: 'native:fish'
+    })
+    await vi.advanceTimersByTimeAsync(30)
+    expect(proc._writes).toHaveLength(1)
+    expect(proc._writes[0]).toMatch(/^bash \/setup.sh; begin;/)
+    expect(proc._writes[0]).toContain('native:fish')
+    const unknown = createMockProc()
+    writeStartupCommandWhenShellReady(Promise.resolve(), unknown, 'bash /setup.sh', () => {}, {
+      nativeSetupToken: 'native:unknown'
+    })
+    await vi.advanceTimersByTimeAsync(200)
+    expect(unknown._writes).toEqual(['bash /setup.sh\r'])
+    const closed = createMockProc()
+    let cleanup = () => {}
+    writeStartupCommandWhenShellReady(
+      ready,
+      closed,
+      'bash /setup.sh',
+      (value) => {
+        cleanup = value
+      },
+      { nativeSetupToken: 'native:late' }
+    )
+    cleanup()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(closed._writes).toEqual([])
+  })
 })

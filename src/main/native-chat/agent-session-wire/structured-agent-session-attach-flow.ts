@@ -95,6 +95,8 @@ export type AttachFlowInput = {
   eventSink?: StructuredAgentSessionEventSink
   /** Prevent acquisition-window events from reaching superseded journals. */
   onAcquiring?: () => Promise<void> | void
+  onReserved?: () => Promise<void>
+  /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
   /** Adopt the conversation’s journal; attach never owns its open. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
@@ -190,6 +192,16 @@ export async function performAttach(
         return { ok: false, refusal: replay.refusal }
       }
     }
+    await lock.commit(async () => {
+      const journal = await input.openConversation(record)
+      await importAdoptedTranscript(
+        params,
+        { journal, unconfirmedClientMessageIds: [] },
+        record,
+        preparedTranscript.items
+      )
+      await input.onReserved?.()
+    })
     if (agentSessionLeaseAdmitsWriter(record.lease)) {
       // Keep the existing live owner.
     } else if (replayed && reserved.operationRow.outcome.status === 'succeeded') {
@@ -258,7 +270,6 @@ export async function performAttach(
         record: acquired,
         openConversation: input.openConversation
       })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items)
       await input.onAttached(journal, acquisitionGeneration, owner)
       return journal
     })

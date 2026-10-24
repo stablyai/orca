@@ -1,3 +1,11 @@
+import type { HostFoundingAttempt } from './host-founding-attempt'
+/**
+ * What a caller hands `executeAgentLaunch`. Two shapes, so the compiler rather than a runtime throw
+ * keeps each caller to the inputs its policy needs: a launch that may build its own surface must
+ * bring the factory for it, and a `legacy-host` create, whose startup terminal is its only
+ * surface, cannot bring one.
+ */
+
 import type {
   AgentLaunchIntent,
   AgentLaunchResult,
@@ -24,7 +32,10 @@ type AgentLaunchExecutionBase = {
   /** False if the client cannot display this chat; host callers may omit it. */
   callerRendersStructured?: boolean
   onStage?: (stage: 'worktree_create' | 'mode_settle' | 'surface_create') => void
-  /** Runs after tab publication, before post-creation delivery; must not throw. */
+  hostFoundingAttempt?: HostFoundingAttempt
+  /** Best-effort canonical bookkeeping; independent of presentation and ancillary failures. */
+  onSurfaceAdmitted?: (surface: AgentLaunchPublishedSurface) => void
+  /** Only an installed surface may authorize presentation/selection. Must not throw. */
   onSurfacePublished?: (surface: AgentLaunchPublishedSurface) => void
   /** Abort at the next boundary; return an existing agent and skip pending prompt delivery. */
   signal?: AbortSignal

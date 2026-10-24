@@ -1,44 +1,44 @@
-import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import {
+  prepareFoundingRequest,
+  unknownFoundingOutcome,
+  type StructuredAgentSessionCreateOptions
+} from './structured-agent-session-founding-request'
+export type { StructuredAgentSessionCreateOptions } from './structured-agent-session-founding-request'
+import {
+  createFoundingReceipt,
+  sendOpeningFoundingMessage
+} from './structured-agent-session-founding-receipt'
+
+import { assertHostFoundingNotCancelled } from '../../agent-launch/host-founding-attempt'
+
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
   refuse,
   type AgentSessionAttachResult,
   type AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
+
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
+import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import {
   prepareAdoptedTranscript,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
-import {
-  pinnedAgentSessionLaunchArgs,
-  pinnedAgentSessionLaunchEnv
-} from './structured-agent-session-launch-env'
+
 import {
   adapterSupportsCreateIfDeclared,
   hostCanStartRecord
 } from './structured-agent-session-provider-support'
-import { performSend } from './structured-agent-session-turns'
+
 import { observedReceipt } from './structured-agent-session-operation-settlement'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
+
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
-
-export type StructuredAgentSessionCreateOptions = {
-  firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
-  hostLaunchDirectory?: string
-  catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
-  /** Publish after durable creation, before agent delivery starts. */
-  publishTab?: () => Promise<void>
-}
 
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
@@ -96,33 +96,7 @@ async function foundConversation(
       )
     }
   }
-  const launchDirectory =
-    !prior && isFloatingWorkspaceId(params.location.workspaceId)
-      ? (options.hostLaunchDirectory ??
-        (await deps.resolveWorkspacePath?.(params.location.workspaceId)))
-      : undefined
-  if (!prior && isFloatingWorkspaceId(params.location.workspaceId) && !launchDirectory) {
-    throw new Error('floating_agent_session_launch_directory_unavailable')
-  }
-  const request = reserveRequestFor({
-    sessionId,
-    params,
-    models: prior ? undefined : options.catalogModels,
-    callerKey,
-    fingerprint: params.envelope.payloadFingerprint,
-    now: context.now(),
-    authority: {
-      ...(launchDirectory ? { launchDirectory } : {}),
-      spawnToken: () => {
-        throw new Error('founding_must_not_reserve_a_spawn')
-      },
-      claimKeyId: deps.claimKeyId,
-      handoffOperationId: null,
-      probe: { outcome: 'pid-absent' },
-      ...(await pinnedAgentSessionLaunchArgs(deps.resolveLaunchArgs, params)),
-      ...(await pinnedAgentSessionLaunchEnv(deps.resolveLaunchEnv, params))
-    }
-  })
+  const request = await prepareFoundingRequest(context, callerKey, params, options, prior)
   const candidate = store.founding.prepare(request)
   if (!hostCanStartRecord(deps, candidate.record)) {
     return {
@@ -135,6 +109,17 @@ async function foundConversation(
     }
   }
   const replayed = candidate.disposition === 'replayed'
+  const attempt = options.hostFoundingAttempt
+  if (attempt) {
+    attempt.identity = {
+      callerKey,
+      operationId: request.operation.operationId,
+      fingerprint: request.operation.fingerprint,
+      sessionId,
+      priorRecord: prior !== null && prior !== undefined
+    }
+    attempt.disposition = replayed ? 'replay' : 'fresh'
+  }
   if (replayed && candidate.operationRow.outcome.status !== 'succeeded') {
     const replay = resolveAgentSessionReplayOutcome({
       operationId: params.envelope.clientOperationId,
@@ -143,14 +128,7 @@ async function foundConversation(
     })
     return {
       ok: false,
-      refusal:
-        replay.decision === 'refuse'
-          ? replay.refusal
-          : refuse(
-              'agent_session_operation_unknown',
-              { reason: 'outcomeUnknown' },
-              'The create outcome is unknown.'
-            )
+      refusal: replay.decision === 'refuse' ? replay.refusal : unknownFoundingOutcome()
     }
   }
   const prepared = replayed
@@ -166,6 +144,13 @@ async function foundConversation(
     }
   }
   const existing = context.sessions.get(sessionId)
+  // A replay token cannot prove the earlier message absent, and is not a reason to open it.
+  if (attempt && replayed && options.firstMessage && !existing) {
+    return {
+      ok: false,
+      refusal: unknownFoundingOutcome()
+    }
+  }
   const opened = existing
     ? { session: existing }
     : await openStructuredAgentSessionConversationJournal(deps, candidate.record).catch(
@@ -180,7 +165,8 @@ async function foundConversation(
       )
   const { session } = opened
   const fence = candidate.record.lease.runtimeFence
-  let committed = replayed
+  let keepHandle = replayed
+  const foundingReceipt = createFoundingReceipt(context, request, params, options, attempt)
   try {
     if (!replayed) {
       await importAdoptedTranscript(
@@ -192,41 +178,77 @@ async function foundConversation(
       )
       const first = options.firstMessage
       if (first) {
-        const sent = await performSend(
-          {
-            sessionId,
-            journal: session.journal,
-            fence,
-            adapter: deps.adapter,
-            agents: deps.agents,
-            agent: params.agent,
-            logger: deps.logger,
-            resolvedBy: callerKey,
-            persistedOptions: candidate.record.options,
-            persistOptions: async () => {},
-            publish: () => {},
-            operationReceipt: observedReceipt(store, store.founding.receipt(request)),
-            now: context.now
-          },
-          {
-            ...first,
-            payloadFingerprint: computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.send',
-              sessionId,
-              fields: { body: first.body }
-            }),
-            origin: 'client',
-            source: { kind: 'user' },
-            ...openingMessageOptions(candidate.record.options)
-          }
+        const receipt = observedReceipt(store, foundingReceipt(true))
+        const sent = await sendOpeningFoundingMessage(
+          context,
+          params,
+          session,
+          candidate.record,
+          callerKey,
+          fence,
+          first,
+          receipt
         )
         if (!sent.ok) {
-          return sent
+          if (!attempt) {
+            return sent
+          }
+          assertHostFoundingNotCancelled(attempt)
+          const disposition = attempt.opening?.transaction.disposition
+          if (disposition === 'not-attempted' || disposition === 'not-committed') {
+            await store.commitOperationReceipt(foundingReceipt(false))
+          } else {
+            // Publication uses adopted identity, independently of this failed new handle.
+            if (attempt.adopted && disposition === 'committed') {
+              await options.publishTab?.()
+            }
+            return {
+              ok: false,
+              refusal: unknownFoundingOutcome()
+            }
+          }
         }
+      } else if (attempt) {
+        await store.commitOperationReceipt(foundingReceipt(false))
       } else {
         await store.founding.commit(request)
       }
-      committed = true
+      if (attempt && !attempt.adopted) {
+        return {
+          ok: false,
+          refusal: unknownFoundingOutcome()
+        }
+      }
+      keepHandle = true
+    }
+    const firstMessage = options.firstMessage
+      ? session.journal.submission(options.firstMessage.clientMessageId)
+      : undefined
+    if (attempt && replayed) {
+      const record = store.getRecord(sessionId)
+      const expectedFingerprint =
+        options.firstMessage &&
+        computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId,
+          fields: { body: options.firstMessage.body }
+        })
+      if (options.firstMessage && firstMessage?.payloadFingerprint !== expectedFingerprint) {
+        return {
+          ok: false,
+          refusal: unknownFoundingOutcome()
+        }
+      }
+      if (record) {
+        const tabId = store.getSessionTabId(sessionId)
+        attempt.adopted = {
+          sessionId: record.sessionId,
+          workspaceId: record.location.workspaceId,
+          agent: params.agent,
+          fence: record.lease.runtimeFence,
+          ...(tabId ? { tabId } : {})
+        }
+      }
     }
     try {
       await options.publishTab?.()
@@ -253,9 +275,6 @@ async function foundConversation(
     }
     context.publishStatus(sessionId)
     const tabId = store.getSessionTabId(sessionId)
-    const firstMessage = options.firstMessage
-      ? session.journal.submission(options.firstMessage.clientMessageId)
-      : undefined
     const result = {
       ok: true as const,
       replayed,
@@ -273,33 +292,16 @@ async function foundConversation(
     context.wakeDelivery?.(sessionId)
     return result
   } finally {
-    if (!committed && !existing) {
-      await session.journal.close()
+    if (!keepHandle && !existing) {
+      await (attempt
+        ? session.journal.close().catch((error: unknown) => {
+            deps.logger.warn('closing a failed new chat handle failed', {
+              scope: 'create-journal-close',
+              sessionId,
+              error
+            })
+          })
+        : session.journal.close())
     }
   }
-}
-
-export function structuredAgentSessionEntryDelegates(
-  context: () => StructuredAgentSessionAttachContext
-) {
-  return {
-    attach: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: Parameters<typeof attachStructuredAgentSession>[3]
-    ) => attachStructuredAgentSession(context(), caller.callerKey, params, options),
-    create: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: StructuredAgentSessionCreateOptions
-    ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
-  }
-}
-
-/** Opening messages retain creation-time model/effort choices like later sends. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: AgentSessionExecutionOptions
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

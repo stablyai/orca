@@ -14,11 +14,12 @@ import {
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(
     await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
+  ).runtimeRpcClientWithLayoutApply(await importOriginal()),
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
 
 const initialAppStoreState = useAppStore.getState()
 

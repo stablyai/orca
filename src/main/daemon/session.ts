@@ -7,7 +7,7 @@ import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-bar
 import { SessionTerminationController } from './session-termination-controller'
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
-import type { SessionOptions } from './session-options'
+import type { SessionOptions, NativeSetupWrite } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
@@ -72,6 +72,7 @@ export class Session {
       subprocess: this.subprocess,
       responderParser: this.output.responderParser,
       shellReadySupported: opts.shellReadySupported,
+      nativeSetupToken: opts.nativeSetupToken,
       ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
@@ -136,13 +137,16 @@ export class Session {
     return this.subprocess.terminateOwnedTree()
   }
 
-  write(data: string): void {
+  write(data: string, setup?: NativeSetupWrite): void {
     if (this._state === 'exited' || this._disposed) {
       return
     }
 
-    // Contain cooked query echoes and preserve input order through the post-ready flush window.
-    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data)) {
+    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
+    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
+    // Why the queue: keep queuing during the post-ready flush-gate window ('ready' but not yet
+    // flushed); a direct write would race fresh input ahead of the buffered startup command.
+    if (this.startupIngress.answerLiveQueryReply(data) || this.shellReady.tryEnqueue(data, setup)) {
       return
     }
 

@@ -170,7 +170,7 @@ function attachContext(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
     deps: {
-      store: { getRecord: () => null },
+      store: { getRecord: () => null, getOperationRow: () => null },
       claimKeyId: 'key-1',
       journalDatabase: openTestJournalHostDatabase(root)
     },

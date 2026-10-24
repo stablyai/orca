@@ -1,3 +1,4 @@
+import { basename, win32 } from 'node:path'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   resolveSetupRunnerCommand,
@@ -46,6 +47,59 @@ export function buildObservedSetupCommand(
   return { command: `bash -lc ${quotePosixShell(script)}` }
 }
 
+export type NativeSetupCompletionShell = 'posix' | 'fish' | 'cmd' | 'powershell'
+
+export function nativeSetupCompletionShell(
+  executablePath: string
+): NativeSetupCompletionShell | undefined {
+  const name = win32.basename(basename(executablePath)).toLowerCase()
+  if (name === 'cmd.exe') {
+    return 'cmd'
+  }
+  if (name === 'powershell.exe' || name === 'pwsh.exe') {
+    return 'powershell'
+  }
+  if (name === 'fish') {
+    return 'fish'
+  }
+  return ['bash', 'zsh', 'sh', 'dash', 'ksh', 'mksh', 'ash'].includes(name) ? 'posix' : undefined
+}
+
+export function nativeSetupCompletionToken(
+  env: Record<string, string | undefined> | undefined
+): string | undefined {
+  const token = env?.ORCA_SETUP_COMPLETION_TOKEN
+  return token?.startsWith('native:') ? token : undefined
+}
+
+export function stripNativeSetupCompletionEnvironment(env: Record<string, string>): void {
+  if (nativeSetupCompletionToken(env)) {
+    delete env.ORCA_SETUP_COMPLETION_TOKEN
+  }
+}
+
+export function appendNativeSetupCompletion(
+  command: string,
+  token: string | undefined,
+  shell: NativeSetupCompletionShell | undefined
+): string {
+  if (!token || !shell) {
+    return command
+  }
+  const prefix = completionPrefix(token)
+  if (shell === 'cmd') {
+    return `${command} & call "%ComSpec%" /d /c "echo ${prefix}%%errorlevel%%&exit /b %%errorlevel%%"`
+  }
+  if (shell === 'powershell') {
+    return `${command}; $__orca_success=$?; $__orca_status=$LASTEXITCODE; if ($__orca_success) { $__orca_status=0 } elseif (!$__orca_status) { $__orca_status=1 }; [Console]::WriteLine('${prefix}' + $__orca_status); if ($__orca_status -ne 0) { Write-Error 'setup failed' -ErrorAction Ignore }`
+  }
+  // Why one submission: a second stdin line could become the setup program's input.
+  if (shell === 'fish') {
+    return `${command}; begin; set -l __orca_status $status; printf '\\n${prefix}%s\\n' $__orca_status; /bin/sh -c 'exit "$1"' sh $__orca_status; end`
+  }
+  return `${command}; ( __orca_status=$?; printf '\\n${prefix}%s\\n' "$__orca_status"; exit "$__orca_status" )`
+}
+
 export function createSetupCompletionScanner(
   completionToken: string,
   onComplete: (exitCode: number) => void
@@ -78,4 +132,21 @@ export function createSetupCompletionScanner(
 
 function completionPrefix(completionToken: string): string {
   return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
+}
+
+export function createSetupCompletionObservation(token: string) {
+  let finish: (exitCode: number | null) => void = () => {}
+  let fail: (error: unknown) => void = () => {}
+  const completion = new Promise<{ exitCode: number | null }>((resolve, reject) => {
+    fail = reject
+    finish = (exitCode) => resolve({ exitCode })
+  })
+  void completion.catch(() => {})
+  return {
+    token,
+    completion,
+    finish,
+    fail,
+    ...createSetupCompletionScanner(token, (code) => finish(code))
+  }
 }

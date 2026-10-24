@@ -1,8 +1,7 @@
 /**
  * Host-side delivery of a launch's initial text to the terminal agent the launch just started.
  *
- * The twin of `agent-launch-structured-prompt`, and it exists for the same reason: `agent.launch`
- * created a terminal and reported the text as undelivered, which was only workable while the
+ * `agent.launch` used to create a terminal and report the text as undelivered, which worked while the
  * surface that could paste — the desktop renderer's own pane — was also the one issuing the launch.
  * Mobile, the CLI and orchestration got an agent and no prompt. The host owns the PTY, so it can
  * write into one whether or not any window is open on it.

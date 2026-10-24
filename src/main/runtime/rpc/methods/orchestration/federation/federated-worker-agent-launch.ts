@@ -61,7 +61,7 @@ export async function launchFederatedWorkerAgent(args: {
     onStage: (stage) =>
       args.onStage(stage === 'worktree_create' ? 'worktree_create' : 'terminal_create'),
     workspaces: {
-      createWorktree: async ({ startupAgent }) => {
+      createWorktree: async ({ startupAgent, initializeSurface, onWorkspaceCreated }) => {
         // Agent-first is the only create here; a structured pre-flight must not reach it.
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
@@ -88,6 +88,8 @@ export async function launchFederatedWorkerAgent(args: {
           setupDecision,
           awaitTerminalProvisioning: true,
           observeSetupCompletion: true,
+          initializeSurface,
+          onWorkspaceCreated,
           createdWithAgent: agent,
           startupAgent: agent,
           startupLaunchSource: 'orchestration',
@@ -127,11 +129,12 @@ export async function launchFederatedWorkerAgent(args: {
       createStructuredSession: () => {
         throw new Error(TERMINAL_ONLY_MESSAGE)
       },
-      createTerminalAgent: async ({ worktreeId }) => {
+      createTerminalAgent: async ({ worktreeId, sequenceTerminalCommand }) => {
         const terminal = await runtime.createTerminal(`id:${worktreeId}`, {
           // Why: agent ids are not shell commands (`cursor` is the desktop app,
           // its CLI is `cursor-agent`); resolve through the TUI agent config.
           startupAgent: agent,
+          ...(sequenceTerminalCommand ? { sequenceTerminalCommand } : {}),
           launchSource: 'orchestration',
           ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
           title: `worker-${params.taskId}`,

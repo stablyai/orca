@@ -57,6 +57,7 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
   ) => Promise<RemoteFetchResult>
   fetchRemote: (path: string, remote: string, options?: LocalGitExecOptions) => Promise<void>
   onWorktreeMetadataPersisted: (worktree: Worktree) => T
+  preparation?: PreparationRearmHolder
   rearm: PreparationRearmHolder
   timing: WorktreeCreateTimingRecorder
 }
@@ -129,6 +130,11 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
       'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
     )
   }
+  const refreshRemoteTrackingBase: RuntimeLocalWorktreeCreateArgs<T>['refreshRemoteTrackingBase'] =
+    (...inputs) => {
+      request.onProgress?.({ phase: 'fetching' })
+      return args.refreshRemoteTrackingBase(...inputs)
+    }
   const base = await resolveRuntimeLocalWorktreeCreateBase({
     repoPath: repo.path,
     baseBranch,
@@ -136,15 +142,18 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     allowLocalBaseFallback: request.allowLocalBaseFallback === true,
     resolveRemoteTrackingBase: args.resolveRemoteTrackingBase,
     hasRemoteTrackingRef: args.hasRemoteTrackingRef,
-    refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
+    refreshRemoteTrackingBase,
     timing: args.timing
   })
   const baseRefRefresh = startRuntimeLocalBaseRefRefresh({
     repoPath: repo.path,
     base,
     localWorktreeGitOptions: worktreeGitOptions,
-    refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
-    fetchRemote: args.fetchRemote,
+    refreshRemoteTrackingBase,
+    fetchRemote: (...inputs) => {
+      request.onProgress?.({ phase: 'fetching' })
+      return args.fetchRemote(...inputs)
+    },
     timing: args.timing
   })
   const candidate = await args.timing.time('resolve_name', () =>
@@ -166,6 +175,9 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     candidate.worktreePath,
     worktreeGitOptions
   )
+  if (args.preparation) {
+    args.preparation.fire = releaseInFlightHold
+  }
   try {
     const git = await createRuntimeLocalGitWorktree({
       request,
@@ -202,7 +214,6 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
       effectiveCreatedWithAgent: args.createdWithAgent,
       localWorktreeGitOptions: worktreeGitOptions,
       onMetadataPersisted: (worktree) => {
-        releaseInFlightHold()
         return args.onWorktreeMetadataPersisted(worktree)
       },
       timing: args.timing
@@ -215,6 +226,8 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
       ...(base.baseFallback ? { baseFallback: base.baseFallback } : {})
     }
   } finally {
-    releaseInFlightHold()
+    if (!args.preparation) {
+      releaseInFlightHold()
+    }
   }
 }

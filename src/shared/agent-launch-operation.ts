@@ -18,7 +18,7 @@
  */
 
 import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
-import { parseAgentSessionOperationTimestamp } from './agent-session-host-authority'
+export { deriveAgentLaunchChildOperationId } from './agent-launch-child-operation'
 
 /**
  * The launch fields that decide what the call does. The operation id itself is excluded — it names
@@ -28,6 +28,7 @@ import { parseAgentSessionOperationTimestamp } from './agent-session-host-author
  */
 export type AgentLaunchFingerprintInput = {
   agent: string
+  createIdentity?: { instanceId: string }
   target:
     | { kind: 'existing'; worktree: string }
     | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
@@ -69,6 +70,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
   return canonicalAgentSessionDigest({
     method: 'agent.launch',
     agent: input.agent,
+    createIdentity: input.createIdentity,
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
@@ -80,30 +82,4 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     sessionId: input.sessionId,
     surface: input.surface
   })
-}
-
-const OPERATION_ID_ENTROPY_LENGTH = 32
-
-/**
- * The id the launch's inner `agentSession.attach` reserves under.
- *
- * The ledger keys a row on `(callerKey, operationId)` with no method in it, and a structured launch
- * reserves in that same ledger under the same caller. Forwarding the launch's own id would make the
- * attach meet the launch's row, disagree with its fingerprint, and refuse a conflict before
- * anything was created. Derived rather than random so the child of a given launch is always the
- * same id — a launch is claimed once, and a claim that could name a different child each time would
- * be ownership in name only.
- *
- * The launch's timestamp is kept so the child ages out on the same schedule as its parent.
- */
-export function deriveAgentLaunchChildOperationId(operationId: string): string | null {
-  const timestamp = parseAgentSessionOperationTimestamp(operationId)
-  if (timestamp === null) {
-    return null
-  }
-  const entropy = canonicalAgentSessionDigest({
-    child: 'agent.launch:attach',
-    operationId
-  }).slice(0, OPERATION_ID_ENTROPY_LENGTH)
-  return `${timestamp}-${entropy}`
 }

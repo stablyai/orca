@@ -1,3 +1,4 @@
+import { classifyStoreFailure } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import '../unused-default-rpc-methods.test-fixture'
 // The create route's pre-commit boundary: a failure before `attach` must reach the client as a
 // refusal it can classify, and a failure at or after `attach` must not.
@@ -45,13 +46,26 @@ function createParams(overrides: Record<string, unknown> = {}) {
 let attach: ReturnType<typeof vi.fn>
 
 function hostStub(): StructuredAgentSessionHost {
-  attach = vi.fn(async () => ({
-    ok: true,
-    replayed: false,
-    fence: 1,
-    cursor: { epoch: 'epoch-a', sequence: 0 },
-    value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
-  }))
+  attach = vi.fn(
+    async (
+      _caller: Parameters<StructuredAgentSessionHost['attach']>[0],
+      _params: Parameters<StructuredAgentSessionHost['attach']>[1],
+      options?: Parameters<StructuredAgentSessionHost['attach']>[2]
+    ) => {
+      try {
+        await options?.publishTab?.()
+      } catch (error) {
+        return { ok: false, refusal: classifyStoreFailure(error, 1) }
+      }
+      return {
+        ok: true,
+        replayed: false,
+        fence: 1,
+        cursor: { epoch: 'epoch-a', sequence: 0 },
+        value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
+      }
+    }
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: legacy create reads the empty ledger, calls attach and logs failures.
   return {
     attach,

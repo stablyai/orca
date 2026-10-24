@@ -3,6 +3,7 @@ import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
+import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -72,6 +73,18 @@ export class MetadataLineageOperations {
       this[metadataLineageOperationsContext].scheduling,
       worktreeId,
       executionHostId
+    )
+  }
+
+  hasWorktreeInstanceForHost(instanceId: string, executionHostId: ExecutionHostId): boolean {
+    const { state } = this[metadataLineageOperationsContext].runtime
+    const key = canonicalWorktreeIdentity({ worktreeId: '', executionHostId, instanceId })
+    return (
+      Object.hasOwn(state.worktreeMetaByIdentity ?? {}, key) ||
+      Object.values(state.worktreeMeta).some(
+        (meta) =>
+          meta.instanceId === instanceId && (!meta.hostId || meta.hostId === executionHostId)
+      )
     )
   }
 

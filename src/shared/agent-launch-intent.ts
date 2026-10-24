@@ -1,3 +1,4 @@
+import type { CreateWorktreeResult } from './worktree/create-types'
 /**
  * What a caller asks for when it wants an agent running somewhere, independent of which surface
  * asked and of whether the answer turns out to be a structured session or a terminal.
@@ -60,6 +61,7 @@ export type AgentLaunchTarget =
 export type AgentLaunchReusedTerminal = { handle: string }
 
 export type AgentLaunchIntent = {
+  createIdentity?: { instanceId: string }
   agent: TuiAgent
   target: AgentLaunchTarget
   prompt?: AgentLaunchPrompt
@@ -192,6 +194,7 @@ export type AgentLaunchPromptReceipt = {
 } & AgentLaunchPromptDisposal
 
 export type AgentLaunchResult = {
+  created?: CreateWorktreeResult
   outcome: AgentLaunchOutcome
   /** The workspace the agent runs in, resolved or created. */
   worktreeId: string

@@ -45,6 +45,7 @@ async function agentLaunchIntent(
   const paneKey = publishedPaneKey ?? params.paneKey
   return {
     agent: params.agent,
+    ...(params.createIdentity ? { createIdentity: params.createIdentity } : {}),
     target: await agentLaunchTarget(params, runtime),
     ...(params.prompt ? { prompt: params.prompt } : {}),
     ...(params.sessionOptions ? { sessionOptions: params.sessionOptions } : {}),

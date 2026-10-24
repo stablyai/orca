@@ -1,11 +1,15 @@
 import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
+import { retireDesktopCreatePresentation } from '@/lib/structured-agent-session-desktop-create-cancellation'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
+import {
+  abandonHostCreatedLaunchPrompts,
+  discardStructuredAgentSessionChatSends
+} from '@/lib/structured-agent-session-launch-prompt'
 import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
-import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import { closeStructuredAgentSession } from './structured-agent-session-close'
@@ -125,6 +129,10 @@ export function beginStructuredAgentSessionTabClose(args: {
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
 }): void {
+  if (!args.provisional) {
+    retireDesktopCreatePresentation(args.sessionId, executionHostIdForStructuredTarget(args.target))
+  }
+  abandonHostCreatedLaunchPrompts(args.sessionId, executionHostIdForStructuredTarget(args.target))
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(

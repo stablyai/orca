@@ -66,6 +66,7 @@ type WorkerAgentPlacementArgs = {
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
+  onSetupReceipt?: (receipt: WorkerSetupReceipt) => void
 }
 
 /** The setup receipt for a placement that creates no worktree, and the one a start reports if it
@@ -136,8 +137,20 @@ async function launchWorkerAgent(
             id: shell.handle,
             tabId: shell.tabId
           })
+          args.db.recordWorkerStage({
+            dispatchId: args.dispatchId,
+            stage: 'terminal_creating',
+            worktreeId,
+            effects: args.effects,
+            residualResources: args.effects
+          })
         },
-        createWorktree: async ({ startupAgent, promisedAgentChat, onWorkspaceCreated }) => {
+        createWorktree: async ({
+          startupAgent,
+          promisedAgentChat,
+          onWorkspaceCreated,
+          initializeSurface
+        }) => {
           created = await createWorkerWorktree({
             runtime: args.runtime,
             db: args.db,
@@ -150,6 +163,8 @@ async function launchWorkerAgent(
             withAgentTerminal: startupAgent !== undefined,
             promisedAgentChat,
             onWorkspaceCreated,
+            initializeSurface,
+            onSetupReceipt: args.onSetupReceipt,
             ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
             effects: args.effects
           })
@@ -198,7 +213,10 @@ function workerSurfaceFactory(
     })
   }
   return {
-    createStructuredSession: async ({ worktreeId }) => {
+    createStructuredSession: async ({ worktreeId, firstMessage }) => {
+      if (firstMessage) {
+        throw new Error('worker_opening_input_uses_its_own_admission')
+      }
       recordSurfaceStage(worktreeId)
       const session = await createStructuredWorkerSessionForWorktree({
         runtime: args.runtime,
@@ -215,12 +233,13 @@ function workerSurfaceFactory(
         fence: session.fence
       }
     },
-    createTerminalAgent: async ({ worktreeId }) => {
+    createTerminalAgent: async ({ worktreeId, sequenceTerminalCommand }) => {
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
         runtime: args.runtime,
         worktreeId,
         agent,
+        ...(sequenceTerminalCommand ? { sequenceTerminalCommand } : {}),
         ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
         taskId: args.taskId,
         effects: args.effects

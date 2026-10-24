@@ -1,5 +1,14 @@
+import { useAppStore } from '@/store'
+import * as launchRecords from '@/lib/structured-agent-session-launch-persistence'
+import { parseDesktopCreateLaunchRecord } from '@/lib/structured-agent-session-launch-record'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
+import {
+  getRuntimeEnvironmentConnectionGeneration,
+  advanceRuntimeEnvironmentConnectionGeneration
+} from '../../runtime-status-connection-generation'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { applyCreatedWorktree } from '../create/created-worktree-state-merge'
@@ -133,16 +142,23 @@ function seedCreatedWorkspaceWithPendingLaunch(
 function applyListing(
   store: ReturnType<typeof createTestStore>,
   rows: Worktree[],
-  catalogVersion?: WorktreeCatalogVersion
+  catalogVersion?: WorktreeCatalogVersion,
+  hostId: ExecutionHostId = 'local',
+  runtimeAuthority?: {
+    environmentId: string
+    connectionGeneration: number
+    runtimeConnectionGeneration: number
+  }
 ): WorktreeListingMergeOutcome {
   return mergeFetchedWorktrees(store.setState, store.getState, {
     repoId: REPO_ID,
-    hostId: 'local',
+    hostId,
     ownerWasMissingAtStart: false,
     requestStartedWorktrees: store.getState().worktreesByRepo[REPO_ID],
     refresh: {
       status: 'admitted',
-      executionHostId: 'local',
+      executionHostId: hostId,
+      runtimeAuthority,
       result: {
         repoId: REPO_ID,
         authoritative: true,
@@ -298,4 +314,404 @@ describe('a listing versioned before an applied create', () => {
     expect(launchWasCancelled()).toBe(true)
     expect(store.getState().activeWorktreeId).toBeNull()
   })
+})
+
+it('associates a missed outer reply from accepted catalog rows with bounded keyed work, including unchanged rows', () => {
+  const read = vi.spyOn(launchRecords, 'readStructuredAgentLaunchRecord')
+  const globals = vi.spyOn(useAppStore, 'getState')
+  try {
+    for (const size of [10, 100]) {
+      resetStructuredAgentLaunchPersistenceForTests()
+      const store = createTestStore()
+      seedStore(store, { repos: [TEST_REPO] })
+      globals.mockImplementation(store.getState)
+      const instanceId = '94d38a16-e9db-4e86-b81d-334788958124'
+      const rows = Array.from({ length: size }, (_, i) =>
+        makeWorktree({
+          id: `${REPO_ID}::/tmp/perf-${i}`,
+          path: `/tmp/perf-${i}`,
+          repoId: REPO_ID,
+          instanceId: i === 0 ? instanceId : `unrelated-${i}`
+        })
+      )
+      read.mockClear()
+      expect(applyListing(store, rows)).toBe('applied')
+      expect(read.mock.calls.filter(([key]) => key.startsWith('desktop-create:'))).toHaveLength(0)
+      const sessionId = 'claude_11111111_2222_4333_8444_555555555555'
+      const record = parseDesktopCreateLaunchRecord({
+        sessionId,
+        executionHostId: 'local',
+        agent: 'claude',
+        lifecycle: 'visibility-unknown',
+        desktopCreate: {
+          params: {
+            agent: 'claude',
+            operationId: '1790000000123-0123456789abcdef0123456789abcdef',
+            sessionId,
+            paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+            surface: 'chat',
+            createIdentity: { instanceId },
+            target: { kind: 'create-worktree', create: { repo: REPO_ID, name: 'task' } },
+            prompt: { text: 'host-owned A', delivery: 'submit' }
+          }
+        }
+      })
+      if (!record) {
+        throw new Error('outer record invalid')
+      }
+      writeStructuredAgentLaunchRecord(record)
+      read.mockClear()
+      expect(applyListing(store, rows)).toBe('applied')
+      expect(
+        read.mock.calls.filter(([key]) => key.startsWith('desktop-create:')).length
+      ).toBeLessThanOrEqual(size)
+      expect(readStructuredAgentLaunchRecord(sessionId)).toMatchObject({
+        lifecycle: 'visibility-unknown',
+        desktopCreate: { worktreeId: rows[0]!.id },
+        surfaceAddress: { worktreeId: rows[0]!.id }
+      })
+      expect(store.getState().unifiedTabsByWorktree[rows[0]!.id]).toEqual([
+        expect.objectContaining({
+          contentType: 'agent-session',
+          entityId: sessionId,
+          executionHostId: 'local'
+        })
+      ])
+      expect(store.getState().activeWorktreeId).toBeNull()
+      expect(applyListing(store, rows)).toBe('applied')
+      expect(store.getState().unifiedTabsByWorktree[rows[0]!.id]).toHaveLength(1)
+    }
+  } finally {
+    read.mockRestore()
+    globals.mockRestore()
+    resetStructuredAgentLaunchPersistenceForTests()
+  }
+})
+
+it('keeps lost outer replies unknown through admitted catalog, publication, reload and close; only deliberate Replay checks the same request', async () => {
+  const rpcModule = await import('@/runtime/runtime-rpc-client')
+  const { RuntimeRpcCallError } = await import('@/runtime/runtime-rpc-result')
+  const { issueDesktopCreateLaunch } = await import('@/lib/structured-agent-session-desktop-create')
+  const { retryStructuredAgentSessionLaunch } =
+    await import('@/lib/structured-agent-session-launch')
+  const { recheckUnconfirmedStructuredAgentLaunches } =
+    await import('@/lib/structured-agent-session-launch-unconfirmed-recheck')
+  const { markStructuredAgentSessionLaunchPublished } =
+    await import('@/lib/structured-agent-session-launch-publication')
+  const { getStructuredAgentSessionLaunchLifecycle } =
+    await import('@/lib/structured-agent-session-launch-registry')
+  const { deriveAgentLaunchChildOperationId } =
+    await import('../../../../../../shared/agent-launch-child-operation')
+  const store = createTestStore()
+  seedStore(store, { repos: [TEST_REPO] })
+  const globalState = vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+  const rpc = vi.spyOn(rpcModule, 'callRuntimeRpc').mockImplementation(async () => ({}))
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key)
+  })
+  resetStructuredAgentLaunchPersistenceForTests()
+  const sessionId = 'claude_11111111_2222_4333_8444_555555555555'
+  const instanceId = '94d38a16-e9db-4e86-b81d-334788958124'
+  const record = parseDesktopCreateLaunchRecord({
+    sessionId,
+    executionHostId: 'local',
+    agent: 'claude',
+    lifecycle: 'visibility-unknown',
+    desktopCreate: {
+      params: {
+        agent: 'claude',
+        sessionId,
+        surface: 'chat',
+        createIdentity: { instanceId },
+        operationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
+        paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+        target: { kind: 'create-worktree', create: { repo: REPO_ID, name: 'task' } },
+        prompt: { text: 'host A', delivery: 'submit' }
+      }
+    }
+  })
+  if (!record) {
+    throw new Error('outer record invalid')
+  }
+  const row = makeWorktree({ id: CREATED_ID, path: '/tmp/wt-created', repoId: REPO_ID, instanceId })
+  try {
+    writeStructuredAgentLaunchRecord(record)
+    rpc.mockRejectedValueOnce(new Error('whole RPC reply lost'))
+    await expect(issueDesktopCreateLaunch(record, { kind: 'local' })).rejects.toThrow(
+      'whole RPC reply lost'
+    )
+    expect(applyListing(store, [row])).toBe('applied')
+    expect(getStructuredAgentSessionLaunchLifecycle(CREATED_ID, sessionId)).toBe(
+      'visibility-unknown'
+    )
+    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toEqual([
+      expect.objectContaining({ entityId: sessionId })
+    ])
+    markStructuredAgentSessionLaunchPublished(CREATED_ID, sessionId, 'local')
+    expect(readStructuredAgentLaunchRecord(sessionId)?.desktopCreate).toBeDefined()
+    recheckUnconfirmedStructuredAgentLaunches('local')
+    resetStructuredAgentLaunchPersistenceForTests()
+    expect(readStructuredAgentLaunchRecord(sessionId)?.lifecycle).toBe('visibility-unknown')
+    expect(applyListing(store, [row])).toBe('applied')
+    expect(rpc).toHaveBeenCalledTimes(1)
+    let reply!: (value: unknown) => void
+    rpc.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          reply = resolve
+        })
+    )
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(true)
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(false)
+    expect(rpc.mock.calls[1]?.[1]).toBe('agent.launchReplay')
+    expect(rpc.mock.calls[1]?.[2]).toEqual(record.desktopCreate.params)
+    // Actual close retires the saved owner before the late result; no transient input is re-staged.
+    store.getState().closeUnifiedTab(`structured-agent-session-${sessionId}`)
+    expect(readStructuredAgentLaunchRecord(sessionId)).toBeUndefined()
+    const child = deriveAgentLaunchChildOperationId(record.desktopCreate.params.operationId)!
+    reply({
+      worktreeId: CREATED_ID,
+      outcome: { kind: 'structured', sessionId, handle: 'chat' },
+      receipt: { mode: 'structured', preferred: 'structured', reason: 'requested', detail: 'Chat' },
+      prompt: {
+        text: 'host A',
+        delivery: 'submit',
+        outcome: 'journaled',
+        messageId: deriveAgentLaunchChildOperationId(child)
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(readStructuredAgentLaunchRecord(sessionId)).toBeUndefined()
+    expect(
+      rpc.mock.calls.filter(
+        ([, method]) => method === 'agentSession.create' || method === 'agentSession.send'
+      )
+    ).toHaveLength(0)
+    // Independent single-fault fixture: a delivered W survives lost instance metadata.
+    storage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    seedStore(store, { worktreesByRepo: {}, unifiedTabsByWorktree: {}, groupsByWorktree: {} })
+    writeStructuredAgentLaunchRecord(record)
+    rpc.mockRejectedValueOnce(
+      new RuntimeRpcCallError({
+        id: 'actual-W',
+        ok: false,
+        error: {
+          code: 'agent_session_operation_unknown',
+          message: 'unknown',
+          data: { desktopCreate: { worktreeId: CREATED_ID } }
+        }
+      })
+    )
+    rpc.mockResolvedValueOnce({ worktree: { ...row, instanceId: undefined } })
+    const merge = vi.spyOn(useAppStore, 'setState').mockImplementation(store.setState)
+    const refresh = vi.spyOn(store.getState(), 'fetchWorktrees').mockResolvedValue(true)
+    let observerThrew = false
+    const stopObserver = store.subscribe((state) => {
+      if (
+        !observerThrew &&
+        state.unifiedTabsByWorktree[CREATED_ID]?.some((tab) => tab.entityId === sessionId)
+      ) {
+        observerThrew = true
+        throw new Error('presentation observer failed after tab installation')
+      }
+    })
+    try {
+      await expect(issueDesktopCreateLaunch(record, { kind: 'local' })).rejects.toThrow('unknown')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(observerThrew).toBe(true)
+      expect(store.getState().getKnownWorktreeById(CREATED_ID, 'local')).toBeDefined()
+      expect(rpc.mock.calls.some(([, method]) => method === 'worktree.show')).toBe(true)
+    } finally {
+      stopObserver()
+      merge.mockRestore()
+      refresh.mockRestore()
+    }
+    expect(readStructuredAgentLaunchRecord(sessionId)).toMatchObject({
+      lifecycle: 'visibility-unknown',
+      desktopCreate: { worktreeId: CREATED_ID }
+    })
+    resetStructuredAgentLaunchPersistenceForTests()
+    expect(applyListing(store, [{ ...row, instanceId: undefined }])).toBe('applied')
+    expect(readStructuredAgentLaunchRecord(sessionId)?.desktopCreate?.worktreeId).toBe(CREATED_ID)
+    const frozenMetadataRetry = structuredClone(
+      readStructuredAgentLaunchRecord(sessionId)?.desktopCreate?.params
+    )
+    const beforeMetadataRetry = rpc.mock.calls.length
+    rpc.mockRejectedValueOnce(
+      new RuntimeRpcCallError({
+        id: 'metadata-retry',
+        ok: false,
+        error: { code: 'agent_session_operation_unknown', message: 'unknown' }
+      })
+    )
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(rpc.mock.calls.slice(beforeMetadataRetry)).toEqual([
+      [
+        { kind: 'local' },
+        'agent.launchReplay',
+        frozenMetadataRetry,
+        expect.objectContaining({ beforeSend: expect.any(Function) })
+      ]
+    ])
+    expect(
+      rpc.mock.calls.some(
+        ([, method]) => method === 'agentSession.create' || method === 'agentSession.send'
+      )
+    ).toBe(false)
+    expect(readStructuredAgentLaunchRecord(sessionId)?.lifecycle).toBe('visibility-unknown')
+    store.getState().closeUnifiedTab(`structured-agent-session-${sessionId}`)
+    storage.clear()
+    resetStructuredAgentLaunchPersistenceForTests()
+    writeStructuredAgentLaunchRecord(record)
+    let closed = false
+    const stop = store.subscribe((state) => {
+      if (
+        !closed &&
+        state.unifiedTabsByWorktree[CREATED_ID]?.some((tab) => tab.entityId === sessionId)
+      ) {
+        closed = true
+        state.closeUnifiedTab(`structured-agent-session-${sessionId}`)
+      }
+    })
+    try {
+      expect(applyListing(store, [row])).toBe('applied')
+      expect(closed).toBe(true)
+      expect(readStructuredAgentLaunchRecord(sessionId)).toBeUndefined()
+      resetStructuredAgentLaunchPersistenceForTests()
+      expect(readStructuredAgentLaunchRecord(sessionId)).toBeUndefined()
+      expect(applyListing(store, [row])).toBe('applied')
+      expect(store.getState().unifiedTabsByWorktree[CREATED_ID] ?? []).toEqual([])
+    } finally {
+      stop()
+    }
+  } finally {
+    rpc.mockRestore()
+    globalState.mockRestore()
+    resetStructuredAgentLaunchPersistenceForTests()
+    vi.unstubAllGlobals()
+  }
+})
+
+it('restores an outer paired launch only from current admitted catalog and manually replays its frozen request on that host', async () => {
+  const rpcModule = await import('@/runtime/runtime-rpc-client')
+  const { RuntimeRpcCallError } = await import('@/runtime/runtime-rpc-result')
+  const { replaceRuntimeEnvironmentRevisions } =
+    await import('@/runtime/runtime-environment-revision')
+  const { restoreStructuredLaunchSurfaces } =
+    await import('@/lib/structured-agent-session-launch-surface')
+  const { retryStructuredAgentSessionLaunch } =
+    await import('@/lib/structured-agent-session-launch')
+  const { recheckUnconfirmedStructuredAgentLaunches } =
+    await import('@/lib/structured-agent-session-launch-unconfirmed-recheck')
+  const { stagedStructuredLaunchPrompts } =
+    await import('@/lib/structured-agent-session-launch-prompt')
+  const store = createTestStore()
+  const hostId = 'runtime:outer-paired'
+  const environmentId = 'outer-paired'
+  seedStore(store, { repos: [{ ...TEST_REPO, executionHostId: hostId }] })
+  const state = vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+  const rpc = vi.spyOn(rpcModule, 'callRuntimeRpc').mockRejectedValue(
+    new RuntimeRpcCallError({
+      id: 'replay',
+      ok: false,
+      error: { code: 'agent_session_operation_expired', message: 'expired' }
+    })
+  )
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key)
+  })
+  resetStructuredAgentLaunchPersistenceForTests()
+  replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 21 }])
+  const sessionId = 'codex_11111111_2222_4333_8444_555555555555'
+  const instanceId = '94d38a16-e9db-4e86-b81d-334788958124'
+  const record = parseDesktopCreateLaunchRecord({
+    sessionId,
+    executionHostId: hostId,
+    agent: 'codex',
+    lifecycle: 'pending',
+    desktopCreate: {
+      params: {
+        agent: 'codex',
+        sessionId,
+        surface: 'chat',
+        createIdentity: { instanceId },
+        operationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
+        paneKey: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+        target: { kind: 'create-worktree', create: { repo: REPO_ID, name: 'paired' } },
+        prompt: { text: 'host A', delivery: 'submit' }
+      }
+    }
+  })
+  if (!record) {
+    throw new Error('outer fixture invalid')
+  }
+  const row = makeWorktree({
+    id: CREATED_ID,
+    repoId: REPO_ID,
+    path: '/tmp/wt-created',
+    instanceId,
+    hostId
+  })
+  const authority = {
+    environmentId,
+    connectionGeneration: getEnvironmentSshStateGeneration(environmentId),
+    runtimeConnectionGeneration: getRuntimeEnvironmentConnectionGeneration(environmentId)
+  }
+  try {
+    writeStructuredAgentLaunchRecord(record)
+    resetStructuredAgentLaunchPersistenceForTests()
+    restoreStructuredLaunchSurfaces()
+    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
+    advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+    expect(applyListing(store, [row], undefined, hostId, authority)).toBe('not-current')
+    expect(readStructuredAgentLaunchRecord(sessionId)?.desktopCreate?.worktreeId).toBeUndefined()
+    const current = {
+      ...authority,
+      runtimeConnectionGeneration: getRuntimeEnvironmentConnectionGeneration(environmentId)
+    }
+    const version = { epoch: 'paired-host', sequence: 5 }
+    expect(applyListing(store, [row], version, hostId, current)).toBe('applied')
+    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toEqual([
+      expect.objectContaining({ entityId: sessionId, executionHostId: hostId })
+    ])
+    expect(applyListing(store, [], { ...version, sequence: 4 }, hostId, current)).toBe('superseded')
+    resetStructuredAgentLaunchPersistenceForTests()
+    recheckUnconfirmedStructuredAgentLaunches(hostId)
+    expect(applyListing(store, [row], version, hostId, current)).toBe('applied')
+    expect(rpc).not.toHaveBeenCalled()
+    expect(stagedStructuredLaunchPrompts.has(sessionId)).toBe(false)
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(true)
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(false)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId },
+      'agent.launchReplay',
+      record.desktopCreate.params,
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 21 })
+    )
+    expect(readStructuredAgentLaunchRecord(sessionId)?.lifecycle).toBe('visibility-unknown')
+    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toHaveLength(1)
+    replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 22 }], {
+      retired: [environmentId],
+      sameHost: []
+    })
+    expect(readStructuredAgentLaunchRecord(sessionId)).toBeUndefined()
+    expect(retryStructuredAgentSessionLaunch(CREATED_ID, sessionId)).toBe(false)
+    expect(rpc).toHaveBeenCalledTimes(1)
+  } finally {
+    rpc.mockRestore()
+    state.mockRestore()
+    vi.unstubAllGlobals()
+    resetStructuredAgentLaunchPersistenceForTests()
+    replaceRuntimeEnvironmentRevisions([])
+  }
 })

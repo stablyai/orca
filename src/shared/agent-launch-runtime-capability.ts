@@ -77,7 +77,11 @@ export const AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY = 'settings.agent-permiss
 // explicit chat it cannot open before creating anything. Older hosts strip the field.
 export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
 
+export const AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY =
+  'agent.launch.desktop-create.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
+  AGENT_LAUNCH_DESKTOP_CREATE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,

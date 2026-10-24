@@ -11,6 +11,7 @@ import {
 } from '../../../../../agent-launch/agent-launch-mode'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { RuntimeManagedWorktreeCreateArgs } from '../../../../runtime-managed-worktree-create-types'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
 import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
@@ -44,13 +45,26 @@ const TERMINAL: AgentLaunchModeReceipt = {
 const COORDINATOR = { id: 'wt_coord', repoId: 'repo_1' }
 const EXISTING = { id: 'wt_existing', repoId: 'repo_1' }
 
-function fakes() {
+function fakes(staged = false) {
   const stages: string[] = []
   const runtime = {
-    createManagedWorktree: vi.fn(async (args: { startupAgent?: string }) => ({
-      worktree: { id: 'wt_new', repoId: 'repo_1' },
-      ...(args.startupAgent ? { startupTerminal: { handle: 'term_startup' } } : {})
-    })),
+    createManagedWorktree: vi.fn(async (args: RuntimeManagedWorktreeCreateArgs) => {
+      args.onWorkspaceCreated?.('wt_new')
+      if (staged) {
+        await args.initializeSurface?.({ worktreeId: 'wt_new', startupTerminalHandle: undefined })
+      }
+      return {
+        worktree: { id: 'wt_new', repoId: 'repo_1' },
+        ...(args.startupAgent ? { startupTerminal: { handle: 'term_startup' } } : {}),
+        setupReceipt: {
+          requested: 'run',
+          hookFound: true,
+          startupPolicy: 'wait-for-setup',
+          state: 'running',
+          terminalHandle: 'term_setup'
+        }
+      }
+    }),
     listTerminals: vi.fn(async (_selector: string) => ({
       terminals: [{ handle: 'term_startup', title: 'claude', tabId: 'tab_1', leafId: 'leaf_1' }]
     })),
@@ -64,9 +78,11 @@ function fakes() {
     ensureStructuredAgentSessionHost: async () => {}
   }
   const db = {
-    recordWorkerStage: vi.fn((row: { stage: string }) => {
-      stages.push(row.stage)
-    })
+    recordWorkerStage: vi.fn(
+      (row: { stage: string; effects?: unknown[]; residualResources?: unknown[] }) => {
+        stages.push(row.stage)
+      }
+    )
   }
   const failedStages: string[] = []
   const effects: WorkerEffect[] = []
@@ -139,6 +155,38 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', { surfaceOwner: false })
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
   })
+
+  it.each([false, true])(
+    'retains created workspace, Setup and recovery shell on refused create (staged=%s)',
+    async (staged) => {
+      const f = fakes(staged)
+      f.runtime.listTerminals.mockResolvedValue({
+        terminals: [{ handle: 'term_setup', title: 'Setup', tabId: 'setup', leafId: 'setup-leaf' }]
+      })
+      sessionCreate.refusal = { code: 'structured_agent_session_unsupported' }
+      await expect(place(f, { mode: STRUCTURED })).rejects.toMatchObject({
+        code: 'agent_unconfigured'
+      })
+      expect(f.effects).toEqual(
+        expect.arrayContaining([
+          { kind: 'worktree', action: 'created_child', id: 'wt_new' },
+          expect.objectContaining({ kind: 'terminal', role: 'setup', id: 'term_setup' }),
+          expect.objectContaining({ kind: 'setup', state: 'running', terminalId: 'term_setup' }),
+          expect.objectContaining({ kind: 'terminal', role: 'recovery_shell', id: 'term_worker' })
+        ])
+      )
+      expect(f.db.recordWorkerStage.mock.calls.at(-1)?.[0]).toMatchObject({
+        effects: f.effects,
+        residualResources: f.effects
+      })
+      expect(f.runtime.createManagedWorktree.mock.calls[0]?.[0]).toMatchObject({
+        runHooks: false,
+        setupDecision: 'run',
+        activate: false,
+        lineage: { parentWorktree: 'wt_coord', callerTerminalHandle: 'term_coord' }
+      })
+    }
+  )
 
   it('does not ask the host again about an existing worktree whose mode it already settled', async () => {
     const f = fakes()
@@ -241,9 +289,9 @@ describe('a fresh worker through the launch executor', () => {
         requested: 'run',
         effective: 'run',
         source: 'orchestration_default',
-        hookFound: false,
-        startupPolicy: 'start-immediately',
-        state: 'not_configured'
+        hookFound: true,
+        startupPolicy: 'wait-for-setup',
+        state: 'running'
       }
     })
     expect(placed).not.toHaveProperty('warning')

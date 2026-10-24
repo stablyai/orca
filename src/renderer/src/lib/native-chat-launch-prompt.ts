@@ -6,6 +6,8 @@ export type NativeChatLaunchPrompt = {
   text: string
   createdAt: number
   failed?: boolean
+  unconfirmed?: true
+  paneKey?: string
 }
 
 /**

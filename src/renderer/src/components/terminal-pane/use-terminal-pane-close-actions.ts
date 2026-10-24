@@ -1,3 +1,5 @@
+import { abandonHostCreatedLaunchPane } from '@/lib/structured-agent-session-launch-prompt'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useCallback, useEffect, useRef } from 'react'
 import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane-close'
 import { useAppStore } from '../../store'
@@ -114,6 +116,10 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         return
       }
       const leafId = manager.getLeafId(paneId)
+      const host = getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+      if (host && leafId) {
+        abandonHostCreatedLaunchPane(host, tabId, leafId)
+      }
       // Switch point: main closes the pane first; the window removes it when main's frame does.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&

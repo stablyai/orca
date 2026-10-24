@@ -76,7 +76,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
   )
   const meta = timing.timeSync('persist_metadata', () =>
     store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
-      instanceId: randomUUID(),
+      instanceId: request.requestedInstanceId ?? randomUUID(),
       ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,
       createdAt: now,

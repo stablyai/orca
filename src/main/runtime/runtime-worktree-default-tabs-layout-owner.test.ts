@@ -29,9 +29,7 @@ function fakeHost() {
     applyDefaultTabs: vi.fn(async (_worktreeId, tabs) => {
       applied.push(tabs)
       return tabs
-    }),
-    getPtyId: () => undefined,
-    recordSetupCompletionToken: vi.fn()
+    })
   }
   return { host, applied, createTerminal }
 }

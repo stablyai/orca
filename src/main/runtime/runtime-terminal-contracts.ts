@@ -1,3 +1,4 @@
+import type { AgentLaunchTerminalSequence } from '../agent-launch/agent-launch-surface-factories'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
@@ -105,6 +106,8 @@ export type TerminalCreateOptions = {
   focus?: boolean
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
+  sequenceTerminalCommand?: AgentLaunchTerminalSequence
+  initializeWorkspaceTopology?: true
   surfaceOwner?: false
   /** Main-internal: recheck early publication when the host is ready to reveal its pane. */
   agentLaunchViewer?: () => AgentLaunchTabViewerRule

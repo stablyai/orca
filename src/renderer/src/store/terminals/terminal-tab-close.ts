@@ -1,3 +1,5 @@
+import { abandonHostCreatedLaunchTab } from '@/lib/structured-agent-session-launch-prompt'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
@@ -42,6 +44,13 @@ export function createTerminalTabCloseActions(
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
           : buildTerminalTabRetirementPlan(get(), tabId)
+      if (closeReason === 'user' && retirementPlan.worktreeId) {
+        const state = get()
+        const host = getExecutionHostIdForWorktree(state, retirementPlan.worktreeId)
+        if (host) {
+          abandonHostCreatedLaunchTab(host, tabId)
+        }
+      }
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)

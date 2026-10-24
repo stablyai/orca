@@ -18,7 +18,9 @@ export async function completeWorktreeCreation(args: {
 }): Promise<void> {
   const { request } = args
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
-  useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
+  useAppStore
+    .getState()
+    .removePendingWorktreeCreation(args.creationId, { cleanupVm: false, reason: 'completed' })
   if (!args.structuredLaunchAccepted) {
     seedAgentTabStateAfterWorktreeCreate({
       request,

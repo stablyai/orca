@@ -139,7 +139,10 @@ export type StructuredAgentSessionHostDeps = {
   now?: () => number
   idleSweep?: { intervalMs?: number; idleMs?: number }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
-  /** Absent means no dispatch ownership. */
+  /** The workspace's setup an agent start waits on first, when its project waits for setup; null
+   *  or absent starts at once. Settles on its own: it is bounded where it is held. */
+  setupHold?: (workspaceId: string) => Promise<void> | null
+  /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
   hasOpenDispatch?: (record: AgentSessionRecord) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string) => void

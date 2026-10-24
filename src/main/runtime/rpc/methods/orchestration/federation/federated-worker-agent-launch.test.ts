@@ -91,6 +91,8 @@ describe('a federated worker through the launch executor', () => {
       setupDecision: 'run',
       awaitTerminalProvisioning: true,
       observeSetupCompletion: true,
+      initializeSurface: expect.any(Function),
+      onWorkspaceCreated: expect.any(Function),
       createdWithAgent: 'claude',
       startupAgent: 'claude',
       startupLaunchSource: 'orchestration',

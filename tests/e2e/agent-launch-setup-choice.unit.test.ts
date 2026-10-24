@@ -107,7 +107,11 @@ describe('CLI setup choice across durable launch admission', () => {
     expect(firstError).toMatchObject({ message: SETUP_CHOICE })
     expect(first.createTerminal).not.toHaveBeenCalled()
     const row = store.listOperationRows()[0]
-    expect(row?.outcome).toMatchObject({ status: 'failed', code: SETUP_CHOICE })
+    expect(row?.outcome).toMatchObject({
+      status: 'failed',
+      code: 'worktree_create_setup_choice_required',
+      message: SETUP_CHOICE
+    })
     if (!row) {
       throw new Error('Missing failed launch row')
     }

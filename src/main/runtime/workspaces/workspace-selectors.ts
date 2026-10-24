@@ -1,3 +1,4 @@
+import { waitForInFlightWorktreeCreate } from '../../worktree-create-in-flight'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -42,6 +43,11 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    const parsed = splitWorktreeIdForFilesystem(explicitWorktreeId ?? selector)
+    await waitForInFlightWorktreeCreate(
+      parsed?.worktreePath ?? selector.replace(/^path:/, ''),
+      parsed?.repoId
+    )
     // Why only `id:`: every other selector kind is matched across the whole fleet, and their
     // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
     // winner where today they correctly refuse. An `id:` selector already names its repo.

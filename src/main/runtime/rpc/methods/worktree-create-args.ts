@@ -32,6 +32,7 @@ export function buildManagedWorktreeCreateArgs(
     // A phone's retry key is the identity of its creation.
     creationId: params.creationId ?? params.clientMutationId,
     ...(viewerSupported !== undefined ? { terminalImageViewerSupported: viewerSupported } : {}),
+    pendingFirstAgentMessageRename: params.pendingFirstAgentMessageRename,
     name: params.name ?? '',
     // Absent means the user typed the name, which must never be retired.
     ...(params.nameWasGenerated === true ? { nameWasGenerated: true } : {}),

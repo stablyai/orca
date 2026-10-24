@@ -1,3 +1,4 @@
+import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import { OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding } from '../session-lifecycle/close/has-live-or-persisted-serve-or-ssh-owned-pty-binding'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
@@ -54,6 +55,9 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       !this.isMobileSessionSurfaceMembershipAllowed(worktreeId, args.tabId, args.leafId, pty.ptyId)
     ) {
       return
+    }
+    if (pty.launchAgent && readCreatedWorkspaceLaunch(this, worktreeId)) {
+      args = { ...args, activate: false, selectIfNoActiveTab: true }
     }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent

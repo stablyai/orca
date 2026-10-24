@@ -92,6 +92,7 @@ export type PtySpawnCommitInput<Reply extends PtySpawnResult> = {
     store: Store | undefined
     worktreeId: string | null | undefined
     shellOverride: string | undefined
+    setupCompletionToken?: string
     rendererLaunchAuthority: { launchToken: string; launchAgent: TuiAgent } | null
   }
   preAllocatedHandle: string | null | undefined
@@ -166,6 +167,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
         ? {
             tabId,
             leafId: state.metadataLeafId,
+            setupCompletionToken: registration.setupCompletionToken,
             ...(input.preAllocatedHandle ? { terminalHandle: input.preAllocatedHandle } : {}),
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
             ...(registration.rendererLaunchAuthority

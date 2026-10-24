@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
@@ -206,7 +207,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        nativeSetupToken: nativeSetupCompletionToken(spawn.env)
       }
     )
   }

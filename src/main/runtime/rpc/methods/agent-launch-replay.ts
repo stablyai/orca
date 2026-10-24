@@ -15,12 +15,11 @@
  * lease for that same reason.
  */
 
-import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-operation'
+import { deriveAgentLaunchChildOperationId } from '../../../../shared/agent-launch-child-operation'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
 import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
 import type {
   AgentSessionOperationOutcome,
@@ -153,37 +152,18 @@ function withLiveTerminalHandle(
 }
 
 /**
- * A recorded answer as this caller may read it now. A prompt the host stopped delivering is
+ * An answer as this caller may read it now, outside the shared execution and ledger. A prompt is
  * `unconfirmed` only to a caller that reads the word; every other caller gets the refusal it got
  * before the first write existed, never a `not-delivered` that invites a duplicate turn.
  */
-function presentRecordedAnswer(
+export function presentAgentLaunchResult(
   context: RpcContext,
-  operationId: string,
-  answer: AgentLaunchAdmission
-): AgentLaunchAdmission {
-  if (
-    answer.decision === 'refuse' &&
-    answer.refusal.code === AGENT_LAUNCH_TAB_CLOSED_CODE &&
-    !readsAgentLaunchTabClosed(context)
-  ) {
-    return refusal(
-      operationId,
-      'agent_session_operation_unknown',
-      'was stopped; its tab was closed'
-    )
+  result: AgentLaunchResult
+): AgentLaunchResult {
+  if (result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
+    throw new Error('agent_session_operation_unknown')
   }
-  if (answer.decision !== 'replay') {
-    return answer
-  }
-  if (answer.result.prompt?.outcome === 'unconfirmed' && !readsUnconfirmedLaunchPrompt(context)) {
-    return refusal(
-      operationId,
-      'agent_session_operation_unknown',
-      'started its agent, but whether its prompt arrived is unknown'
-    )
-  }
-  return { decision: 'replay', result: withLiveTerminalHandle(answer.result, context.runtime) }
+  return withLiveTerminalHandle(result, context.runtime)
 }
 
 /**
@@ -222,7 +202,7 @@ export async function admitAgentLaunchOperation(
   if (admitted.decision === 'replay') {
     const answer = answerFromRecordedRow(operationId, admitted.row.outcome)
     if (answer) {
-      return presentRecordedAnswer(context, operationId, answer)
+      return answer
     }
   }
   // Unreachable with both steps in one transaction; answered as uncertain rather than run twice.
@@ -238,7 +218,7 @@ export async function admitAgentLaunchOperation(
     // this runtime did not start it, so treating it as restart uncertainty is the safe answer.
     const answer = answerFromRecordedRow(operationId, claim.row.outcome)
     return answer
-      ? presentRecordedAnswer(context, operationId, answer)
+      ? answer
       : refusal(operationId, 'agent_session_operation_unknown', 'is claimed but unsettled')
   }
   const succeeded = (result: AgentLaunchResult) =>

@@ -11,9 +11,29 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeAgentLaunchFingerprint,
+  deriveAgentLaunchChildOperationId,
   type AgentLaunchFingerprintInput
 } from './agent-launch-operation'
 import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
+import { deriveAgentLaunchChildOperationId as browserChildId } from './agent-launch-child-operation'
+
+it('keeps browser and host opening-message identity compatible with existing child receipts', () => {
+  const operationId = '1790000000123-0123456789abcdef0123456789abcdef'
+  const child = browserChildId(operationId)
+  expect(child).toBe('1790000000123-7b6527b99cc98b8e0e80d8829453ad3c')
+  expect(deriveAgentLaunchChildOperationId(operationId)).toBe(child)
+  expect(child).toBe(
+    `1790000000123-${canonicalAgentSessionDigest({ child: 'agent.launch:attach', operationId }).slice(0, 32)}`
+  )
+  if (!child) {
+    throw new Error('valid launch operation must have a child')
+  }
+  expect(browserChildId(child)).toBe('1790000000123-b4a6aab1c63a7cd37871a6d77772d9e2')
+  expect(browserChildId(child)).toBe(
+    `1790000000123-${canonicalAgentSessionDigest({ child: 'agent.launch:attach', operationId: child }).slice(0, 32)}`
+  )
+  expect(browserChildId('invalid-operation')).toBeNull()
+})
 
 const BASE = {
   agent: 'claude',

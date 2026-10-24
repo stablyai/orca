@@ -1,3 +1,5 @@
+import { win32 } from 'node:path'
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   discardStagedStartupCommand,
@@ -161,8 +163,11 @@ async function spawnAndPublishSession(
   let staging: StartupCommandStaging | undefined
   // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
-    (opts.shellReadySupported ?? false) &&
-    (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+    ((opts.shellReadySupported ?? false) &&
+      (subprocess.shellPath === undefined ||
+        shellPathSupportsPtyStartupBarrier(subprocess.shellPath))) ||
+    (Boolean(nativeSetupCompletionToken(opts.env)) &&
+      win32.basename(subprocess.shellPath ?? '').toLowerCase() === 'wsl.exe')
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -176,6 +181,7 @@ async function spawnAndPublishSession(
       wslDistro
     }),
     shellReadySupported,
+    nativeSetupToken: nativeSetupCompletionToken(opts.env),
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -246,10 +252,13 @@ async function spawnAndPublishSession(
         // Diagnostics must never turn a live PTY into a failed create.
       }
     }
+    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
+    const nativeToken = nativeSetupCompletionToken(opts.env)
     session.write(
-      buildStartupCommandSubmission(staging.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
+      buildStartupCommandSubmission(staging.command, { bracketedPasteSafe: shellReadySupported }),
+      nativeToken
+        ? { command: staging.command, token: nativeToken, bracketedPasteSafe: shellReadySupported }
+        : undefined
     )
   }
 

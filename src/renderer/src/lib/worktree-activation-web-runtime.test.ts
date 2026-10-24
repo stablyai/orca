@@ -20,6 +20,7 @@ import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bri
 import { rememberEmptyHostAnswerForTests } from '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 
 registerWorktreeActivationReset()
 
@@ -168,7 +169,25 @@ describe('activateAndRevealFolderWorkspace', () => {
                 snapshotVersion: 1
               }
             }
-          : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
+          : (createCompatibleRuntimeStatusResponseIfNeeded(request) ??
+            (request.method === 'session.tabs.list'
+              ? // The host's current, empty inventory is what authorizes an automatic seed.
+                {
+                  ok: true,
+                  result: {
+                    worktree: folderWorkspaceKey('folder-1'),
+                    publicationEpoch: 'epoch-1',
+                    snapshotVersion: 1,
+                    activeGroupId: null,
+                    activeTabId: null,
+                    activeTabType: null,
+                    tabs: []
+                  }
+                }
+              : {
+                  ok: false,
+                  error: { code: 'test', message: 'stop after recording the request' }
+                }))
     )
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     stubRuntimeEnvironmentBridge({ call: callRuntimeEnvironment })

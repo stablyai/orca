@@ -145,7 +145,7 @@ export function getShellLaunchConfig(
         '-l',
         '-C',
         `${getFishShellReadyInitCommand(
-          SHELL_READY_MARKER_ESCAPED,
+          SHELL_READY_MARKER_ESCAPED.replace(':posix', ':fish'),
           features.includes('ready'),
           startupCommand !== undefined
         )}\n${getFishCodexShellLaunchPreflight() + getFishClaudeShellFunction()}`

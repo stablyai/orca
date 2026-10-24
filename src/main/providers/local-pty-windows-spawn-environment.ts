@@ -1,3 +1,4 @@
+import { nativeSetupCompletionToken } from '../runtime/orchestration/setup-completion-signal'
 import { win32 as pathWin32 } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
@@ -23,6 +24,11 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
   const { spawn, plan, env } = args
   const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
   if (pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe') {
+    if (nativeSetupCompletionToken(spawn.env)) {
+      env.ORCA_SHELL_FEATURES = 'ready,identity'
+      addWslEnvKeys(env, ['ORCA_SHELL_FEATURES'])
+      plan.shellReadyLaunch = { args: null, env: {}, supportsReadyMarker: true }
+    }
     if (codexHomeWslInfo) {
       if (plan.launchWslDistro && plan.launchWslDistro !== codexHomeWslInfo.distro) {
         delete env.CODEX_HOME
@@ -88,7 +94,8 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       plan.defaultCwd,
       plan.launchWslContext,
       spawn.command,
-      codexLaunchPreflightCommand
+      codexLaunchPreflightCommand,
+      nativeSetupCompletionToken(spawn.env)
     )
     plan.shellArgs = resolved.shellArgs
     plan.effectiveCwd = resolved.effectiveCwd

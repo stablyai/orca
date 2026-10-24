@@ -1,3 +1,4 @@
+import type { HostFoundingAttempt } from '../../../agent-launch/host-founding-attempt'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
@@ -112,19 +113,19 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
-  const priorOperation =
-    args.atRest === undefined
-      ? null
-      : host.deps.store.getOperationRow(args.caller.callerKey, args.envelope.clientOperationId)
-  // A capability update cannot change the contract of an already-recorded create.
+  const priorOperation = host.deps.store.getOperationRow(
+    args.caller.callerKey,
+    args.envelope.clientOperationId
+  )
+  // Recorded operations retain their contract across capability and setup changes.
   const legacyReplay =
     args.firstMessage === undefined &&
     args.options === undefined &&
     priorOperation?.fingerprint === attachFingerprint
   const atRest =
-    args.atRest !== undefined &&
-    (priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
-      (args.atRest === true && !legacyReplay))
+    priorOperation?.fingerprint === args.envelope.payloadFingerprint ||
+    ((args.atRest === true || host.deps.setupHold?.(resolved.location.workspaceId) != null) &&
+      !legacyReplay)
   const hostFingerprint = atRest ? args.envelope.payloadFingerprint : attachFingerprint
   if (atRest && args.options) {
     const refusal = structuredAgentSessionOptionOverridesRefusal(
@@ -198,7 +199,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
   /** This machine's window made the create and opens the chat's tab where it reserved it. */
   placedByWindow?: boolean
-  /** Where the creating client opens the chat, in this host's ids. */
+  hostFoundingAttempt?: HostFoundingAttempt
   tabPlacement?: ChatTabPlacement
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
@@ -207,76 +208,75 @@ export async function commitStructuredAgentSessionCreate(args: {
     ...(args.placedByWindow ? { placedByWindow: true } : {}),
     ...(args.tabPlacement ? { placement: args.tabPlacement } : {})
   }
+  let adoptedTabPublicationFailed = false
+  const publishTab = tab
+    ? async () => {
+        if (
+          ORCA_LAYOUT_OWNER_IS_MAIN &&
+          structuredAgentSessionClosedBeforeCreate(prepared.attachParams.envelope.sessionId)
+        ) {
+          return
+        }
+        try {
+          const adopted = args.hostFoundingAttempt?.adopted
+          await args.runtime.publishStructuredAgentSessionTab({
+            workspaceId: adopted?.workspaceId ?? tab.workspaceId,
+            sessionId: adopted?.sessionId ?? prepared.attachParams.envelope.sessionId,
+            agent: adopted?.agent ?? tab.agent,
+            activate: args.activate,
+            ...(args.hostFoundingAttempt ? { foundingAttempt: args.hostFoundingAttempt } : {}),
+            ...tabPlace,
+            ...((adopted?.tabId ?? prepared.attachParams.surfaceTabId)
+              ? { tabId: adopted?.tabId ?? prepared.attachParams.surfaceTabId }
+              : {})
+          })
+        } catch (error) {
+          prepared.host.deps.logger.warn('publishing the tab of a created chat failed', {
+            scope: 'create-tab-publication',
+            sessionId: prepared.attachParams.envelope.sessionId,
+            error
+          })
+          if (!prepared.atRest && prepared.attachParams.adopt) {
+            // Imported history keeps the acquired route's receipt even if early notification fails.
+            adoptedTabPublicationFailed = true
+            return
+          }
+          throw new AgentSessionRefusalError(
+            refuse(
+              'agent_session_operation_unknown',
+              { reason: 'tabUnconfirmed' },
+              'The chat may have been created, but its tab could not be confirmed.'
+            )
+          )
+        }
+      }
+    : undefined
   if (prepared.atRest) {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
+      ...(args.hostFoundingAttempt ? { hostFoundingAttempt: args.hostFoundingAttempt } : {}),
       ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
       ...(prepared.hostLaunchDirectory
         ? { hostLaunchDirectory: prepared.hostLaunchDirectory }
         : {}),
-      ...(tab
-        ? {
-            // A chat closed while it was being made gets no tab to show before main closes it.
-            publishTab: () =>
-              ORCA_LAYOUT_OWNER_IS_MAIN &&
-              structuredAgentSessionClosedBeforeCreate(prepared.attachParams.envelope.sessionId)
-                ? Promise.resolve()
-                : args.runtime.publishStructuredAgentSessionTab({
-                    workspaceId: tab.workspaceId,
-                    sessionId: prepared.attachParams.envelope.sessionId,
-                    agent: tab.agent,
-                    activate: args.activate,
-                    ...tabPlace,
-                    ...(prepared.attachParams.surfaceTabId
-                      ? { tabId: prepared.attachParams.surfaceTabId }
-                      : {})
-                  })
-          }
-        : {})
+      ...(publishTab ? { publishTab } : {})
     })
   }
-  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
+  const attached = await prepared.host.attach(args.caller, prepared.attachParams, {
     ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
-    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {})
+    ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
+    ...(publishTab ? { publishTab } : {})
   })
-  if (!result.ok || !prepared.tab) {
-    return result
-  }
-  // A chat closed while it was being made gets no tab to show before main closes it.
-  if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    structuredAgentSessionClosedBeforeCreate(result.value.sessionId)
-  ) {
-    return result
-  }
-  const surfaceTabId = prepared.attachParams.surfaceTabId
-  try {
-    await args.runtime.publishStructuredAgentSessionTab({
-      workspaceId: prepared.tab.workspaceId,
-      sessionId: result.value.sessionId,
-      agent: prepared.tab.agent,
-      activate: args.activate,
-      ...tabPlace,
-      ...(surfaceTabId ? { tabId: surfaceTabId } : {})
-    })
-  } catch (error) {
-    prepared.host.deps.logger.warn('publishing the tab of a created chat failed', {
-      scope: 'create-tab-publication',
-      sessionId: result.value.sessionId,
-      error
-    })
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_unknown',
-        { reason: 'tabUnconfirmed' },
-        'The chat may have been created, but its tab could not be confirmed.'
-      )
-    }
-  }
-  // Read after publishing, which is what gives the chat its tab.
-  const tabId = prepared.host.getSessionTabId?.(result.value.sessionId)
-  return tabId ? { ...result, value: { ...result.value, tabId } } : result
+  return adoptedTabPublicationFailed && attached.ok
+    ? {
+        ok: false,
+        refusal: refuse(
+          'agent_session_operation_unknown',
+          { reason: 'tabUnconfirmed' },
+          'The chat may have been created, but its tab could not be confirmed.'
+        )
+      }
+    : attached
 }
 
 export async function createStructuredAgentSessionForWorktree(args: {
@@ -291,6 +291,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true
+  firstMessage?: StructuredAgentSessionFirstMessage
+  hostFoundingAttempt?: HostFoundingAttempt
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   // An at-rest create's ledger row is keyed by its intent, as a client's create is.
   const envelope = args.atRest
@@ -310,6 +312,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
     runtime: args.runtime,
     caller: args.caller,
     prepared,
+    ...(args.hostFoundingAttempt ? { hostFoundingAttempt: args.hostFoundingAttempt } : {}),
     activate: args.activate
   })
 }

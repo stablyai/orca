@@ -9,6 +9,7 @@
 // Git lookup, so the alert can't arrive after the prompt was answered. Each notification is keyed by
 // the edge's identity, which delivery dedupes on and retirement addresses.
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
@@ -137,4 +138,24 @@ export function createStructuredAttentionMobileDelivery(
     },
     reconcile: deps.reconcile
   }
+}
+
+export function subscribeStructuredAgentSessionAttention(
+  installed: Pick<StructuredAgentSessionHost, 'subscribeTurnCompletions' | 'readStatusSummary'>,
+  delivery: StructuredAttentionMobileDelivery
+): void {
+  // Lives exactly as long as the host: teardown drops the host and its subscribers together.
+  installed.subscribeTurnCompletions({
+    id: 'host-attention-delivery',
+    includePrompts: true,
+    emit: (event) => {
+      if (event.type === 'end') {
+        return
+      }
+      const sessionId =
+        event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
+      delivery.deliver(event, installed.readStatusSummary(sessionId))
+    },
+    onState: delivery.reconcile
+  })
 }

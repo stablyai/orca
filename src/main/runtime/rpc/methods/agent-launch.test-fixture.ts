@@ -8,8 +8,11 @@
 import { vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
 import type { WorktreeLineageWarning } from '../../../../shared/worktree/lineage-types'
+import type { CreateWorktreeProgressEvent } from '../../../../shared/worktree/create-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../shared/agent-launch-pane-already-live'
 import type { RpcContext } from '../core'
+import type { RuntimeManagedWorktreeCreateArgs } from '../../runtime-managed-worktree-create-types'
+import { WorkspaceSetupAgentStartHolds } from '../../workspace-setup-agent-start-holds'
 import { resolveRpcCallerIdentity } from '../rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
@@ -107,7 +110,7 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     ),
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
     createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
-    createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
+    createManagedWorktree: vi.fn(async (args: RuntimeManagedWorktreeCreateArgs) => {
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {
         handlesByPaneKey.set(options.startupTerminalPaneKey, 'term_agent_first')
@@ -168,6 +171,8 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       return launchRecordStore
     }),
     waitForSetupTerminalCompletion,
+    workspaceSetupAgentStarts: new WorkspaceSetupAgentStartHolds(),
+    notifyWorktreeCreationProgress: vi.fn((_event: CreateWorktreeProgressEvent) => {}),
     canPublishAgentLaunchTab: vi.fn(() => options.publishAgentLaunchTab !== undefined),
     publishAgentLaunchTab: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>

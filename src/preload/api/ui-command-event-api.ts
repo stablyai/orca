@@ -46,6 +46,7 @@ import type {
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeMobileSessionTabsResult,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -199,6 +200,7 @@ export type UiCommandEventApi = {
       activate?: boolean
       focus?: boolean
       presentation?: RuntimeTerminalPresentation
+      initialWorkspaceTopology?: RuntimeMobileSessionTabsResult
       surfaceOwner?: false
       agentLaunchViewer?: AgentLaunchTabViewerRule
       tabId?: string

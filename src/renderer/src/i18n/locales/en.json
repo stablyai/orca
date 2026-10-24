@@ -1350,6 +1350,9 @@
       "worktreeJumpNavigation": {
         "filteredNotice": "This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces."
       },
+      "worktreeCreationThroughHost": {
+        "unconfirmedCreate": "Could not confirm whether {{agent}} created the workspace. Retry to check the same request."
+      },
       "file": {
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",

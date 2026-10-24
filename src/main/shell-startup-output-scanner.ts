@@ -21,6 +21,7 @@ export type ShellStartupOutputScanResult = {
   shellPid: number | null
   ready: boolean
   postMarkerBytesObserved: boolean
+  nativeSetupShell?: 'posix' | 'fish'
 }
 
 export function createShellStartupOutputScanState(): ShellStartupOutputScanState {
@@ -57,6 +58,7 @@ export function scanShellStartupOutput(
     output,
     shellPid,
     ready: readiness.matched,
+    ...(readiness.nativeSetupShell ? { nativeSetupShell: readiness.nativeSetupShell } : {}),
     postMarkerBytesObserved: readiness.postMarkerBytesObserved
   }
 }

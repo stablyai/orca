@@ -167,7 +167,8 @@ describe('registerPtyHandlers', () => {
       cwd: '/repo',
       tabId: 'tab-1',
       leafId,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      env: { ORCA_SETUP_COMPLETION_TOKEN: 'host-setup-token' }
     })
 
     // Mobile-create recovery needs tab/leaf identity at runtime registration (#7587).
@@ -175,7 +176,12 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'wt-1',
       null,
-      { tabId: 'tab-1', leafId, incarnationId: expect.any(String) },
+      {
+        tabId: 'tab-1',
+        leafId,
+        incarnationId: expect.any(String),
+        setupCompletionToken: 'host-setup-token'
+      },
       false
     )
   })

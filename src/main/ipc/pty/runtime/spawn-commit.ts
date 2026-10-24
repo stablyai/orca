@@ -27,6 +27,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       expectedSourceBinding: ctx.hostSessionBinding?.expectedSourceBinding,
       adoptedAgentSession: ensure?.disposition === 'adopted' ? ensure : undefined,
       registration: {
+        setupCompletionToken: ctx.env?.ORCA_SETUP_COMPLETION_TOKEN,
         store: ctx.hostSessionBinding?.store ?? ctx.deps.store,
         worktreeId: args.worktreeId,
         shellOverride: ctx.daemonShellOverride,

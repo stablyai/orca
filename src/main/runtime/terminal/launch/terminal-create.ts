@@ -1,4 +1,4 @@
-import { revealCreatedTerminal } from './terminal-create-reveal'
+import { prepareTerminalPresentation, revealCreatedTerminal } from './terminal-create-reveal'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
 import * as dependencies from '../../orca-runtime-create-terminal-dependencies'
@@ -22,12 +22,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
     if (opts.startupAgent && worktreeSelector === undefined) {
       throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
     }
-    const callerColors = dependencies.normalizeColorQueryReplyColors(opts.terminalColorQueryReplies)
-    // Older paired clients report their theme only at creation.
-    if (callerColors) {
-      dependencies.setPairedViewerColors(callerColors)
-    }
-    const presentation = dependencies.resolveTerminalPresentation(opts)
+    const presentation = prepareTerminalPresentation(opts)
     // Why: this process starts every terminal it can place, so a slow window only delays showing
     // it; a window-made create that timed out here still ran later, and a retry duplicated it.
     if (worktreeSelector !== undefined) {
@@ -233,6 +228,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             tabId,
             leafId,
             terminalHandle: preAllocatedHandle,
+            setupCompletionToken: launchOpts.env?.ORCA_SETUP_COMPLETION_TOKEN,
             ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
           })
         }
@@ -271,6 +267,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const reveal = revealCreatedTerminal({
+          currentTopology: () => this.getMobileSessionTabsForWorktree(workspace.id),
           notifier: this.notifier,
           workspace,
           ptyId: result.id,

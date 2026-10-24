@@ -64,7 +64,8 @@ it('a close while the attach still probes the previous owner asks no adapter to 
     return probe(sessionId)
   }
   expect(await host.attach(CALLER, attachParams()).catch((error: unknown) => error)).toMatchObject({
-    name: 'AgentSessionPreSpawnError'
+    name: 'Error',
+    message: 'closed while starting'
   })
   await closing
   expect(state.acquire).not.toHaveBeenCalled()

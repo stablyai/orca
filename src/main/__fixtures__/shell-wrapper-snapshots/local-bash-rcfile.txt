@@ -426,7 +426,7 @@ __orca_prepend_prompt_command "__orca_osc133_precmd"
 # startup files have rebuilt the prompt, without re-running user rc files.
 if [[ -n "$__orca_ready_marker" ]]; then
   __orca_prompt_mark() {
-    printf "\033]777;orca-shell-ready\007"
+    printf "\033]777;orca-shell-ready:posix\007"
   }
   __orca_append_prompt_command "__orca_prompt_mark"
 fi

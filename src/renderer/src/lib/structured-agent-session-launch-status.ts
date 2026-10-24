@@ -1,10 +1,16 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
+import { useSyncExternalStore } from 'react'
+import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
+  subscribeStructuredAgentLaunchStatus,
+  getStructuredAgentSessionLaunchFailure,
+  getStructuredAgentSessionLaunchLifecycle,
   structuredLaunchIdentity,
   structuredLaunchStates,
-  type StructuredAgentLaunchStatus
+  type StructuredAgentLaunchStatus,
+  type StructuredAgentSessionLaunchLifecycle
 } from './structured-agent-session-launch-registry'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
 
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(
@@ -35,3 +41,27 @@ export function hasStructuredAgentLaunchInWorktree(worktreeId: string): boolean 
   }
   return false
 }
+
+export function useStructuredAgentSessionLaunchFailure(
+  worktreeId: string,
+  sessionId: string
+): StructuredLaunchFailure | null {
+  return useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),
+    () => null
+  )
+}
+
+export function useStructuredAgentSessionLaunchLifecycle(
+  worktreeId: string,
+  sessionId: string
+): StructuredAgentSessionLaunchLifecycle | null {
+  return useSyncExternalStore(
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentSessionLaunchLifecycle(worktreeId, sessionId),
+    () => null
+  )
+}
+
+export { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'

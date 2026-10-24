@@ -122,9 +122,124 @@ export function moduleDuration(diagnostic) {
   )
 }
 
+const unitTraceFiles = new Set([
+  'src/renderer/src/components/native-chat/structured-agent-session-status-bridge-unconfirmed-start.test.tsx',
+  'src/renderer/src/components/terminal-pane/terminal-pane-recovery-host-rebind-cap.test.ts',
+  'src/renderer/src/components/terminal-pane/terminal-pane-recovery-unsettled-fallback.test.ts',
+  'src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge.test.tsx',
+  'src/renderer/src/components/native-chat/structured-agent-session-status-bridge-clock.test.tsx',
+  'src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge.launch-directory.test.tsx',
+  'src/renderer/src/components/native-chat/structured-agent-session-status-bridge-failed-start.test.tsx',
+  'src/renderer/src/lib/palette-match/palette-match-performance.test.ts',
+  'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts',
+  'src/renderer/src/components/native-chat/StructuredAgentSessionAttentionBridge.test.tsx',
+  'src/renderer/src/components/native-chat/structured-agent-session-status-bridge-stopping.test.tsx',
+  'src/renderer/src/components/terminal-pane/terminal-pane-recovery.test.ts',
+  'tests/e2e/codex-child-approval-activity-row.unit.test.ts',
+  'src/renderer/src/components/activity/activity-answered-ask-timeline.test.tsx',
+  'src/renderer/src/components/native-chat/structured-chat-sleep-startup.test.tsx',
+  'src/renderer/src/components/native-chat/structured-child-records-switch.test.tsx',
+  'tests/e2e/structured-attention-prompt-relay.unit.test.ts',
+  'tests/e2e/structured-attention-read-retirement.unit.test.ts',
+  'src/main/runtime/structured-agent-session-integration-replay.test.ts',
+  'src/renderer/src/store/slices/repos.test.ts',
+  'src/renderer/src/components/terminal-pane/pending-split-close.test.ts'
+])
+
+const diagnosticModule = (entity) => (entity.type === 'module' ? entity : entity.module)
+const diagnosticFile = (module) => module.relativeModuleId.replaceAll('\\', '/')
+const diagnosticText = (value, root) =>
+  typeof value === 'string'
+    ? value
+        .replaceAll('file://', '')
+        .replaceAll(root, '<root>')
+        .replace(/\b[a-z][a-z\d+.-]*:\/\/\S+/gi, '[url omitted]')
+    : undefined
+
 export default class UnitTimingReporter {
   onInit(ctx) {
     this.ctx = ctx
+  }
+
+  writeDiagnostic(event, entity, details = {}) {
+    try {
+      const module = diagnosticModule(entity)
+      this.ctx.logger.log(
+        `[unit-ci] ${JSON.stringify({
+          event,
+          file: diagnosticFile(module),
+          project: module.project.name,
+          entity: entity.type,
+          id: entity.id,
+          line: entity.location?.line,
+          ...details
+        })}`
+      )
+    } catch {
+      // Optional CI diagnostics must not change the test verdict.
+    }
+  }
+
+  trace(event, entity, details) {
+    if (unitTraceFiles.has(diagnosticFile(diagnosticModule(entity)))) {
+      this.writeDiagnostic(event, entity, details)
+    }
+  }
+
+  reportErrors(entity, errors) {
+    for (const error of errors) {
+      this.writeDiagnostic('error', entity, {
+        name: diagnosticText(error.name, this.ctx.config.root),
+        message: diagnosticText(error.message, this.ctx.config.root),
+        stack: diagnosticText(
+          error.stack ??
+            error.stacks?.map(({ file, line, column }) => `${file}:${line}:${column}`).join('\n'),
+          this.ctx.config.root
+        )
+      })
+    }
+  }
+
+  onTestModuleQueued(module) {
+    this.trace('module-queued', module)
+  }
+
+  onTestModuleCollected(module) {
+    this.trace('module-collected', module)
+  }
+
+  onTestModuleStart(module) {
+    this.trace('module-start', module)
+  }
+
+  onTestModuleEnd(module) {
+    this.trace('module-end', module, { state: module.state() })
+    if (module.state() !== 'failed') {
+      return
+    }
+    this.reportErrors(module, module.errors())
+    for (const suite of module.children.allSuites()) {
+      this.reportErrors(suite, suite.errors())
+    }
+    for (const test of module.children.allTests('failed')) {
+      this.reportErrors(test, test.result().errors)
+    }
+  }
+
+  onTestCaseReady(test) {
+    this.trace('case-ready', test)
+  }
+
+  onTestCaseResult(test) {
+    this.trace('case-result', test, { state: test.result().state })
+  }
+
+  onHookStart(hook) {
+    this.trace('hook-start', hook.entity, { hook: hook.name })
+  }
+
+  onHookEnd(hook) {
+    this.trace('hook-end', hook.entity, { hook: hook.name })
   }
 
   onTestRunStart() {

@@ -111,25 +111,52 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
   })
 }
 
-/** Include COMMIT in rollback handling: failed commits can leave the shared connection in a transaction.
- * Callbacks must remain synchronous so another chat cannot write inside this transaction. */
+/** A fresh token for one attempt; a missing committed callback does not prove rollback. */
+export type JournalTransactionObservation = {
+  disposition: 'not-attempted' | 'unresolved' | 'not-committed' | 'committed'
+}
+
+/**
+ * One IMMEDIATE transaction, its COMMIT inside the failure boundary: SQLite can leave a transaction
+ * open after a failed COMMIT, and on the shared connection every later BEGIN would then fail. The
+ * caller gets the original error; a ROLLBACK that fails too goes to `onStranded`. `run` is
+ * synchronous by contract: an await inside it would let another chat's statements land in this
+ * transaction.
+ */
 export function runJournalTransaction<T>(
   db: Database.Database,
   run: (db: Database.Database) => T,
-  onStranded: () => void = () => undefined
+  onStranded: () => void = () => undefined,
+  observation?: JournalTransactionObservation
 ): T {
-  db.exec('BEGIN IMMEDIATE')
+  if (observation) {
+    observation.disposition = 'unresolved'
+  }
+  try {
+    db.exec('BEGIN IMMEDIATE')
+  } catch (error) {
+    if (observation) {
+      observation.disposition = 'not-committed'
+    }
+    throw error
+  }
   try {
     const result = run(db)
     if (result instanceof Promise) {
       throw new Error('a chat journal transaction must not await')
     }
     db.exec('COMMIT')
+    if (observation) {
+      observation.disposition = 'committed'
+    }
     return result
   } catch (error) {
     if (db.isTransaction) {
       try {
         db.exec('ROLLBACK')
+        if (observation) {
+          observation.disposition = 'not-committed'
+        }
       } catch (rollbackError) {
         console.warn(
           '[agent-session-journal] rolling back a failed transaction failed',

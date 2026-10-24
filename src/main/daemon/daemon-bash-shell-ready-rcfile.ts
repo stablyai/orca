@@ -106,7 +106,7 @@ __orca_osc133_epilogue() {
   trap '__orca_osc133_preexec' DEBUG
   # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
   if [[ -n "$__orca_ready_marker" ]]; then
-    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready:posix\\a\\]'
     __orca_ready_marker=""
   fi
 }

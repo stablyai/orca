@@ -1,3 +1,4 @@
+import type { AgentLaunchTerminalSequence } from '../../../agent-launch/agent-launch-surface-factories'
 import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
@@ -153,7 +154,13 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      extraAgentArgs?: string
+      sequenceTerminalCommand?: AgentLaunchTerminalSequence
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
@@ -174,6 +181,9 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       throw startup.launchRuntime
     }
     const terminal = await this.createTerminal(`id:${worktree.id}`, {
+      ...(opts.sequenceTerminalCommand
+        ? { sequenceTerminalCommand: opts.sequenceTerminalCommand }
+        : {}),
       command: startup.startup.command,
       env: startup.startup.env,
       ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),

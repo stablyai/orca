@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import type * as JournalStoreFactory from '../native-chat/agent-session-journal/journal-store-factory'
+import type * as AttachFlow from '../native-chat/agent-session-wire/structured-agent-session-attach-flow'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -30,29 +30,35 @@ const { journalOpenHold } = vi.hoisted(() => {
   return { journalOpenHold }
 })
 
-// Holds the next journal open midway, so provider events land while the attach binds its journal.
-vi.mock('../native-chat/agent-session-journal/journal-store-factory', async (importOriginal) => {
-  const actual = await importOriginal<typeof JournalStoreFactory>()
-  return {
-    ...actual,
-    openAgentSessionJournal: async (
-      input: Parameters<typeof actual.openAgentSessionJournal>[0]
-    ) => {
-      const hold = journalOpenHold.next
-      journalOpenHold.next = null
-      if (hold) {
-        hold.entered()
-        await hold.released
-      }
-      return actual.openAgentSessionJournal(input)
+// Hold the acquired attach before bind; early conversation publication now opens its journal first.
+vi.mock(
+  '../native-chat/agent-session-wire/structured-agent-session-attach-flow',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AttachFlow>()
+    return {
+      ...actual,
+      performAttach: (input: Parameters<typeof actual.performAttach>[0]) =>
+        actual.performAttach({
+          ...input,
+          beforeJournalOpen: async () => {
+            await input.beforeJournalOpen?.()
+            const hold = journalOpenHold.next
+            journalOpenHold.next = null
+            if (hold) {
+              hold.entered()
+              await hold.released
+            }
+          }
+        })
     }
   }
-})
+)
 
 const journals = createTrackedJournalOpener()
 const WORKSPACE = 'workspace-1'
 
 let harness: StructuredCodexRpcHarness
+let releaseAttachHold: (() => void) | undefined
 
 function textOf(item: AgentJournalRenderItem): string {
   const body = item.body
@@ -66,6 +72,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  releaseAttachHold?.()
+  releaseAttachHold = undefined
+  journalOpenHold.next = null
   await journals.closeAll()
   await harness.dispose()
 })
@@ -102,27 +111,30 @@ describe('a structured codex session over agentSession.*', () => {
     await ensureStructuredAgentSessionHost(harness.hostConfig())
     const openEntered = Promise.withResolvers<void>()
     const openGate = Promise.withResolvers<void>()
+    releaseAttachHold = openGate.resolve
     journalOpenHold.next = { entered: openEntered.resolve, released: openGate.promise }
 
     const creating = harness.ok<{ fence: number }>(
       'agentSession.create',
       harness.createIntentParams()
     )
-    await openEntered.promise
-    harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
-    harness.codex.notify('item/started', {
-      threadId: THREAD,
-      turnId: TURN,
-      item: { type: 'agentMessage', id: 'item-bind-window', text: '' }
-    })
-    harness.codex.notify('item/agentMessage/delta', {
-      threadId: THREAD,
-      turnId: TURN,
-      itemId: 'item-bind-window',
-      delta: 'Buffered while the journal opens.'
-    })
-
-    openGate.resolve()
+    try {
+      await openEntered.promise
+      harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: TURN } })
+      harness.codex.notify('item/started', {
+        threadId: THREAD,
+        turnId: TURN,
+        item: { type: 'agentMessage', id: 'item-bind-window', text: '' }
+      })
+      harness.codex.notify('item/agentMessage/delta', {
+        threadId: THREAD,
+        turnId: TURN,
+        itemId: 'item-bind-window',
+        delta: 'Buffered while the journal opens.'
+      })
+    } finally {
+      openGate.resolve()
+    }
     await creating
     await vi.waitFor(() =>
       expect(harness.codex.live().calls.some((entry) => entry.method === 'thread/start')).toBe(true)

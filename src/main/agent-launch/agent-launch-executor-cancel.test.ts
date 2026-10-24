@@ -72,6 +72,12 @@ function harness(options: {
     }),
     getStructuredAgentSessionCreateSupport
   }
+  const createSurfaces = () => ({
+    createStructuredSession,
+    createTerminalAgent,
+    deliverStructuredPrompt,
+    deliverTerminalPrompt
+  })
   return {
     calls,
     createRecoveryShell,
@@ -81,12 +87,7 @@ function harness(options: {
       executeAgentLaunch({
         runtime,
         intent,
-        surfaces: {
-          createStructuredSession,
-          createTerminalAgent,
-          deliverStructuredPrompt,
-          deliverTerminalPrompt
-        },
+        surfaces: createSurfaces(),
         workspaces: { createWorktree, createRecoveryShell },
         signal
       })
