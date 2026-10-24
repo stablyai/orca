@@ -10,6 +10,8 @@ const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 export type HeadlessAutomationDispatchLaunch = {
   workspaceId: string
   workspaceDisplayName?: string | null
+  sessionKind?: AutomationRun['sessionKind']
+  chatSessionId?: string | null
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null

@@ -60,6 +60,7 @@ export function getAutomationRunViewState({
   /** The workspace's paired server holds the terminal; only it can say whether it still lives. */
   terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
+  const hasStructuredIdentity = run.sessionKind === 'structured' && Boolean(run.chatSessionId)
   const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
   // Why the pane alone: a slept run drops its PTY id but keeps its pane, which the server resumes.
   const hasPaneIdentity = Boolean(run.terminalPaneKey)
@@ -72,20 +73,29 @@ export function getAutomationRunViewState({
     }
   }
 
-  if (run.workspaceId && workspaceExists && hasPaneIdentity && terminalOnPairedServer) {
+  if (
+    run.workspaceId &&
+    workspaceExists &&
+    (hasPaneIdentity || hasStructuredIdentity) &&
+    terminalOnPairedServer
+  ) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',
-      statusLabel: 'Run terminal is on the paired server.',
+      statusLabel: hasStructuredIdentity
+        ? 'Run chat is on the paired server.'
+        : 'Run terminal is on the paired server.',
       canOpen: true
     }
   }
 
-  if (run.workspaceId && workspaceExists && hasTerminalIdentity) {
+  if (run.workspaceId && workspaceExists && (hasTerminalIdentity || hasStructuredIdentity)) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',
-      statusLabel: 'Run terminal is unavailable.',
+      statusLabel: hasStructuredIdentity
+        ? 'Run chat is unavailable.'
+        : 'Run terminal is unavailable.',
       canOpen: true
     }
   }

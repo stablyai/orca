@@ -829,4 +829,57 @@ describe('Store', () => {
       terminalPtyId: 'pty-run'
     })
   })
+
+  it('persists structured chat session identity across later status updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const paneKey = 'structured-agent-session-sess-1:11111111-1111-4111-8111-111111111111'
+
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      workspaceId: 'wt1',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalSessionId: 'structured-agent-session-sess-1',
+      terminalPaneKey: paneKey,
+      terminalPtyId: null,
+      error: null
+    })
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      outputSnapshot: {
+        format: 'plain_text',
+        content: 'Structured summary',
+        capturedAt: 1,
+        truncated: false
+      },
+      error: null
+    })
+
+    const persisted = store.listAutomationRuns(automation.id)[0]
+    expect(persisted).toMatchObject({
+      status: 'completed',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalSessionId: 'structured-agent-session-sess-1',
+      terminalPaneKey: paneKey,
+      terminalPtyId: null
+    })
+    expect(persisted.outputSnapshot).toMatchObject({ content: 'Structured summary' })
+  })
 })

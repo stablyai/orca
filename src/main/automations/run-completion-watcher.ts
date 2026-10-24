@@ -174,6 +174,8 @@ export class AutomationRunCompletionWatcher {
       runId: run.id,
       status: observation.status,
       workspaceId: current.workspaceId,
+      sessionKind: current.sessionKind,
+      chatSessionId: current.chatSessionId,
       terminalSessionId: current.terminalSessionId,
       terminalPaneKey: current.terminalPaneKey,
       terminalPtyId: current.terminalPtyId,

@@ -19,15 +19,41 @@ export type AutomationRunPaneTarget = {
   ptyId: string | null
 }
 
+export type AutomationRunStructuredTarget = {
+  tabId: string
+  chatSessionId: string
+}
+
+export function resolveAutomationRunStructuredTarget(
+  run: Pick<AutomationRun, 'sessionKind' | 'chatSessionId' | 'workspaceId'>,
+  unifiedTabsByWorktree:
+    | Readonly<
+        Record<string, readonly { id: string; contentType: string; entityId: string }[] | undefined>
+      >
+    | undefined
+): AutomationRunStructuredTarget | null {
+  if (run.sessionKind !== 'structured' || !run.chatSessionId || !run.workspaceId) {
+    return null
+  }
+  const tab = (unifiedTabsByWorktree?.[run.workspaceId] ?? []).find(
+    (candidate) =>
+      candidate.contentType === 'agent-session' && candidate.entityId === run.chatSessionId
+  )
+  return tab ? { tabId: tab.id, chatSessionId: run.chatSessionId } : null
+}
+
 function getAutomationRunOpenTabId(run: Pick<AutomationRun, 'terminalPaneKey'>): string | null {
   return parsePaneKey(run.terminalPaneKey ?? '')?.tabId ?? null
 }
 
 export function automationRunMatchesPaneKey(
-  run: Pick<AutomationRun, 'terminalPaneKey'>,
+  run: Pick<AutomationRun, 'terminalPaneKey' | 'sessionKind' | 'chatSessionId'>,
   paneKey: string
 ): boolean {
-  return run.terminalPaneKey ? paneKey === run.terminalPaneKey : false
+  if (run.terminalPaneKey && paneKey === run.terminalPaneKey) {
+    return true
+  }
+  return false
 }
 
 export function resolveAutomationRunOpenTarget({

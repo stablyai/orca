@@ -133,4 +133,60 @@ describe('automation session reuse selection', () => {
     expect(find([run({})], { status: { state: 'done', agentType: 'unknown' } })).toBe('run-1')
     expect(find([run({})], { status: { state: 'done' } })).toBe('run-1')
   })
+
+  it('picks a reusable structured run when its chat session is idle and live', () => {
+    const structuredRun = run({
+      id: 'run-structured',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalSessionId: 'structured-agent-session-sess-1',
+      terminalPaneKey: 'structured-agent-session-sess-1:leaf-1',
+      terminalPtyId: null,
+      createdAt: 2
+    })
+    expect(
+      findReusableAutomationRun({
+        automationId: 'auto-1',
+        agentId: 'claude',
+        worktreeId: 'wt-1',
+        currentRunId: 'run-current',
+        runs: [structuredRun],
+        agentStatusForPane: () => undefined,
+        liveSession: () => null,
+        structuredStatusForSession: () => ({ state: 'done', agentType: 'claude' }),
+        liveStructuredSession: (candidate) => candidate.chatSessionId
+      })
+    ).toBe('sess-1')
+  })
+
+  it('skips an older structured run on a chat session whose newest run is still working', () => {
+    const first = run({
+      id: 'run-structured-1',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalPtyId: null,
+      createdAt: 1
+    })
+    const second = run({
+      id: 'run-structured-2',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      status: 'dispatched',
+      terminalPtyId: null,
+      createdAt: 2
+    })
+    expect(
+      findReusableAutomationRun({
+        automationId: 'auto-1',
+        agentId: 'claude',
+        worktreeId: 'wt-1',
+        currentRunId: 'run-current',
+        runs: [first, second],
+        agentStatusForPane: () => undefined,
+        liveSession: () => null,
+        structuredStatusForSession: () => ({ state: 'done', agentType: 'claude' }),
+        liveStructuredSession: (candidate) => candidate.chatSessionId
+      })
+    ).toBeNull()
+  })
 })

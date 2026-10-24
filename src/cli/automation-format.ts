@@ -158,6 +158,8 @@ export function formatAutomationRun(
     `trigger: ${result.run.trigger}`,
     `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
     ...(result.run.workspaceId ? [`workspaceId: ${result.run.workspaceId}`] : []),
+    ...(result.run.sessionKind === 'structured' ? [`sessionKind: structured`] : []),
+    ...(result.run.chatSessionId ? [`chatSessionId: ${result.run.chatSessionId}`] : []),
     ...(result.run.terminalSessionId ? [`terminalSessionId: ${result.run.terminalSessionId}`] : []),
     ...(result.run.terminalPaneKey ? [`terminalPaneKey: ${result.run.terminalPaneKey}`] : []),
     ...(result.run.terminalPtyId ? [`terminalPtyId: ${result.run.terminalPtyId}`] : []),

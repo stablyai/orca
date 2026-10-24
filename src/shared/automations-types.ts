@@ -134,6 +134,8 @@ export type Automation = {
   updatedAt: number
 }
 
+export type AutomationRunSessionKind = 'terminal' | 'structured'
+
 export type AutomationRun = {
   id: string
   automationId: string
@@ -147,7 +149,7 @@ export type AutomationRun = {
   /** Why: run history must remain understandable after the backing workspace
    *  is deleted and its live metadata is gone. */
   workspaceDisplayName?: string | null
-  sessionKind: 'terminal'
+  sessionKind: AutomationRunSessionKind
   chatSessionId: string | null
   terminalSessionId: string | null
   /** Why: a terminal tab can later point at a different pane/PTY. Automation
@@ -239,6 +241,8 @@ export type AutomationDispatchResult = {
   status: AutomationRunStatus
   workspaceId?: string | null
   workspaceDisplayName?: string | null
+  sessionKind?: AutomationRunSessionKind
+  chatSessionId?: string | null
   terminalSessionId?: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null

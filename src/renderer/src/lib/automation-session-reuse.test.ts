@@ -133,4 +133,43 @@ describe('automation session reuse in the renderer store', () => {
 
     expect(session).toBeNull()
   })
+
+  it('reuses a structured chat session tab when its agent status is done', () => {
+    const chatSessionId = 'sess-structured'
+    const tabId = `structured-agent-session-${chatSessionId}`
+    const structuredPaneKey = `${tabId}:11111111-1111-4111-a111-111111111111`
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [
+        run({
+          id: 'run-structured',
+          sessionKind: 'structured',
+          chatSessionId,
+          terminalSessionId: tabId,
+          terminalPaneKey: structuredPaneKey,
+          terminalPtyId: null,
+          createdAt: 2
+        })
+      ],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test state includes only the slice fields read by findReusableAutomationSession.
+      state: {
+        agentStatusByPaneKey: { [structuredPaneKey]: status({ paneKey: structuredPaneKey }) },
+        ptyIdsByTabId: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [{ id: tabId, contentType: 'agent-session', entityId: chatSessionId }]
+        }
+      } as never
+    })
+
+    expect(session).toEqual({
+      kind: 'structured',
+      tabId,
+      chatSessionId,
+      paneKey: structuredPaneKey
+    })
+  })
 })

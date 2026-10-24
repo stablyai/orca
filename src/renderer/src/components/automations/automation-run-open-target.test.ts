@@ -3,7 +3,8 @@ import type { AutomationRun } from '../../../../shared/automations-types'
 import {
   automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
-  resolveAutomationRunOpenTarget
+  resolveAutomationRunOpenTarget,
+  resolveAutomationRunStructuredTarget
 } from './automation-run-open-target'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
@@ -230,5 +231,28 @@ describe('automation run open target', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [leafId]: 'pty-run', [otherLeafId]: 'pty-other' }
     })
+  })
+
+  it('resolves a structured chat session target from unified tabs', () => {
+    const structuredRun = run({
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalPtyId: null
+    })
+    expect(
+      resolveAutomationRunStructuredTarget(structuredRun, {
+        'wt-1': [
+          {
+            id: 'structured-agent-session-sess-1',
+            contentType: 'agent-session',
+            entityId: 'sess-1'
+          }
+        ]
+      })
+    ).toEqual({
+      tabId: 'structured-agent-session-sess-1',
+      chatSessionId: 'sess-1'
+    })
+    expect(resolveAutomationRunStructuredTarget(structuredRun, { 'wt-1': [] })).toBeNull()
   })
 })

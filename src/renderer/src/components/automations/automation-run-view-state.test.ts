@@ -106,6 +106,53 @@ describe('automation run view state', () => {
     ).toMatchObject({ availability: 'workspace', actionLabel: 'Open workspace' })
   })
 
+  it('keeps View run for structured chat session identity on local and paired hosts', () => {
+    const structuredRun = makeRun({
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalSessionId: null,
+      terminalPaneKey: null,
+      terminalPtyId: null
+    })
+    expect(
+      getAutomationRunViewState({
+        run: structuredRun,
+        workspaceExists: true,
+        terminalTargetExists: true
+      })
+    ).toMatchObject({
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run is open',
+      canOpen: true
+    })
+    expect(
+      getAutomationRunViewState({
+        run: structuredRun,
+        workspaceExists: true,
+        terminalTargetExists: false,
+        terminalOnPairedServer: true
+      })
+    ).toMatchObject({
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run chat is on the paired server.',
+      canOpen: true
+    })
+    expect(
+      getAutomationRunViewState({
+        run: structuredRun,
+        workspaceExists: true,
+        terminalTargetExists: false
+      })
+    ).toMatchObject({
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run chat is unavailable.',
+      canOpen: true
+    })
+  })
+
   it('resumes the workspace only when there is no exact terminal identity', () => {
     expect(
       getAutomationRunViewState({
@@ -187,8 +234,8 @@ describe('automation run view state', () => {
       })
     ).toMatchObject({
       availability: 'snapshot',
-      actionLabel: 'Snapshot saved',
       statusLabel: 'Showing saved run snapshot.',
+      actionLabel: 'Snapshot saved',
       canOpen: false
     })
   })

@@ -10,6 +10,7 @@ import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-
 import { useAppStore } from '@/store'
 import {
   getAutomationRunOwnerEnvironmentId,
+  resolveAutomationRunStructuredTarget,
   resolveAutomationRunTerminalTarget
 } from './automation-run-open-target'
 import { canRerunAutomationRun, getAutomationRunViewState } from './automation-run-view-state'
@@ -260,6 +261,8 @@ export function useAutomationRunPageState({
         run: selectedAutomationRunPage,
         workspaceExists: Boolean(selectedAutomationRunPageWorktree),
         terminalTargetExists:
+          resolveAutomationRunStructuredTarget(selectedAutomationRunPage, unifiedTabsByWorktree) !==
+            null ||
           resolveAutomationRunTerminalTarget(
             selectedAutomationRunPage,
             {

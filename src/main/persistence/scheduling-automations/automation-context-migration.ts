@@ -38,6 +38,26 @@ export function normalizeAutomationRunTerminalPtyId(
   return trimmed || null
 }
 
+export function normalizeAutomationRunChatSessionId(
+  value: string | null | undefined
+): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
+}
+
+export function normalizeAutomationRunSessionKind(
+  value: unknown,
+  chatSessionId?: string | null
+): AutomationRun['sessionKind'] {
+  if (
+    value === 'structured' ||
+    (value === undefined && normalizeAutomationRunChatSessionId(chatSessionId))
+  ) {
+    return 'structured'
+  }
+  return 'terminal'
+}
+
 export function normalizeAutomationRunOutputSnapshot(
   value: AutomationRunOutputSnapshot | null | undefined
 ): AutomationRunOutputSnapshot | null {
@@ -228,6 +248,14 @@ export function backfillLegacyAutomationContexts(
     }
     if (!Object.hasOwn(next, 'terminalPtyId')) {
       next.terminalPtyId = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'chatSessionId')) {
+      next.chatSessionId = null
+      changed = true
+    }
+    if (!Object.hasOwn(next, 'sessionKind')) {
+      next.sessionKind = normalizeAutomationRunSessionKind(undefined, next.chatSessionId)
       changed = true
     }
     return next
