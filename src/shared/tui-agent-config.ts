@@ -103,6 +103,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // was pasted blind, mid-startup (#22479). The signal itself fired every time in
     // those runs, so the budget was the problem, not a dropped escape.
     draftPasteReadyTimeoutMs: 20_000,
+    // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
+    ctrlEnterEncoding: 'csi-u',
     composerReadyCaptures: [
       'opencode-1-18-32-timed-boot-slow',
       'opencode-1-18-32-timed-boot-hidden-pane',

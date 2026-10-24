@@ -41,7 +41,7 @@ describe('hasCtrlEnterCsiUAuthorityForPane', () => {
   )
 
   it('authorizes only trusted Ctrl+Enter CSI-u consumers', () => {
-    for (const agent of ['droid', 'grok'] as const) {
+    for (const agent of ['droid', 'grok', 'opencode'] as const) {
       expect(
         hasCtrlEnterCsiUAuthorityForPane(
           {
