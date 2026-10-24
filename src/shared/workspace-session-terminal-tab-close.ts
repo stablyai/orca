@@ -1,4 +1,10 @@
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
+import {
+  isLiveSurfaceContentType,
+  type Tab,
+  type TabGroup,
+  type TabGroupLayoutNode,
+  type WorkspaceVisibleTabType
+} from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
@@ -138,7 +144,9 @@ function deriveActiveSurface(
       terminalTabId: terminalFallback,
       browserTabId: browserFallback,
       fileId: activeUnified.entityId,
-      type: activeUnified.contentType === 'simulator' ? 'simulator' : 'editor'
+      type: isLiveSurfaceContentType(activeUnified.contentType)
+        ? activeUnified.contentType
+        : 'editor'
     }
   }
   if (fileFallback) {

@@ -4,6 +4,7 @@ import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-sc
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from './browser-uuid'
+import type { LiveSurfaceContentType } from '../../../shared/tab-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   findAmbiguousWorktreeIds,
@@ -203,6 +204,48 @@ export function ensureSimulatorTab(
   return drawnId
 }
 
+/**
+ * Creates a live-surface tab beside the source group, to its right: reuses an existing right
+ * split, else splits. Falls back to the source group itself if the split cannot be created.
+ * Why the window draws it in every build: main's layout models only the simulator tab today.
+ */
+export function createLiveSurfaceTabRightOf(
+  worktreeId: string,
+  sourceGroupId: string,
+  contentType: LiveSurfaceContentType,
+  label: string,
+  executionHostId?: ExecutionHostId
+): string | null {
+  const store = useAppStore.getState()
+  const tabOptions = { label, activate: true, ...hostOf(executionHostId) }
+  const reusableRightGroupId = findReusableRightSplitGroupId(
+    store.layoutByWorktree[worktreeId],
+    sourceGroupId
+  )
+  // Why: publish the tab directly in its split group. A two-step
+  // create-then-move can persist the midpoint during dev reload/HMR.
+  const splitTab = reusableRightGroupId
+    ? null
+    : store.createUnifiedTabInSplit(
+        worktreeId,
+        contentType,
+        { sourceGroupId, splitDirection: 'right' },
+        tabOptions
+      )
+  // A tab published straight into a new split is already active there.
+  if (splitTab) {
+    return splitTab.id
+  }
+  const tabId = createBrowserUuid()
+  store.createUnifiedTab(worktreeId, contentType, {
+    ...tabOptions,
+    id: tabId,
+    targetGroupId: reusableRightGroupId ?? sourceGroupId
+  })
+  surfaceCreatedTab(worktreeId, tabId, contentType)
+  return tabId
+}
+
 function hostOf(executionHostId: ExecutionHostId | undefined): {
   executionHostId?: ExecutionHostId
 } {
@@ -210,9 +253,17 @@ function hostOf(executionHostId: ExecutionHostId | undefined): {
 }
 
 function surfaceCreatedSimulatorTab(worktreeId: string, tabId: string): void {
+  surfaceCreatedTab(worktreeId, tabId, 'simulator')
+}
+
+function surfaceCreatedTab(
+  worktreeId: string,
+  tabId: string,
+  contentType: LiveSurfaceContentType
+): void {
   const store = useAppStore.getState()
   store.activateTab(tabId)
-  store.setActiveTabType('simulator', worktreeId)
+  store.setActiveTabType(contentType, worktreeId)
   // Why read by id: placement falls back to the active group when the requested one is gone.
   const groupId = store.getTab(tabId)?.groupId
   if (groupId) {

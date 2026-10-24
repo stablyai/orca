@@ -3,6 +3,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 
@@ -86,7 +87,7 @@ export function TerminalTitlebarTabs({
       activeFileId={activeFileId}
       activeBrowserTabId={activeBrowserTabId}
       activeSimulatorTabId={
-        activeTabType === 'simulator' && renderedActiveWorktreeId
+        isLiveSurfaceContentType(activeTabType) && renderedActiveWorktreeId
           ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
           : null
       }
@@ -94,10 +95,10 @@ export function TerminalTitlebarTabs({
       onActivateFile={(fileId) => {
         const unifiedTabs =
           useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId ?? ''] ?? []
-        const unifiedTab = unifiedTabs.find((tab) => tab.id === fileId)
-        if (unifiedTab?.contentType === 'simulator') {
+        const liveSurfaceType = unifiedTabs.find((tab) => tab.id === fileId)?.contentType
+        if (isLiveSurfaceContentType(liveSurfaceType)) {
           setActiveTab(fileId)
-          setActiveTabType('simulator', renderedActiveWorktreeId)
+          setActiveTabType(liveSurfaceType, renderedActiveWorktreeId)
           return
         }
         setActiveFile(fileId)

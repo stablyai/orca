@@ -16,6 +16,12 @@ export type TabGroupLayoutNode =
       ratio?: number
     }
 
+/** Tabs drawn by a pane overlay over the group body (today the mobile emulator), not by an editor. */
+export const LIVE_SURFACE_CONTENT_TYPES = ['simulator'] as const
+export type LiveSurfaceContentType = (typeof LIVE_SURFACE_CONTENT_TYPES)[number]
+// Why: the one membership source, so adding a type to the array above is the only edit the guard needs.
+const LIVE_SURFACE_CONTENT_TYPE_SET: ReadonlySet<string> = new Set(LIVE_SURFACE_CONTENT_TYPES)
+
 // ─── Unified Tab ────────────────────────────────────────────────────
 export type TabContentType =
   | 'terminal'
@@ -25,14 +31,14 @@ export type TabContentType =
   | 'check-details'
   | 'agent-session'
   | 'browser'
-  | 'simulator'
+  | LiveSurfaceContentType
 
 export type WorkspaceVisibleTabType =
   | 'terminal'
   | 'editor'
   | 'agent-session'
   | 'browser'
-  | 'simulator'
+  | LiveSurfaceContentType
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 // Why: many-to-one — every editor-family kind collapses to 'editor'. Never invert it by equality;
@@ -42,11 +48,17 @@ export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleT
     contentType === 'agent-session' ||
     contentType === 'browser' ||
     contentType === 'terminal' ||
-    contentType === 'simulator'
+    isLiveSurfaceContentType(contentType)
   ) {
     return contentType
   }
   return 'editor'
+}
+
+export function isLiveSurfaceContentType(
+  contentType: TabContentType | undefined | null
+): contentType is LiveSurfaceContentType {
+  return contentType != null && LIVE_SURFACE_CONTENT_TYPE_SET.has(contentType)
 }
 
 export type Tab = {

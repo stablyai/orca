@@ -12,6 +12,7 @@ import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
+import { isLiveSurfaceContentType } from '../../../../shared/tab-types'
 
 export type TabBarItem =
   | {
@@ -193,7 +194,7 @@ export function buildOrderedTabItems({
       continue
     }
     const simulatorTab = unifiedTabByVisibleId.get(id)
-    if (simulatorTab?.contentType === 'simulator') {
+    if (isLiveSurfaceContentType(simulatorTab?.contentType)) {
       items.push({
         type: 'simulator',
         id,
@@ -244,7 +245,7 @@ export function findActiveVisibleTabId(
   const activeItem = items.find((item) => {
     if (item.type === 'terminal') {
       return (
-        (active.activeTabType === 'terminal' || active.activeTabType === 'simulator') &&
+        (active.activeTabType === 'terminal' || isLiveSurfaceContentType(active.activeTabType)) &&
         item.id === active.activeTabId
       )
     }
@@ -252,7 +253,9 @@ export function findActiveVisibleTabId(
       return active.activeTabType === 'browser' && item.id === active.activeBrowserTabId
     }
     if (item.type === 'simulator') {
-      return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
+      return (
+        isLiveSurfaceContentType(active.activeTabType) && item.id === active.activeSimulatorTabId
+      )
     }
     if (item.type === 'agent-session') {
       // Reachable only from TabGroupPanel, which passes the structured tab's own id; the store's
@@ -261,7 +264,7 @@ export function findActiveVisibleTabId(
       return active.activeTabType === 'agent-session' && item.id === active.activeTabId
     }
     return (
-      (active.activeTabType === 'editor' || active.activeTabType === 'simulator') &&
+      (active.activeTabType === 'editor' || isLiveSurfaceContentType(active.activeTabType)) &&
       active.activeFileId === item.id
     )
   })

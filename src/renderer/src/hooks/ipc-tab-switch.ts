@@ -1,4 +1,5 @@
 import { useAppStore } from '../store'
+import { isLiveSurfaceContentType } from '../../../shared/tab-types'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getActiveEntityIdForTabType,
@@ -75,11 +76,17 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
     }
     store.setActiveTabType('browser', worktreeId)
   } else if (next.type === 'simulator') {
-    store.setActiveTab(next.tabId ?? next.id)
+    const tabId = next.tabId ?? next.id
+    store.setActiveTab(tabId)
     if (next.tabId) {
       store.activateTab?.(next.tabId)
     }
-    store.setActiveTabType('simulator', worktreeId)
+    // Why: the 'simulator' tab-bar item covers every live surface.
+    const liveSurfaceType = store.getTab(tabId)?.contentType
+    store.setActiveTabType(
+      isLiveSurfaceContentType(liveSurfaceType) ? liveSurfaceType : 'simulator',
+      worktreeId
+    )
   } else if (next.type === 'agent-session') {
     if (next.tabId) {
       store.activateTab?.(next.tabId)
