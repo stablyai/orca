@@ -129,13 +129,18 @@ export function agentMeta(event: ActivityEvent): string {
 export function paneTitleForEntry(
   entry: AgentStatusEntry,
   tab: TerminalTab,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  paneLiveTitle?: string | null
 ): string {
-  return getActivityThreadTaskTitle({ entry, tab, generatedTitlesEnabled })
+  return getActivityThreadTaskTitle({ entry, tab, generatedTitlesEnabled, paneLiveTitle })
 }
 
-export function paneTitleForEvent(event: ActivityEvent, generatedTitlesEnabled: boolean): string {
-  return paneTitleForEntry(event.entry, event.tab, generatedTitlesEnabled)
+export function paneTitleForEvent(
+  event: ActivityEvent,
+  generatedTitlesEnabled: boolean,
+  paneLiveTitle?: string | null
+): string {
+  return paneTitleForEntry(event.entry, event.tab, generatedTitlesEnabled, paneLiveTitle)
 }
 
 export function statusPreviewForEntry(

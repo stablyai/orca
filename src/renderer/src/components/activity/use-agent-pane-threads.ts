@@ -185,6 +185,10 @@ export function useAgentPaneThreads(args: {
     [storeData, agentStatusEpoch]
   )
 
+  // Why: selected outside storeData so a pane title change rebuilds threads, not events.
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+
   const allThreads = useMemo(
     () =>
       buildAgentPaneThreads(
@@ -192,11 +196,20 @@ export function useAgentPaneThreads(args: {
           events: allEvents,
           liveAgentByPaneKey,
           paneEntryByPaneKey,
-          generatedTitlesEnabled: storeData.generatedTitlesEnabled
+          generatedTitlesEnabled: storeData.generatedTitlesEnabled,
+          terminalLayoutsByTabId,
+          runtimePaneTitlesByTabId
         },
         threadReuseCacheRef.current
       ),
-    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled]
+    [
+      allEvents,
+      liveAgentByPaneKey,
+      paneEntryByPaneKey,
+      storeData.generatedTitlesEnabled,
+      terminalLayoutsByTabId,
+      runtimePaneTitlesByTabId
+    ]
   )
 
   const selectedPaneKeyIsLive =
