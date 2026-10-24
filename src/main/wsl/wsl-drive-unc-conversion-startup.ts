@@ -27,10 +27,8 @@ import { wslHostsGateOpen } from './wsl-host-gate'
 import { getHistoryRoot, listWslHistoryRoots } from '../terminal-history-paths'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
-import {
-  rewriteWslDriveUncState,
-  WSL_DRIVE_UNC_STATE_DISPOSITIONS
-} from './wsl-drive-unc-state-rewrite'
+import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
+import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../shared/wsl-drive-unc-state-dispositions'
 
 export type WslDriveUncConversionStartupDeps = {
   /** Where the journal lives. */
