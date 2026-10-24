@@ -9,6 +9,10 @@
       "rootDescription": "Le shell de l'application n'a pas pu terminer son rendu. Réessayez pour le remonter, ou relancez Orca si l'erreur persiste.",
       "webTitle": "Orca web a rencontré une erreur de rendu.",
       "webDescription": "Réessayez le client web ou reconnectez-vous au runtime appairé."
+    },
+    "sidebarLayout": {
+      "moveLeft": "Déplacer la barre latérale des outils à gauche (disposition VS Code)",
+      "moveRight": "Déplacer la barre latérale des outils à droite"
     }
   },
   "browser": {
@@ -539,7 +543,7 @@
       "7cbfbf622f": "Réessayez l'espace de travail flottant, ou fermez-le et rouvrez-le.",
       "1b3024bcd6": "L'espace de travail flottant a rencontré une erreur.",
       "8d1e160ed1": "Réessayez la barre latérale ou changez d'onglet pour recharger cette vue.",
-      "ed6b168d00": "La barre latérale droite a rencontré une erreur.",
+      "ed6b168d00": "Une erreur est survenue dans la barre latérale des outils.",
       "03a14f6b5b": "Réessayez la page ou naviguez vers une autre vue Orca.",
       "b7a714db1e": "Cette page a rencontré une erreur.",
       "98d4ea2823": "Le rendu du terminal, du navigateur ou de l'éditeur a échoué dans cet espace de travail. Réessayez pour le remonter.",
@@ -550,7 +554,7 @@
       "c1cf0b0e4a": "Réduire le volet",
       "8504ddf267": "L'app tourne toujours. Réessayez le shell ou utilisez le menu pour signaler les détails du plantage.",
       "df1d56bf87": "Le shell de l'espace de travail a rencontré une erreur.",
-      "9e0b441a91": "Basculer la barre latérale droite",
+      "9e0b441a91": "Afficher/masquer la barre latérale des outils",
       "e81217c1b7": "Masquer le nom de l'app",
       "5096cbbc86": "Orca",
       "8b0b8eb54f": "Menu de l'application",
@@ -570,7 +574,7 @@
       "4f08ae8311": "tâches",
       "ca6c6eece7": "skills",
       "1b9d9d065f": "paramètres",
-      "c184e056de": "Basculer la barre latérale droite ({{value0}})",
+      "c184e056de": "Afficher/masquer la barre latérale des outils ({{value0}})",
       "f7aa73e785": "Suivant ({{value0}})",
       "cf9099fe98": "Suivant",
       "fe21e8f6f5": "Précédent ({{value0}})",
@@ -14140,7 +14144,7 @@
             "70893f017b": "Côté",
             "7b415c39e9": "Haut",
             "864111caa2": "Position de la barre d'activité",
-            "e8e2e4ce74": "Basculer la barre latérale droite",
+            "e8e2e4ce74": "Afficher/masquer la barre latérale des outils",
             "441733b630": "Ports",
             "83a10e3c44": "Vérifications",
             "0314901467": "Contrôle de code source",
@@ -14148,7 +14152,7 @@
             "8bc2bbc3a0": "Explorateur",
             "45b78f03bc": "côté",
             "34af8aadf5": "haut",
-            "9fffaf17c1": "Basculer la barre latérale droite ({{value0}})",
+            "9fffaf17c1": "Afficher/masquer la barre latérale des outils ({{value0}})",
             "b37ff4a89a": "ports",
             "9f83375839": "checks",
             "6306b48afd": "source-control",

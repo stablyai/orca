@@ -28,6 +28,7 @@ export function useAppChromeLayout() {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const toolsSidebarOnLeft = settings?.toolsSidebarPosition === 'left'
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Why: the creation surface owns the tab strip from the first pending frame; gating on the delayed loader flag swapped the tab bar mid-create.
   const activePendingCreationExists = useAppStore(
@@ -96,7 +97,7 @@ export function useAppChromeLayout() {
   // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, rightSidebarOpen, toolsSidebarOnLeft])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -149,6 +150,7 @@ export function useAppChromeLayout() {
     // Why: the workbench stays mounted while hidden, so visibility tracks the same condition separately.
     terminalWorkbenchVisible: workspaceChromeActive,
     titlebarLeftControlsRef,
+    toolsSidebarOnLeft,
     workspaceChromeActive
   }
 }

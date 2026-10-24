@@ -127,12 +127,14 @@ export function ActivityBarButton({
   active,
   onClick,
   layout,
+  sidebarSide = 'right',
   statusIndicator
 }: {
   item: ActivityBarItem
   active: boolean
   onClick: () => void
   layout: 'top' | 'side'
+  sidebarSide?: 'left' | 'right'
   statusIndicator?: CheckStatus | null
 }): React.JSX.Element {
   const Icon = item.icon
@@ -170,11 +172,19 @@ export function ActivityBarButton({
             <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-foreground rounded-t" />
           )}
           {active && !isTop && (
-            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-foreground rounded-l" />
+            <div
+              className={cn(
+                'absolute top-[25%] bottom-[25%] w-[2px] bg-foreground',
+                sidebarSide === 'left' ? 'left-0 rounded-r' : 'right-0 rounded-l'
+              )}
+            />
           )}
         </button>
       </TooltipTrigger>
-      <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
+      <TooltipContent
+        side={isTop ? 'bottom' : sidebarSide === 'left' ? 'right' : 'left'}
+        sideOffset={6}
+      >
         {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
       </TooltipContent>
     </Tooltip>

@@ -53,6 +53,10 @@
       "rootDescription": "The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.",
       "webTitle": "Orca web hit a renderer error.",
       "webDescription": "Retry the web client or reconnect to the paired runtime."
+    },
+    "sidebarLayout": {
+      "moveLeft": "Move tools sidebar to the left (VS Code layout)",
+      "moveRight": "Move tools sidebar to the right"
     }
   },
   "browser": {
@@ -620,7 +624,7 @@
       "7cbfbf622f": "Retry the floating workspace or close and reopen it.",
       "1b3024bcd6": "The floating workspace hit an error.",
       "8d1e160ed1": "Retry the sidebar or switch tabs to reload this surface.",
-      "ed6b168d00": "The right sidebar hit an error.",
+      "ed6b168d00": "The tools sidebar hit an error.",
       "03a14f6b5b": "Retry the page or navigate to another Orca surface.",
       "b7a714db1e": "This page hit an error.",
       "98d4ea2823": "Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.",
@@ -631,7 +635,7 @@
       "c1cf0b0e4a": "Collapse pane",
       "8504ddf267": "The app is still running. Retry the shell or use the menu to report the crash details.",
       "df1d56bf87": "The workspace shell hit an error.",
-      "9e0b441a91": "Toggle right sidebar",
+      "9e0b441a91": "Toggle tools sidebar",
       "e81217c1b7": "Hide App Name",
       "5096cbbc86": "Orca",
       "8b0b8eb54f": "Application menu",
@@ -651,7 +655,7 @@
       "4f08ae8311": "tasks",
       "ca6c6eece7": "skills",
       "1b9d9d065f": "settings",
-      "c184e056de": "Toggle right sidebar ({{value0}})",
+      "c184e056de": "Toggle tools sidebar ({{value0}})",
       "f7aa73e785": "Go forward ({{value0}})",
       "cf9099fe98": "Go forward",
       "fe21e8f6f5": "Go back ({{value0}})",
@@ -14269,7 +14273,7 @@
             "70893f017b": "Side",
             "7b415c39e9": "Top",
             "864111caa2": "Activity Bar Position",
-            "e8e2e4ce74": "Toggle right sidebar",
+            "e8e2e4ce74": "Toggle tools sidebar",
             "441733b630": "Ports",
             "83a10e3c44": "Checks",
             "0314901467": "Source Control",
@@ -14277,7 +14281,7 @@
             "8bc2bbc3a0": "Explorer",
             "45b78f03bc": "side",
             "34af8aadf5": "top",
-            "9fffaf17c1": "Toggle right sidebar ({{value0}})",
+            "9fffaf17c1": "Toggle tools sidebar ({{value0}})",
             "b37ff4a89a": "ports",
             "9f83375839": "checks",
             "6306b48afd": "source-control",

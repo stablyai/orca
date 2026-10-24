@@ -69,6 +69,13 @@ export default function TabGroupPanel({
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
+  const toolsSidebarOnLeft = useAppStore((state) => state.settings?.toolsSidebarPosition === 'left')
+  const windowControlsSpacerStyle = {
+    width: toolsSidebarOnLeft
+      ? 'var(--window-controls-width, 0px)'
+      : 'calc(40px + var(--window-controls-width, 0px))',
+    WebkitAppRegion: 'no-drag'
+  }
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
@@ -281,7 +288,9 @@ export default function TabGroupPanel({
         >
           <div className="flex h-full items-stretch pr-1.5">
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-            {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            {reserveCollapsedSidebarHeaderSpace &&
+            !sidebarOpen &&
+            !(toolsSidebarOnLeft && rightSidebarOpen) ? (
               <div
                 className="shrink-0"
                 style={
@@ -307,16 +316,8 @@ export default function TabGroupPanel({
               ) : null}
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
-              <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'calc(40px + var(--window-controls-width, 0px))',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
-              />
+            {reserveClosedExplorerToggleSpace && (toolsSidebarOnLeft || !rightSidebarOpen) ? (
+              <div className="shrink-0" style={windowControlsSpacerStyle} />
             ) : null}
           </div>
         </div>

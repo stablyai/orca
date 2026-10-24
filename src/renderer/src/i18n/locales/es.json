@@ -9,6 +9,10 @@
       "rootDescription": "El shell de la aplicación no pudo terminar de renderizarse. Vuelva a intentar volver a montarlo o reinicie Orca si el error persiste.",
       "webTitle": "Orca web tuvo un error de renderizado.",
       "webDescription": "Vuelva a cargar el cliente web o vuelva a conectarse al servidor Orca vinculado."
+    },
+    "sidebarLayout": {
+      "moveLeft": "Mover la barra lateral de herramientas a la izquierda (diseño de VS Code)",
+      "moveRight": "Mover la barra lateral de herramientas a la derecha"
     }
   },
   "githubChecks": {
@@ -399,7 +403,7 @@
       "7cbfbf622f": "Vuelve a intentarlo, o cierra y vuelve a abrir el espacio de trabajo flotante.",
       "1b3024bcd6": "El espacio de trabajo flotante tuvo un error.",
       "8d1e160ed1": "Vuelve a intentarlo o cambia de pestaña para recargar la barra lateral.",
-      "ed6b168d00": "La barra lateral derecha tuvo un error.",
+      "ed6b168d00": "Se produjo un error en la barra lateral de herramientas.",
       "03a14f6b5b": "Vuelve a intentarlo con la página o navega a otra sección de Orca.",
       "b7a714db1e": "Esta página tuvo un error.",
       "98d4ea2823": "No se pudo mostrar el terminal, el navegador o el editor en este espacio de trabajo. Vuelve a intentarlo para recargarlo.",
@@ -410,7 +414,7 @@
       "c1cf0b0e4a": "Contraer panel",
       "8504ddf267": "La aplicación sigue ejecutándose. Vuelve a intentar cargar el espacio de trabajo o usa el menú para informar los detalles del fallo.",
       "df1d56bf87": "La vista del espacio de trabajo tuvo un error.",
-      "9e0b441a91": "Alternar barra lateral derecha",
+      "9e0b441a91": "Alternar barra lateral de herramientas",
       "e81217c1b7": "Ocultar nombre de la aplicación",
       "5096cbbc86": "Orca",
       "8b0b8eb54f": "Menú de aplicaciones",
@@ -430,7 +434,7 @@
       "4f08ae8311": "tareas",
       "ca6c6eece7": "habilidades",
       "1b9d9d065f": "ajustes",
-      "c184e056de": "Alternar barra lateral derecha ({{value0}})",
+      "c184e056de": "Alternar barra lateral de herramientas ({{value0}})",
       "f7aa73e785": "Avanzar ({{value0}})",
       "cf9099fe98": "Avanzar",
       "fe21e8f6f5": "Volver ({{value0}})",
@@ -13996,7 +14000,7 @@
             "70893f017b": "Lado",
             "7b415c39e9": "Arriba",
             "864111caa2": "Posición de la barra de actividades",
-            "e8e2e4ce74": "Alternar barra lateral derecha",
+            "e8e2e4ce74": "Alternar barra lateral de herramientas",
             "441733b630": "Puertos",
             "83a10e3c44": "Checks",
             "0314901467": "Control de código fuente",
@@ -14004,7 +14008,7 @@
             "8bc2bbc3a0": "Explorador",
             "45b78f03bc": "lado",
             "34af8aadf5": "arriba",
-            "9fffaf17c1": "Alternar barra lateral derecha ({{value0}})",
+            "9fffaf17c1": "Alternar barra lateral de herramientas ({{value0}})",
             "b37ff4a89a": "puertos",
             "9f83375839": "cheques",
             "6306b48afd": "source-control",
