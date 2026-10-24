@@ -54,12 +54,23 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       `Terminal ${terminal} does not belong to worktree ${resolvedWorktreeId}.`
     )
   }
-  if (!(await runtime.isTerminalRunningAgent(terminal))) {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      `Terminal ${terminal} is not running a recognized agent.`
-    )
+  await assertTerminalRunsAgent(runtime, terminal)
+}
+
+/** Refuses a pane with no agent to read a preamble; `reason` says when presence could not be read. */
+export async function assertTerminalRunsAgent(
+  runtime: Pick<OrcaRuntimeService, 'resolveTerminalAgentPresence'>,
+  terminal: string
+): Promise<void> {
+  const presence = await runtime.resolveTerminalAgentPresence(terminal)
+  if (presence === 'present') {
+    return
   }
+  throw new OrchestrationError(
+    'agent_unconfigured',
+    `Terminal ${terminal} is not running a recognized agent.`,
+    presence === 'unknown' ? { reason: 'foreground_process_unreadable' } : undefined
+  )
 }
 
 /** A `--terminal` party: a terminal pane, or a chat named by its Orca session ID. */

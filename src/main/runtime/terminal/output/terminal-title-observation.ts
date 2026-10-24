@@ -57,10 +57,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
-    return (
-      this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
-      detectAgentStatusFromTitle(rawTitle)
-    )
+    return this.getPtyProgramActivity(ptyId) ?? detectAgentStatusFromTitle(rawTitle)
+  }
+
+  protected getPtyProgramActivity(ptyId: string): AgentStatus | null {
+    return this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ?? null
   }
 
   /** Re-classifies the PTY under new program activity; on null the title's own glyph decides again. */

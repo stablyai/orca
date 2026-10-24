@@ -389,7 +389,7 @@ describe('orchestration RPC methods', () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
-      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'resolveTerminalAgentPresence').mockResolvedValue('present')
       const task = db.createTask({ spec: 'reuse exact worker' })
 
       const result = (await call('orchestration.workerStart', {

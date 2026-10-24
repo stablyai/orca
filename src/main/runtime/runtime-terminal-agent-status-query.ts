@@ -2,12 +2,9 @@ import {
   detectAgentStatusFromTitle,
   isOpenCodeNativeTitle,
   isQuarterCircleSpinnerOnlyAgentTitle,
-  isShellProcess,
   type AgentStatus
 } from '../../shared/agent-detection'
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   terminalTitleBlocksExplicitAgentStatus,
@@ -30,7 +27,6 @@ export type RuntimeTerminalAgentStatusSnapshot = {
 }
 
 type Dependencies = {
-  getController(): RuntimePtyController | null
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
@@ -42,6 +38,7 @@ type Dependencies = {
     ptyId: string
   ): { status: AgentStatus | null; updatedAt: number } | null | undefined
   isRunning(handle: string): Promise<boolean>
+  foregroundContradictsStatus(ptyId: string): Promise<boolean>
   getTitleDisplayClear(ptyId: string): TitleDisplayClear | null
 }
 
@@ -107,7 +104,7 @@ export class RuntimeTerminalAgentStatusQuery {
       // Fresh hook state is tighter, but current shell/management evidence wins.
       const isRunningAgent =
         !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
-        !(await this.terminalHasShellForegroundProcess(handle, ptyId))
+        !(await this.isStatusContradictedByForeground(handle, ptyId))
       this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
       return {
         handle,
@@ -231,36 +228,9 @@ export class RuntimeTerminalAgentStatusQuery {
     }
   }
 
-  private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
-    const controller = this.deps.getController()
-    if (!controller) {
-      return false
-    }
-    let foregroundProcess: string | null
-    try {
-      foregroundProcess = await controller.getForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return false
-    }
+  private async isStatusContradictedByForeground(handle: string, ptyId: string): Promise<boolean> {
+    const contradicted = await this.deps.foregroundContradictsStatus(ptyId)
     this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    if (!foregroundProcess || !isShellProcess(foregroundProcess)) {
-      return false
-    }
-    const confirmationController = this.deps.getController()
-    if (!confirmationController?.confirmForegroundProcess) {
-      return true
-    }
-    let confirmedProcess: string | null
-    try {
-      confirmedProcess = await confirmationController.confirmForegroundProcess(ptyId)
-    } catch {
-      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-      return true
-    }
-    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    // Why: hook identity is generic; strong provider evidence only needs to
-    // prove that some recognized agent still owns this exact PTY.
-    return recognizeAgentProcess(confirmedProcess) === null
+    return contradicted
   }
 }

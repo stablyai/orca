@@ -99,7 +99,7 @@ describe('federated worker first dispatch readiness', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reuse path reads only the worktree id.
       { id: WORKTREE } as never
     )
-    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(runtime, 'resolveTerminalAgentPresence').mockResolvedValue('present')
 
     await expect(attach(runtime, { terminal: HANDLE })).resolves.toMatchObject({ state: 'ready' })
 

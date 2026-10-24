@@ -197,9 +197,7 @@ describe('display surfaces after the stale-working title clear', () => {
         isRunningAgent: false,
         status: null
       })
-      await expect(
-        runtime.isTerminalRunningAgent(handle, { retryForegroundWrappers: false })
-      ).resolves.toBe(false)
+      await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -229,9 +227,7 @@ describe('display surfaces after the stale-working title clear', () => {
         isRunningAgent: true,
         status: 'idle'
       })
-      await expect(
-        runtime.isTerminalRunningAgent(terminal.handle, { retryForegroundWrappers: false })
-      ).resolves.toBe(true)
+      await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
     } finally {
       vi.useRealTimers()
     }

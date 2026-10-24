@@ -26,6 +26,8 @@ function presence(isLiveStructuredAgent: (handle: string) => boolean) {
       getTrackedPty: () => null,
       getTabTitle: () => null,
       getForegroundProcess: () => null,
+      confirmForegroundProcess: () => null,
+      reportsAgentStatus: () => false,
       getTitleDisplayClear: () => null
     })
   }
@@ -34,7 +36,7 @@ function presence(isLiveStructuredAgent: (handle: string) => boolean) {
 describe('agent presence for a structured worker', () => {
   it('reports the session as running an agent without probing a pane', async () => {
     const { presence: subject, getLiveLeaf } = presence(() => true)
-    await expect(subject.isRunning('structworker_1')).resolves.toBe(true)
+    await expect(subject.resolve('structworker_1')).resolves.toBe('present')
     // A structured session IS the agent; there is no foreground process to recognise, and the
     // leaf probe would only throw.
     expect(getLiveLeaf).not.toHaveBeenCalled()
@@ -42,6 +44,6 @@ describe('agent presence for a structured worker', () => {
 
   it('still answers false for a handle that is not a live structured worker', async () => {
     const { presence: subject } = presence(() => false)
-    await expect(subject.isRunning('term_gone')).resolves.toBe(false)
+    await expect(subject.resolve('term_gone')).resolves.toBe('absent')
   })
 })

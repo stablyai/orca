@@ -69,7 +69,7 @@ describe('orchestration worker release recovery', () => {
       accepted: true,
       bytesWritten: 1
     })
-    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(runtime, 'resolveTerminalAgentPresence').mockResolvedValue('present')
     vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
     vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
       handle: 'term_worker',

@@ -298,9 +298,7 @@ describe('OrcaRuntimeService', () => {
 
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
 
-    await expect(
-      runtime.isTerminalRunningAgent(handle, { retryForegroundWrappers: false })
-    ).resolves.toBe(false)
+    await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(false)
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
   })
 

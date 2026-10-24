@@ -129,7 +129,7 @@ export function registerWorkerStartTerminalTargetTests(): void {
       ['the coordinator handle', 'term_coord'],
       ['an alias of the coordinator pane', 'term_coord_alias']
     ])('refuses %s even when no agent is detected', async (_label, target) => {
-      vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockResolvedValue(false)
+      vi.spyOn(harness.runtime, 'resolveTerminalAgentPresence').mockResolvedValue('absent')
       vi.spyOn(harness.runtime, 'getOrchestrationDispatchAuthority').mockImplementation(
         (handle) =>
           (handle === 'term_coord_alias'

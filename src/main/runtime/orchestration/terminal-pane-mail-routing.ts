@@ -1,4 +1,3 @@
-import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -6,7 +5,6 @@ import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle
 } from '../../../shared/agent-detection'
-import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import {
   resolveStructuredWorkerAuthority,
   resolveStructuredWorkerIdentityForSession
@@ -111,14 +109,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     return this.titleObservationSequence
   }
 
-  // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
-  async isTerminalRunningAgent(
-    handle: string,
-    options?: RuntimeTerminalAgentPresenceOptions
-  ): Promise<boolean> {
-    return this.terminalAgentPresence.isRunning(handle, options)
-  }
-
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
     try {
       const livePty = this.getLivePtyForHandle(handle)
@@ -128,21 +118,14 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       if (!ptyId || !trackedPty || !this.ptyController) {
         return false
       }
-      let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
-      let agent = recognizeAgentProcess(foregroundProcess)?.agent
-      // Why: the cached foreground name can be an executable basename nothing recognizes
-      // (macOS p_comm reports the native Claude installer as `2.1.258`), and treating that
-      // as "no agent" silently downgrades the prompt to unframed chunks, which Claude's
-      // composer truncates. A fresh process-table scan reads the real command line.
-      if (agent === undefined && this.ptyController.confirmForegroundProcess) {
-        foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
-        agent = recognizeAgentProcess(foregroundProcess)?.agent
-      }
+      // Why confirm a shell too: treating an unproven name as "no agent" downgrades the prompt to
+      // unframed chunks, which Claude's composer truncates.
+      const foreground = await this.terminalAgentPresence.readForeground(ptyId)
+      const agent = foreground.kind === 'agent' ? foreground.agent : undefined
       if (agent !== 'claude' && agent !== 'codex') {
         return false
       }
-      const presence = { retryForegroundWrappers: false, foregroundProcess }
-      if (!(await this.isTerminalRunningAgent(handle, presence))) {
+      if ((await this.terminalAgentPresence.resolve(handle, foreground)) !== 'present') {
         return false
       }
       trackedPty.foregroundAgent = agent

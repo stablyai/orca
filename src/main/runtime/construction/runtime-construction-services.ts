@@ -31,7 +31,6 @@ import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status-osc'
-import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
 import type { OrchestrationMailboxLeaf } from '../orchestration/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
@@ -125,6 +124,7 @@ export abstract class RuntimeConstructionServices {
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void
+  protected abstract getPtyProgramActivity(ptyId: string): AgentStatus | null
   protected abstract getPtyTitleDisplayClear(
     ptyId: string | null | undefined
   ): TitleDisplayClear | null
@@ -218,10 +218,6 @@ export abstract class RuntimeConstructionServices {
       updatedAt: number
     }
   >
-  abstract isTerminalRunningAgent(
-    handle: string,
-    options?: RuntimeTerminalAgentPresenceOptions
-  ): Promise<boolean>
   abstract getTerminalProcessIncarnation(handle: string): string | null
   protected abstract controllerKnowsPtyIsLive(ptyId: string): boolean
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
@@ -267,6 +263,14 @@ export abstract class RuntimeConstructionServices {
     retryStale?: boolean,
     inventoryOptions?: PtyControllerContract.PtyInventoryRefreshOptions
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
+  protected abstract getFreshExplicitAgentStatusForPty(
+    handle: string,
+    ptyId: string
+  ): {
+    status: NonNullable<RuntimeTerminalAgentStatus['status']>
+    updatedAt: number
+    stateStartedAt: number
+  } | null
   protected abstract getFreshExplicitAgentStatusForHandle(
     handle: string,
     paneKeyOverride?: string | null

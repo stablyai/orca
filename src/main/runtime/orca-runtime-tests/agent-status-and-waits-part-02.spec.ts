@@ -486,7 +486,6 @@ describe('OrcaRuntimeService', () => {
     foreground.resolve('zsh')
 
     await expect(status).rejects.toThrow('terminal_handle_stale')
-    expect(confirmForegroundProcess).not.toHaveBeenCalled()
   })
 
   it('rejects a handle rebind while a controller-less status check yields', async () => {

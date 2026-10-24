@@ -6,6 +6,7 @@ import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-gu
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
+import { assertTerminalRunsAgent } from '../worker/explicit-worker-terminal-validation'
 import type { FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
@@ -130,12 +131,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
                 `Terminal ${terminalHandle} does not belong to worktree ${worktree.id}.`
               )
             }
-            if (!(await runtime.isTerminalRunningAgent(terminalHandle))) {
-              throw new OrchestrationError(
-                'agent_unconfigured',
-                `Terminal ${terminalHandle} is not running a recognized agent.`
-              )
-            }
+            await assertTerminalRunsAgent(runtime, terminalHandle)
             effects.push({
               kind: 'terminal',
               role: 'agent',

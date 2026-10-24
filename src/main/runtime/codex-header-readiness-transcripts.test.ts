@@ -539,9 +539,7 @@ describe('Display title clearing and live agent presence', () => {
             isRunningAgent: false,
             status: null
           })
-          await expect(
-            runtime.isTerminalRunningAgent(handle, { retryForegroundWrappers: false })
-          ).resolves.toBe(false)
+          await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
         } finally {
           vi.useRealTimers()
         }
@@ -563,9 +561,7 @@ describe('Display title clearing and live agent presence', () => {
           isRunningAgent: true,
           status: null
         })
-        await expect(
-          runtime.isTerminalRunningAgent(handle, { retryForegroundWrappers: false })
-        ).resolves.toBe(true)
+        await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
       } finally {
         vi.useRealTimers()
       }
