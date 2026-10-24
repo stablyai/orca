@@ -71,6 +71,8 @@ export function createWslHostConnector(options: {
       findWslHostDeployment(options.userDataPath, environmentId)
         ? resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
         : null,
+    recordedLocalPort: (environmentId) =>
+      findWslHostDeployment(options.userDataPath, environmentId)?.localPort ?? null,
     onChange: options.onChange,
     deployAndLaunch: (distro, deployOptions) =>
       options.isKnownDistro(distro)

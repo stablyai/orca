@@ -4,7 +4,10 @@
  * distro; a relaunch that moved orcad's port moves the bridge with it. In memory only: the
  * deployment record (C7) persists what `onChange` reports.
  */
-import type { WslOrcadConnection } from './wsl-orcad-connection-types'
+import type {
+  WslOrcadConnection,
+  WslOrcadConnectionDependencies
+} from './wsl-orcad-connection-types'
 import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
@@ -12,11 +15,8 @@ import {
 import type { WslHostConnectIntent } from '../../shared/wsl-host-types'
 import { errorMessage } from '../../shared/error-message'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
-import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import type { OrcadTunnelIdentity } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
-import type { WslDistroHolder } from './wsl-distro-holder'
 import {
   wslConnectFailedStatus,
   type WslOrcadConnectionStatus
@@ -25,19 +25,18 @@ import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import {
   defaultWslOrcadEnvironmentId,
   deployAndLaunchWslOrcad,
-  type WslOrcadDeployOptions,
   type WslOrcadLaunch
 } from './wsl-orcad-deploy'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
-import { resolveWslOrcadPairing, type WslOrcadPairingRecovery } from './wsl-orcad-pairing-identity'
+import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
 import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
-import {
-  listenWslOrcadStdioBridgeOnPreferredPort,
-  type WslOrcadStdioBridgeOptions
-} from './wsl-orcad-stdio-bridge'
+import { listenWslOrcadStdioBridgeOnPreferredPort } from './wsl-orcad-stdio-bridge'
 
-export type { WslOrcadConnection } from './wsl-orcad-connection-types'
+export type {
+  WslOrcadConnection,
+  WslOrcadConnectionDependencies
+} from './wsl-orcad-connection-types'
 
 export type WslOrcadConnectOptions = {
   environmentId?: string
@@ -54,26 +53,6 @@ type WslOrcadConnectStatus = { pending: WslOrcadConnectionStatus; ready: WslOrca
 
 const CONNECTING: WslOrcadConnectionStatus = { state: 'connecting' }
 const READY: WslOrcadConnectionStatus = { state: 'ready', census: null }
-
-export type WslOrcadConnectionDependencies = {
-  holder?: WslDistroHolder
-  getPairingOffer?: (environmentId: string) => PairingOffer | null
-  deployAndLaunch?: (distro: string, options: WslOrcadDeployOptions) => Promise<WslOrcadLaunch>
-  createTransport?: (target: WslOrcadHostTarget) => OrcadHostTransport
-  listen?: (
-    transport: OrcadHostTransport,
-    options: WslOrcadStdioBridgeOptions
-  ) => Promise<StartedPortForward>
-  verifyIdentity?: (pairingOffer: string, readiness: ServeReadiness) => Promise<OrcadTunnelIdentity>
-  /** Re-pairs a refused enrolled token; without it a refusal fails the connect. */
-  pairingRecovery?: Omit<WslOrcadPairingRecovery, 'environmentId'>
-  /** A connection (re)opened, its offer changed, or its status moved; null once it closed. */
-  onChange?: (
-    distro: string,
-    connection: WslOrcadConnection | null,
-    status: WslOrcadConnectionStatus
-  ) => void
-}
 
 type ActiveWslOrcadConnection = {
   connection: WslOrcadConnection
@@ -253,7 +232,11 @@ export class WslOrcadConnectionManager {
       )
     }
     // orcad moved ports (or this is the first connect): the old bridge dials a dead port.
-    const preferredLocalPort = current?.connection.localPort ?? options.localPort ?? 0
+    const preferredLocalPort =
+      current?.connection.localPort ??
+      options.localPort ??
+      this.dependencies.recordedLocalPort?.(environmentId) ??
+      0
     if (current) {
       await this.drop(key, current)
       this.dependencies.onChange?.(distro, null, status.pending)
