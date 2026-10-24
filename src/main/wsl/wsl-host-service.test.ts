@@ -294,6 +294,31 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenCalledTimes(3)
   })
 
+  it('connects a host with no open work when the user asks for work on it, as after a relaunch', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    await service.add({ distro: 'Ubuntu' })
+    // A relaunch: the bridge died with the old app and no project on the host is open.
+    await connector.disconnect('Ubuntu')
+    connector.connect.mockClear()
+
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('isn’t connected')
+    expect(connector.connect).not.toHaveBeenCalled()
+
+    await service.ensureForUserRequest('wsl:ubuntu')
+    expect(connector.connect).toHaveBeenCalledTimes(1)
+    // Live now, so another request reuses it.
+    await service.ensureForUserRequest('wsl:ubuntu')
+    expect(connector.connect).toHaveBeenCalledTimes(1)
+
+    await connector.disconnect('Ubuntu')
+    enabled = false
+    await expect(service.ensureForUserRequest('wsl:ubuntu')).rejects.toThrow(
+      'turned off in Settings'
+    )
+    expect(connector.connect).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses a connect while the experiment is off, but still removes the host', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
