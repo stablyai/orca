@@ -30,6 +30,11 @@ import {
 import { recoverInterruptedWslMoves } from './wsl-move-reset'
 import { bringWslMovedProjectBack } from './wsl-move-use-locally'
 import {
+  isWslMoveWindowWriteHeld,
+  resetWslMoveWindowWriteHoldForTests,
+  setWslMoveReloadableWindow
+} from './wsl-move-window-write-hold'
+import {
   cancelWslMoveRewriteRetryForTests,
   scheduleWslMoveRewriteRetry
 } from './wsl-move-rewrite-retry'
@@ -53,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
+  resetWslMoveWindowWriteHoldForTests()
   rmSync(userDataPath, { recursive: true, force: true })
 })
 
@@ -108,6 +114,53 @@ describe('moveProjectsToWslHost', () => {
     expect(journal()).toEqual([])
     // The host's staging was aborted; nothing of the move is left on either side.
     expect([...world.catalog.values()]).toEqual([])
+  })
+
+  it("holds the open window's saves from the commit request and reloads it once, after the rewrite", async () => {
+    const page = { loaded: () => {} }
+    const window = {
+      isDestroyed: () => false,
+      reload: vi.fn(),
+      allowUnload: () => () => {},
+      onLoadedOrGone: (listener: () => void) => {
+        page.loaded = listener
+        return () => {}
+      }
+    }
+    setWslMoveReloadableWindow(() => window)
+    const heldAt: string[] = []
+    registerWslMoveDesktopRewriteStore({
+      id: 'session-globals',
+      side: 'main',
+      run: () => {
+        heldAt.push(isWslMoveWindowWriteHeld() ? 'rewrite:held' : 'rewrite:open')
+      },
+      flush: () => {}
+    })
+
+    expect(await moveProjectsToWslHost(world.deps, request)).toMatchObject({ outcome: 'moved' })
+    expect(heldAt).toEqual(['rewrite:held'])
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(window.reload).toHaveBeenCalledOnce()
+    expect(isWslMoveWindowWriteHeld()).toBe(true)
+    page.loaded()
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+  })
+
+  it('leaves the window unheld and unreloaded when the commit request fails', async () => {
+    const window = {
+      isDestroyed: () => false,
+      reload: vi.fn(),
+      allowUnload: () => () => {},
+      onLoadedOrGone: () => () => {}
+    }
+    setWslMoveReloadableWindow(() => window)
+    world.failAt.add('commit:before')
+
+    expect(await moveProjectsToWslHost(world.deps, request)).not.toMatchObject({ outcome: 'moved' })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+    expect(window.reload).not.toHaveBeenCalled()
   })
 
   it('recovers a stage whose reply was lost by reading the host, then moves', async () => {

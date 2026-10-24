@@ -7,10 +7,13 @@ import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/ws
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { listWslMoveCutovers } from '../persistence/moving-wsl-projects/wsl-move-cutover-journal'
 import {
-  hasWslMoveFrozenSessions,
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import {
+  isWslMoveWindowWriteHeld,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import {
   registerWslMoveDesktopRewriteStore,
   resetWslMoveDesktopRewriteStoresForTests
@@ -118,25 +121,31 @@ describe('WSL move IPC', () => {
     }
     expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
 
-    const listeners = new Map<string, () => void>()
+    const page = { loaded: () => {} }
     const mainWindow = {
       id: MAIN_WINDOW_ID,
-      once: (name: string, listener: () => void) => listeners.set(name, listener),
       isDestroyed: () => false,
-      reload: vi.fn()
+      reload: vi.fn(),
+      allowUnload: () => () => {},
+      onLoadedOrGone: (listener: () => void) => {
+        page.loaded = listener
+        return () => {}
+      }
     }
+    setWslMoveReloadableWindow(() => mainWindow)
     const result = handlers.get('wslMove:useProjectHereAgain')?.(
       { sender: mainWindow },
       { kind: 'repo', id: 'repo-1' }
     )
     expect(result).toMatchObject({ released: true })
     expect(listWslMoveCutovers(userDataPath)).toEqual([])
-    // The page held only chats: its session stays frozen until the reloaded page has loaded.
-    expect(hasWslMoveFrozenSessions()).toBe(true)
+    // The page held only chats: its saves are dropped until the reloaded page has loaded.
+    expect(isWslMoveWindowWriteHeld()).toBe(true)
     await new Promise((resolve) => setImmediate(resolve))
     expect(mainWindow.reload).toHaveBeenCalledOnce()
-    listeners.get('did-finish-load')?.()
-    expect(hasWslMoveFrozenSessions()).toBe(false)
+    page.loaded()
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
+    setWslMoveReloadableWindow(() => null)
   })
 
   it('brings a project back only for the main window, and only with the gate open', () => {

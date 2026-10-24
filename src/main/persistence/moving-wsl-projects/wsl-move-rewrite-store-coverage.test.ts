@@ -111,7 +111,6 @@ const ROWS = new Map<string, WslMoveFieldDisposition>([
 /** The stores startup registers, through the same entry point. */
 function registeredStoreIds(): string[] {
   registerWslMoveDesktopRewriteRegistry({
-    windowOpen: () => false,
     profile: {
       getUI: vi.fn(),
       updateUI: vi.fn(),

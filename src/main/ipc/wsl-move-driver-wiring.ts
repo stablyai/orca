@@ -60,6 +60,8 @@ import { inspectPtyProviderProcessForRenderer } from '../providers/pty-process-i
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from './ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import { wslMoveReloadableWindow } from './wsl-move-reloadable-window'
+import { setWslMoveReloadableWindow } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import {
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
@@ -83,6 +85,10 @@ import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-envi
  */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   registerWslSleepShellCwdReader()
+  setWslMoveReloadableWindow(() => {
+    const contents = getTrustedUIRendererWebContents()
+    return contents && wslMoveReloadableWindow(contents)
+  })
   registerWslMoveHandlers(
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
@@ -239,7 +245,7 @@ export function createWslMoveDriverDeps(
         (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId)
       ),
     shellHistory: (distro, worktrees) => buildWslMoveShellHistoryBlobs({ distro, worktrees }),
-    // The window reload is the renderer's (`reloadRequired`), through restart preparation.
+    // The pass reloads the window it held at commit (wsl-move-window-write-hold.ts).
     finishOnDesktop: async () => {
       await runGatedWslMoveDesktopRewritePass({ userDataPath })
       // A step the host could not take yet (automations back on) retries in this run too.

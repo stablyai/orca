@@ -26,10 +26,7 @@ import {
   listWslMoveDesktopRewriteStores,
   resetWslMoveDesktopRewriteStoresForTests
 } from './wsl-move-desktop-rewrite-stores'
-import {
-  registerWslMoveMainRewriteStores,
-  takeWslMoveRewritesUnderOpenWindow
-} from './wsl-move-main-rewrite-stores'
+import { registerWslMoveMainRewriteStores } from './wsl-move-main-rewrite-stores'
 import { findCrossHostPaneTabIds } from '../restoring-sessions/cross-host-pane-tab-ids'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
 
@@ -120,7 +117,6 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  takeWslMoveRewritesUnderOpenWindow()
   resetWslMoveFenceForTests()
   await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })

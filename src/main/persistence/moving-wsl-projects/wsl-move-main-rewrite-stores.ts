@@ -9,11 +9,10 @@ import type { Store } from '../loading-store/store'
 import { wslMoveAutomationHostFilterUpdate } from './wsl-move-automation-filter-rewrite'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 import { wslMoveRewriteScope, type WslMoveRewriteScope } from './wsl-move-rewrite-scope'
-import { withWslMoveEchoedBrowserTabs } from './wsl-move-echoed-browser-tabs'
 import { withWslMoveSeededViewState } from './wsl-move-seeded-view-state'
-import { workspaceIdsNamedByPartition } from '../../../shared/workspace-session-stranded-partition-adoption'
 import { wslMoveHostSessionSeed, wslMoveSessionGlobalsPatch } from './wsl-move-session-rewrite'
 import { rewriteWslMoveUiRouting } from './wsl-move-ui-routing-rewrite'
+import { holdWslMoveWindowWrites } from './wsl-move-window-write-hold'
 
 export type WslMoveMainRewriteProfile = Pick<
   Store,
@@ -25,37 +24,18 @@ export type WslMoveMainRewriteProfile = Pick<
   | 'flushPendingOrThrowAsync'
 >
 
-// Moves rewritten while a window was open: that window hydrated before them, so each of its
-// unloads re-applies them until its document is replaced (wsl-move-stale-window-reapply.ts).
-const rewrittenUnderOpenWindow = new Set<string>()
-
-export function listWslMoveRewritesUnderOpenWindow(): string[] {
-  return [...rewrittenUnderOpenWindow]
-}
-
-/** Drains them once the stale window's document is gone. */
-export function takeWslMoveRewritesUnderOpenWindow(): string[] {
-  const ids = [...rewrittenUnderOpenWindow]
-  rewrittenUnderOpenWindow.clear()
-  return ids
-}
-
-export function registerWslMoveMainRewriteStores(
-  profile: WslMoveMainRewriteProfile,
-  windowOpen: () => boolean = () => false
-): void {
+/**
+ * Each of these rewrites state an open window also saves, so it first holds that window's saves;
+ * the pass reloads the window once they are on disk (wsl-move-window-write-hold.ts).
+ */
+export function registerWslMoveMainRewriteStores(profile: WslMoveMainRewriteProfile): void {
   // Resolves once this pass's writes are on disk, not merely scheduled.
   const flush = (): Promise<void> => profile.flushPendingOrThrowAsync()
-  const noteOpenWindow = (migrationId: string): void => {
-    if (windowOpen()) {
-      rewrittenUnderOpenWindow.add(migrationId)
-    }
-  }
   registerWslMoveDesktopRewriteStore({
     id: 'ui-routing',
     side: 'main',
     run: (context) => {
-      noteOpenWindow(context.cutover.migrationId)
+      holdWslMoveWindowWrites()
       const ui = profile.getUI()
       const automationHostFilter = wslMoveAutomationHostFilterUpdate(
         ui.automationHostFilter,
@@ -75,6 +55,7 @@ export function registerWslMoveMainRewriteStores(
     id: 'session-globals',
     side: 'main',
     run: (context) => {
+      holdWslMoveWindowWrites()
       applyWslMoveSessionFocus(profile, wslMoveRewriteScope(context))
     },
     flush
@@ -83,7 +64,7 @@ export function registerWslMoveMainRewriteStores(
     id: 'host-session-seed',
     side: 'main',
     run: (context) => {
-      noteOpenWindow(context.cutover.migrationId)
+      holdWslMoveWindowWrites()
       const seeded = applyWslMoveHostSessionSeed(
         profile,
         context.cutover,
@@ -111,23 +92,17 @@ export function applyWslMoveSessionFocus(
   if (!patch) {
     return false
   }
-  // A move's rewrite of focus, re-applied only to undo a stale window; no LayoutCommand owns focus.
+  // A move's one-shot rewrite of focus; no LayoutCommand owns focus.
   profile.patchWorkspaceSession(patch, LOCAL_EXECUTION_HOST_ID)
   return true
 }
 
-/**
- * Seeds the host partition with the carried rows of moved workspaces it lacks; returns their ids.
- * `overEchoes` is the unload redo of a window open across the move: that window's save of the
- * host's tabs named the moved workspaces without what only the seed carries, so its browser tabs
- * and drafts are added beside it there. Ids returned are those written.
- */
+/** Seeds the host partition with the carried rows of moved workspaces it lacks; returns their ids. */
 export function applyWslMoveHostSessionSeed(
   profile: Pick<Store, 'getWorkspaceSession' | 'setWorkspaceSession'>,
   cutover: Pick<WslMoveCutover, 'manifest' | 'destinationEnvironmentId'>,
   scope: WslMoveRewriteScope,
-  alreadySeeded: ReadonlySet<string>,
-  overEchoes = false
+  alreadySeeded: ReadonlySet<string>
 ): string[] {
   const carried = cutover.manifest.payload.dormantState?.workspaceSession
   if (!carried) {
@@ -136,27 +111,18 @@ export function applyWslMoveHostSessionSeed(
   const hostId = scope.destinationHostId
   const existing = profile.getWorkspaceSession(hostId)
   const seed = wslMoveHostSessionSeed(carried, existing, scope, alreadySeeded)
-  const seededIds = new Set(seed?.workspaceIds ?? [])
-  const echoedIds = new Set(
-    overEchoes
-      ? [...workspaceIdsNamedByPartition(existing)].filter(
-          (workspaceId) => scope.inScope(workspaceId) && !seededIds.has(workspaceId)
-        )
-      : []
-  )
-  const base = seed?.session ?? existing
-  const withBrowserTabs = withWslMoveEchoedBrowserTabs(base, carried, echoedIds)
-  const withViewState = withWslMoveSeededViewState(
-    withBrowserTabs ?? base,
-    profile.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID),
-    { ...scope, destinationEnvironmentId: cutover.destinationEnvironmentId },
-    new Set([...seededIds, ...echoedIds])
-  )
-  const next = withViewState ?? withBrowserTabs ?? seed?.session
-  if (!next) {
+  if (!seed) {
     return []
   }
-  // A move's one-shot seed, or its redo after a stale window; layout commands refuse runtime hosts.
+  const seededIds = new Set(seed.workspaceIds)
+  const next =
+    withWslMoveSeededViewState(
+      seed.session,
+      profile.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID),
+      { ...scope, destinationEnvironmentId: cutover.destinationEnvironmentId },
+      seededIds
+    ) ?? seed.session
+  // A move's one-shot seed; layout commands refuse runtime hosts.
   profile.setWorkspaceSession(next, hostId)
-  return [...seededIds, ...echoedIds]
+  return [...seededIds]
 }

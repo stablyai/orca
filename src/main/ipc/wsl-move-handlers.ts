@@ -31,9 +31,9 @@ import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import { bringWslMovedProjectBack } from '../persistence/moving-wsl-projects/wsl-move-use-locally'
 import {
-  holdReleasedWslMoveSessions,
-  liftReleasedWslMoveSessionHolds
-} from '../persistence/moving-wsl-projects/wsl-move-release-session-hold'
+  holdWslMoveWindowWrites,
+  reloadWslMoveWindowWithWritesHeld
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 
 export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:listPendingRendererRewrites',
@@ -169,34 +169,11 @@ function registerWslMoveUseHereHandler(
         request.kind === 'repo' ? { repoId: request.id } : { folderWorkspaceId: request.id }
       const result = bringWslMovedProjectBack(getUserDataPath(), ref)
       if (result.released) {
-        reloadWithSessionHeld(sender, result)
+        // The page holds only the project's chats; the reloaded one hydrates its pre-move session.
+        holdWslMoveWindowWrites()
+        reloadWslMoveWindowWithWritesHeld()
       }
       return result
     }
   )
-}
-
-/**
- * The page holds only the project's chats; reloading hydrates its whole pre-move session from
- * disk. The hold keeps that session frozen until the new page loaded, so the old page's last
- * save cannot overwrite it.
- */
-function reloadWithSessionHeld(
-  sender: WebContents,
-  scope: { repoIds: string[]; folderWorkspaceIds: string[] }
-): void {
-  holdReleasedWslMoveSessions(scope)
-  const lift = (): void => liftReleasedWslMoveSessionHolds()
-  sender.once('did-finish-load', lift)
-  sender.once('destroyed', lift)
-  // The renderer refuses a release while a file is unsaved; one edited since still vetoes this.
-  sender.once('will-prevent-unload', () => {
-    console.warn('[wsl-move] Reload after "Use on this computer again" was vetoed by the page')
-  })
-  // After the reply reaches the renderer, so its awaited call settles first.
-  setImmediate(() => {
-    if (!sender.isDestroyed()) {
-      sender.reload()
-    }
-  })
 }

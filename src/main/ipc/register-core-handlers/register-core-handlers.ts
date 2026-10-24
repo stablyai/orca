@@ -1,4 +1,4 @@
-import { app, webContents } from 'electron'
+import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
@@ -30,10 +30,6 @@ import {
   registerRuntimeEnvironmentHandlers
 } from '../runtime-environments/runtime-environments'
 import { registerWslHostHandlers } from '../wsl-host-handlers'
-import {
-  reapplyWslMoveRewritesAtUnload,
-  reapplyWslMoveRewritesWhenDocumentReplaced
-} from '../../persistence/moving-wsl-projects/wsl-move-stale-window-reapply'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
@@ -167,12 +163,6 @@ export function registerCoreHandlers(
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
-  const mainContents =
-    mainWindowWebContentsId === null ? undefined : webContents.fromId(mainWindowWebContentsId)
-  if (mainContents) {
-    // Per window: each new one replaces its document on reload.
-    reapplyWslMoveRewritesWhenDocumentReplaced(mainContents, app.getPath('userData'), store)
-  }
   if (registered) {
     return
   }
@@ -187,10 +177,6 @@ export function registerCoreHandlers(
             runtime.shutdownReconnectFactsFor(session, partition)
         }
       : {}),
-    // The checkpoint writes the window's state, which is stale for a project moved under it.
-    afterUnloadStage: () => {
-      reapplyWslMoveRewritesAtUnload(app.getPath('userData'), store)
-    },
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
     // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)

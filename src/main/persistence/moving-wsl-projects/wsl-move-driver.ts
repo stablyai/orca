@@ -46,6 +46,10 @@ import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './wsl-move-qui
 import { finishWslMove as finish } from './wsl-move-driver-finish'
 import { resetWslMoveToZero } from './wsl-move-reset'
 import { claimWslMoveRun, releaseWslMoveRun, type RunningWslMove } from './wsl-move-running-moves'
+import {
+  holdWslMoveWindowWritesForCommit,
+  settleWslMoveWindowWriteHoldForCommit
+} from './wsl-move-window-write-hold'
 
 class WslMoveStop extends Error {}
 
@@ -100,7 +104,11 @@ export async function moveProjectsToWslHost(
   return reportWslMoveRunEnd(deps, request.distro, (tracked) =>
     runMove(tracked, request, migrationId, running)
       .catch((error: unknown) => putBack(tracked, null, migrationId, describe(error)))
-      .finally(() => releaseWslMoveRun(request.distro, running))
+      .finally(() => {
+        releaseWslMoveRun(request.distro, running)
+        // Committed runs settled it in `finish`; any other end leaves the window as it was.
+        settleWslMoveWindowWriteHoldForCommit(false)
+      })
   )
 }
 
@@ -244,6 +252,8 @@ async function moveQuiesced(
   })
   // From here a cancel can no longer be honoured: the host may commit whatever this run sees.
   running.commitRequested = true
+  // The host publishes the moved projects at commit; an open window must not save its view of them.
+  holdWslMoveWindowWritesForCommit()
   deps.progress({ distro, step: 'switching', migrationId, phase: transferred.phase })
   const committed = await commitWslMove(deps, host, transferred, blobs.descriptors)
   return finish(deps, distro, committed.migrationId)

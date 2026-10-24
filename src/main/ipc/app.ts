@@ -43,8 +43,6 @@ import type { ReconnectFactsFor } from '../persistence/window-save-view'
 type RegisterAppHandlersOptions = {
   quitResumeRecordsFor?: QuitResumeRecordsFor
   reconnectFactsFor?: ReconnectFactsFor
-  /** Runs after the unload checkpoint stages the window's state, before it flushes. */
-  afterUnloadStage?: () => void
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
@@ -125,8 +123,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   registerRendererShutdownCheckpointHandler(
     store,
     options.quitResumeRecordsFor,
-    options.reconnectFactsFor,
-    options.afterUnloadStage
+    options.reconnectFactsFor
   )
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
