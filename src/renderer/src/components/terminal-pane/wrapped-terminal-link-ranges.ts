@@ -1,6 +1,7 @@
 import type { IBufferLine, IBufferRange } from '@xterm/xterm'
 import {
   canStartHardWrappedPath,
+  isClosedPathWrapper,
   getHardWrappedPathPrefix,
   getHardWrappedPathSuffix,
   isHardWrappedPathContinuation,
@@ -214,8 +215,8 @@ export function buildHardWrappedPathLogicalLineCandidates(
     if (!start) {
       continue
     }
-    const canStartWholeRow = canStartHardWrappedPath(start.text)
     const startSuffix = getHardWrappedPathSuffix(start)
+    const canStartWholeRow = canStartHardWrappedPath(start.text)
     const canStartBoundary = Boolean(
       startSuffix &&
       (canStartHardWrappedPath(startSuffix.text) ||
@@ -223,7 +224,7 @@ export function buildHardWrappedPathLogicalLineCandidates(
     )
     // Why: hover calls this for every terminal row; reject non-path starts
     // before translating their possible continuation rows.
-    if (!canStartWholeRow && !canStartBoundary) {
+    if (!(canStartWholeRow || canStartBoundary) || isClosedPathWrapper(startSuffix?.text ?? '')) {
       continue
     }
 
