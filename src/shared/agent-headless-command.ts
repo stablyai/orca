@@ -28,7 +28,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
   dsh: isDshNonInteractiveCommand,
-  dsb: isDsbHeadlessOneShotCommand
+  dsb: isDsbHeadlessOneShotCommand,
+  omo: isPrintModeHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(

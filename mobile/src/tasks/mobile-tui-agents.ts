@@ -51,7 +51,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
-  openclaw: 'openclaw.ai'
+  openclaw: 'openclaw.ai',
+  omo: 'github.com'
 }
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
