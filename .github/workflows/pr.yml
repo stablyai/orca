@@ -52,6 +52,7 @@ jobs:
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
       managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
+      windows_process_probe: ${{ steps.filter.outputs.windows_process_probe }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       layout_oracle: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.layout_oracle }}
       dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
@@ -1341,6 +1342,9 @@ jobs:
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
+        if: needs.code_paths.outputs.windows_process_probe != 'false'
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         # Serialize the two suites so their cold PowerShell/CIM starts cannot contend.
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
