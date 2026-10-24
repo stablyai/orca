@@ -4,15 +4,17 @@ import {
 } from './terminal-follow-output-waiters'
 import { isTerminalScrollIntentRebuildInFlight } from './terminal-scroll-intent-rebuild'
 import {
+  anchorPinnedScrollIntent,
+  resolvePinnedScrollRestore
+} from './terminal-scroll-intent-anchor'
+import {
   readKeyedTerminalScrollIntent,
   readKeyedTerminalScrollIntentBinding,
   writeKeyedTerminalScrollIntent,
-  writeKeyedTerminalScrollIntentBinding
-} from './terminal-scroll-intent-key-store'
-import type {
-  TerminalScrollIntent,
-  TerminalScrollIntentKey,
-  TerminalScrollIntentKind
+  writeKeyedTerminalScrollIntentBinding,
+  type TerminalScrollIntent,
+  type TerminalScrollIntentKey,
+  type TerminalScrollIntentKind
 } from './terminal-scroll-intent-key-store'
 import {
   clampTerminalViewportY,
@@ -87,6 +89,7 @@ function writeIntentSnapshot(
   const intent = { kind, ...snapshot, revision: nextTerminalScrollIntentRevision }
   nextTerminalScrollIntentRevision += 1
   terminalScrollIntentByTerminal.set(terminal, intent)
+  anchorPinnedScrollIntent(terminal, intent)
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
   if (key) {
     writeKeyedTerminalScrollIntent(key, intent)
@@ -336,12 +339,8 @@ export function enforceTerminalCurrentScrollIntent(terminal: TerminalScrollInten
     // resuming must follow live output, not freeze at that stale line.
     snapshot.kind = 'followOutput'
   }
-  const current = readTerminalScrollBufferSnapshot(terminal)
-  // Why: a shorter live buffer than the stored intent means the buffer was
-  // rebuilt (snapshot replay/remount); absolute lines are renumbered there.
-  const restoreBy =
-    snapshot.kind === 'pinnedViewport' && current && current.baseY < snapshot.baseY
-      ? 'bottomOffset'
-      : 'viewportLine'
-  restoreTerminalStructuralScrollIntent(terminal, snapshot, { restoreBy })
+  const restore = resolvePinnedScrollRestore(terminal, existing, snapshot)
+  restoreTerminalStructuralScrollIntent(terminal, restore.snapshot, {
+    restoreBy: restore.restoreBy
+  })
 }
