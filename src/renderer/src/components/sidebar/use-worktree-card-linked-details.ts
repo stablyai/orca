@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
@@ -10,6 +11,7 @@ import {
 } from './worktree-card-title-display'
 import { useWorkspaceDeleteModifierPressed } from './workspace-delete-quick-action'
 import type { WorktreeCardProps } from './worktree-card-model'
+import { otherOpenLinkedPullRequests } from './linked-issue-other-pull-requests'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
@@ -36,15 +38,24 @@ export function useWorktreeCardLinkedDetails({
       ? issueEntry.data
       : undefined
     : null
-  const issueDisplay: WorktreeCardIssueDisplay | null =
-    issue ??
-    (worktree.linkedIssue
-      ? {
-          number: worktree.linkedIssue,
-          // Why: linked metadata persists immediately but GitHub details arrive async; show the link number so it doesn't look unlinked.
-          title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
-        }
-      : null)
+  const ownReviewNumber = prDisplay?.number
+  const linkedIssueNumber = worktree.linkedIssue
+  const issueDisplay: WorktreeCardIssueDisplay | null = useMemo(
+    () =>
+      issue
+        ? {
+            ...issue,
+            otherOpenPullRequests: otherOpenLinkedPullRequests(issue, { ownReviewNumber, branch })
+          }
+        : linkedIssueNumber
+          ? {
+              number: linkedIssueNumber,
+              // Why: linked metadata persists immediately but GitHub details arrive async; show the link number so it doesn't look unlinked.
+              title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
+            }
+          : null,
+    [issue, linkedIssueNumber, ownReviewNumber, branch]
+  )
   const linearIssue: LinearIssue | null | undefined = worktree.linkedLinearIssue
     ? (linearIssueEntry?.data ?? linearIssueFallbackEntry?.data)
     : null

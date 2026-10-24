@@ -1,5 +1,12 @@
 import React from 'react'
-import { CalendarClock, CircleDot, Link2, SquareTerminal, StickyNote } from 'lucide-react'
+import {
+  CalendarClock,
+  CircleDot,
+  GitPullRequestArrow,
+  Link2,
+  SquareTerminal,
+  StickyNote
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
@@ -137,6 +144,25 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           <SquareTerminal className="text-muted-foreground" />
         </MetaIconBadge>
       )}
+      {issue?.otherOpenPullRequests?.length ? (
+        <MetaIconBadge
+          label={
+            issue.otherOpenPullRequests.length === 1
+              ? translate(
+                  'auto.components.sidebar.WorktreeCardMeta.otherOpenPullRequest',
+                  '1 other open PR for issue #{{value0}}',
+                  { value0: issue.number }
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeCardMeta.otherOpenPullRequests',
+                  '{{count}} other open PRs for issue #{{value0}}',
+                  { count: issue.otherOpenPullRequests.length, value0: issue.number }
+                )
+          }
+        >
+          <GitPullRequestArrow className="text-status-warning" />
+        </MetaIconBadge>
+      ) : null}
       {issueItems.length ? (
         <WorktreeReferenceStack items={issueItems} details={referenceDetails} />
       ) : (

@@ -1,4 +1,7 @@
-import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import type {
+  IssueInfo,
+  LinkedPullRequestSummary
+} from '../../../../shared/github/pull-request-types'
 import type {
   Worktree,
   WorkspaceAttachment,
@@ -9,7 +12,7 @@ import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
 
-export type WorktreeCardIssueDisplay =
+export type WorktreeCardIssueDisplay = (
   | IssueInfo
   | {
       number: number
@@ -18,6 +21,10 @@ export type WorktreeCardIssueDisplay =
       url?: string
       labels?: string[]
     }
+) & {
+  /** Open PRs for the issue that aren't this workspace's own. */
+  otherOpenPullRequests?: LinkedPullRequestSummary[]
+}
 
 export type WorktreeCardLinearIssueDisplay = {
   identifier: string
