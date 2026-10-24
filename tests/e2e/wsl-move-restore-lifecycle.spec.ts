@@ -49,8 +49,10 @@ import { HistoryReader } from '../../src/main/daemon/history-reader'
 import { getOrcadMigrationReceivedBlobPath } from '../../src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
 import {
   installOrcadMigrationTerminalHistory,
+  movedPaneHistorySessionId,
   orcadMigrationTerminalHistoryKey
 } from '../../src/main/persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
 import { readWslMoveSleptScrollbackFromHistory } from '../../src/main/persistence/moving-wsl-projects/wsl-move-slept-scrollback'
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -401,6 +403,19 @@ test('a moved pane shows its own history once, in its folder, across three reloa
         shown.push(pane)
         if (launch === 0) {
           // The agent resumed in the folder the pane was in (the stub prints where it started).
+          if (!pane.content.includes(`STUB_CODEX_CWD ${deep}`)) {
+            // Diagnostics for a pane that resumed outside its folder: which terminal, from which history.
+            const listed = await host.client.call('terminal.list', { worktree: `id:${worktreeId}` })
+            const movedSession = movedPaneHistorySessionId(worktreeId, paneKey)
+            const folder = path.join(historyRoot, getHistorySessionDirName(movedSession))
+            const read = (name: string): string =>
+              existsSync(path.join(folder, name))
+                ? readFileSync(path.join(folder, name), 'utf8').slice(0, 300)
+                : 'missing'
+            console.log(
+              `[restore-lifecycle] wrong folder: terminals=${JSON.stringify(listed.result)} meta=${read('meta.json')} checkpointCwd=${JSON.stringify(/"cwd":"[^"]*"/.exec(read('checkpoint.json'))?.[0] ?? null)} tail=${JSON.stringify(pane.content.slice(-900))}`
+            )
+          }
           expect.soft(pane.content).toContain(`STUB_CODEX_CWD ${deep}`)
           const moved = await client.page.evaluate(
             ({ id, path: filePath }) => {
