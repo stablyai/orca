@@ -8088,6 +8088,11 @@
           "191ac34567": "Orquestación de agentes",
           "nestedWorkerDepthTitle": "Profundidad del trabajador anidado",
           "nestedWorkerDepthDescription": "¿Cuántas generaciones de trabajadores despedidos pueden engendrar sus propios trabajadores? 1 mantiene el árbol de agentes plano: un coordinador envía trabajadores y esos trabajadores no envían.",
+          "chatErrorEscalationTitle": "Avisar al coordinador de los errores del chat",
+          "chatErrorEscalationDescription": "Cuando un agente asignado encuentra un error que termina su turno, envía el error exacto al coordinador que lo asignó. La tarea sigue asignada al agente. Solo funciona con agentes que se ejecutan en la interfaz de chat.",
+          "chatErrorEscalationNeedsChat": "Activa la interfaz de chat en la configuración experimental para usarlo.",
+          "chatErrorEscalationKeywordError": "error",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copiar comando de instalación"
         },
         "OrchestrationSetupCard": {

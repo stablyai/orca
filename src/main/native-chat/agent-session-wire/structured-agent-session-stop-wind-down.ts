@@ -20,6 +20,7 @@ export type StructuredAgentSessionStopWindDown = {
   waitsForProvider: boolean
   stoppedAt: number
   stopNote: AgentJournalItemIdentity
+  stopNoteWrite?: Promise<void>
   /** End settlement regardless of exit proof; failedOn identifies work still running. */
   settled?: (failedOn?: JournalStopFailedOn) => void
 }
@@ -38,12 +39,14 @@ export async function endStoppedStructuredAgentSession(
       await ctx.adapter.awaitStoppedRequestEnd?.(ctx.sessionId, windDown.stoppedAt)
     }
     await stopChild()
+    await windDown.stopNoteWrite?.catch(onError)
   } catch (error) {
     onError(error)
     failedOn = structuredAgentSessionFailedStopMark(
       contextStructuredAgentSessionCurrentWork(ctx),
       ctx.journal
     )
+    await windDown.stopNoteWrite?.catch(onError)
     await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)
   } finally {
     windDown.settled?.(failedOn)

@@ -4,13 +4,20 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { projectStructuredAgentSessionStatus } from '../../../shared/structured-agent-session-projection'
+import {
+  projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusState
+} from '../../../shared/structured-agent-session-projection'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
+  claudeFrame as frame,
+  claudeWasSent as wrote,
   fakeClaude,
   PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
@@ -79,8 +86,8 @@ beforeEach(async () => {
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
-      resumesTranscript: false,
-      continuesChain: false
+      resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
       const mapped = structuredClaudeLifecycleEvent(event)
@@ -360,3 +367,71 @@ it('a card sent now into the running turn comes back paused when Claude reports 
   expect(connection.sent).toHaveLength(2)
   expect(await sends()).toEqual([{ state: 'rejected', reason: DISPATCH_REJECTED_CANCELLED }])
 }, 20_000)
+
+it('ends the captured child when a named Stop sees its next turn open during acceptance', async () => {
+  const connection = claude.connections[0]!
+  const close = vi.spyOn(connection, 'close')
+  const stoppedTurn = await openFirstTurn(connection)
+  const laneDrained = () => host['tasks'].serialize(SESSION, async () => {})
+  const statusTexts = async () =>
+    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+      item.body.kind === 'status' ? [String(item.body.text)] : []
+    )
+  await send('Already handed-over follow-up.')
+  await eventually(() => expect(wrote(connection, 'Already handed-over follow-up.')).toBe(true))
+  const followUp = connection.sent.at(-1)!
+  const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const accept = journal.stops.accept.bind(journal.stops)
+  vi.spyOn(journal.stops, 'accept').mockImplementationOnce(async (...args) => {
+    const accepted = await accept(...args)
+    frame(connection, { type: 'result', subtype: 'success', is_error: false, uuid: 'result-1' })
+    frame(connection, followUp)
+    frame(connection, {
+      type: 'assistant',
+      uuid: 'follow-up-leaf',
+      parent_tool_use_id: null,
+      message: { id: 'msg-2', role: 'assistant', content: [{ type: 'text', text: 'Next reply' }] }
+    })
+    await eventually(async () => {
+      const live = activeStructuredAgentSessionTurnId((await host.journalSnapshot(SESSION)).items)
+      expect(live).not.toBeNull()
+      expect(live).not.toBe(stoppedTurn)
+    })
+    return accepted
+  })
+
+  await expect(stop(stoppedTurn)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  await laneDrained()
+
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(close).toHaveBeenCalledOnce()
+  expect(connection.closed).toBe(true)
+  expect(await statusTexts()).toEqual(['Cancellation requested.'])
+  const snapshot = await host.journalSnapshot(SESSION)
+  const turn = readAgentJournalTurn(
+    snapshot.items.findLast((item) => item.body.kind === 'turn')?.body
+  )
+  expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  const { summary } = projectStructuredAgentSessionStatusState(
+    snapshot.items,
+    snapshot.submissions,
+    store.getRecord(SESSION)!.lease.runtimeFence
+  )
+  expect(structuredAgentSessionAgentStatus({ ...summary, status: summary.status! })).toMatchObject({
+    mainAgent: { outcome: 'cancellation' }
+  })
+
+  await send('New child.')
+  await eventually(() => {
+    const started = claude.connections.at(-1)!
+    expect(started).not.toBe(connection)
+    expect(wrote(started, 'New child.')).toBe(true)
+  })
+  const resumed = claude.connections.at(-1)!
+  await expect(stop(stoppedTurn)).resolves.toMatchObject({ ok: true, value: { cancelled: false } })
+  await laneDrained()
+  expect(close).toHaveBeenCalledOnce()
+  expect(resumed.closed).toBe(false)
+  expect(resumed.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect(await statusTexts()).toEqual(['Cancellation requested.'])
+})

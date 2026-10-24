@@ -24,6 +24,22 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
+describe('chat worker error preference upgrade', () => {
+  it('defaults a truly missing saved key to on and preserves a saved opt-out', () => {
+    const parsed = getDefaultPersistedState(homedir())
+    delete parsed.settings.orchestrationChatErrorEscalationEnabled
+    const normalize = () =>
+      normalizeLoadedGlobalSettings(
+        parsed,
+        prepareLoadedTerminalSettings(parsed, () => {}),
+        prepareLoadedProfileSettings(parsed, getDefaultPersistedState(homedir()), () => {})
+      )
+    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(true)
+    parsed.settings.orchestrationChatErrorEscalationEnabled = false
+    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(false)
+  })
+})
+
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
     'drops saved setup location %s without changing terminal preferences',

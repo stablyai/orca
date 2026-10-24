@@ -1,4 +1,4 @@
-// Withdrawn sends render their own feedback; another notice misattributes the old turn on legacy clients.
+// Accepted Stop retains its request note even when child exit takes back the send.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -119,10 +119,10 @@ async function stopEndingTheChild(options: {
 }
 
 describe('a Stop that ends the child after its interrupt failed', () => {
-  it('leaves no row when the child end took back the send, with no turn running', async () => {
+  it('records Stop when the child end took back the send, with no turn running', async () => {
     expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: true })).toEqual({
       cancelled: true,
-      rows: []
+      rows: ['Cancellation requested.']
     })
   })
 
@@ -133,14 +133,14 @@ describe('a Stop that ends the child after its interrupt failed', () => {
     })
   })
 
-  it("leaves no row when the only other send in doubt was an earlier process's", async () => {
+  it("keeps Stop when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({
         turnRunning: false,
         takesSendBack: true,
         earlierProcessSendInDoubt: true
       })
-    ).toEqual({ cancelled: true, rows: [] })
+    ).toEqual({ cancelled: true, rows: ['Cancellation requested.'] })
   })
 
   it('says cancellation was requested on the turn it stopped, whatever became of the send', async () => {

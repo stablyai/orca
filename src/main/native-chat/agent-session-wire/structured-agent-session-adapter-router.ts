@@ -111,15 +111,15 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
+  capturePendingOutput: StructuredAgentSessionAdapter['capturePendingOutput'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.capturePendingOutput?.(input)
+
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.liveOwnerOrNull(sessionId)?.heldSends?.(sessionId)
 
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsLiveProviderProcess?.(sessionId, acquisitionGeneration) ??
     false
-
-  stopEndsSession = (sessionId: string): boolean =>
-    this.liveOwnerOrNull(sessionId)?.stopEndsSession?.(sessionId) ?? false
 
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
@@ -187,19 +187,21 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   closeSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.closeSession)
+    this.stopSession(sessionId, (adapter) => adapter.closeSession?.(sessionId))
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.forceCloseSession ?? adapter.closeSession)
+    this.stopSession(sessionId, (adapter) =>
+      (adapter.forceCloseSession ?? adapter.closeSession)?.call(adapter, sessionId)
+    )
 
   disposeSession = (sessionId: string): Promise<boolean> =>
-    this.stopSession(sessionId, (adapter) => adapter.disposeSession ?? adapter.closeSession)
+    this.stopSession(sessionId, (adapter) =>
+      (adapter.disposeSession ?? adapter.closeSession)?.call(adapter, sessionId)
+    )
 
   private async stopSession(
     sessionId: string,
-    selectStop: (
-      adapter: StructuredAgentSessionAdapter
-    ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined
+    stop: (adapter: StructuredAgentSessionAdapter) => Promise<boolean> | undefined
   ): Promise<boolean> {
     const route = this.routes.get(sessionId)
     if (!route) {
@@ -213,8 +215,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       return this.releaseAcquisition({ sessionId })
     }
     const { adapter } = route.registration
-    const stop = selectStop(adapter)
-    const stopped = await stop?.call(adapter, sessionId)
+    const stopped = await stop(adapter)
     if (stopped === true) {
       route.state = 'stopped'
       return true

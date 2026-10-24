@@ -508,8 +508,7 @@ export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
   'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-  'config/scripts/process-host-build-dist.test.mjs',
-  'src/main/codex/codex-app-server-connection.test.ts'
+  'config/scripts/process-host-build-dist.test.mjs'
 ])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {

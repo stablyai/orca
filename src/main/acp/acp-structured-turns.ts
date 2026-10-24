@@ -49,6 +49,11 @@ export class AcpStructuredTurns {
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {}
 
+  capturePendingSend(clientMessageId: string): () => boolean {
+    const send = this.active?.clientMessageId === clientMessageId ? this.active : null
+    return () => send !== null && this.active === send && !this.ended
+  }
+
   get running(): boolean {
     return this.active !== null
   }

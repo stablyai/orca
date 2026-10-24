@@ -5,14 +5,15 @@ import type {
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../shared/runtime-types'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getBrowserProfilesForHost,
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
-  getDefaultBrowserProfileForHost
+  getDefaultBrowserProfileForHost,
+  listedProfilesByHostUpdate
 } from './browser-host-state'
 
 export function createBrowserProfileListActions(
@@ -22,9 +23,15 @@ export function createBrowserProfileListActions(
   BrowserSlice,
   'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
 > {
+  // Why: change events can overlap fetches; only the latest listing per host may land, or an older one restores a deleted profile.
+  const latestListingByHost = new Map<ExecutionHostId, number>()
+  let listingCount = 0
   return {
     fetchBrowserSessionProfiles: async (requestedHostId) => {
       const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const listing = ++listingCount
+      latestListingByHost.set(hostId, listing)
+      const isLatest = (): boolean => latestListingByHost.get(hostId) === listing
       const parsedHostId = parseExecutionHostId(hostId)
       const runtimeEnvironmentId =
         parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
@@ -47,15 +54,21 @@ export function createBrowserProfileListActions(
               ? { ...profile, source: clientImportSources[profile.id] }
               : profile
           )
-          set((s) => profileListByHostUpdate(s, profiles, hostId))
+          if (isLatest()) {
+            set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+          }
         } catch {
-          set((s) => profileListByHostUpdate(s, [], hostId))
+          if (isLatest()) {
+            set((s) => profileListByHostUpdate(s, [], hostId))
+          }
         }
         return
       }
       try {
         const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-        set((s) => profileListByHostUpdate(s, profiles, hostId))
+        if (isLatest()) {
+          set((s) => listedProfilesByHostUpdate(s, profiles, hostId))
+        }
       } catch {
         /* best-effort — stale profile list is preferable to a crash */
       }

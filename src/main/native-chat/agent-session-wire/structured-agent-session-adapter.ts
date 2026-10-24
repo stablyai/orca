@@ -179,6 +179,11 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  /** Execution-host observations from a requested provider close, when available. */
+  processExit?: {
+    root: 'live' | 'unverifiable' | 'exited'
+    workload: 'live' | 'unverifiable' | 'exited'
+  }
   fence: number
   acquisitionGeneration: string
   /** Observed child exit supplies interrupted-turn end time. */
@@ -285,6 +290,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     turnId?: string
     fence: number
     prompt?: { itemId: string }
+    /** Original host Stop time; in-process only, for a Stop that ends the session. */
+    stoppedAt?: number
     dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
     /** Re-read journal turn immediately before interrupt; direct callers may omit this guard. */
     resolveLiveTurnId?: () => string | null
@@ -309,6 +316,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Captures only this input's pending answer/output in the supplied live acquisition. */
+  capturePendingOutput?(input: {
+    sessionId: string
+    clientMessageId: string
+    fence: number
+    generation: string
+  }): (() => boolean) | undefined
   /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */

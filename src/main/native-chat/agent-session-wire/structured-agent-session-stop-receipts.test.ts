@@ -25,7 +25,7 @@ let serial = 0
 let warned: ReturnType<typeof vi.spyOn>
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  rig = await createQueuedMessageTestRig({ restartable: true })
   warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
@@ -51,6 +51,18 @@ function receipt(id: string) {
   return rig.store.readCommandReceipt(CALLER_SCOPE, id)
 }
 
+it('does not treat completed submission history as a send in an empty reinitialization', async () => {
+  const id = await rig.workingSend()
+  await rig.settleAccepted(id, 'old')
+  await turnRow('turn-old', 'interrupted')
+  const child = rig.host.collaboratorsForTests().sessions.get(SESSION)!.child!
+  child.phase = 'starting'
+  expect(await rig.stop()).toMatchObject({ ok: true })
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+  ).toEqual([])
+})
+
 function stopEvents(): { sequence: number; event: JournalStopEvent }[] {
   const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
   if (!since.ok) {
@@ -71,7 +83,10 @@ async function turnRow(turnId: string, state: 'running' | 'interrupted'): Promis
       startedAt: 1,
       ...(state === 'running' ? {} : { completedAt: 2 })
     },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    {
+      fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
   )
 }
 

@@ -38,6 +38,7 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-ownership'
 
 export const hello: AgentJournalMessageItem = {
@@ -86,6 +87,7 @@ export async function openHostRig(
     deps?: Partial<AcpStructuredSessionAdapterDeps>
     modelCatalog?: AgentModelCatalogService
     statusSink?: StructuredAgentSessionStatusSink
+    onRequestFailure?: StructuredAgentSessionHostDeps['onRequestFailure']
   } = {}
 ) {
   const state = hostTestState()
@@ -125,6 +127,7 @@ export async function openHostRig(
     mintSpawnToken: () => 'spawn-a',
     now: () => HOST_TEST_NOW,
     statusSink: options.statusSink,
+    onRequestFailure: options.onRequestFailure,
     ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {})
   })
   hosted.host = host

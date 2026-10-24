@@ -8264,6 +8264,11 @@
           "191ac34567": "Orchestration d'agents",
           "nestedWorkerDepthTitle": "Profondeur du travailleur imbriqué",
           "nestedWorkerDepthDescription": "Combien de générations de travailleurs détachés peuvent engendrer leurs propres travailleurs. 1 maintient l'arborescence des agents à plat : un coordinateur répartit les travailleurs, et ces travailleurs ne répartissent pas.",
+          "chatErrorEscalationTitle": "Prévenir le coordinateur des erreurs du chat",
+          "chatErrorEscalationDescription": "Quand un agent assigné rencontre une erreur qui met fin à son tour, envoie l'erreur exacte au coordinateur qui l'a assigné. La tâche reste assignée à l'agent. Fonctionne uniquement pour les agents dans l'interface de chat.",
+          "chatErrorEscalationNeedsChat": "Activez l'interface de chat dans les paramètres expérimentaux pour l'utiliser.",
+          "chatErrorEscalationKeywordError": "erreur",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copier la commande d'installation"
         },
         "OrchestrationSetupCard": {

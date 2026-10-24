@@ -171,8 +171,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         this.deps.onDispatchSettledLate?.({ sessionId: request.sessionId, ...settlement }),
       ...(this.deps.requestTimeoutMs === undefined ? {} : { timeoutMs: this.deps.requestTimeoutMs })
     })
-  // End the session on Stop: interrupts may leave the turn or background work running.
-  stopEndsSession = (): boolean => true
   awaitStoppedRequestEnd = claudeStoppedRequestEndWait(this.sessions)
   routePromptCancel = claudePromptCancelRoute
   dismissPrompt: NonNullable<StructuredAgentSessionAdapter['dismissPrompt']> = (request) =>

@@ -35,9 +35,9 @@ export class JournalStopMarks {
     return personStopDecidesTurn(this.deps.state(), turnId, endedAt)
   }
 
-  /** Until settled, unnamed Stops own every turn ending during settlement. */
-  beginSettle(): JournalStopSettle | null {
-    const settle = beginJournalStopSettle(this.deps.state())
+  /** Until settled, session-ending Stops own every turn ending during settlement. */
+  beginSettle(endsSession = false): JournalStopSettle | null {
+    const settle = beginJournalStopSettle(this.deps.state(), endsSession)
     if (settle) {
       this.edge()
     }

@@ -233,7 +233,9 @@ describe('closing or stopping a Grok chat while it starts', () => {
       { dispatchState: 'rejected', rejection: { kind: 'cancelled' } }
     ])
     const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
-    expect(rows.filter((row) => row.body.kind === 'status')).toEqual([])
+    expect(rows.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))).toEqual([
+      'Cancellation requested.'
+    ])
     await host.close(SESSION, 'user-close')
   })
 

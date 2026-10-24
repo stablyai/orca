@@ -292,13 +292,14 @@ describe('a start that ends before it proves itself', () => {
     })
     expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(closeSession).toHaveBeenCalled()
-    // The rejected send already carries Stop feedback; another host row would duplicate it.
+    // The taken-back send carries its stopped result, and the accepted Stop its one request row.
     const snapshot = await host.journalSnapshot(SESSION)
     expect(
       projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions)
     ).toMatchObject([
       { role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-      { blocks: [{ type: 'text', text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT }] }
+      { blocks: [{ type: 'text', text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT }] },
+      { blocks: [{ type: 'text', text: 'Cancellation requested.' }] }
     ])
     expect(dispatch).not.toHaveBeenCalled()
     expect(startupAttemptOpen()).toBe(false)

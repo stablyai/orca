@@ -286,9 +286,8 @@ async function subscribe(
 
 /** Settles everything the provider streamed into the journal. Real clients see
  *  these rows arrive on the subscription; a test has to wait for them. */
-function drainStreamedEvents(): Promise<void> {
-  return getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION) ?? Promise.resolve()
-}
+const drainStreamedEvents = (): Promise<void> =>
+  getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION) ?? Promise.resolve()
 
 function textOf(item: AgentJournalRenderItem): string {
   const body = item.body
@@ -691,16 +690,18 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(true)
     expect(itemsOf(missed).map(textOf).filter(Boolean)).toEqual(['Stopped.'])
 
-    // A runtime taking the session over is the other half of reconnect: the
-    // fence advances, the old child is reaped, and its replacement resumes the
-    // thread this session proved rather than forking a new one.
+    // Stop ended the session once its turn did. A runtime taking it over is the other half of
+    // reconnect: the fence advances, and the new child resumes the thread this session proved
+    // rather than forking a new one.
     const reaped = codex.live()
+    await vi.waitFor(() => expect(reaped.closed).toBe(true))
+    const stoppedFence =
+      getStructuredAgentSessionHost()?.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? fence
     const resumed = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.ensure',
-      attachParams(fence)
+      attachParams(stoppedFence)
     )
-    expect(resumed.fence).toBe(fence + 1)
-    expect(reaped.closed).toBe(true)
+    expect(resumed.fence).toBe(stoppedFence + 1)
     expect(codex.live().resumedThreadId).toBe(THREAD)
     expect(await readKnownOptions()).toMatchObject({
       ok: true,

@@ -132,6 +132,18 @@ async function expectHeld(id: string): Promise<void> {
   expect(claude.connections[0]!.sent).toEqual([])
 }
 
+it('ends empty initialization without a cancellation request row', async () => {
+  expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
+  expect(
+    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
+  expect(
+    (await host.journalSnapshot(SESSION)).items.filter((item) => item.body.kind === 'status')
+  ).toEqual([])
+  expect(claude.connections[0]!.closeCount).toBeGreaterThan(0)
+})
+
 it('holds the message from a start that never answers, and a Stop ends it: stopped, nothing working', async () => {
   expect(host['sessions'].get(SESSION)?.child?.phase).toBe('starting')
   const body = hostTestMessage('hello')
@@ -150,6 +162,11 @@ it('holds the message from a start that never answers, and a Stop ends it: stopp
   const stopped = await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
 
   expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(
+    (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+      item.body.kind === 'status' ? [item.body.text] : []
+    )
+  ).toEqual(['Cancellation requested.'])
   await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeNull())
   expect(connection!.closeCount).toBeGreaterThan(0)
   await vi.waitFor(async () =>

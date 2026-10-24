@@ -1,12 +1,8 @@
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
-import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -42,14 +38,6 @@ function stopEvents(): JournalStopEvent[] {
   )
 }
 
-async function queuedDraft(text: string): Promise<string> {
-  const queued = await rig.send(text, 'queue-if-active').result
-  if (!queued.ok || !('queued' in queued.value)) {
-    throw new Error(`expected a queued receipt: ${JSON.stringify(queued)}`)
-  }
-  return queued.value.queued.messageId
-}
-
 async function turnRow(turnId: string, state: 'running' | 'interrupted', userId?: string) {
   return journal().appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 },
@@ -60,29 +48,54 @@ async function turnRow(turnId: string, state: 'running' | 'interrupted', userId?
       startedAt: 1,
       ...(userId ? { userItemId: agentJournalSubmissionKey(userId) } : {})
     },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    {
+      fence: rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
   )
 }
 
-function withdraw(clientMessageId: string) {
-  return rig.host.settleLateDispatch({
-    sessionId: HOST_TEST_SESSION,
-    clientMessageId,
-    state: 'rejected',
-    ...agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-  })
-}
-
 describe("a Stop's event", () => {
+  it('publishes the request note while the native interrupt is still unanswered', async () => {
+    rig = await createQueuedMessageTestRig()
+    await rig.workingSend()
+    const interrupt = Promise.withResolvers<{ cancelled: boolean }>()
+    rig.cancelTurn.mockImplementationOnce(() => interrupt.promise)
+    const stopped = rig.stop()
+    try {
+      await eventually(() =>
+        expect(
+          journal()
+            .snapshot()
+            .items.filter(
+              (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
+            )
+        ).toHaveLength(1)
+      )
+      expect(rig.cancelTurn).toHaveBeenCalledOnce()
+    } finally {
+      interrupt.resolve({ cancelled: true })
+      await stopped
+    }
+    expect(
+      journal()
+        .snapshot()
+        .items.filter(
+          (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
+        )
+    ).toHaveLength(1)
+  })
+
   it('reaches the journal before the interrupt, naming the turn it stopped and who asked', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
+    await turnRow('turn-1', 'running')
     let atInterrupt: JournalStopEvent[] = []
     rig.cancelTurn.mockImplementationOnce(async () => {
       atInterrupt = stopEvents()
       return { cancelled: true }
     })
-    const fields = { turnId: 'turn-named' }
+    const fields = { turnId: 'turn-1' }
     const operationId = hostTestOperationId()
     const stopped = await rig.host.cancel(QUEUED_RIG_CALLER, {
       envelope: rig.envelope(fields, 'agentSession.cancel', operationId),
@@ -93,215 +106,10 @@ describe("a Stop's event", () => {
     expect(atInterrupt).toEqual([
       {
         reason: 'user-stop',
-        turnId: 'turn-named',
+        turnId: 'turn-1',
         caller: QUEUED_RIG_CALLER.callerKey,
         at: expect.any(Number)
       }
     ])
-  })
-
-  it("lands before the rows the interrupt causes: the stopped turn's end comes after it", async () => {
-    rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
-    let turnEnd: number | undefined
-    rig.cancelTurn.mockImplementationOnce(async () => {
-      turnEnd = (await turnRow('turn-1', 'interrupted')).cursor.sequence
-      return { cancelled: true }
-    })
-    await rig.stop()
-    const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-    const stopRow = since.ok
-      ? since.rows.find((row) => row.kind === 'tombstone' && row.stopEvent)
-      : undefined
-    expect(stopRow?.seq).toBeLessThan(turnEnd ?? 0)
-  })
-
-  it('a Stop whose acceptance cannot be saved interrupts nothing and asks to try again', async () => {
-    rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
-    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    vi.spyOn(journal().stops, 'accept').mockRejectedValue(new Error('disk I/O error'))
-    const refused = await rig.stop()
-    expect(refused).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        details: { reason: 'stopFailed' },
-        message: expect.stringMatching(/^Couldn't stop .+\. Try again\.$/)
-      }
-    })
-    expect(rig.cancelTurn).not.toHaveBeenCalled()
-    expect(rig.closeSession).not.toHaveBeenCalled()
-    expect(stopEvents()).toEqual([])
-    warned.mockRestore()
-  })
-
-  it('at an agent still starting, reaches the journal before the start is ended, and holds a card queued before it', async () => {
-    rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-    rig.send('work on this')
-    await eventually(() =>
-      expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
-        'starting'
-      )
-    )
-    const held = await queuedDraft('queued while it starts')
-    let atEnd: JournalStopEvent[] | undefined
-    rig.closeSession.mockImplementationOnce(async () => {
-      atEnd = stopEvents()
-      return true
-    })
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-    await observationClock.observe(250)
-    expect(await rig.handoff(held)).toBeUndefined()
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    expect(rig.cancelTurn).not.toHaveBeenCalled()
-    expect(rig.dispatch).not.toHaveBeenCalled()
-    expect(rig.closeSession).toHaveBeenCalledTimes(1)
-    expect(atEnd).toEqual([
-      { reason: 'user-stop', caller: QUEUED_RIG_CALLER.callerKey, at: expect.any(Number) }
-    ])
-  })
-
-  it('is written by an idle Stop only when it withdrew a send', async () => {
-    rig = await createQueuedMessageTestRig()
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
-    expect(stopEvents()).toEqual([])
-    // Hold the lane so Stop precedes the send’s requested handover.
-    const release = holdLane(rig.host, HOST_TEST_SESSION)
-    const waiting = rig.send('waits for its handover')
-    const stopped = rig.stop()
-    release()
-    expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
-    expect(await rig.submission(waiting.id)).toMatchObject({ dispatchState: 'rejected' })
-    expect(rig.dispatch).not.toHaveBeenCalled()
-    expect(rig.cancelTurn).not.toHaveBeenCalled()
-    expect(stopEvents()).toEqual([
-      { reason: 'user-stop', caller: QUEUED_RIG_CALLER.callerKey, at: expect.any(Number) }
-    ])
-  })
-
-  it('a second press while the first interrupt lands writes nothing: a card queued between them sends normally', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-    const between = await queuedDraft('queued between the presses')
-    expect(await rig.stop()).toMatchObject({ ok: true })
-    expect(stopEvents()).toHaveLength(1)
-    await rig.settleAccepted(working, 'stopped')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
-  })
-
-  it('a second press once the turn shows, after a first before it did, writes nothing: a card queued between sends', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await rig.stop()
-    const between = await queuedDraft('queued between the presses')
-    await turnRow('turn-1', 'running', working)
-    await rig.stop()
-    expect(stopEvents()).toHaveLength(1)
-    await rig.settleAccepted(working, 'stopped')
-    await turnRow('turn-1', 'interrupted')
-    await eventually(async () => expect(await rig.handoff(between)).toBeDefined())
-  })
-
-  it('a second press after a card sent into the turn settled unknown writes again', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await rig.stop()
-    await turnRow('turn-1', 'running', working)
-    const steered = await queuedDraft('sent into the turn between the presses')
-    await rig.sendNow(steered)
-    await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
-    await rig.host.settleLateDispatch({
-      sessionId: HOST_TEST_SESSION,
-      clientMessageId: await rig.handoffId(steered),
-      state: 'unknown',
-      reason: 'the provider never answered'
-    })
-    await rig.stop()
-    expect(stopEvents()).toHaveLength(2)
-  })
-
-  it('a second press after a card was sent into the turn writes again, and the card stays sent', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await rig.stop()
-    await turnRow('turn-1', 'running', working)
-    const steered = await queuedDraft('sent into the turn between the presses')
-    await rig.sendNow(steered)
-    await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
-    await rig.stop()
-    expect(stopEvents()).toHaveLength(2)
-    const handoff = await rig.handoffId(steered)
-    await withdraw(handoff)
-    await rig.settleAccepted(working, 'stopped')
-    await observationClock.observe(250)
-    // Handover without non-delivery proof must never requeue.
-    expect(await rig.drafts()).toEqual([])
-    expect((await rig.submission(handoff))?.dispatchState).toBe('rejected')
-  })
-
-  it('naming no turn, names the turn running when it takes effect', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await turnRow('turn-1', 'running', working)
-    await rig.stop()
-    expect(stopEvents()).toMatchObject([{ reason: 'user-stop', turnId: 'turn-1' }])
-  })
-
-  it('names a turn already over, as a late Stop from a phone does: writes nothing', async () => {
-    rig = await createQueuedMessageTestRig()
-    rig.cancelTurn.mockResolvedValueOnce({ cancelled: false })
-    const fields = { turnId: 'turn-already-over' }
-    const stopped = await rig.host.cancel(QUEUED_RIG_CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.cancel', hostTestOperationId()),
-      ...fields
-    })
-    expect(stopped).toMatchObject({ ok: true, value: { cancelled: false } })
-    expect(stopEvents()).toEqual([])
-  })
-
-  it('names a turn that ended while the next card is sent but shows no turn yet: writes nothing, and the card runs', async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    await turnRow('turn-1', 'running', working)
-    const next = await queuedDraft('sent when turn-1 ends')
-    await rig.settleAccepted(working, 'working')
-    await turnRow('turn-1', 'interrupted')
-    await eventually(async () => expect((await rig.handoff(next))?.handedOverAt).toBeDefined())
-    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
-    const fields = { turnId: 'turn-1' }
-    const stopped = await rig.host.cancel(QUEUED_RIG_CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.cancel', hostTestOperationId()),
-      ...fields
-    })
-    expect(stopped).toMatchObject({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
-    expect(stopEvents()).toEqual([])
-    expect(rig.cancelTurn).not.toHaveBeenCalled()
-    expect(await rig.queuePause()).toBeNull()
-    expect((await rig.handoff(next))?.dispatchState).toBe('pending')
-  })
-
-  it("holds a card when it lands between the queue's pick and its claim", async () => {
-    rig = await createQueuedMessageTestRig()
-    const working = await rig.workingSend()
-    const draftId = await queuedDraft('picked by the drain')
-    const open = journal()
-    const appendSubmission = open.appendSubmission.bind(open)
-    let injected = false
-    // Force a pause after selection to verify the claim transaction still holds the card.
-    vi.spyOn(open, 'appendSubmission').mockImplementation(async (input, consume) => {
-      if (consume?.yieldsToPause && consume.messageId === draftId && !injected) {
-        injected = true
-        await open.appendStopEvent({ reason: 'user-stop' }, input.fence)
-      }
-      return appendSubmission(input, consume)
-    })
-    await rig.settleAccepted(working, 'working')
-    await eventually(() => expect(injected).toBe(true))
-    await observationClock.observe(250)
-    expect(await rig.handoff(draftId)).toBeUndefined()
-    expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   })
 })

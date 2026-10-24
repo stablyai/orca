@@ -1,4 +1,4 @@
-// Default Stop keeps successfully interrupted children; default prompt Cancel interrupts their turn.
+// Chat Stop ends the captured child for every provider; default prompt Cancel interrupts its turn.
 
 import type {
   AgentJournalApprovalItem,
@@ -16,8 +16,6 @@ export type AgentSessionCancelOutcome = {
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
 export type StructuredAgentSessionAdapterStop = {
-  /** Opt into child termination after Stop; stale-target refusals keep it, failed interrupts of live targets end it. */
-  stopEndsSession?(sessionId: string): boolean
   /** Wait for in-flight work or grace expiry measured from interrupt issuance. */
   awaitStoppedRequestEnd?(sessionId: string, stoppedAt: number): Promise<void>
   /** Undefined routes through cancelTurn with the prompt. */

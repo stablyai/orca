@@ -253,7 +253,8 @@ it('returns the receipt for a stopped child whose provider reports its own end',
         cause: 'requested-close',
         sessionId,
         fence: child.fence,
-        acquisitionGeneration: child.generation
+        acquisitionGeneration: child.generation,
+        processExit: { root: 'exited', workload: 'unverifiable' }
       })
     }
     return true

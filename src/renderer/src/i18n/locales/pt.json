@@ -7699,6 +7699,11 @@
           "191ac34567": "Orquestração de Agentes",
           "nestedWorkerDepthTitle": "Profundidade de worker aninhado",
           "nestedWorkerDepthDescription": "Quantas gerações de workers despachados podem gerar seus próprios workers. 1 mantém a árvore de agentes plana: um coordenador despacha workers, e esses workers não despacham.",
+          "chatErrorEscalationTitle": "Avisar o coordenador sobre erros do chat",
+          "chatErrorEscalationDescription": "Quando um agente atribuído encontra um erro que encerra seu turno, envia o erro exato ao coordenador que o atribuiu. A tarefa continua atribuída ao agente. Funciona apenas para agentes executados na interface de chat.",
+          "chatErrorEscalationNeedsChat": "Ative a interface de chat nas configurações experimentais para usar.",
+          "chatErrorEscalationKeywordError": "erro",
+          "chatErrorEscalationKeywordChat": "chat",
           "7bc082f4de": "Copiar comando de instalação"
         },
         "RuntimeAccessGrantList": {

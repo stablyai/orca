@@ -2,7 +2,7 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalStatusItem,
-  AgentJournalSubmission
+  AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
@@ -20,13 +20,13 @@ import {
   STOP_NOTE_CANCELLATION_REQUESTED,
   structuredAgentSessionNamedTurnScope,
   structuredAgentSessionStopNamesTurnNotLive,
-  structuredAgentSessionStoppedTurnId
+  structuredAgentSessionStoppedTurnId,
+  writeStructuredAgentSessionStopNote
 } from './structured-agent-session-turn-stop-notes'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionStopWindDown } from './structured-agent-session-stop-wind-down'
 import type { JournalStopFailedOn } from '../agent-session-journal/queued-message-pause'
 import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
-import { sendStopCanTakeBack } from './structured-agent-session-unopened-send-withdrawal'
 import { settleTakenStop } from './structured-agent-session-taken-stop-settle'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
@@ -48,18 +48,6 @@ function stillRunsStoppedTurn(
   }
   // Working without an open turn after the captured turn means a later send.
   return stoppedTurnId === null || work.activeTurnId() === stoppedTurnId
-}
-
-function tookBackEverySend(
-  ctx: Pick<AgentSessionTurnContext, 'journal'>,
-  inFlight: readonly AgentJournalSubmission[]
-): boolean {
-  const rejected = new Set(
-    ctx.journal
-      .submissions()
-      .flatMap((entry) => (entry.dispatchState === 'rejected' ? [entry.clientMessageId] : []))
-  )
-  return inFlight.length > 0 && inFlight.every((entry) => rejected.has(entry.clientMessageId))
 }
 
 /** A refusal that may still open a turn is unconfirmed, never proof that nothing ran. */
@@ -93,8 +81,10 @@ export async function performCancel(
       return answerCancelOfSettledPrompt(ctx, { ...input, prompt: input.prompt }, validated)
     }
   }
-  // Turnless Stop binds work ending during its settlement.
-  const settle = input.opensSettle ? ctx.journal.stopMarks.beginSettle() : null
+  // An accepted chat Stop owns every turn its captured child ends, whatever its event names.
+  const settle = input.opensSettle
+    ? ctx.journal.stopMarks.beginSettle(Boolean(input.acceptedStop && input.endSession))
+    : null
   const binding: StopSettleBinding = {}
   const close = (failedOn?: JournalStopFailedOn): void =>
     ctx.journal.stopMarks.settled(settle, binding.turnId, binding.failedOn ?? failedOn)
@@ -107,10 +97,19 @@ export async function performCancel(
   }
 }
 
+/** A chat Stop's accepted target and request feedback survive later dispatch settlement. */
+export type AcceptedChatStop = {
+  turnId: string | null
+  turnScope: AgentJournalTurnScope
+  previouslyStopped: boolean
+  requestNoteWrite?: Promise<void>
+}
+
 type PerformCancelInput = {
   clientOperationId: string
   /** Absent targets all in-flight work; present targets only this current turn. */
   turnId?: string
+  acceptedStop?: AcceptedChatStop
   prompt?: { itemId: string; expectedRevision: number }
   /** End the child when a command/turn cannot be interrupted. */
   stopChild?: () => Promise<void>
@@ -142,12 +141,17 @@ async function cancelAndNote(
   const work = () => contextStructuredAgentSessionCurrentWork(ctx)
   // Capture the note’s turn before cancel can settle it.
   const turnScope =
+    input.acceptedStop?.turnScope ??
     (input.turnId !== undefined
       ? structuredAgentSessionNamedTurnScope(ctx.journal, input.turnId)
-      : null) ?? work().turnScope()
+      : null) ??
+    work().turnScope()
   // Commands end only through provider or child exit; dead-generation settlement supplies their verdict.
   const liveTurnId = work().activeTurnId()
-  const stoppedTurnId = structuredAgentSessionStoppedTurnId(work(), input.turnId)
+  // Read with the live turn, before the cancel settles it: the note is keyed by this turn.
+  const stoppedTurnId = input.acceptedStop
+    ? input.acceptedStop.turnId
+    : structuredAgentSessionStoppedTurnId(work(), input.turnId)
   const namesTurnNotLive = structuredAgentSessionStopNamesTurnNotLive(input.turnId, liveTurnId)
   const runningCommand =
     input.stopChild !== undefined &&
@@ -155,18 +159,36 @@ async function cancelAndNote(
     isStructuredAgentSessionCommandTurnId(liveTurnId) &&
     !namesTurnNotLive
   const stoppedBefore =
-    runningCommand && structuredAgentSessionCommandWasStopped(ctx.journal, liveTurnId)
-  // Capture before session-ending Stop discards the child.
-  const endsSession =
-    input.endSession !== undefined && ctx.adapter.stopEndsSession?.(ctx.sessionId) === true
+    runningCommand &&
+    (input.acceptedStop?.previouslyStopped ??
+      structuredAgentSessionCommandWasStopped(ctx.journal, liveTurnId))
+  // One rule for every agent: a chat's Stop ends its session, background work included; the next
+  // send resumes the conversation. A task row's Stop has its own targeted path.
+  const endsSession = input.endSession !== undefined
   const stoppedAt = Date.now()
-  // Capture sends before cancel can settle them.
-  const sentBeforeStop = ctx.journal.submissions().filter(sendStopCanTakeBack)
+  const noteIdentity = structuredAgentSessionStopNoteIdentity(
+    stoppedTurnId ?? input.clientOperationId
+  )
+  let stoppedTurn: string | undefined = stoppedTurnId ?? undefined
+  let noteWritten = input.acceptedStop?.requestNoteWrite !== undefined
+  const writeNote = (body: AgentJournalStatusItem): Promise<void> => {
+    noteWritten = true
+    // A child end this Stop caused moved the fence past `ctx.fence`.
+    const fence = Math.max(ctx.fence, input.noteFence?.() ?? ctx.fence)
+    return writeStructuredAgentSessionStopNote(
+      { journal: ctx.journal, fence, logger: ctx.logger, sessionId: ctx.sessionId },
+      { identity: noteIdentity, body, stoppedTurn, fallbackScope: turnScope }
+    )
+  }
+  const requestNoteWrite = input.acceptedStop
+    ? input.acceptedStop.requestNoteWrite
+    : endsSession && !namesTurnNotLive
+      ? writeNote(note)
+      : undefined
   // undefined means cancel threw and its effect is unknown.
   let taken: boolean | undefined
   let interruptFailed = false
   let refusal: AgentSessionCancelOutcome['refusal']
-  let stoppedTurn: string | undefined
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     const outcome: AgentSessionCancelOutcome = stoppedBefore
@@ -175,6 +197,7 @@ async function cancelAndNote(
           sessionId: ctx.sessionId,
           ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
           fence: ctx.fence,
+          ...(endsSession ? { stoppedAt } : {}),
           // Validate against the journal the client used to name its turn.
           resolveLiveTurnId: () => work().activeTurnId(),
           ...(dispatchStatus ? { dispatchStatus } : {}),
@@ -189,7 +212,7 @@ async function cancelAndNote(
     if (!cancelled && !isMainAgentWorking(ctx) && (await input.withdrewQueued) === true) {
       // Withdrawing all queued work confirms Stop regardless of provider no-op wording.
       cancelled = true
-      note = null
+      note = { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
     } else if (!cancelled && input.prompt) {
       note = null
     } else if (!cancelled && input.turnId === undefined) {
@@ -205,26 +228,30 @@ async function cancelAndNote(
       ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
     }
   }
-  const noteIdentity = structuredAgentSessionStopNoteIdentity(
-    stoppedTurn ?? stoppedTurnId ?? input.clientOperationId
-  )
-  // Declined old-turn Stops retain the session; any other interrupt may affect a follow-up before it opens.
-  if (endsSession && (!namesTurnNotLive || taken !== false)) {
+  // Accepted chat Stops retain runtime closure; other named cancellations keep their live-turn scope.
+  if (endsSession && (input.acceptedStop || !namesTurnNotLive || taken !== false)) {
     // Accepted interrupts warrant wind-down even before their turn echo arrives.
     binding.closedByWindDown = true
+    // Child exit confirms Stop, superseding interrupt uncertainty.
+    const ended: AgentJournalStatusItem | null =
+      note === null || (input.acceptedStop && !requestNoteWrite)
+        ? null
+        : { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
+    const stopNoteWrite = ended !== null ? (requestNoteWrite ?? writeNote(ended)) : undefined
     input.endSession?.({
       waitsForProvider: taken === true,
       stoppedAt,
       stopNote: noteIdentity,
+      stopNoteWrite,
       settled: closeSettle
     })
     cancelled = true
-    // Child exit confirms Stop, superseding interrupt uncertainty.
-    if (note !== null) {
-      note = { kind: 'status', text: 'Cancellation requested.' }
-    }
+    note = ended
   } else if (runningCommand && !cancelled) {
+    const noteWrite =
+      requestNoteWrite ?? writeNote({ kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED })
     await input.stopChild?.()
+    await noteWrite
     cancelled = true
     note = { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
   } else if (
@@ -234,6 +261,8 @@ async function cancelAndNote(
     stillRunsStoppedTurn(ctx, stoppedTurnId)
   ) {
     let ended: boolean
+    const noteWrite =
+      requestNoteWrite ?? writeNote({ kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED })
     try {
       await input.stopChild()
       ended = true
@@ -244,14 +273,11 @@ async function cancelAndNote(
     }
     if (ended) {
       cancelled = true
-      // Withdrawn sends render their own feedback; another notice misattributes the previous turn on old clients.
-      note =
-        stoppedTurnId === null && tookBackEverySend(ctx, sentBeforeStop)
-          ? null
-          : { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
+      note = { kind: 'status', text: STOP_NOTE_CANCELLATION_REQUESTED }
     } else if (taken !== undefined) {
       note = stopRefusedNote(ctx, refusal)
     }
+    await noteWrite
   } else if (!cancelled && taken === false && input.turnId !== undefined) {
     note = null
   }
@@ -262,30 +288,16 @@ async function cancelAndNote(
     binding.failedOn = structuredAgentSessionFailedStopMark(work(), ctx.journal)
   }
   if (taken === true && stoppedTurn !== undefined && !binding.closedByWindDown) {
-    const opened = await settleTakenStop(ctx, stoppedTurn)
-    if (!opened && stoppedTurnId === null && tookBackEverySend(ctx, sentBeforeStop)) {
-      note = null
-    }
+    await settleTakenStop(ctx, stoppedTurn)
   }
   const value = { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled }
   if (note === null) {
     return { ok: true, value }
   }
-  // Prefer the provider’s turn opened during cancel over the scope captured before waiting.
-  const noteScope =
-    (stoppedTurn !== undefined
-      ? structuredAgentSessionNamedTurnScope(ctx.journal, stoppedTurn)
-      : null) ?? turnScope
-  // Best-effort notes cannot change the accepted Stop.
-  const fence = Math.max(ctx.fence, input.noteFence?.() ?? ctx.fence)
-  await ctx.journal
-    .appendItem(noteIdentity, note, { fence, turnScope: noteScope })
-    .catch((error: unknown) =>
-      ctx.logger.warn("writing a Stop's note failed", {
-        scope: 'stop-note',
-        sessionId: ctx.sessionId,
-        error
-      })
-    )
+  await (!noteWritten || note.text !== STOP_NOTE_CANCELLATION_REQUESTED
+    ? writeNote(note)
+    : binding.closedByWindDown
+      ? undefined
+      : requestNoteWrite)
   return { ok: true, value }
 }

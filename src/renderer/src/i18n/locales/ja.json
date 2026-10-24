@@ -8094,6 +8094,11 @@
           "191ac34567": "Agent オーケストレーション",
           "nestedWorkerDepthTitle": "ネストされたワーカーの深さ",
           "nestedWorkerDepthDescription": "起動されたワーカーが、さらに自分のワーカーを起動できる世代数です。1 にすると Agent ツリーはフラットになります。コーディネーターがワーカーを起動し、そのワーカーはワーカーを起動しません。",
+          "chatErrorEscalationTitle": "チャットのエラーをコーディネーターに知らせる",
+          "chatErrorEscalationDescription": "割り当てられた Agent がターンを終了させるエラーに遭遇したとき、そのエラーをそのまま割り当て元のコーディネーターに送ります。タスクは Agent に割り当てられたままです。チャット UI で動作する Agent でのみ機能します。",
+          "chatErrorEscalationNeedsChat": "使用するには、試験的機能の設定でチャット UI をオンにしてください。",
+          "chatErrorEscalationKeywordError": "エラー",
+          "chatErrorEscalationKeywordChat": "チャット",
           "7bc082f4de": "インストールコマンドのコピー"
         },
         "OrchestrationSetupCard": {

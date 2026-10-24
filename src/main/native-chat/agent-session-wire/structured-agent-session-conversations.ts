@@ -1,3 +1,4 @@
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -12,6 +13,12 @@ export class StructuredAgentSessionConversations extends Map<
 
   constructor(
     private readonly delivery: {
+      observe?: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        rows?: readonly JournalRow[]
+      ) => void
+      forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -27,7 +34,19 @@ export class StructuredAgentSessionConversations extends Map<
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
     const { journal } = session
     let queued = false
-    journal.observeCommits(() => {
+    journal.observeCommits((rows) => {
+      if (this.get(sessionId)?.journal !== journal) {
+        return
+      }
+      try {
+        this.delivery.observe?.(sessionId, journal, rows)
+      } catch (error) {
+        this.delivery.logger.warn('observing committed requests failed', {
+          scope: 'request-outcomes',
+          sessionId,
+          error
+        })
+      }
       if (queued) {
         return
       }
@@ -66,11 +85,13 @@ export class StructuredAgentSessionConversations extends Map<
     })
     this.activity.set(sessionId, this.delivery.now())
     const adopted = super.set(sessionId, session)
+    this.delivery.observe?.(sessionId, journal)
     this.delivery.onOpened?.(sessionId)
     return adopted
   }
 
   override delete(sessionId: string): boolean {
+    this.delivery.forget?.(sessionId)
     this.activity.delete(sessionId)
     return super.delete(sessionId)
   }

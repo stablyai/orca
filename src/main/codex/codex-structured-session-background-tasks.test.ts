@@ -8,8 +8,10 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -19,12 +21,15 @@ const THREAD_ID = '01a07d54-3785-71d0-b065-82c8ebbc572a'
 const PARENT_TURN = '01a07d54-37be-72e1-8206-8f0c23dd2cef'
 const CHILD_ID = '01a07d54-5523-78a3-91f5-e0acb1dab065'
 
-function fakeCodex(close: () => Promise<boolean> = async () => true): {
+function fakeCodex(
+  close: () => Promise<boolean> = async () => true,
+  proof?: StructuredAgentSessionEndedEvent['processExit']
+): {
   handlers: () => CodexAppServerConnectionHandlers
   openConnection: typeof openCodexAppServerConnection
 } {
   let live: CodexAppServerConnectionHandlers = {}
-  const openConnection = (async (_launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
     live = handlers
     const connection: CodexAppServerConnection = {
       pid: 4321,
@@ -35,9 +40,14 @@ function fakeCodex(close: () => Promise<boolean> = async () => true): {
       respond: () => {},
       respondWithError: () => {},
       close
-    } as unknown as CodexAppServerConnection
+    }
+    if (proof) {
+      Object.defineProperty(connection, 'closeResult', {
+        value: { root: proof.root, tree: proof.workload }
+      })
+    }
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   return { handlers: () => live, openConnection }
 }
 
@@ -77,9 +87,10 @@ async function adapterWithSession(
   published: Published[],
   events?: StructuredAgentSessionEventSink,
   onEvent?: (event: CodexStructuredSessionEvent) => void,
-  close?: () => Promise<boolean>
+  close?: () => Promise<boolean>,
+  proof?: StructuredAgentSessionEndedEvent['processExit']
 ): Promise<{ adapter: CodexStructuredSessionAdapter; codex: ReturnType<typeof fakeCodex> }> {
-  const codex = fakeCodex(close)
+  const codex = fakeCodex(close, proof)
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -287,5 +298,46 @@ describe("codex background tasks reach the host's child records", () => {
 
     expect(published).toEqual([{ sessionId: 'session-1', evidence: ['session-ended'] }])
     expect(adapter.backgroundTaskState('session-1')).toBeUndefined()
+  })
+
+  it.each([
+    [{ root: 'exited', workload: 'exited' }, true],
+    [{ root: 'exited', workload: 'unverifiable' }, false],
+    [{ root: 'live', workload: 'exited' }, false]
+  ] as const)('hands close proof %j to the host child-work path', async (proof, ended) => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(
+      published,
+      undefined,
+      undefined,
+      undefined,
+      proof
+    )
+    const spawn = subagentNotification('started')
+    codex.handlers().onNotification?.(spawn.method, spawn.params)
+    published.length = 0
+    const drain = vi.spyOn(CodexBackgroundTaskTracker.prototype, 'drainChildWorkEvidence')
+    try {
+      expect(await adapter.closeSession('session-1')).toBe(true)
+      const endings = drain.mock.results.flatMap((result) =>
+        result.type === 'return' ? result.value.filter((edge) => edge.type === 'ended') : []
+      )
+      expect(endings).toEqual(
+        ended
+          ? [
+              expect.objectContaining({
+                type: 'ended',
+                handle: { idKind: 'thread_id', id: CHILD_ID, runId: 'child-turn' },
+                outcome: 'cancelled'
+              })
+            ]
+          : []
+      )
+      expect(published).toEqual([
+        { sessionId: 'session-1', evidence: ended ? ['ended', 'session-ended'] : ['session-ended'] }
+      ])
+    } finally {
+      drain.mockRestore()
+    }
   })
 })

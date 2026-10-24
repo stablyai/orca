@@ -70,7 +70,7 @@ async function stopWhileTheTurnOpens(
     publish: vi.fn(),
     now: () => 1
   }
-  await performCancel(ctx, { clientOperationId: 'stop-1' })
+  await performCancel(ctx, { clientOperationId: 'stop-1', endSession: () => {} })
   return journal
     .snapshot()
     .items.flatMap((item) =>
@@ -79,11 +79,11 @@ async function stopWhileTheTurnOpens(
 }
 
 describe('a Stop that waited for a turn to open', () => {
-  it('keeps its note with that turn when the interrupt took it', async () => {
+  it('keeps the request before the turn that opens during interruption', async () => {
     expect(await stopWhileTheTurnOpens({ cancelled: true, turnId: 'turn-1' })).toEqual([
       {
-        itemId: agentJournalItemKey(structuredAgentSessionStopNoteIdentity('turn-1')),
-        turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(TURN) }
+        itemId: agentJournalItemKey(structuredAgentSessionStopNoteIdentity('stop-1')),
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     ])
   })

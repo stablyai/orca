@@ -45,6 +45,8 @@ export class StructuredAgentSessionHost {
     this
   )
   private readonly sessions = new StructuredAgentSessionConversations({
+    observe: (id, journal, rows) => this.clientDelivery.requestFailures.observe(id, journal, rows),
+    forget: (id) => this.clientDelivery.requestFailures.forget(id),
     deliver: (sessionId, journal) => {
       this.subscribers.publish(sessionId, journal)
       this.conversationDelivery.afterCommit(sessionId, journal)
