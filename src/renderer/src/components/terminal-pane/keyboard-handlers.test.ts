@@ -161,7 +161,11 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
-    expect(findNext).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findNext).toHaveBeenCalledWith('hello', {
+      caseSensitive: true,
+      regex: false,
+      wholeWord: false
+    })
     expect(findPrevious).not.toHaveBeenCalled()
   })
 
@@ -173,8 +177,28 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
-    expect(findPrevious).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findPrevious).toHaveBeenCalledWith('hello', {
+      caseSensitive: true,
+      regex: false,
+      wholeWord: false
+    })
     expect(findNext).not.toHaveBeenCalled()
+  })
+
+  it('forwards whole-word matching to the addon', () => {
+    const findNext = vi.fn(() => true)
+    const pane = { searchAddon: { findNext } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'next', { ...searchState, wholeWord: true })).toBe(
+      true
+    )
+    expect(findNext).toHaveBeenCalledWith('hello', {
+      caseSensitive: true,
+      regex: false,
+      wholeWord: true
+    })
   })
 
   it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {

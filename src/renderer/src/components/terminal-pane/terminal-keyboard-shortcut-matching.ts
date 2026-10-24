@@ -67,7 +67,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-export type SearchState = { query: string; caseSensitive: boolean; regex: boolean }
+export type SearchState = {
+  query: string
+  caseSensitive: boolean
+  regex: boolean
+  wholeWord?: boolean
+}
 export type SearchNavigationDirection = 'next' | 'previous'
 
 export function matchSearchNavigate(
@@ -94,7 +99,11 @@ export function runTerminalSearchNavigation(
   direction: SearchNavigationDirection,
   searchState: SearchState
 ): boolean {
-  const options = { caseSensitive: searchState.caseSensitive, regex: searchState.regex }
+  const options = {
+    caseSensitive: searchState.caseSensitive,
+    regex: searchState.regex,
+    wholeWord: searchState.wholeWord === true
+  }
   return direction === 'next'
     ? safeFind(
         (term, findOptions) => pane.searchAddon.findNext(term, findOptions),

@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useState, useCallback } from 'react'
-import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
+import { ChevronUp, ChevronDown, X, CaseSensitive, Regex, WholeWord } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
 import type { SearchState } from '@/components/terminal-pane/terminal-keyboard-shortcut-matching'
@@ -37,6 +37,7 @@ export default function TerminalSearch({
 }: TerminalSearchProps): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
+  const [wholeWord, setWholeWord] = useState(false)
   const [regex, setRegex] = useState(false)
   const [results, setResults] = useState(EMPTY_RESULTS)
   const requestQuery = getFindRequestQuery(query)
@@ -46,6 +47,7 @@ export default function TerminalSearch({
     (incremental: boolean = false) => ({
       caseSensitive,
       regex,
+      wholeWord,
       incremental,
       decorations: {
         matchBackground: '#5c4a00',
@@ -56,7 +58,7 @@ export default function TerminalSearch({
         activeMatchColorOverviewRuler: '#ff9900'
       }
     }),
-    [caseSensitive, regex]
+    [caseSensitive, regex, wholeWord]
   )
 
   const findNext = useCallback(() => {
@@ -104,7 +106,7 @@ export default function TerminalSearch({
 
   useEffect(() => {
     // Global match-navigation shortcuts read the same query as the panel.
-    searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex }
+    searchStateRef.current = { query: requestQuery ?? '', caseSensitive, regex, wholeWord }
 
     if (!isOpen || !requestQuery) {
       clearTerminalSearch(searchAddon)
@@ -117,7 +119,16 @@ export default function TerminalSearch({
         searchOptions(true)
       )
     }
-  }, [requestQuery, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
+  }, [
+    requestQuery,
+    searchAddon,
+    isOpen,
+    caseSensitive,
+    regex,
+    wholeWord,
+    searchStateRef,
+    searchOptions
+  ])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -172,6 +183,18 @@ export default function TerminalSearch({
         title={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
       >
         <CaseSensitive size={14} />
+      </Button>
+
+      <Button
+        type="button"
+        variant={wholeWord ? 'secondary' : 'ghost'}
+        size="icon-xs"
+        aria-pressed={wholeWord}
+        onClick={() => setWholeWord((v) => !v)}
+        className="shrink-0"
+        title={translate('auto.components.TerminalSearch.wholeWord', 'Match Whole Word')}
+      >
+        <WholeWord size={14} />
       </Button>
 
       <Button
