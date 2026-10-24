@@ -190,6 +190,7 @@
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs",
     "audit:anti-slop": "node config/scripts/sync-anti-slop-plugin.mjs && oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings",
     "sync:anti-slop-plugin": "node config/scripts/sync-anti-slop-plugin.mjs",
+    "sync:win-unpacked": "node config/scripts/sync-win-unpacked.mjs",
     "build:packages": "pnpm --filter @orca/process-host build",
     "check:process-host-imports": "node config/scripts/check-process-host-imports.mjs",
     "check:main-sync-spawn-ratchet": "node config/scripts/check-main-sync-spawn-ratchet.mjs",
