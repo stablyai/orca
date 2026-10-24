@@ -31,7 +31,14 @@ export type WslDriveUncConversionStore = {
 // The lock wait blocks the main thread (synchronous SQLite); a busy database retries next start.
 const BUSY_TIMEOUT_MS = 2_000
 
-/** In ledger order. */
+export const WSL_DRIVE_UNC_MAIN_STORE_IDS = [
+  'terminal-history',
+  'shell-history',
+  'orchestration-history',
+  'chat-journal'
+] as const
+
+/** In ledger order, as WSL_DRIVE_UNC_MAIN_STORE_IDS lists them. */
 export function wslDriveUncConversionStores(
   paths: WslDriveUncConversionStorePaths
 ): WslDriveUncConversionStore[] {
