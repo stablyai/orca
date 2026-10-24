@@ -29,6 +29,7 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+/** Covers competing completion signals so an agent run cannot notify twice or lose its live state. */
 export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
@@ -350,7 +351,8 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
         titleHandler('Codex working', 'Codex working')
         await vi.advanceTimersByTimeAsync(2_500)
-        getForegroundProcess.mockResolvedValue(null)
+        // A crash leaves a live shell; null cannot confirm that the agent exited.
+        getForegroundProcess.mockResolvedValue('pwsh.exe')
         await vi.advanceTimersByTimeAsync(3_000)
         if (hookUpdateBeforeDispatch !== 'none') {
           mockStoreState.agentStatusByPaneKey[paneKey] = {

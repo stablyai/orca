@@ -38,6 +38,8 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
+  /** Rechecks a local exit candidate without trusting the inspection's cached process name. */
+  confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   dispatchHookLifecycle?: (payload: AgentCompletionStatusSnapshot) => void
