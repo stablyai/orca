@@ -93,6 +93,33 @@ export default function ProjectCell({
       </span>
     )
   }
+  if (field.dataType === 'LINKED_PULL_REQUESTS') {
+    if (value?.kind !== 'pull-requests') {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    const labels = value.pullRequests.map((pr) => `#${pr.number}`)
+    const overflow =
+      value.truncated || value.totalCount > value.pullRequests.length
+        ? ` +${Math.max(value.totalCount - value.pullRequests.length, 1)}`
+        : ''
+    return (
+      <span className="truncate text-xs text-muted-foreground">
+        {labels.join(', ')}
+        {overflow}
+      </span>
+    )
+  }
+  if (field.dataType === 'SUB_ISSUES_PROGRESS') {
+    const progress = row.content.subIssuesProgress
+    if (!progress || progress.total === 0) {
+      return <span className="text-xs text-muted-foreground" />
+    }
+    return (
+      <span className="truncate text-xs text-muted-foreground">
+        {progress.completed}/{progress.total} ({progress.percentCompleted}%)
+      </span>
+    )
+  }
   if (field.kind === 'single-select') {
     return (
       <ProjectSingleSelectCell

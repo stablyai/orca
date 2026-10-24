@@ -20,8 +20,9 @@ import { ownerQueryRoot } from './project-view-config'
 import type { RawItem } from './project-view-item-normalization'
 import {
   FIELD_CONFIG_FRAGMENT,
-  FIELD_VALUES_SELECTION,
-  itemContentSelection
+  fieldValuesSelection,
+  itemContentSelection,
+  supportsProjectExtendedFields
 } from './project-view-query-fragments'
 
 export type RawItemsPage = {
@@ -67,8 +68,10 @@ export async function fetchItemsPageWithRaw(args: {
               id
               type
               updatedAt
-              content { ${itemContentSelection(args.includeParent)} }
-              ${FIELD_VALUES_SELECTION}
+              content {
+                ${itemContentSelection(args.includeParent, supportsProjectExtendedFields(args.host))}
+              }
+              ${fieldValuesSelection(supportsProjectExtendedFields(args.host))}
             }
           }
         }

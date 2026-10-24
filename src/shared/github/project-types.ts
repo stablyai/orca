@@ -154,6 +154,13 @@ export type GitHubProjectFieldValue =
   | { kind: 'date'; fieldId: string; date: string; fieldName?: string }
   | { kind: 'labels'; fieldId: string; labels: GitHubProjectLabel[] }
   | { kind: 'users'; fieldId: string; users: GitHubProjectUser[] }
+  | {
+      kind: 'pull-requests'
+      fieldId: string
+      pullRequests: { number: number; title: string; url: string }[]
+      truncated: boolean
+      totalCount: number
+    }
 
 export type GitHubProjectRowItemType = 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE' | 'REDACTED'
 
@@ -178,6 +185,8 @@ export type GitHubProjectRow = {
     assignees: GitHubProjectUser[]
     labels: GitHubProjectLabel[]
     parentIssue: GitHubProjectParentIssue | null
+    /** Present when the ProjectV2Item content is an Issue and GitHub returned its summary. */
+    subIssuesProgress?: { completed: number; total: number; percentCompleted: number } | null
     /** Issue.issueType when set; null on PRs/drafts/redacted or when unset. */
     issueType: GitHubIssueType | null
   }
