@@ -43,6 +43,9 @@ import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import { getBrowserDisplayTitle, toDisplayUrl } from './describe-page/browser-page-url-display'
 import type { ClientHostedBrowserPagePaneProps } from './describe-page/browser-page-types'
+import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from './host-guest/browser-page-viewport'
+import { BrowserDevToolsDock } from './devtools-dock/BrowserDevToolsDock'
+import { useBrowserDevToolsDockPageFlex } from './devtools-dock/browser-devtools-docked-pages'
 
 export function ClientHostedBrowserPagePane({
   browserTab,
@@ -56,6 +59,7 @@ export function ClientHostedBrowserPagePane({
   onSetUrl
 }: ClientHostedBrowserPagePaneProps): React.JSX.Element {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   // Why: a worktree switch unmounts this pane while main keeps the guest, so the failure has to
@@ -348,35 +352,42 @@ export function ClientHostedBrowserPagePane({
           {markup.drawButton}
         </BrowserNavigationControlRow>
       </div>
-      <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
-        {markup.overlay}
-        <BrowserPageZoomIndicator
-          state={browserZoomIndicatorState}
-          percent={zoom.browserZoomPercent}
-        />
-        <BrowserFind
-          isOpen={findOpen}
-          onClose={() => setFindOpen(false)}
-          webviewRef={webviewRef}
-          guestGeneration={pageHostGeneration}
-        />
-        {showFailureOverlay ? (
-          <ClientHostedBrowserLoadFailure
-            browserTab={browserTab}
-            isActive={isActive}
-            onRetry={() => reload.runReloadTrigger('reload')}
+      <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
+        <div
+          ref={viewportRef}
+          className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+          style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
+        >
+          {markup.overlay}
+          <BrowserPageZoomIndicator
+            state={browserZoomIndicatorState}
+            percent={zoom.browserZoomPercent}
           />
-        ) : null}
-        {attachmentError || restoredPageUnrecovered ? (
-          <ClientHostedBrowserUnavailableNotice
-            runtimeEnvironmentId={runtimeEnvironmentId}
-            worktreeId={worktreeId}
-            lastCommittedUrl={browserTab.url}
-            placementHostClientId={browserHostClientId}
+          <BrowserFind
+            isOpen={findOpen}
+            onClose={() => setFindOpen(false)}
+            webviewRef={webviewRef}
+            guestGeneration={pageHostGeneration}
           />
-        ) : isBlankBrowserUrl(browserTab.url) ? (
-          <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
-        ) : null}
+          {showFailureOverlay ? (
+            <ClientHostedBrowserLoadFailure
+              browserTab={browserTab}
+              isActive={isActive}
+              onRetry={() => reload.runReloadTrigger('reload')}
+            />
+          ) : null}
+          {attachmentError || restoredPageUnrecovered ? (
+            <ClientHostedBrowserUnavailableNotice
+              runtimeEnvironmentId={runtimeEnvironmentId}
+              worktreeId={worktreeId}
+              lastCommittedUrl={browserTab.url}
+              placementHostClientId={browserHostClientId}
+            />
+          ) : isBlankBrowserUrl(browserTab.url) ? (
+            <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
+          ) : null}
+        </div>
+        {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}
       </div>
     </div>
   )
