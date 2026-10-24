@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { toast } from 'sonner'
 import type { PluginHostInstallSource, PluginHostListEntry } from '../../../../preload/api-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
-import { Button } from '../ui/button'
+import { useAppStore } from '@/store'
+import { PluginAddMenu } from './PluginAddMenu'
 import { PluginConsentDialog } from './PluginConsentDialog'
 import { PluginInstallDialog } from './PluginInstallDialog'
 import { PluginRemoveDialog } from './PluginRemoveDialog'
@@ -13,6 +14,9 @@ import { getPluginsSectionPresentation } from './plugins-search'
 import { SettingsSection } from './SettingsSection'
 import { usePluginLogs } from './use-plugin-logs'
 import { usePluginMarketplaceLifecycle } from './use-plugin-marketplace-lifecycle'
+import { usePluginPageNavigation } from './use-plugin-page-navigation'
+import { usePluginReviewQueue } from './use-plugin-review-queue'
+import { isPluginEnabled } from './plugin-status-presentation'
 
 type PluginsSettingsSectionProps = {
   mounted: boolean
@@ -33,8 +37,8 @@ export function PluginsSettingsSection({
   const [plugins, setPlugins] = useState<PluginHostListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [installOpen, setInstallOpen] = useState(false)
-  const [consentPluginId, setConsentPluginId] = useState<string | null>(null)
+  const [installKind, setInstallKind] = useState<'local-path' | 'git' | null>(null)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [removePluginId, setRemovePluginId] = useState<string | null>(null)
   const [busyPluginKeys, setBusyPluginKeys] = useState<Set<string>>(() => new Set())
   const [featureBusy, setFeatureBusy] = useState(false)
@@ -42,13 +46,25 @@ export function PluginsSettingsSection({
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const listRequestRef = useRef(0)
+  const page = usePluginPageNavigation()
+  const review = usePluginReviewQueue()
+  const consentPluginId = review.reviewKey
+  const clearReviews = review.clear
+  const installedKeysRef = useRef<ReadonlySet<string>>(new Set())
 
   const applyPluginList = (nextPlugins: PluginHostListEntry[]): void => {
     const installedPluginKeys = new Set(nextPlugins.map((plugin) => plugin.pluginKey))
+    // Why: a plugin removed while its page is open closes the page, so a reinstall starts fresh.
+    for (const pluginKey of installedKeysRef.current) {
+      if (!installedPluginKeys.has(pluginKey)) {
+        page.leave(pluginKey)
+      }
+    }
+    installedKeysRef.current = installedPluginKeys
     setPlugins(nextPlugins)
     setError(null)
     // Why: accepted discovery results own installed-plugin identity and invalidate stale UI state.
-    setConsentPluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
+    review.prune(installedPluginKeys)
     setRemovePluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setBusyPluginKeys(
       (current) => new Set([...current].filter((pluginKey) => installedPluginKeys.has(pluginKey)))
@@ -86,6 +102,12 @@ export function PluginsSettingsSection({
     }
   }
 
+  const clearBusy = (pluginKey: string): void => {
+    if (mountedRef.current) {
+      setBusyPluginKeys((current) => new Set([...current].filter((key) => key !== pluginKey)))
+    }
+  }
+
   const applyCompletedMutation = (nextPlugins: PluginHostListEntry[]): void => {
     if (!mountedRef.current) {
       return
@@ -103,8 +125,8 @@ export function PluginsSettingsSection({
       setPlugins([])
       setLoading(true)
       setError(null)
-      setInstallOpen(false)
-      setConsentPluginId(null)
+      setInstallKind(null)
+      clearReviews()
       setRemovePluginId(null)
       setBusyPluginKeys(new Set())
       setFeatureBusy(false)
@@ -115,10 +137,10 @@ export function PluginsSettingsSection({
       mountedRef.current = false
       listRequestRef.current += 1
     }
-  }, [mounted])
+  }, [mounted, clearReviews])
 
   useEffect(() => {
-    if (!mounted || !settings.pluginSystemEnabled) {
+    if (!mounted) {
       return
     }
     setLoading(true)
@@ -144,7 +166,7 @@ export function PluginsSettingsSection({
     plugins,
     applyCompletedMutation,
     setPluginListError,
-    setConsentPluginId,
+    openReviews: review.enqueue,
     setBusyPluginKeys
   })
   const pluginLogs = usePluginLogs(mounted, mountedRef, plugins)
@@ -189,8 +211,8 @@ export function PluginsSettingsSection({
       throw new Error(result.error)
     }
     // Why: installation is not consent; select by id and wait for the authoritative list.
-    setInstallOpen(false)
-    setConsentPluginId(result.pluginKey)
+    setInstallKind(null)
+    review.show(result.pluginKey)
     await loadPluginList(window.api.plugins.refresh())
   }
 
@@ -208,25 +230,15 @@ export function PluginsSettingsSection({
       })
       applyCompletedMutation(nextPlugins)
       if (mountedRef.current) {
-        setConsentPluginId(null)
+        review.advance(nextPlugins)
       }
     } finally {
-      if (mountedRef.current) {
-        setBusyPluginKeys((current) => {
-          const next = new Set(current)
-          next.delete(pluginKey)
-          return next
-        })
-      }
+      clearBusy(pluginKey)
     }
   }
 
   const toggleEnabled = async (plugin: PluginHostListEntry): Promise<void> => {
-    const enabled =
-      plugin.status === 'running' ||
-      plugin.status === 'restarting' ||
-      plugin.status === 'idle' ||
-      plugin.status === 'errored'
+    const enabled = isPluginEnabled(plugin)
     setBusyPluginKeys((current) => new Set(current).add(plugin.pluginKey))
     try {
       const nextEnabled = !enabled
@@ -239,20 +251,40 @@ export function PluginsSettingsSection({
       // pending; open its review instead of silently flipping the row back to "Needs review".
       const next = nextPlugins.find((entry) => entry.pluginKey === plugin.pluginKey)
       if (nextEnabled && next?.status === 'pending' && mountedRef.current) {
-        setConsentPluginId(plugin.pluginKey)
+        review.show(plugin.pluginKey)
       }
     } catch (cause) {
       if (mountedRef.current) {
         setPluginListError(cause)
       }
     } finally {
+      clearBusy(plugin.pluginKey)
+    }
+  }
+
+  // Why: re-enabling resets the supervisor's restart budget, which is what "Restart" means here.
+  const restart = async (pluginKey: string): Promise<void> => {
+    setBusyPluginKeys((current) => new Set(current).add(pluginKey))
+    try {
+      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: true }))
+    } catch (cause) {
       if (mountedRef.current) {
-        setBusyPluginKeys((current) => {
-          const next = new Set(current)
-          next.delete(plugin.pluginKey)
-          return next
-        })
+        // Why: the stop may have landed before the start failed; show what is true now.
+        void loadPluginList(window.api.plugins.list())
+        toast.error(
+          translate(
+            'auto.components.settings.PluginsSettingsSection.restartFailed',
+            "Couldn't restart {{value0}}.",
+            {
+              value0: plugins.find((plugin) => plugin.pluginKey === pluginKey)?.name ?? pluginKey
+            }
+          )
+        )
+        console.warn('[plugins] restart failed:', cause)
       }
+    } finally {
+      clearBusy(pluginKey)
     }
   }
 
@@ -269,13 +301,7 @@ export function PluginsSettingsSection({
         setPluginListError(cause)
       }
     } finally {
-      if (mountedRef.current) {
-        setBusyPluginKeys((current) => {
-          const next = new Set(current)
-          next.delete(pluginKey)
-          return next
-        })
-      }
+      clearBusy(pluginKey)
     }
   }
 
@@ -310,16 +336,14 @@ export function PluginsSettingsSection({
     <SettingsSection
       id="plugins"
       {...sectionPresentation}
+      hideHeader={featureEnabled && page.openKey !== null}
+      bodyClassName="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none"
       headerAction={
-        <Button
-          variant="outline"
-          size="sm"
+        <PluginAddMenu
           disabled={!featureEnabled || featureBusy}
-          onClick={() => setInstallOpen(true)}
-        >
-          <Plus />
-          {translate('auto.components.settings.PluginsSettingsSection.install', 'Install plugin')}
-        </Button>
+          onChoose={setInstallKind}
+          onSources={() => setSourcesOpen(true)}
+        />
       }
     >
       <PluginSettingsOverview
@@ -330,21 +354,46 @@ export function PluginsSettingsSection({
         error={error}
         plugins={plugins}
         busyPluginKeys={busyPluginKeys}
-        openLogs={pluginLogs.openLogs}
-        logsByPlugin={pluginLogs.logsByPlugin}
         devPaths={settings.devPluginPaths}
         devPathsBusy={devPathsBusy}
+        handlers={{
+          onOpen: () => undefined,
+          onReview: review.show,
+          onToggleEnabled: (pluginKey) => {
+            const plugin = plugins.find((entry) => entry.pluginKey === pluginKey)
+            if (plugin) {
+              void toggleEnabled(plugin)
+            }
+          },
+          onRestart: (pluginKey) => void restart(pluginKey),
+          onViewLogs: pluginLogs.toggleLogs,
+          onRollbackRequest: marketplaceLifecycle.requestRollback,
+          onRemoveRequest: setRemovePluginId
+        }}
         onToggleFeature={() => void toggleFeature()}
         onRefresh={refresh}
-        onReview={setConsentPluginId}
-        onToggleEnabled={(entry) => void toggleEnabled(entry)}
-        onToggleLogs={pluginLogs.toggleLogs}
         onMarketplaceInstalled={marketplaceLifecycle.reloadAfterMutation}
-        onRollbackRequest={marketplaceLifecycle.requestRollback}
-        onRemoveRequest={setRemovePluginId}
         onUpdateDevPaths={updateDevPaths}
+        logsByPlugin={pluginLogs.logsByPlugin}
+        onShowLogs={pluginLogs.showLogs}
+        sourcesOpen={sourcesOpen}
+        setSourcesOpen={setSourcesOpen}
+        page={page}
+        onOpenShortcuts={() =>
+          useAppStore.getState().openSettingsTarget({ pane: 'shortcuts', repoId: null })
+        }
       />
-      <PluginInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={install} />
+      <PluginInstallDialog
+        key={installKind ?? 'closed'}
+        open={installKind !== null}
+        initialKind={installKind ?? 'local-path'}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInstallKind(null)
+          }
+        }}
+        onInstall={install}
+      />
       <PluginConsentDialog
         key={consentPlugin?.pluginKey ?? 'closed'}
         plugin={consentPlugin}

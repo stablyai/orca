@@ -12245,7 +12245,8 @@
           "title": "Restaurer le plugin ?",
           "description": "Restaure la version précédente de {{value0}}. Un accès modifié nécessite un nouvel examen.",
           "cancel": "Annuler",
-          "confirm": "Restaurer le plugin"
+          "confirm": "Restaurer le plugin",
+          "descriptionVersion": "Restaure {{value0}} {{value1}}. Un accès modifié nécessite un nouvel examen."
         },
         "PluginsSettingsSection": {
           "systemLabel": "Système de plugins",
@@ -12264,7 +12265,8 @@
           "logsFailed": "Impossible de charger les logs du plugin.",
           "rollbackFailed": "Impossible de restaurer la version précédente de ce plugin.",
           "fileTypeSuggestionsLabel": "Suggérer des plugins pour les fichiers inconnus",
-          "fileTypeSuggestionsDescription": "Propose un plugin du catalogue quand Orca ne peut pas ouvrir ou colorer un fichier."
+          "fileTypeSuggestionsDescription": "Propose un plugin du catalogue quand Orca ne peut pas ouvrir ou colorer un fichier.",
+          "restartFailed": "Impossible de redémarrer {{value0}}."
         },
         "PluginSettingsRow": {
           "blocked": "Bloquée",
@@ -13270,6 +13272,174 @@
             "description": "Icônes de fichiers et dossiers d’un plugin activé.",
             "builtIn": "Intégré"
           }
+        },
+        "PluginAddMenu": {
+          "add": "Ajouter un plugin",
+          "folder": "Depuis un dossier…",
+          "git": "Depuis une URL Git…",
+          "sources": "Sources du catalogue…"
+        },
+        "PluginManager": {
+          "verified": "vérifié",
+          "unverified": "non vérifié",
+          "catalogLoading": "Catalogue",
+          "catalogFailedTitle": "Impossible de charger le catalogue de plugins.",
+          "catalogFailedBody": "Vos plugins installés continuent de fonctionner.",
+          "retry": "Réessayer",
+          "sourceFailedTitle": "Impossible de charger ce catalogue.",
+          "sourceFailedBody": "Vos plugins installés continuent de fonctionner.",
+          "sources": "Sources…",
+          "sourceStaleTitle": "Impossible d’actualiser ce catalogue.",
+          "sourceStaleBody": "Copie de {{value0}} affichée.",
+          "shownOf": "{{value0}} sur {{value1}}",
+          "installed": "Installés",
+          "installedFailedTitle": "Impossible de lire vos plugins installés.",
+          "updatesTitle": "Mises à jour",
+          "sourcesLabel": "Sources du catalogue",
+          "refreshLabel": "Actualiser les catalogues",
+          "noResultsTitle": "Aucun plugin ne correspond à « {{value0}} »",
+          "noResults": "La recherche porte sur les noms, descriptions, éditeurs et catégories.",
+          "noneInstalledTitle": "Aucun plugin installé",
+          "noneInstalled": "Parcourez le catalogue pour trouver des thèmes, langages et commandes, ou ajoutez-en un depuis un dossier ou Git.",
+          "browseAll": "Parcourir tous les plugins",
+          "resultCount": "{{value0}} plugins correspondent",
+          "resultCountOne": "1 plugin correspond",
+          "updateAll": "Tout mettre à jour…"
+        },
+        "PluginDetailPage": {
+          "bundled": "Fourni avec Orca",
+          "localFolder": "Dossier local",
+          "gitUrl": "URL Git",
+          "stoppedTitle": "Arrêté après une erreur",
+          "stoppedBody": "Son code plantait sans cesse, donc Orca a cessé de le redémarrer. Il reste activé ; Redémarrer réessaie.",
+          "invalidTitle": "Orca ne peut pas charger ce plugin",
+          "reviewBody": "Vérifiez ce qu’il ajoute et ce à quoi il peut accéder, puis activez-le. Rien ne s’exécute avant.",
+          "needsOrcaTitle": "Nécessite Orca {{value0}} ou une version ultérieure",
+          "needsOrcaBody": "Vous avez Orca {{value0}}. Mettez Orca à jour pour installer ce plugin.",
+          "back": "Plugins",
+          "install": "Installer…",
+          "info": "Informations",
+          "version": "Version",
+          "latest": "Dernière",
+          "requires": "Nécessite",
+          "requiresValue": "Orca {{value0}} ou ultérieur",
+          "categories": "Catégories",
+          "pluginId": "ID du plugin",
+          "content": "Contenu",
+          "repository": "Dépôt"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Langue de l’interface",
+          "typeAppTheme": "Thème de l’app",
+          "typeTerminalTheme": "Thème du terminal",
+          "typeIconTheme": "Thème d’icônes de fichiers",
+          "typeSyntax": "Coloration syntaxique",
+          "typeInstructions": "Instructions pour les agents",
+          "typePanel": "Panneau latéral",
+          "typeWorker": "Code en arrière-plan",
+          "adds": "Ajoute à Orca",
+          "replaces": "Remplace votre raccourci pour {{value0}}",
+          "changeShortcuts": "Modifier dans Raccourcis",
+          "command": "Commande",
+          "panel": "Panneau latéral",
+          "recipe": "Recette de machine",
+          "access": "Peut accéder à",
+          "accessLoading": "Lecture du plugin…",
+          "noAccess": "Rien en dehors de ses propres fichiers",
+          "noAccessCode": "Son code s’exécute dans un bac à sable sans accès supplémentaire.",
+          "noAccessContent": "Contenu uniquement. Aucun code ne s’exécute.",
+          "logs": "Journaux",
+          "copyLogs": "Copier",
+          "accessFailed": "Impossible de lire ce à quoi il peut accéder",
+          "accessFailedDetail": "Orca n’a pas pu récupérer ni vérifier les fichiers de ce plugin.",
+          "retry": "Réessayer"
+        },
+        "PluginManagerRows": {
+          "crashedCount": "A planté {{value0}} fois de suite. Consultez ses journaux sur la page du plugin.",
+          "crashed": "A planté au démarrage. Consultez ses journaux sur la page du plugin.",
+          "remove": "Supprimer…",
+          "review": "Vérifier",
+          "restart": "Redémarrer",
+          "viewError": "Voir l’erreur",
+          "copyId": "Copier l’ID du plugin",
+          "checkUpdate": "Rechercher une mise à jour",
+          "rollback": "Revenir en arrière…",
+          "bundledWithOrca": "Fourni avec Orca",
+          "installName": "Installer {{value0}}",
+          "copied": "ID du plugin copié",
+          "copyFailed": "Impossible de copier l’ID du plugin.",
+          "stopped": "Arrêté",
+          "cantLoad": "Chargement impossible",
+          "on": "Activé",
+          "details": "Détails",
+          "enterKey": "Entrée",
+          "unverified": "Non vérifié",
+          "crashedOnce": "A planté une fois. Consultez ses journaux sur la page du plugin.",
+          "updateAvailable": "mise à jour {{value0}} disponible",
+          "updateLabel": "Mettre à jour {{value0}} vers {{value1}}",
+          "update": "Mettre à jour vers {{value0}}",
+          "needsOrca": "Nécessite Orca {{value0}}",
+          "off": "Désactivé",
+          "rollbackTo": "Revenir à {{value0}}…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "Les plugins sont désactivés",
+          "offBody": "Rien de vos plugins ne s’exécute. Activez-les pour parcourir le catalogue et utiliser ce que vous avez installé.",
+          "turnOn": "Activer les plugins",
+          "systemDescription": "Désactive tous les plugins d’un coup. Rien ne s’exécute tant que vous ne l’avez pas vérifié et activé.",
+          "pausedCount": "{{value0}} en pause",
+          "pausedUnknown": "Vos plugins installés sont en pause et reviendront quand vous activerez les plugins."
+        },
+        "PluginFilterPopover": {
+          "label": "Filtrer les plugins",
+          "kind": "Catégorie",
+          "catalog": "Catalogue",
+          "clear": "Effacer les filtres",
+          "themes": "Thèmes",
+          "languages": "Langages",
+          "icons": "Icônes",
+          "commands": "Commandes et panneaux",
+          "machines": "Machines et recettes"
+        },
+        "PluginUpdateAllDialog": {
+          "title": "Mettre à jour les plugins ?",
+          "reading": "Lecture des changements de chaque mise à jour…",
+          "someGrow": "Les mises à jour qui demandent un nouvel accès sont détaillées ci-dessous. Les autres ne changent que ce qu’elles ajoutent.",
+          "noneGrow": "Aucune de ces mises à jour ne demande de nouvel accès.",
+          "previewError": "Impossible de lire cette mise à jour. Elle sera ignorée.",
+          "newAccess": "Nouvel accès : {{value0}}",
+          "noNewAccess": "Aucun nouvel accès",
+          "failed": "Impossible de mettre à jour {{value0}}. Les autres ont été mis à jour.",
+          "cancel": "Annuler",
+          "updateOne": "Mettre à jour 1 plugin",
+          "updateMany": "Mettre à jour {{value0}} plugins",
+          "failedAll": "Impossible de mettre à jour {{value0}}. Rien n’a été mis à jour.",
+          "close": "Fermer",
+          "retry": "Réessayer",
+          "updated": "Mis à jour",
+          "needsOrca": "Nécessite Orca {{value0}} ou une version ultérieure. Mettez d’abord Orca à jour."
+        },
+        "PluginDetailInfo": {
+          "previous": "Précédente",
+          "updated": "Mis à jour",
+          "license": "Licence",
+          "homepage": "Page d’accueil",
+          "whatsNew": "Nouveautés",
+          "hashCopied": "Empreinte du contenu copiée",
+          "hashCopyFailed": "Impossible de copier l’empreinte.",
+          "copyHash": "Copier l’empreinte du contenu {{value0}}"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
+          "clearBoth": "Effacer la recherche et les filtres",
+          "pageGone": "Ce plugin n’est plus installé ni référencé."
+        },
+        "pluginContributions": {
+          "dark": "Sombre",
+          "light": "Clair",
+          "languageIncomplete": "Traduit à {{value0}} %, trop incomplet pour servir de langue à Orca",
+          "languageCoverage": "Langue de l’interface · traduite à {{value0}} %",
+          "agent": "Profil d’agent"
         }
       },
       "right": {
@@ -18264,7 +18434,15 @@
           "all": "Tous",
           "installed": "Installés",
           "searchLabel": "Rechercher des plugins",
-          "searchPlaceholder": "Rechercher des plugins, catégories ou éditeurs"
+          "searchPlaceholder": "Rechercher des plugins, catégories ou éditeurs",
+          "updates": "Mises à jour",
+          "clearSearch": "Effacer la recherche"
+        },
+        "PluginListGroup": {
+          "showAll": "Afficher {{value0}} de plus"
+        },
+        "PluginListRow": {
+          "official": "Officiel"
         }
       },
       "terminalPane": {

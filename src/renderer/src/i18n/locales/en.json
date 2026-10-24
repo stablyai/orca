@@ -12398,7 +12398,8 @@
           "title": "Roll back plugin?",
           "description": "Restores the previous version of {{value0}}. Changed access needs another review.",
           "cancel": "Cancel",
-          "confirm": "Roll back plugin"
+          "confirm": "Roll back plugin",
+          "descriptionVersion": "Restores {{value0}} {{value1}}. Changed access needs another review."
         },
         "PluginsSettingsSection": {
           "systemLabel": "Plugin system",
@@ -12417,7 +12418,8 @@
           "logsFailed": "Could not load plugin logs.",
           "rollbackFailed": "Couldn't roll back this plugin.",
           "fileTypeSuggestionsLabel": "Suggest plugins for unknown files",
-          "fileTypeSuggestionsDescription": "Offer a catalog plugin when Orca can’t open or highlight a file."
+          "fileTypeSuggestionsDescription": "Offer a catalog plugin when Orca can’t open or highlight a file.",
+          "restartFailed": "Couldn't restart {{value0}}."
         },
         "PluginSettingsRow": {
           "blocked": "Blocked",
@@ -13440,6 +13442,174 @@
             "description": "File and folder icons from an enabled plugin.",
             "builtIn": "Built-in"
           }
+        },
+        "PluginAddMenu": {
+          "add": "Add plugin",
+          "folder": "From a folder…",
+          "git": "From a Git URL…",
+          "sources": "Catalog sources…"
+        },
+        "PluginManager": {
+          "verified": "verified",
+          "unverified": "unverified",
+          "catalogLoading": "Catalog",
+          "catalogFailedTitle": "Couldn’t load the plugin catalog.",
+          "catalogFailedBody": "Your installed plugins keep working.",
+          "retry": "Retry",
+          "sourceFailedTitle": "Couldn’t load this catalog.",
+          "sourceFailedBody": "Your installed plugins keep working.",
+          "sources": "Sources…",
+          "sourceStaleTitle": "Couldn’t refresh this catalog.",
+          "sourceStaleBody": "Showing the copy from {{value0}}.",
+          "shownOf": "{{value0}} of {{value1}}",
+          "installed": "Installed",
+          "installedFailedTitle": "Couldn’t read your installed plugins.",
+          "updatesTitle": "Updates",
+          "sourcesLabel": "Catalog sources",
+          "refreshLabel": "Refresh catalogs",
+          "noResultsTitle": "No plugins match “{{value0}}”",
+          "noResults": "Search looks at names, descriptions, publishers and categories.",
+          "noneInstalledTitle": "No plugins installed",
+          "noneInstalled": "Browse the catalog for themes, languages and commands, or add one from a folder or Git.",
+          "browseAll": "Browse all plugins",
+          "resultCount": "{{value0}} plugins match",
+          "resultCountOne": "1 plugin matches",
+          "updateAll": "Update all…"
+        },
+        "PluginDetailPage": {
+          "bundled": "Bundled with Orca",
+          "localFolder": "Local folder",
+          "gitUrl": "Git URL",
+          "stoppedTitle": "Stopped after an error",
+          "stoppedBody": "Its code kept crashing, so Orca stopped restarting it. It’s still switched on; Restart tries again.",
+          "invalidTitle": "Orca can’t load this plugin",
+          "reviewBody": "Review what it adds and what it can reach, then enable it. Nothing runs before that.",
+          "needsOrcaTitle": "Needs Orca {{value0}} or later",
+          "needsOrcaBody": "You have Orca {{value0}}. Update Orca to install this plugin.",
+          "back": "Plugins",
+          "install": "Install…",
+          "info": "Info",
+          "version": "Version",
+          "latest": "Latest",
+          "requires": "Requires",
+          "requiresValue": "Orca {{value0}} or later",
+          "categories": "Categories",
+          "pluginId": "Plugin ID",
+          "content": "Content",
+          "repository": "Repository"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "Interface language",
+          "typeAppTheme": "App theme",
+          "typeTerminalTheme": "Terminal theme",
+          "typeIconTheme": "File icon theme",
+          "typeSyntax": "Syntax highlighting",
+          "typeInstructions": "Agent instructions",
+          "typePanel": "Sidebar panel",
+          "typeWorker": "Background code",
+          "adds": "Adds to Orca",
+          "replaces": "Replaces your shortcut for {{value0}}",
+          "changeShortcuts": "Change in Shortcuts",
+          "command": "Command",
+          "panel": "Sidebar panel",
+          "recipe": "Machine recipe",
+          "access": "Can access",
+          "accessLoading": "Reading the plugin…",
+          "noAccess": "Nothing outside its own files",
+          "noAccessCode": "Its code runs in a sandbox with no extra access.",
+          "noAccessContent": "Content only. It has no code that runs.",
+          "logs": "Logs",
+          "copyLogs": "Copy",
+          "accessFailed": "Couldn’t read what it can access",
+          "accessFailedDetail": "Orca couldn’t fetch or check this plugin’s files.",
+          "retry": "Retry"
+        },
+        "PluginManagerRows": {
+          "crashedCount": "Crashed {{value0}} times in a row. View its logs on the plugin page.",
+          "crashed": "Crashed while starting. View its logs on the plugin page.",
+          "remove": "Remove…",
+          "review": "Review",
+          "restart": "Restart",
+          "viewError": "View error",
+          "copyId": "Copy plugin ID",
+          "checkUpdate": "Check for update",
+          "rollback": "Roll back…",
+          "bundledWithOrca": "Bundled with Orca",
+          "installName": "Install {{value0}}",
+          "copied": "Plugin ID copied",
+          "copyFailed": "Couldn't copy the plugin ID.",
+          "stopped": "Stopped",
+          "cantLoad": "Can’t load",
+          "on": "On",
+          "details": "Details",
+          "enterKey": "Enter",
+          "unverified": "Unverified",
+          "crashedOnce": "Crashed once. View its logs on the plugin page.",
+          "updateAvailable": "update {{value0}} available",
+          "updateLabel": "Update {{value0}} to {{value1}}",
+          "update": "Update {{value0}}",
+          "needsOrca": "Needs Orca {{value0}}",
+          "off": "Off",
+          "rollbackTo": "Roll back to {{value0}}…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "Plugins are off",
+          "offBody": "Nothing from your plugins runs. Turn them on to browse the catalog and use what you installed.",
+          "turnOn": "Turn on plugins",
+          "systemDescription": "Turns every plugin off at once. Nothing runs until you review and enable it.",
+          "pausedCount": "{{value0}} paused",
+          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on."
+        },
+        "PluginFilterPopover": {
+          "label": "Filter plugins",
+          "kind": "Category",
+          "catalog": "Catalog",
+          "clear": "Clear filters",
+          "themes": "Themes",
+          "languages": "Languages",
+          "icons": "Icons",
+          "commands": "Commands & panels",
+          "machines": "Machines & recipes"
+        },
+        "PluginUpdateAllDialog": {
+          "title": "Update plugins?",
+          "reading": "Reading what each update changes…",
+          "someGrow": "Updates that ask for new access are expanded below. The others change only what they add.",
+          "noneGrow": "None of these updates asks for new access.",
+          "previewError": "Couldn’t read this update. It will be skipped.",
+          "newAccess": "New access: {{value0}}",
+          "noNewAccess": "No new access",
+          "failed": "Couldn’t update {{value0}}. The others were updated.",
+          "cancel": "Cancel",
+          "updateOne": "Update 1 plugin",
+          "updateMany": "Update {{value0}} plugins",
+          "failedAll": "Couldn’t update {{value0}}. Nothing was updated.",
+          "close": "Close",
+          "retry": "Try again",
+          "updated": "Updated",
+          "needsOrca": "Needs Orca {{value0}} or later. Update Orca first."
+        },
+        "PluginDetailInfo": {
+          "previous": "Previous",
+          "updated": "Updated",
+          "license": "License",
+          "homepage": "Homepage",
+          "whatsNew": "What’s new",
+          "hashCopied": "Content hash copied",
+          "hashCopyFailed": "Couldn't copy the hash.",
+          "copyHash": "Copy content hash {{value0}}"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "No plugins match these filters",
+          "clearBoth": "Clear search and filters",
+          "pageGone": "This plugin is no longer installed or listed."
+        },
+        "pluginContributions": {
+          "dark": "Dark",
+          "light": "Light",
+          "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
+          "languageCoverage": "Interface language · {{value0}}% translated",
+          "agent": "Agent profile"
         }
       },
       "right": {
@@ -18440,7 +18610,15 @@
           "all": "All",
           "installed": "Installed",
           "searchLabel": "Search plugins",
-          "searchPlaceholder": "Search plugins, categories, or publishers"
+          "searchPlaceholder": "Search plugins, categories, or publishers",
+          "updates": "Updates",
+          "clearSearch": "Clear search"
+        },
+        "PluginListGroup": {
+          "showAll": "Show {{value0}} more"
+        },
+        "PluginListRow": {
+          "official": "Official"
         }
       },
       "terminalPane": {

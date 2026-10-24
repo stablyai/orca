@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { PluginHostListEntry, PluginHostLogLine } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import type { PluginLogsState } from './PluginSettingsRow'
+
+export type PluginLogsState = {
+  loading: boolean
+  lines?: PluginHostLogLine[]
+  error?: string
+}
 
 export function usePluginLogs(
   mounted: boolean,
@@ -11,6 +16,7 @@ export function usePluginLogs(
   openLogs: ReadonlySet<string>
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   toggleLogs: (pluginKey: string) => void
+  showLogs: (pluginKey: string) => void
 } {
   const [openLogs, setOpenLogs] = useState<Set<string>>(() => new Set())
   const [logsByPlugin, setLogsByPlugin] = useState<Record<string, PluginLogsState>>({})
@@ -53,6 +59,16 @@ export function usePluginLogs(
     if (logsByPlugin[pluginKey]?.lines) {
       return
     }
+    fetchLogs(pluginKey)
+  }
+
+  /** Opens and re-reads a plugin's logs; a plugin page always shows the latest. */
+  const showLogs = (pluginKey: string): void => {
+    setOpenLogs((current) => new Set(current).add(pluginKey))
+    fetchLogs(pluginKey)
+  }
+
+  function fetchLogs(pluginKey: string): void {
     const requestId = ++nextRequestRef.current
     requestsRef.current[pluginKey] = requestId
     setLogsByPlugin((current) => ({ ...current, [pluginKey]: { loading: true } }))
@@ -83,5 +99,5 @@ export function usePluginLogs(
       })
   }
 
-  return { openLogs, logsByPlugin, toggleLogs }
+  return { openLogs, logsByPlugin, toggleLogs, showLogs }
 }

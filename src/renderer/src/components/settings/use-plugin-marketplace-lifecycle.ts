@@ -7,6 +7,7 @@ import {
 } from 'react'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
+import { pluginNeedsReview } from './plugin-status-presentation'
 
 type PluginMarketplaceLifecycleOptions = {
   mounted: boolean
@@ -14,7 +15,8 @@ type PluginMarketplaceLifecycleOptions = {
   plugins: readonly PluginHostListEntry[]
   applyCompletedMutation: (plugins: PluginHostListEntry[]) => void
   setPluginListError: (cause: unknown) => void
-  setConsentPluginId: Dispatch<SetStateAction<string | null>>
+  /** Opens review for these plugins, one after another. */
+  openReviews: (pluginKeys: readonly string[]) => void
   setBusyPluginKeys: Dispatch<SetStateAction<Set<string>>>
 }
 
@@ -24,12 +26,13 @@ export function usePluginMarketplaceLifecycle({
   plugins,
   applyCompletedMutation,
   setPluginListError,
-  setConsentPluginId,
+  openReviews,
   setBusyPluginKeys
 }: PluginMarketplaceLifecycleOptions): {
   rollbackPlugin: PluginHostListEntry | null
   rollbackError: string | null
-  reloadAfterMutation: (pluginKey: string) => Promise<void>
+  /** Reloads, then opens review for each changed plugin that now needs it, in turn. */
+  reloadAfterMutation: (pluginKeys: string | readonly string[]) => Promise<void>
   requestRollback: (pluginKey: string) => void
   cancelRollback: () => void
   confirmRollback: (pluginKey: string) => Promise<void>
@@ -45,17 +48,19 @@ export function usePluginMarketplaceLifecycle({
     }
   }, [mounted, rollbackPlugin, rollbackPluginId])
 
-  const reloadAfterMutation = async (pluginKey: string): Promise<void> => {
+  const reloadAfterMutation = async (pluginKeys: string | readonly string[]): Promise<void> => {
+    const changed = new Set(typeof pluginKeys === 'string' ? [pluginKeys] : pluginKeys)
     try {
       const nextPlugins = await window.api.plugins.list()
       if (!mountedRef.current) {
         return
       }
       applyCompletedMutation(nextPlugins)
-      const changedPlugin = nextPlugins.find((plugin) => plugin.pluginKey === pluginKey)
-      if (changedPlugin?.needsReconsent || changedPlugin?.status === 'pending') {
-        setConsentPluginId(pluginKey)
-      }
+      openReviews(
+        nextPlugins
+          .filter((plugin) => changed.has(plugin.pluginKey) && pluginNeedsReview(plugin))
+          .map((plugin) => plugin.pluginKey)
+      )
     } catch (cause) {
       if (mountedRef.current) {
         setPluginListError(cause)

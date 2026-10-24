@@ -111,7 +111,7 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     await orcaPage.getByRole('tab', { name: /^Installed/ }).click()
     const row = orcaPage.locator(`[data-plugin-key="${installed.pluginKey}"]`)
     await expect(row).toContainText('Needs review')
-    await row.getByRole('button', { name: 'Review & enable' }).click()
+    await row.getByRole('button', { name: 'Review', exact: true }).click()
     const consent = orcaPage.getByRole('dialog', { name: 'Review permissions' })
     await expect(consent).toBeVisible()
     await expect(consent).toContainText('Local folder')
@@ -119,7 +119,7 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
     await expect(consent.getByRole('button', { name: 'Keep Disabled' })).toBeFocused()
     await consent.getByRole('button', { name: 'Enable plugin' }).click()
     await expect(consent).toBeHidden()
-    await expect(row).toContainText('Enabled')
+    await expect(row).toContainText('On')
 
     const commandResults = await orcaPage.evaluate(async (pluginKey) => {
       const first = await window.api.plugins.invokeCommand({

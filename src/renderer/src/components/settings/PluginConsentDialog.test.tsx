@@ -127,6 +127,7 @@ describe('PluginConsentDialog', () => {
         pluginKey: 'acme.panel',
         name: 'Acme Panel',
         hasWorker: false,
+        execution: 'sandboxed-ui',
         capabilities: [{ kind: 'panels', description: 'Add an Acme panel' }]
       },
       vi.fn().mockResolvedValue(undefined)
@@ -138,6 +139,34 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).not.toContain('full access to your files')
   })
 
+  it('never calls a plugin content only when the host omits its profile', async () => {
+    await renderConsent(
+      { ...plugin, pluginKey: 'acme.old-host', hasWorker: false, capabilities: [] },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).not.toContain('Content only')
+    expect(document.body.textContent).toContain(
+      'Its commands and instructions can take actions when you or an agent use them.'
+    )
+  })
+
+  it('reviews a commands plugin as instructional even with no worker or keybindings', async () => {
+    await renderConsent(
+      {
+        ...plugin,
+        pluginKey: 'acme.commands',
+        hasWorker: false,
+        execution: 'instructional',
+        capabilities: []
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).not.toContain('Content only')
+    expect(document.body.textContent).toContain('Instructional')
+  })
+
   it('describes inert content without pretending it requested permissions', async () => {
     await renderConsent(
       {
@@ -145,6 +174,7 @@ describe('PluginConsentDialog', () => {
         pluginKey: 'acme.icons',
         name: 'Acme Icons',
         hasWorker: false,
+        execution: 'data',
         capabilities: []
       },
       vi.fn().mockResolvedValue(undefined)

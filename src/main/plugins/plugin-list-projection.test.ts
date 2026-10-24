@@ -218,6 +218,9 @@ describe('buildPluginList consent identity', () => {
       isDev: true
     }
 
+    const [entry] = await buildPluginList(serviceWith(plugin), emptyPluginLockfile())
+    // Why: a worker-less commands plugin still runs instructions, so the page must not say content only.
+    expect(entry).toMatchObject({ hasWorker: false, execution: 'instructional' })
     expect(
       (
         await buildPluginList(

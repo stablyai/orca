@@ -701,6 +701,11 @@
           }
         }
       },
+      "pluginCatalog": {
+        "PluginCatalogLayout": {
+          "searchPlaceholder": "Search plugins, categories, or publishers"
+        }
+      },
       "right": {
         "sidebar": {
           "AiVaultPanel": {
@@ -1416,6 +1421,59 @@
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
+        },
+        "PluginManager": {
+          "sourcesLabel": "Catalog sources"
+        },
+        "PluginManagerRows": {
+          "enterKey": "Enter",
+          "rollback": "Roll back…"
+        },
+        "PluginMarketplaceBrowser": {
+          "addSource": "Add marketplace",
+          "empty": "The configured marketplaces do not list any plugins.",
+          "emptyTitle": "Nothing listed yet",
+          "loading": "Loading marketplace plugins…",
+          "manageSources": "Manage sources",
+          "noInstalled": "Plugins you install appear here.",
+          "noInstalledTitle": "No plugins installed",
+          "noResults": "No marketplace plugins match this search.",
+          "noResultsTitle": "No matching plugins",
+          "noSources": "Add an official, community, or private Git marketplace to browse plugins.",
+          "noSourcesTitle": "No marketplaces configured",
+          "refresh": "Refresh",
+          "refreshing": "Refreshing…",
+          "tryAgain": "Try again"
+        },
+        "PluginMarketplaceListingRow": {
+          "blockedAction": "Blocked",
+          "checkUpdate": "Check for update",
+          "installed": "Installed",
+          "official": "Official"
+        },
+        "PluginSettingsOverview": {
+          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on."
+        },
+        "PluginSettingsRow": {
+          "hideLogs": "Hide logs",
+          "languageCoverage": "{{value0}} {{value1}}% translated",
+          "noDescription": "No description provided.",
+          "official": "Official",
+          "remove": "Remove",
+          "restartCount": " · {{value0}} restarts",
+          "reviewAndEnable": "Review & enable",
+          "rollback": "Roll back",
+          "runtimeError": "Stopped after an error. View logs for details.",
+          "viewAdvisory": "View advisory"
+        },
+        "PluginsSettingsSection": {
+          "empty": "Browse the All tab to install plugins from a marketplace.",
+          "emptyTitle": "No plugins installed yet",
+          "install": "Install plugin",
+          "loading": "Loading plugins…",
+          "noInstalledResults": "No installed plugins match this search.",
+          "noInstalledResultsTitle": "No matching plugins",
+          "systemDescription": "Nothing runs until you review and enable it."
         },
         "PrivacyPane": {
           "afec8b03be": "ci"

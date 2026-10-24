@@ -12094,7 +12094,8 @@
           "title": "플러그인을 롤백하시겠습니까?",
           "description": "{{value0}}의 이전 버전을 복원합니다. 접근 권한이 바뀌면 다시 검토해야 합니다.",
           "cancel": "취소",
-          "confirm": "플러그인 롤백"
+          "confirm": "플러그인 롤백",
+          "descriptionVersion": "{{value0}} {{value1}}을(를) 복원합니다. 변경된 접근 권한은 다시 검토해야 합니다."
         },
         "PluginsSettingsSection": {
           "systemLabel": "플러그인 시스템",
@@ -12113,7 +12114,8 @@
           "logsFailed": "플러그인 로그를 로드할 수 없습니다.",
           "rollbackFailed": "이 플러그인을 롤백할 수 없습니다.",
           "fileTypeSuggestionsLabel": "알 수 없는 파일에 플러그인 제안",
-          "fileTypeSuggestionsDescription": "Orca가 열거나 강조할 수 없는 파일에 카탈로그 플러그인을 제안합니다."
+          "fileTypeSuggestionsDescription": "Orca가 열거나 강조할 수 없는 파일에 카탈로그 플러그인을 제안합니다.",
+          "restartFailed": "{{value0}}을(를) 다시 시작할 수 없습니다."
         },
         "PluginSettingsRow": {
           "blocked": "차단됨",
@@ -13110,6 +13112,174 @@
             "description": "활성화된 플러그인의 파일 및 폴더 아이콘입니다.",
             "builtIn": "기본 제공"
           }
+        },
+        "PluginAddMenu": {
+          "add": "플러그인 추가",
+          "folder": "폴더에서…",
+          "git": "Git URL에서…",
+          "sources": "카탈로그 소스…"
+        },
+        "PluginManager": {
+          "verified": "확인됨",
+          "unverified": "확인되지 않음",
+          "catalogLoading": "카탈로그",
+          "catalogFailedTitle": "플러그인 카탈로그를 불러올 수 없습니다.",
+          "catalogFailedBody": "설치된 플러그인은 계속 작동합니다.",
+          "retry": "다시 시도",
+          "sourceFailedTitle": "이 카탈로그를 불러올 수 없습니다.",
+          "sourceFailedBody": "설치된 플러그인은 계속 작동합니다.",
+          "sources": "소스…",
+          "sourceStaleTitle": "이 카탈로그를 새로 고칠 수 없습니다.",
+          "sourceStaleBody": "{{value0}}의 사본을 표시합니다.",
+          "shownOf": "{{value1}}개 중 {{value0}}개",
+          "installed": "설치됨",
+          "installedFailedTitle": "설치된 플러그인을 읽을 수 없습니다.",
+          "updatesTitle": "업데이트",
+          "sourcesLabel": "카탈로그 소스",
+          "refreshLabel": "카탈로그 새로 고침",
+          "noResultsTitle": "‘{{value0}}’와(과) 일치하는 플러그인이 없습니다",
+          "noResults": "이름, 설명, 게시자, 카테고리에서 검색합니다.",
+          "noneInstalledTitle": "설치된 플러그인이 없습니다",
+          "noneInstalled": "카탈로그에서 테마, 언어, 명령을 찾아보거나 폴더나 Git에서 추가하세요.",
+          "browseAll": "모든 플러그인 보기",
+          "resultCount": "플러그인 {{value0}}개 일치",
+          "resultCountOne": "플러그인 1개 일치",
+          "updateAll": "모두 업데이트…"
+        },
+        "PluginDetailPage": {
+          "bundled": "Orca에 기본 포함",
+          "localFolder": "로컬 폴더",
+          "gitUrl": "Git URL",
+          "stoppedTitle": "오류로 인해 중지됨",
+          "stoppedBody": "코드가 계속 충돌해서 Orca가 다시 시작을 멈췄습니다. 여전히 켜져 있으며, 다시 시작을 누르면 다시 시도합니다.",
+          "invalidTitle": "Orca가 이 플러그인을 불러올 수 없습니다",
+          "reviewBody": "추가되는 내용과 접근할 수 있는 범위를 검토한 후 사용하도록 설정하세요. 그 전에는 아무것도 실행되지 않습니다.",
+          "needsOrcaTitle": "Orca {{value0}} 이상이 필요합니다",
+          "needsOrcaBody": "현재 Orca {{value0}}을(를) 사용 중입니다. 이 플러그인을 설치하려면 Orca를 업데이트하세요.",
+          "back": "플러그인",
+          "install": "설치…",
+          "info": "정보",
+          "version": "버전",
+          "latest": "최신",
+          "requires": "요구 사항",
+          "requiresValue": "Orca {{value0}} 이상",
+          "categories": "카테고리",
+          "pluginId": "플러그인 ID",
+          "content": "콘텐츠",
+          "repository": "저장소"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "인터페이스 언어",
+          "typeAppTheme": "앱 테마",
+          "typeTerminalTheme": "터미널 테마",
+          "typeIconTheme": "파일 아이콘 테마",
+          "typeSyntax": "구문 강조",
+          "typeInstructions": "에이전트 지침",
+          "typePanel": "사이드바 패널",
+          "typeWorker": "백그라운드 코드",
+          "adds": "Orca에 추가되는 항목",
+          "replaces": "{{value0}}의 단축키를 대체합니다",
+          "changeShortcuts": "단축키에서 변경",
+          "command": "명령",
+          "panel": "사이드바 패널",
+          "recipe": "머신 레시피",
+          "access": "접근 가능 범위",
+          "accessLoading": "플러그인을 읽는 중…",
+          "noAccess": "자체 파일 외에는 접근하지 않음",
+          "noAccessCode": "코드는 추가 접근 권한이 없는 샌드박스에서 실행됩니다.",
+          "noAccessContent": "콘텐츠 전용입니다. 실행되는 코드가 없습니다.",
+          "logs": "로그",
+          "copyLogs": "복사",
+          "accessFailed": "접근할 수 있는 항목을 읽을 수 없습니다",
+          "accessFailedDetail": "Orca가 이 플러그인의 파일을 가져오거나 확인할 수 없습니다.",
+          "retry": "다시 시도"
+        },
+        "PluginManagerRows": {
+          "crashedCount": "{{value0}}번 연속으로 충돌했습니다. 플러그인 페이지에서 로그를 확인하세요.",
+          "crashed": "시작하는 중에 충돌했습니다. 플러그인 페이지에서 로그를 확인하세요.",
+          "remove": "제거…",
+          "review": "검토",
+          "restart": "다시 시작",
+          "viewError": "오류 보기",
+          "copyId": "플러그인 ID 복사",
+          "checkUpdate": "업데이트 확인",
+          "rollback": "롤백…",
+          "bundledWithOrca": "Orca에 기본 포함",
+          "installName": "{{value0}} 설치",
+          "copied": "플러그인 ID를 복사했습니다",
+          "copyFailed": "플러그인 ID를 복사할 수 없습니다.",
+          "stopped": "중지됨",
+          "cantLoad": "불러올 수 없음",
+          "on": "켜짐",
+          "details": "세부 정보",
+          "enterKey": "Enter",
+          "unverified": "확인되지 않음",
+          "crashedOnce": "한 번 충돌했습니다. 플러그인 페이지에서 로그를 확인하세요.",
+          "updateAvailable": "업데이트 {{value0}} 사용 가능",
+          "updateLabel": "{{value0}}을(를) {{value1}}(으)로 업데이트",
+          "update": "{{value0}}(으)로 업데이트",
+          "needsOrca": "Orca {{value0}} 필요",
+          "off": "꺼짐",
+          "rollbackTo": "{{value0}}(으)로 되돌리기…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "플러그인이 꺼져 있습니다",
+          "offBody": "플러그인이 아무것도 실행되지 않습니다. 켜면 카탈로그를 둘러보고 설치한 항목을 사용할 수 있습니다.",
+          "turnOn": "플러그인 켜기",
+          "systemDescription": "모든 플러그인을 한 번에 끕니다. 검토하고 사용하도록 설정하기 전에는 아무것도 실행되지 않습니다.",
+          "pausedCount": "{{value0}}개 일시 중지됨",
+          "pausedUnknown": "설치된 플러그인은 일시 중지되었으며 플러그인을 켜면 다시 사용할 수 있습니다."
+        },
+        "PluginFilterPopover": {
+          "label": "플러그인 필터",
+          "kind": "카테고리",
+          "catalog": "카탈로그",
+          "clear": "필터 지우기",
+          "themes": "테마",
+          "languages": "언어",
+          "icons": "아이콘",
+          "commands": "명령 및 패널",
+          "machines": "머신 및 레시피"
+        },
+        "PluginUpdateAllDialog": {
+          "title": "플러그인을 업데이트할까요?",
+          "reading": "각 업데이트의 변경 사항을 읽는 중…",
+          "someGrow": "새 접근 권한을 요청하는 업데이트는 아래에 펼쳐 표시됩니다. 나머지는 추가되는 항목만 바뀝니다.",
+          "noneGrow": "새 접근 권한을 요청하는 업데이트가 없습니다.",
+          "previewError": "이 업데이트를 읽을 수 없습니다. 건너뜁니다.",
+          "newAccess": "새 접근 권한: {{value0}}",
+          "noNewAccess": "새 접근 권한 없음",
+          "failed": "{{value0}}을(를) 업데이트할 수 없습니다. 나머지는 업데이트되었습니다.",
+          "cancel": "취소",
+          "updateOne": "플러그인 1개 업데이트",
+          "updateMany": "플러그인 {{value0}}개 업데이트",
+          "failedAll": "{{value0}}을(를) 업데이트할 수 없습니다. 아무것도 업데이트되지 않았습니다.",
+          "close": "닫기",
+          "retry": "다시 시도",
+          "updated": "업데이트됨",
+          "needsOrca": "Orca {{value0}} 이상이 필요합니다. 먼저 Orca를 업데이트하세요."
+        },
+        "PluginDetailInfo": {
+          "previous": "이전 버전",
+          "updated": "업데이트",
+          "license": "라이선스",
+          "homepage": "홈페이지",
+          "whatsNew": "새로운 기능",
+          "hashCopied": "콘텐츠 해시를 복사했습니다",
+          "hashCopyFailed": "해시를 복사할 수 없습니다.",
+          "copyHash": "콘텐츠 해시 {{value0}} 복사"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "이 필터와 일치하는 플러그인이 없습니다",
+          "clearBoth": "검색 및 필터 지우기",
+          "pageGone": "이 플러그인은 더 이상 설치되어 있거나 목록에 없습니다."
+        },
+        "pluginContributions": {
+          "dark": "다크",
+          "light": "라이트",
+          "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
+          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
+          "agent": "에이전트 프로필"
         }
       },
       "right": {
@@ -18104,7 +18274,15 @@
           "all": "All",
           "installed": "Installed",
           "searchLabel": "Search plugins",
-          "searchPlaceholder": "플러그인, 카테고리 또는 게시자를 검색하세요."
+          "searchPlaceholder": "플러그인, 카테고리 또는 게시자를 검색하세요.",
+          "updates": "업데이트",
+          "clearSearch": "검색 지우기"
+        },
+        "PluginListGroup": {
+          "showAll": "{{value0}}개 더 보기"
+        },
+        "PluginListRow": {
+          "official": "공식"
         }
       },
       "terminalPane": {

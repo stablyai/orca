@@ -12094,7 +12094,8 @@
           "title": "プラグインをロールバックしますか？",
           "description": "{{value0}} を以前のバージョンに戻します。アクセス権が変わった場合は再確認が必要です。",
           "cancel": "キャンセル",
-          "confirm": "プラグインをロールバック"
+          "confirm": "プラグインをロールバック",
+          "descriptionVersion": "{{value0}} {{value1}} を復元します。変更されたアクセスは再確認が必要です。"
         },
         "PluginsSettingsSection": {
           "systemLabel": "プラグインシステム",
@@ -12113,7 +12114,8 @@
           "logsFailed": "プラグインログをロードできませんでした。",
           "rollbackFailed": "このプラグインを以前のバージョンに戻せませんでした。",
           "fileTypeSuggestionsLabel": "不明なファイルにプラグインを提案",
-          "fileTypeSuggestionsDescription": "Orca で開けない、またはハイライトできないファイルにカタログのプラグインを提案します。"
+          "fileTypeSuggestionsDescription": "Orca で開けない、またはハイライトできないファイルにカタログのプラグインを提案します。",
+          "restartFailed": "{{value0}} を再起動できませんでした。"
         },
         "PluginSettingsRow": {
           "blocked": "ブロック中",
@@ -13110,6 +13112,174 @@
             "description": "有効なプラグインのファイルとフォルダーのアイコンです。",
             "builtIn": "組み込み"
           }
+        },
+        "PluginAddMenu": {
+          "add": "プラグインを追加",
+          "folder": "フォルダーから…",
+          "git": "Git URL から…",
+          "sources": "カタログのソース…"
+        },
+        "PluginManager": {
+          "verified": "検証済み",
+          "unverified": "未検証",
+          "catalogLoading": "カタログ",
+          "catalogFailedTitle": "プラグインカタログを読み込めませんでした。",
+          "catalogFailedBody": "インストール済みのプラグインは引き続き動作します。",
+          "retry": "再試行",
+          "sourceFailedTitle": "このカタログを読み込めませんでした。",
+          "sourceFailedBody": "インストール済みのプラグインは引き続き動作します。",
+          "sources": "ソース…",
+          "sourceStaleTitle": "このカタログを更新できませんでした。",
+          "sourceStaleBody": "{{value0}} のコピーを表示しています。",
+          "shownOf": "{{value1}} 件中 {{value0}} 件",
+          "installed": "インストール済み",
+          "installedFailedTitle": "インストール済みのプラグインを読み取れませんでした。",
+          "updatesTitle": "アップデート",
+          "sourcesLabel": "カタログのソース",
+          "refreshLabel": "カタログを更新",
+          "noResultsTitle": "「{{value0}}」に一致するプラグインはありません",
+          "noResults": "名前、説明、発行元、カテゴリを検索します。",
+          "noneInstalledTitle": "インストール済みのプラグインはありません",
+          "noneInstalled": "カタログでテーマ、言語、コマンドを探すか、フォルダーや Git から追加してください。",
+          "browseAll": "すべてのプラグインを表示",
+          "resultCount": "{{value0}} 件のプラグインが一致",
+          "resultCountOne": "1 件のプラグインが一致",
+          "updateAll": "すべてアップデート…"
+        },
+        "PluginDetailPage": {
+          "bundled": "Orca に同梱",
+          "localFolder": "ローカルフォルダー",
+          "gitUrl": "Git URL",
+          "stoppedTitle": "エラーのため停止しました",
+          "stoppedBody": "コードのクラッシュが続いたため、Orca は再起動を停止しました。オンのままです。「再起動」で再試行します。",
+          "invalidTitle": "Orca はこのプラグインを読み込めません",
+          "reviewBody": "追加される内容とアクセスできる範囲を確認してから有効にしてください。それまでは何も実行されません。",
+          "needsOrcaTitle": "Orca {{value0}} 以降が必要です",
+          "needsOrcaBody": "現在の Orca は {{value0}} です。このプラグインをインストールするには Orca を更新してください。",
+          "back": "プラグイン",
+          "install": "インストール…",
+          "info": "情報",
+          "version": "バージョン",
+          "latest": "最新",
+          "requires": "必要条件",
+          "requiresValue": "Orca {{value0}} 以降",
+          "categories": "カテゴリ",
+          "pluginId": "プラグイン ID",
+          "content": "内容",
+          "repository": "リポジトリ"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "表示言語",
+          "typeAppTheme": "アプリのテーマ",
+          "typeTerminalTheme": "ターミナルのテーマ",
+          "typeIconTheme": "ファイルアイコンのテーマ",
+          "typeSyntax": "シンタックスハイライト",
+          "typeInstructions": "Agent 向けの指示",
+          "typePanel": "サイドバーパネル",
+          "typeWorker": "バックグラウンドコード",
+          "adds": "Orca に追加されるもの",
+          "replaces": "{{value0}} のショートカットを置き換えます",
+          "changeShortcuts": "ショートカットで変更",
+          "command": "コマンド",
+          "panel": "サイドバーパネル",
+          "recipe": "マシンレシピ",
+          "access": "アクセスできる範囲",
+          "accessLoading": "プラグインを読み込み中…",
+          "noAccess": "自身のファイル以外にはアクセスしません",
+          "noAccessCode": "コードは追加のアクセス権のないサンドボックスで実行されます。",
+          "noAccessContent": "コンテンツのみです。実行されるコードはありません。",
+          "logs": "ログ",
+          "copyLogs": "コピー",
+          "accessFailed": "アクセスできる範囲を読み取れませんでした",
+          "accessFailedDetail": "Orca はこのプラグインのファイルを取得または確認できませんでした。",
+          "retry": "再試行"
+        },
+        "PluginManagerRows": {
+          "crashedCount": "{{value0}} 回連続でクラッシュしました。プラグインのページでログを確認してください。",
+          "crashed": "起動時にクラッシュしました。プラグインのページでログを確認してください。",
+          "remove": "削除…",
+          "review": "確認",
+          "restart": "再起動",
+          "viewError": "エラーを表示",
+          "copyId": "プラグイン ID をコピー",
+          "checkUpdate": "アップデートを確認",
+          "rollback": "ロールバック…",
+          "bundledWithOrca": "Orca に同梱",
+          "installName": "{{value0}} をインストール",
+          "copied": "プラグイン ID をコピーしました",
+          "copyFailed": "プラグイン ID をコピーできませんでした。",
+          "stopped": "停止",
+          "cantLoad": "読み込めません",
+          "on": "オン",
+          "details": "詳細",
+          "enterKey": "Enter",
+          "unverified": "未検証",
+          "crashedOnce": "1 回クラッシュしました。プラグインのページでログを確認してください。",
+          "updateAvailable": "アップデート {{value0}} あり",
+          "updateLabel": "{{value0}} を {{value1}} にアップデート",
+          "update": "{{value0}} にアップデート",
+          "needsOrca": "Orca {{value0}} が必要",
+          "off": "オフ",
+          "rollbackTo": "{{value0}} に戻す…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "プラグインはオフです",
+          "offBody": "プラグインは何も実行されていません。オンにすると、カタログを閲覧し、インストールしたものを使えます。",
+          "turnOn": "プラグインをオンにする",
+          "systemDescription": "すべてのプラグインを一度にオフにします。確認して有効にするまで何も実行されません。",
+          "pausedCount": "{{value0}} 件を一時停止中",
+          "pausedUnknown": "インストール済みのプラグインは一時停止中です。プラグインをオンにすると再開します。"
+        },
+        "PluginFilterPopover": {
+          "label": "プラグインを絞り込む",
+          "kind": "カテゴリ",
+          "catalog": "カタログ",
+          "clear": "絞り込みをクリア",
+          "themes": "テーマ",
+          "languages": "言語",
+          "icons": "アイコン",
+          "commands": "コマンドとパネル",
+          "machines": "マシンとレシピ"
+        },
+        "PluginUpdateAllDialog": {
+          "title": "プラグインをアップデートしますか？",
+          "reading": "各アップデートの変更点を読み込み中…",
+          "someGrow": "新しいアクセスを求めるアップデートは下に展開して表示されます。その他は追加内容だけが変わります。",
+          "noneGrow": "どのアップデートも新しいアクセスを求めていません。",
+          "previewError": "このアップデートを読み込めませんでした。スキップされます。",
+          "newAccess": "新しいアクセス: {{value0}}",
+          "noNewAccess": "新しいアクセスなし",
+          "failed": "{{value0}} をアップデートできませんでした。その他はアップデートされました。",
+          "cancel": "キャンセル",
+          "updateOne": "1 件のプラグインをアップデート",
+          "updateMany": "{{value0}} 件のプラグインをアップデート",
+          "failedAll": "{{value0}} を更新できませんでした。何も更新されていません。",
+          "close": "閉じる",
+          "retry": "再試行",
+          "updated": "更新済み",
+          "needsOrca": "Orca {{value0}} 以降が必要です。先に Orca を更新してください。"
+        },
+        "PluginDetailInfo": {
+          "previous": "以前のバージョン",
+          "updated": "更新日",
+          "license": "ライセンス",
+          "homepage": "ホームページ",
+          "whatsNew": "新機能",
+          "hashCopied": "コンテンツハッシュをコピーしました",
+          "hashCopyFailed": "ハッシュをコピーできませんでした。",
+          "copyHash": "コンテンツハッシュ {{value0}} をコピー"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "これらのフィルターに一致するプラグインはありません",
+          "clearBoth": "検索とフィルターをクリア",
+          "pageGone": "このプラグインはインストールもリスト掲載もされていません。"
+        },
+        "pluginContributions": {
+          "dark": "ダーク",
+          "light": "ライト",
+          "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
+          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
+          "agent": "Agent プロファイル"
         }
       },
       "right": {
@@ -18104,7 +18274,15 @@
           "all": "全て",
           "installed": "インストール済み",
           "searchLabel": "プラグインを検索",
-          "searchPlaceholder": "プラグイン、カテゴリ、公開元を検索"
+          "searchPlaceholder": "プラグイン、カテゴリ、公開元を検索",
+          "updates": "アップデート",
+          "clearSearch": "検索をクリア"
+        },
+        "PluginListGroup": {
+          "showAll": "さらに {{value0}} 件を表示"
+        },
+        "PluginListRow": {
+          "official": "公式"
         }
       },
       "terminalPane": {

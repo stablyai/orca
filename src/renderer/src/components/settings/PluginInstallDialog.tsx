@@ -21,6 +21,8 @@ type PluginInstallDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onInstall: (source: PluginHostInstallSource) => Promise<void>
+  /** The tab it opens on; remount (key) to apply a new one. */
+  initialKind?: 'local-path' | 'git'
 }
 
 function installValidationMessage(reason: string): string {
@@ -51,9 +53,10 @@ function installValidationMessage(reason: string): string {
 export function PluginInstallDialog({
   open,
   onOpenChange,
-  onInstall
+  onInstall,
+  initialKind = 'local-path'
 }: PluginInstallDialogProps): React.JSX.Element {
-  const [kind, setKind] = useState<'local-path' | 'git'>('local-path')
+  const [kind, setKind] = useState<'local-path' | 'git'>(initialKind)
   const [localPath, setLocalPath] = useState('')
   const [gitUrl, setGitUrl] = useState('')
   const [error, setError] = useState<string | null>(null)

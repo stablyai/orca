@@ -118,7 +118,7 @@ async function installMarketplacePluginThroughUi(
   pluginName: string,
   consentDialogName: string
 ): Promise<void> {
-  const listing = page.locator(`[data-marketplace-plugin-key="${pluginKey}"]`)
+  const listing = page.locator(`[data-plugin-key="${pluginKey}"]`)
   await expect(listing).toBeVisible()
   await listing.getByRole('button', { name: 'Install' }).click()
   const preview = page.getByRole('dialog', { name: pluginName })
@@ -138,7 +138,7 @@ async function enableInstalledPluginThroughUi(
   await page.getByRole('tab', { name: /^Installed/ }).click()
   const plugin = page.locator(`[data-plugin-key="${pluginKey}"]`)
   await expect(plugin).toBeVisible()
-  await plugin.getByRole('button', { name: 'Review & enable' }).click()
+  await plugin.getByRole('button', { name: 'Review', exact: true }).click()
   const consent = page.getByRole('dialog', { name: consentDialogName })
   await expect(consent).toBeVisible()
   await consent.getByRole('button', { name: 'Enable plugin' }).click()
@@ -171,9 +171,9 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
 async function runMarketplaceJourney(page: Page): Promise<void> {
   const startedAt = Date.now()
   await openPluginSettings(page)
-  const pluginSystem = page.getByRole('switch', { name: 'Plugin system' })
-  await pluginSystem.click()
-  await expect(pluginSystem).toBeChecked()
+  // Why a button: with plugins off the page offers one action, and the switch appears once on.
+  await page.getByRole('button', { name: 'Turn on plugins' }).click()
+  await expect(page.getByRole('switch', { name: 'Plugin system' })).toBeChecked()
   await expect
     .poll(
       () =>

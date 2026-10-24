@@ -29,21 +29,29 @@ vi.mock('../ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DropdownMenuItem: ({
     children,
-    onSelect
+    onSelect,
+    disabled
   }: {
     children: React.ReactNode
     onSelect?: () => void
-  }) => <button onClick={onSelect}>{children}</button>
+    disabled?: boolean
+  }) => (
+    <button disabled={disabled} onClick={onSelect}>
+      {children}
+    </button>
+  ),
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: () => null
+}))
+
+vi.mock('../ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: () => null
 }))
 
 vi.mock('./PluginInstallDialog', () => ({ PluginInstallDialog: () => null }))
-vi.mock('./PluginMarketplaceBrowser', () => ({
-  PluginMarketplaceBrowser: ({
-    renderInstalledContent
-  }: {
-    renderInstalledContent?: (search: string) => React.ReactNode
-  }) => <>{renderInstalledContent?.('')}</>
-}))
 vi.mock('./PluginConsentDialog', () => ({
   PluginConsentDialog: ({
     plugin,
@@ -160,11 +168,15 @@ function installApi(overrides: Record<string, unknown> = {}): {
     value: {
       plugins: {
         list: vi.fn().mockResolvedValue([plugin]),
+        getRollbackVersion: vi.fn().mockResolvedValue(null),
+        getInstalledManifest: vi.fn().mockResolvedValue(null),
         onChanged: vi.fn().mockReturnValue(unsubscribe),
         refresh: vi.fn().mockResolvedValue([plugin]),
         setEnabled: vi.fn().mockResolvedValue([{ ...plugin, status: 'disabled' }]),
         remove: vi.fn().mockResolvedValue([]),
         getLogs: vi.fn().mockResolvedValue([]),
+        listMarketplaces: vi.fn().mockResolvedValue([]),
+        listMarketplacePlugins: vi.fn().mockResolvedValue([]),
         consent: vi.fn().mockResolvedValue([plugin]),
         install: vi.fn(),
         rollbackMarketplacePlugin: vi.fn().mockResolvedValue({
@@ -176,7 +188,9 @@ function installApi(overrides: Record<string, unknown> = {}): {
           resolvedCommit: 'previous-commit'
         }),
         ...overrides
-      }
+      },
+      updater: { getVersion: vi.fn().mockResolvedValue('1.4.0') },
+      ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) }
     }
   })
   return { unsubscribe }
@@ -237,13 +251,16 @@ describe('PluginsSettingsSection lifecycle', () => {
       { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
       updateSettings
     )
-    const featureSwitch = container.querySelector('[aria-labelledby="plugin-system-label"]')
-    if (!featureSwitch) {
-      throw new Error('missing feature switch')
+    const turnOn = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Turn on plugins'
+    )
+    if (!turnOn) {
+      throw new Error('missing turn-on action')
     }
-    expect(window.api.plugins.list).not.toHaveBeenCalled()
+    // Why: with plugins off the pane still lists what is installed, dimmed.
+    expect(container.textContent).toContain('Notes')
 
-    await act(async () => click(featureSwitch))
+    await act(async () => click(turnOn))
 
     expect(updateSettings).toHaveBeenCalledWith({ pluginSystemEnabled: true })
     expect(window.api.plugins.refresh).toHaveBeenCalledOnce()
@@ -268,7 +285,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     })
 
     const removeAction = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Remove'
+      (button) => button.textContent === 'Remove…'
     )
     if (!removeAction) {
       throw new Error('missing remove action')
@@ -309,6 +326,31 @@ describe('PluginsSettingsSection lifecycle', () => {
     ).toBe(true)
   })
 
+  it('shows what is true after a Restart fails halfway', async () => {
+    const crashed = { ...plugin, status: 'errored' as const }
+    const stopped = { ...plugin, status: 'disabled' as const }
+    const list = vi.fn().mockResolvedValueOnce([crashed]).mockResolvedValue([stopped])
+    installApi({
+      list,
+      setEnabled: vi
+        .fn()
+        .mockResolvedValueOnce([stopped])
+        .mockRejectedValueOnce(new Error('worker failed to start'))
+    })
+    const { container } = await renderSection()
+    const restart = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Restart'
+    )
+    if (!restart) {
+      throw new Error('missing restart action')
+    }
+
+    await act(async () => click(restart))
+
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[aria-label="Enable Notes"]')).not.toBeNull()
+  })
+
   it('confirms marketplace rollback before invoking plugin IPC', async () => {
     const marketplacePlugin: PluginHostListEntry = {
       ...plugin,
@@ -323,10 +365,16 @@ describe('PluginsSettingsSection lifecycle', () => {
         }
       }
     }
-    installApi({ list: vi.fn().mockResolvedValue([marketplacePlugin]) })
+    installApi({
+      list: vi.fn().mockResolvedValue([marketplacePlugin]),
+      getRollbackVersion: vi.fn().mockResolvedValue('0.9.0')
+    })
     const { container } = await renderSection()
+    expect(window.api.plugins.getRollbackVersion).toHaveBeenCalledWith({
+      pluginKey: plugin.pluginKey
+    })
     const rollbackAction = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Roll back'
+      (button) => button.textContent === 'Roll back to 0.9.0…'
     )
     if (!rollbackAction) {
       throw new Error('missing rollback action')
@@ -345,6 +393,24 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(window.api.plugins.rollbackMarketplacePlugin).toHaveBeenCalledWith({
       pluginKey: plugin.pluginKey
     })
+  })
+
+  it('offers no rollback when no earlier version is kept', async () => {
+    installApi({
+      list: vi.fn().mockResolvedValue([
+        {
+          ...plugin,
+          source: {
+            kind: 'marketplace',
+            reference: 'https://example.com/notes.git',
+            resolvedCommit: 'current-commit',
+            contentHash: 'current-content'
+          }
+        }
+      ])
+    })
+    const { container } = await renderSection()
+    expect(container.textContent).not.toContain('Roll back')
   })
 
   it('accepts overlapping mutations in completion order without regressing final state', async () => {
@@ -386,7 +452,7 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('fetches bounded logs only when their disclosure opens', async () => {
     const getLogs = vi.fn().mockResolvedValue([{ ts: 1, level: 'info', line: 'started' }])
-    installApi({ getLogs })
+    installApi({ getLogs, list: vi.fn().mockResolvedValue([{ ...plugin, hasWorker: true }]) })
     const { container } = await renderSection()
     expect(getLogs).not.toHaveBeenCalled()
     const viewLogs = Array.from(container.querySelectorAll('button')).find(
@@ -418,7 +484,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     const reinstalledList = deferred<PluginHostListEntry[]>()
     const oldLogs = deferred<Awaited<ReturnType<typeof window.api.plugins.getLogs>>>()
     const freshLogs = deferred<Awaited<ReturnType<typeof window.api.plugins.getLogs>>>()
-    const pendingPlugin = { ...plugin, status: 'pending' as const }
+    const pendingPlugin = { ...plugin, status: 'pending' as const, hasWorker: true }
     let onChanged: (() => void) | undefined
     const unsubscribe = vi.fn()
     installApi({
@@ -439,10 +505,10 @@ describe('PluginsSettingsSection lifecycle', () => {
         (button) => button.textContent?.trim() === label
       )
 
-    act(() => click(findButton('Review & enable')!))
+    act(() => click(findButton('Review')!))
     act(() => click(findButton('Mark consent dirty')!))
     act(() => click(findButton('View logs')!))
-    act(() => click(findButton('Remove')!))
+    act(() => click(findButton('Remove…')!))
     expect(container.textContent).toContain('Consent local state')
     expect(container.textContent).toContain('Confirm remove')
 
@@ -455,7 +521,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     await act(async () => reinstalledList.resolve([pendingPlugin]))
     expect(container.textContent).not.toContain('Loading logs…')
 
-    act(() => click(findButton('Review & enable')!))
+    act(() => click(findButton('Review')!))
     expect(container.textContent).not.toContain('Consent local state')
     act(() => click(findButton('View logs')!))
     await act(async () => freshLogs.resolve([{ ts: 2, level: 'info', line: 'fresh installation' }]))
@@ -471,16 +537,16 @@ describe('PluginsSettingsSection lifecycle', () => {
       { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
       updateSettings
     )
-    const featureSwitch = container.querySelector<HTMLButtonElement>(
-      '[aria-labelledby="plugin-system-label"]'
+    const turnOn = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Turn on plugins'
     )
-    if (!featureSwitch) {
-      throw new Error('missing feature switch')
+    if (!turnOn) {
+      throw new Error('missing turn-on action')
     }
 
-    await act(async () => click(featureSwitch))
+    await act(async () => click(turnOn))
 
-    expect(featureSwitch.disabled).toBe(false)
+    expect(turnOn.disabled).toBe(false)
     expect(window.api.plugins.refresh).not.toHaveBeenCalled()
     expect(container.textContent).toContain('Could not save plugin settings.')
   })

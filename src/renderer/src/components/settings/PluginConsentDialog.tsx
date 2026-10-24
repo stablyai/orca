@@ -9,6 +9,7 @@ import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview
 import { PluginConsentProvenance } from './PluginConsentProvenance'
 import { pluginCapabilityDescription } from './plugin-capability-presentation'
 import { PluginReviewBody, PluginReviewSection } from './plugin-review-dialog-layout'
+import { pluginConsentTier } from './plugin-access-profile'
 import {
   Dialog,
   DialogContent,
@@ -28,91 +29,85 @@ type PluginConsentDialogProps = {
 }
 
 function trustTier(plugin: PluginHostListEntry): string {
-  if (plugin.hasWorker) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.workerTrust',
-      'Background worker — runs its own process'
-    )
+  switch (pluginConsentTier(plugin)) {
+    case 'worker':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.workerTrust',
+        'Background worker — runs its own process'
+      )
+    case 'instructional':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.instructionalTrust',
+        'Instructional content — runs later under user or agent authority'
+      )
+    case 'panel':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.panelTrust',
+        'Panel or host-integrated content — no worker process'
+      )
+    case 'declarative':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.declarativeTrust',
+        'Declarative content — no plugin code'
+      )
   }
-  if (hasInstructionalContent(plugin)) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.instructionalTrust',
-      'Instructional content — runs later under user or agent authority'
-    )
-  }
-  if (plugin.panels.length === 0 && plugin.capabilities.length === 0) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.declarativeTrust',
-      'Declarative content — no plugin code'
-    )
-  }
-  return translate(
-    'auto.components.settings.PluginConsentDialog.panelTrust',
-    'Panel or host-integrated content — no worker process'
-  )
-}
-
-function hasInstructionalContent(plugin: PluginHostListEntry): boolean {
-  return (
-    (plugin.vmRecipes?.length ?? 0) > 0 ||
-    plugin.commands.some((command) => command.keybindings.length > 0)
-  )
 }
 
 /** Short one-word trust label for the header chip; the single warning below
  *  carries the full explanation. */
 function trustTierShort(plugin: PluginHostListEntry): string {
-  if (plugin.hasWorker) {
-    return translate('auto.components.settings.PluginConsentDialog.trustShortWorker', 'Worker')
+  switch (pluginConsentTier(plugin)) {
+    case 'worker':
+      return translate('auto.components.settings.PluginConsentDialog.trustShortWorker', 'Worker')
+    case 'instructional':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.trustShortInstructional',
+        'Instructional'
+      )
+    case 'panel':
+      return translate('auto.components.settings.PluginConsentDialog.trustShortPanel', 'Panel')
+    case 'declarative':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.trustShortDeclarative',
+        'Declarative'
+      )
   }
-  if (hasInstructionalContent(plugin)) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.trustShortInstructional',
-      'Instructional'
-    )
-  }
-  if (plugin.panels.length > 0 || plugin.capabilities.length > 0) {
-    return translate('auto.components.settings.PluginConsentDialog.trustShortPanel', 'Panel')
-  }
-  return translate(
-    'auto.components.settings.PluginConsentDialog.trustShortDeclarative',
-    'Declarative'
-  )
 }
 
 function trustWarning(plugin: PluginHostListEntry): string {
-  if (plugin.hasWorker) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.warning',
-      'Its worker runs as a normal process with full access to your files, network, and other processes.'
-    )
+  switch (pluginConsentTier(plugin)) {
+    case 'worker':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.warning',
+        'Its worker runs as a normal process with full access to your files, network, and other processes.'
+      )
+    case 'instructional':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.instructionalWarning',
+        'Its commands and instructions can take actions when you or an agent use them.'
+      )
+    case 'panel':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.panelWarning',
+        'No background worker. These permissions limit what it can do in Orca.'
+      )
+    case 'declarative':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.declarativeWarning',
+        "Content only: no code, no background worker, and no access to Orca's API."
+      )
   }
-  if (hasInstructionalContent(plugin)) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.instructionalWarning',
-      'Its commands and instructions can take actions when you or an agent use them.'
-    )
-  }
-  if (plugin.capabilities.length > 0 || plugin.panels.length > 0) {
-    return translate(
-      'auto.components.settings.PluginConsentDialog.panelWarning',
-      'No background worker. These permissions limit what it can do in Orca.'
-    )
-  }
-  return translate(
-    'auto.components.settings.PluginConsentDialog.declarativeWarning',
-    "Content only: no code, no background worker, and no access to Orca's API."
-  )
 }
 
 function consentTitle(plugin: PluginHostListEntry): string {
-  if (!plugin.hasWorker && plugin.capabilities.length === 0 && !hasInstructionalContent(plugin)) {
+  const tier = pluginConsentTier(plugin)
+  if (tier === 'declarative' && plugin.capabilities.length === 0) {
     return translate('auto.components.settings.PluginConsentDialog.reviewTitle', 'Review plugin')
   }
-  if (!hasInstructionalContent(plugin)) {
+  if (tier !== 'instructional') {
     return translate('auto.components.settings.PluginConsentDialog.title', 'Review permissions')
   }
-  if (plugin.hasWorker || plugin.capabilities.length > 0) {
+  if (plugin.capabilities.length > 0) {
     return translate(
       'auto.components.settings.PluginConsentDialog.mixedTitle',
       'Review access and content'

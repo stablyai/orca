@@ -1373,7 +1373,8 @@ html.native-shell .app-layout {
 [role='option'].jump-palette-item[data-selected='true'],
 .jump-palette-command [data-slot='command-item'][data-selected='true'],
 .jump-palette-command [role='option'][data-selected='true'],
-.ai-vault-session-row[data-selected='true'] {
+.ai-vault-session-row[data-selected='true'],
+.plugin-list-row:has([data-plugin-row-name]:focus-visible) {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
@@ -1389,7 +1390,8 @@ html.native-shell .app-layout {
 .dark [role='option'].jump-palette-item[data-selected='true'],
 .dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
 .dark .jump-palette-command [role='option'][data-selected='true'],
-.dark .ai-vault-session-row[data-selected='true'] {
+.dark .ai-vault-session-row[data-selected='true'],
+.dark .plugin-list-row:has([data-plugin-row-name]:focus-visible) {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);

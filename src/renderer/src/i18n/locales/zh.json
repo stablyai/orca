@@ -12094,7 +12094,8 @@
           "title": "回滚插件？",
           "description": "恢复 {{value0}} 的上一个版本。如果访问权限有变化，需要重新审查。",
           "cancel": "取消",
-          "confirm": "回滚插件"
+          "confirm": "回滚插件",
+          "descriptionVersion": "恢复 {{value0}} {{value1}}。更改的访问权限需要重新审核。"
         },
         "PluginsSettingsSection": {
           "systemLabel": "插件系统",
@@ -12113,7 +12114,8 @@
           "logsFailed": "无法加载插件日志。",
           "rollbackFailed": "无法回滚此插件。",
           "fileTypeSuggestionsLabel": "为未知文件推荐插件",
-          "fileTypeSuggestionsDescription": "当 Orca 无法打开或高亮文件时，推荐插件市场中的插件。"
+          "fileTypeSuggestionsDescription": "当 Orca 无法打开或高亮文件时，推荐插件市场中的插件。",
+          "restartFailed": "无法重新启动 {{value0}}。"
         },
         "PluginSettingsRow": {
           "blocked": "已阻止",
@@ -13110,6 +13112,174 @@
             "description": "来自已启用插件的文件和文件夹图标。",
             "builtIn": "内置"
           }
+        },
+        "PluginAddMenu": {
+          "add": "添加插件",
+          "folder": "从文件夹…",
+          "git": "从 Git URL…",
+          "sources": "目录来源…"
+        },
+        "PluginManager": {
+          "verified": "已验证",
+          "unverified": "未验证",
+          "catalogLoading": "目录",
+          "catalogFailedTitle": "无法加载插件目录。",
+          "catalogFailedBody": "已安装的插件仍可正常使用。",
+          "retry": "重试",
+          "sourceFailedTitle": "无法加载此目录。",
+          "sourceFailedBody": "已安装的插件仍可正常使用。",
+          "sources": "来源…",
+          "sourceStaleTitle": "无法刷新此目录。",
+          "sourceStaleBody": "显示的是 {{value0}} 的副本。",
+          "shownOf": "{{value0}} / {{value1}}",
+          "installed": "已安装",
+          "installedFailedTitle": "无法读取已安装的插件。",
+          "updatesTitle": "更新",
+          "sourcesLabel": "目录来源",
+          "refreshLabel": "刷新目录",
+          "noResultsTitle": "没有与“{{value0}}”匹配的插件",
+          "noResults": "搜索范围包括名称、描述、发布者和类别。",
+          "noneInstalledTitle": "尚未安装插件",
+          "noneInstalled": "在目录中浏览主题、语言和命令，或从文件夹或 Git 添加。",
+          "browseAll": "浏览所有插件",
+          "resultCount": "{{value0}} 个插件匹配",
+          "resultCountOne": "1 个插件匹配",
+          "updateAll": "全部更新…"
+        },
+        "PluginDetailPage": {
+          "bundled": "随 Orca 附带",
+          "localFolder": "本地文件夹",
+          "gitUrl": "Git URL",
+          "stoppedTitle": "因错误而停止",
+          "stoppedBody": "其代码不断崩溃，因此 Orca 已停止重启它。它仍处于开启状态；点击“重新启动”可再次尝试。",
+          "invalidTitle": "Orca 无法加载此插件",
+          "reviewBody": "请先查看它添加的内容和可访问的范围，然后再启用。在此之前不会运行任何内容。",
+          "needsOrcaTitle": "需要 Orca {{value0}} 或更高版本",
+          "needsOrcaBody": "你的 Orca 版本为 {{value0}}。请更新 Orca 以安装此插件。",
+          "back": "插件",
+          "install": "安装…",
+          "info": "信息",
+          "version": "版本",
+          "latest": "最新",
+          "requires": "需要",
+          "requiresValue": "Orca {{value0}} 或更高版本",
+          "categories": "类别",
+          "pluginId": "插件 ID",
+          "content": "内容",
+          "repository": "仓库"
+        },
+        "PluginDetailSections": {
+          "typeLanguagePack": "界面语言",
+          "typeAppTheme": "应用主题",
+          "typeTerminalTheme": "终端主题",
+          "typeIconTheme": "文件图标主题",
+          "typeSyntax": "语法高亮",
+          "typeInstructions": "代理指令",
+          "typePanel": "侧边栏面板",
+          "typeWorker": "后台代码",
+          "adds": "为 Orca 添加",
+          "replaces": "替换你为 {{value0}} 设置的快捷键",
+          "changeShortcuts": "在“快捷键”中更改",
+          "command": "命令",
+          "panel": "侧边栏面板",
+          "recipe": "机器配方",
+          "access": "可访问",
+          "accessLoading": "正在读取插件…",
+          "noAccess": "仅限自身文件",
+          "noAccessCode": "其代码在沙盒中运行，没有额外的访问权限。",
+          "noAccessContent": "仅包含内容，没有会运行的代码。",
+          "logs": "日志",
+          "copyLogs": "复制",
+          "accessFailed": "无法读取它可以访问的内容",
+          "accessFailedDetail": "Orca 无法获取或检查此插件的文件。",
+          "retry": "重试"
+        },
+        "PluginManagerRows": {
+          "crashedCount": "已连续崩溃 {{value0}} 次。请在插件页面查看日志。",
+          "crashed": "启动时崩溃。请在插件页面查看日志。",
+          "remove": "移除…",
+          "review": "查看",
+          "restart": "重新启动",
+          "viewError": "查看错误",
+          "copyId": "复制插件 ID",
+          "checkUpdate": "检查更新",
+          "rollback": "回滚…",
+          "bundledWithOrca": "随 Orca 附带",
+          "installName": "安装 {{value0}}",
+          "copied": "已复制插件 ID",
+          "copyFailed": "无法复制插件 ID。",
+          "stopped": "已停止",
+          "cantLoad": "无法加载",
+          "on": "已开启",
+          "details": "详情",
+          "enterKey": "Enter",
+          "unverified": "未验证",
+          "crashedOnce": "崩溃了一次。请在插件页面查看日志。",
+          "updateAvailable": "有可用更新 {{value0}}",
+          "updateLabel": "将 {{value0}} 更新到 {{value1}}",
+          "update": "更新到 {{value0}}",
+          "needsOrca": "需要 Orca {{value0}}",
+          "off": "已关闭",
+          "rollbackTo": "回滚到 {{value0}}…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "插件已关闭",
+          "offBody": "你的插件都不会运行。开启后即可浏览目录并使用已安装的插件。",
+          "turnOn": "开启插件",
+          "systemDescription": "一次性关闭所有插件。在你查看并启用之前，不会运行任何内容。",
+          "pausedCount": "已暂停 {{value0}} 个",
+          "pausedUnknown": "已安装的插件已暂停，开启插件后即可恢复。"
+        },
+        "PluginFilterPopover": {
+          "label": "筛选插件",
+          "kind": "类别",
+          "catalog": "目录",
+          "clear": "清除筛选",
+          "themes": "主题",
+          "languages": "语言",
+          "icons": "图标",
+          "commands": "命令和面板",
+          "machines": "机器和配方"
+        },
+        "PluginUpdateAllDialog": {
+          "title": "要更新插件吗？",
+          "reading": "正在读取每个更新的变更…",
+          "someGrow": "需要新访问权限的更新在下方展开显示，其余更新只改变所添加的内容。",
+          "noneGrow": "这些更新都不需要新的访问权限。",
+          "previewError": "无法读取此更新，将跳过。",
+          "newAccess": "新访问权限：{{value0}}",
+          "noNewAccess": "无新访问权限",
+          "failed": "无法更新 {{value0}}，其他插件已更新。",
+          "cancel": "取消",
+          "updateOne": "更新 1 个插件",
+          "updateMany": "更新 {{value0}} 个插件",
+          "failedAll": "无法更新 {{value0}}。没有任何插件被更新。",
+          "close": "关闭",
+          "retry": "重试",
+          "updated": "已更新",
+          "needsOrca": "需要 Orca {{value0}} 或更高版本。请先更新 Orca。"
+        },
+        "PluginDetailInfo": {
+          "previous": "上一版本",
+          "updated": "更新于",
+          "license": "许可证",
+          "homepage": "主页",
+          "whatsNew": "新功能",
+          "hashCopied": "已复制内容哈希",
+          "hashCopyFailed": "无法复制哈希。",
+          "copyHash": "复制内容哈希 {{value0}}"
+        },
+        "PluginListEmptyStates": {
+          "noFilterMatches": "没有与这些筛选条件匹配的插件",
+          "clearBoth": "清除搜索和筛选",
+          "pageGone": "此插件已不再安装或列出。"
+        },
+        "pluginContributions": {
+          "dark": "深色",
+          "light": "浅色",
+          "languageIncomplete": "已翻译 {{value0}}%，不够完整，无法用作 Orca 的语言",
+          "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
+          "agent": "智能体配置"
         }
       },
       "right": {
@@ -18104,7 +18274,15 @@
           "all": "All",
           "installed": "Installed",
           "searchLabel": "Search plugins",
-          "searchPlaceholder": "搜索插件、分类或发布者"
+          "searchPlaceholder": "搜索插件、分类或发布者",
+          "updates": "更新",
+          "clearSearch": "清除搜索"
+        },
+        "PluginListGroup": {
+          "showAll": "再显示 {{value0}} 个"
+        },
+        "PluginListRow": {
+          "official": "官方"
         }
       },
       "terminalPane": {

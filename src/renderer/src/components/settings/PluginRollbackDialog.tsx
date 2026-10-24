@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
+import { usePluginRollbackVersion } from './use-plugin-rollback-version'
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ export function PluginRollbackDialog({
   onConfirm
 }: PluginRollbackDialogProps): React.JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null)
+  const version = usePluginRollbackVersion(plugin?.pluginKey ?? null)
   return (
     <Dialog open={Boolean(plugin)} onOpenChange={(open) => !open && !busy && onCancel()}>
       <DialogContent
@@ -43,11 +45,17 @@ export function PluginRollbackDialog({
             {translate('auto.components.settings.PluginRollbackDialog.title', 'Roll back plugin?')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
-              'auto.components.settings.PluginRollbackDialog.description',
-              'Restores the previous version of {{value0}}. Changed access needs another review.',
-              { value0: plugin?.name ?? '' }
-            )}
+            {version
+              ? translate(
+                  'auto.components.settings.PluginRollbackDialog.descriptionVersion',
+                  'Restores {{value0}} {{value1}}. Changed access needs another review.',
+                  { value0: plugin?.name ?? '', value1: version }
+                )
+              : translate(
+                  'auto.components.settings.PluginRollbackDialog.description',
+                  'Restores the previous version of {{value0}}. Changed access needs another review.',
+                  { value0: plugin?.name ?? '' }
+                )}
           </DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
