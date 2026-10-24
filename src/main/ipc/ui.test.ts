@@ -7,6 +7,7 @@ const {
   getAllWindowsMock,
   handleMock,
   onMock,
+  removeHandlerMock,
   removeAllListenersMock
 } = vi.hoisted(() => ({
   fromIdMock: vi.fn(),
@@ -15,6 +16,7 @@ const {
   getAllWindowsMock: vi.fn(() => []),
   handleMock: vi.fn(),
   onMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
   removeAllListenersMock: vi.fn()
 }))
 
@@ -26,6 +28,7 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock,
     on: onMock,
+    removeHandler: removeHandlerMock,
     removeAllListeners: removeAllListenersMock
   },
   webContents: {
@@ -71,10 +74,13 @@ function getNativePasteHandler():
   return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativePaste')?.[1]
 }
 
+/** Exercises the registered invoke handler so its dispatch acknowledgement is covered. */
 function getNativeSelectionActionHandler():
-  | ((event: ReturnType<typeof makeUIEvent>, action: unknown) => void)
+  | ((event: ReturnType<typeof makeUIEvent>, action: unknown) => boolean)
   | undefined {
-  return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativeSelectionAction')?.[1]
+  return handleMock.mock.calls.find(
+    ([channel]) => channel === 'ui:performNativeSelectionAction'
+  )?.[1]
 }
 
 describe('UI IPC', () => {
@@ -88,6 +94,7 @@ describe('UI IPC', () => {
     getAllWindowsMock.mockReturnValue([])
     handleMock.mockReset()
     onMock.mockReset()
+    removeHandlerMock.mockReset()
     removeAllListenersMock.mockReset()
     setTrustedUIRendererWebContentsId(null)
   })
@@ -198,16 +205,20 @@ describe('UI IPC', () => {
     const selectAll = vi.fn()
     const event = makeUIEvent()
     setTrustedUIRendererWebContentsId(17)
-    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+    fromWebContentsMock.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { copy, selectAll, isDestroyed: () => false }
+    })
 
     registerUIHandlers(makeStore() as never)
 
-    expect(removeAllListenersMock).toHaveBeenCalledWith('ui:performNativeSelectionAction')
+    expect(removeHandlerMock).toHaveBeenCalledWith('ui:performNativeSelectionAction')
     const handler = getNativeSelectionActionHandler()
-    handler?.(event, 'copy')
-    handler?.(event, 'select-all')
-    handler?.(event, 'invalid')
+    expect(handler?.(event, 'copy')).toBe(true)
+    expect(handler?.(event, 'select-all')).toBe(true)
+    expect(handler?.(event, 'invalid')).toBe(false)
 
+    expect(fromWebContentsMock).toHaveBeenCalledWith(event.sender)
     expect(copy).toHaveBeenCalledOnce()
     expect(selectAll).toHaveBeenCalledOnce()
   })
@@ -217,18 +228,79 @@ describe('UI IPC', () => {
     const selectAll = vi.fn()
     const event = makeUIEvent({ id: 42 })
     const isDashboardPopoutRenderer = vi.fn((sender: unknown) => sender === event.sender)
-    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+    fromWebContentsMock.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { copy, selectAll, isDestroyed: () => false }
+    })
 
     registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer })
 
     const handler = getNativeSelectionActionHandler()
-    handler?.(event, 'copy')
-    handler?.(event, 'select-all')
-    handler?.(makeUIEvent({ id: 43 }), 'copy')
+    expect(handler?.(event, 'copy')).toBe(true)
+    expect(handler?.(event, 'select-all')).toBe(true)
+    expect(handler?.(makeUIEvent({ id: 43 }), 'copy')).toBe(false)
 
     expect(isDashboardPopoutRenderer).toHaveBeenCalledWith(event.sender)
     expect(copy).toHaveBeenCalledOnce()
     expect(selectAll).toHaveBeenCalledOnce()
+  })
+
+  it('rejects native selection actions from stale, browser, and destroyed senders', () => {
+    setTrustedUIRendererWebContentsId(17)
+    registerUIHandlers(makeStore() as never)
+    const handler = getNativeSelectionActionHandler()
+
+    expect(handler?.(makeUIEvent({ id: 42 }), 'copy')).toBe(false)
+    expect(handler?.(makeUIEvent({ getType: () => 'webview' }), 'copy')).toBe(false)
+    expect(handler?.(makeUIEvent({ isDestroyed: () => true }), 'copy')).toBe(false)
+    expect(fromWebContentsMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects destroyed dashboard senders even if the dashboard predicate accepts them', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler uses only the mocked Store methods.
+    registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer: () => true })
+
+    expect(
+      getNativeSelectionActionHandler()?.(makeUIEvent({ isDestroyed: () => true }), 'copy')
+    ).toBe(false)
+    expect(fromWebContentsMock).not.toHaveBeenCalled()
+  })
+
+  it('returns false when the native selection window is missing or destroyed', () => {
+    const copy = vi.fn()
+    setTrustedUIRendererWebContentsId(17)
+    registerUIHandlers(makeStore() as never)
+    const handler = getNativeSelectionActionHandler()
+
+    fromWebContentsMock.mockReturnValueOnce(null)
+    expect(handler?.(makeUIEvent(), 'copy')).toBe(false)
+    fromWebContentsMock.mockReturnValueOnce({
+      isDestroyed: () => true,
+      webContents: { copy, isDestroyed: () => false }
+    })
+    expect(handler?.(makeUIEvent(), 'copy')).toBe(false)
+    fromWebContentsMock.mockReturnValueOnce({
+      isDestroyed: () => false,
+      webContents: { copy, isDestroyed: () => true }
+    })
+    expect(handler?.(makeUIEvent(), 'copy')).toBe(false)
+    expect(copy).not.toHaveBeenCalled()
+  })
+
+  it('returns false if dispatching the native selection action throws', () => {
+    setTrustedUIRendererWebContentsId(17)
+    fromWebContentsMock.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        copy: vi.fn(() => {
+          throw new Error('Object has been destroyed')
+        })
+      }
+    })
+    registerUIHandlers(makeStore() as never)
+
+    expect(getNativeSelectionActionHandler()?.(makeUIEvent(), 'copy')).toBe(false)
   })
 
   it('ignores native paste fallback from stale or browser senders', () => {

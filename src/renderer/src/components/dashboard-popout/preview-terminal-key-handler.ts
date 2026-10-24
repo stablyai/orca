@@ -14,6 +14,7 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
+import { copyTerminalSelectionFromUserInput } from '@/components/terminal-pane/terminal-selection-copy'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
 
 /**
@@ -135,7 +136,7 @@ export function installPreviewTerminalKeyHandler(args: {
       const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
       consumedClipboardKeys.add(keyIdentity)
       if (firstKeydown && selection) {
-        void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
+        void copyTerminalSelectionFromUserInput(terminal, 'keyboard').catch(() => undefined)
       }
       return consumeEvent(event)
     }

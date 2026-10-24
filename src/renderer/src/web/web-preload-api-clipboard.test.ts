@@ -121,6 +121,36 @@ describe('web UI preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it.each(['copy', 'select-all'] as const)(
+    'reports whether the browser accepted the native %s action',
+    async (action) => {
+      const globals = installBrowserGlobals('Linux')
+      const clipboard = installExecCommandClipboardDocument()
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+
+      await expect(globals.window.api.ui.performNativeSelectionAction(action)).resolves.toBe(true)
+      expect(clipboard.execCommand).toHaveBeenCalledWith(action === 'copy' ? 'copy' : 'selectAll')
+      clipboard.execCommand.mockReturnValue(false)
+      await expect(globals.window.api.ui.performNativeSelectionAction(action)).resolves.toBe(false)
+    }
+  )
+
+  it('returns false when the native browser selection action is missing or throws', async () => {
+    const globals = installBrowserGlobals('Linux')
+    vi.stubGlobal('document', {})
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.ui.performNativeSelectionAction('copy')).resolves.toBe(false)
+    vi.stubGlobal('document', {
+      execCommand: vi.fn(() => {
+        throw new Error('Command is unavailable')
+      })
+    })
+    await expect(globals.window.api.ui.performNativeSelectionAction('copy')).resolves.toBe(false)
+  })
+
   it('writes bounded clipboard text through the browser clipboard API', async () => {
     const globals = installBrowserGlobals('Linux')
     const writeText = vi.fn().mockResolvedValue(undefined)

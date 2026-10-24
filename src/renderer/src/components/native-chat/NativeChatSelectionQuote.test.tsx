@@ -155,6 +155,15 @@ describe('NativeChatSelectionQuote', () => {
 describe('NativeChatSelectionQuote copy on select', () => {
   const originalSettings = useAppStore.getState().settings
   const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
+  const performNativeSelectionAction = vi.fn()
+
+  /** Supplies display metadata without changing the host display or clipboard. */
+  function platform(platform: NodeJS.Platform, displayServer: 'wayland' | 'x11' | null): void {
+    vi.stubGlobal('api', {
+      platform: { get: () => ({ platform, displayServer }) },
+      ui: { writeClipboardText, performNativeSelectionAction }
+    })
+  }
 
   function copyOnSelect(enabled: boolean): void {
     useAppStore.setState({
@@ -165,7 +174,8 @@ describe('NativeChatSelectionQuote copy on select', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     writeClipboardText.mockReset().mockResolvedValue(undefined)
-    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    performNativeSelectionAction.mockReset().mockResolvedValue(true)
+    vi.stubGlobal('api', { ui: { writeClipboardText, performNativeSelectionAction } })
     copyOnSelect(true)
   })
 
@@ -211,5 +221,64 @@ describe('NativeChatSelectionQuote copy on select', () => {
 
     expect(writeClipboardText).toHaveBeenCalledTimes(1)
     expect(writeClipboardText).toHaveBeenCalledWith('Use the draft store.\n\nIt already appends.')
+  })
+
+  it.each(['mouse', 'keyboard'] as const)(
+    'uses native Wayland copy for a finished %s selection without changing focus or selection',
+    (interaction) => {
+      platform('linux', 'wayland')
+      render(<Chat />)
+      const transcript = screen.getByTestId('first')
+      transcript.tabIndex = 0
+      transcript.focus()
+      const activeElement = document.activeElement
+
+      fireEvent.pointerDown(transcript, { button: 0 })
+      select(transcript)
+      const selection = window.getSelection()!
+      const range = selection.getRangeAt(0)
+      const selectedText = selection.toString()
+      expect(performNativeSelectionAction).not.toHaveBeenCalled()
+
+      if (interaction === 'mouse') {
+        fireEvent.mouseUp(transcript, { button: 0 })
+        fireEvent.mouseUp(transcript, { button: 0 })
+      } else {
+        fireEvent.keyUp(transcript, { key: 'Shift' })
+        fireEvent.keyUp(transcript, { key: 'Shift' })
+      }
+      settle()
+
+      expect(performNativeSelectionAction).toHaveBeenCalledExactlyOnceWith('copy')
+      expect(writeClipboardText).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(activeElement)
+      expect(selection.toString()).toBe(selectedText)
+      expect(selection.getRangeAt(0)).toBe(range)
+    }
+  )
+
+  it('does not request native Wayland copy while disabled or outside the transcript', () => {
+    platform('linux', 'wayland')
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('composer'))
+    releaseSelection(screen.getByTestId('first'), screen.getByTestId('composer'))
+    copyOnSelect(false)
+    releaseSelection(screen.getByTestId('first'))
+
+    expect(performNativeSelectionAction).not.toHaveBeenCalled()
+    expect(writeClipboardText).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['linux', 'x11'],
+    ['darwin', null],
+    ['win32', null]
+  ] as const)('keeps the clipboard writer on %s/%s', (os, displayServer) => {
+    platform(os, displayServer)
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('first'))
+
+    expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(window.getSelection()!.toString())
+    expect(performNativeSelectionAction).not.toHaveBeenCalled()
   })
 })
