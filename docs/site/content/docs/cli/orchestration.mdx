@@ -30,6 +30,10 @@ Use it when you need ownership, completion tracking, or a DAG. For one-off promp
 
 Completion authority comes from the active dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`.
 
+Run bindings use the caller's runtime-resolved stable pane or Orca session ID. A worker cannot use `run-use` to become coordinator of its parent Run while its assignment is unsettled; refusal leaves the binding, generation, mail, and worker resources unchanged. The original coordinator can keep its binding during recovery or self-dispatch, and workers can coordinate distinct child Runs. Accepted settlement allows that terminal to become a coordinator later.
+
+Status mail naming both the Task and Dispatch of an inactive assignment stays out of the parent Run's unread inbox when the sender still matches the assigned pane and exact process. Orca retains it as delivered history without waking the coordinator. Current status, ordinary unscoped mail, process-mismatch diagnostics, escalations, and settlement or recovery messages keep their existing delivery rules.
+
 Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
 
 ## Preferred supervised loop
