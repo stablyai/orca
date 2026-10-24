@@ -2,9 +2,13 @@ import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../provider-account-services'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
+import {
+  resolveCodexSessionBackfillPaths,
+  startCodexSessionBackfillInBackground
+} from '../codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
+import { startCodexSessionLogRetentionSweepInBackground } from '../codex/codex-session-log-retention'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   hasOpenCodeGoApiKey,
@@ -64,6 +68,16 @@ export function initializeMainProcessAccountServices(): void {
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  // Why: rollout logs in the runtime home were never pruned and grew unbounded (#16776).
+  // While the session migration is eligible, only prune rollouts it already published
+  // into the real Codex home; otherwise the sweep could delete their last copy.
+  void startCodexSessionLogRetentionSweepInBackground(
+    getOrcaManagedCodexHomePath(),
+    state.codexRuntimeHome.isHostSystemDefaultSessionMigrationEligible()
+      ? resolveCodexSessionBackfillPaths(resolveHostCodexSessionSourceHome(store.getSettings()))
+          .systemSessionsRoot
+      : undefined
+  )
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
