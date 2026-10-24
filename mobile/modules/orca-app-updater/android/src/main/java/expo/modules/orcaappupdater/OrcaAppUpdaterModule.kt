@@ -51,7 +51,6 @@ class OrcaAppUpdaterModule : Module() {
     .followSslRedirects(false)
     .connectTimeout(30, TimeUnit.SECONDS)
     .readTimeout(30, TimeUnit.SECONDS)
-    .callTimeout(5, TimeUnit.MINUTES)
     .build()
 
   override fun definition() = ModuleDefinition {
