@@ -57,6 +57,8 @@ export type WslHostServerStop = { stopped: true } | { stopped: false; reason: st
 
 export type WslHostAddFailureKind =
   | 'unsupported-wsl1'
+  /** Its platform, libc or loader can't run Orca's server (e.g. NixOS, musl without libstdc++). */
+  | 'unsupported-distro'
   | 'distro-stopped'
   | 'already-added'
   | 'ssh-managed'

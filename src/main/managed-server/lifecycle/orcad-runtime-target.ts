@@ -16,7 +16,8 @@ export async function resolveOrcadRuntimeTarget(options: {
   if (!target) {
     const glibc = facts.glibc ? `${facts.glibc.major}.${facts.glibc.minor}` : 'unknown'
     throw new OrcadHostUnsupportedError(
-      `No Orca runtime supports ${facts.target} with glibc ${glibc}.`
+      `No Orca runtime supports ${facts.target} with glibc ${glibc}. ` +
+        'Use a Linux release with glibc 2.28 or newer (for example Ubuntu 20.04 or Debian 10 and later).'
     )
   }
   return target

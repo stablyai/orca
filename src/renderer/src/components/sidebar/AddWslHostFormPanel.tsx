@@ -58,6 +58,8 @@ export function AddWslHostFormPanel({
   onCancel: () => void
 }): React.JSX.Element {
   const selected = distros.find((distro) => distro.name === selectedDistro)
+  // A disabled option can't show its refusal, so the conversion command is spelled out here.
+  const wsl1Distro = distros.find((distro) => distro.version === 1)
   const stopped = selected?.state === 'stopped' && canAddWslDistro(selected)
   return (
     <>
@@ -131,6 +133,15 @@ export function AddWslHostFormPanel({
             {translate(
               'auto.components.sidebar.AddWslHostFormPanel.none',
               'No WSL distros found. Install one with: wsl --install'
+            )}
+          </p>
+        ) : null}
+        {wsl1Distro ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.AddWslHostFormPanel.wsl1Hint',
+              'WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2',
+              { value0: wsl1Distro.name }
             )}
           </p>
         ) : null}

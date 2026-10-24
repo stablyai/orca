@@ -50,6 +50,11 @@ describe('AddWslHostFormPanel', () => {
     expect(html).toContain('until you move them to this host')
   })
 
+  it('spells out the WSL 2 conversion for a WSL 1 distro the list cannot offer', () => {
+    expect(render()).toContain('wsl --set-version Legacy 2')
+    expect(render({ distros: [ubuntu] })).not.toContain('wsl --set-version')
+  })
+
   it('makes starting a stopped distro an explicit action', () => {
     const html = render({ selectedDistro: 'Debian' })
     expect(html).toContain('Debian is stopped. Adding it starts it.')

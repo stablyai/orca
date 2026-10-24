@@ -7065,7 +7065,8 @@
           "adding": "Setting up…",
           "startAndAdd": "Start and add",
           "add": "Add host",
-          "refresh": "Refresh"
+          "refresh": "Refresh",
+          "wsl1Hint": "WSL 1 distros can’t be hosts. Convert one in a Windows terminal with: wsl --set-version {{value0}} 2"
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
