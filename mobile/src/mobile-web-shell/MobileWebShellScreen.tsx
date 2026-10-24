@@ -187,7 +187,11 @@ export function MobileWebShellScreen({
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
-    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+    usePageHostSnapshot(
+      hostId,
+      route.pathname,
+      ownsHostArea || routeGrants.includes('native.storage.read')
+    )
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
   const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)

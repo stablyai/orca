@@ -108,7 +108,7 @@ export function createBridgeNotifyForwarder(args: {
           host.id,
           args.route(),
           held,
-          options.ownsHostArea === true
+          options.ownsHostArea === true || granted.includes('native.storage.read')
         )
       ) {
         options.onDiagnostic?.({ kind: 'storage-refused', key: message.key })
