@@ -7,6 +7,7 @@ import {
 } from './mobile-clipboard-image-downscale'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from './mobile-clipboard-image-upload-chunk'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import type { SendRequestOptions } from '../transport/rpc-client'
 import {
   clipboardImageSaveAsTempFile,
   clipboardImageUploadAbort,
@@ -79,13 +80,18 @@ export async function prepareMobileClipboardImageBase64(
 export async function saveMobileClipboardImageAsTempFile(
   client: MobileClipboardImageRpcSender,
   imageData: string,
-  args?: { connectionId?: string | null }
+  args?: { connectionId?: string | null; deadline?: number }
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
   for (let retry = 0; ; retry += 1) {
     try {
-      return await uploadMobileClipboardImageTransaction(client, contentBase64, connectionId)
+      return await uploadMobileClipboardImageTransaction(
+        client,
+        contentBase64,
+        connectionId,
+        args?.deadline
+      )
     } catch (error) {
       if (
         !isLogicalClientCutoverError(error) ||
@@ -98,15 +104,28 @@ export async function saveMobileClipboardImageAsTempFile(
   }
 }
 
+function imageUploadRequestOptions(deadline: number | undefined): [] | [SendRequestOptions] {
+  if (deadline === undefined) {
+    return []
+  }
+  const timeoutMs = deadline - Date.now()
+  if (timeoutMs <= 0) {
+    throw new Error('Image upload timed out')
+  }
+  return [{ timeoutMs, budgetSpansConnect: true }]
+}
+
 async function uploadMobileClipboardImageTransaction(
   client: MobileClipboardImageRpcSender,
   contentBase64: string,
-  connectionId: string | null
+  connectionId: string | null,
+  deadline?: number
 ): Promise<string> {
-  const startResponse = await clipboardImageUploadStart.request(client, {
-    expectedBase64Length: contentBase64.length,
-    connectionId
-  })
+  const startResponse = await clipboardImageUploadStart.request(
+    client,
+    { expectedBase64Length: contentBase64.length, connectionId },
+    ...imageUploadRequestOptions(deadline)
+  )
 
   // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
   // image then goes over the single-frame method — no acceptance policy carries the code.
@@ -116,7 +135,11 @@ async function uploadMobileClipboardImageTransaction(
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
       return clipboardImageSaveAsTempFile.interpret(
-        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
+        await clipboardImageSaveAsTempFile.request(
+          client,
+          { contentBase64, connectionId },
+          ...imageUploadRequestOptions(deadline)
+        )
       )
     }
     throw new Error(startResponse.error.message)
@@ -133,23 +156,39 @@ async function uploadMobileClipboardImageTransaction(
       offset += MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
     ) {
       clipboardImageUploadAppend.interpret(
-        await clipboardImageUploadAppend.request(client, {
-          uploadId,
-          offset,
-          contentBase64: contentBase64.slice(
+        await clipboardImageUploadAppend.request(
+          client,
+          {
+            uploadId,
             offset,
-            offset + MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-          )
-        })
+            contentBase64: contentBase64.slice(
+              offset,
+              offset + MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+            )
+          },
+          ...imageUploadRequestOptions(deadline)
+        )
       )
     }
     return clipboardImageUploadCommit.interpret(
-      await clipboardImageUploadCommit.request(client, { uploadId })
+      await clipboardImageUploadCommit.request(
+        client,
+        { uploadId },
+        ...imageUploadRequestOptions(deadline)
+      )
     )
   } catch (error) {
     // Why: failed mobile image sends create server-side upload state; abort so
     // the bounded upload slot is released immediately instead of waiting for TTL.
-    await clipboardImageUploadAbort.request(client, { uploadId }).catch(() => {})
+    await clipboardImageUploadAbort
+      .request(
+        client,
+        { uploadId },
+        ...(deadline === undefined
+          ? ([] as const)
+          : ([{ failWhenDisconnected: true, timeoutMs: 1_000, budgetSpansConnect: true }] as const))
+      )
+      .catch(() => {})
     throw error
   }
 }
