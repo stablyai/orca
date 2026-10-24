@@ -37,6 +37,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
+vi.mock('@/runtime/structured-chat-name-observation', () => ({
+  subscribeStructuredChatTabNames: () => () => {},
+  getStructuredChatTabNames: () => new Map()
+}))
+
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))

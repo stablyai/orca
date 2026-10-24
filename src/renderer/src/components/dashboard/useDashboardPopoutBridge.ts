@@ -1,6 +1,10 @@
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
+import {
+  subscribeStructuredChatTabNames,
+  getStructuredChatTabNames
+} from '@/runtime/structured-chat-name-observation'
 import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
 import {
   type AgentLaunchRouteView,
@@ -102,6 +106,7 @@ export function dashboardSnapshotInputsChanged(
  *  because react-doctor's effect-needs-cleanup false-positives on `subscribe`
  *  inside an effect body; the caller's cleanup does unsubscribe. */
 export function watchSnapshotInputs(onChanged: () => void): () => void {
+  const stopNames = subscribeStructuredChatTabNames(onChanged)
   const unsubscribeStore = useAppStore.subscribe((state, previousState) => {
     // Why: unrelated high-frequency store writes must not rebuild a cross-worktree snapshot.
     if (dashboardSnapshotInputsChanged(state, previousState)) {
@@ -111,6 +116,7 @@ export function watchSnapshotInputs(onChanged: () => void): () => void {
   // Launch options also read host chat facts held outside the store.
   const unsubscribeChatFacts = subscribeChatProgramFacts(onChanged)
   return () => {
+    stopNames()
     unsubscribeStore()
     unsubscribeChatFacts()
   }
@@ -169,11 +175,15 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
       chatOwners.reconcile(state)
-      const snapshot = buildDashboardSnapshot(state, lastPublishAt, {
-        launchRouteStore: selectAgentLaunchRouteView(state),
-        rowsCache,
-        rowsGeneration: state.agentStatusEpoch
-      })
+      const snapshot = buildDashboardSnapshot(
+        { ...state, chatNames: getStructuredChatTabNames() },
+        lastPublishAt,
+        {
+          launchRouteStore: selectAgentLaunchRouteView(state),
+          rowsCache,
+          rowsGeneration: state.agentStatusEpoch
+        }
+      )
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {
         const { repoIconsByRepoId: _omitted, ...withoutIcons } = snapshot

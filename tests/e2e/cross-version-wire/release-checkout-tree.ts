@@ -14,7 +14,7 @@ const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
 // the shared codec, plus a release's relay that an app update leaves running. Skipping cli keeps a cold CI
 // extraction a few seconds.
-// The phone's `worktree ps` row reader rides along alone; it imports only from src/shared.
+// The phone's `worktree ps` reader is shared-only; newer read operations are optional below.
 // Workspace packages the release declares are added per release (releaseWorkspaceArchivePaths).
 const ARCHIVE_PATHS = [
   'src/main',
@@ -25,7 +25,22 @@ const ARCHIVE_PATHS = [
   'mobile/src/worktree/agent-row-display.ts'
 ]
 // Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
-const OPTIONAL_ARCHIVE_PATHS = ['src/relay', 'src/wsl-guest']
+const OPTIONAL_ARCHIVE_PATHS = [
+  'src/relay',
+  'src/wsl-guest',
+  // Released phone read operations and their runtime decoding dependencies.
+  'mobile/src/agent-history/agent-history-reply-schema.ts',
+  'mobile/src/agent-history/mobile-agent-history-operations.ts',
+  'mobile/src/session/mobile-session-read-operations.ts',
+  'mobile/src/session/session-read-reply-schema.ts',
+  'mobile/src/transport/mobile-runtime-client-capabilities.ts',
+  'mobile/src/transport/request-single-flight.ts',
+  'mobile/src/transport/rpc-acceptance-policies.ts',
+  'mobile/src/transport/rpc-incompatible-reply-error.ts',
+  'mobile/src/transport/rpc-operation-reply.ts',
+  'mobile/src/transport/rpc-operation-result-reader.ts',
+  'mobile/src/transport/rpc-operation.ts'
+]
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'
 

@@ -1,3 +1,4 @@
+import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
@@ -79,8 +80,10 @@ export type DashboardSnapshotState = Pick<
  * worktree's rows into presentational cards. Provider subagents without their
  * own terminal stay folded into their spawning card.
  */
+export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
+
 export function buildDashboardSnapshot(
-  state: DashboardSnapshotState,
+  state: DashboardSnapshotInput,
   now: number,
   options: {
     launchRouteStore?: AgentLaunchRouteView
@@ -255,7 +258,9 @@ export function buildDashboardSnapshot(
             row,
             generatedTitlesEnabled,
             terminalLayoutsByTabId[row.tab.id],
-            paneTitlesByTabId[row.tab.id]
+            paneTitlesByTabId[row.tab.id],
+            state.chatNames,
+            state.unifiedTabsByWorktree
           )
         ),
         ...(terminalInput ? { terminalInput } : {})

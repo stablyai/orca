@@ -1,7 +1,6 @@
 import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
-import { firstDifference } from '../rpc-recording/golden-difference'
-import { canonicalJson, OBSERVATION_FIELDS } from '../rpc-recording/golden-value-pool'
+import { checkpointListDifference, recordingDifferences } from '../rpc-recording/golden-difference'
 import type { Observation, Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
 import { captureValue, type RecordedValue } from '../rpc-recording/recording-values'
 import type { ParamsMismatchEvidence } from './divergence-classes'
@@ -50,28 +49,35 @@ export function withReplyMeta(json: string): string {
  * the field records it where the faithful run records nothing. Removing it is what makes the two
  * runs comparable; it is a key the recorder never sees on this corpus, so nothing else is lost.
  */
-export function withoutRpcMeta(value: RecordedValue): RecordedValue {
+export function withoutRpcMeta(value: RecordedValue, injectedOnly = false): RecordedValue {
   if (Array.isArray(value)) {
-    return value.map(withoutRpcMeta)
+    return value.map((entry) => withoutRpcMeta(entry, injectedOnly))
   }
   if (typeof value !== 'object' || value === null) {
     return value
   }
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => key !== '_meta')
-      .map(([key, entry]) => [key, withoutRpcMeta(entry)])
+      .filter(
+        ([key, entry]) =>
+          key !== '_meta' ||
+          (injectedOnly &&
+            (!isKeyedObject(entry) ||
+              Object.keys(entry).length !== 1 ||
+              entry.runtimeId !== 'counterfactual-runtime'))
+      )
+      .map(([key, entry]) => [key, withoutRpcMeta(entry, injectedOnly)])
   )
 }
 
 /** A recording with the counterfactual's fingerprints removed, ready to diff against a golden. */
-export function recordingWithoutRpcMeta(recording: Recording): Recording {
+export function recordingWithoutRpcMeta(recording: Recording, injectedOnly = false): Recording {
   return {
     scenario: recording.scenario,
     checkpoints: recording.checkpoints.map((checkpoint) => ({
       id: checkpoint.id,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `withoutRpcMeta` preserves shape, so an observation maps to an observation.
-      observation: withoutRpcMeta(checkpoint.observation) as Observation
+      observation: withoutRpcMeta(checkpoint.observation, injectedOnly) as Observation
     }))
   }
 }
@@ -81,28 +87,16 @@ export function recordingWithoutRpcMeta(recording: Recording): Recording {
  * the two runs did not even reach the same checkpoints. All of them, not the first: a rule that
  * needs to know whether *every* field that moved is an ordinal cannot be given only one.
  */
-export function divergingFields(expected: Recording, actual: Recording): string[] {
-  const expectedIds = expected.checkpoints.map((checkpoint) => checkpoint.id)
-  const actualIds = actual.checkpoints.map((checkpoint) => checkpoint.id)
-  if (JSON.stringify(expectedIds) !== JSON.stringify(actualIds)) {
+export function divergingFields(expected: Recording, actual: Recording, complete = true): string[] {
+  const list = checkpointListDifference(expected, actual)
+  if (!complete && (list.missing.length || list.extra.length || list.reordered)) {
     return ['checkpoints']
   }
-  const fields: string[] = []
-  for (const [index, checkpoint] of expected.checkpoints.entries()) {
-    const found = actual.checkpoints[index]
-    if (found === undefined) {
-      return ['checkpoints']
-    }
-    for (const field of OBSERVATION_FIELDS) {
-      const mine = checkpoint.observation[field]
-      const theirs = found.observation[field]
-      if (canonicalJson(mine) === canonicalJson(theirs)) {
-        continue
-      }
-      fields.push(`${field}${firstDifference(mine, theirs).path}`)
-    }
-  }
-  return fields
+  return [
+    ...(expected.scenario === actual.scenario ? [] : ['scenario']),
+    ...(list.missing.length || list.extra.length || list.reordered ? ['checkpoints'] : []),
+    ...recordingDifferences(expected, actual, complete).map(({ field, path }) => `${field}${path}`)
+  ]
 }
 
 /** A reply shape the wire itself drops: `ok` with no `result` key at all. */
@@ -132,12 +126,12 @@ export function refusalReleasedStream(diagnostics: readonly BridgeRpcClientDiagn
 /** The name the scripted transport prints for a request whose params stopped matching. */
 const REQUEST_PARAMS_MISMATCH = /^Request params mismatch: (?<method>.+)#(?<occurrence>\d+)$/
 
-function isKeyedObject(value: unknown): value is Record<string, unknown> {
+export function isKeyedObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The comparison the transport itself made: `captureValue` is what it matches a step against. */
-function sameParams(left: unknown, right: unknown): boolean {
+export function sameParams(left: unknown, right: unknown): boolean {
   return JSON.stringify(captureValue(left)) === JSON.stringify(captureValue(right))
 }
 
@@ -185,11 +179,11 @@ function differingParamPaths(scripted: unknown, arrived: unknown, path = ''): st
 }
 
 /** The params of the `index`th request the page posted for `method`, absent arity included. */
-function postedRequestParams(
+export function postedRequestParams(
   posted: readonly string[],
   method: string,
   index: number
-): { found: true; params: unknown } | { found: false } {
+): { found: true; params: unknown; id: unknown } | { found: false } {
   const frames = posted
     .map((json): unknown => JSON.parse(json))
     .filter((frame) => isKeyedObject(frame) && frame.type === 'request' && frame.method === method)
@@ -197,7 +191,7 @@ function postedRequestParams(
   if (!isKeyedObject(frame)) {
     return { found: false }
   }
-  return { found: true, params: frame.params }
+  return { found: true, params: frame.params, id: frame.id }
 }
 
 /**

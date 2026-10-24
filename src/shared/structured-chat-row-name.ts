@@ -8,8 +8,9 @@ export function structuredChatDisplayName(
   return customLabel?.trim() || conversationName || fallback.trim()
 }
 
-/** Whether a Session History row a native chat owns shows the chat's name. Only Claude and Codex
- *  rows do; other agents' rows keep their CLI's own title, as their terminal conversations do. */
-export function historyRowShowsChatName(rowAgent: string): boolean {
+/** Whether a Session History row a native chat owns, and the chat has no name yet, reads the chat's
+ *  default label. Claude and Codex rows do, as their tabs do; other agents' rows keep their CLI's
+ *  own title until the chat is named. A named chat's row always shows its name. */
+export function historyRowFallsBackToChatLabel(rowAgent: string): boolean {
   return rowAgent === 'claude' || rowAgent === 'codex'
 }

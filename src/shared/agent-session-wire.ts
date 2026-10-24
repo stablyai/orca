@@ -293,10 +293,21 @@ export type AgentSessionStatusSummary = {
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = { message: string; failedAt: number }
 
+export type AgentSessionConversationName = {
+  sessionId: string
+  conversationName: string | null
+  namingError?: AgentSessionNamingError
+}
+
 /** A summary outlives its provider child: an evicted idle session is still idle, so the host
  *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[]; namingActiveSessionIds?: string[] }
+  | {
+      type: 'snapshot'
+      sessions: AgentSessionStatusSummary[]
+      namingActiveSessionIds?: string[]
+      conversationNames?: AgentSessionConversationName[]
+    }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 

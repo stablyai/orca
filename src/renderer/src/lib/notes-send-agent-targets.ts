@@ -1,3 +1,8 @@
+import {
+  projectedStructuredChatTabName,
+  type StructuredChatTabNames
+} from '@/runtime/structured-chat-tab-name'
+import { structuredChatTabById } from './structured-chat-tab-index'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -72,12 +77,20 @@ function detectTitleHintPaneEvidence(
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
+  chatNames: StructuredChatTabNames,
   now = Date.now()
 ): NotesSendAgentTarget[] {
   const targets: NotesSendAgentTarget[] = [
     ...deriveRunningAgentSendTargets(state, worktreeId, now),
     ...deriveStatuslessStructuredAgentSendTargets(state, worktreeId)
-  ].map(toNotesSendAgentTarget)
+  ].map((target) => {
+    const tab = structuredChatTabById(state.unifiedTabsByWorktree, worktreeId, target.tabId)
+    const title =
+      target.kind === 'structured-session' && tab?.entityId === target.sessionId
+        ? projectedStructuredChatTabName(tab, chatNames)
+        : undefined
+    return toNotesSendAgentTarget(target, title)
+  })
 
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     const titleHintTarget = deriveTitleHintAgentTarget(state, tab)
@@ -98,7 +111,10 @@ export function deriveNotesSendAgentTargets(
   return targets
 }
 
-function toNotesSendAgentTarget(target: RunningAgentSendTarget): NotesSendAgentTarget {
+function toNotesSendAgentTarget(
+  target: RunningAgentSendTarget,
+  title?: string
+): NotesSendAgentTarget {
   return {
     paneKey: target.paneKey,
     tabId: target.tabId,
@@ -107,7 +123,7 @@ function toNotesSendAgentTarget(target: RunningAgentSendTarget): NotesSendAgentT
       target.kind === 'terminal'
         ? resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent)
         : target.agentType,
-    tabTitle: target.kind === 'terminal' ? target.tab.title : target.title,
+    tabTitle: target.kind === 'terminal' ? target.tab.title : (title ?? target.title),
     status: target.status,
     ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
   }

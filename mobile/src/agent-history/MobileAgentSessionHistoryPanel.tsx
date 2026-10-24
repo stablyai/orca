@@ -73,6 +73,18 @@ function MobileAgentSessionHistoryPanelContent({
   )
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
+  const {
+    scope,
+    screenState,
+    refreshing,
+    hostStatusResult,
+    activeWorktreePath,
+    scopeFilterPaths,
+    onSelectScope,
+    onRefresh,
+    retry
+  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
+
   // Why: the worktree list seeds the host-local scopePaths derivation and the
   // active-worktree path for the "current worktree" badge.
   useEffect(() => {
@@ -108,18 +120,6 @@ function MobileAgentSessionHistoryPanelContent({
       cancelled = true
     }
   }, [client, connState])
-
-  const {
-    scope,
-    screenState,
-    refreshing,
-    hostStatusResult,
-    activeWorktreePath,
-    scopeFilterPaths,
-    onSelectScope,
-    onRefresh,
-    retry
-  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES

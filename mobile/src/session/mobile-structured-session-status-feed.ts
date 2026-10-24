@@ -5,17 +5,24 @@
 // then replaces what contact loss revoked.
 
 import {
+  AgentSessionAssociationObservation,
   foldAgentSessionStatusEvent,
   revokeAgentSessionStatusLive,
   type AgentSessionStatusSnapshot
 } from '../../../src/shared/agent-session-status-snapshot-fold'
 import type { AgentSessionStatusEvent } from '../../../src/shared/agent-session-wire'
+import {
+  foldAgentSessionConversationNames,
+  type AgentSessionConversationNames
+} from '../../../src/shared/agent-session-conversation-names'
 import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import type { RpcClient } from '../transport/rpc-client'
 
 export type MobileStructuredSessionStatusFeed = {
   subscribe: (listener: () => void) => () => void
   getSnapshot: () => AgentSessionStatusSnapshot
+  getNamingSnapshot: () => AgentSessionConversationNames
+  getAssociationRevision: () => number
 }
 
 const feeds = new WeakMap<RpcClient, MobileStructuredSessionStatusFeed>()
@@ -50,6 +57,8 @@ function streamRefusal(value: unknown): { code?: string; message?: string } | nu
 
 function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   let snapshot: AgentSessionStatusSnapshot = new Map()
+  let names: AgentSessionConversationNames = new Map()
+  const associations = new AgentSessionAssociationObservation()
   // `unavailable`: the host refused the method to phones; asked again only on a new connection.
   let stream: 'closed' | 'open' | 'unavailable' = 'closed'
   // Released once the host ends the stream, so the client never replays it on a later session.
@@ -60,11 +69,16 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     pending()
   }
   const listeners = new Set<() => void>()
-  const setSnapshot = (next: AgentSessionStatusSnapshot): void => {
-    if (next === snapshot) {
+  const setSnapshot = (
+    next: AgentSessionStatusSnapshot,
+    nextNames = names,
+    associationChanged = false
+  ): void => {
+    if (!associationChanged && next === snapshot && nextNames === names) {
       return
     }
     snapshot = next
+    names = nextNames
     for (const listener of listeners) {
       listener()
     }
@@ -78,7 +92,12 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         revokeLive()
         return
       }
-      setSnapshot(foldAgentSessionStatusEvent(snapshot, raw))
+      const associationChanged = associations.observe(raw)
+      setSnapshot(
+        foldAgentSessionStatusEvent(snapshot, raw),
+        foldAgentSessionConversationNames(names, raw),
+        associationChanged
+      )
       return
     }
     const refusal = streamRefusal(raw)
@@ -93,6 +112,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
   }
   const open = (): void => {
     if (stream === 'closed' && listeners.size > 0) {
+      associations.renew()
       stream = 'open'
       const dispose = client.subscribe('agentSession.subscribeStatus', {}, onFrame)
       // A stream that ended inside `subscribe` is released at once.
@@ -113,6 +133,7 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
     if (stream === 'unavailable') {
       stream = 'closed'
     }
+    associations.renew()
     revokeLive()
   })
   return {
@@ -123,7 +144,9 @@ function createFeed(client: RpcClient): MobileStructuredSessionStatusFeed {
         listeners.delete(listener)
       }
     },
-    getSnapshot: () => snapshot
+    getSnapshot: () => snapshot,
+    getNamingSnapshot: () => names,
+    getAssociationRevision: () => associations.revision
   }
 }
 

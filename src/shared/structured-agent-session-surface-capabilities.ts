@@ -23,6 +23,10 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY =
 // `agentSession.regenerateName`; an older host still publishes nothing a client must act on.
 export const STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY =
   'agent-session.structured.regenerate-name.v1' as const
+// Why: a chat rename is saved on the host only through `agentSession.rename`; a window talking to an
+// older host keeps the rename on its own tab instead.
+export const STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY =
+  'agent-session.structured.rename.v1' as const
 // Why: `agentSession.create` gains an optional `resumeFrom`, and its params are a STRICT union — an
 // older host rejects the unknown key as a schema error, which a client cannot tell from a real
 // refusal. Worse, without probing, a client cannot know whether a host that accepted the call
@@ -58,5 +62,6 @@ export const STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY
+  STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RENAME_RUNTIME_CAPABILITY
 ] as const

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
+import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 import type { AppState } from './types'
 
 /** Resolves the displayed tab-strip label for the destructive confirmation. */
@@ -11,7 +12,9 @@ export function resolvePinnedTabLabel(
   const tab = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
     (candidate) => candidate.id === visibleId || candidate.entityId === visibleId
   )
-  return resolveUnifiedTabLabel(tab, state.settings?.tabAutoGenerateTitle === true)
+  return tab?.contentType === 'agent-session'
+    ? readStructuredChatTabName(tab, state)
+    : resolveUnifiedTabLabel(tab, state.settings?.tabAutoGenerateTitle === true)
 }
 
 /** Whether the unified tab matching `tabId` (by id or entityId) in the given

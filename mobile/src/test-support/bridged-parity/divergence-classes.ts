@@ -53,18 +53,18 @@ export type BridgedParityEvidence = {
   /** The run threw before there was a recording to compare. */
   threwWhileRecording: boolean
   /**
-   * Field paths that differ, in the order `compareGolden` walks them, or `checkpoints` when the
-   * checkpoint lists themselves do. Only the first names the golden: it is the divergence that
-   * takes the replay off course, and everything after it is a consequence of a run that is already
-   * somewhere else. The rest is kept because a failure that has to be read wants all of it.
+   * Every differing leaf, plus checkpoint-list disagreement. No first-path shortcut can certify
+   * that later siblings are ordinal-only or consequences of a malformed exchange.
    */
   divergingFields: readonly string[]
-  /** The scenario scripts a reply that is `ok` and carries no `result` key. */
-  scriptsAbsentResultReply: boolean
+  /** Every nonordinal difference was traced to its own injected exchange and actual refusal. */
+  absentResultExplainsResiduals: boolean
   /** Null unless the throw was the scripted transport refusing one request's params. */
   paramsMismatch: ParamsMismatchEvidence | null
   /** The page refused a frame on a stream it held and released that stream because of it. */
   refusalReleasedStream: boolean
+  /** Unchanged corpus membership only; these legacy labels do not certify causal parity. */
+  legacyBaseline?: { firstField: string | undefined; scriptsAbsentResultReply: boolean }
 }
 
 /**
@@ -87,21 +87,11 @@ function settlementField(path: string): boolean {
   return path.endsWith('.settlement') || path.includes('.settlement.')
 }
 
-function ordinalField(path: string): boolean {
-  return path.endsWith('.ordinal')
+export function ordinalField(path: string): boolean {
+  return /^(sender|payloads|effects)\[\d+\]\.ordinal$/.test(path)
 }
 
-/**
- * Exactly one name per diverging golden, in this order and no other.
- *
- * The first arm is the only one that needs a second run, and it has to come first because it is the
- * only one that is a cause rather than a symptom: nearly every golden here is refused some reply
- * for the missing field, and only the run that supplies it says which of them the field explains.
- * Everything below is a property of the scenario, of the fields that moved, or of the frames the
- * page posted. The one arm that has no recording to read — the run that threw before there was
- * one — is the one arm that reads the throw, and it reads it only far enough to find the step the
- * transport named, then compares the params on their own.
- */
+/** Strict residual certification, or the explicitly requested unchanged-corpus legacy label. */
 export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedParityClass {
   if (evidence.fixedByReplyMeta) {
     return 'reply-meta-required'
@@ -110,33 +100,38 @@ export function classifyBridgedParity(evidence: BridgedParityEvidence): BridgedP
     if (movedOnlyKeysScriptedUndefined(evidence.paramsMismatch)) {
       return 'params-undefined'
     }
-    return evidence.scriptsAbsentResultReply && evidence.refusalReleasedStream
-      ? 'result-absent-stream-release'
+    return evidence.refusalReleasedStream ? 'result-absent-stream-release' : 'unclassified'
+  }
+  const legacy = evidence.legacyBaseline
+  if (legacy !== undefined) {
+    if (legacy.firstField === undefined) {
+      return 'unclassified'
+    }
+    if (legacy.firstField.endsWith('.ordinal')) {
+      return 'write-ordinal'
+    }
+    return legacy.scriptsAbsentResultReply
+      ? settlementField(legacy.firstField)
+        ? 'result-absent-settlement'
+        : 'result-absent-observation'
       : 'unclassified'
   }
-  const [first] = evidence.divergingFields
-  if (first === undefined) {
+  if (evidence.divergingFields.length === 0) {
     return 'unclassified'
   }
-  // Before the partition below, not after: a reply shape the page drops cannot move a write
-  // ordinal, so an ordinal that moved first is the bridge's hop and not the partition's doing. Most
-  // of the matrix carries an absent-result reply somewhere, and testing that first would swallow
-  // every ordinal finding in the corpus.
-  if (ordinalField(first)) {
+  const residuals = evidence.divergingFields.filter((path) => !ordinalField(path))
+  if (residuals.length === 0) {
     return 'write-ordinal'
   }
-  if (evidence.scriptsAbsentResultReply) {
-    return settlementField(first) ? 'result-absent-settlement' : 'result-absent-observation'
+  if (evidence.absentResultExplainsResiduals) {
+    return settlementField(residuals[0]!) ? 'result-absent-settlement' : 'result-absent-observation'
   }
   return 'unclassified'
 }
 
 /**
- * Why a class the run still counts is a bound on the claim rather than a defect left open.
- *
- * A class with an entry here is one the suite is allowed to see; a class without one has to be
- * zero, which is what `reply-meta-required` became. Each reason is a property of the recorder or of
- * the wire, measured rather than argued, so it can be checked without rerunning anything.
+ * Known recorder limitations. For unchanged corpus members these describe legacy labels, not
+ * complete causal proofs. Changed History members require exact residual attribution above.
  */
 export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityClass, string>>> = {
   'result-absent-settlement':
@@ -162,37 +157,15 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
     'while a same-turn `subscribe` payload publishes one delivery later'
 }
 
-/**
- * What this tree measures, per class, over all 795 goldens.
- *
- * A pin, not a description: `bridgedParityTallyDrift` holds every number below to itself exactly,
- * in both directions, and this module's test pins their sum to the size of the corpus. A class that
- * grew, a class that shrank, and a golden that moved out of a class into `identical` are each a red
- * run whose answer is an edit here.
- *
- * Exact rather than a bound because a bound cannot see the up direction at all: a golden reported
- * `identical` instead of the excluded class it belongs to still leaves nothing unclassified and
- * nothing diverging outside an excluded class, which is everything else the suite asks. Two
- * excluded classes trading members when a fix changes which difference a run meets first is the
- * same story — both numbers move, and both moves are edits here rather than a quiet pass.
- */
+/** Measured membership counts: strict History verdicts plus unchanged legacy baseline labels. */
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 401,
-  // Closed by the `_meta` widening: the page's reader is `isRpcResponse` itself.
+  identical: 396,
   'reply-meta-required': 0,
-  // Settling a refused reply moved three goldens here out of `write-ordinal`: a rejection that
-  // now arrives differs before the ordinal that also moved does. Nothing stopped replaying
-  // identically, and the corpus is a fixed size, so a shuffle between two excluded classes cannot
-  // hide one. Two more arrived with Jira: the hydration and workspace-context groups each ask
-  // `jira.status`, so each family gained one absent-result partition.
   'result-absent-settlement': 350,
-  // Four left here and two left `write-ordinal` for the class below, which is the `cancel` a
-  // refused stream frame now posts: the run stops at a renamed occurrence before it reaches the
-  // checkpoint or the ordinal that used to be what differed first.
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
   'params-undefined': 27,
-  'write-ordinal': 8,
+  'write-ordinal': 13,
   unclassified: 0
 }
 
@@ -225,18 +198,7 @@ export function bridgedParityTallyDrift(tally: BridgedParityTally): readonly str
 /** A class this small is named golden by golden in the run's output rather than counted. */
 export const BRIDGED_PARITY_NAMEABLE = 8
 
-/**
- * Which goldens are in each class small enough to name, so the pin holds membership and not a count.
- *
- * A count alone is blind to a trade. Every predicate above reads the scenario rather than the
- * refused frame — `scriptsAbsentResultReply` asks whether the scenario scripts the injected shape
- * anywhere, not whether the frame the page refused was one — so a real refusal inside a stream
- * golden is named an excluded class. One golden leaving that class as the real refusal puts another
- * in moves no number here, and the sum and the `identical` pin both still hold. The ids are what
- * notices. Where a class is too large to list, its predicate stands on its own and the count is all
- * the pin has; that is why the classes here are the small ones and why the test above requires
- * every class of `BRIDGED_PARITY_NAMEABLE` or fewer to appear.
- */
+/** Small-class membership plus the measured strict ordinal History controls. */
 export const BRIDGED_PARITY_MEMBERS: Readonly<
   Partial<Record<BridgedParityClass, readonly string[]>>
 > = {
@@ -254,14 +216,19 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-session.native-chat-page-nativechat.subscribe-1-1'
   ],
   'write-ordinal': [
-    'settings-home-coalesced',
-    'live-worktree-name-stream',
+    'aivault-history-scan-fulfilled',
+    'aivault-history-scan-unsupported',
+    'aivault-history-scan-worktrees-late',
+    'aivault-history-screen-listed',
+    'aivault-history-screen-worktrees',
     'host-worktree-refresh-stream',
+    'live-worktree-name-stream',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1',
+    'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-1',
     'matrix-live-worktree-name-worktree.show-2',
-    'matrix-live-worktree-name-runtime.clientevents.subscribe-2-1',
     'matrix-live-worktree-name-worktree.show-3',
-    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1'
+    'settings-home-coalesced'
   ]
 }
 

@@ -78,7 +78,7 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
  * Scripts emitted at every prefix of the sorted route key list, and the route each prefix added.
  *
  * A chunk is emitted per distinct set of importers, not per route, so a route's marginal cost is
- * what it fails to share rather than what it weighs. Re-measured on this head by building
+ * what it fails to share rather than what it weighs. The recorded sweep was measured by building
  * `routes.slice(0, n)` for every n, which is what the fence below is derived from rather than
  * fitted to. The spread it shows is 1 to 14: `pr` adds one script, `tasks` adds fourteen.
  * The root `./_layout.tsx` (the page's web sibling of the native root) sorts first; with it the
@@ -119,8 +119,8 @@ export const MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD = sweptScripts
  * Measured, not chosen, and per head rather than cumulative: at 8, 10, 12 and 14 routes the head
  * that wrote the old `4r + 16` read 32, 43, 61 and 69, and one refactor with no route added moved
  * the 12-route prefix by four (61 to 57). Four is the worst step a refactor alone has cost. The
- * sweep before this branch read 34, 40, 58 and 71 and this head reads 34, 40, 59 and 75: four at
- * 14 routes, from main's own drift plus the server-workspace modules this head adds. A head
+ * sweep before this branch read 34, 40, 58 and 71; its measured 15-route source read 34, 42, 59
+ * and 75: four at 14 routes, from main's drift plus the server-workspace modules it added. A head
  * between them read 77 there, six past that sweep, and re-measured rather than fitting inside the
  * margin, which is what a step past four is meant to force.
  * Summing the steps instead would grow this number every head and loosen the fence for free.

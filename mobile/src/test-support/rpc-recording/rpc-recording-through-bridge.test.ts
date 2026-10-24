@@ -1,3 +1,4 @@
+import { strictReplayVerdict, type BridgedReplay } from '../bridged-parity/replay-verdict'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
@@ -34,8 +35,8 @@ import {
   divergingFields,
   paramsMismatchEvidence,
   recordingWithoutRpcMeta,
-  refusalReleasedStream,
   refusedFrames,
+  refusalReleasedStream,
   scriptsAbsentResultReply,
   withReplyMeta
 } from '../bridged-parity/divergence-evidence'
@@ -49,77 +50,10 @@ import { runRecording } from './run-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 
 /**
- * Every golden, recorded again with the page bridge between the operation and the scripted
- * transport, and compared body for body against the committed file.
- *
- * The claim it is built to certify is the one C1 needs before a screen moves to the web: a screen
- * driven through `BridgeRpcClient` observes what it observes on the native client, down to the
- * byte. This suite writes nothing, and it is not in `RECORDING_DRIVERS`: a suite that cannot put
- * an observation in a recorded file does not record one.
- *
- * It runs by default, in `pnpm test` and so in CI, and `RPC_FOUNDATION_BRIDGE=0` is what skips it
- * for a local run that does not want the three minutes. Vitest gives the file a worker of its own
- * beside the rest of the suite, so the gate costs much less in wall time than it does in test time.
- *
- * ## What it asserts today
- *
- * Byte-identical replay where it holds, and the named shape of every divergence where it does not.
- * A golden that matches is compared in full; one that does not is classified by
- * `classifyBridgedParity`, which reads the frames and the scenario rather than the failure's text.
- * The run fails if any count is not exactly its number in `BRIDGED_PARITY_BASELINE` — `identical`
- * among them, which is the only check that sees a golden that stopped diverging as well as one that
- * started — if a single golden lands in `unclassified`, or if one diverges in a class
- * `BRIDGED_PARITY_EXCLUSIONS` does not name. For a class small enough to name,
- * `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one golden
- * leaving a class as another arrives.
- *
- * 401 of the 795 replay byte for byte. The other 394 fall in five classes, 350 / 3 / 6 / 27 / 8,
- * and none of them is a reason to re-record anything. `c1-page-closure.ts` then pins, golden by
- * golden, the 103 recorded at a call site the C1 page owns, because a count over 795 cannot tell a
- * domain's regression from another domain's improvement.
- *
- * 1. **result-absent-settlement, 350** and **2. result-absent-observation, 3.**
- *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
- *    alike, so this one is not a bridge defect: the recorder injects that partition at the scripted
- *    sender port, below the frame validation both sides do, which is what the README means by not
- *    claiming malformed-frame coverage. A reply shape the wire itself drops cannot cross a real
- *    frame boundary, so byte-identical replay is not available for it at any bridge. The two
- *    classes are the same cause seen twice. In the first, what differs first is the settlement,
- *    which now arrives as a refusal the caller can read rather than never arriving at all. In the
- *    others the listener got far enough to act, so what differs first is downstream of the reply:
- *    a different set of checkpoints, or an effect that no longer happens. The suite names all of
- *    the second class in its output for as long as the class is small enough to name.
- * 3. **result-absent-stream-release, 6.** The same injection a third time, delivered on a stream
- *    rather than as a reply. The page refuses the frame, and a frame it refused is not a stream the
- *    shell retired, so it posts the `cancel` that is the only thing releasing the shell's slot for
- *    it. That unsubscribe is a physical payload the native run has no counterpart for, and it takes
- *    the recorder's next occurrence name for that method, so the scenario stops matching and the
- *    run throws before there is a recording to compare. The native client never refuses the frame,
- *    so it never reaches the release: the difference is the injected shape, not the release.
- * 4. **params-undefined, 27.** An own property whose value is `undefined` does not survive
- *    JSON — and it does not survive the native path either. `tw-smart-search-all-providers` records
- *    `{"filter":"assigned","limit":50}` as the bytes its `linear.listIssues` request put on the
- *    wire, with the scenario's `workspaceId` already gone, so the bridged run sends the identical
- *    frame. What differs is the object `ScriptedRpcTransport.complete` matches the scenario step
- *    against, which is the params as the shell's client received them, one level above any
- *    serialization. No transport can carry that difference, and the projection the brief named is
- *    not where it lives: `projectMobileRpcRequestParams` rewrites `worktree.ps` alone, none of the
- *    scenarios in this class calls it, and the bridge host forwards into the same
- *    `StableLogicalRpcClient` the native screens hold, so there is no shell-side copy to move.
- * 5. **write-ordinal, 8.** Not a reorder on the wire: the page posts its frames in the order
- *    the operation made them and the payloads publish below the bridge in that same order. What
- *    moves is every write the operation makes *above* the bridge, the logical `sendRequest` stamp
- *    and each device effect, because those happen at the call while a same-turn `subscribe` payload
- *    is published a delivery later. `write-ordinal.ts` counts both into one sequence.
- *
- * ## What C0.8 closed
- *
- * The class this suite was landed to name — a page reader narrower than the transport it stands in
- * for — is gone: `BridgeReplyPayloadSchema` is `isRpcResponse` itself, so every reply the phone
- * accepts today crosses. A frame the reader still refuses now settles the exchange it named instead
- * of leaving it pending for the life of the document, and where that exchange is a stream the page
- * also cancels it, because the shell has not retired a stream whose frame the page dropped. The counterfactual replay stays, and its
- * class stays pinned at zero: it is what tells a future narrowing apart from a payload that moved.
+ * The ten changed History goldens receive complete residual certification. Other goldens retain
+ * their pre-existing regression labels and per-id/page/tally drift checks; those legacy labels
+ * are not causal parity proofs. Their known recorder coverage gaps remain outside this change.
+ * The reply-meta counterfactual and raw recordings are preserved for both paths.
  */
 
 const root = resolve(import.meta.dirname, '../../../..')
@@ -136,11 +70,7 @@ const BUILD_ID = 'recording-build'
 /** `ready` out, `init` back: two deliveries, and a round to see that the session landed. */
 const HANDSHAKE_ROUNDS = 4
 
-type Replay = {
-  recording: Recording | null
-  thrown: unknown
-  pairs: BridgePortPair<RpcClient>[]
-}
+type Replay = BridgedReplay
 
 const counts: Record<BridgedParityClass, number> = {
   'reply-meta-required': 0,
@@ -265,8 +195,11 @@ async function verdict(
     observed.set(id, { family, verdict: name })
   }
   const expected = readGolden(directory, id)
+  const certified =
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history'] ?? {}, id) ||
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {}, id)
   const fields = run.recording === null ? [] : divergingFields(expected.recording, run.recording)
-  if (run.recording !== null && fields.length === 0) {
+  if (!certified && run.recording !== null && fields.length === 0) {
     // Not redundant with the field walk: this one also pins the encoding.
     compareGolden(expected, { ...expected, recording: run.recording })
     identical += 1
@@ -274,19 +207,49 @@ async function verdict(
     return
   }
   const asIf = await replay(id, scenarios, withReplyMeta)
+  if (certified) {
+    const result = strictReplayVerdict(expected.recording, scenarios, run, asIf)
+    if (result.name === 'unclassified') {
+      throw new Error(
+        `Unclassified bridged divergence: ${id}\noriginal (${result.original.name}):\n${explain(result.original.fields, run)}\nwith \`_meta\` supplied (${result.replyMeta.name}):\n${explain(result.replyMeta.fields, asIf)}`
+      )
+    }
+    if (result.name === 'identical') {
+      compareGolden(expected, { ...expected, recording: run.recording! })
+      identical += 1
+      record('identical')
+      return
+    }
+    counts[result.name] += 1
+    record(result.name)
+    members.set(result.name, [...(members.get(result.name) ?? []), id])
+    if (!samples.has(result.name)) {
+      samples.set(result.name, `${id}\n${explain(fields, run)}`)
+    }
+    return
+  }
   const asIfFields =
     asIf.recording === null
       ? []
       : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording))
   // A scenario is handed a pair as it starts, so the last pair belongs to the one that threw.
   const failing = scenarios[asIf.pairs.length - 1]
+  const scriptsAbsent = scenarios.some(scriptsAbsentResultReply)
   const evidence: BridgedParityEvidence = {
     fixedByReplyMeta: asIf.recording !== null && asIfFields.length === 0,
     threwWhileRecording: asIf.recording === null,
     divergingFields: asIfFields,
-    scriptsAbsentResultReply: scenarios.some(scriptsAbsentResultReply),
+    absentResultExplainsResiduals: false,
     paramsMismatch: paramsMismatchEvidence(asIf.thrown, failing, asIf.pairs.at(-1)?.toShell ?? []),
-    refusalReleasedStream: asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics))
+    refusalReleasedStream:
+      scriptsAbsent && asIf.pairs.some((pair) => refusalReleasedStream(pair.diagnostics)),
+    legacyBaseline: {
+      firstField:
+        asIf.recording === null
+          ? undefined
+          : divergingFields(expected.recording, recordingWithoutRpcMeta(asIf.recording), false)[0],
+      scriptsAbsentResultReply: scriptsAbsent
+    }
   }
   const name = classifyBridgedParity(evidence)
   counts[name] += 1
@@ -303,7 +266,7 @@ async function verdict(
 }
 
 describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
-  'every golden replays through the page bridge, byte-identically or in a named class',
+  'History parity certification and unchanged corpus baseline membership',
   () => {
     for (const pilot of pilotGoldens(input.scenarios)) {
       it(`${pilot.id}: bridged parity`, async () => {
@@ -325,7 +288,7 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         golden.timeoutMs
       )
     }
-    it('replays every golden byte for byte or in a class a predicate excludes by name', () => {
+    it('preserves measured strict and legacy membership without unexplained changed History residuals', () => {
       const table = [
         `identical ${identical}`,
         ...Object.entries(counts).map(([name, count]) => {
@@ -340,8 +303,12 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         ([name]) => BRIDGED_PARITY_EXCLUSIONS[asClass(name)] !== undefined
       )
       const excludedCount = total(Object.fromEntries(excluded))
-      process.stdout.write(`\nbridged parity over ${corpus} goldens\n${table}\n`)
-      process.stdout.write(`\nexcluded ${excludedCount} of ${corpus}, each with the reason it is\n`)
+      process.stdout.write(
+        `\nHistory certification and legacy membership over ${corpus} goldens\n${table}\n`
+      )
+      process.stdout.write(
+        `\nlabelled recorder limitations ${excludedCount} of ${corpus}; unchanged labels are baseline only\n`
+      )
       for (const [name, count] of excluded) {
         process.stdout.write(`  ${name} ${count}: ${BRIDGED_PARITY_EXCLUSIONS[asClass(name)]}\n`)
       }

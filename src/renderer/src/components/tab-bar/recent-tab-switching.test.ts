@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 import type { AppState } from '../../store/types'
 import type { Tab } from '../../../../shared/tab-types'
 import {
@@ -30,20 +31,7 @@ function stateWithTabs(
   recentTabIds: string[],
   activeTabId: string,
   hydratingTabIds: string[] = []
-): Pick<
-  AppState,
-  | 'activeBrowserTabId'
-  | 'activeFileId'
-  | 'activeGroupIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabType'
-  | 'browserTabsByWorktree'
-  | 'groupsByWorktree'
-  | 'openFiles'
-  | 'tabBarOrderByWorktree'
-  | 'tabsByWorktree'
-  | 'unifiedTabsByWorktree'
-> {
+): AppState {
   // Why: only tabs the group actually holds — a group tab missing from tabOrder is a hydration
   // race the strip repairs by appending, so listing extras here would not model "one tab open".
   const tabs = [
@@ -52,6 +40,7 @@ function stateWithTabs(
     tab('tab-c', 'file-c', 'C')
   ].filter((entry) => tabOrder.includes(entry.id) || hydratingTabIds.includes(entry.id))
   return {
+    ...createTestStore().getState(),
     activeBrowserTabId: null,
     activeFileId: tabs.find((entry) => entry.id === activeTabId)?.entityId ?? null,
     activeGroupIdByWorktree: { [WT]: GROUP },

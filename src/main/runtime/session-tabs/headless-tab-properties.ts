@@ -1,3 +1,4 @@
+import { renameStructuredSessionTab, type SessionTabProps } from './structured-session-tab-rename'
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
@@ -38,39 +39,40 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
   // was never persisted. Persist to the workspace session + live snapshot.
   async setMobileSessionTabProps(
     worktreeSelector: string,
-    args: {
-      tabId: string
-      color?: string | null
-      isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
-      customTitle?: string | null
-    }
+    args: SessionTabProps
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Why: a renderer-authoritative host owns + republishes tab props, so a
     // headless write would be overwritten. Persist only when headless.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
-    // Why by tab: a sleeping or starting pane has no handle for terminal.rename to name (#29975).
-    const customTitle =
-      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
     // Switch point: a terminal tab main owns takes its props in main's layout, window or not.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
       return { updated: true }
     }
-    if (this.getAvailableAuthoritativeWindow()) {
-      if (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined) {
-        throw Object.assign(
-          new Error(
-            'Tab color, pin, and view mode edits are unavailable while a desktop window owns the layout'
-          ),
-          { code: 'capability_unsupported' }
-        )
-      }
+    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    if (
+      authoritativeWindow &&
+      (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)
+    ) {
+      throw Object.assign(
+        new Error(
+          'Tab color, pin, and view mode edits are unavailable while a desktop window owns the layout'
+        ),
+        { code: 'capability_unsupported' }
+      )
+    }
+    args = await renameStructuredSessionTab(snapshot, hostTabId, args, () =>
+      this.ensureStructuredAgentSessionHost()
+    )
+    const customTitle =
+      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
+    if (authoritativeWindow) {
       if (customTitle !== undefined) {
         this.notifier?.renameTerminal(hostTabId, customTitle)
       }

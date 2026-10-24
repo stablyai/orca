@@ -68,6 +68,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       }
 
       const { events, liveAgentByPaneKey } = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: entries,
         retainedAgentsByPaneKey: {},
         tabsByWorktree: { [worktree.id]: tabs },
@@ -223,6 +224,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
     it('creates a thread for a repo-less floating terminal agent', () => {
       const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: makeWorkingEntryWithoutHistory()
         },
@@ -416,6 +418,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
       const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: makeWorkingEntryWithoutHistory(),
           [PANE_KEY_2]: {
@@ -467,6 +470,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       const tab1 = makeTabWithIds('tab-1', worktree.id)
       const tab2 = makeTabWithIds('tab-2', worktree.id)
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {
           [PANE_KEY]: makeWorkingEntryWithoutHistory(),
           [PANE_KEY_2]: {
@@ -536,6 +540,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: { [PANE_KEY]: doneEntry('builder') },
         retainedAgentsByPaneKey: {},
         tabsByWorktree: { [localWorktree.id]: [tab] },
@@ -572,6 +577,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: { [PANE_KEY]: doneEntry(null) },
         retainedAgentsByPaneKey: {},
         tabsByWorktree: { [localWorktree.id]: [tab] },
@@ -619,6 +625,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       retained.entry = doneEntry(null)
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {},
         retainedAgentsByPaneKey: { [PANE_KEY]: retained },
         tabsByWorktree: {},
@@ -642,6 +649,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       const tab = makeTab()
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {},
         retainedAgentsByPaneKey: {},
         migrationUnsupportedByPtyId: {
@@ -684,6 +692,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
       )
 
       const result = buildActivityEvents({
+        chatNames: new Map(),
         agentStatusByPaneKey: {},
         retainedAgentsByPaneKey: { [PANE_KEY]: retained },
         tabsByWorktree: {},

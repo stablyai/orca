@@ -150,6 +150,7 @@ export function makeActivityResult(args: {
   const tab = args.tab ?? makeTab()
 
   return buildActivityEvents({
+    chatNames: new Map(),
     agentStatusByPaneKey: args.entries ?? {},
     retainedAgentsByPaneKey: args.retained ?? {},
     tabsByWorktree: {
