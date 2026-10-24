@@ -16,7 +16,7 @@ import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
-import { existingWslColdRestoreCwd, normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
@@ -181,12 +181,12 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
+        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
+        // fails for reasons other than absence, which woke panes blank and at the root (verify-7).
         cwd:
-          recoveryWslDistro && recoveredCwd && process.platform === 'win32'
-            ? await existingWslColdRestoreCwd(recoveredCwd, requestedCwd)
-            : recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
-              ? recoveredCwd
-              : requestedCwd
+          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
+            ? recoveredCwd
+            : requestedCwd
       }
     }
 
