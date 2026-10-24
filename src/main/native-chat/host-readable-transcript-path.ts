@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs'
-import { isAbsolute } from 'node:path'
+import { isAbsolute, posix } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   uniqueDirs,
   wslHomeSessionDirs,
   type SessionHomeAgent
 } from '../ai-vault/session-scanner-roots'
-import { getWslHomeAsync, listRunningWslHomeDirsAsync } from '../wsl'
+import { getWslHomeAsync, listRunningWslHomeDirsAsync, resolveWslGuestRealDirAsync } from '../wsl'
 import {
   filterPathsToRunningWslDistrosAsync,
   filterPathsToWslDistros
@@ -60,6 +60,7 @@ export type HostReadableTranscriptPathDeps = {
   wslDistro?: string
   listWslHomeDirs?: () => Promise<string[]>
   wslSnapshot?: WslTranscriptResolutionSnapshot
+  resolveGuestRealDir?: (distro: string, guestDir: string) => Promise<string | null>
 }
 
 // Probe asynchronously: unreachable WSL 9P shares can stall the main thread.
@@ -89,6 +90,8 @@ let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
 let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
+// Cache answers so a transcript that does not exist yet does not spawn wsl.exe on every poll.
+const guestRealDirs = new Map<string, { realDir: string | null; expiresAt: number }>()
 
 export function configureHostReadableTranscriptPathSources(options: {
   getAdditionalCodexHomePaths?: () => readonly string[]
@@ -133,6 +136,43 @@ export function resetHostReadableTranscriptPathCacheForTests(): void {
   cachedWslHomeDirsExpiresAt = 0
   inflightWslHomeDirs = null
   getAdditionalCodexHomePaths = undefined
+  guestRealDirs.clear()
+}
+
+/** UNC twin of a guest path whose directory is a symlink (e.g. a Claude profile's `projects`). */
+async function guestSymlinkTarget(
+  guestPath: string,
+  distro: string,
+  deps: HostReadableTranscriptPathDeps
+): Promise<string | null> {
+  const dir = posix.dirname(guestPath)
+  const key = `${distro}\0${dir}`
+  let realDir = guestRealDirs.get(key)
+  if (!realDir || Date.now() >= realDir.expiresAt) {
+    const resolved = await (deps.resolveGuestRealDir ?? resolveWslGuestRealDirAsync)(distro, dir)
+    realDir = {
+      realDir: resolved,
+      expiresAt: Date.now() + (resolved ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
+    }
+    guestRealDirs.set(key, realDir)
+  }
+  return !realDir.realDir || realDir.realDir === dir
+    ? null
+    : toWindowsWslPath(posix.join(realDir.realDir, posix.basename(guestPath)), distro)
+}
+
+async function probeGuestPath(
+  guestPath: string,
+  distro: string,
+  pathExists: (path: string) => Promise<boolean>,
+  deps: HostReadableTranscriptPathDeps
+): Promise<string | null> {
+  const uncPath = toWindowsWslPath(guestPath, distro)
+  if (await pathExists(uncPath)) {
+    return uncPath
+  }
+  const linkedPath = await guestSymlinkTarget(guestPath, distro, deps)
+  return linkedPath && (await pathExists(linkedPath)) ? linkedPath : null
 }
 
 /** Translate WSL guest paths to host-readable UNC paths, preferring homes matching the guest path. */
@@ -167,6 +207,9 @@ export async function toHostReadableTranscriptPath(
     ) {
       return null
     }
+    if (candidate !== path) {
+      return probeGuestPath(path, exactWslDistro, pathExists, deps)
+    }
     return (await pathExists(candidate)) ? candidate : null
   }
   // Classify before probing: Win32 resolves /home on the current drive and may find a local look-alike.
@@ -190,10 +233,10 @@ export async function toHostReadableTranscriptPath(
   // Probe ranked distros sequentially to avoid unnecessary 9P calls into stopped distros.
   let unavailable: WslTranscriptFsError | undefined
   for (const distro of rankDistrosForGuestPath(homeDirs, path)) {
-    const uncPath = toWindowsWslPath(path, distro)
     try {
-      if (await pathExists(uncPath)) {
-        return uncPath
+      const hostPath = await probeGuestPath(path, distro, pathExists, deps)
+      if (hostPath) {
+        return hostPath
       }
     } catch (error) {
       unavailable = wslTranscriptFsRefusal(error)

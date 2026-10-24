@@ -16,7 +16,8 @@ vi.mock('../wsl', () => ({
     UBUNTU_HOME,
     UBUNTU_HOME.replace('Ubuntu', 'Debian')
   ]),
-  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro))
+  getWslHomeAsync: vi.fn(async (distro: string) => UBUNTU_HOME.replace('Ubuntu', distro)),
+  resolveWslGuestRealDirAsync: vi.fn(async (_distro: string, dir: string) => dir)
 }))
 
 // Accept only exact UNC fixtures so wrong-distro resolutions fail; native paths use real filesystem checks.
