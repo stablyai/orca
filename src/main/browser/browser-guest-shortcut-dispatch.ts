@@ -167,6 +167,12 @@ export function forwardGuestShortcutInput(
       // Guest focus may leave active-tab state stale in splits; close by source ID.
       renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
     }
+  } else if (
+    !isFloatingGuest &&
+    keybindingMatchesAction('tab.moveToSplitRight', input, process.platform, keybindings)
+  ) {
+    // Why: guest key events never reach the renderer window handler; carry the guest id so the tab that moves is the focused one, not the group the renderer marks active. Consumed even when the renderer finds no split possible (before-input-event is synchronous).
+    renderer.send('ui:moveTabToSplit', { direction: 'right', sourceId: browserTabId })
   } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
     renderer.send('ui:switchTab', 1)
   } else if (
