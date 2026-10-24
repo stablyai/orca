@@ -10,21 +10,27 @@ import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 export class DegradedDaemonOwnerRecovery {
   private readonly attachResolver: DaemonSessionOwnerResolver<IPtyProvider>
   private readonly livenessResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
+  private readonly identityUnsubscribes: (() => void)[] = []
+  private readonly identitySubscribed = new Set<DaemonPtyAdapter>()
+  private identityTracking = false
 
   constructor(
-    providers: readonly IPtyProvider[],
-    private readonly daemonAdapters: readonly DaemonPtyAdapter[],
+    private readonly readProviders: () => readonly IPtyProvider[],
+    private readonly readDaemonAdapters: () => readonly DaemonPtyAdapter[],
     private readonly routes: Map<string, IPtyProvider>,
     private readonly spawnFresh: (opts: PtySpawnOptions) => Promise<PtySpawnResult>
   ) {
-    this.attachResolver = new DaemonSessionOwnerResolver(providers, routes)
-    this.livenessResolver = new DaemonSessionOwnerResolver(daemonAdapters, routes)
+    this.attachResolver = new DaemonSessionOwnerResolver([], routes)
+    this.livenessResolver = new DaemonSessionOwnerResolver([], routes)
   }
 
-  resolveFencedOwner = (id: string, incarnationId: string) =>
-    this.attachResolver.resolveTermination(id, incarnationId)
+  resolveFencedOwner = (id: string, incarnationId: string) => {
+    this.syncCollections()
+    return this.attachResolver.resolveTermination(id, incarnationId)
+  }
 
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
+    this.syncCollections()
     if (opts.attachOnly && opts.sessionId) {
       return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
     }
@@ -36,17 +42,25 @@ export class DegradedDaemonOwnerRecovery {
     return result
   }
 
-  getVerifiedRoute = (id: string): IPtyProvider | undefined =>
-    this.attachResolver.getVerifiedRoute(id)
+  getVerifiedRoute = (id: string): IPtyProvider | undefined => {
+    this.syncCollections()
+    return this.attachResolver.getVerifiedRoute(id)
+  }
 
-  probe = async (sessionId: string): Promise<boolean | null> =>
-    await this.livenessResolver.probe(sessionId)
+  probe = async (sessionId: string): Promise<boolean | null> => {
+    this.syncCollections()
+    return await this.livenessResolver.probe(sessionId)
+  }
 
-  discoverRoutes = async (): Promise<void> => await this.attachResolver.discoverRoutes()
+  discoverRoutes = async (): Promise<void> => {
+    this.syncCollections()
+    await this.attachResolver.discoverRoutes()
+  }
 
   async listProcesses(
     opts?: Parameters<IPtyProvider['listProcesses']>[0]
   ): Promise<PtyProcessInfo[]> {
+    this.syncCollections()
     return this.attachResolver.listProcesses(opts)
   }
 
@@ -54,10 +68,11 @@ export class DegradedDaemonOwnerRecovery {
     alive: string[]
     killed: string[]
   }> {
+    this.syncCollections()
     const alive: string[] = []
     const killed: string[] = []
     const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
-    for (const adapter of this.daemonAdapters) {
+    for (const adapter of this.readDaemonAdapters()) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
       for (const id of result.alive) {
         alive.push(id)
@@ -79,28 +94,57 @@ export class DegradedDaemonOwnerRecovery {
   }
 
   recordRoute(sessionId: string, provider: IPtyProvider, incarnationId?: string): void {
+    this.syncCollections()
     this.attachResolver.recordRoute(sessionId, provider, incarnationId)
-    const adapter = this.daemonAdapters.find((candidate) => candidate === provider)
+    const adapter = this.readDaemonAdapters().find((candidate) => candidate === provider)
     if (adapter) {
       this.livenessResolver.recordRoute(sessionId, adapter, incarnationId)
     }
   }
 
   forgetRoute(sessionId: string): void {
+    this.syncCollections()
     this.attachResolver.forgetRoute(sessionId)
     this.livenessResolver.forgetRoute(sessionId)
   }
 
   subscribeIdentityChanges(): (() => void)[] {
-    return this.daemonAdapters.flatMap((adapter) =>
-      typeof adapter.onDaemonIdentityChanged === 'function'
-        ? [
-            adapter.onDaemonIdentityChanged(() => {
-              this.attachResolver.invalidateProvider(adapter)
-              this.livenessResolver.invalidateProvider(adapter)
-            })
-          ]
-        : []
+    this.identityTracking = true
+    this.syncCollections()
+    return [
+      () => {
+        this.identityTracking = false
+        for (const unsubscribe of this.identityUnsubscribes.splice(0)) {
+          unsubscribe()
+        }
+      }
+    ]
+  }
+
+  // Why: current stays out of inventory until its spawn probe succeeds, then joins the live collections.
+  private syncCollections(): void {
+    for (const provider of this.readProviders()) {
+      this.attachResolver.admitProvider(provider)
+    }
+    for (const adapter of this.readDaemonAdapters()) {
+      this.livenessResolver.admitProvider(adapter)
+      this.subscribeAdapterIdentity(adapter)
+    }
+  }
+
+  private subscribeAdapterIdentity(adapter: DaemonPtyAdapter): void {
+    if (!this.identityTracking || this.identitySubscribed.has(adapter)) {
+      return
+    }
+    this.identitySubscribed.add(adapter)
+    if (typeof adapter.onDaemonIdentityChanged !== 'function') {
+      return
+    }
+    this.identityUnsubscribes.push(
+      adapter.onDaemonIdentityChanged(() => {
+        this.attachResolver.invalidateProvider(adapter)
+        this.livenessResolver.invalidateProvider(adapter)
+      })
     )
   }
 }

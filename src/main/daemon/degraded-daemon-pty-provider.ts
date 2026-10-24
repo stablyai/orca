@@ -31,6 +31,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   /** Runs terminals in this process, so they die with it. */
   readonly fallback: IPtyProvider
+  /** False while the current daemon failed startup and must stay out of inventory. */
+  private currentAvailable: boolean
   private sessionProviders = new Map<string, IPtyProvider>()
   private freshSpawns: DegradedDaemonFreshSpawnRouter
   private ownerRecovery: DegradedDaemonOwnerRecovery
@@ -42,25 +44,29 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     current: DaemonPtyAdapter
     legacy: DaemonPtyAdapter[]
     fallback: IPtyProvider
+    currentAvailable?: boolean
     probeCurrentDaemonSpawn?: () => Promise<boolean>
   }) {
     this.current = opts.current
     this.legacy = opts.legacy
     this.fallback = opts.fallback
+    this.currentAvailable = opts.currentAvailable ?? true
+    const probeCurrentDaemonSpawn = opts.probeCurrentDaemonSpawn
     this.freshSpawns = new DegradedDaemonFreshSpawnRouter(
       opts.current,
       opts.fallback,
       this.sessionProviders,
-      opts.probeCurrentDaemonSpawn ?? null
+      probeCurrentDaemonSpawn ? () => this.noteCurrentProbe(probeCurrentDaemonSpawn) : null
     )
     this.ownerRecovery = new DegradedDaemonOwnerRecovery(
-      this.allProviders(),
-      this.allDaemonAdapters(),
+      () => this.allProviders(),
+      () => this.allDaemonAdapters(),
       this.sessionProviders,
       (spawnOpts) => this.freshSpawns.spawn(spawnOpts)
     )
 
-    for (const provider of this.allProviders()) {
+    // Why: current is omitted from inventory until its probe succeeds, but its events must already flow.
+    for (const provider of [this.fallback, this.current, ...this.legacy]) {
       this.unsubscribers.push(
         provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
         provider.onExit((payload) => {
@@ -118,9 +124,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)
     )
 
-  write(id: string, data: string): boolean | void {
-    return this.providerFor(id).write(id, data)
-  }
+  write = (id: string, data: string): boolean | void => this.providerFor(id).write(id, data)
 
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     return await this.providerFor(id).writeWithSettlement(id, data)
@@ -130,13 +134,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).resize(id, cols, rows)
   }
 
-  pauseProducer(id: string): void {
-    this.providerFor(id).pauseProducer?.(id)
-  }
+  pauseProducer = (id: string): void => this.providerFor(id).pauseProducer?.(id)
 
-  resumeProducer(id: string): void {
-    this.providerFor(id).resumeProducer?.(id)
-  }
+  resumeProducer = (id: string): void => this.providerFor(id).resumeProducer?.(id)
 
   setPtyBackgrounded(id: string, background: boolean): void {
     this.providerFor(id).setPtyBackgrounded?.(id, background)
@@ -149,13 +149,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.providerFor(id).sendSignal(id, signal)
   }
 
-  async getCwd(id: string): Promise<string> {
-    return this.providerFor(id).getCwd(id)
-  }
+  getCwd = async (id: string): Promise<string> => this.providerFor(id).getCwd(id)
 
-  async getInitialCwd(id: string): Promise<string> {
-    return this.providerFor(id).getInitialCwd(id)
-  }
+  getInitialCwd = async (id: string): Promise<string> => this.providerFor(id).getInitialCwd(id)
 
   async getAppliedSize(id: string): Promise<{ cols: number; rows: number } | null> {
     return (await this.providerFor(id).getAppliedSize?.(id)) ?? null
@@ -201,13 +197,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return (await this.providerFor(id).confirmShellForeground?.(id)) ?? false
   }
 
-  async serialize(ids: string[]): Promise<string> {
-    return this.fallback.serialize(ids)
-  }
+  serialize = async (ids: string[]): Promise<string> => this.fallback.serialize(ids)
 
-  async revive(state: string): Promise<void> {
-    await this.fallback.revive(state)
-  }
+  revive = async (state: string): Promise<void> => this.fallback.revive(state)
 
   async listProcesses(
     opts?: Parameters<IPtyProvider['listProcesses']>[0]
@@ -215,9 +207,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.ownerRecovery.listProcesses(opts)
   }
 
-  async getDefaultShell(): Promise<string> {
-    return this.fallback.getDefaultShell()
-  }
+  getDefaultShell = async (): Promise<string> => this.fallback.getDefaultShell()
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     return this.fallback.getProfiles()
@@ -235,19 +225,21 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     return combineUnsubscribes(
-      this.allProviders().flatMap((provider) => provider.onBackgroundStreamEvent?.(callback) ?? [])
+      this.subscriptionProviders().flatMap(
+        (provider) => provider.onBackgroundStreamEvent?.(callback) ?? []
+      )
     )
   }
 
   // Forward daemon endpoint failures so every affected pane can recover (STA-2373).
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     return combineUnsubscribes(
-      this.allDaemonAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
+      this.subscriptionAdapters().map((adapter) => adapter.onWriteUnavailable(callback))
     )
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
+    const unsubscribes = this.subscriptionProviders().map((provider) => provider.onReplay(callback))
     let active = true
     const trackedUnsubscribe = (): void => {
       if (!active) {
@@ -300,9 +292,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     }
   }
 
-  disposeProviderOnly(): void {
-    combineUnsubscribes(this.unsubscribers.splice(0))()
-  }
+  disposeProviderOnly = (): void => combineUnsubscribes(this.unsubscribers.splice(0))()
 
   async shutdownFallbackSessions(): Promise<number> {
     return shutdownDegradedFallbackSessions(this.sessionProviders, this.fallback)
@@ -357,5 +347,24 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return [this.fallback, ...this.allDaemonAdapters()]
   }
 
-  private allDaemonAdapters = (): DaemonPtyAdapter[] => [this.current, ...this.legacy]
+  private noteCurrentProbe(probe: () => Promise<boolean>): Promise<boolean> {
+    return probe().then((available) => {
+      if (available) {
+        this.currentAvailable = true
+      }
+      return available
+    })
+  }
+
+  // Why: a current daemon that failed startup must not mark legacy inventory incomplete.
+  private allDaemonAdapters = (): DaemonPtyAdapter[] =>
+    this.currentAvailable ? [this.current, ...this.legacy] : [...this.legacy]
+
+  // Why: subscriptions must cover the current daemon even while it is excluded from inventory.
+  private subscriptionAdapters = (): DaemonPtyAdapter[] => [this.current, ...this.legacy]
+
+  private subscriptionProviders = (): IPtyProvider[] => [
+    this.fallback,
+    ...this.subscriptionAdapters()
+  ]
 }
