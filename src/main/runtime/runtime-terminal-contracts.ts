@@ -275,6 +275,8 @@ export type TerminalWaiter = {
   timeout: NodeJS.Timeout | null
   /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
   cancelIdlePoll: (() => void) | null
+  /** Retires the repeated visible-screen probe armed for this waiter; null when not probing. */
+  cancelVisibleProbe: (() => void) | null
   abortCleanup: (() => void) | null
   /** Main-internal: waiting for a just-launched agent, so a name-only title must be held to a
    *  quiet stream (`TuiIdleEvaluationInput.launchReadiness`). */

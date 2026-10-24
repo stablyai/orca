@@ -27,11 +27,28 @@ import type {
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
+// Why 1s: it matches the provider visible-snapshot retry cadence, so a repainted screen is
+// picked up on the next attempt without adding a second, faster sweep to the wait path.
+const TUI_IDLE_VISIBLE_PROBE_RETRY_MS = 1_000
+
+/**
+ * Agents whose settled readiness is painted to the screen instead of written to scrollback.
+ */
+function usesAlternateScreenReadiness(agent: TuiAgent | null): boolean {
+  return agent === 'antigravity' || agent === 'codex'
+}
+
 /**
  * A pane with no retained bytes and no status has only its provider's screen to read, and one
  * whose tail shows a rule file's `profile.screenProbeBanner` is probed as before screen rules. So
  * is a clockless pane whose rules read the trusted screen, whatever its status: a re-attached
  * pane's own model can be untrusted. A clocked one settles through the poll, once quiet.
+ *
+ * Alternate-screen agents join whatever their status: codex 0.157 turned on
+ * `tui.fullscreen_transcript`, so the session banner is painted into the alternate screen with
+ * cursor addressing instead of being written to scrollback, and `buildTerminalWaitText` only
+ * ever reads the stream tail — a pane whose readiness lives on the screen never settles from
+ * the tail alone (#22825).
  */
 function shouldProbeVisibleScreen(
   paneAgent: TuiAgent | null,
@@ -39,6 +56,7 @@ function shouldProbeVisibleScreen(
   waitText: string
 ): boolean {
   return (
+    usesAlternateScreenReadiness(paneAgent) ||
     (record.lastAgentStatus === null && waitText.length === 0) ||
     showsScreenProbeBanner(waitText) ||
     (readsTrustedScreen(paneAgent) && record.lastOutputAt === null)
@@ -73,6 +91,49 @@ export class RuntimeTerminalWait {
 
   private evaluateLeaf(leaf: RuntimeLeafRecord, waitText: string): TuiIdleVerdict {
     return evaluateTuiIdle(leafTuiIdleEvidence(this.deps, leaf, () => waitText))
+  }
+
+  /**
+   * Ask the provider for its visible screen, repeating for the panes whose readiness the
+   * stream tail can never carry.
+   *
+   * Why repeat instead of one bounded look: a launch registers the waiter while the TUI is
+   * still painting, so a single probe can read a blank screen and hand the wait back to the
+   * tail-only sweep, which cannot see an alternate-screen banner at all. Every other lane
+   * settles from the tail, so those panes keep today's single bounded look and its cost.
+   *
+   * Why the timer rides on the waiter: the registry's single `remove` path then retires it
+   * alongside the wait timeout and the idle poll, so no probe can outlive its waiter.
+   */
+  private startVisibleScreenProbe(
+    waiter: TerminalWaiter,
+    waiterTimeoutMs: number,
+    agent: TuiAgent | null
+  ): void {
+    const deadlineAt = Date.now() + Math.max(0, waiterTimeoutMs)
+    if (!usesAlternateScreenReadiness(agent)) {
+      this.deps.startVisibleReadProbe(waiter, waiterTimeoutMs, agent)
+      return
+    }
+    let timer: NodeJS.Timeout | null = null
+    const cancel = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+      waiter.cancelVisibleProbe = null
+    }
+    const probe = (): void => {
+      this.deps.startVisibleReadProbe(waiter, Math.max(0, deadlineAt - Date.now()), agent)
+      const remainingMs = deadlineAt - Date.now()
+      // Why re-check: the probe can resolve synchronously, and `remove` has already retired
+      // this loop by then, so arming another timer would outlive the waiter.
+      if (remainingMs <= 0 || waiter.cancelVisibleProbe !== cancel) {
+        return
+      }
+      timer = setTimeout(probe, Math.min(TUI_IDLE_VISIBLE_PROBE_RETRY_MS, remainingMs))
+    }
+    waiter.cancelVisibleProbe = cancel
+    probe()
   }
 
   async wait(
@@ -119,6 +180,7 @@ export class RuntimeTerminalWait {
           reject,
           timeout: null,
           cancelIdlePoll: null,
+          cancelVisibleProbe: null,
           abortCleanup: null,
           ...(options?.launchReadiness ? { launchReadiness: true } : {})
         }
@@ -161,7 +223,7 @@ export class RuntimeTerminalWait {
             this.polls.startPty(waiter, live.pty, verdict)
             const paneAgent = this.deps.getPaneAgent(live.pty.ptyId)
             if (shouldProbeVisibleScreen(paneAgent, live.pty, livePtyWaitText)) {
-              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
+              this.startVisibleScreenProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }
@@ -203,6 +265,7 @@ export class RuntimeTerminalWait {
         reject,
         timeout: null,
         cancelIdlePoll: null,
+        cancelVisibleProbe: null,
         abortCleanup: null,
         ...(options?.launchReadiness ? { launchReadiness: true } : {})
       }
@@ -253,7 +316,7 @@ export class RuntimeTerminalWait {
             this.polls.startLeaf(waiter, live.leaf, verdict)
             const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
             if (shouldProbeVisibleScreen(paneAgent, live.leaf, liveLeafWaitText)) {
-              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs, paneAgent)
+              this.startVisibleScreenProbe(waiter, effectiveTimeoutMs, paneAgent)
             }
           }
         }
