@@ -124,15 +124,12 @@ export async function createIssueForAgent(
     if (!result.success) {
       throw new LinearWriteFailure('failed', 'Linear create failed')
     }
-    const issue = await confirmLinearWrite(
-      'Issue was created but could not be retrieved',
-      async () => result.issue
-    )
-    if (!issue?.id) {
+    const issueId = result.issueId
+    if (!issueId) {
       throw new LinearWriteFailure('unconfirmed', 'Issue was created but could not be retrieved')
     }
     return confirmLinearWrite('Issue was created but could not be retrieved', () =>
-      getCreatedIssueRecord(issue.id, client)
+      getCreatedIssueRecord(issueId, client)
     )
   })
 }
