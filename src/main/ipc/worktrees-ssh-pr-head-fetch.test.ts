@@ -124,7 +124,6 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  // Why: a row may name its SSH host only as `executionHostId`; local git must not run for it.
   it('refuses local git for a PR base on an executionHostId-only SSH repo', async () => {
     store.getRepo.mockReturnValue({ ...harnessRepo, executionHostId: 'ssh:gpu' })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' })

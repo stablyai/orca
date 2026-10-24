@@ -191,6 +191,8 @@ describe('proxy bypass rules', () => {
     ['10.0.0.0/8', '10.20.30.40', 443, true, true],
     ['10.0.0.0/8', '11.0.0.1', 443, false, false],
     ['[fd00::1]', 'fd00::1', 443, true, true],
+    ['[fd00::1]', 'fd00:0:0:0:0:0:0:1', 443, true, true],
+    ['fd00:0::1', '[FD00::1]', 443, true, true],
     ['https://corp.test', 'corp.test', 443, true, true],
     ['https://corp.test', 'corp.test', 80, false, false],
     ['ftp://corp.test', 'corp.test', 21, false, false],
@@ -199,9 +201,20 @@ describe('proxy bypass rules', () => {
     ['192.168.*', '192.168.4.20', 443, true, true],
     ['api.*.corp.test', 'api.eu.corp.test', 443, true, true],
     ['api.*.corp.test', 'web.eu.corp.test', 443, false, false],
-    ['corp.test', 'corp.test.', 443, true, true]
+    ['corp.test', 'corp.test.', 443, true, true],
+    ['', '169.254.169.254', 80, true, true],
+    ['<-loopback>', 'localhost', 3000, false, false],
+    ['<-loopback>;<local>', 'localhost', 3000, true, true],
+    ['<local>;<-loopback>', 'localhost', 3000, false, false],
+    ['<local>;<-loopback>', 'intranet', 80, true, true]
   ])('%s against %s:%d (NO_PROXY %s, Chromium %s)', (rule, host, port, noProxy, chromium) => {
     expect(matchesProxyBypassRules({ host, port }, rule, 'no-proxy')).toBe(noProxy)
     expect(matchesProxyBypassRules({ host, port }, rule, 'chromium')).toBe(chromium)
+  })
+
+  it('proxies loopback destinations when the bypass list subtracts them', () => {
+    const settings = { httpProxyUrl: 'http://proxy.test:8080', httpProxyBypassRules: '<-loopback>' }
+    const target = { host: '127.0.0.1', port: 3000 }
+    expect(selectBrowserNetworkTunnelProxy(target, settings, {})).toMatchObject({ kind: 'http' })
   })
 })

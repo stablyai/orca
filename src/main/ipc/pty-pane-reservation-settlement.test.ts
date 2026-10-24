@@ -177,7 +177,7 @@ describe('registerPtyHandlers', () => {
     expect(providerSpawn).toHaveBeenCalledTimes(2)
   })
   it('settles the pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
-    // Why: reservation-leak regression — a post-spawn throw after provider.spawn resolves must reject/clear the reservation, else later spawns for the same pane key hang forever.
+    // Post-spawn throws must release the reservation or later spawns for this pane hang.
     registerPtyHandlers(mainWindow as never)
     const leafId = '44444444-4444-4444-8444-444444444444'
     const spawnArgs = { cols: 80, rows: 24, tabId: 'tab-reservation', leafId }
@@ -188,7 +188,6 @@ describe('registerPtyHandlers', () => {
 
     await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow('boom')
 
-    // A second spawn for the same pane must run a fresh spawn rather than await the leaked (never-settled) reservation promise.
     let hangTimer: ReturnType<typeof setTimeout> | undefined
     const second = handlers.get('pty:spawn')!(null, spawnArgs) as Promise<{ id: string }>
     const result = await Promise.race([
@@ -205,7 +204,7 @@ describe('registerPtyHandlers', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2)
   })
   it('settles the runtime-owned pane reservation when a post-spawn step throws so later spawns do not hang', async () => {
-    // Why: like the renderer-path regression, the runtime spawn path must clear its own reservation when a post-spawn step throws, else the next materialization hangs forever.
+    // Runtime post-spawn throws need the same reservation cleanup as renderer spawns.
     type RuntimeSpawnController = {
       spawn(args: {
         cols: number
@@ -286,7 +285,6 @@ describe('registerPtyHandlers', () => {
 
     await expect(spawnController.spawn(spawnArgs)).rejects.toThrow('boom')
 
-    // The reservation must be gone, so a second materialization runs a fresh provider.spawn instead of awaiting the leaked promise.
     let hangTimer: ReturnType<typeof setTimeout> | undefined
     const second = spawnController.spawn(spawnArgs)
     const result = await Promise.race([

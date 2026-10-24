@@ -1,6 +1,4 @@
-// Client side of chat attachments on a paired server: main owns the file handles, the clipboard and
-// the runtime socket, so it pumps the bytes into the server's attachment store and hands the
-// renderer only the server path.
+// Main pumps client-local attachment bytes into the paired server store; the renderer receives only server paths.
 
 import { randomUUID } from 'node:crypto'
 import { lstat } from 'node:fs/promises'
@@ -69,7 +67,7 @@ async function callAttachmentMethod<TResult>(
   return response.result as TResult
 }
 
-/** start → body → commit; any failure aborts, so the server frees the slot and its part file. */
+/** Abort failed transfers so the server frees their slots and part files. */
 async function uploadAttachment(
   context: UploadContext,
   file: { name: string; byteLength: number },
@@ -127,7 +125,6 @@ export function uploadBufferToAgentSessionAttachments(
   })
 }
 
-/** A paste for a structured chat on a paired server, stored in that server's store. */
 export async function uploadPasteToAgentSessionAttachments(
   target: AgentSessionAttachmentClipboardTarget,
   runtimeEnvironmentId: string,
@@ -147,10 +144,7 @@ export async function uploadPasteToAgentSessionAttachments(
   return stored.path
 }
 
-/**
- * Upload dropped or picked client-local files, in input order. A folder is skipped as
- * unsupported: a chat attachment is a file.
- */
+/** Upload files in input order; folders are unsupported. */
 export async function uploadExternalPathsToAgentSessionAttachments(
   context: UploadContext,
   paths: readonly string[]
@@ -158,7 +152,7 @@ export async function uploadExternalPathsToAgentSessionAttachments(
   const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
   for (const sourcePath of paths) {
     context.signal?.throwIfAborted()
-    // Before staging, which would walk and open everything inside a folder only to skip it.
+    // Reject folders before staging walks and opens their contents.
     if (await isDirectory(sourcePath)) {
       result.skipped.push({ sourcePath, reason: 'unsupported' })
       continue

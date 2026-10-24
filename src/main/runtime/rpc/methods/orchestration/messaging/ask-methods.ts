@@ -51,7 +51,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment && paneKey) {
-        rejectFederatedExplicitTarget(params)
+        rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,

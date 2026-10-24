@@ -49,7 +49,8 @@ function runtime() {
       }
     },
     subscribeAgentProviderSessionChangesFn: null,
-    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => []
+    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => [],
+    agentTransitions: { latestRow: vi.fn(() => null), subscribe: vi.fn(() => () => {}) }
   }
 }
 
@@ -62,7 +63,6 @@ describe('installExternalConversations', () => {
     const folders = vi.spyOn(store, 'getFolderWorkspaces')
     const rows = vi.spyOn(host, 'getAgentStatusRowsForPane')
     const connectors = installExternalConversations(store, host)
-    // Nothing is read until the host's first `current()`.
     expect(getSettings).not.toHaveBeenCalled()
     expect(connectors.current()).toBeNull()
     update({ experimentalConnectors: false })
@@ -74,6 +74,7 @@ describe('installExternalConversations', () => {
     expect(meta).not.toHaveBeenCalled()
     expect(folders).not.toHaveBeenCalled()
     expect(rows).not.toHaveBeenCalled()
+    expect(host.agentTransitions.subscribe).not.toHaveBeenCalled()
   })
 
   it('builds the seam on first use when the setting is already on', () => {
@@ -172,7 +173,6 @@ describe('installExternalConversations', () => {
         return () => reports.delete(listener)
       }
     }
-    // What each runtime host does at startup, before any connector call.
     const connectors = installExternalConversations(store, host)
     connectors.current()
     const cleared = { ...SESSION, id: 'claude-session-after-clear' }

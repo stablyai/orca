@@ -211,29 +211,73 @@ describe('managed agent hook timeouts', () => {
     }
   })
 
-  it('bounds every generated POSIX curl wrapper with --connect-timeout and --max-time', async () => {
-    let curlWrappersChecked = 0
-    for (const { agent, install } of JSON_INSTALLERS) {
-      const { sftp, fs } = createFakeSftp()
-      await install(sftp)
-      for (const [path, content] of fs.files) {
-        if (!path.endsWith('.sh')) {
-          continue
+  it.skipIf(process.platform === 'win32')(
+    'passes timeout budgets to curl from every generated POSIX wrapper',
+    async () => {
+      const captureDir = mkdtempSync(join(tmpdir(), 'orca-hook-curl-args-'))
+      const capturePath = join(captureDir, 'curl-args')
+      try {
+        const installers = [
+          ...JSON_INSTALLERS,
+          {
+            agent: 'kimi',
+            install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
+          }
+        ]
+        for (const { agent, install } of installers) {
+          const { sftp, fs } = createFakeSftp()
+          await install(sftp)
+          let wrappersChecked = 0
+          for (const [path, content] of fs.files) {
+            if (!path.endsWith('.sh')) {
+              continue
+            }
+            rmSync(capturePath, { force: true })
+            const result = spawnSync(
+              '/bin/sh',
+              [
+                '-c',
+                [
+                  'curl() { printf "%s\\n" "$@" > "$ORCA_TEST_CURL_ARGS"; command -p cat >/dev/null; }',
+                  content
+                ].join('\n')
+              ],
+              {
+                input: '{"hook_event_name":"Stop"}',
+                encoding: 'utf8',
+                timeout: 5_000,
+                env: {
+                  ...process.env,
+                  ORCA_AGENT_HOOK_ENDPOINT: '',
+                  ORCA_AGENT_HOOK_TRANSPORT: '',
+                  ORCA_AGENT_HOOK_PORT: '1',
+                  ORCA_AGENT_HOOK_TOKEN: 'test-token',
+                  ORCA_PANE_KEY: 'pane-1',
+                  CLAUDE_JOB_DIR: '',
+                  DEVIN_PROJECT_DIR: '',
+                  ORCA_TEST_CURL_ARGS: capturePath
+                }
+              }
+            )
+            expect(result.error, `${agent} wrapper execution`).toBeUndefined()
+            expect(result.status, `${agent} wrapper exit`).toBe(0)
+            const args = readFileSync(capturePath, 'utf8').trimEnd().split('\n')
+            expect(args, `${agent} delivery endpoint`).toContain(
+              `http://127.0.0.1:1/hook/${agent === 'openclaude' ? 'claude' : agent}`
+            )
+            expect(args[args.indexOf('--connect-timeout') + 1], `${agent} connect budget`).toBe(
+              '0.5'
+            )
+            expect(args[args.indexOf('--max-time') + 1], `${agent} request budget`).toBe('1.5')
+            wrappersChecked += 1
+          }
+          expect(wrappersChecked, `${agent} executed wrappers`).toBeGreaterThan(0)
         }
-        expect(content, `${agent} wrapper missing curl transport`).toContain('curl')
-        expect(content, `${agent} wrapper missing --connect-timeout`).toContain('--connect-timeout')
-        expect(content, `${agent} wrapper missing --max-time`).toContain('--max-time')
-        curlWrappersChecked += 1
+      } finally {
+        rmSync(captureDir, { recursive: true, force: true })
       }
     }
-    const kimi = createFakeSftp()
-    await new KimiHookService().installRemote(kimi.sftp, REMOTE_HOME)
-    const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/kimi-hook.sh`)!
-    expect(kimiWrapper, 'kimi wrapper missing --connect-timeout').toContain('--connect-timeout')
-    expect(kimiWrapper, 'kimi wrapper missing --max-time').toContain('--max-time')
-    curlWrappersChecked += 1
-    expect(curlWrappersChecked).toBeGreaterThan(0)
-  })
+  )
 
   describe('dead-endpoint transport budget', () => {
     let tempDir: string | null = null

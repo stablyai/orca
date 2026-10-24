@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { ReviewChecksIndicator, reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -26,6 +27,7 @@ export function WorktreeCardReferenceRow({
   label,
   provider,
   source,
+  stale,
   url,
   onOpen,
   onManage,
@@ -37,13 +39,19 @@ export function WorktreeCardReferenceRow({
   label: string
   provider: string
   source?: string | null
+  stale?: boolean
   url?: string
   onOpen: (url: string, event: MouseEvent) => void
   onManage?: (event: MouseEvent) => void
   actions?: ReactNode
 }): React.JSX.Element {
   return (
-    <div className="flex min-w-0 items-start gap-2">
+    <div className="flex min-w-0 items-start gap-2" data-stale={stale || undefined}>
+      {stale ? (
+        <span className="sr-only">
+          {translate('workspace.links.lastKnownStatus', 'Last known status')}
+        </span>
+      ) : null}
       <div className="mt-0.5 flex w-3.5 shrink-0 items-center">
         {review ? (
           <Tooltip>
@@ -113,9 +121,9 @@ export function WorktreeCardReferenceRow({
               <GitHubIcon className="size-3" />
             </span>
           ) : null}
-          <span className="shrink-0">{label}</span>
+          <span className={cn('shrink-0', stale && 'shimmer shimmer-duration-2400')}>{label}</span>
           {review?.status ? <ReviewChecksIndicator status={review.status} /> : null}
-          <span className="min-w-0 flex-1 truncate">
+          <span className={cn('min-w-0 flex-1 truncate', stale && 'shimmer shimmer-duration-2400')}>
             {provider === 'GitHub' ? null : `· ${provider}`}
             {source ? ` · ${source}` : ''}
           </span>

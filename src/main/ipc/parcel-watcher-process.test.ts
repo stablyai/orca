@@ -1,6 +1,3 @@
-// Regression tests for issue #7547: local @parcel/watcher subscriptions run
-// in a forked watcher process, and a native watcher crash must be contained —
-// respawn, resubscribe, notify interruption — instead of killing the app.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WATCHER_PROCESS_CANCEL_TIMEOUT_MS } from './parcel-watcher-cancellation-tracker'
 import {
@@ -48,8 +45,7 @@ describe('subscribeViaWatcherProcess', () => {
   beforeEach(() => {
     resetWatcherProcessForTest()
     resetRuntimeWatcherProcessForTest()
-    // Why: the client deliberately runs in-process under vitest; these tests
-    // exercise the forked-process mode, so hide the vitest marker.
+    // Hide the Vitest marker to exercise forked mode instead of the in-process fallback.
     vi.stubEnv('VITEST', '')
     existsSyncMock.mockReturnValue(true)
     forkMock.mockImplementation(() => new FakeChild())
@@ -179,8 +175,7 @@ describe('subscribeViaWatcherProcess', () => {
     const child = currentChild()
     const id = ackSubscribe(child, 0)
     const subscription = await promise
-    // Why: hold a second subscription so this unsubscribe exercises the ack
-    // path instead of the last-subscriber idle kill.
+    // A second root exercises unsubscribe acknowledgement instead of last-subscriber idle termination.
     const keepAlivePromise = subscribeViaWatcherProcess('/other', vi.fn(), {})
     ackSubscribe(child)
     await keepAlivePromise
@@ -706,8 +701,7 @@ describe('subscribeViaWatcherProcess', () => {
       force: true
     })
 
-    // Why: the deliberate idle kill must not count as a crash — no respawn
-    // and no crash-fuse advance when the killed child's exit event lands.
+    // Deliberate idle termination must not advance the crash fuse or trigger recovery.
     first.connected = false
     first.emit('exit', null, 'SIGTERM')
     await expect(unsubscribe).resolves.toBeUndefined()
@@ -766,8 +760,7 @@ describe('subscribeViaWatcherProcess', () => {
     expect(child.kill).not.toHaveBeenCalled()
     expect(child.sent.at(-1)).toMatchObject({ op: 'unsubscribe' })
 
-    // The last unsubscribe kills the idle child; both callers wait for its
-    // physical exit because either may gate destructive worktree cleanup.
+    // Both callers may gate destructive cleanup, so both must await physical exit.
     const secondUnsub = second.unsubscribe()
     expect(child.kill).toHaveBeenCalledTimes(1)
     child.emit('exit', 0, null)

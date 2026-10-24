@@ -37,6 +37,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
 
   const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -49,6 +50,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
     // Why explicit both ways: a server from before the default flip reads an absent value as off.
     allowRemoteCliControl: form.allowRemoteCliControl
   }
@@ -66,6 +68,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
+        systemSshProxyConnectionReuse,
         source: 'manual'
       }
     }

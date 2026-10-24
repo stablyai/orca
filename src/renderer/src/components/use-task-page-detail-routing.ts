@@ -1,7 +1,7 @@
 import type { TaskPageGitHubIssueDraftModel } from './use-task-page-github-issue-draft'
 import { useState, useMemo, useCallback } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { findTaskPageLinearIssue } from './task-page/linear/task-page-linear-cache-selectors'

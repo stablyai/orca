@@ -21,16 +21,17 @@ export function pickSourceControlLaunchAgent(args: {
   defaultAgent: TuiAgent | 'blank' | null | undefined
   detectedAgents: TuiAgent[]
   disabledAgents?: TuiAgent[]
+  chosenOpensAsChat?: (agent: TuiAgent) => boolean
 }): TuiAgent | null {
   const enabledAgents = filterEnabledTuiAgents(args.detectedAgents, args.disabledAgents)
-  if (args.savedAgent && enabledAgents.includes(args.savedAgent)) {
+  const usable = (agent: TuiAgent): boolean =>
+    enabledAgents.includes(agent) ||
+    (filterEnabledTuiAgents([agent], args.disabledAgents).length > 0 &&
+      args.chosenOpensAsChat?.(agent) === true)
+  if (args.savedAgent && usable(args.savedAgent)) {
     return args.savedAgent
   }
-  if (
-    args.defaultAgent &&
-    args.defaultAgent !== 'blank' &&
-    enabledAgents.includes(args.defaultAgent)
-  ) {
+  if (args.defaultAgent && args.defaultAgent !== 'blank' && usable(args.defaultAgent)) {
     return args.defaultAgent
   }
   return TUI_AGENT_AUTO_PICK_ORDER.find((agent) => enabledAgents.includes(agent)) ?? null

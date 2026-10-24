@@ -6,13 +6,7 @@ import {
 } from './parcel-watcher-delivery-canary'
 import type { WatcherProcessSubscriptionRecord } from './parcel-watcher-process-subscription'
 
-/**
- * Host side of the child's canary health reports. Why: during an OS event
- * stall the child keeps its streams, so subscriptions would go silently stale.
- * Once a stall outlasts one canary backoff period, every caller gets an
- * overflow (rescan), backing off like the canary so a stalled system is not
- * loaded further, and one more when the stall ends.
- */
+/** Rescan roots during OS event stalls with backoff, then once on recovery; the child keeps its streams. */
 export class WatcherDeliveryHealthMonitor {
   private timer: ReturnType<typeof setTimeout> | null = null
   private stalled = false

@@ -1,11 +1,4 @@
-/**
- * Which hosts the orcad launch/lifecycle path actually supports, declared rather than
- * discovered at runtime.
- *
- * The install transaction is host-agnostic. Every managed-orcad operation runs on Windows
- * through the host script (`orcad-windows-host-script.ts`); the guard below remains only on
- * POSIX command builders that the Windows paths never call.
- */
+// Windows operations use the host script; only POSIX command builders use this guard.
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 export class OrcadRemoteLaunchUnsupportedError extends Error {
@@ -25,30 +18,22 @@ export function assertPosixOrcadHost(host: RemoteHostPlatform): void {
   }
 }
 
-/** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
+/** Candidate stdout containing readiness; bounded below even if other output follows. */
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
-/** Stderr, including the bind-exposure line and every supervision message. */
 export const ORCAD_LOG_FILENAME = 'orcad.log'
-// Why a cap: the readiness file is candidate-written stdout, and a runaway writer must not be read whole.
+// Candidate stdout is untrusted in size; never read runaway output whole.
 export const ORCAD_READINESS_MAX_BYTES = 256 * 1024
 
-/** PID of the launched orcad, written into its own version dir at launch. */
 export const ORCAD_PID_FILENAME = '.orcad-pid'
-/** Windows' `.orcad-pid`: `{"pid":N,"creationTimeMs":M|null}`, since a PID alone is no identity there. */
+/** Pair the PID with boot ID and node name; shared home paths cannot identify a machine. */
+export const ORCAD_PID_MACHINE_FILENAME = `${ORCAD_PID_FILENAME}-machine`
+/** Emit nothing without a boot ID; launch and later wait compare this identity. */
+export const ORCAD_LAUNCH_MACHINE_COMMAND = 'cat /proc/sys/kernel/random/boot_id&&uname -n'
+
+/** Windows pairs PID with creation time because PID reuse alone cannot identify the process. */
 export const ORCAD_WINDOWS_PROCESS_FILENAME = '.orcad-process.json'
 
-/**
- * A shell function answering whether a PID is a *running* process.
- *
- * `kill -0` alone is not that question. It succeeds for a zombie — a process that has
- * exited but whose parent has not reaped it — so a stop loop built on it reports
- * `STILL_RUNNING` for a process that is already gone, and GC reports a dead version dir as
- * in use. Verified against a real zombie on macOS; the `ps` state check is what separates
- * the two.
- *
- * A host without `ps` yields an empty state, which falls through to "alive" — the safe
- * direction for both callers.
- */
+/** kill -0 includes zombies; ps excludes them, while missing evidence conservatively retains the process. */
 export function posixProcessAliveShellFunction(
   options: { refuseUnverifiable?: boolean } = {}
 ): string {

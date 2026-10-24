@@ -264,8 +264,7 @@ describe('IosEmulatorBackend', () => {
   })
 
   it('recycles the device and retries when the helper finds no framebuffer', async () => {
-    // The real-world failure: simctl reports Booted but the display IO ports
-    // never came up, so serve-sim --detach dies with the framebuffer error.
+    // CoreSimulator can report Booted while framebuffer ports remain unavailable.
     execServeSimCommandMock
       .mockRejectedValueOnce(
         new EmulatorError(
@@ -284,7 +283,6 @@ describe('IosEmulatorBackend', () => {
     const info = await backend.startSession('device-1')
     expect(info.deviceUdid).toBe('device-1')
     expect(shutdownSimulatorDeviceMock).toHaveBeenCalledWith('device-1')
-    // Booted once up front, again after the recycle shutdown.
     expect(ensureSimulatorBootedMock).toHaveBeenCalledTimes(2)
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
   })
@@ -328,10 +326,8 @@ describe('IosEmulatorBackend', () => {
     const backend = new IosEmulatorBackend({ waitForEndpointReady: async () => true })
     await expect(backend.startSession('device-1')).rejects.toMatchObject({
       code: 'emulator_helper_failed',
-      // Actionable headline plus the raw helper log for diagnosis.
       message: expect.stringMatching(/simctl erase[\s\S]*No framebuffer display descriptor found/)
     })
-    // Exactly one recycle attempt; no shutdown/boot loop against a broken device.
     expect(shutdownSimulatorDeviceMock).toHaveBeenCalledTimes(1)
     expect(execServeSimCommandMock).toHaveBeenCalledTimes(2)
   })

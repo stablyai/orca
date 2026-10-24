@@ -24,7 +24,6 @@ describe('provider timeline turns', () => {
       requestedAt: 900
     })
     const runningRow = await rig.row(providerTurnItemId('turn-1'))
-    // The running row is stamped at the turn start, not at append time.
     expect(runningRow?.observedAt).toBe(1_000)
 
     rig.assembler.apply({
@@ -47,7 +46,6 @@ describe('provider timeline turns', () => {
       completedAt: 3_000,
       durationMs: 1_800
     })
-    // Turn rows belong to no turn, and are revised rather than replaced.
     expect(row?.turnScope).toEqual({ kind: 'thread' })
     expect(row?.revision).toBeGreaterThan(runningRow?.revision ?? Infinity)
   })
@@ -99,7 +97,6 @@ describe('provider timeline turns', () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
     rig.assembler.apply({ type: 'input.accepted', clientMessageId: 'send-1', requestedAt: 1_100 })
-    // A second send folds into the turn; it does not replace the opener.
     rig.assembler.apply({ type: 'input.accepted', clientMessageId: 'send-2', requestedAt: 1_200 })
     expect(await rig.turn('turn-1')).toMatchObject({
       userItemId: agentJournalSubmissionKey('send-1'),
@@ -136,21 +133,18 @@ describe('provider timeline turns', () => {
     expect(rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_100 }).dropped).toBe(
       'turn-duplicate'
     )
-    // An open naming no turn while one is open is the same turn, not a new one.
     expect(rig.assembler.apply({ type: 'turn.open', at: 1_200 }).dropped).toBe('turn-duplicate')
     expect(
       rig.assembler.apply({ type: 'turn.end', turn: 'turn-9', at: 1_500, state: 'completed' })
         .dropped
     ).toBe('turn-unknown')
     rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed', outcome: 'success' })
-    // The journal holds the turn: its end is admitted and finds nothing left to settle.
     expect(
       rig.assembler.apply({ type: 'turn.end', turn: 'turn-1', at: 3_000, state: 'interrupted' })
     ).toEqual({ admission: { accepted: true } })
     expect(rig.assembler.apply({ type: 'turn.end', at: 3_000, state: 'completed' }).dropped).toBe(
       'no-turn'
     )
-    // An open of a turn the journal holds settled neither reopens nor rewrites it.
     expect(rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 4_000 }).dropped).toBe(
       'turn-settled'
     )
@@ -168,7 +162,7 @@ describe('provider timeline turns', () => {
     rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed', outcome: 'success' })
     await rig.rows()
 
-    // Admitted without the journal's view, so only its write can see the row is there.
+    // Deferred writes must detect rows created before sink binding.
     const { assembler, bind } = openUnboundProviderTimelineAssembler(rig.journal)
     expect(
       assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 5_000 }).dropped
@@ -182,7 +176,6 @@ describe('provider timeline turns', () => {
       startedAt: 1_000,
       completedAt: 2_000
     })
-    // The journal's settlement reaches the state at the next event.
     assembler.apply({ type: 'activity', text: 'reading' })
     expect(assembler.openTurnId).toBeNull()
   })

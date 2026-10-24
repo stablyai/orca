@@ -1,4 +1,5 @@
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
@@ -60,6 +61,7 @@ export type AcpTurnEnding = {
   durationMs?: number
   failureDetail?: string
   notSignedIn?: boolean
+  usageLimit?: AgentSessionUsageLimit
   hookBlock?: AcpHookBlock
 }
 
@@ -102,6 +104,10 @@ export type AcpDialect = {
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
+  promptFailure?(
+    error: AcpAgentError,
+    at: number
+  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string

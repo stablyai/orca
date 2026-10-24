@@ -13,7 +13,6 @@ export const MANAGED_VERSION = '0.2.0+abc'
 export const MANAGED_PREVIOUS_VERSION = '0.1.0+def'
 export const MANAGED_LOCAL_PORT = 46_768
 
-/** A managed server registered in a temp profile, with its claimed SSH target. */
 export function createManagedLifecycleHarness() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orcad-managed-lifecycle-'))
   let target: SshTarget = {
@@ -76,7 +75,6 @@ export function createManagedLifecycleHarness() {
   return { userDataPath, environment, targetStore, context, flushes, current: () => target }
 }
 
-/** Readiness whose pairing offer, once tunneled, matches the harness server's saved one. */
 export function managedReadiness(deviceToken = 'device-token'): ServeReadiness {
   const endpoint = 'ws://127.0.0.1:6768'
   return {

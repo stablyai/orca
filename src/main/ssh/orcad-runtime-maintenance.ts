@@ -82,7 +82,7 @@ function refreshPairing(
 }
 
 /** A launched slot may bind another port than the forward in use, so forward anew. */
-async function followLaunchedServerPort(
+export async function followLaunchedServerPort(
   userDataPath: string,
   environmentId: string
 ): Promise<void> {

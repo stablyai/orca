@@ -29,8 +29,7 @@ export class RuntimeWatcherPendingAssignment<T> {
       onFulfilled: onGranted,
       onAbandon: () => {
         if (this.settlementWaiters.waiterCount === 0) {
-          // Why: delete the logically abandoned assignment synchronously so a
-          // same-turn replacement cannot join its soon-to-reject promise.
+          // Remove abandoned assignments synchronously so same-turn replacements cannot join a doomed promise.
           this.notifySettled()
           this.onNoWaiters()
         }

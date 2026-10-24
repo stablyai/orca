@@ -218,8 +218,7 @@ describe('readAgentSessionHistory', () => {
 })
 
 describe('history page byte ceiling', () => {
-  // A legal user message may be 256 KiB; twenty of them serialize past the
-  // 4 MiB outbound channel cap, which closes the socket on overflow.
+  // Several legal messages exceed the 4 MiB outbound cap.
   const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
   async function appendLargeItems(count: number): Promise<void> {
@@ -235,7 +234,6 @@ describe('history page byte ceiling', () => {
     if (!result.ok) {
       throw new Error(`expected a page, got reset ${result.reset}`)
     }
-    // The actual channel gate: the page must serialize under the outbound cap.
     serializeRemoteRuntimePayload(result.page)
     return result.page
   }
@@ -494,7 +492,6 @@ describe('projectJournalBatch', () => {
   })
 })
 
-/** Serialize through the actual channel gate and hand back the byte length. */
 function serializedPageBytes(value: unknown): number {
   return Buffer.byteLength(serializeRemoteRuntimePayload(value), 'utf8')
 }
@@ -503,8 +500,7 @@ type RawSeedRow =
   | Omit<JournalItemRow, 'v' | 'epoch' | 'fence' | 'ts'>
   | Omit<JournalTombstoneRow, 'v' | 'epoch' | 'fence' | 'ts'>
 
-/** Simulate rows admitted before identity bounding existed: written straight
- *  into the log, then loaded by a fresh journal instance. */
+/** Seed raw legacy rows, then reopen to exercise current read bounds. */
 async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSessionJournal> {
   const full = rows.map(
     (row) =>
@@ -516,8 +512,6 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
         ts: tick()
       }) as JournalRow
   )
-  // Rows are staged straight into the session database: the reopen below has to
-  // see them exactly as a previous writer would have committed them.
   await journal.close()
   const opened = openTestJournalHostDatabase(root)
   try {
@@ -533,9 +527,7 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
 }
 
 describe('pre-existing oversized identities', () => {
-  // The exact escape from the round-two review: a legal 5 MiB Codex turnId
-  // admitted before bounding, then tombstoned. Its removal id alone exceeds
-  // the 4 MiB outbound cap, so no page can ever carry it.
+  // Legacy oversized tombstone IDs cannot fit any outbound page.
   const HUGE_ITEM_ID = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
 
   it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
@@ -560,9 +552,7 @@ describe('pre-existing oversized identities', () => {
       expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
       )
-      // The reset page replaces client state wholesale, so the removal is
-      // applied without carrying the id, and resuming from the live cursor
-      // starts past the unsendable row.
+      // Reset replaces client state without sending an unsendable removal ID.
       expect(result.page.items).toEqual([])
       const liveCursor = result.page.liveCursor
       if (!liveCursor) {

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   createHookListenerState,
   type HookListenerState
@@ -6,9 +9,6 @@ import {
 import { normalizeHookPayload } from './agent-hook-listener'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
-// Payloads below are jcode 0.87.1's own `JCODE_HOOK_PAYLOAD` objects, captured by
-// pointing every `[hooks]` entry at a logging script; see
-// docs/reference/jcode-hook-events.md.
 function ingest(state: HookListenerState, payload: Record<string, unknown>) {
   return normalizeHookPayload(
     state,
@@ -20,13 +20,17 @@ function ingest(state: HookListenerState, payload: Record<string, unknown>) {
 
 describe('shared agent-hook-listener: jcode', () => {
   let state: HookListenerState
+  let jcodeHome: string
 
   beforeEach(() => {
+    jcodeHome = mkdtempSync(join(tmpdir(), 'orca-jcode-hooks-'))
+    vi.stubEnv('JCODE_HOME', jcodeHome)
     state = createHookListenerState()
   })
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    rmSync(jcodeHome, { recursive: true, force: true })
   })
 
   it('maps turn_start to working before any tool has run', () => {
@@ -104,11 +108,20 @@ describe('shared agent-hook-listener: jcode', () => {
       toolName: 'request_permission'
     })
     expect(JSON.parse(event?.payload?.interactivePrompt ?? '{}')).toMatchObject({
-      action: 'delete the staging bucket'
+      action: 'delete the staging bucket',
+      reason: 'Why this needs approval'
     })
   })
 
   it('does not re-open a question on post_tool, which fires after the answer', () => {
+    const pending = ingest(state, {
+      event: 'pre_tool',
+      session_id: 'session_jc_2',
+      tool_name: 'request_permission',
+      tool_input: '{"action":"delete the staging bucket","reason":"Why this needs approval"}'
+    })
+    expect(pending?.payload.state).toBe('waiting')
+    expect(pending?.payload.interactivePrompt).toBeDefined()
     const event = ingest(state, {
       event: 'post_tool',
       session_id: 'session_jc_2',
@@ -116,6 +129,7 @@ describe('shared agent-hook-listener: jcode', () => {
       status: 'ok'
     })
     expect(event?.payload).toMatchObject({ state: 'working' })
+    expect(event?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('leaves unrelated tool names working even when they read like a question', () => {
@@ -145,6 +159,13 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('surfaces the turn error instead of a stale reply when a turn fails', () => {
+    const previous = ingest(state, {
+      event: 'turn_end',
+      session_id: 'session_jc_3',
+      status: 'ok',
+      last_assistant_text: 'Stale reply.'
+    })
+    expect(previous?.payload.lastAssistantMessage).toBe('Stale reply.')
     const event = ingest(state, {
       event: 'turn_end',
       session_id: 'session_jc_3',
@@ -184,12 +205,13 @@ describe('shared agent-hook-listener: jcode', () => {
   })
 
   it('clears the previous turn tool when a new turn starts', () => {
-    ingest(state, {
+    const previous = ingest(state, {
       event: 'pre_tool',
       session_id: 'session_jc_4',
       tool_name: 'bash',
       tool_input: '{"command":"pnpm lint"}'
     })
+    expect(previous?.payload).toMatchObject({ toolName: 'bash', toolInput: 'pnpm lint' })
     const event = ingest(state, {
       event: 'turn_start',
       session_id: 'session_jc_4',
@@ -209,6 +231,7 @@ describe('shared agent-hook-listener: jcode', () => {
     })
     expect(event?.payload).toMatchObject({ agentType: 'jcode', state: 'done' })
     expect(event?.providerSession).toEqual({ key: 'session_id', id: 'session_jc_5' })
+    expect(event?.providerSessionOnly).toBe(true)
   })
 
   it('reads the lifecycle point from jcode\u2019s own `event` key', () => {

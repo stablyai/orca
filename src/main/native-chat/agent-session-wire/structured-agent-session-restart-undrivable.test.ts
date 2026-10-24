@@ -1,7 +1,3 @@
-// A chat whose agent this build no longer drives (its definition now names another transport) is
-// still readable, but nothing offers to start it: no restart offer, and a recorded failure is not
-// retryable. The offer itself is kept, so a build that drives the agent again offers it again.
-
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -16,7 +12,6 @@ import { interruptedRestart } from './structured-agent-session-restart-interrupt
 
 afterEach(() => vi.restoreAllMocks())
 
-/** This build's agents, with Codex now speaking a protocol its existing chats were not made in. */
 function codexOnAnotherTransport(): StructuredAgentRegistry {
   return new StructuredAgentRegistry(
     NO_STRUCTURED_AGENTS.registrations().map((registration) =>

@@ -8,6 +8,7 @@
 @import './markdown-preview.css';
 @import './terminal.css';
 @import './mobile-page.css';
+@import './text-shimmer.css';
 @import '../../../shared/styles/scrollbar-sleek.css';
 
 @font-face {
@@ -958,6 +959,12 @@ html.native-shell .app-layout {
 [data-slot='dialog-overlay'],
 [data-slot='dialog-content'] {
   -webkit-app-region: no-drag;
+}
+
+/* Modal inline pointer styles must not turn noninteractive labels into hit targets. */
+[data-radix-popper-content-wrapper]:has(> [data-slot='tooltip-content'].pointer-events-none),
+[data-slot='tooltip-content'].pointer-events-none {
+  pointer-events: none !important;
 }
 
 .titlebar {

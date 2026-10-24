@@ -98,7 +98,7 @@ describe('forwardToVerifiedOrcad', () => {
     await expect(result).rejects.toThrow(/no longer accepts this desktop's pairing/)
     await expect(result).rejects.not.toThrow(/another Orca/)
     expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
-    // Our own server refusing our token is not a moved port: no re-read, no wake.
+    // A pinned server's token refusal needs pairing repair, not a port change.
     expect(state.rereadRemotePort).not.toHaveBeenCalled()
     expect(state.addForward).toHaveBeenCalledTimes(1)
   })

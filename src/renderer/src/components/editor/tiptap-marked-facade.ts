@@ -17,7 +17,7 @@ import {
 import { ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
 
 // Same item start Tiptap's ordered list accepts, so every list it built can be re-read here.
-const EXTENDED_LIST_ITEM = new RegExp(`^(\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)])(\\s+)`)
+const TIPTAP_LIST_ITEM = new RegExp(`^(\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)])(\\s+)`)
 
 function expandColumns(text: string, startColumn = 0): number {
   let column = startColumn
@@ -41,7 +41,7 @@ function sliceBeforeOuterQuote(source: string): string {
   let contentIndent = 0
   let outerQuoteLine = /^>/
   for (const [index, line] of lines.entries()) {
-    const item = EXTENDED_LIST_ITEM.exec(line)
+    const item = TIPTAP_LIST_ITEM.exec(line)
     const lineIndent = expandColumns(/^\s*/.exec(line)?.[0] ?? '')
     if (item && (index === 0 || lineIndent < contentIndent)) {
       contentIndent = getItemContentIndent(item)
@@ -58,11 +58,11 @@ function isListToken(token: Tokens.Generic | undefined): token is Tokens.List {
 }
 
 class BlockquoteListTokenizer extends Tokenizer {
-  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in
-  // v18), skipping the registered extended-marker (a., iii)) tokenizers, then reads `.raw`.
+  // Why: Marked's blockquote() lazy continuation calls `this.list(newText)!` (still so in v18),
+  // skipping the registered tokenizer that also reads `1.` + no-break space, then reads `.raw`.
   list(source: string): Tokens.List | undefined {
     const token = super.list(source)
-    if (token || !EXTENDED_LIST_ITEM.test(source)) {
+    if (token || !TIPTAP_LIST_ITEM.test(source)) {
       return token
     }
     const listSource = sliceBeforeOuterQuote(source)

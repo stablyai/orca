@@ -3532,7 +3532,11 @@
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
             "downloadOpenFailed": "无法下载“{{value0}}”。",
             "openInThisGroup": "在此分组中打开",
-            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
+            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
+            "fileInOtherWorkspace": "此文件位于 {{value0}}",
+            "fileInAnotherWorkspace": "此文件位于另一个工作区",
+            "openInOwningWorkspace": "在那里打开",
+            "openedHereReadOnly": "已在此处以只读方式打开"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "主机不可用",
@@ -3542,12 +3546,15 @@
             "restoring": "正在恢复终端…"
           },
           "AgentLaunchPaneNotice": {
-            "commandNotFound": "在此计算机上找不到其命令。",
+            "agent": "智能体",
+            "commandNotFound": "无法启动 {{agent}}，因为在此计算机上找不到其命令。",
             "copyPrompt": "复制提示",
-            "exitedDuringStart": "它在启动时退出了。",
-            "notStarted": "智能体无法启动。",
-            "unconfirmed": "无法确认智能体已启动。",
-            "workspaceGone": "其工作区已不可用。"
+            "exitedDuringStart": "{{agent}} 在启动时退出了。",
+            "notStarted": "无法启动 {{agent}}。",
+            "restoreWorkspace": "请恢复工作区文件夹或打开可用的工作区，然后重试。",
+            "tryInTerminal": "请在此文件夹的终端中运行它以查看原因，然后重试。",
+            "unconfirmed": "无法确认 {{agent}} 已启动。请先检查其终端，再重试。",
+            "workspaceGone": "无法启动 {{agent}}，因为其工作区已不可用。"
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "由于主机意外停止，自动恢复已暂停。您的会话已保存。",
@@ -7377,14 +7384,14 @@
           "6b17602073": "重置访问权限",
           "506f2acf7a": "正在重置访问...",
           "4b65070096": "darwin",
-          "statusGranted": "的确",
+          "statusGranted": "已授权",
           "statusUnsupported": "仅限 macOS",
           "statusNotEnabled": "未启用"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "刷新",
           "6326a4c5cc": "当 CLI、本地应用程序或自动化工具需要 macOS 隐私访问时，请使用这些控件。 Orca 在启动时不会询问。",
-          "6f011b9bf6": "终端工具继承了 Orca 的 macOS 隐私信封。",
+          "6f011b9bf6": "终端工具继承了 Orca 的 macOS 隐私权限范围。",
           "bfa3402305": "无法请求许可",
           "66e94d6cf3": "已发送权限请求",
           "fa809e8ada": "打开 macOS 隐私和安全",
@@ -7394,7 +7401,7 @@
           "b2210b1b4f": "蓝牙",
           "dfbc12c8c8": "与 USB 设备通信的硬件调试和设备工具。",
           "bf51e4a542": "USB 设备",
-          "f903bf20b5": "发现和访问网络上的开发服务器。",
+          "f903bf20b5": "允许终端和开发工具连接到本地网络上的服务。macOS 不会向 Orca 提供此权限的当前状态。",
           "e7bb06007c": "局域网",
           "4a73f5217a": "用于控制其他本地应用程序的脚本的 Apple 事件。",
           "e119f0d66b": "自动化",
@@ -7409,12 +7416,12 @@
           "cc8151d9fa": "语音输入、转录、录音、sox、ffmpeg 和 Whisper CLI。",
           "16381e040a": "麦克风",
           "dac08ec03e": "处理中...",
-          "actionRequest": "要求",
+          "actionRequest": "请求授权",
           "actionOpenSettings": "打开设置",
           "actionTriggerPrompt": "触发提示",
-          "statusGranted": "的确",
+          "statusGranted": "已授权",
           "statusDenied": "被拒绝",
-          "statusNotRequested": "没有要求",
+          "statusNotRequested": "尚未请求",
           "statusRestricted": "受限制的",
           "statusUnsupported": "仅限 macOS",
           "statusEntitled": "有权",
@@ -7437,7 +7444,7 @@
           "connectionTestDescription": "输入本地网络上另一台设备上的服务。 Orca 测试终端工具使用的相同网络路径。",
           "connectionTestLastVerified": "最后验证",
           "connectionTestNotYetVerified": "未保存成功的测试。",
-          "connectionTestHost": "主持人",
+          "connectionTestHost": "主机",
           "connectionTestPort": "端口",
           "connectionTestRunning": "测试...",
           "connectionTestAction": "测试连接",
@@ -9678,6 +9685,11 @@
               "invert": "反转",
               "opposite": "相反"
             },
+            "linkRoutingBackground": {
+              "background": "后台",
+              "focus": "焦点",
+              "tab": "标签页"
+            },
             "72c58f7792": "网页视图",
             "82ba1c80ea": "本地主机",
             "bea27bac4b": "链接",
@@ -11888,6 +11900,10 @@
           "titleOrca": "按住 Shift 在 Orca 中打开",
           "descriptionSystem": "链接在 Orca 中打开，因此 {{chord}}+点击会将其发送到系统浏览器。",
           "descriptionOrca": "链接在系统浏览器中打开。启用后，{{chord}}+点击会改在 Orca 内置浏览器中打开。"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "在后台打开链接",
+          "description": "终端、聊天和 Markdown 中的链接会在浏览器中打开，焦点仍停留在你点击的位置。"
         },
         "PluginConsentDialog": {
           "workerTrust": "后台工作进程 — 运行自己的进程",
@@ -14141,7 +14157,7 @@
                     "bdf8772106": "冲突",
                     "edc2d82a2b": "合并正在进行中",
                     "5c3707aa44": "变基正在进行中",
-                    "ffe53a1da6": "樱桃采摘正在进行中",
+                    "ffe53a1da6": "正在进行 cherry-pick",
                     "35eb76d323": "操作正在进行中"
                   }
                 }
@@ -15908,6 +15924,7 @@
           "6c4f1a8d2e": "检查详情不可用。"
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "只读",
           "fb8331694e": "打开侧面预览",
           "4157f3cbf3": "打开 Markdown 预览",
           "269ce4842b": "复制相对路径",
@@ -19107,7 +19124,7 @@
         "countAgentsOne": "1 个智能体",
         "countAgentsMany": "{{value0}} 智能体",
         "countShellOne": "1 个外壳",
-        "countShellMany": "{{value0}} 贝壳",
+        "countShellMany": "{{value0}} 个 shell",
         "countShellCommandOne": "1 个 shell 命令",
         "countMonitorsOne": "1台显示器",
         "countMonitorsMany": "{{value0}} 监视器",
@@ -19703,7 +19720,8 @@
     "jiraUserPicker": {
       "select": "选择{{value0}}",
       "search": "搜索用户",
-      "empty": "没有找到用户"
+      "empty": "没有找到用户",
+      "useKnownId": "使用已知用户 ID“{{value0}}”"
     },
     "status": {
       "bar": {

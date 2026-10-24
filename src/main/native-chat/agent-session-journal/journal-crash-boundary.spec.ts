@@ -144,8 +144,7 @@ export function registerJournalCrashBoundaryTests(): void {
       const restarted = await open()
       await restarted.markPendingSubmissionsUnknown(2)
 
-      // A restart re-opens what it could not answer. This one is already answered,
-      // so recovery must not reopen it as doubt.
+      // Recovery must preserve settled rejection instead of reopening it as unknown.
       expect(restarted.submissions()[0]).toMatchObject({
         dispatchState: 'rejected',
         reason: 'provider_write_failed'
@@ -154,8 +153,7 @@ export function registerJournalCrashBoundaryTests(): void {
       expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
     })
 
-    // Only an older Orca minted this reason -- Codex now settles a send on the
-    // provider echo -- but rows written under it still come back from disk.
+    // Older Codex rows retain this uncertainty reason even though current sends settle on echoes.
     it('keeps a codex turn it could not name in doubt, never rejected', async () => {
       const journal = await open()
       await journal.appendSubmission({
@@ -174,7 +172,7 @@ export function registerJournalCrashBoundaryTests(): void {
       const restarted = await open()
       await restarted.markPendingSubmissionsUnknown(2, 'provider_exited_before_acknowledgement')
 
-      // The turn IS started; recovery may not overwrite that with a weaker guess,
+      // Preserve proven turn start; rejection would incorrectly authorize redelivery.
       // and it may never become a rejection, which would license a re-delivery.
       expect(restarted.submissions()[0]).toMatchObject({
         dispatchState: 'unknown',

@@ -164,8 +164,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('answers the synchronous settings read with the persisted settings', () => {
-    // Why: panes can bind PTYs before async hydration; the side-effect
-    // authority kill switch needs the persisted value synchronously.
+    // PTYs can bind before hydration; authority selection needs persisted settings synchronously.
     store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
     registerSettingsHandlers(store as never)
 
@@ -899,8 +898,6 @@ describe('registerSettingsHandlers', () => {
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 
-  // 3b stores the two booleans and nothing else; the consent copy and the
-  // history picker are PR 8's. A profile that has never opted in has no key.
   it('normalizes an agent-session-search write and hands the change to the index', async () => {
     const before = { aiVaultSearch: { enabled: false, historyDays: null } }
     store.getSettings.mockReturnValue(before)

@@ -1,6 +1,4 @@
-// What a Stop's row says when Codex took the interrupt, against the real host, journal and Codex
-// adapter. Codex answers a turn's interrupt as the turn aborts and sends the turn's end right after
-// the answer, so the end reaches Orca a moment after the Stop has its answer.
+// Codex interrupt replies precede turn-end frames; preserve Stop rows across both deliveries.
 
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -37,7 +35,6 @@ let host: StructuredAgentSessionHost
 let turns: ReturnType<typeof codexTurnLifecycleFake>
 let codex: ReturnType<typeof fakeCodex>
 let notify: (method: string, params: unknown) => void
-/** Read at each start, so a test can say what the next start resumes. */
 let launch: { resumeThreadId?: string | null }
 let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let disposeSession: MockInstance<NonNullable<StructuredAgentSessionAdapter['disposeSession']>>
@@ -51,7 +48,6 @@ beforeEach(async () => {
   codex.routes['turn/start'] = turns.routes['turn/start']
   codex.routes['turn/interrupt'] = () => {
     const turnId = turns.turnId
-    // The answer first, then the turn's end on a later read of Codex's output.
     setTimeout(
       () =>
         notify('turn/completed', { threadId: THREAD, turn: { id: turnId, status: 'interrupted' } }),
@@ -60,7 +56,6 @@ beforeEach(async () => {
     return {}
   }
   const store = await openTestAgentSessionRecordStore(root)
-  // The runtime's wiring: an echo accepts its send, and every exit reaches the host.
   launch = {}
   const adapter = adapterFor(codex, launch, [], {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
@@ -143,8 +138,7 @@ async function journalRows() {
   }
 }
 
-/** Codex's -32600 states the named turn is not running; its -32603 is an interrupt it could not
- *  submit, the turn still running. */
+/** -32600 proves no running target; -32603 leaves the turn potentially running. */
 function refused(message: string, code: -32600 | -32603 = -32600): CodexAppServerRequestError {
   return new CodexAppServerRequestError(
     'turn/interrupt',
@@ -160,7 +154,6 @@ function interruptFailure(failure: 'internal error' | 'unanswered'): Error {
     : new CodexAppServerTimeoutError('codex app-server turn/interrupt exceeded 30000ms')
 }
 
-/** Codex picked the follow-up's turn and answered the send, and has not started it. */
 async function followUpUnopened(): Promise<void> {
   const sent = await send('and then this')
   if (!sent.ok) {
@@ -170,8 +163,6 @@ async function followUpUnopened(): Promise<void> {
   await host.flushStreamedEvents(SESSION)
 }
 
-/** Whether the Stop ended the child: the host's stop, which proves the exit. Nothing else here
- *  stops it before the test's teardown. */
 function childEndedByStop(): boolean {
   return disposeSession.mock.calls.length > 0
 }
@@ -191,7 +182,7 @@ describe('a Codex Stop that Codex answered', () => {
 
       expect((await journalRows()).statuses).toEqual(['Cancellation requested.'])
       expect(stopped).toMatchObject({ ok: true, value: { cancelled: true } })
-      // Codex's background terminals live in its child, so a Stop it took keeps the child.
+      // Successful Stop preserves Codex’s child-owned background terminals.
       expect(childEndedByStop()).toBe(false)
       expect(codex.connections.at(-1)?.closed).toBe(false)
     }
@@ -249,7 +240,7 @@ describe('a Codex Stop whose interrupt failed', () => {
     'keeps the child when Codex has moved on to another turn, %s',
     async (_case, turnId) => {
       await runningTurn()
-      // Codex ended the turn and opened another before the interrupt reached it.
+      // Race turn replacement ahead of interrupt delivery.
       codex.routes['turn/interrupt'] = () => {
         turns.end('completed')
         notify('turn/started', { threadId: THREAD, turn: { id: 'turn-2', status: 'inProgress' } })
@@ -266,7 +257,7 @@ describe('a Codex Stop whose interrupt failed', () => {
     }
   )
 
-  // Codex marks the turn ended before it writes the frame, so its refusal can come first.
+  // Codex marks turns ended before emitting their frames, so refusal can arrive first.
   it.each([
     ['naming no turn', undefined],
     ['naming its turn', 'turn-1']
@@ -327,7 +318,6 @@ describe('a Codex Stop whose interrupt failed', () => {
     expect((await journalRows()).statuses).toEqual([])
   })
 
-  // A phone names the turn it shows; a follow-up from elsewhere is not that Stop's to end.
   it.each([
     ['Codex refused it', 'refused'],
     ['the interrupt went unanswered', 'unanswered']
@@ -356,7 +346,7 @@ describe('a Codex Stop whose interrupt failed', () => {
 
   it("decides on Codex's frames received before the interrupt failed, not on the journal's last write", async () => {
     await runningTurn()
-    // Each frame lands in the journal as Codex hands it over, before the interrupt fails.
+    // Land provider frames before interrupt failure to test current journal state.
     codex.routes['turn/interrupt'] = () => {
       turns.end('completed')
       notify('turn/started', { threadId: THREAD, turn: { id: 'turn-2', status: 'inProgress' } })
@@ -413,7 +403,6 @@ describe('a Codex Stop whose interrupt failed', () => {
     const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
     const rows = since.ok ? since.rows : []
     const stopAt = rows.find((row) => row.kind === 'tombstone' && row.stopEvent)?.seq
-    // The turn's end, from the child's end or Codex's own frame, in whatever row carries it.
     const endAt = rows.find((row) => JSON.stringify(row).includes('"state":"interrupted"'))?.seq
     expect(stopAt).toBeLessThan(endAt ?? 0)
   })
@@ -435,8 +424,7 @@ describe('a Codex Stop whose interrupt failed', () => {
 })
 
 describe('a message after a Codex Stop whose exit was unproven', () => {
-  /** A Stop whose interrupt fails ends the child, whose close cannot prove the exit `failures`
-   *  times. As the real connection, it refuses every request once a close begins. */
+  /** Refuse requests once close begins; inject failures unproven closes before exit proof. */
   async function stopWithUnprovenClose(failures: number) {
     await runningTurn()
     codex.routes['turn/interrupt'] = () => {
@@ -497,7 +485,6 @@ describe('a message after a Codex Stop whose exit was unproven', () => {
 
     old.handlers.onExit?.(new Error('codex app-server exited'), { expected: true })
 
-    // The close Orca began, ended: Orca's, never blamed on Codex as a crash.
     expect(handled).toHaveBeenCalledWith(
       expect.objectContaining({ cause: 'requested-close', failure: { kind: 'hostFault' } })
     )
@@ -509,7 +496,6 @@ describe('a message after a Codex Stop whose exit was unproven', () => {
   it('joins that close first, then goes to a fresh Codex, never to the old one', async () => {
     const old = await stopWithUnprovenClose(1)
     expect(host['sessions'].get(SESSION)?.child?.close).toMatchObject({ cause: 'user-stop' })
-    // The next start resumes the chat's thread, as the runtime's launch resolves it from the record.
     launch.resumeThreadId = THREAD
 
     const sent = await send('carry on')
@@ -526,7 +512,7 @@ describe('a message after a Codex Stop whose exit was unproven', () => {
       throw interruptFailure('internal error')
     }
     const old = codex.connections.at(-1)!
-    // The forced kill saw the root exit but could not prove the rest of the tree gone.
+    // Prove root exit independently of descendant-tree cleanup.
     Object.defineProperty(old, 'processTreeUnproven', { get: () => old.closed })
 
     await stop()

@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskPageLinearCollectionEffectsModel } from './task-page/linear/use-task-page-linear-collection-effects'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
-import { restrictJiraQueryToProject } from '../../../shared/jira-project-reference'
+import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
 import { buildJiraPresetJql } from '../../../shared/jira/jira-preset-jql'
 import { buildJiraTextMatchJql } from '../../../shared/jira/jira-search-input-jql'
 

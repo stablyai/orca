@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
-import { normalizeJiraProjectReference } from '../../../../shared/jira-project-reference'
+import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import {
   findRepoForHost,
   getRepoHostIdentityForParts,

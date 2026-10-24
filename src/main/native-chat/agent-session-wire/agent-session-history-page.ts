@@ -1,11 +1,4 @@
-// Paged history over one journal.
-//
-// `tail` and `before` read the REDUCED timeline, so backward paging keeps
-// working after compaction — the folded snapshot still holds every live item.
-// `after` is the catch-up direction and must read rows instead: an item created
-// early and revised late orders by its creation sequence, so an item-window
-// read would silently skip that revision. Rows carry the revision, which is why
-// `after` is the only direction that can answer `cursor_compacted`.
+// Backward pages read reduced items; catch-up reads rows so late revisions of early items are not lost.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -42,8 +35,7 @@ import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
-/** Clamped, never rejected: a client asking for more than the host will serve
- *  should get a smaller page and keep paging, not an error mid-scroll. */
+/** Clamp oversized requests so clients can keep paging. */
 export function resolveHistoryLimit(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) {
     return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
@@ -51,21 +43,10 @@ export function resolveHistoryLimit(limit: number | undefined): number {
   return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
 }
 
-/** Whose rows a backward read serves. Both window over the session's own rows; a
- *  reader of the session's own agent alone gets only those. In-process only: no wire
- *  request carries it. */
+/** Both scopes window on session-owned rows; every-agent also includes interleaved subagent rows. */
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
-/**
- * The newest `limit` of the session's own rows, in whole sequence groups, and every
- * row after the oldest of them: a subagent's rows, and each subagent's own row, ride
- * along with the conversation they happened in, so a burst or a fan-out cannot crowd
- * the conversation off the page. The page stays contiguous and starts at its first
- * item, as the cursor means; the byte budget still bounds it. Fewer own rows than
- * `limit` reach back to the start. With no subagent rows this is the newest `limit`
- * rows, as before. A page reaches back to the first sibling of each subagent group it holds
- * part of, so loading an older page does not renumber a group's ordinals or move its row.
- */
+/** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */
 function conversationWindow(
   items: readonly AgentJournalRenderItem[],
   limit: number
@@ -97,8 +78,7 @@ export function readAgentSessionHistory(
     scope = 'every-agent',
     reader = CLIENT_HISTORY_READER
   }: {
-    /** Reduced state to read against. A synchronous multi-page catch-up passes one
-     *  snapshot for the whole run so each page costs its own rows, not the timeline. */
+    /** Reuse a snapshot across synchronous catch-up pages to avoid repeated full reduction. */
     snapshot?: AgentJournalSnapshot
     scope?: AgentSessionHistoryScope
     reader?: HistoryReader
@@ -145,11 +125,7 @@ export function readAgentSessionHistory(
   }
 }
 
-/**
- * A catch-up run over one journal. Pages share one reduced timeline, so the run
- * costs its own rows instead of re-reducing every item per page; the cursor
- * check re-reduces if anything did advance the journal between pages.
- */
+/** Reuse reduced state until the journal cursor advances. */
 export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal,
   reader: HistoryReader = CLIENT_HISTORY_READER
@@ -220,20 +196,16 @@ function readForward(
   reader: HistoryReader
 ): AgentSessionHistoryResult {
   if (!cursor) {
-    // Why: forward paging replays rows after a position; without one there is
-    // nothing to be after, and silently serving the tail would hand the client
-    // a page it cannot place.
+    // Forward paging without a cursor cannot place its rows; force reset.
     return historyReset(snapshot, 'cursor_ahead', reader)
   }
-  // One lookahead preserves hasNewer without rereading the entire remaining journal per page.
+  // One lookahead determines hasNewer without rereading the whole remaining journal.
   const since = journal.readSince(cursor, limit + 1)
   if (!since.ok) {
     return historyReset(snapshot, since.reset, reader)
   }
   const submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // The page cost is EVERYTHING variable it carries: items with their
-  // submissions AND removal ids — a legal pre-bounding tombstone id can dwarf
-  // every item on the page.
+  // Count submissions and removal IDs too: legacy tombstones can outweigh all item content.
   const pageContentBytes = (
     items: readonly ReturnType<HistoryReader['form']>[],
     removedItemIds: readonly string[]
@@ -246,9 +218,7 @@ function readForward(
       (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
       0
     )
-  // Rows replay forward, so the byte bound shrinks the ROW window rather than
-  // clipping projected items: dropping an item while advancing the cursor past
-  // the rows that touched it would lose that revision for good.
+  // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
   let rows = since.rows.slice(0, limit)
   const project = (window: typeof rows) => {
     const result = projectJournalBatch({
@@ -275,7 +245,6 @@ function readForward(
     projected = shrunk
     contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
   }
-  // One row can still touch an over-budget item; degrade it visibly.
   let items = projected.batch.items
   if (contentBytes > reader.budgetBytes) {
     items = items.map((formed) => {
@@ -287,11 +256,7 @@ function readForward(
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }
   if (contentBytes > reader.budgetBytes) {
-    // A single row's semantic payload — in practice a pre-bounding oversized
-    // removal id — can never fit any page, and truncating a removal id would
-    // break the client's keying. A bounded tail replaces the client's state
-    // wholesale, which applies the removal without carrying the id, and the
-    // client resumes from the live cursor past this row.
+    // Unsplittable removal IDs require whole-state reset; resume at the live cursor past the oversized row.
     return historyReset(snapshot, 'cursor_compacted', reader)
   }
   const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
@@ -302,7 +267,6 @@ function readForward(
       direction: 'after',
       items: items.map(({ item }) => item),
       removedItemIds: projected.batch.removedItemIds,
-      // Reading after a position means there is something before it.
       hasOlder: cursor.sequence > 0,
       hasNewer: since.rows.length > rows.length,
       fallbackCursor: cursor,
@@ -346,12 +310,12 @@ function buildPage(input: {
     hasOlder: input.hasOlder,
     hasNewer: input.hasNewer,
     ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
-    // From the whole timeline, never the page: a long turn's record sits below any window.
+    // Read the whole timeline: long turns can begin below this page.
     latestTurn: snapshotLatestTurn(input.snapshot)
   }
 }
 
-// A catch-up run pages one snapshot many times; its scan back to the turn record is paid once.
+// Cache the turn scan across catch-up pages sharing a snapshot.
 const latestTurnBySnapshot = new WeakMap<AgentJournalSnapshot, AgentSessionLatestTurn | null>()
 
 export function snapshotLatestTurn(snapshot: AgentJournalSnapshot): AgentSessionLatestTurn | null {

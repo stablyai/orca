@@ -243,6 +243,8 @@ describe('relay observability', () => {
     for (let index = 0; index < 40; index++) {
       observability.recordAssignmentUnavailable('drain-return-deferred')
     }
+    // A drained reserve host's intake pace is scheduled by the drain too.
+    observability.recordAssignmentUnavailable('reserve-paced-drained')
     observability.recordAssignmentUnavailable('sticky-lane')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
     observability.recordAssignmentUnavailable('relay_capacity_exhausted')
@@ -252,6 +254,7 @@ describe('relay observability', () => {
     expect(entries[0]).toMatchObject({
       assign503sByCauseDelta: {
         'drain-return-deferred': 40,
+        'reserve-paced-drained': 1,
         'sticky-lane': 1,
         relay_capacity_exhausted: 2
       },

@@ -5,6 +5,7 @@ import {
 } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
+import type { AgentSessionUsageLimit } from '../../shared/agent-session-usage-limit'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError, AcpAuthRequiredError, AcpSignInPromptError } from './acp-errors'
@@ -54,7 +55,12 @@ export function acpSignInRequiredFailure(
 export class AcpTurnFailures {
   private readonly rows = new BoundedMap<
     string,
-    { text: string; notSignedIn: boolean; usageLimited: boolean }
+    {
+      text: string
+      notSignedIn: boolean
+      usageLimited: boolean
+      usageLimit?: AgentSessionUsageLimit
+    }
   >({
     maxEntries: 128
   })
@@ -73,16 +79,20 @@ export class AcpTurnFailures {
     turn: string,
     stopReason: string,
     text: string | undefined,
-    notSignedIn = false
+    notSignedIn = false,
+    usageLimit?: AgentSessionUsageLimit
   ): ProviderTimelineEvent[] {
-    return acpStopReasonFailed(stopReason) ? this.row(turn, text, stopReason, notSignedIn) : []
+    return acpStopReasonFailed(stopReason)
+      ? this.row(turn, text, stopReason, notSignedIn, usageLimit)
+      : []
   }
 
   row(
     turn: string,
     text: string | undefined,
     stopReason = 'error',
-    notSignedIn = false
+    notSignedIn = false,
+    usageLimit?: AgentSessionUsageLimit
   ): ProviderTimelineEvent[] {
     const written = this.rows.peek(turn)
     const detail = text === undefined ? undefined : providerDiagnostic(text, 'person')
@@ -92,23 +102,30 @@ export class AcpTurnFailures {
     // Preserve rate-limit classification when a later prompt error omits the stop reason.
     const usageLimited =
       !authenticationRequired && (stopReason === 'rate_limit' || written?.usageLimited === true)
+    const limit = usageLimit ?? written?.usageLimit
     if (
       written &&
       written.text === (diagnostic?.text ?? '') &&
       written.notSignedIn === authenticationRequired &&
-      written.usageLimited === usageLimited
+      written.usageLimited === usageLimited &&
+      written.usageLimit?.resetsAt === limit?.resetsAt &&
+      written.usageLimit?.window === limit?.window
     ) {
       return []
     }
     this.rows.set(turn, {
       text: diagnostic?.text ?? '',
       notSignedIn: authenticationRequired,
-      usageLimited
+      usageLimited,
+      usageLimit: limit
     })
     const failure = authenticationRequired
       ? agentSessionFailureFact('notSignedIn', { detail: diagnostic })
       : usageLimited
-        ? agentSessionFailureFact('usageLimitReached', { detail: diagnostic })
+        ? agentSessionFailureFact('usageLimitReached', {
+            detail: diagnostic,
+            usageLimit: limit
+          })
         : null
     return [
       {

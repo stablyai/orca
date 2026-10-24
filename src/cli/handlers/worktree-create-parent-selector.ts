@@ -26,7 +26,7 @@ export function assertWorktreeParentFlagsCompatible(
   }
 }
 
-function getWorkspaceKeyParentSelector(selector: string): string | undefined {
+export function getWorkspaceKeyParentSelector(selector: string): string | undefined {
   const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
   return isWorkspaceKey(rawSelector) ? rawSelector : undefined
 }

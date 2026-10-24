@@ -154,7 +154,7 @@ attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
-  await openWorkspaceBrowserTab(request)
+  return openWorkspaceBrowserTab(request)
 })
 
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs

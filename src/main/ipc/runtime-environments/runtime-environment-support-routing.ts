@@ -56,9 +56,7 @@ export function shouldRouteCallBySupport(method: string, environmentId: string):
     return false
   }
   if (method === 'session.tabs.list' || method === 'session.tabs.listAll') {
-    // Why: snapshot recovery must stay available while shared-control streams reconnect after a
-    // restart, but on a ready shared socket a one-shot socket per worktree switch only adds a
-    // connect and handshake to every switch (#26785).
+    // Use ready shared sockets for tab reads; one-shot recovery remains available during reconnect (#26785).
     return getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state === 'ready'
   }
   return true
@@ -220,7 +218,7 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
       outcome.kind !== 'stale_incarnation' &&
       isRuntimeEnvironmentCapabilityOutcomeCurrent(outcome)
     ) {
-      // Why: checked after the connection is ready, just before sending, where a reconnect lands.
+      // Verify identity after connection readiness, immediately before send.
       if (args.expectedRuntimeId !== undefined && outcome.runtimeId !== args.expectedRuntimeId) {
         return runtimeEnvironmentChangedFailure(environment, args.method)
       }

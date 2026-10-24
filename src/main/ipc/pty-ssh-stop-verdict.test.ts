@@ -54,8 +54,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-// A detached relay PTY is designed to outlive the provider that addressed it, so
-// "the SSH provider is gone" is never evidence that the remote process stopped.
+// Detached relay PTYs outlive their provider; missing providers cannot prove remote exit.
 describe('stopping a PTY whose SSH provider is unregistered', () => {
   const { handlers, mainWindow, installObservableDaemonTestProvider } = setupPtyIpcSuite()
 
@@ -96,7 +95,6 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const { controller, runtime } = installController()
 
     expect(controller.kill('ssh-detached-pty')).toBe(false)
-    // The local lease is still tombstoned so reconnect cannot revive the pane.
     expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-detached-pty', -1, undefined)
     expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
       'ssh-detached-pty',

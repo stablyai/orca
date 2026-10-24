@@ -69,6 +69,9 @@ vi.mock('./BrowserLinkRoutingSetting', () => ({
 vi.mock('./BrowserLinkRoutingModifierSetting', () => ({
   BrowserLinkRoutingModifierSetting: () => <span>Modifier row</span>
 }))
+vi.mock('./BrowserLinkRoutingBackgroundSetting', () => ({
+  BrowserLinkRoutingBackgroundSetting: () => <span>Background links row</span>
+}))
 vi.mock('./BrowserTerminalLinkActionsSetting', () => ({
   BrowserTerminalLinkActionsSetting: () => <span>Terminal links row</span>
 }))

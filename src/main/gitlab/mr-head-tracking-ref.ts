@@ -18,7 +18,6 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-// Why: mirrors fetchGitHubPullRequestHeadRef so both forges pin the durable head ref the same way.
 export async function fetchGitLabMergeRequestHeadRef(
   repo: { path: string } & Pick<Repo, 'connectionId' | 'executionHostId'>,
   remote: string,
@@ -37,7 +36,7 @@ export async function fetchGitLabMergeRequestHeadRef(
   }
   const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
   const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
-  // Why: return the same path the fetch wrote so callers don't re-resolve identity.
+  // Return the written ref so callers do not recompute its identity.
   const localRef = gitlabMergeRequestHeadLocalRef(remoteComponent, mrIid)
   await gitExecFileAsync(
     ['fetch', '--no-tags', remote, `+refs/merge-requests/${mrIid}/head:${localRef}`],

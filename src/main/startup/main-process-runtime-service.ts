@@ -126,7 +126,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     prepareCodexCatalogProbeHome: (homePath) =>
       state.codexRuntimeHome?.prepareHostCodexHomeForReadOnlyAppServer(
         homePath,
-        resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+        resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
     orchestrationEnvironmentTransport,
     workspaceSleepPlatform: {

@@ -49,7 +49,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'runtime-slow-hash-'))
   shim = join(root, 'shim')
   mkdirSync(shim)
-  // Slow home storage: reading the executable takes longer than the client waits.
+  // Slow storage lets executable hashing outlast client observation.
   writeFileSync(
     join(shim, 'sha256sum'),
     `#!/bin/sh\nsleep 1\necho "${pinnedNodeRuntimeAsset(target).executableSha256}  $1"\n`,
@@ -67,7 +67,7 @@ describe.skipIf(process.platform === 'win32')('runtime install on slow storage',
     const store = join(root, '.orca-remote', 'runtimes')
     const archive = join(root, 'node.tar.gz')
     writeFileSync(archive, 'archive')
-    // A sibling installer publishes this pin while this client uploads.
+    // Model sibling publication during this installer's upload.
     vi.mocked(uploadRemoteInstallDirectory).mockImplementation(async () => {
       mkdirSync(join(runtimeDir, 'bin'), { recursive: true })
       writeFileSync(posixNodeRuntimeExecutable(host, runtimeDir), 'node', { mode: 0o755 })
@@ -77,7 +77,7 @@ describe.skipIf(process.platform === 'win32')('runtime install on slow storage',
     let orphan: Promise<string> | undefined
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
       if (command.includes('sha256sum') && ++hashes === 2) {
-        // The under-lock re-hash outlives the client's exec timer; the host keeps running it.
+        // Stop client observation while the under-lock hash keeps executing on the host.
         orphan = sh(command)
         throw Object.assign(new Error('timed out'), {
           code: 'SSH_EXEC_TIMEOUT',
@@ -96,9 +96,9 @@ describe.skipIf(process.platform === 'win32')('runtime install on slow storage',
       })
     ).rejects.toMatchObject({ sshChannelCloseConfirmed: false })
     expect(orphan).toBeDefined()
-    // Kept while the hash runs: loss of contact is not an exit.
+    // Lost contact cannot prove the hash exited; its runtime lock must remain held.
     expect(existsSync(join(store, RUNTIME_STORE_LOCK_NAME))).toBe(true)
-    // Without the host release this waits out the 20-minute stale rule.
+    // Host-side release avoids waiting for the 20-minute stale-lock window.
     await withRuntimeStoreLock(conn, host, store, async () => {}, AbortSignal.timeout(10_000))
     expect((await orphan)?.trim()).toBe(REMOTE_NODE_RUNTIME_READY)
   }, 20_000)

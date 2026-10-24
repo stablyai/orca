@@ -4,8 +4,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 
-/** For a test that attaches without a host: the conversation's journal, through the one open a
- *  host would take, so the attach under test adopts it the way it adopts the host's. */
+/** Open through the production conversation path so hostless attach tests adopt the same journal. */
 export function openTestAttachConversation(
   journalDatabase: JournalHostDatabase
 ): (record: AgentSessionRecord) => Promise<AgentSessionJournal> {

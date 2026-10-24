@@ -1,13 +1,7 @@
-// What a send this host queued answers with when it is asked again — a lost
-// acknowledgement's replay, or a rerun the operation ledger no longer covers:
-// from its draft first, then from the hand-off that names it.
-
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-/** Null for a send this host never queued. A refused conversion answers with
- *  its returned card, never the rejected submission, or the same text would
- *  render twice — on a Retry row AND the card. */
+/** Refused conversions replay as returned cards, avoiding duplicate Retry rows; null means never queued. */
 export function queuedSendAnswer(
   journal: Pick<AgentSessionJournal, 'queuedMessages' | 'submission' | 'submissions'>,
   clientMessageId: string
@@ -25,14 +19,11 @@ export function queuedSendAnswer(
           queued: { messageId: draft.messageId, position: draft.position, state: draft.state }
         }
   }
-  // The card is gone (an earlier build pruned it, or a new epoch did not keep it); its last
-  // hand-off still names it. Only a withdrawn card goes while its last hand-off stands rejected —
-  // a card the user deleted — so it answers withdrawn, never as a refused send.
+  // Missing cards with rejected handoffs were deleted; replay withdrawn rather than a refused send.
   const handoff = journal
     .submissions()
     .findLast((entry) => entry.queuedMessageId === clientMessageId)
   if (handoff?.dispatchState === 'rejected') {
-    // The gone card's position went with it; a withdrawn receipt names no place in the queue.
     return {
       clientMessageId,
       queued: { messageId: clientMessageId, position: 0, state: 'withdrawn' }

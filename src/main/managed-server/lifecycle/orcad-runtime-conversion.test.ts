@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../shared/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cutover-journal'
@@ -22,6 +22,9 @@ import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
 import { fakeOrcadMigrationDestination } from '../../ssh/orcad-migration-destination-fake'
 import { reconcileManagedOrcadSshTargets, visibleRepos } from '../../ssh/orcad-retained-source'
 import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { makeTerminalScrollbackSnapshotRef } from '../../terminal-scrollback-snapshots'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
@@ -71,7 +74,6 @@ beforeEach(() => {
   mocks.state.targetStore = new SshConnectionStore(store as never)
   destination = fakeOrcadMigrationDestination()
   mocks.ensureTunnel.mockImplementation(resolveEnvironment)
-  // Registers the server the fence named, as the real deploy would after pairing.
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))
     if (!owner) {
@@ -106,25 +108,117 @@ afterEach(async () => {
 
 const releaseDirectSession = vi.fn(async () => {})
 const convert = (
-  // The account-wide census found no relay with work unless a test says otherwise.
   censusHost: OrcadManagedConversionArgs['censusHost'] = async () => ({
     verdict: 'exited',
     count: 0
-  })
+  }),
+  isBridgedPaneLease?: OrcadManagedConversionArgs['isBridgedPaneLease']
 ) =>
   convertSshTargetToManagedOrcad(userDataPath, {
     sshTargetId: TARGET.id,
     name: 'Managed',
     censusHost,
+    isBridgedPaneLease,
     destinationFor: () => destination,
     releaseDirectSession,
     now: () => new Date('2026-10-02T00:00:00.000Z')
   })
 
 describe('converting an SSH host into a managed server', () => {
+  it.each(['live', 'unverifiable'] as const)(
+    'offers and completes the move with unreadable scrollback while relay terminals are %s',
+    async (verdict) => {
+      const worktreeId = 'repo-1::/srv/app'
+      const tabId = 'a0b28c21-0065-4056-93d5-46fe37604193'
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const ref = makeTerminalScrollbackSnapshotRef(tabId, leafId)
+      const session = getDefaultWorkspaceSession()
+      session.tabsByWorktree[worktreeId] = [
+        {
+          id: tabId,
+          ptyId: null,
+          worktreeId,
+          title: 'Agent',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+      session.terminalLayoutsByTabId[tabId] = {
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
+        expandedLeafId: null,
+        scrollbackRefsByLeafId: { [leafId]: ref }
+      }
+      const hostId = toSshExecutionHostId(TARGET.id)
+      const profile = getDefaultPersistedState(userDataPath)
+      profile.repos = store.getRepos()
+      profile.sshTargets = [TARGET]
+      profile.workspaceSessionsByHostId = { [hostId]: session }
+      profile.sshRemotePtyLeases = [
+        {
+          targetId: TARGET.id,
+          ptyId: 'agent-pty',
+          tabId,
+          leafId,
+          worktreeId,
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          targetId: TARGET.id,
+          ptyId: 'older-agent-pty',
+          tabId: 'closed-tab',
+          leafId,
+          worktreeId,
+          state: 'expired',
+          supersededBy: 'agent-pty',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+      const reportDirectory = join(userDataPath, 'reported-profile')
+      mkdirSync(reportDirectory)
+      const dataFile = join(reportDirectory, 'orca-data.json')
+      writeFileSync(dataFile, JSON.stringify(profile))
+      store = createSqliteTestStore(Store, { dataFile })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry wraps this real test store.
+      mocks.state.targetStore = new SshConnectionStore(store as never)
+      const retire = vi.spyOn(store, 'markSshRemotePtyLease')
+      const census = async () => ({ verdict, count: 1 })
+      const isBridgedPaneLease = (lease: SshRemotePtyLease): boolean => lease.ptyId === 'agent-pty'
+      const refused = await convert(census, isBridgedPaneLease)
+      expect(refused).toMatchObject({ outcome: 'refused', canLeaveBehind: true })
+      expect(destination.commits).toBe(0)
+      expect(store.getSshTarget(TARGET.id)?.managedServerLeaveBehind).toBeUndefined()
+      store.updateSshTarget(TARGET.id, {
+        managedServerLeaveBehind: { confirmedAt: '2026-10-23T00:00:00.000Z' }
+      })
+      await expect(convert(census, isBridgedPaneLease)).resolves.toMatchObject({
+        outcome: 'converted'
+      })
+      expect(destination.commits).toBe(1)
+      const [journal] = listOrcadMigrationSourceCutovers(userDataPath)
+      expect(journal?.bridgedPtyIds).toEqual(['agent-pty', 'older-agent-pty'])
+      const moved = journal?.manifest.payload.dormantState?.workspaceSession
+      expect(moved?.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual([tabId])
+      expect(moved?.terminalLayoutsByTabId[tabId]).toMatchObject({ root: { type: 'leaf', leafId } })
+      expect(moved?.terminalLayoutsByTabId[tabId]?.scrollbackRefsByLeafId).toBeUndefined()
+      expect(
+        store.getWorkspaceSession(hostId)?.terminalLayoutsByTabId[tabId]?.scrollbackRefsByLeafId
+      ).toEqual({ [leafId]: ref })
+      expect(store.getSshRemotePtyLeases(TARGET.id)).toEqual([
+        expect.objectContaining({ ptyId: 'agent-pty', state: 'detached', tabId, leafId }),
+        expect.objectContaining({ ptyId: 'older-agent-pty', state: 'expired' })
+      ])
+      expect(retire).not.toHaveBeenCalled()
+    }
+  )
+
   it('commits first time with the pairing the tunnel re-paired to while it opened', async () => {
     mocks.ensureTunnel.mockImplementation(async (path: string, id: string) => {
-      // The server refused the stored token; the tunnel paired again over SSH.
       refreshManagedOrcadPairing(
         path,
         id,
@@ -150,7 +244,7 @@ describe('converting an SSH host into a managed server', () => {
     expect(destination.commits).toBe(1)
     const used = destinationFor.mock.calls[0]![0]
     expect(getPreferredPairingOffer(used).deviceToken).toBe('fresh-token')
-    // The re-pair keeps the migration mark that blocks rollbacks across this commit.
+    // Repair must preserve the migration mark that prevents rollback across committed migration.
     expect(used.orcadMigratedAt).toBe('2026-10-02T00:00:00.000Z')
   })
 
@@ -165,7 +259,7 @@ describe('converting an SSH host into a managed server', () => {
     const [environment] = listEnvironments(userDataPath)
     expect(environment?.orcadMigratedAt).toBe('2026-10-02T00:00:00.000Z')
     expect(destination.commits).toBe(1)
-    // An older build reads these rows and reaches the host over its relay.
+    // Retained source rows keep downgraded relay-era clients able to reach the host.
     expect(store.getRepos().map((repo) => repo.id)).toEqual(['repo-1'])
     const [journal] = listOrcadMigrationSourceCutovers(userDataPath)
     expect(journal).toMatchObject({
@@ -174,7 +268,6 @@ describe('converting an SSH host into a managed server', () => {
     })
     expect(store.getSshTarget(TARGET.id)?.owner).toBeUndefined()
     expect(getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))).toBe(environment?.id)
-    // Converting again only resumes the finished migration: nothing commits twice.
     await expect(convert()).resolves.toMatchObject({
       outcome: 'converted',
       migrationId: journal?.migrationId
@@ -184,7 +277,6 @@ describe('converting an SSH host into a managed server', () => {
 
   // COMPAT(legacy-relay-bridge): converting stops nothing, so a relay terminal no longer blocks it.
   it('converts while a relay terminal may still run, leaving its lease to the bridge', async () => {
-    // Saved by a relay-era build; this build only reads it.
     const lease = {
       targetId: TARGET.id,
       ptyId: 'p',
@@ -192,7 +284,7 @@ describe('converting an SSH host into a managed server', () => {
       createdAt: 1,
       updatedAt: 1
     }
-    // A clean 1.4.224 quit saves its leases detached; a crash leaves them expired.
+    // Released clients detach leases on clean quit; crashes leave expired leases.
     const detached = { ...lease, ptyId: 'q', state: 'detached' as const }
     vi.spyOn(store, 'getSshRemotePtyLeases').mockReturnValue([lease, detached])
     const markLease = vi.spyOn(store, 'markSshRemotePtyLease')
@@ -203,7 +295,6 @@ describe('converting an SSH host into a managed server', () => {
     expect(markLease).not.toHaveBeenCalled()
   })
 
-  // No lease: only a host census may prove nothing runs, never the silence.
   it('refuses without any host census', async () => {
     await expect(convert(null)).resolves.toMatchObject({
       outcome: 'refused',
@@ -253,7 +344,6 @@ describe('converting an SSH host into a managed server', () => {
       }
       return read!(manifest)
     })
-    // The commit lands, then contact is lost before either the reply or a re-read arrives.
     destination.commit.mockImplementationOnce(async (manifest) => {
       await commit!(manifest)
       reachable = false
@@ -310,7 +400,6 @@ describe('backing out a conversion whose server is registered but never committe
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(listOrcadMigrationSourceCutovers(userDataPath)).toEqual([])
     expect(store.getSshTarget(TARGET.id)?.orcadFence).toBeUndefined()
-    // The next start finds no server to re-fence the host to.
     reconcileManagedOrcadSshTargets(userDataPath, store)
     expect(store.getSshTarget(TARGET.id)?.orcadFence).toBeUndefined()
   })
@@ -342,7 +431,6 @@ describe('backing out a conversion whose server is registered but never committe
 
   it('clears a stale journal a stopped server left, so the host converts again', async () => {
     await expect(convert()).resolves.toMatchObject({ outcome: 'converted' })
-    // A stopped server from a build that left its journal behind.
     const [environment] = listEnvironments(userDataPath)
     removeManagedOrcadEnvironment(userDataPath, environment!.id)
     store.updateSshTarget(TARGET.id, { orcadFence: undefined })
@@ -351,7 +439,7 @@ describe('backing out a conversion whose server is registered but never committe
   })
 })
 
-/** What v1.4.218 and current main do with a stored target: keep every field, hide only `owner`. */
+/** Frozen released-client target filtering; retain unknown fields and hide owned targets. */
 function shippedBuildView(targets: SshTarget[]): SshTarget[] {
   return JSON.parse(JSON.stringify(targets)).filter(
     (target: SshTarget) => target.owner?.type !== 'on-demand-runtime'
@@ -368,7 +456,6 @@ describe('a converted host across a downgrade and back', () => {
     const visible = shippedBuildView(store.getSshTargets())
     expect(visible.map((target) => target.id)).toEqual([TARGET.id])
     expect(store.getRepos().filter((repo) => repo.connectionId === TARGET.id)).toHaveLength(1)
-    // This build hides the retained rows and serves the host from its managed server instead.
     expect(visibleRepos(store, () => userDataPath)).toEqual([])
   })
 

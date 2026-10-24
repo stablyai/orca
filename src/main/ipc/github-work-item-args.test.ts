@@ -19,7 +19,7 @@ describe('dispatchWorkItem', () => {
 
   it('rejects non-number values coming across IPC', () => {
     const fn = vi.fn()
-    // Renderer can send anything; simulate a string that slips past TS.
+    // Model malformed renderer input despite the static type.
     const bogus = { repoPath: '/r', number: 'abc' as unknown as number }
     expect(dispatchWorkItem(bogus, repo, fn)).toBeNull()
     expect(fn).not.toHaveBeenCalled()

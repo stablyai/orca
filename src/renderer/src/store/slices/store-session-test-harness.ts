@@ -17,7 +17,7 @@ type UsageScannerMocks = {
 }
 
 export type StoreSessionMockApi = {
-  worktrees: { list: Mock; create: Mock; remove: Mock; updateMeta: Mock }
+  worktrees: { create: Mock; remove: Mock; updateMeta: Mock }
   repos: {
     list: Mock
     add: Mock
@@ -39,7 +39,6 @@ export type StoreSessionMockApi = {
 export function createStoreSessionMockApi(): StoreSessionMockApi {
   const mockApi: StoreSessionMockApi = {
     worktrees: {
-      list: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({}),
       remove: vi.fn().mockResolvedValue(undefined),
       updateMeta: vi.fn().mockResolvedValue({})

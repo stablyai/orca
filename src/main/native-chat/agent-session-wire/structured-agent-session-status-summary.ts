@@ -34,7 +34,6 @@ export function structuredAgentSessionStatusSummary({
   journal: AgentSessionJournal
   record: AgentSessionRecord | null
   state: StructuredAgentSessionStatusState
-  /** A person's Stop is still ending the work it stopped. */
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
@@ -42,8 +41,7 @@ export function structuredAgentSessionStatusSummary({
 }): AgentSessionStatusSummary {
   const projected = state.summary
   const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-  // The journal has no model: the record's acknowledged options are where a mid-session
-  // switch lands, so the row follows whichever is in force.
+  // Acknowledged record options remain authoritative across model switches.
   const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
   const permissionMode = record?.permissionMode
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
@@ -59,7 +57,6 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
-    // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
     ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
       ? { rewindBlockedReason: 'outcome-unknown' as const }
@@ -75,7 +72,6 @@ export function structuredAgentSessionStatusSummary({
   }
 }
 
-/** The record's name, and the failure to replace it only while that is still the name. */
 function structuredSummaryConversationNaming(
   record: AgentSessionRecord | null,
   failure: StructuredChatNamingFailure | undefined
@@ -92,7 +88,6 @@ function structuredSummaryConversationNaming(
     : { conversationName: name }
 }
 
-/** A closed chat's retained summary with current record annotations, or null if unchanged. */
 export function renamedStructuredStatusSummary(
   previous: AgentSessionStatusSummary,
   deps: Pick<StructuredAgentSessionStatusFeedDeps, 'getRecord' | 'namingFailure'>,

@@ -29,7 +29,9 @@ export function useFloatingTerminalOrchestrationVisibility({
     try {
       const status = await window.api.cli.getInstallStatus()
       if (mountedRef.current) {
-        setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
+        const cliRegistrationUnavailable =
+          status?.state === 'unsupported' && status.unsupportedReason === 'launch_mode_unavailable'
+        setShowOrchestrationSetup(!cliRegistrationUnavailable && !isOrcaCliAvailableOnPath(status))
       }
     } catch {
       if (mountedRef.current) {

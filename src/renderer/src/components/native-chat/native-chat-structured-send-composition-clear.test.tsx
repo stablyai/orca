@@ -93,6 +93,7 @@ function transport(
   overrides: Partial<NativeChatStructuredComposerTransport> = {}
 ): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => PASS_THROUGH),
     optionsSurface: {
@@ -148,26 +149,33 @@ afterEach(() => cleanup())
 describe('structured send racing the next IME composition', () => {
   // The regression: the RPC's clear lands while the NEXT composition is live, so the DOM sync
   // drops it and settlement used to adopt the sent text back into the composer (#17359).
-  it('does not resurrect the sent message when the clear lands mid-composition', async () => {
+  it('preserves the next composition when a typed goal is accepted', async () => {
     const dispatch = deferred()
-    const structured = transport({ dispatchCommand: vi.fn(() => dispatch.promise) })
+    const structured = transport({
+      dispatchCommand: vi.fn(async () => PASS_THROUGH).mockReturnValueOnce(dispatch.promise),
+      threadGoal: { setObjective: vi.fn() }
+    })
     renderComposer(structured)
+    const pane = `tab-${paneCounter}:structured`
     const input = textarea()
 
-    changePrompt(input, '안녕')
+    changePrompt(input, '/goal 안녕')
     pressEnter(input)
-    expect(structured.dispatchCommand).toHaveBeenCalledWith('안녕')
+    expect(structured.dispatchCommand).toHaveBeenCalledWith('/goal 안녕')
 
     fireEvent.compositionStart(input)
-    changePrompt(input, '안녕하')
+    changePrompt(input, '/goal 안녕하')
 
     await act(async () => {
-      dispatch.resolve(PASS_THROUGH)
+      dispatch.resolve({ handled: true, accepted: true, error: null })
       await dispatch.promise
     })
+    expect(promptValue(input)).toBe('/goal 안녕하')
+    expect(structured.send).not.toHaveBeenCalled()
     fireEvent.compositionEnd(input, { data: '하' })
 
     expect(promptValue(input)).toBe('하')
+    expect(readNativeChatDraftCache(pane)).toBe('하')
 
     await act(async () => pressEnter(input))
     expect(structured.send).toHaveBeenLastCalledWith('하', [])

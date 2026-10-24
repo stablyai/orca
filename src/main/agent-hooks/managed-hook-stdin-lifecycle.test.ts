@@ -1,7 +1,7 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +13,11 @@ let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
+  vi.stubEnv('GROK_HOME', undefined)
+  vi.stubEnv('KIMI_CODE_HOME', undefined)
+  vi.stubEnv('COPILOT_HOME', undefined)
+  vi.stubEnv('KIRO_HOME', undefined)
+  vi.stubEnv('XDG_CONFIG_HOME', undefined)
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-user-data-'))
   // Isolate managed-script resolution so inherited user-data paths cannot target live hooks.
@@ -26,6 +31,7 @@ afterEach(() => {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
+  vi.unstubAllEnvs()
 })
 
 const { homedirMock, bundledHook } = vi.hoisted(() => {
@@ -185,7 +191,12 @@ function runHookProcess(
   stdin: 'close' | 'abandon' = 'close'
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawnProcess({
+      program: executable,
+      args,
+      env,
+      stdio: 'pipe'
+    })
     const stdinErrors: NodeJS.ErrnoException[] = []
     let stderr = ''
     let stdout = ''
@@ -316,6 +327,7 @@ describe('Windows managed hook stdin structure', () => {
       expect(claude, 'claude devin guard present').toContain(
         'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
       )
+      expect(claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeGreaterThanOrEqual(0)
       expect(claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
         claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
       )
@@ -333,6 +345,10 @@ describe('Windows managed hook stdin structure', () => {
       ] as const) {
         const decoded = decodeEncodedPowerShellCommand(command)
         expect(decoded, `${name} decoded`).toContain(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+        expect(
+          decoded.indexOf("Write-Output '{}'"),
+          `${name} response exists`
+        ).toBeGreaterThanOrEqual(0)
         expect(decoded.indexOf("Write-Output '{}'"), `${name} answers first`).toBeLessThan(
           decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
         )
@@ -468,8 +484,8 @@ describe('Windows managed hook stdin structure', () => {
       const absentProfile = join(home, 'absent')
       seedCmdAutoRunTarget(home)
       seedCmdAutoRunTarget(absentProfile)
-      bundledHook.path = bundled ? buildWindowsNativeHookExecutable() : null
       try {
+        bundledHook.path = bundled ? buildWindowsNativeHookExecutable() : null
         expect(new ClaudeHookService().install().state).toBe('installed')
         const settings = JSON.parse(
           readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
@@ -563,7 +579,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     }
   })
 
-  it('accepts a large payload without Orca environment or a broken writer', async () => {
+  it('accepts a large payload across generated hooks without breaking the writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
       const extraEnv = agent.startsWith('command-code')

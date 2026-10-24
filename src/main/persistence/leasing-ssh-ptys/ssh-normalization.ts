@@ -27,6 +27,7 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const systemSshProxyConnectionReuse = target.systemSshProxyConnectionReuse
   const remoteRuntime = target.remoteRuntime
   const remoteRuntimeResolution = normalizeSshRemoteRuntimeResolution(
     target.remoteRuntimeResolution
@@ -36,6 +37,7 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.systemSshProxyConnectionReuse
   delete target.remoteRuntime
   delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
@@ -59,6 +61,9 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   }
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
+  }
+  if (systemSshProxyConnectionReuse === true) {
+    normalized.systemSshProxyConnectionReuse = true
   }
   // Known values survive, so an explicit Host Node choice outlives a later default flip;
   // an unknown value from a newer build must not change the runtime.

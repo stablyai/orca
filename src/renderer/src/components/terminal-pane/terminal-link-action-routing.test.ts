@@ -15,7 +15,7 @@ import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 const openUrl = vi.fn()
 const createBrowserTab = vi.fn()
 const setActiveWorktree = vi.fn()
-const openRuntimeBrowserTab = vi.fn(() => Promise.resolve())
+const openRuntimeBrowserTab = vi.fn((): Promise<string | null> => Promise.resolve(null))
 
 function plainEvent(): MouseEvent {
   return {

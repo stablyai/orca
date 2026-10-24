@@ -1,6 +1,6 @@
-import type { JiraConnectionStatus, JiraSite } from '../shared/jira-types'
+import type { JiraConnectionStatus, JiraSite } from '../shared/jira/jira-types'
 import type { RuntimeStatus } from '../shared/runtime-types'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
 import {
   getMatchingJiraSites,
   JIRA_ISSUE_KEY_PATTERN,

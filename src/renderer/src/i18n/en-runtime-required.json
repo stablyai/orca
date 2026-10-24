@@ -2612,7 +2612,9 @@
             "f7c3d7d5af": "Split Right"
           },
           "QuickLaunchButton": {
-            "chatLoading": "Checking chat support…"
+            "chatLoading": "Checking chat support…",
+            "hostUnreachable": "Can’t reach this workspace’s host to list its agents",
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
           },
           "SortableTabContextMenu": {
             "0ce4bae39d": "Split Left",

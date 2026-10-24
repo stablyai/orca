@@ -14,7 +14,6 @@ function withCommand(command: AgentSessionConversationCommandRecord) {
 const COMMAND = { operationId: 'operation-1', callerKey: 'client-1', runtimeFence: 7 }
 
 describe('a send refused by the conversation command it follows', () => {
-  // A clear's commit is its only durable write, so a record short of it never changed the chat.
   it("lets a send follow a /clear that never committed, as an older build's record leaves one", () => {
     expect(
       structuredAgentSessionSendBlock(

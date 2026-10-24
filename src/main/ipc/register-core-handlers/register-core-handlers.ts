@@ -155,10 +155,7 @@ export function registerCoreHandlers(
   pluginService?: PluginService,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // Why: on macOS the app can stay alive after all windows close, then
-  // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
-  // if a channel is registered twice, so we guard to register only once and
-  // just update the per-window web-contents ID on subsequent calls.
+  // macOS activation can replace the window without ending the app; refresh trusted IDs but register IPC once.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
@@ -170,7 +167,6 @@ export function registerCoreHandlers(
 
   registerAppHandlers(store, {
     quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
-    // Switch point: main derives what the next startup reconnects instead of taking the window's.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN
       ? {
           reconnectFactsFor: (session, partition) =>
@@ -178,7 +174,7 @@ export function registerCoreHandlers(
         }
       : {}),
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
-    // Why here, not onBeforeRelaunch: restart and profile switches quit through will-quit, which closes it.
+    // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
     onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
   })
   registerCliHandlers()
@@ -215,10 +211,7 @@ export function registerCoreHandlers(
   registerWorkspaceSpaceWindowHandlers(store)
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
-  // Why: diagnostics handlers are wired alongside telemetry but the two
-  // lanes never share a code path — `ipc/diagnostics.ts` imports only from
-  // `src/main/observability/`, never from `src/main/telemetry/`. Order is
-  // not load-bearing; both register independent ipcMain channels.
+  // Diagnostics and telemetry register independent channels and keep separate data paths.
   registerDiagnosticsHandlers()
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()

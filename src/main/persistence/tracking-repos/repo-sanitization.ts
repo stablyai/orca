@@ -4,7 +4,7 @@ import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import { normalizeJiraProjectReference } from '../../../shared/jira-project-reference'
+import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import {
   normalizeCustomWorktreeVisibilitySources,

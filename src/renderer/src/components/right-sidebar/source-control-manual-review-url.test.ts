@@ -4,6 +4,7 @@ import {
   buildSourceControlManualReviewUrlFromContext,
   resolveSourceControlManualReviewProvider
 } from './source-control/review/manual-review-url'
+import { parseRemoteRepo } from './source-control/review/remote-repo'
 
 describe('resolveSourceControlManualReviewProvider', () => {
   it('prefers hosted review and creation providers over linked review hints', () => {
@@ -78,6 +79,47 @@ describe('buildSourceControlManualReviewUrlFromContext', () => {
 })
 
 describe('buildSourceControlManualReviewUrl', () => {
+  it.each([
+    'ssh://git@altssh.gitlab.com:443/team/project.git',
+    'git@altssh.gitlab.com:team/project.git',
+    'ssh://git@ALTSSH.GITLAB.COM:443/team/project.git',
+    'git@ALTSSH.GITLAB.COM:team/project.git'
+  ])('canonicalizes GitLab SSH-over-443 web identity: %s', (remote) => {
+    expect(parseRemoteRepo(remote)).toEqual({
+      provider: 'gitlab',
+      path: 'team/project',
+      webBaseUrl: 'https://gitlab.com/team/project'
+    })
+    for (const provider of [undefined, 'gitlab'] as const) {
+      expect(
+        buildSourceControlManualReviewUrl({
+          baseRef: 'main',
+          branchName: 'feature/x',
+          repoRemoteName: 'origin',
+          repoRemoteUrl: remote,
+          provider,
+          upstreamName: 'origin/feature/x'
+        })
+      ).toBe(
+        'https://gitlab.com/team/project/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature%2Fx&merge_request%5Btarget_branch%5D=main'
+      )
+    }
+  })
+
+  it('does not infer GitLab or rewrite the web origin of an alias lookalike', () => {
+    const remote = 'ssh://git@altssh.gitlab.com.example.com:443/team/project.git'
+    expect(parseRemoteRepo(remote)).toEqual({
+      provider: null,
+      path: 'team/project',
+      webBaseUrl: 'https://altssh.gitlab.com.example.com/team/project'
+    })
+    expect(parseRemoteRepo(remote, 'gitlab')).toEqual({
+      provider: 'gitlab',
+      path: 'team/project',
+      webBaseUrl: 'https://altssh.gitlab.com.example.com/team/project'
+    })
+  })
+
   it('builds a GitHub compare URL for the current remote branch', () => {
     expect(
       buildSourceControlManualReviewUrl({

@@ -28,7 +28,7 @@ async function commit(
   const runtime = {
     terminalRunFacts: facts,
     intentionalPtyStops: stops,
-    // Why the real method: the case under test is what the runtime does with each commit.
+    // Exercise real runtime commit handling through the fixture ports.
     noteTerminalSpawnCommit: OrcaRuntimeWithRuntimeId.prototype.noteTerminalSpawnCommit,
     registerPreAllocatedHandleForPty: vi.fn(),
     registerPty: vi.fn(),

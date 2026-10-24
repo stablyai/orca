@@ -50,7 +50,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   // The client the oracle reads every view through.
   'src/cli/runtime/client.ts',
   'src/shared/remote-runtime-client.ts',
-  'src/shared/remote-runtime-subscription-transport.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-subscription-transport.ts',
   'src/shared/paired-runtime-connection.ts',
   'src/shared/pairing.ts',
   // The harness: the oracle imports most of the shared e2e helpers, not just its own.

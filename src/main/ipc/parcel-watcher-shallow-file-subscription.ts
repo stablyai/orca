@@ -4,16 +4,12 @@ import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
 import type { ShallowWatcherSubscription } from './parcel-watcher-shallow-subscription'
 import { watchFileAcrossReplacement, type RebindingFileWatch } from './rebinding-file-watch'
 
-// Why: bindings that missed a replacement are found by this sweep. Primary git
-// metadata also has its own backstop poll, so this bounds staleness, not latency.
+// Rebind missed replacements; Git metadata polling provides the shorter staleness backstop.
 const REBIND_SWEEP_INTERVAL_MS = 30_000
-// Why: a file created later with no sibling write (packed-refs from pack-refs or
-// gc) is only found by a sweep. Re-statting just the missing paths is one ENOENT
-// each, so they get the git poll cadence instead of waiting for the full sweep.
+// Newly created files may have no sibling event; check only missing paths at the Git poll cadence.
 export const MISSING_FILE_SWEEP_INTERVAL_MS = 2_000
 
-/** One watch per included file, so a `.git` root never streams objects/, refs/
- *  or worktrees/ churn. Used on macOS, where a directory watch is recursive. */
+/** Watch files individually on macOS to avoid recursive .git object/ref/worktree churn. */
 export function startShallowFileWatcher(
   rootPath: string,
   relativePaths: readonly string[],
@@ -68,8 +64,7 @@ export function startShallowFileWatcher(
         path,
         () => {
           emitUpdate(path)
-          // Git writes these files together, so one event is a cheap moment to
-          // look for a sibling that has just been created.
+          // Git writes sibling metadata together; use the event to discover newly created files.
           refreshAll(true)
         },
         reportError

@@ -15,7 +15,7 @@ const ORCAD_ACTIVATION_TRANSACTION_MAX_BYTES = 64 * 1024
 
 type OrcadActivationTransactionStoreOptions = OrcadRemoteExecTarget & { remoteHome: string }
 
-/** `null` only on a verified absence; an unreadable journal keeps the host fenced. */
+/** Only verified absence returns null; unreadable journals retain the fence. */
 export async function readOrcadActivationTransaction(
   options: OrcadActivationTransactionStoreOptions
 ): Promise<OrcadActivationTransaction | null> {
@@ -31,10 +31,7 @@ export async function readOrcadActivationTransaction(
   return parsed.state === 'ok' ? parsed.transaction : null
 }
 
-/**
- * Stamped with the writing run's fence token, so a release only ever removes its own generation's
- * journal (Astra pass 9); readers ignore the extra field.
- */
+/** Stamp each write with its fence generation so release cannot delete another holder's journal. */
 export function writeOrcadActivationTransaction(
   options: OrcadActivationTransactionStoreOptions,
   transaction: OrcadActivationTransaction

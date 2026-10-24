@@ -303,7 +303,7 @@ describe('AgentHookServer listener replay', () => {
     })
   }
 
-  it('re-attaching a retired pane while idle re-opens it for a much later first turn', async () => {
+  it('re-attaching an idle retired pane accepts completion and a later turn', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -707,6 +707,13 @@ describe('AgentHookServer closed-tab suppression bound', () => {
       internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
     }
 
+    const refreshedTab = `closed-tab-${total - CLOSED_AGENT_STATUS_TAB_IDS_MAX}`
+    const nextOldestTab = `closed-tab-${total - CLOSED_AGENT_STATUS_TAB_IDS_MAX + 1}`
+    internals.markTabClosedForAgentStatus(refreshedTab)
+    internals.markTabClosedForAgentStatus('closed-tab-next')
+
+    expect(internals.closedAgentStatusTabIds.has(refreshedTab)).toBe(true)
+    expect(internals.closedAgentStatusTabIds.has(nextOldestTab)).toBe(false)
     expect(internals.closedAgentStatusTabIds.size).toBe(CLOSED_AGENT_STATUS_TAB_IDS_MAX)
     expect(internals.closedAgentStatusTabIds.has('closed-tab-0')).toBe(false)
     expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)

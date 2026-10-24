@@ -2,12 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
 
-// STA-4869 — main's hidden-delivery drop latch retires on the renderer's
-// applied-ack, never on serving the snapshot. Serving proves only that main
-// answered: the pane can dispose across the multi-MB serialize + IPC round trip
-// (tab/split/worktree switch, renderer reload), and a snapshot nobody painted
-// heals nothing. Anything that retires the latch earlier spends the last
-// recovery signal on a marker no view will ever receive.
+// Retire drop memory only after a painted-restore ACK; a pane can disappear after requesting its snapshot (STA-4869).
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -83,7 +78,6 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
     }
   }
 
-  /** Registers the handlers against the suite's mock window and spawns one daemon PTY. */
   async function registerAndSpawnDaemonPty(runtime: Record<string, unknown>): Promise<string> {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the suite's mock window and this runtime stub implement every member the spawn path touches.
     registerPtyHandlers(mainWindow as never, runtime as never)
@@ -153,9 +147,7 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       const getSnapshot = handlers.get('pty:getMainBufferSnapshot')!
       const ackApplied = getPtyHiddenOutputRestoreAppliedListener()
 
-      // A pane retiring while hidden unhides after unregistering its marker
-      // handler, so the first unhide marker reaches nobody. The replacement's
-      // own unhide must still be able to ask for the restore.
+      // A retiring view may miss the first reveal marker; the replacement must still be able to request restore.
       setHidden(null, { id, hidden: false })
       setHidden(null, { id, hidden: false })
       expect(restoreMarkers()).toBe(3)
@@ -166,13 +158,11 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
         markerSeq: 42
       })
 
-      // Serving the snapshot proves only that main answered — the asking pane
-      // can still die before it paints.
+      // Serving a snapshot does not prove the requesting pane survived to paint it.
       await getSnapshot(null, { id })
       setHidden(null, { id, hidden: false })
       expect(restoreMarkers()).toBe(4)
 
-      // The ack says the bytes are on screen: no marker storm afterwards.
       ackApplied(null, { id, hiddenDropEpisode: lastMarkerEpisode() })
       setHidden(null, { id, hidden: false })
       setHidden(null, { id, hidden: false })
@@ -201,7 +191,6 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       daemon.emitData(result.id, 'hidden again')
       vi.advanceTimersByTime(50)
 
-      // hidden-drop, unhide, then the fresh episode's hidden-drop.
       expect(
         mainWindow.webContents.send.mock.calls.filter(
           (call: unknown[]) => call[0] === 'pty:modelRestoreNeeded'
@@ -218,7 +207,6 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       const { id, setHidden, restoreMarkers } = await armDropLatch()
       const ackApplied = getPtyHiddenOutputRestoreAppliedListener()
 
-      // Another pane's ack must never retire this PTY's drop memory.
       ackApplied(null, { id: 'some-other-pty' })
       ackApplied(null, {})
       ackApplied(null, { id: '' })
@@ -226,7 +214,7 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       setHidden(null, { id, hidden: false })
       expect(restoreMarkers()).toBe(2)
 
-      // An ack naming no episode, or a stale one, cannot prove it covered this gap.
+      // Missing/stale episode IDs cannot prove this gap was restored.
       ackApplied(null, { id })
       ackApplied(null, { id, hiddenDropEpisode: lastMarkerEpisode() - 1 })
       setHidden(null, { id, hidden: false })
@@ -256,8 +244,7 @@ describe('registerPtyHandlers hidden-output restore ack', () => {
       daemon.emitData(result.id, 'hidden output')
       vi.advanceTimersByTime(50)
 
-      // Why: a refused snapshot painted nothing, so the next reveal still owes
-      // the renderer a restore signal.
+      // A refused snapshot painted nothing; the next reveal still needs a restore signal.
       expect(
         await handlers.get('pty:getMainBufferSnapshot')!(null, {
           id: result.id

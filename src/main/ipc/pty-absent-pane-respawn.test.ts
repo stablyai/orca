@@ -88,7 +88,6 @@ function watchLayout(store: Harness['store']): {
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-/** The frames as records, keeping only what each workspace change carries. */
 const recordsOf = (events: WorkspaceLayoutStreamEvent[]) =>
   events.map((event) =>
     event.type === 'records'
@@ -131,7 +130,7 @@ describe('pty:spawn for a restored pane whose process is gone', () => {
       expect(boundAtFreshLaunch).toEqual(['pty-old'])
       expect(durableBindings).toEqual(['pty-old'])
       expect(retire).not.toHaveBeenCalled()
-      // Its generation rises, so a reader tells the fresh process from the dead one.
+      // A higher generation distinguishes the replacement from its dead predecessor.
       expect(recordsOf(layout.events)).toEqual([
         [{ change: 'records', bindings: { set: [{ leafId, ptyId: 'pty-old', ptyGeneration: 1 }] } }]
       ])

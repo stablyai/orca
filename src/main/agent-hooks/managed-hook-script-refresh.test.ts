@@ -20,6 +20,11 @@ let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
+  vi.stubEnv('GROK_HOME', undefined)
+  vi.stubEnv('KIMI_CODE_HOME', undefined)
+  vi.stubEnv('COPILOT_HOME', undefined)
+  vi.stubEnv('KIRO_HOME', undefined)
+  vi.stubEnv('XDG_CONFIG_HOME', undefined)
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-user-data-'))
   process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
@@ -32,6 +37,7 @@ afterEach(() => {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
+  vi.unstubAllEnvs()
 })
 
 const { homedirMock } = vi.hoisted(() => ({
