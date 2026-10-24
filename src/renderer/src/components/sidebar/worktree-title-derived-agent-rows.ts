@@ -1,4 +1,5 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import { resolveRootlessTerminalLayoutLeafId } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
@@ -15,6 +16,7 @@ import {
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
 } from '../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -38,6 +40,11 @@ const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
 const EMPTY_PANE_FOREGROUND: Record<string, TitleDerivedPaneForeground> = {}
+const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
+  root: null,
+  activeLeafId: null,
+  expandedLeafId: null
+}
 
 export function buildTitleDerivedAgentRows(args: {
   tabs: TerminalTab[]
@@ -83,15 +90,23 @@ export function buildTitleDerivedAgentRows(args: {
         liveSlotIds.length === leafIds.length &&
         liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
       for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          leafIds,
-          ptyIds: ptyIdsByTabId[tab.id] ?? [],
-          liveSlotIds,
-          liveSlotsAreDense,
-          paneId: Number(paneId),
-          title
-        })
+        // Why: a just-created + tab can already have a pane title and live PTY while
+        // layout.root is still null; the unique bound leaf is that pane (#18113).
+        const rootlessLeafId =
+          leafIds.length === 0 && paneTitleEntries.length === 1 && layout && !layout.root
+            ? resolveRootlessTerminalLayoutLeafId(layout)
+            : null
+        const leafId =
+          rootlessLeafId ??
+          resolveLeafIdForTitleFallback({
+            layout,
+            leafIds,
+            ptyIds: ptyIdsByTabId[tab.id] ?? [],
+            liveSlotIds,
+            liveSlotsAreDense,
+            paneId: Number(paneId),
+            title
+          })
         if (!leafId) {
           continue
         }
@@ -113,7 +128,7 @@ export function buildTitleDerivedAgentRows(args: {
       continue
     }
 
-    const leafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
+    const leafId = resolveTitleDerivedTabLeafId(layout)
     if (!leafId) {
       continue
     }
@@ -248,10 +263,36 @@ function resolveTitleDerivedPaneOwner(
 ): AgentType | null {
   // Why: launchAgent is tab-scoped, so it is pane ownership only while the tab has one
   // leaf; applying it inside a split would let one pane brand its sibling.
-  if (layout?.root?.type !== 'leaf' || layout.root.leafId !== leafId) {
+  if (!isTitleDerivedLaunchOwnerLeaf(layout, leafId)) {
     return null
   }
   return resolvePaneAgentOwner({ launchAgent: tab.launchAgent })
+}
+
+function isTitleDerivedLaunchOwnerLeaf(
+  layout: TerminalLayoutSnapshot | undefined,
+  leafId: string
+): boolean {
+  if (layout?.root?.type === 'leaf' && layout.root.leafId === leafId) {
+    return true
+  }
+  const boundLeafIds = Object.keys(layout?.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
+  // Why: a rootless snapshot can bind split panes before the tree serializes;
+  // launchAgent is tab-scoped and must not stamp a spinner-only sibling.
+  if (!layout?.root && boundLeafIds.length > 1) {
+    return false
+  }
+  // Why: tab-bar + creates the newest agent with a rootless snapshot until the
+  // pane tree serializes; the unique bound/active leaf is still that tab's owner.
+  return !layout?.root && resolveRootlessTerminalLayoutLeafId(layout ?? EMPTY_LAYOUT) === leafId
+}
+
+function resolveTitleDerivedTabLeafId(layout: TerminalLayoutSnapshot | undefined): string | null {
+  const rootedLeafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
+  if (rootedLeafId) {
+    return rootedLeafId
+  }
+  return layout ? resolveRootlessTerminalLayoutLeafId(layout) : null
 }
 
 /**
