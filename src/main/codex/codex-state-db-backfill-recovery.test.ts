@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { link, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,7 +25,9 @@ function createFakeChild(): EventEmitter & {
   kill: ReturnType<typeof vi.fn>
 } {
   return Object.assign(new EventEmitter(), {
-    stdin: { end: vi.fn() },
+    stdin: Object.assign(new PassThrough(), { end: vi.fn() }),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
     exitCode: null,
     signalCode: null,
     kill: vi.fn(() => true)
@@ -240,7 +243,7 @@ describe('Codex state DB backfill recovery', () => {
       pendingTimers: 0,
       maxLiveChildren: 1,
       maxPendingTimers: 1,
-      terminateCount: 0,
+      terminateCount: 5,
       safetyFuseTripped: false
     })
   })
@@ -319,7 +322,7 @@ describe('Codex state DB backfill recovery', () => {
       liveChildren: 0,
       pendingTimers: 0,
       maxLiveChildren: 1,
-      terminateCount: 1
+      terminateCount: 3
     })
   })
 
@@ -356,8 +359,11 @@ describe('Codex state DB backfill recovery', () => {
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 2 })
     expect(spawnProcess).toHaveBeenCalledTimes(2)
     expect(timerDurations).toEqual([5_000, 2_000, 5_000])
-    expect(terminate).toHaveBeenCalledTimes(1)
-    expect(terminate).toHaveBeenCalledWith(children[1], process.platform !== 'win32')
+    expect(terminate).toHaveBeenCalledTimes(2)
+    expect(terminate).toHaveBeenCalledWith(
+      children[1],
+      expect.objectContaining({ child: children[1] })
+    )
   })
 
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
@@ -377,7 +383,7 @@ describe('Codex state DB backfill recovery', () => {
         now: vi.fn(() => 1_000)
       })
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
-    expect(terminate).toHaveBeenCalledWith(child, process.platform !== 'win32')
+    expect(terminate).toHaveBeenCalledWith(child, expect.objectContaining({ child }))
   })
 
   it('hands the Codex shim itself to the spawn chokepoint for native Windows recovery', async () => {
@@ -423,7 +429,7 @@ describe('Codex state DB backfill recovery', () => {
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions).not.toHaveProperty('detached')
-    expect(terminate).toHaveBeenCalledWith(child, false)
+    expect(terminate).toHaveBeenCalledWith(child, undefined)
   })
 
   it('retries a live foreign lease until one durable claimant can recover it', async () => {

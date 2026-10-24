@@ -1,3 +1,6 @@
+import * as processRows from '../../provider-process/provider-process-row-read'
+import * as processIdentity from '../../runtime/agent-session-process-identity-probe'
+import * as descendants from '../../pty-descendant-termination'
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +13,7 @@ import {
 } from '../../runtime/agent-session-older-build-lease.test-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { supervisedPosixLaunch } from '../../provider-process/provider-process-supervisor'
+import { supervisedPosixLaunch } from '../../provider-process/legacy-provider-supervisor.test-fixture'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
@@ -24,6 +27,7 @@ const roots: string[] = []
 let operations = 0
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -72,7 +76,8 @@ async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
     process: {
       hostId: 'local',
       pid,
-      processStartTimeMs: NOW - 1_000,
+      processStartTimeMs:
+        pid === 4242 ? NOW - 1_000 : await processIdentity.readProcessStartTimeMs(pid),
       spawnToken: 'spawn-recovery'
     },
     now: NOW
@@ -103,6 +108,15 @@ function deps(
   probe: (calls: number) => AgentSessionOwnerProbe,
   overrides: Partial<StructuredSessionRecoveryResolutionDeps> = {}
 ): StructuredSessionRecoveryResolutionDeps & { probes: () => number } {
+  vi.spyOn(processRows, 'readPosixProcessRow').mockResolvedValue({
+    pid: 4242,
+    ppid: 1,
+    pgid: 4242,
+    startedAt: 'test-start',
+    startResolution: 'clock-tick'
+  })
+  vi.spyOn(processIdentity, 'readProcessStartTimeMs').mockResolvedValue(NOW - 1_000)
+  vi.spyOn(descendants, 'captureDescendantSnapshot').mockResolvedValue(null)
   let calls = 0
   return {
     store,
@@ -373,6 +387,7 @@ describe.runIf(process.platform !== 'win32')(
         })
       })
       recordedPids.push(provider)
+      await new Promise((resolve) => setTimeout(resolve, 1_100))
       const store = await openStore()
       await liveOwner(store, supervisor.pid!)
       await latch(store)

@@ -50,15 +50,15 @@ function readFreshProcessTable(
         maxBuffer: PS_MAX_BUFFER_BYTES,
         timeout: timeoutMs,
         killSignal: 'SIGKILL',
-        // Pin lstart’s locale so delayed identity checks parse it consistently.
-        env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
+        // Pin lstart's locale and timezone so delayed identity checks parse it consistently.
+        env: { ...process.env, LANG: 'C', LC_ALL: 'C', TZ: 'UTC' }
       },
       (error, stdout) => {
         if (error) {
           reject(error)
           return
         }
-        resolve({ rows: parseProcessTable(stdout), capturedAtMs })
+        resolve({ rows: parseProcessTable(stdout, 'UTC'), capturedAtMs })
       }
     )
   })

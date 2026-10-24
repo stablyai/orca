@@ -1,10 +1,14 @@
-import { EventEmitter } from 'node:events'
+import { registerScriptedProviderChild } from '../provider-process/mock-provider-process-group.test-support'
+import type * as ProcessHostModule from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
+import { AcpScriptedAgent } from '../acp/acp-scripted-agent.test-support'
+import {
+  completeFakeSpawn,
+  createFakePipedChild
+} from '../../shared/__fixtures__/fake-spawned-child'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
-  childSpawnMock: vi.fn(),
-  readFileMock: vi.fn()
-}))
+const { childSpawnMock } = vi.hoisted(() => ({ childSpawnMock: vi.fn() }))
 
 // The probe's child runs in-process here; the worker transport has its own suite.
 vi.mock(
@@ -12,8 +16,6 @@ vi.mock(
   () =>
     import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
 )
-vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 vi.mock('./codex-auth-presence', () => ({
@@ -26,58 +28,28 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
-
-function parseRpcRequest(line: string): { id?: number; method?: string } {
-  const parsed: unknown = JSON.parse(line)
-  if (typeof parsed !== 'object' || parsed === null) {
-    return {}
-  }
-  return {
-    id: 'id' in parsed && typeof parsed.id === 'number' ? parsed.id : undefined,
-    method: 'method' in parsed && typeof parsed.method === 'string' ? parsed.method : undefined
-  }
-}
-
-// Like the real app-server, the fake dies on stdin EOF or a signal.
-class FakeRpcChild extends EventEmitter {
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
-  exitCode: number | null = null
-  rateLimits: unknown = null
-  readonly kill = vi.fn(() => {
-    this.exitNow()
-    return true
-  })
-  readonly stdin = Object.assign(new EventEmitter(), {
-    end: vi.fn(() => this.exitNow()),
-    write: vi.fn((line: string) => {
-      const request = parseRpcRequest(line)
-      if (request.method === 'initialize') {
-        this.reply(request.id, {})
-      }
-      if (request.method === 'account/rateLimits/read') {
-        this.reply(request.id, { rateLimits: this.rateLimits })
-      }
-    })
-  })
-
-  private reply(id: number | undefined, result: unknown): void {
-    setTimeout(() => {
-      this.stdout.emit('data', Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`))
-    }, 0)
-  }
-
-  private exitNow(): void {
-    this.exitCode = 0
-    this.emit('exit', 0, null)
-  }
-}
+import { getAppEnvironment } from '../../shared/app-environment'
 
 async function fetchWithRateLimits(rateLimits: unknown) {
-  const child = new FakeRpcChild()
-  child.rateLimits = rateLimits
+  const agent = new AcpScriptedAgent()
+  const child = registerScriptedProviderChild(
+    Object.assign(createFakePipedChild(9_999_999), {
+      stdin: agent.stdin,
+      stdout: agent.stdout
+    })
+  )
+  agent.on('initialize', (frame) => setTimeout(() => agent.reply(frame, {}), 0))
+  agent.on('account/rateLimits/read', (frame) =>
+    setTimeout(() => agent.reply(frame, { rateLimits }), 0)
+  )
+  child.stdin.once('finish', () => completeFakeSpawn(child))
   childSpawnMock.mockReturnValue(child)
-  const resultPromise = fetchCodexRateLimits()
+  const resultPromise = fetchCodexRateLimits({
+    codexHomePath: getAppEnvironment().getPath('userData')
+  })
+  await vi.waitFor(() =>
+    expect(agent.frames.some((frame) => frame.method === 'initialize')).toBe(true)
+  )
   await vi.advanceTimersByTimeAsync(1)
   await vi.advanceTimersByTimeAsync(1)
   return resultPromise
@@ -87,7 +59,6 @@ describe('fetchCodexRateLimits credit balance', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    readFileMock.mockRejectedValue(new Error('no auth fixture'))
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -145,4 +116,15 @@ describe('fetchCodexRateLimits credit balance', () => {
     })
     expect(result.extraUsage).toMatchObject({ unit: 'credits', unlimited: true, enabled: true })
   })
+})
+
+vi.mock('@orca/process-host', async (original) => {
+  const actual = await original<typeof ProcessHostModule>()
+  return {
+    ...actual,
+    spawnProcess: (spec: ProcessSpec) =>
+      spec.program === 'codex'
+        ? childSpawnMock(spec.program, spec.args ?? [], spec)
+        : actual.spawnProcess(spec)
+  }
 })

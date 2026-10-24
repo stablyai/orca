@@ -6,7 +6,7 @@ export type ProcessTableRow = {
   startedAt: string
 }
 
-export function parseProcessTable(psOutput: string): ProcessTableRow[] {
+export function parseProcessTable(psOutput: string, timeZone?: 'UTC'): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
   for (const line of psOutput.split('\n')) {
     // lstart contains spaces, so only the three leading numeric columns are positional.
@@ -18,7 +18,7 @@ export function parseProcessTable(psOutput: string): ProcessTableRow[] {
       pid: Number(match[1]),
       ppid: Number(match[2]),
       pgid: Number(match[3]),
-      startedAt: match[4]
+      startedAt: timeZone ? `${match[4]} ${timeZone}` : match[4]
     })
   }
   return rows

@@ -1,11 +1,10 @@
-import { EventEmitter } from 'node:events'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RunProcess from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
-import { POSIX_PROVIDER_SUPERVISOR_SCRIPT } from '../provider-process/provider-process-supervisor'
 import { generateCommitMessageFromContext } from './commit-message-text-generation'
 import { withPlatform } from './commit-message-text-generation-test-harness'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
@@ -18,20 +17,12 @@ vi.mock('@orca/process-host', async (importOriginal) => {
   return { ...actual, spawnProcess: spawnProcessMock }
 })
 
-function fakeChild(): EventEmitter & {
-  stdin: { on: () => void; end: () => void }
-} {
-  return Object.assign(new EventEmitter(), {
-    stdin: { on: vi.fn(), end: vi.fn() }
-  })
+function fakeChild() {
+  return createFakePipedChild()
 }
 
 function lastSpawnSpec(): ProcessSpec {
   return spawnProcessMock.mock.calls.at(-1)![0]
-}
-
-function decodedSupervisorSpec(spec: ProcessSpec): Record<string, unknown> {
-  return JSON.parse(Buffer.from(spec.env!.ORCA_PROVIDER_SUPERVISOR_SPEC!, 'base64').toString())
 }
 
 const folder = mkdtempSync(join(tmpdir(), 'orca-agent-launch-'))
@@ -59,19 +50,15 @@ describe('spawnSourceControlAgent', () => {
     )
 
     const spec = lastSpawnSpec()
-    expect(child.supervised).toBe(true)
+    expect(child.managed?.dedicatedGroup).toBe(true)
     expect(spec).toMatchObject({
-      program: process.execPath,
-      args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', '/opt/agent/claude', '-p', '--verbose'],
+      program: '/opt/agent/claude',
+      args: ['-p', '--verbose'],
       cwd,
       detached: true,
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+      stdio: ['pipe', 'pipe', 'pipe']
     })
     expect(spec.env).toMatchObject({ PATH: '/usr/bin', AGENT_TOKEN: 'kept' })
-    expect(decodedSupervisorSpec(spec)).toMatchObject({
-      cwd,
-      lifetime: 'one-shot'
-    })
   })
 
   it('spawns a Windows agent directly, without a supervisor', () => {
@@ -86,7 +73,7 @@ describe('spawnSourceControlAgent', () => {
       })
     )
 
-    expect(child.supervised).toBeUndefined()
+    expect(child.managed).toBeUndefined()
     expect(lastSpawnSpec()).toMatchObject({
       program: 'C:/tools/agent.exe',
       args: ['--print']
@@ -238,8 +225,6 @@ process.stdin.on('end', () => setTimeout(() => console.log(prompt.includes('READ
       )
     ).resolves.toMatchObject({ success: true, message: 'Update README' })
     expect(lastSpawnSpec().program).toBe(process.execPath)
-    expect(decodedSupervisorSpec(lastSpawnSpec())).toMatchObject({
-      lifetime: 'one-shot'
-    })
+    expect(lastSpawnSpec().args).toContain(agent)
   })
 })

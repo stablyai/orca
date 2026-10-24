@@ -1,25 +1,20 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcessHandle, PipedChildProcess } from '@orca/process-host/process-spec'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
 import { terminateCodexProbeChild } from '../rate-limits/codex-probe-termination'
 import {
-  createProviderSpawnSpec,
-  type ProviderCloseRequest
-} from '../provider-process/provider-process-supervisor'
-import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
-import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
-import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+  spawnManagedProviderProcess,
+  type ManagedProviderProcess
+} from '../provider-process/managed-provider-process'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
-// Keep owner-death and explicit shutdown on the same stdin-drain policy.
-const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
-
 export type CodexBackfillRecoveryProcess = {
   child: ChildProcessHandle
-  supervised: boolean
+  managed?: ManagedProviderProcess
 }
 
 export function spawnCodexBackfillRecoveryProcess(
@@ -43,42 +38,46 @@ export function spawnCodexBackfillRecoveryProcess(
         cwd: resolveWslInteropSpawnCwd()
       }
     )
-    return { child, supervised: false }
+    return { child }
   }
   const command = resolveCommand()
-  // The POSIX supervisor stops this long-lived child even if Orca crashes.
-  const spawnSpec = createProviderSpawnSpec(
-    { command, args: [...CODEX_READ_ONLY_APP_SERVER_ARGS], cwd: codexHomePath },
-    withCliRuntimeOnPath(command, {
-      ...process.env,
-      CODEX_HOME: codexHomePath
-    }),
-    process.platform,
-    { lifetime: 'session', closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST }
+  if (process.platform === 'win32') {
+    return {
+      child: spawnProcess(command, [...CODEX_READ_ONLY_APP_SERVER_ARGS], {
+        cwd: codexHomePath,
+        stdio: ['pipe', 'ignore', 'ignore'],
+        windowsHide: true,
+        env: withCliRuntimeOnPath(command, { ...process.env, CODEX_HOME: codexHomePath })
+      })
+    }
+  }
+  const managed = spawnManagedProviderProcess(
+    {
+      command,
+      args: [...CODEX_READ_ONLY_APP_SERVER_ARGS],
+      cwd: codexHomePath
+    },
+    {
+      site: BACKFILL_RECOVERY_KILL_SITE,
+      inheritedEnv: withCliRuntimeOnPath(command, { ...process.env, CODEX_HOME: codexHomePath }),
+      spawnImpl: (spec) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this spec supplies three pipe slots to the production spawner.
+        spawnProcess(spec.program, [...(spec.args ?? [])], {
+          ...spec,
+          windowsHide: true
+        }) as PipedChildProcess
+    }
   )
-  const child = spawnProcess(spawnSpec.program, spawnSpec.args, {
-    cwd: codexHomePath,
-    stdio: ['pipe', 'ignore', 'ignore', ...spawnSpec.groupReportStdio],
-    windowsHide: true,
-    env: spawnSpec.env,
-    ...(spawnSpec.supervised ? { detached: true } : {})
-  })
-  guardSupervisedProviderGroup(child, {
-    site: BACKFILL_RECOVERY_KILL_SITE,
-    supervised: spawnSpec.supervised
-  })
-  return { child, supervised: spawnSpec.supervised }
+  managed.child.stdout.resume()
+  return { child: managed.child, managed }
 }
 
 export async function stopCodexBackfillRecoveryProcess(
   child: ChildProcessHandle,
-  supervised: boolean
+  managed?: ManagedProviderProcess
 ): Promise<void> {
-  if (supervised) {
-    await stopSupervisedChildProcess(child, {
-      site: BACKFILL_RECOVERY_KILL_SITE,
-      closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST
-    })
+  if (managed) {
+    await managed.close()
     return
   }
   await terminateCodexProbeChild(child)

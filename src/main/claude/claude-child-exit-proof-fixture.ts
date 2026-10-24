@@ -7,7 +7,7 @@ import { claudeChildClosePolicy, claudeChildCloseProven } from './claude-child-e
 
 const managedChildren = new WeakMap<object, ManagedProviderProcess>()
 
-/** `closePlatform` picks the close rules; the spawn itself always skips the POSIX supervisor. */
+/** Fake handles keep the Windows owner isolated from real POSIX groups. */
 export function managedChild(
   child: PipedChildProcess,
   closePlatform: NodeJS.Platform = 'linux'
@@ -28,4 +28,18 @@ export function managedChild(
   )
   managedChildren.set(child, managed)
   return managed
+}
+
+/** Real children exercise the execution host's actual group owner. */
+export function spawnRealClaudeProofChild(script: string): PipedChildProcess {
+  const managed = spawnManagedProviderProcess(
+    { command: process.execPath, args: ['-e', script] },
+    {
+      site: 'claude-proof-fixture',
+      policy: claudeChildClosePolicy,
+      acceptClose: claudeChildCloseProven
+    }
+  )
+  managedChildren.set(managed.child, managed)
+  return managed.child
 }

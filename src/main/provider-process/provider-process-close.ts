@@ -1,7 +1,16 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type {
+  PipedProcessSpawner,
+  PipedChildProcess,
+  SpawnedProcess
+} from '@orca/process-host/process-spec'
+import type { ProviderProcessOutputOptions } from './provider-process-output'
+import type { ProviderResource, ProviderResourceResult } from './provider-process-inventory'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import { waitForProcessExitUntil } from './provider-process-exit-deadline'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
+import { PROVIDER_STDIN_END_GRACE_MS } from './provider-process-timing'
+import {
+  waitForProcessExitUntil,
+  type ProviderCleanupBudget
+} from './provider-process-exit-deadline'
 import type { ProviderProcessTeardownVerdict } from './provider-process-teardown'
 
 export type ProviderProcessTree = {
@@ -16,7 +25,7 @@ export type ProviderProcessTree = {
 export type ProviderProcessClosePolicy = {
   gracefulExitMs: number
   forcedExitMs: number
-  signalSupervisorOnClose?: boolean
+  immediateTerm?: boolean
   /** A root that leaves on its own after its stdin ends, with no forced reap ever on its tree, is
    *  the close: no claim is made about its descendants, and no post-exit reap runs. */
   selfExitIsClose?: boolean
@@ -26,7 +35,6 @@ export type ProviderProcessCloseInput = {
   child: Pick<SpawnedProcess, 'pid' | 'kill' | 'stdin'>
   exitPromise: Promise<void>
   rootVerdict: () => DescendantTreeVerdict
-  supervised?: boolean
   policy: ProviderProcessClosePolicy
   tree?: ProviderProcessTree
   terminateTree: () => Promise<ProviderProcessTeardownVerdict>
@@ -44,9 +52,9 @@ export const ROOT_ONLY_GRACEFUL_EXIT_MS = 1_500
 const ROOT_ONLY_FORCED_EXIT_MS = 1_000
 
 /** Default for providers without a descendant reaper: end stdin, wait, then the fallback teardown. */
-export function rootOnlyProviderClosePolicy(supervised: boolean): ProviderProcessClosePolicy {
+export function rootOnlyProviderClosePolicy(dedicatedGroup: boolean): ProviderProcessClosePolicy {
   return {
-    gracefulExitMs: supervised ? PROVIDER_SUPERVISOR_MAX_STOP_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
+    gracefulExitMs: dedicatedGroup ? PROVIDER_STDIN_END_GRACE_MS : ROOT_ONLY_GRACEFUL_EXIT_MS,
     forcedExitMs: ROOT_ONLY_FORCED_EXIT_MS
   }
 }
@@ -56,7 +64,7 @@ export function acceptProviderRootExit(result: ProviderProcessCloseResult): bool
   return result.root === 'exited'
 }
 
-/** The supervisor owns the POSIX signal ladder; its wrapper must outlive that ladder. */
+/** Existing Windows root/tree policy; POSIX groups are owned by the managed handle. */
 export async function closeProviderProcess(
   input: ProviderProcessCloseInput
 ): Promise<ProviderProcessCloseResult> {
@@ -68,9 +76,6 @@ export async function closeProviderProcess(
     child.stdin?.end()
   } catch {
     // A broken pipe still owes the reap.
-  }
-  if (input.supervised && policy.signalSupervisorOnClose && input.rootVerdict() !== 'exited') {
-    child.kill('SIGTERM')
   }
   let reaped = false
   let fallbackTree: DescendantTreeVerdict | null = null
@@ -99,4 +104,49 @@ export async function closeProviderProcess(
     await tree.reap()
   }
   return { root: input.rootVerdict(), tree: tree ? tree.treeVerdict : fallbackTree }
+}
+
+export type ProviderProcessExit = {
+  code: number | null
+  signal: NodeJS.Signals | null
+  processless: boolean
+}
+
+export type ManagedProviderProcess = {
+  child: PipedChildProcess
+  dedicatedGroup: boolean
+  /** The spawn failed before a process existed: absence is proven, but no exit was observed. */
+  readonly processless: boolean
+  /** `exited` covers a processless child too; use `rootExitObserved` for "a real process exited". */
+  readonly rootVerdict: DescendantTreeVerdict
+  /** A process that existed was seen to exit; never true for a processless child. */
+  readonly rootExitObserved: boolean
+  /** The last close that ran the ladder; the already-exited answer only when none did. */
+  readonly lastCloseResult: ProviderProcessCloseResult | null
+  readonly exitPromise: Promise<void>
+  readonly completion: Promise<ProviderProcessExit>
+  readonly settled: boolean
+  onSettled(listener: (exit: ProviderProcessExit) => void): void
+  verifyWriters(budget?: ProviderCleanupBudget): Promise<ProviderResourceResult>
+  /** The configured executable was missing at spawn. */
+  readonly executableMissing: boolean
+  /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
+  stderrTail(): string
+  onExit(listener: (exit: ProviderProcessExit) => void): void
+  terminateTree(): Promise<ProviderProcessTeardownVerdict>
+  attachTree(tree: ProviderProcessTree): void
+  close(tree?: ProviderProcessTree): Promise<ProviderProcessCloseResult>
+}
+
+export type ManagedProviderProcessOptions = ProviderProcessOutputOptions & {
+  site: string
+  resource?: ProviderResource
+  windowsDetached?: boolean
+  /** Defaults to the root-only policy; only a provider with its own reaper overrides it. */
+  policy?: (dedicatedGroup: boolean) => ProviderProcessClosePolicy
+  spawnImpl?: PipedProcessSpawner
+  platform?: NodeJS.Platform
+  inheritedEnv?: NodeJS.ProcessEnv
+  /** Defaults to "the root is gone". */
+  acceptClose?: (result: ProviderProcessCloseResult) => boolean
 }

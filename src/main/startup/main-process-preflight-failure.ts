@@ -1,3 +1,4 @@
+import { setProviderRecoveryMutationOwner } from '../provider-process/provider-process-inventory'
 import { app, dialog } from 'electron'
 import { formatProfileStateStartupFailure } from '../persistence/profile-state/profile-state-startup-failure'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
@@ -8,6 +9,7 @@ import { acquireDesktopProfileInstanceLock } from './desktop-profile-instance-lo
 /** False when orcad holds the profile; unlike a second desktop, nothing else would say why. */
 export function acquireDesktopProfileLockOrExplain(userDataPath: string): boolean {
   const profileLock = acquireDesktopProfileInstanceLock(userDataPath)
+  setProviderRecoveryMutationOwner(profileLock.state === 'acquired')
   if (profileLock.state !== 'held') {
     return true
   }

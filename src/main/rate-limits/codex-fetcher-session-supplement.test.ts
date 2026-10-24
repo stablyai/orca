@@ -1,3 +1,9 @@
+import type * as FsPromisesModule from 'node:fs/promises'
+import type * as ChildProcessModule from 'node:child_process'
+import type * as ProcessHostModule from '@orca/process-host'
+import type * as ProviderLedgerModule from '../provider-process/provider-process-ledger'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
+import { PassThrough } from 'node:stream'
 import { EventEmitter } from 'node:events'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,8 +18,14 @@ vi.mock(
   () =>
     import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
 )
-vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof ChildProcessModule>()),
+  spawn: childSpawnMock
+}))
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof FsPromisesModule>()),
+  readFile: readFileMock
+}))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 vi.mock('./codex-auth-presence', () => ({
@@ -28,27 +40,26 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
 import { fetchCodexRateLimits } from './codex-fetcher'
 
 function makeRpcChild(rateLimitResetCredits?: unknown) {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter
-    stderr: EventEmitter
+  type RpcChild = EventEmitter & {
+    pid: number
+    stdout: PassThrough
+    stderr: PassThrough
     stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.exitCode = null
   // Why: like the real app-server, the fake dies on stdin EOF or a signal —
   // the graceful shutdown path resolves only once the child reports exit.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
+    child.emit('close', 0, null)
   }
-  child.kill = vi.fn(() => {
+  const kill = vi.fn(() => {
     exitNow()
     return true
   })
-  child.stdin = Object.assign(new EventEmitter(), {
+  const stdin = Object.assign(new EventEmitter(), {
     end: vi.fn(exitNow),
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as { id?: number; method?: string }
@@ -80,6 +91,14 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
         }, 0)
       }
     })
+  })
+  const child: RpcChild = Object.assign(new EventEmitter(), {
+    pid: 9_999_999,
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin,
+    kill,
+    exitCode: null
   })
   return child
 }
@@ -119,8 +138,10 @@ function dedicatedCreditsResponse(): Response {
 }
 
 async function fetchWeeklyOnly(rateLimitResetCredits?: unknown) {
-  childSpawnMock.mockReturnValue(makeRpcChild(rateLimitResetCredits))
+  const child = makeRpcChild(rateLimitResetCredits)
+  childSpawnMock.mockReturnValue(child)
   const resultPromise = fetchCodexRateLimits()
+  await vi.waitFor(() => expect(child.stdin.write).toHaveBeenCalled(), { interval: 0 })
   await vi.advanceTimersByTimeAsync(1)
   await vi.advanceTimersByTimeAsync(1)
   return resultPromise
@@ -195,3 +216,17 @@ describe('Codex backend session supplement credits', () => {
     ])
   })
 })
+
+vi.mock('@orca/process-host', async (original) => ({
+  ...(await original<typeof ProcessHostModule>()),
+  spawnProcess: (spec: ProcessSpec) => childSpawnMock(spec.program, spec.args ?? [], spec)
+}))
+
+vi.mock('../provider-process/provider-process-ledger', async (original) => ({
+  ...(await original<typeof ProviderLedgerModule>()),
+  recordProviderLaunch: () => ({
+    capture: async () => {},
+    retire: async () => {},
+    members: () => []
+  })
+}))

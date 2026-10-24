@@ -206,7 +206,8 @@ export function createClaudeChildTreeReaper(
   }
 
   async function judgeTree(): Promise<DescendantTreeVerdict> {
-    const killRoot = (): boolean => terminateClaudeRoot({ child, exited })
+    const killRoot = (): boolean =>
+      platform === 'win32' ? terminateClaudeRoot({ child, exited }) : false
     const rootPid = child.pid
     if (!rootPid) {
       return 'exited'

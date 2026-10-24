@@ -1,6 +1,8 @@
 import { isSafeTimerDelayMs } from '../../shared/timer-delay'
 
 export type JsonlRpcPeerOptions = {
+  /** Managed owners finish reading stdout after the writable pipe closes. */
+  closeOnOutputEnd?: boolean
   maxLineBytes?: number
   maxQueuedWriteBytes?: number
   maxPendingRequests?: number
@@ -11,6 +13,7 @@ export function resolveJsonlRpcPeerOptions(
   options: JsonlRpcPeerOptions = {}
 ): Required<JsonlRpcPeerOptions> {
   return {
+    closeOnOutputEnd: options.closeOnOutputEnd ?? true,
     maxLineBytes: positiveInteger(options.maxLineBytes, 8 * 1024 * 1024),
     maxQueuedWriteBytes: positiveInteger(options.maxQueuedWriteBytes, 32 * 1024 * 1024),
     maxPendingRequests: positiveInteger(options.maxPendingRequests, 128),

@@ -27,7 +27,6 @@ export class JsonlRpcAgentConnection {
   private readonly managed: ManagedProviderProcess
   private readonly peer: JsonlRpcPeer
   private closing = false
-  private finishObservedExit?: () => void
   private streamExitTimer?: ReturnType<typeof setTimeout>
 
   constructor(
@@ -35,7 +34,7 @@ export class JsonlRpcAgentConnection {
     private readonly options: JsonlRpcAgentConnectionOptions = {},
     spawnImpl: PipedProcessSpawner = spawnProcess
   ) {
-    const peerOptions = resolveJsonlRpcPeerOptions(options.peer)
+    const peerOptions = resolveJsonlRpcPeerOptions({ ...options.peer, closeOnOutputEnd: false })
     this.managed = spawnManagedProviderProcess(launch, {
       spawnImpl,
       site: 'jsonl-rpc-agent-teardown'
@@ -78,7 +77,7 @@ export class JsonlRpcAgentConnection {
     )
     managed.child.on('error', this.onError)
     managed.child.stderr.on('error', this.onError)
-    managed.onExit((exit) => {
+    managed.onSettled((exit) => {
       clearTimeout(this.streamExitTimer)
       const error = withProviderDiagnostic(
         new Error(
@@ -89,41 +88,12 @@ export class JsonlRpcAgentConnection {
         providerDiagnostic(managed.stderrTail(), 'person')
       )
       this.peer.finishOnInputEnd(error)
-      const stdout = managed.child.stdout
-      let finished = false
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const finish = (): void => {
-        if (finished) {
-          return
-        }
-        finished = true
-        clearTimeout(timer)
-        stdout.removeListener('end', finish)
-        stdout.removeListener('close', finish)
-        this.finishObservedExit = undefined
-        this.peer.close(error)
-        managed.child.removeListener('error', this.onError)
-        try {
-          options.onExit?.(error, { expected: this.closing, exit })
-        } catch {
-          this.diagnose('Agent exit observer failed')
-        }
-      }
-      this.finishObservedExit = finish
-      if (
-        this.closing ||
-        exit.processless ||
-        this.peer.closed ||
-        stdout.destroyed ||
-        stdout.readableEnded
-      ) {
-        finish()
-      } else {
-        stdout.once('end', finish)
-        stdout.once('close', finish)
-        // A descendant can inherit stdout after the provider root exits.
-        timer = setTimeout(finish, 1_000)
-        timer.unref()
+      this.peer.close(error)
+      managed.child.removeListener('error', this.onError)
+      try {
+        options.onExit?.(error, { expected: this.closing, exit })
+      } catch {
+        this.diagnose('Agent exit observer failed')
       }
     })
   }
@@ -145,7 +115,7 @@ export class JsonlRpcAgentConnection {
   }
 
   onExit(listener: () => void): void {
-    this.managed.onExit(listener)
+    this.managed.onSettled(listener)
   }
 
   request(
@@ -168,11 +138,10 @@ export class JsonlRpcAgentConnection {
     this.peer.resumeReading()
   }
 
-  /** The dialect sends abort before the supervisor closes the process connection. */
+  /** Stop sends the dialect's abort first, then closes this connection through the process owner. */
   close(error?: Error): Promise<ProviderProcessCloseResult> {
     this.closing = true
     clearTimeout(this.streamExitTimer)
-    this.finishObservedExit?.()
     this.peer.close(error)
     return this.managed.close()
   }

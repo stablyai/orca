@@ -6,7 +6,7 @@ import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../native-chat/native-chat-visuals-delivery'
-import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
+import { createProviderSpawnSpec } from '../provider-process/provider-process-launch'
 import { acpLaunchSpecFor } from './acp-launch-specs'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 

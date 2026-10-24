@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { CODEX_RESUMED_MESSAGE_CAPTURE as RESUMED_TURN } from './codex-resumed-message-capture.test-fixture'
 import {
   briefToolArg,
   createToolInputDisplay,
@@ -40,13 +41,6 @@ const LIVE_TURN: CodexThreadItem[] = [
     exitCode: 0,
     aggregatedOutput: 'a\nb\n'
   },
-  { type: 'agentMessage', id: 'item-3', text: 'Two files.' }
-]
-
-// The same turn after resume: IDs were renumbered and command execution omitted.
-const RESUMED_TURN: CodexThreadItem[] = [
-  { type: 'userMessage', id: 'item-1', content: [{ type: 'text', text: 'list the files' }] },
-  { type: 'agentMessage', id: 'item-2', text: 'Let me look.' },
   { type: 'agentMessage', id: 'item-3', text: 'Two files.' }
 ]
 

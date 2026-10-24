@@ -1,3 +1,6 @@
+import { mockRecordedOwnerProcess } from './structured-agent-session-owner-process.test-support'
+// End-to-end exits from latched recovery states: no shape a user cannot get out of.
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -129,6 +132,7 @@ afterEach(async () => {
   await Promise.all([...supersededHosts].map(abandonStructuredAgentSessionHost))
   supersededHosts.clear()
   await Promise.all([...spawnedOwners].map((child) => stopOwner(child)))
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -209,6 +213,7 @@ describe('recovery exits', () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
     await reopenStore()
 
+    mockRecordedOwnerProcess(store.getRecord(SESSION)?.lease.ownerProcess)
     let orphanAlive = true
     const stopOwnerProcess = vi.fn((_pid: number, _signal: 'SIGTERM' | 'SIGKILL') => {
       orphanAlive = false
@@ -242,6 +247,7 @@ describe('recovery exits', () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
     await reopenStore()
 
+    mockRecordedOwnerProcess(store.getRecord(SESSION)?.lease.ownerProcess)
     let orphanAlive = true
     const stopOwnerProcess = vi.fn(() => {
       orphanAlive = false

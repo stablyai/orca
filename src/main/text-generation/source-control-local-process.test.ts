@@ -3,9 +3,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { rootOnlyProviderClosePolicy } from '../provider-process/provider-process-close'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
-import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import { discoverModelsLocal } from './commit-message-model-discovery'
 import { cancelGenerateCommitMessageLocal } from './commit-message-text-generation'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
@@ -21,20 +18,18 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: terminateTreeMock
 }))
 
-type FakeSupervisor = EventEmitter & {
+type FakeManagedChild = EventEmitter & {
   pid: number
   exitCode: number | null
   signalCode: NodeJS.Signals | null
-  supervised: true
   kill: ReturnType<typeof vi.fn<(signal?: NodeJS.Signals) => boolean>>
 }
 
-function fakeSupervisor(exitsOn: NodeJS.Signals | null): FakeSupervisor {
-  const child: FakeSupervisor = Object.assign(new EventEmitter(), {
+function fakeManagedChild(exitsOn: NodeJS.Signals | null): FakeManagedChild {
+  const child: FakeManagedChild = Object.assign(new EventEmitter(), {
     pid: 4242,
     exitCode: null,
     signalCode: null,
-    supervised: true as const,
     kill: vi.fn((signal?: NodeJS.Signals) => {
       if (signal === exitsOn) {
         child.signalCode = signal
@@ -46,16 +41,25 @@ function fakeSupervisor(exitsOn: NodeJS.Signals | null): FakeSupervisor {
   return child
 }
 
-// Behaves as the supervisor does: a SIGTERM ends it, after the time its provider takes to stop.
-function fakeSupervisedAgent(stopMs: number): FakeSupervisor & {
+// Behaves as a managed child does: a SIGTERM ends it, after the time its provider takes to stop.
+function fakeManagedAgent(stopMs: number): FakeManagedChild & {
   stdout: EventEmitter
   stderr: EventEmitter
   stdin: { on: () => void; end: () => void }
 } {
-  const child = Object.assign(fakeSupervisor(null), {
+  const child = Object.assign(fakeManagedChild(null), {
     stdout: new EventEmitter(),
     stderr: new EventEmitter(),
-    stdin: { on: vi.fn(), end: vi.fn() }
+    stdin: { on: vi.fn(), end: vi.fn() },
+    managed: {
+      close: () =>
+        new Promise<void>((resolve) => {
+          child.once('close', resolve)
+          child.kill('SIGTERM')
+        }),
+      onSettled: (listener: (exit: { code: number | null }) => void) =>
+        child.once('close', (code) => listener({ code }))
+    }
   })
   child.kill.mockImplementation((signal?: NodeJS.Signals) => {
     if (signal === 'SIGTERM') {
@@ -70,7 +74,7 @@ function fakeSupervisedAgent(stopMs: number): FakeSupervisor & {
   return child
 }
 
-function asSpawned(child: FakeSupervisor): SpawnedSourceControlAgentProcess {
+function asSpawned(child: FakeManagedChild): SpawnedSourceControlAgentProcess {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop and the generation read only pid, exit state, kill, the stdio streams and the child events, which the fakes implement.
   return child as unknown as SpawnedSourceControlAgentProcess
 }
@@ -89,51 +93,11 @@ afterEach(() => {
   terminateTreeMock.mockClear()
 })
 
-describe('killSourceControlAgentProcess for a supervised agent', () => {
-  it('asks the supervisor to stop and leaves its group to it', async () => {
-    const child = fakeSupervisor('SIGTERM')
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    expect(terminateTreeMock).not.toHaveBeenCalled()
-  })
-
-  it('tears the tree down only once the supervisor has had its full stop time', async () => {
-    vi.useFakeTimers()
-    const child = fakeSupervisor(null)
-
-    const stopped = killSourceControlAgentProcess(asSpawned(child))
-    await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS - 1)
-    expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    expect(terminateTreeMock).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-    expect(terminateTreeMock).toHaveBeenCalledWith(child, {
-      site: 'source-control-text-generation'
-    })
-    // The shared close then gives the forced root its own short wait.
-    await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
-    await stopped
-    expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('signals nothing once the supervisor has exited', async () => {
-    const child = fakeSupervisor(null)
-    child.exitCode = 0
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill).not.toHaveBeenCalled()
-    expect(terminateTreeMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('a supervised agent one-shot that runs out of time', () => {
-  it('times out at once but holds the Codex home until the supervisor has stopped', async () => {
+describe('a managed agent one-shot that runs out of time', () => {
+  it('times out at once but holds the Codex home until cleanup has settled', async () => {
     vi.useFakeTimers()
     const stopMs = 2_000
-    const agents = [fakeSupervisedAgent(stopMs), fakeSupervisedAgent(stopMs)]
+    const agents = [fakeManagedAgent(stopMs), fakeManagedAgent(stopMs)]
     const spawnAgent = vi.fn(() => asSpawned(agents[spawnAgent.mock.calls.length - 1]!))
     const request = (cwd: string): ReturnType<typeof generateCommitMessage> =>
       generateCommitMessage({
@@ -144,7 +108,8 @@ describe('a supervised agent one-shot that runs out of time', () => {
       })
 
     const first = request('/repo/first')
-    await vi.advanceTimersByTimeAsync(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
+    await vi.advanceTimersToNextTimerAsync()
     await expect(first).resolves.toMatchObject({
       success: false,
       error: expect.stringMatching(/timed out/)
@@ -165,11 +130,11 @@ describe('a supervised agent one-shot that runs out of time', () => {
   })
 })
 
-describe('a supervised Codex model discovery that runs out of time', () => {
-  it('times out at once but holds the Codex home until the supervisor has stopped', async () => {
+describe('a managed Codex model discovery that runs out of time', () => {
+  it('times out at once but holds the Codex home until cleanup has settled', async () => {
     vi.useFakeTimers()
     const stopMs = 2_000
-    const agents = [fakeSupervisedAgent(stopMs), fakeSupervisedAgent(stopMs)]
+    const agents = [fakeManagedAgent(stopMs), fakeManagedAgent(stopMs)]
     const spawnAgent = vi.fn(() => asSpawned(agents[spawnAgent.mock.calls.length - 1]!))
     const discover = (): ReturnType<typeof discoverModelsLocal> =>
       discoverModelsLocal({
@@ -181,7 +146,8 @@ describe('a supervised Codex model discovery that runs out of time', () => {
       })
 
     const first = discover()
-    await vi.advanceTimersByTimeAsync(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    await vi.waitFor(() => expect(spawnAgent).toHaveBeenCalledOnce())
+    await vi.advanceTimersToNextTimerAsync()
     await expect(first).resolves.toMatchObject({
       success: false,
       error: expect.stringMatching(/timed out/)
@@ -208,7 +174,7 @@ describe('a supervised Codex model discovery that runs out of time', () => {
 describe.runIf(process.platform !== 'win32')(
   'killSourceControlAgentProcess on a real agent',
   () => {
-    it('stops an agent that ignores its stdin end through its supervisor', async () => {
+    it('stops an agent that ignores its stdin end through its owner', async () => {
       const child = spawnSourceControlAgent({
         binary: process.execPath,
         args: ['-e', 'console.log(process.pid); setInterval(() => {}, 60000)'],
@@ -242,7 +208,7 @@ describe.runIf(process.platform !== 'win32')(
       }
     })
 
-    it('holds the Codex home until a canceled agent has stopped through its supervisor', async () => {
+    it('holds the Codex home until a canceled agent has stopped through its owner', async () => {
       const folder = mkdtempSync(join(tmpdir(), 'orca-supervised-cancel-'))
       const pids: number[] = []
       try {
@@ -313,7 +279,7 @@ require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)
       }
     })
 
-    it('stops an agent through its supervisor once its output passes the limit', async () => {
+    it('stops an agent through its owner once its output passes the limit', async () => {
       const folder = mkdtempSync(join(tmpdir(), 'orca-supervised-output-limit-'))
       const pids: number[] = []
       try {
@@ -357,7 +323,7 @@ setInterval(() => {}, 60000)
       }
     })
 
-    it('stops a Codex discovery through its supervisor once its output passes the limit, holding the home', async () => {
+    it('stops a Codex discovery through its owner once its output passes the limit, holding the home', async () => {
       const folder = mkdtempSync(join(tmpdir(), 'orca-supervised-discovery-limit-'))
       const pids: number[] = []
       try {

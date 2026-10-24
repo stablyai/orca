@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-timing'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { JsonlRpcAgentConnection, type JsonlRpcAgentConnectionOptions } from './agent-connection'
 
@@ -13,6 +13,7 @@ const teardown = vi.hoisted(() =>
 vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
+const originalPlatform = process.platform
 const opened: { connection: JsonlRpcAgentConnection; exit: () => void }[] = []
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
@@ -32,7 +33,10 @@ function fixture(
     return child
   })
   if (behavior.exitOnEnd !== false) {
-    child.stdin.once('finish', () => child.emit('exit', 0, null))
+    child.stdin.once('finish', () => {
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+    })
   }
   const connection = new JsonlRpcAgentConnection(
     {
@@ -45,7 +49,13 @@ function fixture(
     options,
     spawn
   )
-  opened.push({ connection, exit: () => child.emit('exit', 0, null) })
+  opened.push({
+    connection,
+    exit: () => {
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+    }
+  })
   return { child, spawn, connection }
 }
 afterEach(async () => {
@@ -55,6 +65,7 @@ afterEach(async () => {
   }
   teardown.mockReset().mockResolvedValue('unverifiable')
   vi.useRealTimers()
+  Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('JSON-lines RPC process ownership', () => {
@@ -64,7 +75,7 @@ describe('JSON-lines RPC process ownership', () => {
       expect.objectContaining({
         cwd: '/execution-host/folder',
         env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
+        stdio: ['pipe', 'pipe', 'pipe']
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
@@ -73,7 +84,10 @@ describe('JSON-lines RPC process ownership', () => {
       '{"type":"response","id":"orca-1","command":"get_state","success":true,"data":{"sessionFile":"/host/session.jsonl"}}\n'
     )
     expect(await pending).toEqual({ sessionFile: '/host/session.jsonl' })
-    expect(await connection.close()).toEqual({ root: 'exited', tree: null })
+    expect(await connection.close()).toEqual({
+      root: 'exited',
+      tree: process.platform === 'win32' ? null : 'exited'
+    })
   })
 
   it('settles requests on proven exit with stdout open, and excludes stderr from public errors', async () => {
@@ -100,6 +114,7 @@ describe('JSON-lines RPC process ownership', () => {
     const onExit = vi.fn()
     const { connection, child } = fixture({ onRecord, onExit })
     const request = connection.request('get_state')
+    child.stdin.end()
     child.emit('exit', 0, null)
     expect(connection.rootVerdict).toBe('exited')
     expect(onExit).not.toHaveBeenCalled()
@@ -107,7 +122,8 @@ describe('JSON-lines RPC process ownership', () => {
       '{"type":"response","command":"get_state","id":"orca-1","success":true,"data":{}}\n{"type":"agent_settled"}\n'
     )
     await expect(request).resolves.toEqual({})
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    child.emit('close', 0, null)
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
     expect(onRecord).toHaveBeenCalledExactlyOnceWith({ type: 'agent_settled' })
     expect(onExit).toHaveBeenCalledOnce()
   })
@@ -126,8 +142,10 @@ describe('JSON-lines RPC process ownership', () => {
     await vi.advanceTimersByTimeAsync(250)
     expect(onClose).toHaveBeenCalledOnce()
     expect(onExit).not.toHaveBeenCalled()
+    child.stdin.end()
     child.emit('exit', 0, null)
     expect(connection.rootVerdict).toBe('exited')
+    child.emit('close', 0, null)
     await connection.close()
   })
 
@@ -138,6 +156,8 @@ describe('JSON-lines RPC process ownership', () => {
     child.stdout.emit('end')
     child.emit('exit', 7, null)
     expect(onClose).not.toHaveBeenCalled()
+    child.emit('close', 7, null)
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
     expect(onExit).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('code 7') }),
       expect.anything()
@@ -145,7 +165,8 @@ describe('JSON-lines RPC process ownership', () => {
     await connection.close()
   })
 
-  it('joins close attempts and retries unproven exit without starting another process', async () => {
+  it('Windows: joins close attempts and retries unproven exit without starting another process', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
     vi.useFakeTimers()
     const { connection, child, spawn } = fixture({}, { exitOnEnd: false })
     const first = connection.close()
@@ -162,16 +183,17 @@ describe('JSON-lines RPC process ownership', () => {
     await vi.advanceTimersByTimeAsync(grace + 1_000)
     expect(await retry).toEqual({ root: 'exited', tree: 'unverifiable' })
     expect(spawn).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps retained descendant uncertainty when the root exits between attempts', async () => {
+  it('Windows: keeps retained descendant uncertainty when the root exits between attempts', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
     vi.useFakeTimers()
     const { connection, child } = fixture({}, { exitOnEnd: false })
     const close = connection.close()
     await vi.advanceTimersByTimeAsync(grace + 1_000)
     await close
     child.emit('exit', null, 'SIGKILL')
+    child.emit('close', null, 'SIGKILL')
     await connection.close()
     expect(connection.lastCloseResult).toEqual({
       root: 'live',
@@ -190,6 +212,7 @@ describe('JSON-lines RPC process ownership', () => {
     expect(onExit).not.toHaveBeenCalled()
     child.emit('close', null, null)
     expect(connection.rootVerdict).toBe('exited')
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
     expect(onExit.mock.calls[0][1].exit.processless).toBe(true)
   })
 

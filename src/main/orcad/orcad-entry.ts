@@ -1,3 +1,6 @@
+import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
+import { startProviderRecoveryTask } from '../provider-process/provider-process-ledger'
+import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
 /**
  * `orcad` — the Orca runtime served without Electron.
  *
@@ -10,16 +13,11 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
-import { join } from 'node:path'
 import process from 'node:process'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
-import {
-  installOrcadHostAdapters,
-  prepareOrcadSecretStore,
-  runOrcadQuitHandlers
-} from './orcad-host-adapters'
+import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
@@ -77,18 +75,6 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   )
   const version = getAppEnvironment().getVersion()
   return { readiness, managedStop: { version, runtimeId: readiness.runtimeId, instance }, stop }
-}
-
-async function prepareOrcadSecretStoreAndMigrate(userDataPath: string): Promise<void> {
-  const { getSecretStore } = await import('../../shared/secret-store')
-  const { reportSecretProtectionGap } = await import('../host/secret-protection-report')
-  const { migratePlaintextCredentials, orcadCredentialRoot } =
-    await import('./orcad-plaintext-credential-migration')
-  // Why the credential root, not userData: a disposable ORCA_USER_DATA would take the key with it.
-  if (await prepareOrcadSecretStore(orcadCredentialRoot(), userDataPath)) {
-    migratePlaintextCredentials(getSecretStore())
-  }
-  reportSecretProtectionGap({ dataFile: join(userDataPath, 'orca-data.json') })
 }
 
 async function startOrcadRuntime(
@@ -160,6 +146,9 @@ async function startOrcadRuntime(
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
+  const recovery = startProviderRecoveryTask()
+  registerCleanup(() => recovery.cancelAndJoin())
+  await recovery.ready
   const { startEventLoopDelayProbe } = await import('../diagnostics/event-loop-delay-probe')
   startEventLoopDelayProbe('orcad', runtimeUserDataPath)
   // A missing `orca` command must never keep the server from starting.
@@ -338,6 +327,8 @@ async function startOrcadRuntime(
   void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
     console.error('[orcad-migration] installing pending shell history failed:', error)
   })
+
+  registerCleanup(() => stopStructuredAgentSessionRuntime())
 
   const bindHost = resolveOrcadBindHost(options.bind)
   bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)

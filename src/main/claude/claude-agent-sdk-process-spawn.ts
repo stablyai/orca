@@ -12,10 +12,10 @@ export type ClaudeCodeProcessSpawn = {
   spawn: (options: ClaudeAgentSdkSpawnOptions) => PipedChildProcess
   readonly child: PipedChildProcess | null
   readonly managed: ManagedProviderProcess | null
-  /** Supervisor pid on POSIX; lease ownership also requires start time and spawn token. */
+  /** Actual agent pid; lease ownership also requires start time and spawn token. */
   readonly pid: number | undefined
   /** The spawn spec's verdict, so the close ladder never re-decides it. False until the SDK spawns. */
-  readonly supervised: boolean
+  readonly dedicatedGroup: boolean
 }
 
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
@@ -29,7 +29,6 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 }
 
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
-// POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform
@@ -49,7 +48,7 @@ export function createClaudeCodeProcessSpawn(
           platform,
           inheritedEnv: definedEnv(options.env),
           site: 'claude-stream-json-teardown',
-          policy: (supervised) => claudeChildClosePolicy(supervised, platform),
+          policy: (dedicatedGroup) => claudeChildClosePolicy(dedicatedGroup, platform),
           acceptClose: claudeChildCloseProven
         }
       )
@@ -65,8 +64,8 @@ export function createClaudeCodeProcessSpawn(
     get pid() {
       return managed?.child.pid
     },
-    get supervised() {
-      return managed?.supervised ?? false
+    get dedicatedGroup() {
+      return managed?.dedicatedGroup ?? false
     }
   }
 }

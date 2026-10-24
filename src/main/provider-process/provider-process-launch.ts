@@ -20,3 +20,28 @@ export function resolveProviderChildEnv(
   }
   return childEnv
 }
+
+/** Direct provider streams belong to the execution host, never another runtime. */
+export function createProviderSpawnSpec(
+  launch: ProviderProcessLaunch,
+  baseEnv: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform
+): {
+  program: string
+  args: string[]
+  env: NodeJS.ProcessEnv
+  cwd: string
+  detached: boolean
+} {
+  const env = resolveProviderChildEnv(launch, baseEnv)
+  if (platform !== 'win32') {
+    delete env.ELECTRON_RUN_AS_NODE
+  }
+  return {
+    program: launch.command,
+    args: launch.args,
+    env,
+    cwd: launch.cwd ?? process.cwd(),
+    detached: platform !== 'win32'
+  }
+}

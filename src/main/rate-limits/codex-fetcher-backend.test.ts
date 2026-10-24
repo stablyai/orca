@@ -1,3 +1,5 @@
+import type * as ChildProcessModule from 'node:child_process'
+import type * as FsPromisesModule from 'node:fs/promises'
 import { join } from 'node:path'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,8 +17,14 @@ vi.mock(
   () =>
     import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
 )
-vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof ChildProcessModule>()),
+  spawn: childSpawnMock
+}))
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof FsPromisesModule>()),
+  readFile: readFileMock
+}))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')

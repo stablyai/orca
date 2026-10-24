@@ -1,3 +1,4 @@
+import type * as ProviderLedgerModule from '../provider-process/provider-process-ledger'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
@@ -34,6 +35,7 @@ function fakeChild(
   }
 ): ChildProcessWithoutNullStreams {
   const child = new EventEmitter()
+  child.once('exit', (code, signal) => queueMicrotask(() => child.emit('close', code, signal)))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection reads only pid, the three pipes and kill, which this fake carries.
   return Object.assign(child, {
     pid: 424242,
@@ -136,7 +138,7 @@ describe('Claude stream-json close ordering', () => {
     expect(events).toEqual([])
 
     child.emit('exit', 1, null)
-    await vi.waitFor(() => expect(events).toEqual(['exit', 'message:task_notification']))
+    await vi.waitFor(() => expect(events).toEqual(['message:task_notification', 'exit']))
     await expect(connection.close()).resolves.toBe(true)
   })
 
@@ -326,7 +328,7 @@ describe('Claude stream-json close ordering', () => {
 
     child.emit('exit', 0, 'SIGTERM')
 
-    expect(exits).toEqual([true])
+    await vi.waitFor(() => expect(exits).toEqual([true]))
   })
 
   it('waits for the live tree refresh before ending stdin', async () => {
@@ -416,3 +418,17 @@ describe('Claude stream-json close ordering', () => {
     expect(child.stdin.writableEnded).toBe(true)
   })
 })
+
+vi.mock('../provider-process/provider-process-ledger', async (original) => ({
+  ...(await original<typeof ProviderLedgerModule>()),
+  recordProviderLaunch: () => ({
+    capture: async () => {},
+    retire: async () => {},
+    members: () => []
+  })
+}))
+vi.mock('../provider-process/provider-process-group', () => ({
+  signalProviderGroup: vi.fn(),
+  observeProviderGroup: vi.fn(async () => 'exited'),
+  stopRecordedProviderGroup: vi.fn(async () => 'unverifiable')
+}))

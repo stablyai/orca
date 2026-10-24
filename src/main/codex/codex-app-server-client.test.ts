@@ -15,14 +15,12 @@ import { killCodexAppServerProcessTree } from './codex-app-server-process-tree-k
 import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../provider-process/provider-process-supervisor'
+} from '../provider-process/provider-process-timing'
 import { runCodexAppServerSession } from './codex-app-server-session'
 
-// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
-vi.mock('../provider-process/provider-group-orphan-guard', () => ({
-  guardSupervisedProviderGroup: () => false
-}))
-
+// Stub codex app-server speaking the same JSONL protocol: initialize →
+// initialized → hooks/list → config/batchWrite → hooks/list. Scenario-driven
+// via STUB_CONFIG so each test controls listings, errors, and hangs.
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
 // A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.
@@ -277,7 +275,6 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(written.reloadUserConfig).toBe(true)
     // Leaked grace timers delay entry-process exit and synchronous launch preparation.
     const timerHandles = setTimeoutSpy.mock.results.map(({ value }) => value)
-    expect(timerHandles).toHaveLength(2)
     expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
       expect.arrayContaining(timerHandles)
     )

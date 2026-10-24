@@ -194,6 +194,7 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/main-process-preflight-failure.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [

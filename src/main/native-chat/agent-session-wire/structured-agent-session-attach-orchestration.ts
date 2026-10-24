@@ -168,13 +168,13 @@ async function runAttachUnderAbort(
     ? structuredAgentSessionConversationFence(context.deps.store, sessionId)
     : null
   const unreconciled = await withAgentSessionCreatePhase('reconcile_leases', recordPhase, () =>
-    lock.wait(context.reconcileLeases(sessionId))
+    lock.wait(context.tasks.trackAttach(context.reconcileLeases(sessionId)))
   )
   if (unreconciled) {
     return refuseAgentSessionMutation(unreconciled)
   }
   await withAgentSessionCreatePhase('resolve_recovery', recordPhase, () =>
-    lock.wait(context.runtimeState.resolveRecovery(sessionId))
+    lock.wait(context.tasks.trackAttach(context.runtimeState.resolveRecovery(sessionId)))
   )
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     lock.wait(context.runtimeState.probeOwner(sessionId))

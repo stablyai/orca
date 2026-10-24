@@ -1,3 +1,4 @@
+import { mockRecordedOwnerProcess } from './structured-agent-session-owner-process.test-support'
 // Persist spawn identity before handshake so relaunch can stop the exact orphan instead of guessing.
 
 import { cp, mkdtemp, rm } from 'node:fs/promises'
@@ -40,6 +41,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -130,6 +132,7 @@ describe('a host that dies while its Codex child is starting', () => {
     const restarted = fakeCodex()
     await crash(first)
     const store = await openStore('relaunched')
+    mockRecordedOwnerProcess(store.getRecord(SESSION)?.lease.ownerProcess)
     const relaunched = host(
       'relaunched',
       store,

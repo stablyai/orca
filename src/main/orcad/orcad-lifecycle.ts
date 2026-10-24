@@ -1,3 +1,4 @@
+import { setProviderRecoveryMutationOwner } from '../provider-process/provider-process-inventory'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
@@ -136,6 +137,7 @@ export async function startOrcadWithHost<T extends object>(
   runQuitHandlers: () => void
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath)
+  setProviderRecoveryMutationOwner(true)
   const { pid, startedAtMs, nonce } = instanceLock.record
   const instance = { pid, startedAtMs, nonce, lockPath: instanceLock.path }
   let admission: ProfileStateRuntimeAdmission | undefined
@@ -154,6 +156,7 @@ export async function startOrcadWithHost<T extends object>(
       // Failed teardown keeps both fences until the process actually exits.
       const host = new OrcadRuntimeLifetime(() => {
         if (runtimeCleanupSucceeded) {
+          setProviderRecoveryMutationOwner(false)
           instanceLock.release()
         }
       })

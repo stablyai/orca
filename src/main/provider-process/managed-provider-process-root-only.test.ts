@@ -26,6 +26,7 @@ function fakeChild(pid: number | null = 9_999_999) {
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
+  child.once('exit', (code, signal) => queueMicrotask(() => child.emit('close', code, signal)))
   const spawn = vi.fn<PipedProcessSpawner>(() => {
     return child
   })

@@ -1,3 +1,4 @@
+import { recoverProviderLaunches } from '../provider-process/provider-process-ledger'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -57,6 +58,7 @@ export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
 }
 
 export function initializeMainProcessRuntime(): OrcaRuntimeService {
+  void recoverProviderLaunches()
   const store = state.store
   const stats = state.stats
   if (!store || !stats) {

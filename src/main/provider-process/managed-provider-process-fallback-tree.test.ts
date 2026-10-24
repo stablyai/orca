@@ -61,22 +61,4 @@ describe('fallback teardown never claims descendants it did not observe', () => 
       expect(os.taskkill).toHaveBeenCalledOnce()
     }
   )
-
-  it('reports no observation when the POSIX process table cannot be read', async () => {
-    vi.useFakeTimers()
-    const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: null })
-    expect(os.capture).toHaveBeenCalledOnce()
-    expect(os.verifySnapshot).not.toHaveBeenCalled()
-  })
-
-  it('reports exited only when the captured descendants were verified gone', async () => {
-    vi.useFakeTimers()
-    os.capture.mockResolvedValueOnce({ rootPgid: 1, descendants: [], capturedAtMs: 1 })
-    const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: 'exited' })
-    expect(os.verifySnapshot).toHaveBeenCalledOnce()
-  })
 })

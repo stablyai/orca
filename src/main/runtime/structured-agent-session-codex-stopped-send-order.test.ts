@@ -13,6 +13,7 @@ import type {
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
+import { CODEX_RESUMED_MESSAGE_CAPTURE } from '../codex/codex-resumed-message-capture.test-fixture'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
@@ -90,6 +91,7 @@ let fence: number
 let handlers: CodexAppServerConnectionHandlers | undefined
 let answers: number
 let resumes: number
+const listTurns = vi.fn(() => ({}))
 /** What `thread/resume` reports as the thread's turns, as Codex does: times in whole seconds. */
 let resumeTurns: unknown[] | null
 let turns: ReturnType<typeof codexTurnLifecycleFake>
@@ -177,6 +179,9 @@ const openConnection: typeof openCodexAppServerConnection = async (
       if (method === 'thread/start') {
         return { thread: { id: THREAD } }
       }
+      if (method === 'thread/turns/list') {
+        return listTurns()
+      }
       if (method === 'model/list') {
         return { data: [MODEL], nextCursor: null }
       }
@@ -243,6 +248,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-codex-stopped-send-resume-'))
   answers = 0
   resumes = 0
+  listTurns.mockReset()
   resumeTurns = null
   interruptEndHeld = false
   turns = codexTurnLifecycleFake(
@@ -352,6 +358,60 @@ describe('a send a Stop took back, then a send made while it read Stopping', () 
     })
 
     expect(await drawn()).toEqual(live)
+  })
+})
+
+describe('older Codex returns message history from resume', () => {
+  it('persists unseen messages with their native identities once across restart without pagination', async () => {
+    expect(await drawn()).toEqual([])
+    listTurns.mockImplementation(() => {
+      throw new Error('older returned-history response must not require thread/turns/list')
+    })
+    resumeTurns = [
+      { id: 'historical-turn', status: 'completed', items: CODEX_RESUMED_MESSAGE_CAPTURE }
+    ]
+    const expected = ['list the files', 'Let me look.', 'Two files.'].map((text, ordinal) => ({
+      itemId: `codex:${THREAD}:historical-turn:${ordinal}`,
+      body: {
+        kind: 'message',
+        role: ordinal === 0 ? 'user' : 'assistant',
+        blocks: [{ type: 'text', text }]
+      }
+    }))
+
+    await stopStructuredAgentSessionRuntime()
+    await startHost()
+    await attach(fence)
+    await vi.waitFor(async () => {
+      await host.flushStreamedEvents(SESSION)
+      expect(
+        (await host.journalSnapshot(SESSION)).items
+          .filter((item) => item.body.kind === 'message')
+          .map(({ itemId, body }) => ({ itemId, body }))
+      ).toEqual(expected)
+    })
+    expect(resumes).toBe(1)
+
+    await stopStructuredAgentSessionRuntime()
+    await startHost()
+    // Read the saved messages before another resume could import them again.
+    expect(
+      (await host.journalSnapshot(SESSION)).items
+        .filter((item) => item.body.kind === 'message')
+        .map(({ itemId, body }) => ({ itemId, body }))
+    ).toEqual(expected)
+    expect(resumes).toBe(1)
+
+    await attach(fence)
+    await host.flushStreamedEvents(SESSION)
+    expect(resumes).toBe(2)
+    expect(
+      (await host.journalSnapshot(SESSION)).items
+        .filter((item) => item.body.kind === 'message')
+        .map(({ itemId, body }) => ({ itemId, body }))
+    ).toEqual(expected)
+    expect(await drawn()).toEqual(['list the files', 'Let me look.', 'Two files.'])
+    expect(listTurns).not.toHaveBeenCalled()
   })
 })
 

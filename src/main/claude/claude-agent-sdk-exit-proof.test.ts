@@ -3,7 +3,6 @@ import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { execFileSync } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { spawnProcess } from '@orca/process-host'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import {
@@ -11,7 +10,7 @@ import {
   proveClaudeChildExit,
   type ClaudeChildTreeReaper
 } from './claude-agent-sdk-exit-proof'
-import { managedChild } from './claude-child-exit-proof-fixture'
+import { managedChild, spawnRealClaudeProofChild } from './claude-child-exit-proof-fixture'
 import { GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
 
 function childWithDescendantScript(input: {
@@ -71,22 +70,22 @@ async function proveExitWithRetries(
   input: Parameters<typeof proveClaudeChildExit>[0],
   attempts = 3
 ): Promise<boolean> {
+  const tree =
+    input.tree ??
+    createClaudeChildTreeReaper(input.managed.child, {
+      exited: () => input.managed.rootVerdict === 'exited'
+    })
+  const retained = { ...input, tree }
   for (let attempt = 1; attempt < attempts; attempt += 1) {
-    if (await proveClaudeChildExit(input)) {
+    if (await proveClaudeChildExit(retained)) {
       return true
     }
   }
-  return proveClaudeChildExit(input)
+  return proveClaudeChildExit(retained)
 }
 
 function spawnScript(script: string): PipedChildProcess {
-  const child = spawnProcess({
-    program: process.execPath,
-    args: ['-e', script],
-    stdio: ['pipe', 'pipe', 'pipe']
-  })
-  managedChild(child)
-  return child
+  return spawnRealClaudeProofChild(script)
 }
 
 function firstStdoutLine(child: PipedChildProcess): Promise<string> {
@@ -157,6 +156,9 @@ describe('claude child exit proof', () => {
           descendant: 'exited'
         })
       } finally {
+        // Failure-safe only: the assertion above owns the requirement, this just
+        // stops a failing run from leaking a process.
+        child.kill('SIGKILL')
         try {
           process.kill(descendantPid, 'SIGKILL')
         } catch {
@@ -186,6 +188,7 @@ describe('claude child exit proof', () => {
           descendant: 'exited'
         })
       } finally {
+        child.kill('SIGKILL')
         try {
           process.kill(descendantPid, 'SIGKILL')
         } catch {
@@ -212,6 +215,7 @@ describe('claude child exit proof', () => {
           descendant: 'exited'
         })
       } finally {
+        child.kill('SIGKILL')
         try {
           process.kill(descendantPid, 'SIGKILL')
         } catch {
@@ -232,14 +236,14 @@ describe('claude child exit proof', () => {
       exitedWhenArmed = managed.rootVerdict === 'exited'
     })
 
-    // The fixture closes under POSIX rules; on Windows a self-exit after stdin end is the close.
+    // Real children use this host's owner; Windows may prove its cooperative self-exit.
     await expect(proveClaudeChildExit({ managed, tree })).resolves.toBe(true)
     expect(exitedWhenArmed).toBe(false)
     expect(tree.reap).toHaveBeenCalledTimes(1)
     expect(managed.rootVerdict).toBe('exited')
   }, 20_000)
 
-  it('proves a clean close of a childless root with one snapshot and no signal', async () => {
+  it('proves a clean close of a real childless root through its managed owner', async () => {
     const child = spawnScript(COOPERATIVE_CHILD)
     expect(await firstStdoutLine(child)).toBe('ready')
 
@@ -274,6 +278,7 @@ describe('claude child exit proof', () => {
       const tree = mockTree(['live'])
       tree.reap.mockImplementation(async () => {
         child.emit('exit', null, 'SIGKILL')
+        child.emit('close', null, 'SIGKILL')
         return 'live'
       })
       const proof = proveClaudeChildExit({ managed, tree })
@@ -331,7 +336,7 @@ describe('claude child exit proof', () => {
 })
 
 describe('claude child tree reaper', () => {
-  it('kills the root while verification runs and never stops it first', async () => {
+  it('shares descendant verification while its managed owner stops the root', async () => {
     const child = mockChild()
     const release = Promise.withResolvers<DescendantTreeVerdict>()
     const terminateDescendants = vi.fn(() => release.promise)
@@ -345,8 +350,8 @@ describe('claude child tree reaper', () => {
     const first = tree.reap()
     const second = tree.reap()
     await vi.waitFor(() => expect(terminateDescendants).toHaveBeenCalledTimes(1))
-    // A stopped root cannot verify: its killed children stay zombie rows in ps.
-    expect(child.kill.mock.calls).toEqual([['SIGKILL']])
+    // Root termination belongs to the managed owner, independently of this reap.
+    expect(child.kill).not.toHaveBeenCalled()
     expect(tree.treeVerdict).toBe('unverifiable')
 
     release.resolve('exited')
@@ -469,7 +474,7 @@ describe('claude child tree reaper', () => {
 
     expect(captureDescendants).toHaveBeenCalledTimes(2)
     expect(terminateDescendants).toHaveBeenCalledWith(second)
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('keeps the original capture boundary for retained POSIX rows', async () => {
@@ -542,7 +547,7 @@ describe('claude child tree reaper', () => {
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(terminateDescendants).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('queues a fresh boundary behind an output-triggered capture already in flight', async () => {
@@ -651,11 +656,13 @@ describe('claude child tree reaper', () => {
     })
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
-    expect(child.kill).toHaveBeenCalledTimes(1)
+    // An unreadable table cannot give the descendant reaper root authority.
+    expect(child.kill).not.toHaveBeenCalled()
     exited = true
     await expect(tree.reap()).resolves.toBe('unverifiable')
     expect(captureDescendants).toHaveBeenCalledTimes(1)
-    expect(child.kill).toHaveBeenCalledTimes(1)
+    // A later reap still cannot re-walk the dead root or signal its recycled number.
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('discards a walk that found no root instead of proving an empty tree', async () => {
@@ -710,7 +717,7 @@ describe('claude child tree reaper', () => {
 
     await expect(tree.reap()).resolves.toBe('exited')
     expect(terminateDescendants).not.toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('kills a held Windows root with one taskkill and never snapshots it', async () => {

@@ -1,7 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import {
   createClaudeChildTreeReaper,
   type ClaudeChildTreeReaper
@@ -89,21 +88,6 @@ function windowsTree(
 afterEach(() => vi.useRealTimers())
 
 describe('Claude child exit proof ladder', () => {
-  it('stops a supervised child with SIGTERM and waits out the supervisor stop before forcing', async () => {
-    vi.useFakeTimers()
-    const root = rootStoppedBySigterm(PROVIDER_SUPERVISOR_MAX_STOP_MS - 500, 'darwin')
-    const tree = fakeTree()
-    expect(root.managed.rootVerdict).toBe('live')
-    const proof = proveClaudeChildExitWithReaper({ managed: root.managed, tree }, () => tree)
-    await vi.advanceTimersByTimeAsync(PROVIDER_SUPERVISOR_MAX_STOP_MS)
-    await expect(proof).resolves.toBe(true)
-    expect(root.child.stdin.writableEnded).toBe(true)
-    expect(root.child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
-    expect(root.managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
-    expect(tree.reap).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('never signals an unsupervised child for the graceful stop', async () => {
     vi.useFakeTimers()
     const root = rootStoppedBySigterm(0, 'win32')

@@ -1,4 +1,6 @@
 import type { Readable, Writable } from 'node:stream'
+import { JsonlRpcStreamClosedError, JsonlRpcResponseError } from './peer-errors'
+export { JsonlRpcStreamClosedError, JsonlRpcResponseError } from './peer-errors'
 import { z } from 'zod'
 import {
   createIncrementalNdjsonFramer,
@@ -28,21 +30,6 @@ const responseSchema = z.looseObject({
 })
 
 export type JsonlRpcRecord = z.infer<typeof recordSchema>
-export class JsonlRpcStreamClosedError extends Error {
-  constructor() {
-    super('Agent JSON-lines RPC stream closed')
-    this.name = 'JsonlRpcStreamClosedError'
-  }
-}
-export class JsonlRpcResponseError extends Error {
-  constructor(
-    readonly command: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'JsonlRpcResponseError'
-  }
-}
 export type JsonlRpcPeerHandlers = {
   /** Includes id-less deferred prompt acknowledgements; dialect failures are fatal to preserve lifecycle evidence. */
   onRecord?: (record: JsonlRpcRecord) => void
@@ -116,10 +103,14 @@ export class JsonlRpcPeer {
     input.on('end', this.onEnd)
     input.on('close', this.onEnd)
     input.on('error', this.onError)
-    output.on('finish', this.onEnd)
-    output.on('close', this.onEnd)
+    output.on('finish', this.onOutputEnd)
+    output.on('close', this.onOutputEnd)
     output.on('error', this.onError)
-    if (input.destroyed || input.readableEnded || output.destroyed || !output.writable) {
+    if (
+      input.destroyed ||
+      input.readableEnded ||
+      (this.limits.closeOnOutputEnd && (output.destroyed || !output.writable))
+    ) {
       this.onEnd()
     }
   }
@@ -222,8 +213,8 @@ export class JsonlRpcPeer {
     this.input.removeListener('end', this.onEnd)
     this.input.removeListener('close', this.onEnd)
     detachProviderStreamErrorHandler(this.input, this.onError)
-    this.output.removeListener('finish', this.onEnd)
-    this.output.removeListener('close', this.onEnd)
+    this.output.removeListener('finish', this.onOutputEnd)
+    this.output.removeListener('close', this.onOutputEnd)
     detachProviderStreamErrorHandler(this.output, this.onError)
     this.framer.reset()
     this.writer.close(error)
@@ -246,6 +237,11 @@ export class JsonlRpcPeer {
   }
   private readonly onEnd = (): void =>
     this.close(this.inputEndError ?? new JsonlRpcStreamClosedError())
+  private readonly onOutputEnd = (): void => {
+    if (this.limits.closeOnOutputEnd) {
+      this.onEnd()
+    }
+  }
   private readonly onError = (error: Error): void => this.close(error)
 
   private diagnose(message: string): void {

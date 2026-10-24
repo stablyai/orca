@@ -182,11 +182,13 @@ async function runStart(
   }
   const callerKey = AGENT_START_CALLER_KEY
   // Read eligibility only after lease adjudication/recovery; each commits against its probed owner.
-  const unreconciled = await lock.wait(context.reconcileLeases(sessionId))
+  const unreconciled = await lock.wait(
+    context.tasks.trackAttach(context.reconcileLeases(sessionId))
+  )
   if (unreconciled) {
     return { ok: false, refusal: unreconciled }
   }
-  await lock.wait(context.runtimeState.resolveRecovery(sessionId))
+  await lock.wait(context.tasks.trackAttach(context.runtimeState.resolveRecovery(sessionId)))
   const eligible = await lock.commit(async () => {
     // Re-derive release from this host’s exit proof when wind-down could not persist it.
     await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId)

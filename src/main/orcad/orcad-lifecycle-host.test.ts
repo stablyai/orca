@@ -1,4 +1,16 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { getAppEnvironment, setAppEnvironment } from '../../shared/app-environment'
+import { ProviderCleanupBudget } from '../provider-process/provider-process-exit-deadline'
+import {
+  installProviderLedgerEntry,
+  providerLedgerDirectory,
+  serializeProviderEntry
+} from '../provider-process/provider-process-inventory'
+import {
+  startProviderRecoveryTask,
+  verifyRecoveredProviderResources
+} from '../provider-process/provider-process-ledger'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -28,17 +40,66 @@ function dataRoot(): string {
 describe('startOrcadWithHost', () => {
   it('names the instance a managed stop must address, and releases its lock on a clean stop', async () => {
     const root = dataRoot()
+    const saved = getAppEnvironment()
+    setAppEnvironment({
+      ...saved,
+      getPath: (key) => (key === 'userData' ? root : saved.getPath(key))
+    })
+    const directory = providerLedgerDirectory(),
+      gate = Promise.withResolvers<void>()
+    mkdirSync(directory)
+    const states = Array.from({ length: 5 }, (_, index) => {
+      const entry = {
+        version: 1 as const,
+        origin: 'direct' as const,
+        token: randomUUID(),
+        directory,
+        createdAt: Date.now(),
+        pgid: 9_999_990 + index,
+        owner: { pid: 9_999_999, pgid: 9_999_999, startedAt: 'gone' },
+        members: [],
+        groupRetired: true as const,
+        resource: { kind: 'codex-home' as const, key: String(index) }
+      }
+      writeFileSync(join(directory, `${entry.token}.json`), JSON.stringify(entry))
+      const state = installProviderLedgerEntry(entry)
+      void serializeProviderEntry(state, () => gate.promise)
+      return state
+    })
+    const budget = new ProviderCleanupBudget()
+    const first = verifyRecoveredProviderResources('0', budget)
     const handle = await startOrcadWithHost(
       root,
-      async () => ({}),
+      async (registerCleanup) => {
+        const recovery = startProviderRecoveryTask()
+        registerCleanup(() => recovery.cancelAndJoin())
+        await recovery.ready
+        return {}
+      },
       () => {}
     )
     expect(readOrcadInstanceLockRecord(handle.instance.lockPath)).toMatchObject({
       pid: handle.instance.pid,
       nonce: handle.instance.nonce
     })
-    await handle.stop()
-    expect(existsSync(join(root, ORCAD_LOCK_FILE_NAME))).toBe(false)
+    try {
+      const released = vi.fn(),
+        stop = handle.stop().then(released)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(released).not.toHaveBeenCalled()
+      expect(existsSync(handle.instance.lockPath)).toBe(true)
+      expect(budget.signal.aborted).toBe(false)
+      expect(states[4]?.flight).toBeUndefined()
+      gate.resolve()
+      await expect(first).resolves.toBe('released')
+      await stop
+      expect(existsSync(join(root, ORCAD_LOCK_FILE_NAME))).toBe(false)
+    } finally {
+      gate.resolve()
+      await first
+      await handle.stop()
+      setAppEnvironment(saved)
+    }
   })
 
   it('keeps the instance lock when a runtime writer could not be stopped', async () => {

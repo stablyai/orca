@@ -1,3 +1,8 @@
+import { registerScriptedProviderChild } from '../provider-process/mock-provider-process-group.test-support'
+import {
+  completeFakeSpawn,
+  createFakePipedChild
+} from '../../shared/__fixtures__/fake-spawned-child'
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -214,15 +219,8 @@ describe('generateCommitMessageFromContext', () => {
   })
 
   it('reports branch changes when pull request field output cannot be parsed', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    spawnMock.mockReturnValue({
-      pid: 123,
-      kill: vi.fn(),
-      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
-      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    } as never)
+    const child = createFakePipedChild(9_999_999)
+    spawnMock.mockReturnValue(registerScriptedProviderChild(child))
 
     const pullRequest = generatePullRequestFieldsFromContext(
       {
@@ -247,8 +245,7 @@ describe('generateCommitMessageFromContext', () => {
       }
     )
 
-    listeners.get('stdout:data')?.(Buffer.from('not json'))
-    listeners.get('close')?.(0)
+    completeFakeSpawn(child, { stdout: 'not json' })
 
     await expect(pullRequest).resolves.toEqual({
       success: false,

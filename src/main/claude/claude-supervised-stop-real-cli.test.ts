@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { SUPERVISED_GRACEFUL_EXIT_MS } from './claude-child-exit-proof-ladder'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-timing'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { realClaudeLaunchHome } from './claude-real-cli-availability-test-support'
 import {
@@ -169,7 +169,7 @@ async function resumeAndAsk(sessionId: string, cwd: string): Promise<void> {
   await expect(resumed.close()).resolves.toBe(true)
 }
 
-type StopCase = 'close mid-tool' | 'SIGTERM to the supervisor mid-tool' | 'close while idle'
+type StopCase = 'close mid-tool' | 'SIGTERM to the agent mid-tool' | 'close while idle'
 
 afterEach(async () => {
   for (const pid of recordedPids) {
@@ -184,8 +184,8 @@ afterEach(async () => {
   }
 })
 
-describe.runIf(enabled)('real Claude stopped through the POSIX supervisor', () => {
-  it.each<StopCase>(['close mid-tool', 'SIGTERM to the supervisor mid-tool', 'close while idle'])(
+describe.runIf(enabled)('real Claude stopped through the POSIX agent', () => {
+  it.each<StopCase>(['close mid-tool', 'SIGTERM to the agent mid-tool', 'close while idle'])(
     '%s: stops Claude and its tool, keeps the transcript line-atomic, and resumes',
     async (stopCase) => {
       const cwd = mkdtempSync(join(tmpdir(), 'orca-real-claude-stop-'))
@@ -193,12 +193,12 @@ describe.runIf(enabled)('real Claude stopped through the POSIX supervisor', () =
       const sessionId = randomUUID()
       const frames: Frame[] = []
       const connection = await open(sessionId, cwd, false, frames)
-      const supervisor = connection.pid!
+      const agent = connection.pid!
       const midTool = stopCase !== 'close while idle'
       await connection.send(userMessage(midTool ? TOOL_PROMPT : 'Reply with the single word: ok'))
       const descendants = midTool
         ? await until(async () => {
-            const rows = await descendantsOf(supervisor)
+            const rows = await descendantsOf(agent)
             return rows.some((row) => row.command.includes(TOOL_MARKER)) ? rows : null
           }, 'the Bash tool').catch((error: unknown) => {
             console.log('[no tool] frames so far:', summarize(frames, 0))
@@ -207,7 +207,7 @@ describe.runIf(enabled)('real Claude stopped through the POSIX supervisor', () =
         : await until(
             async () =>
               frames.some((frame) => frame.message.type === 'result')
-                ? await descendantsOf(supervisor)
+                ? await descendantsOf(agent)
                 : null,
             'the idle turn'
           )
@@ -216,15 +216,15 @@ describe.runIf(enabled)('real Claude stopped through the POSIX supervisor', () =
       }
 
       const signalledAt = Date.now()
-      if (stopCase === 'SIGTERM to the supervisor mid-tool') {
-        process.kill(supervisor, 'SIGTERM')
+      if (stopCase === 'SIGTERM to the agent mid-tool') {
+        process.kill(agent, 'SIGTERM')
       } else {
         await expect(connection.close()).resolves.toBe(true)
       }
       const gone = await until(
-        () => ([supervisor, ...descendants.map((row) => row.pid)].some(alive) ? null : true),
-        'the supervisor, Claude and its tools to exit',
-        SUPERVISED_GRACEFUL_EXIT_MS + 2_000
+        () => ([agent, ...descendants.map((row) => row.pid)].some(alive) ? null : true),
+        'the agent, Claude and its tools to exit',
+        PROVIDER_SUPERVISOR_MAX_STOP_MS + 2_000
       )
       const stoppedMs = Date.now() - signalledAt
       const after = summarize(frames, signalledAt)

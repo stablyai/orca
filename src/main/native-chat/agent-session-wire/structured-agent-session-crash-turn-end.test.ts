@@ -1,3 +1,4 @@
+import { mockRecordedOwnerProcess } from './structured-agent-session-owner-process.test-support'
 // Quiet tools may emit only start/end rows; pre-crash lease renewal supplies the latest observed work time.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -248,6 +249,7 @@ describe('a turn a crash cut short mid-tool', () => {
 
   it('ends at the pre-crash renewal when the child outlived Orca and recovery stopped it', async () => {
     // Orphan output after host death cannot count as work the chat showed.
+    mockRecordedOwnerProcess(store.getRecord(SESSION)?.lease.ownerProcess)
     let alive = true
     const probeOwner = async (): Promise<AgentSessionOwnerProbe> =>
       alive
@@ -404,6 +406,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
   })
 
   it('ends it at the last renewal although recovery stops a child that outlived Orca later', async () => {
+    mockRecordedOwnerProcess(store.getRecord(SESSION)?.lease.ownerProcess)
     let alive = true
     const probeOwner = async (): Promise<AgentSessionOwnerProbe> =>
       alive

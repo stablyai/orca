@@ -12,7 +12,6 @@ import {
 } from '../../shared/claude-background-run-isolation'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
-import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
   finalizeModelDiscoveryOutput,
   planModelDiscovery,
@@ -114,6 +113,15 @@ async function discoverModelsOnce(
           env: input.options.wslDistro ? input.env : env,
           commandEnv: plan.env,
           wslDistro: input.options.wslDistro,
+          ...(input.agentId === 'codex'
+            ? {
+                codexHomeLockKey: resolveCodexHomeProcessLockKeyForSpawnEnv(
+                  env,
+                  input.options.wslDistro,
+                  plan.env
+                )
+              }
+            : {}),
           stdinMode: plan.stdinPayload === null ? 'ignore' : 'pipe',
           useCwdForNative: false
         })
@@ -164,9 +172,11 @@ async function discoverModelsOnce(
         })
       }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
-      const onData = (chunk: Buffer, append: (text: string) => void): void => {
+      const onData = (chunk: Buffer | string, append: (text: string) => void): void => {
         if (
-          stdout.length + stderr.length + chunk.byteLength >
+          stdout.length +
+            stderr.length +
+            (typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength) >
           MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
         ) {
           outputLimitExceeded = true
@@ -174,7 +184,7 @@ async function discoverModelsOnce(
           finish({ success: false, error: `${spec.label} returned too much model data.` })
           return
         }
-        append(chunk.toString('utf-8'))
+        append(typeof chunk === 'string' ? chunk : chunk.toString('utf-8'))
       }
       const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
@@ -195,17 +205,7 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
-        // A supervised spawn failure reads as the same failure a direct spawn reports.
-        const spawnFailure = outputLimitExceeded
-          ? null
-          : supervisedProviderSpawnFailure(code, stderr)
-        if (spawnFailure?.thrown) {
-          console.error('[commit-message] Failed to spawn model discovery:', spawnFailure.error)
-          finish(startFailure(spawnFailure.error))
-          return
-        }
-        if (spawnFailure) {
-          onError(spawnFailure.error)
+        if (settled) {
           return
         }
         if (!settled && !outputLimitExceeded) {
@@ -220,11 +220,19 @@ async function discoverModelsOnce(
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       if (input.agentId === 'codex') {
-        child.once('exit', markClosedAfterTermination)
-        child.once('close', markClosedAfterTermination)
+        if (child.managed) {
+          child.managed.onSettled(markClosedAfterTermination)
+        } else {
+          child.once('exit', markClosedAfterTermination)
+          child.once('close', markClosedAfterTermination)
+        }
       }
       child.on('error', onError)
-      child.on('close', onClose)
+      if (child.managed) {
+        child.managed.onSettled((exit) => onClose(exit.code))
+      } else {
+        child.on('close', onClose)
+      }
       detachChildListeners = () => {
         child.stdout?.off?.('data', onStdoutData)
         child.stderr?.off?.('data', onStderrData)

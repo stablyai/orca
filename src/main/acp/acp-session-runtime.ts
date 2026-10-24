@@ -249,6 +249,10 @@ export class AcpSessionRuntime {
     this.peer.drainNotifications(error)
   }
 
+  protected disarmWritableEnd(): void {
+    this.peer.disarmWritableEnd()
+  }
+
   private sessionId(): string {
     if (!this.started) {
       throw new Error('ACP session has not started')

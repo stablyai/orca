@@ -1,3 +1,7 @@
+import type * as FsPromisesModule from 'node:fs/promises'
+import type * as ChildProcessModule from 'node:child_process'
+import type * as ProviderLedgerModule from '../provider-process/provider-process-ledger'
+import { PassThrough } from 'node:stream'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
@@ -18,14 +22,20 @@ vi.mock(
   () =>
     import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
 )
-vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+vi.mock('node:child_process', async (original) => ({
+  ...(await original<typeof ChildProcessModule>()),
+  spawn: childSpawnMock
+}))
 // The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
 vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof RunProcess>()),
   spawnProcess: (spec: { program: string; args?: readonly string[] }) =>
     childSpawnMock(spec.program, spec.args ?? [], spec)
 }))
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof FsPromisesModule>()),
+  readFile: readFileMock
+}))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
 vi.mock('../codex/codex-state-db', () => ({ isCodexStateDbBackfillPending: vi.fn(() => false) }))
@@ -37,25 +47,32 @@ vi.mock('./codex-auth-presence', () => ({ probeCodexAuthPresence: vi.fn(() => 'p
 import { fetchCodexRateLimits } from './codex-fetcher'
 
 function makeRpcChild() {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter
-    stderr: EventEmitter
+  type RpcChild = EventEmitter & {
+    pid: number
+    stdout: PassThrough
+    stderr: PassThrough
     stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
     child.emit('close', 0, null)
+    child.emit('close', 0, null)
   }
-  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
-  child.exitCode = null
-  child.kill = vi.fn(() => {
+  const stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
+  const kill = vi.fn(() => {
     exitNow()
     return true
+  })
+  const child: RpcChild = Object.assign(new EventEmitter(), {
+    pid: 9_999_999,
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin,
+    kill,
+    exitCode: null
   })
   return child
 }
@@ -89,13 +106,15 @@ describe('codex rate-limit spawn runtime pairing', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(() => expect(childSpawnMock).toHaveBeenCalledOnce())
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
     // Guards the argument choice: pairing anything but the resolved CLI silently
     // reverts the ABI fix (stablyai/orca#10932).
     expect(spawnEnv.PATH?.split(delimiter)[0]).toBe(bin)
 
+    rpcChild.exitCode = 0
+    rpcChild.emit('exit', 0, null)
     rpcChild.emit('close')
     await resultPromise
   })
@@ -112,13 +131,15 @@ describe('codex rate-limit spawn runtime pairing', () => {
       childSpawnMock.mockReturnValue(rpcChild)
 
       const resultPromise = fetchCodexRateLimits()
-      await vi.advanceTimersByTimeAsync(0)
+      await vi.waitFor(() => expect(childSpawnMock).toHaveBeenCalledOnce())
 
       const spawnCommand = childSpawnMock.mock.calls[0]?.[0] as string
       expect(spawnCommand).toBe(cli)
       const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
       expect((spawnEnv.Path ?? spawnEnv.PATH)?.split(';')[0]).toBe(bin)
 
+      rpcChild.exitCode = 0
+      rpcChild.emit('exit', 0, null)
       rpcChild.emit('close')
       await resultPromise
     } finally {
@@ -134,12 +155,23 @@ describe('codex rate-limit spawn runtime pairing', () => {
     childSpawnMock.mockReturnValue(rpcChild)
 
     const resultPromise = fetchCodexRateLimits()
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(() => expect(childSpawnMock).toHaveBeenCalledOnce())
 
     const spawnEnv = childSpawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
     expect(spawnEnv.PATH).toBe(process.env.PATH)
 
+    rpcChild.exitCode = 0
+    rpcChild.emit('exit', 0, null)
     rpcChild.emit('close')
     await resultPromise
   })
 })
+
+vi.mock('../provider-process/provider-process-ledger', async (original) => ({
+  ...(await original<typeof ProviderLedgerModule>()),
+  recordProviderLaunch: () => ({
+    capture: async () => {},
+    retire: async () => {},
+    members: () => []
+  })
+}))

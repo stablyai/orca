@@ -4,10 +4,6 @@ import { resolveProviderChildEnv } from '../provider-process/provider-process-la
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
-  providerStderrForDisplay,
-  supervisedProviderSpawnFailure
-} from '../provider-process/provider-spawn-failure-report'
-import {
   killCodexAppServerProcessTree,
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
@@ -81,7 +77,7 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
   )
 }
 
-/** Runs a bounded JSONL session; the POSIX supervisor also stops its group if Orca dies. */
+/** Runs a bounded JSONL session; the execution host owns its POSIX group. */
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
@@ -102,7 +98,6 @@ export async function runCodexAppServerSession<T>(
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
           cwd: spec.cwd,
-          // Preserve the supervisor's group-report channel.
           stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
           ...(spec.detached ? { detached: true } : {})
@@ -112,17 +107,15 @@ export async function runCodexAppServerSession<T>(
   const { child } = managed
 
   let exited = false
-  let exitCode: number | null = null
-  let nextRequestId = 1
   let timedOut = false
+  let nextRequestId = 1
   const pending = new Map<
     number,
     { resolve: (r: JsonRpcResponse) => void; reject: (e: Error) => void }
   >()
 
-  managed.onExit((exit) => {
+  managed.onExit(() => {
     exited = true
-    exitCode = exit.code
   })
   // Spawn failures emit error without exit; reject requests that would otherwise hang.
   let spawnError: Error | null = null
@@ -132,7 +125,7 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
   // close guarantees complete stderr for classifying missing-subcommand versus transient failure.
-  child.on('close', () => {
+  managed.onSettled(() => {
     failPending(buildEarlyExitError())
   })
   // Exit can race stdin.write(); reject RPCs on EPIPE instead of leaving an unhandled stream error.
@@ -173,8 +166,8 @@ export async function runCodexAppServerSession<T>(
   })
   function endSession(error: Error): void {
     timedOut = true
-    // A supervised child is stopped by the finally below, which this rejection runs at once.
-    if (!managed.supervised) {
+    // The owner close in finally runs as soon as this rejection wins the session race.
+    if (!managed.dedicatedGroup) {
       killCodexAppServerProcessTree(child)
     }
     failPending(error)
@@ -263,19 +256,11 @@ export async function runCodexAppServerSession<T>(
     return response.result
   }
 
-  // The supervisor's spawn-failure report reads as Node's own spawn error line.
   function stderrDetail(): string {
-    return providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
+    return managed.stderrTail().trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   }
 
   function buildEarlyExitError(): Error {
-    // A supervisor reports a provider it could not start as exit 127; callers classify that error.
-    const spawnFailure = managed.supervised
-      ? supervisedProviderSpawnFailure(exitCode, managed.stderrTail())
-      : null
-    if (spawnFailure) {
-      return spawnFailure.error
-    }
     if (stderrIndicatesMissingAppServer(managed.stderrTail())) {
       return new CodexAppServerUnsupportedError(
         `codex CLI does not support the app-server subcommand: ${stderrDetail()}`
@@ -309,19 +294,10 @@ export async function runCodexAppServerSession<T>(
     }
     throw error
   } finally {
-    // A session past its deadline is wedged; its stdin end would only add a grace.
-    if (timedOut && managed.supervised && !exited) {
-      try {
-        child.stdin.end()
-      } catch {
-        // A destroyed stdin still leaves the SIGTERM and the close below.
-      }
-      child.kill('SIGTERM')
-    }
-    if (invocation.treeKillOnFinish && !managed.supervised && !exited) {
+    if (invocation.treeKillOnFinish && !managed.dedicatedGroup && !exited) {
       await managed.terminateTree()
     }
-    // Ends stdin, gives a supervisor its full stop time (a direct child 1.5 s), then the tree.
+    // The shared owner finishes group cleanup before this caller releases its resources.
     await managed.close()
     clearTimeout(deadline)
     invocation.signal?.removeEventListener('abort', onAbort)

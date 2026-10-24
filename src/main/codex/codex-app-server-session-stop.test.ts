@@ -1,7 +1,8 @@
+import type * as ProviderLedgerModule from '../provider-process/provider-process-ledger'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { readPosixProcessRow } from '../provider-process/provider-process-row-read'
 import { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import type * as ProcessTreeKill from './codex-app-server-process-tree-kill'
 import {
@@ -20,6 +21,7 @@ vi.mock('./codex-app-server-process-tree-kill', async (importOriginal) => ({
 
 type FakeChild = EventEmitter & {
   pid: number
+  exitCode: number | null
   stdin: PassThrough
   stdout: PassThrough
   stderr: PassThrough
@@ -29,18 +31,43 @@ type FakeChild = EventEmitter & {
 /** A child that answers initialize and then nothing; it exits only on `exitsOn`. */
 function fakeChild(exitsOn: NodeJS.Signals | null): FakeChild {
   const child: FakeChild = Object.assign(new EventEmitter(), {
-    pid: 4242,
+    pid: 9_999_999,
+    exitCode: null,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     kill: vi.fn((signal?: NodeJS.Signals) => {
       if (signal === exitsOn) {
+        child.exitCode = 0
         child.emit('exit', null, signal)
         child.emit('close', null, signal)
       }
       return true
     })
   })
+  vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+    if (pid !== -child.pid) {
+      throw new Error('Unexpected fixture signal')
+    }
+    if (child.exitCode !== null) {
+      throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+    }
+    if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+      child.kill(signal)
+    }
+    return true
+  })
+  vi.mocked(readPosixProcessRow).mockImplementation(async () =>
+    child.exitCode === null
+      ? {
+          pid: child.pid,
+          pgid: child.pid,
+          ppid: process.pid,
+          startedAt: 'fixture',
+          startResolution: 'clock-tick'
+        }
+      : null
+  )
   child.stdin.on('data', (chunk: Buffer) => {
     const message = JSON.parse(chunk.toString())
     if (message.method === 'initialize') {
@@ -55,6 +82,7 @@ const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
+  vi.restoreAllMocks()
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
@@ -100,13 +128,16 @@ describe('runCodexAppServerSession stop', () => {
     })
   })
 
-  it('SIGTERMs a supervised session at its deadline instead of waiting out its stdin grace', async () => {
+  it('ends stdin at its deadline and signals the owned group after its grace', async () => {
     vi.useFakeTimers()
     const child = fakeChild('SIGTERM')
     let stdinEnded = false
     child.stdin.on('finish', () => (stdinEnded = true))
 
     const outcome = startWedgedSession(child, 'darwin')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(child.stdin.writableEnded).toBe(true)
+    expect(child.kill).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(child.kill.mock.calls).toEqual([['SIGTERM']])
@@ -116,23 +147,16 @@ describe('runCodexAppServerSession stop', () => {
     expect(killCodexAppServerProcessTree).not.toHaveBeenCalled()
   })
 
-  it('tears a supervised session down only once the supervisor has had its full stop time', async () => {
+  it('escalates a TERM-ignoring owned group and joins its actual exit', async () => {
     vi.useFakeTimers()
-    const child = fakeChild(null)
-
+    const child = fakeChild('SIGKILL')
     const outcome = startWedgedSession(child, 'linux')
-    await vi.advanceTimersByTimeAsync(1_000 + PROVIDER_SUPERVISOR_MAX_STOP_MS - 1)
-    expect(terminateProviderProcessTree).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(terminateProviderProcessTree).toHaveBeenCalledWith(child, {
-      site: 'codex-app-server-session',
-      platform: 'linux'
-    })
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(await outcome).toBeInstanceOf(CodexAppServerTimeoutError)
+    await vi.advanceTimersByTimeAsync(4_999)
     expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    expect(killCodexAppServerProcessTree).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(child.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+    await expect(outcome).resolves.toBeInstanceOf(CodexAppServerTimeoutError)
+    expect(terminateProviderProcessTree).not.toHaveBeenCalled()
   })
 
   it('keeps the Windows deadline kill and its 1.5 s close wait', async () => {
@@ -157,3 +181,16 @@ describe('runCodexAppServerSession stop', () => {
     expect(killCodexAppServerProcessTree).toHaveBeenCalledTimes(1)
   })
 })
+
+vi.mock('../provider-process/provider-process-ledger', async (original) => ({
+  ...(await original<typeof ProviderLedgerModule>()),
+  recordProviderLaunch: () => ({
+    capture: async () => {},
+    retire: async () => {},
+    members: () => [{ pid: 9_999_999, pgid: 9_999_999, startedAt: 'fixture' }]
+  })
+}))
+vi.mock('../provider-process/provider-process-row-read', () => ({ readPosixProcessRow: vi.fn() }))
+vi.mock('node:timers/promises', () => ({
+  setTimeout: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+}))

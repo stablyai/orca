@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/quit-teardown-deadline'
-import {
-  GRACEFUL_EXIT_MS as CLAUDE_WINDOWS_GRACEFUL_EXIT_MS,
-  SUPERVISED_GRACEFUL_EXIT_MS
-} from '../../claude/claude-child-exit-proof-ladder'
+import { GRACEFUL_EXIT_MS as CLAUDE_WINDOWS_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
 import { GRACEFUL_EXIT_MS as CODEX_WINDOWS_GRACEFUL_EXIT_MS } from '../../codex/codex-app-server-connection'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-timing'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import {
   CHILD_EVICTION_TIMEOUT_MS,
@@ -48,7 +45,7 @@ describe('structured agent-session host teardown', () => {
   it("derives quit's child-eviction bound from every provider's supervised close", () => {
     // Bound drain/graceful close; supervisors finish tree cleanup after main exits, with leases recovered on launch.
     const closes = {
-      claude: SUPERVISED_GRACEFUL_EXIT_MS,
+      claude: PROVIDER_SUPERVISOR_MAX_STOP_MS,
       codex: PROVIDER_SUPERVISOR_MAX_STOP_MS,
       // Windows lacks supervisors and uses shorter close bounds.
       claudeWindows: CLAUDE_WINDOWS_GRACEFUL_EXIT_MS,

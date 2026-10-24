@@ -2,8 +2,13 @@
 // the shared database last. Queued sends recover on next open.
 
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
-import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
+import { DESCENDANT_SNAPSHOT_TIMEOUT_MS } from '../../pty-descendant-termination'
+import { DESCENDANT_KILL_VERIFY_MS } from '../../pty-descendant-exit-verification'
+import {
+  PROVIDER_SUPERVISOR_MAX_STOP_MS,
+  PROVIDER_GROUP_REAP_TIMEOUT_MS,
+  PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS
+} from '../../provider-process/provider-process-timing'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
 import {
@@ -23,10 +28,14 @@ export const RESUME_MARKER_RECORD_TIMEOUT_MS = 2_000
 
 export const EVICTION_MARGIN_MS = 1_000
 
-/** Cover drain and supervised graceful exit within quit’s deadline; supervisors own later tree cleanup. */
+/** Includes the owner ladder, external descendant verification and final output before quit. */
 export const CHILD_EVICTION_TIMEOUT_MS =
   SNAPSHOT_DRAIN_TIMEOUT_MS +
-  Math.max(SUPERVISED_GRACEFUL_EXIT_MS, PROVIDER_SUPERVISOR_MAX_STOP_MS) +
+  PROVIDER_SUPERVISOR_MAX_STOP_MS +
+  PROVIDER_GROUP_REAP_TIMEOUT_MS +
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS +
+  DESCENDANT_KILL_VERIFY_MS +
+  PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS +
   EVICTION_MARGIN_MS
 
 /** Bound duration while preserving rejection, unlike withTimeout alone. */

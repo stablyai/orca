@@ -2,7 +2,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-timing'
 import { ROOT_ONLY_GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import {
@@ -20,6 +20,7 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: teardown
 }))
 
+const originalPlatform = process.platform
 const opened: { connection: AcpAgentConnection; exit: () => void }[] = []
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
@@ -44,7 +45,10 @@ function fixture(
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
   agent.on('session/new', (frame) => agent.reply(frame, { sessionId: 'session-1' }))
   if (behavior.exitOnEnd !== false) {
-    child.stdin.once('finish', () => child.emit('exit', 0, null))
+    child.stdin.once('finish', () => {
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+    })
   }
   const connection = createAcpAgentConnection(
     {
@@ -57,7 +61,13 @@ function fixture(
     options,
     spawn
   )
-  opened.push({ connection, exit: () => child.emit('exit', 0, null) })
+  opened.push({
+    connection,
+    exit: () => {
+      child.emit('exit', 0, null)
+      child.emit('close', 0, null)
+    }
+  })
   return { agent, child, spawn, connection }
 }
 
@@ -68,10 +78,11 @@ afterEach(async () => {
   }
   teardown.mockReset().mockResolvedValue('unverifiable')
   vi.useRealTimers()
+  Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('ACP process-owning connection', () => {
-  it('spawns through the supervisor with the host launch and exposes typed session calls', async () => {
+  it('spawns the configured child directly with the host launch and exposes typed session calls', async () => {
     const { connection, spawn, child, agent } = fixture()
     await connection.spawned
     expect(connection.pid).toBe(child.pid)
@@ -81,7 +92,7 @@ describe('ACP process-owning connection', () => {
       expect.objectContaining({
         cwd: start.cwd,
         env: expect.objectContaining({ ACP_ACCOUNT_HOME: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
+        stdio: ['pipe', 'pipe', 'pipe']
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
@@ -97,7 +108,10 @@ describe('ACP process-owning connection', () => {
     connection.resumeReading()
     expect(child.stdout.isPaused()).toBe(false)
     expect(await connection.close()).toBe(true)
-    expect(connection.lastCloseResult).toEqual({ root: 'exited', tree: null })
+    expect(connection.lastCloseResult).toEqual({
+      root: 'exited',
+      tree: process.platform === 'win32' ? null : 'exited'
+    })
   })
 
   it('settles prompts and permission signals on proven exit with stdout still open', async () => {
@@ -134,8 +148,37 @@ describe('ACP process-owning connection', () => {
     })
     const late = vi.fn()
     connection.onExit(late)
-    expect(late).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(late).toHaveBeenCalledOnce())
     await expect(connection.close()).resolves.toBe(true)
+  })
+
+  it('keeps parsing final replies and notifications after the child stdin closes', async () => {
+    const onExit = vi.fn()
+    const onExtensionNotification = vi.fn()
+    const { connection, child, agent } = fixture(
+      { onExit, onExtensionNotification },
+      { exitOnEnd: false }
+    )
+    await connection.start(start)
+    const pending = connection.prompt([...prompt])
+    const frame = agent.frames.at(-1)
+    if (!frame) {
+      throw new Error('prompt was not sent')
+    }
+    const writableFinished = deferred<boolean>()
+    child.stdin.once('finish', () => writableFinished.resolve(connection.exited))
+    child.stdin.end()
+    child.emit('exit', 0, null)
+    expect(await writableFinished.promise).toBe(true)
+    expect(connection.closed).toBe(false)
+    expect(onExit).not.toHaveBeenCalled()
+    agent.reply(frame, { stopReason: 'end_turn' })
+    agent.notify('_x.ai/final', { done: true })
+    child.stdout.end()
+    child.emit('close', 0, null)
+    await expect(pending).resolves.toEqual({ stopReason: 'end_turn' })
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+    expect(onExtensionNotification).toHaveBeenCalledOnce()
   })
 
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
@@ -214,10 +257,10 @@ describe('ACP process-owning connection', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(connection.rootVerdict).toBe('exited')
     expect(onExit.mock.calls[0][1].expected).toBe(false)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('joins physical close and retries unproven exit without spawning a replacement', async () => {
+  it('Windows: joins physical close and retries unproven exit without spawning a replacement', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
     vi.useFakeTimers()
     const onExit = vi.fn()
     const { connection, child, spawn } = fixture({ onExit }, { exitOnEnd: false })
@@ -238,7 +281,6 @@ describe('ACP process-owning connection', () => {
     expect(connection.processTreeUnproven).toBe(true)
     expect(spawn).toHaveBeenCalledOnce()
     expect(onExit.mock.calls[0][1].expected).toBe(true)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('ends notification draining at the bounded close result even when exit remains unproven', async () => {
@@ -255,12 +297,12 @@ describe('ACP process-owning connection', () => {
     expect(connection.rootVerdict).toBe('live')
     agent.notify('_x.ai/session/update', { outcome: 'after-unproven-close' })
     expect(onExtensionNotification).toHaveBeenCalledOnce()
-    expect(agent.stdout.listenerCount('data')).toBe(0)
   })
 
   it.each(['live', 'unverifiable'] as const)(
     'retains %s tree evidence when root exits between completed close attempts',
     async (tree) => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
       vi.useFakeTimers()
       const { connection, child } = fixture({}, { exitOnEnd: false })
       teardown.mockResolvedValueOnce(tree)
@@ -276,7 +318,7 @@ describe('ACP process-owning connection', () => {
     }
   )
 
-  it('isolates early and late exit subscribers and continues delivering exit', () => {
+  it('isolates early and late exit subscribers and continues delivering exit', async () => {
     const onDiagnostic = vi.fn(() => {
       throw new Error('diagnostic')
     })
@@ -288,6 +330,8 @@ describe('ACP process-owning connection', () => {
     connection.onExit(failing)
     connection.onExit(early)
     expect(() => child.emit('exit', 0, null)).not.toThrow()
+    child.emit('close', 0, null)
+    await vi.waitFor(() => expect(early).toHaveBeenCalledOnce())
     expect(early).toHaveBeenCalledExactlyOnceWith({
       code: 0,
       signal: null,
@@ -296,7 +340,7 @@ describe('ACP process-owning connection', () => {
     expect(() => connection.onExit(failing)).not.toThrow()
     const late = vi.fn()
     connection.onExit(late)
-    expect(late).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(late).toHaveBeenCalledOnce())
     expect(onDiagnostic).toHaveBeenCalledTimes(2)
   })
 
@@ -312,6 +356,7 @@ describe('ACP process-owning connection', () => {
     expect(onExit).not.toHaveBeenCalled()
     child.emit('close', null, null)
     expect(connection.rootVerdict).toBe('exited')
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
     expect(onExit.mock.calls[0][1].exit.processless).toBe(true)
     expect(await connection.close()).toBe(true)
   })

@@ -33,7 +33,7 @@ describe('withCodexHomeProcessLock', () => {
       return 2
     })
 
-    await Promise.resolve()
+    await vi.waitFor(() => expect(events).toEqual(['first:start']))
     expect(events).toEqual(['first:start'])
 
     firstGate.resolve()

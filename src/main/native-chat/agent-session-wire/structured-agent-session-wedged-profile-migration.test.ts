@@ -1,3 +1,4 @@
+import { mockRecordedOwnerProcess } from './structured-agent-session-owner-process.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Real wedged record shapes must become acquirable while retaining conversation and provider history.
 // Migration releases the lease; only operations needing the agent may spawn it.
@@ -171,6 +172,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host?.flushAllStreamedEvents()
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -438,6 +440,7 @@ describe('already-wedged profiles become usable on load', () => {
         wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
       )
       await seedRunningTurn()
+      mockRecordedOwnerProcess(DEAD_OWNER)
       let ownerAlive = ownerOutlivedRestart
       const stopOwnerProcess = vi.fn(() => {
         ownerAlive = false
@@ -480,6 +483,7 @@ describe('already-wedged profiles become usable on load', () => {
     await seedStore(
       wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
     )
+    mockRecordedOwnerProcess(DEAD_OWNER)
     const stopOwnerProcess = vi.fn()
     openHost({
       probeOwner: async () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] }),

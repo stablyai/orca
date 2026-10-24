@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import * as host from '@orca/process-host'
+import { writerVerdict } from './provider-process-inventory'
+import { ProviderCleanupBudget } from './provider-process-exit-deadline'
+import { hasUnambiguousStartTime } from '../pty-descendant-termination'
+import { describe, expect, it, vi } from 'vitest'
 import { parseLinuxProcStat, readPosixProcessRow } from './provider-process-row-read'
 
 describe('parseLinuxProcStat', () => {
@@ -9,7 +13,8 @@ describe('parseLinuxProcStat', () => {
       ppid: 41,
       pgid: 4242,
       startedAt: 'clock-tick:987654',
-      startResolution: 'clock-tick'
+      startResolution: 'clock-tick',
+      zombie: false
     })
   })
 
@@ -29,4 +34,33 @@ describe.runIf(process.platform !== 'win32')('readPosixProcessRow', () => {
   it('reports a pid with no process as absent, not unverifiable', async () => {
     await expect(readPosixProcessRow(2 ** 22 + 12_345)).resolves.toBeNull()
   })
+})
+
+it('uses zoned Darwin identity, rejects birth seconds and retains old unzoned writers', async () => {
+  const start = 'Tue Oct 20 12:00:00 2026',
+    iso = '2026-10-20T12:00:00.000Z'
+  const ps = vi.spyOn(host, 'runProcess').mockResolvedValue({
+    code: 0,
+    signal: null,
+    stdout: `4242 1 4242 ${start} S`,
+    stderr: '',
+    timedOut: false
+  })
+  try {
+    expect(await readPosixProcessRow(4242, 'darwin')).toMatchObject({ startedAt: iso })
+    expect(ps).toHaveBeenCalledWith(
+      expect.objectContaining({ env: expect.objectContaining({ TZ: 'UTC', LC_ALL: 'C' }) })
+    )
+    expect(hasUnambiguousStartTime(iso, Date.parse(iso))).toBe(false)
+    if (process.platform === 'darwin') {
+      expect(
+        await writerVerdict(
+          [{ pid: 4242, pgid: 4242, startedAt: start }],
+          new ProviderCleanupBudget()
+        )
+      ).toBe('unknown')
+    }
+  } finally {
+    ps.mockRestore()
+  }
 })

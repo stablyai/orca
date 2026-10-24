@@ -31,21 +31,8 @@ function posixSnapshot(input: {
   }
 }
 
-describe('Claude root kill fallback', () => {
-  it('kills the root when the first capture landed in the fork second', async () => {
-    // An ambiguous capture second must not block termination through Node's root handle.
-    const child = mockChild()
-    const tree = createClaudeChildTreeReaper(child, {
-      platform: 'linux',
-      exited: () => false,
-      captureDescendants: vi.fn(async () => posixSnapshot({ capturedAtMs: ROOT_FORK_MS + 300 }))
-    })
-
-    await expect(tree.reap()).resolves.toBe('exited')
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('kills the root after a recycled descendant pid voided the snapshot', async () => {
+describe('Claude descendant proof without independent root ownership', () => {
+  it('keeps recycled descendant evidence unverifiable without signalling its root', async () => {
     const child = mockChild()
     const captureDescendants = vi
       .fn()
@@ -72,11 +59,12 @@ describe('Claude root kill fallback', () => {
 
     await tree.capture()
     await tree.refresh?.()
+    // The discarded evidence grants no independent root authority.
     await expect(tree.reap()).resolves.toBe('unverifiable')
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
-  it('keeps an observed live descendant through the root kill', async () => {
+  it('keeps an observed live descendant independent of root termination', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
@@ -92,10 +80,10 @@ describe('Claude root kill fallback', () => {
 
     await expect(tree.reap()).resolves.toBe('live')
     expect(tree.treeVerdict).toBe('live')
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
-  it('kills the root when no POSIX snapshot could be read', async () => {
+  it('keeps an unreadable POSIX snapshot unverifiable without signalling its root', async () => {
     const child = mockChild()
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
@@ -105,7 +93,7 @@ describe('Claude root kill fallback', () => {
     })
 
     await expect(tree.reap()).resolves.toBe('unverifiable')
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.kill).not.toHaveBeenCalled()
   })
 
   it('never signals a root the reaper already saw exit', async () => {

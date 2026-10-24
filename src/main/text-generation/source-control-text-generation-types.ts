@@ -1,3 +1,4 @@
+import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
 import type { AgentSessionUnavailable } from '../../shared/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
@@ -93,8 +94,8 @@ export type LocalProcessExecution<T> = {
 }
 
 export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess> & {
-  /** True when the child is the POSIX provider supervisor: SIGTERM stops the agent's group, then itself. */
-  readonly supervised?: boolean
+  /** Retained lifecycle for host-owned POSIX launches. */
+  readonly managed?: ManagedProviderProcess
 }
 
 export type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
@@ -108,6 +109,7 @@ export type SourceControlAgentSpawnInput = {
   wslDistro?: string
   // WSL applies these in the guest; native callers already merge them into env.
   commandEnv?: Record<string, string>
+  codexHomeLockKey?: string
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
 }

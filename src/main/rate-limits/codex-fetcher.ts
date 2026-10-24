@@ -1,3 +1,4 @@
+import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
@@ -8,6 +9,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 // mocks '../codex-cli/command' does not have to restate this pure helper.
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
+  CodexHomeProcessError,
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
@@ -83,7 +85,10 @@ function requestCodexBackend(url: string, init: RequestInit): Promise<Response> 
   return getMainHttpClient().fetch(url, { ...init, credentials: 'omit' })
 }
 
-async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
+async function fetchViaRpc(
+  homeKey: string,
+  options?: CodexRateLimitFetchOptions
+): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
@@ -94,7 +99,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
   // Why a worker thread (#27362): a cold codex.exe can block process creation for seconds.
-  const child = spawnProcessOnWorkerThread({
+  const spec = {
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
     // Why: WSL holds wsl.exe's cwd busy ~60s, so never hand it a folder inside the profile (#29845).
@@ -105,14 +110,32 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
       ...(wslCodex ? {} : buildConfiguredProxyEnv(options?.networkProxySettings)),
       ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
     })
-  })
+  }
+  const managed =
+    process.platform !== 'win32'
+      ? spawnManagedProviderProcess(
+          { command: spec.program, args: spec.args, cwd: spec.cwd },
+          {
+            inheritedEnv: spec.env,
+            site: 'codex-quota-probe',
+            resource: { kind: 'codex-home', key: homeKey }
+          }
+        )
+      : null
+  const child = managed?.child ?? spawnProcessOnWorkerThread(spec)
   return readCodexRateLimitsViaRpc({
     child,
     codexCommand,
     initTimeoutMs: wslCodex ? WSL_RPC_INIT_TIMEOUT_MS : RPC_INIT_TIMEOUT_MS,
     rpcTimeoutMs: wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS,
     fetchOptions: options,
-    terminate: () => terminateCodexProbeChild(child)
+    terminate: async () => {
+      if (managed) {
+        await managed.close()
+        return
+      }
+      await terminateCodexProbeChild(child)
+    }
   })
 }
 
@@ -200,10 +223,8 @@ export async function fetchCodexRateLimits(
 
   let rpcFailure: ProviderRateLimits
   try {
-    const rpcResult = await withCodexHomeProcessLock(
-      resolveCodexHomeProcessLockKey(options?.codexHomePath),
-      () => fetchViaRpc(options)
-    )
+    const homeKey = resolveCodexHomeProcessLockKey(options?.codexHomePath)
+    const rpcResult = await withCodexHomeProcessLock(homeKey, () => fetchViaRpc(homeKey, options))
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
@@ -215,11 +236,14 @@ export async function fetchCodexRateLimits(
       return rpcResult
     }
     rpcFailure = rpcResult
-  } catch {
+  } catch (error) {
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
-    rpcFailure = codexUnavailable('RPC failed', 'error')
+    rpcFailure = codexUnavailable(
+      error instanceof CodexHomeProcessError ? error.message : 'RPC failed',
+      'error'
+    )
   }
 
   if (isWslHome) {

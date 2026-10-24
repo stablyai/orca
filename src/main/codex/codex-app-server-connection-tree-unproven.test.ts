@@ -1,7 +1,7 @@
-import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { spawnProcess } from '@orca/process-host'
+import { registerScriptedProviderChild } from '../provider-process/mock-provider-process-group.test-support'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
@@ -28,18 +28,14 @@ vi.mock('../claude/claude-agent-sdk-exit-proof', () => ({
   })
 }))
 
+const hostPlatform = process.platform
 afterEach(() => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
   vi.useRealTimers()
 })
 
 function stubChild() {
-  const child = Object.assign(new EventEmitter(), {
-    pid: 9_999_999,
-    stdin: new PassThrough(),
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-    kill: vi.fn(() => true)
-  })
+  const child = registerScriptedProviderChild(createFakePipedChild(9_999_999))
   child.stdin.once('data', () => {
     child.stdout.write(`${JSON.stringify({ id: 1, result: {} })}\n`)
   })
@@ -103,6 +99,7 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     ['live', true],
     ['exited', false]
   ] as const)('teardown observing %s reads unproven=%s', async (verdict, unproven) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.useFakeTimers()
     teardown.verdict = verdict
     const { child, spawnImpl } = stubChild()
@@ -121,6 +118,7 @@ describe('Codex process-tree diagnostic after a forced close', () => {
   })
 
   it('reports a root exit that arrives after an unproven close', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.useFakeTimers()
     teardown.verdict = 'unverifiable'
     teardown.rootExits = () => {}
@@ -136,6 +134,8 @@ describe('Codex process-tree diagnostic after a forced close', () => {
     await expect(closing).resolves.toBe(false)
     expect(onExit).not.toHaveBeenCalled()
     child.emit('exit', 0, null)
+    expect(onExit).not.toHaveBeenCalled()
+    child.emit('close', 0, null)
     await vi.advanceTimersByTimeAsync(0)
     expect(onExit).toHaveBeenCalledTimes(1)
     expect(onExit).toHaveBeenCalledWith(expect.any(Error), { expected: true })

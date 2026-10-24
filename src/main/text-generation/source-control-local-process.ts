@@ -1,7 +1,6 @@
+import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { WindowsCmdLineBreakError } from '@orca/process-host'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
-import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import {
   finalizeFromAgentOutput,
@@ -33,8 +32,8 @@ export async function killSourceControlAgentProcess(
   if (!pid) {
     return
   }
-  if (child.supervised) {
-    await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
+  if (child.managed) {
+    await child.managed.close()
     return
   }
   if (process.platform === 'win32') {
@@ -120,6 +119,15 @@ export function runLocalSourceControlPlan(input: {
         env: input.env,
         commandEnv: plan.env,
         wslDistro: input.wslDistro,
+        ...(holdHomeLockUntilExit
+          ? {
+              codexHomeLockKey: resolveCodexHomeProcessLockKeyForSpawnEnv(
+                input.env,
+                input.wslDistro,
+                plan.env
+              )
+            }
+          : {}),
         stdinMode: 'pipe',
         useCwdForNative: true
       })
@@ -197,14 +205,14 @@ export function runLocalSourceControlPlan(input: {
       }
       stdout += chunk.toString('utf-8')
     }
-    const onStderrData = (chunk: Buffer): void => {
-      stderrBytes += chunk.byteLength
+    const onStderrData = (chunk: Buffer | string): void => {
+      stderrBytes += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.byteLength
       if (stderrBytes > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
         outputLimitExceeded = true
         startTermination()
         return
       }
-      stderr += chunk.toString('utf-8')
+      stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf-8')
     }
     const onError = (error: Error): void => {
       if (!child.pid) {
@@ -225,6 +233,9 @@ export function runLocalSourceControlPlan(input: {
     }
     const onClose = (code: number | null): void => {
       markClosedAfterTermination()
+      if (settled) {
+        return
+      }
       if (canceledByUser) {
         finalize({
           success: false,
@@ -238,17 +249,6 @@ export function runLocalSourceControlPlan(input: {
           success: false,
           error: `${plan.label} CLI command produced too much output. Check the agent CLI configuration and try again.`
         })
-        return
-      }
-      // A supervised spawn failure reads as the same failure a direct spawn reports.
-      const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
-      if (spawnFailure?.thrown) {
-        console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
-        finalize({ success: false, error: couldNotStart })
-        return
-      }
-      if (spawnFailure) {
-        onError(spawnFailure.error)
         return
       }
       finalize(
@@ -266,11 +266,19 @@ export function runLocalSourceControlPlan(input: {
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
     if (holdHomeLockUntilExit) {
-      child.once('exit', markClosedAfterTermination)
-      child.once('close', markClosedAfterTermination)
+      if (child.managed) {
+        child.managed.onSettled(markClosedAfterTermination)
+      } else {
+        child.once('exit', markClosedAfterTermination)
+        child.once('close', markClosedAfterTermination)
+      }
     }
     child.on('error', onError)
-    child.on('close', onClose)
+    if (child.managed) {
+      child.managed.onSettled((exit) => onClose(exit.code))
+    } else {
+      child.on('close', onClose)
+    }
     detachChildListeners = () => {
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)

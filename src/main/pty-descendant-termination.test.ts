@@ -204,7 +204,7 @@ describe('captureDescendantSnapshot', () => {
     const result = await captureDescendantSnapshot(10, { platform: 'darwin' })
 
     expect(result?.capturedAtMs).toBe(CAPTURED_AT_MS + 900)
-    expect(result?.descendants).toEqual([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')])
+    expect(result?.descendants).toEqual([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026 UTC')])
   })
 })
 

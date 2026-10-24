@@ -79,7 +79,7 @@ async function connectCodexAppServer(
       terminalError = buildExitError(cause)
       dispatcher.failPending(terminalError)
     }
-    if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
+    if (managed.settled && closesInFlight === 0 && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
     }
@@ -88,7 +88,7 @@ async function connectCodexAppServer(
   child.on('error', (error) => {
     handleUnexpectedEnd(error)
   })
-  managed.onExit(() => handleUnexpectedEnd())
+  managed.onSettled(() => handleUnexpectedEnd())
   child.stdin.on('error', (error) => {
     // Broken pipes invalidate the transport; during close, fail calls without claiming root exit.
     if (closing) {

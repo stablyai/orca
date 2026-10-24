@@ -11,6 +11,7 @@ const MAX_RECONCILIATION_PASSES = 8
 
 export function createRestartReconciler(deps: {
   store: AgentSessionRecordStore
+  beforeProbe?: (record: AgentSessionRecord) => Promise<void>
   probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeMany?: (
     records: readonly AgentSessionRecord[]
@@ -105,6 +106,7 @@ function failureKey(failure: unknown): string {
 async function reconcileCurrentLease(
   deps: {
     store: AgentSessionRecordStore
+    beforeProbe?: (record: AgentSessionRecord) => Promise<void>
     probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
     probeMany?: (
       records: readonly AgentSessionRecord[]
@@ -114,6 +116,17 @@ async function reconcileCurrentLease(
   sessionId?: string
 ): Promise<void> {
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass += 1) {
+    const targets =
+      sessionId === undefined ? deps.store.listRecords() : [deps.store.getRecord(sessionId)]
+    for (let offset = 0; offset < targets.length; offset += 4) {
+      await Promise.all(
+        targets.slice(offset, offset + 4).map(async (record) => {
+          if (record?.lease.unreconciled) {
+            await deps.beforeProbe?.(record)
+          }
+        })
+      )
+    }
     await deps.store.reconcileOnRestart({
       ...(sessionId === undefined ? {} : { sessionId }),
       probe: deps.probe,
