@@ -172,6 +172,50 @@ describe('orca cli browser page targeting', () => {
     )
   })
 
+  it('describes tab creation focus without contacting the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'create', '--help'], '/tmp/not-an-orca-worktree')
+
+    expect(String(logSpy.mock.calls[0]?.[0])).toContain(
+      '--focus                Select the new browser tab (default: background)'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('activates a created tab only when --focus is requested', async () => {
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-3' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'tab',
+        'create',
+        '--url',
+        'https://example.com',
+        '--profile',
+        'work',
+        '--worktree',
+        'id:ssh-project::/srv/repo',
+        '--focus',
+        '--json'
+      ],
+      '/tmp/not-an-orca-worktree'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.tabCreate',
+      {
+        url: 'https://example.com',
+        worktree: 'id:ssh-project::/srv/repo',
+        profileId: 'work',
+        activate: true
+      },
+      { timeoutMs: 60_000 }
+    )
+  })
+
   it('opens browser-launch URLs on the client hosting the current worktree', async () => {
     queueFixtures(
       callMock,
