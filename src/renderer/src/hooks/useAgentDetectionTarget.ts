@@ -18,8 +18,11 @@ function getRuntimeAgentDetectionTargetKey(environmentId: string, worktreeId: st
 }
 
 function getLocalAgentDetectionTargetKey(worktreeId: string): string {
-  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-    ? `${AGENT_DETECTION_LOCAL_TARGET_KEY}:${encodeURIComponent(worktreeId)}:host`
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return `${AGENT_DETECTION_LOCAL_TARGET_KEY}:${encodeURIComponent(worktreeId)}:host`
+  }
+  return parseWorkspaceKey(worktreeId)?.type === 'folder'
+    ? `${AGENT_DETECTION_LOCAL_TARGET_KEY}:${encodeURIComponent(worktreeId)}`
     : AGENT_DETECTION_LOCAL_TARGET_KEY
 }
 
@@ -84,13 +87,19 @@ export function parseAgentDetectionTargetKey(
     const [encodedWorktreeId, encodedContextKey] = key
       .slice(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`.length)
       .split(':')
-    if (!encodedWorktreeId || !encodedContextKey) {
+    if (!encodedWorktreeId) {
       return { kind: 'local' }
     }
     try {
+      const worktreeId = decodeURIComponent(encodedWorktreeId)
+      if (!encodedContextKey) {
+        return encodedContextKey === undefined && parseWorkspaceKey(worktreeId)?.type === 'folder'
+          ? { kind: 'local', worktreeId }
+          : { kind: 'local' }
+      }
       return {
         kind: 'local',
-        worktreeId: decodeURIComponent(encodedWorktreeId),
+        worktreeId,
         contextKey: decodeURIComponent(encodedContextKey)
       }
     } catch {

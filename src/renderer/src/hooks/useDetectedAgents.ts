@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import {
+  getLocalAgentPreflightContext,
+  localPreflightContextKey
+} from '@/lib/local-preflight-context'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -76,7 +81,21 @@ export function useDetectedAgents(
     targetKind === 'runtime' && targetId
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
-  const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
+  const explicitLocalContextKey = target?.kind === 'local' ? target.contextKey : undefined
+  const localContextKey = useAppStore((s) => {
+    if (targetKind !== 'local') {
+      return undefined
+    }
+    if (explicitLocalContextKey) {
+      return explicitLocalContextKey
+    }
+    // Why: a retained folder picker must observe its own distro's inventory, not the last local probe.
+    return localWorktreeId && parseWorkspaceKey(localWorktreeId)?.type === 'folder'
+      ? localPreflightContextKey(
+          getLocalAgentPreflightContext(s, undefined, undefined, localWorktreeId)
+        )
+      : undefined
+  })
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`

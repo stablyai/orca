@@ -15,6 +15,7 @@ import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import { getIndexedRepoMap } from '@/store/worktree-repo-index'
 import { defaultScopeHost } from './default-creation-host'
 import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
+import { getLocalFolderAgentPreflightContext } from './local-folder-agent-preflight-context'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
@@ -254,10 +255,10 @@ export function getLocalAgentPreflightContext(
   }
 
   const wslDistro = getLocalPreflightWslDistro(state, worktreeId)
-  if (wslDistro) {
-    return getWslPreflightContext(wslDistro)
-  }
-  return undefined
+  return (
+    getLocalFolderAgentPreflightContext(state, appPlatform, wslContext, worktreeId) ??
+    (wslDistro ? getWslPreflightContext(wslDistro) : undefined)
+  )
 }
 
 function isActiveWorkspaceOnAnotherHost(state: AppState): boolean {
