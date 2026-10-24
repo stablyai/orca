@@ -71,6 +71,15 @@ describe('preview', () => {
     expect(markup).not.toMatch(/disabled=""[^>]*>Move 1 project/)
   })
 
+  it('notes browser sign-ins the host cannot keep, without blocking the move', () => {
+    expect(preview()).not.toContain('Browser sign-ins')
+    const markup = preview({
+      preview: { ...READY, browserLoginsNotCarried: 'no-stable-partition' }
+    })
+    expect(markup).toContain('Browser sign-ins won’t carry over to this host.')
+    expect(markup).not.toMatch(/disabled=""[^>]*>Move 1 project/)
+  })
+
   it('cannot start while checking, with nothing selected, or with blockers', () => {
     expect(preview({ preview: null })).toContain('Checking the selected projects')
     expect(preview({ preview: null })).toMatch(/disabled=""[^>]*>Move 1 project/)

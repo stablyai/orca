@@ -10,6 +10,7 @@ import type {
   WslMoveRowRef
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import {
+  wslMoveBrowserLoginsNotCarried,
   wslMoveChatsStayCopy,
   wslMoveRefusalMessage,
   wslMoveScopeRefusalReason
@@ -58,6 +59,11 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
           )}
         </p>
         <p data-testid="wsl-move-chats-stay">{wslMoveChatsStayCopy()}</p>
+        {preview?.outcome === 'ready' && preview.browserLoginsNotCarried ? (
+          <p data-testid="wsl-move-browser-logins">
+            {wslMoveBrowserLoginsNotCarried(preview.browserLoginsNotCarried)}
+          </p>
+        ) : null}
         {rows.length > 0 ? (
           <div className="space-y-1.5">
             <div className="text-xs font-medium text-muted-foreground">

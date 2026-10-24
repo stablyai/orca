@@ -24,6 +24,9 @@ import { HistoryReader } from '../daemon/history-reader'
 import { orcadMigrationDestinationFor } from '../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../persistence'
 import { exportWslMoveManifest } from '../persistence/moving-wsl-projects/wsl-move-manifest-export'
+import { ensureWslMoveDestinationBrowserLogins } from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../browser/browser-route-partition-binding-runtime'
+import { wslHostBrowserRouteStorage } from '../browser/wsl-host-browser-route-partition'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import type {
   WslMoveDriverDeps,
@@ -272,7 +275,12 @@ async function connectWslMoveHost(
     return null
   }
   await service.ensureForRuntimeCall(environmentId)
-  const environment = resolveEnvironment(userDataPath, environmentId)
+  const { environment, notCarried } = ensureWslMoveDestinationBrowserLogins({
+    resolveEnvironment: () => resolveEnvironment(userDataPath, environmentId),
+    resaveConnection: () => service.resaveConnection(environmentId),
+    orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
+    resolveHostStorage: wslHostBrowserRouteStorage
+  })
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId)
   if (!status.ok) {
     return null
@@ -285,6 +293,7 @@ async function connectWslMoveHost(
     name: environment.name,
     ...(distroGuid ? { distroGuid } : {}),
     capabilities: status.result.capabilities ?? [],
+    ...(notCarried ? { browserLoginsNotCarried: notCarried } : {}),
     catalog: orcadMigrationDestinationFor(environment),
     commitWithBlobs: (manifest, expectedBlobs) =>
       commitRemoteOrcadMigrationCatalog(pairingCode, manifest, { ...options, expectedBlobs }),

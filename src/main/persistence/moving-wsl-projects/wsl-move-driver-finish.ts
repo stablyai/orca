@@ -23,12 +23,16 @@ export async function finishWslMove(
   const phase = cutover?.phase ?? 'destination-committed'
   // Never silently off: the result names them, and the rewrite pass keeps retrying them.
   const automationsPending = cutover ? wslMoveAutomationsPending(cutover) : []
+  const loginCopy = cutover?.browserCookieCopy
   deps.progress({ distro, step: 'done', migrationId, phase })
   return {
     outcome: 'moved',
     migrationId,
     phase,
     reloadRequired: true,
-    ...(automationsPending.length > 0 ? { automationsPending } : {})
+    ...(automationsPending.length > 0 ? { automationsPending } : {}),
+    ...(loginCopy?.outcome === 'fresh-partition'
+      ? { browserLoginsNotCopiedReason: loginCopy.reason }
+      : {})
   }
 }

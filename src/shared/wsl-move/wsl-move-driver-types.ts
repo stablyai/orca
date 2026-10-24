@@ -3,6 +3,7 @@
  * the move; the renderer previews it, starts it, may cancel it before the switch, and follows its
  * progress. Every call refuses with `wsl_move_unavailable` while the internal WSL hosts gate is off.
  */
+import type { WslMoveBrowserCookieFreshPartitionReason } from './wsl-move-browser-cookie-copy'
 import type { WslMoveCutoverPhase } from './wsl-move-cutover'
 
 /** Which projects of a distro to move; omitted ids mean every project in the distro. */
@@ -78,6 +79,8 @@ export type WslMovePreview =
       refused: { kind: 'repo' | 'folder-workspace'; id: string; reason: string }[]
       /** Empty when the move can start now. */
       blockers: WslMoveBlocker[]
+      /** Set when the host's browser would start signed out; listed, never a blocker (R44). */
+      browserLoginsNotCarried?: WslMoveBrowserCookieFreshPartitionReason
     }
   | WslMoveRefusal
 

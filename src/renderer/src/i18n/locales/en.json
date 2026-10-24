@@ -21131,7 +21131,9 @@
       "moveMany": "Move {{n}} projects",
       "heldByHost": "Already on the {{distro}} host.",
       "changed": "Moved earlier, then changed here by an older version of Orca. It is not moved again.",
-      "chatsStay": "Existing chats stay on this computer. New chats in this project start on the WSL host."
+      "chatsStay": "Existing chats stay on this computer. New chats in this project start on the WSL host.",
+      "browserLoginsConflict": "Browser sign-ins won’t carry over, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs after the move.",
+      "browserLoginsNotCarried": "Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move."
     },
     "cancel": "Cancel",
     "progress": {

@@ -19,7 +19,10 @@ import { deriveBrowserRoutePartitionStorageScope } from '../../browser/browser-r
 import { wslHostBrowserRouteStorage } from '../../browser/wsl-host-browser-route-partition'
 import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import type { WslMoveBrowserCookieCopyDependencies } from './wsl-move-browser-cookie-copy'
-import { previewWslMoveBrowserCookieCopy } from './wsl-move-browser-cookie-copy'
+import {
+  ensureWslMoveDestinationBrowserLogins,
+  previewWslMoveBrowserCookieCopy
+} from './wsl-move-browser-cookie-copy'
 import { registerWslMoveBrowserCookieStore } from './wsl-move-browser-cookie-store'
 import {
   runGatedWslMoveDesktopRewritePass,
@@ -397,6 +400,42 @@ describe('WSL move browser-cookies store', () => {
     expect(previewWslMoveBrowserCookieCopy(resolve, 'orca-profile-a', undefined)).toEqual({
       kind: 'fresh-partition',
       reason: 'destination-environment-missing'
+    })
+  })
+
+  describe('before a move commits', () => {
+    function ensure(environments: KnownRuntimeEnvironment[], orcaProfileId: string | null = 'p') {
+      const resaveConnection = vi.fn()
+      const result = ensureWslMoveDestinationBrowserLogins({
+        resolveEnvironment: () => environments[resaveConnection.mock.calls.length] ?? wslHost(),
+        resaveConnection,
+        orcaProfileId: () => orcaProfileId,
+        resolveHostStorage: wslHostBrowserRouteStorage
+      })
+      return { ...result, resaveConnection }
+    }
+
+    it('leaves a linked host alone, and its logins carry', () => {
+      const { notCarried, resaveConnection } = ensure([wslHost()])
+      expect(notCarried).toBeUndefined()
+      expect(resaveConnection).not.toHaveBeenCalled()
+    })
+
+    it('restores a lost deployment link from the live connection, so logins carry', () => {
+      const { environment, notCarried, resaveConnection } = ensure([wslHost('unlinked'), wslHost()])
+      expect(resaveConnection).toHaveBeenCalledOnce()
+      expect(environment.orcadDeployment).toEqual(DEPLOYMENTS.wsl)
+      expect(notCarried).toBeUndefined()
+    })
+
+    it('names why logins stay behind when the link cannot be restored, without blocking', () => {
+      const { notCarried, resaveConnection } = ensure([wslHost('unlinked'), wslHost('unlinked')])
+      expect(resaveConnection).toHaveBeenCalledOnce()
+      expect(notCarried).toBe('no-stable-partition')
+    })
+
+    it('says nothing while no Orca profile is active to resolve the partition', () => {
+      expect(ensure([wslHost('unlinked'), wslHost('unlinked')], null).notCarried).toBeUndefined()
     })
   })
 })

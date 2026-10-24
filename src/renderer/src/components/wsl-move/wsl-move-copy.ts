@@ -14,6 +14,19 @@ export function wslMoveChatsStayCopy(): string {
   )
 }
 
+/** The preview's note when the host's browser would start signed out; the move still goes ahead. */
+export function wslMoveBrowserLoginsNotCarried(reason: string): string {
+  return reason === 'destination-partition-conflict'
+    ? translate(
+        'wslMove.preview.browserLoginsConflict',
+        'Browser sign-ins won’t carry over, because the host’s browser profile is already in use. Sign in again in the host’s browser tabs after the move.'
+      )
+    : translate(
+        'wslMove.preview.browserLoginsNotCarried',
+        'Browser sign-ins won’t carry over to this host. Sign in again in its browser tabs after the move.'
+      )
+}
+
 export function wslMoveRefusalMessage(
   refusal: WslMoveRefusal,
   distro: string,

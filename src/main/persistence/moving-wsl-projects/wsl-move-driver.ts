@@ -78,7 +78,7 @@ export async function previewWslMove(
   if (unreadable.length > 0) {
     return refusal('wsl_move_export_incomplete', { reasons: unreadable })
   }
-  const { plan } = prepared
+  const { plan, host } = prepared
   return {
     outcome: 'ready',
     distro: plan.distro,
@@ -87,7 +87,10 @@ export async function previewWslMove(
     changed: plan.changed,
     heldByHost: plan.heldByHost,
     refused: plan.refused,
-    blockers: prepared.blockers
+    blockers: prepared.blockers,
+    ...(host.browserLoginsNotCarried
+      ? { browserLoginsNotCarried: host.browserLoginsNotCarried }
+      : {})
   }
 }
 

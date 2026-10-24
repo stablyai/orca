@@ -2,6 +2,7 @@
  * What the WSL move driver needs from the rest of the app, as ports, so the whole run is testable
  * with fakes and the production wiring stays in one place (wsl-move-driver-wiring).
  */
+import type { WslMoveBrowserCookieFreshPartitionReason } from '../../../shared/wsl-move/wsl-move-browser-cookie-copy'
 import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type {
   OrcadMigrationCatalogState,
@@ -44,6 +45,8 @@ export type WslMoveHost = {
   /** The distro's registry id, which binds the move to this exact distro; absent when unknown. */
   distroGuid?: string
   capabilities: readonly string[]
+  /** Read after the connect re-saved the deployment link; absent when no Orca profile is active. */
+  browserLoginsNotCarried?: WslMoveBrowserCookieFreshPartitionReason
   catalog: OrcadMigrationDestinationCatalog
   /** Commit naming every blob sent, so the host refuses a commit missing one. */
   commitWithBlobs: (

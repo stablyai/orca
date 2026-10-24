@@ -243,6 +243,19 @@ export class WslHostService {
     await connector.connect(record.distro)
   }
 
+  /** Re-saves the live connection's pairing and ports, which the deployment link overlays onto. */
+  resaveConnection(environmentId: string): void {
+    const record = this.recordForEnvironment(environmentId)
+    const connection = record ? this.connector?.get(record.distro) : null
+    if (
+      record &&
+      connection &&
+      persistWslHostConnection(this.deps.userDataPath(), record, connection)
+    ) {
+      this.deps.pairingChanged(environmentId)
+    }
+  }
+
   /** Whether anything may still be started for this distro (spawn guard). */
   isKnownDistro(distro: string): boolean {
     return this.adding.has(wslDistroHolderKey(distro)) || this.recordForDistro(distro) !== null

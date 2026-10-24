@@ -63,6 +63,33 @@ export function previewWslMoveBrowserCookieCopy(
 }
 
 /**
+ * Before a move commits (R44): a WSL host without its deployment link has no stable partition, so
+ * the live connection is re-saved once to restore the link. If logins still cannot carry, the
+ * preview says so; the move is never blocked for it.
+ */
+export function ensureWslMoveDestinationBrowserLogins(dependencies: {
+  resolveEnvironment: () => KnownRuntimeEnvironment
+  resaveConnection: () => void
+  orcaProfileId: () => string | null
+  resolveHostStorage: WslMoveBrowserCookieCopyDependencies['resolveHostStorage']
+}): {
+  environment: KnownRuntimeEnvironment
+  notCarried?: WslMoveBrowserCookieFreshPartitionReason
+} {
+  let environment = dependencies.resolveEnvironment()
+  if (!environment.orcadDeployment) {
+    dependencies.resaveConnection()
+    environment = dependencies.resolveEnvironment()
+  }
+  const orcaProfileId = dependencies.orcaProfileId()
+  if (!orcaProfileId) {
+    return { environment }
+  }
+  const preview = previewWslMoveBrowserCookieCopy(dependencies, orcaProfileId, environment)
+  return preview.kind === 'copy' ? { environment } : { environment, notCarried: preview.reason }
+}
+
+/**
  * The store's `run`. Idempotent: a crash after the copy but before the ledger entry re-runs it,
  * and the merge then finds every cookie already present. The source partition is only read.
  * Returns the partitions written, which the store's `flush` makes durable.

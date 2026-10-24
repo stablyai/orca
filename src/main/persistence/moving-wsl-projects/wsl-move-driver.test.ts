@@ -11,7 +11,7 @@ import {
 } from '../__fixtures__/wsl-mover/wsl-move-driver-world'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { listWslMoveCutovers } from './wsl-move-cutover-journal'
+import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
 import { WslMoveScopeChangedError, type WslMoveManifestExport } from './wsl-move-manifest-export'
 import {
   registerWslMoveDesktopRewriteStore,
@@ -397,6 +397,37 @@ describe('moveProjectsToWslHost', () => {
     await expect(previewWslMove(world.deps, request)).resolves.toMatchObject({
       code: 'wsl_move_host_unavailable'
     })
+  })
+
+  it('lists browser sign-ins the host cannot keep in the preview, and still moves', async () => {
+    const host = await world.deps.connectHost('Ubuntu')
+    world.deps.connectHost = async () =>
+      host && { ...host, browserLoginsNotCarried: 'no-stable-partition' }
+    expect(await previewWslMove(world.deps, request)).toMatchObject({
+      outcome: 'ready',
+      blockers: [],
+      browserLoginsNotCarried: 'no-stable-partition'
+    })
+    // The login copy records its outcome during the rewrite pass; the result names it.
+    const rewrite = world.deps.finishOnDesktop
+    world.deps.finishOnDesktop = async () => {
+      const [entry] = journal()
+      if (entry) {
+        writeWslMoveCutover(userDataPath, {
+          ...entry,
+          browserCookieCopy: { outcome: 'fresh-partition', reason: 'no-stable-partition' }
+        })
+      }
+      await rewrite()
+    }
+    expect(await moveProjectsToWslHost(world.deps, request)).toMatchObject({
+      outcome: 'moved',
+      browserLoginsNotCopiedReason: 'no-stable-partition'
+    })
+  })
+
+  it('says nothing about browser sign-ins when they carry', async () => {
+    expect(await previewWslMove(world.deps, request)).not.toHaveProperty('browserLoginsNotCarried')
   })
 
   it('is unreachable with the internal WSL hosts gate closed', async () => {
