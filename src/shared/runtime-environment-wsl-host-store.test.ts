@@ -103,6 +103,29 @@ describe('WSL host environment store', () => {
     })
   })
 
+  it('saves a moved bridge without reading its new record against the old pairing', () => {
+    // An id of its own: the conflict warning is logged once per message per process.
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:moved-bridge',
+      name: 'Moved (WSL)',
+      pairingCode: code(42000),
+      record,
+      now: 100
+    })
+    const warn = vi.mocked(console.warn)
+    warn.mockClear()
+
+    const refreshed = refreshWslHostPairing(userDataPath, 'wsl:moved-bridge', {
+      pairingCode: code(42001),
+      localPort: 42001,
+      remotePort: 6768
+    })
+
+    expect(refreshed.pairingChanged).toBe(true)
+    expect(refreshed.environment.orcadDeployment).toMatchObject({ kind: 'wsl', localPort: 42001 })
+    expect(warn.mock.calls.flat().join('\n')).not.toMatch(/conflicts with the server's pairing/)
+  })
+
   it('removes the environment and its record', () => {
     addWslHostEnvironment(userDataPath, {
       id: 'wsl:ubuntu',
