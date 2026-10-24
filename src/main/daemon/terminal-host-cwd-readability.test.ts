@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import { TerminalHost, type TerminalHostOptions } from './terminal-host'
+import { TerminalHost } from './terminal-host'
 
 const { opendirMock } = vi.hoisted(() => ({ opendirMock: vi.fn() }))
 // TCC directory enumeration can remain pending while a permission sheet is open.
@@ -12,6 +12,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
 
 const close = vi.fn(async () => {})
+const spawnSubprocess = vi.fn(() => createMockSubprocess())
 
 function dirReading(read: () => unknown): { read: () => unknown; close: () => Promise<void> } {
   return { read, close }
@@ -19,6 +20,33 @@ function dirReading(read: () => unknown): { read: () => unknown; close: () => Pr
 
 function failWith(code: string): never {
   throw Object.assign(new Error(code), { code })
+}
+
+function stallEnumeration(stage: 'open' | 'read' | 'close') {
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const directory = {
+    read: async () => {
+      if (stage === 'read') {
+        await pending
+      }
+      return null
+    },
+    close: vi.fn(async () => {
+      if (stage === 'close') {
+        await pending
+      }
+    })
+  }
+  opendirMock.mockImplementation(async () => {
+    if (stage === 'open') {
+      await pending
+    }
+    return directory
+  })
+  return { release, directory }
 }
 
 function createMockSubprocess(): SubprocessHandle {
@@ -49,26 +77,28 @@ describe('TerminalHost cwd readability verdict', () => {
 
   beforeEach(() => {
     close.mockReset()
+    spawnSubprocess.mockClear()
     opendirMock.mockReset().mockReturnValue(dirReading(() => ({ name: 'entry' })))
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    const spawnSubprocess: TerminalHostOptions['spawnSubprocess'] = () => createMockSubprocess()
     host = new TerminalHost({ spawnSubprocess })
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     await host.dispose()
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
     }
   })
 
-  const create = (sessionId: string, cwd?: string) =>
+  const create = (sessionId: string, cwd?: string, signal?: AbortSignal) =>
     host.createOrAttach({
       sessionId,
       cols: 80,
       rows: 24,
       ...(cwd ? { cwd } : {}),
+      ...(signal ? { cancelSignal: signal, isCanceled: () => signal.aborted } : {}),
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
 
@@ -121,5 +151,93 @@ describe('TerminalHost cwd readability verdict', () => {
     const attached = await create('attach', '/work/repo')
     expect(attached.isNew).toBe(false)
     expect(attached.cwdReadableByDaemon).toBeUndefined()
+  })
+
+  it.each(['open', 'read', 'close'] as const)(
+    'starts a shell when the diagnostic directory %s remains pending',
+    async (stage) => {
+      vi.useFakeTimers()
+      const { release, directory } = stallEnumeration(stage)
+      const creation = create(`slow-${stage}`, `/work/slow-${stage}`)
+      try {
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(host.listSessions()).toHaveLength(1)
+        await expect(creation).resolves.toMatchObject({ isNew: true })
+        expect((await creation).cwdReadableByDaemon).toBeUndefined()
+      } finally {
+        release()
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      expect(directory.close).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('reuses a pending directory probe across timeouts and probes again after it settles', async () => {
+    vi.useFakeTimers()
+    const { release } = stallEnumeration('open')
+    try {
+      const first = create('first-prompt', '/work/prompt')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(host.listSessions()).toHaveLength(1)
+      await first
+      const second = create('second-prompt', '/work/prompt')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(host.listSessions()).toHaveLength(2)
+      await second
+      expect(opendirMock).toHaveBeenCalledOnce()
+    } finally {
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect((await create('after-prompt', '/work/prompt')).cwdReadableByDaemon).toBe(true)
+    expect(opendirMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels a pending probe without spawning and releases the session id for a retry', async () => {
+    vi.useFakeTimers()
+    const { release, directory } = stallEnumeration('open')
+    const abort = new AbortController()
+    const creation = create('canceled-prompt', '/work/canceled-prompt', abort.signal)
+    let error: unknown
+    void creation.catch((rejection: unknown) => {
+      error = rejection
+    })
+    try {
+      abort.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+      expect(host.listSessions()).toEqual([])
+      expect(error).toMatchObject({ message: 'Attach canceled for session canceled-prompt' })
+      const retry = create('canceled-prompt', '/work/canceled-prompt')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(host.listSessions()).toHaveLength(1)
+      await expect(retry).resolves.toMatchObject({ isNew: true })
+      expect(opendirMock).toHaveBeenCalledOnce()
+    } finally {
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect(directory.close).toHaveBeenCalledOnce()
+  })
+
+  it('does not launch a shell when shutdown starts during a pending probe', async () => {
+    vi.useFakeTimers()
+    const { release } = stallEnumeration('open')
+    const creation = create('shutdown-prompt', '/work/shutdown-prompt')
+    let error: unknown
+    void creation.catch((rejection: unknown) => {
+      error = rejection
+    })
+    const disposal = host.dispose()
+    try {
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+      expect(error).toMatchObject({ message: 'Terminal host is shutting down' })
+      await disposal
+      expect(host.listSessions()).toEqual([])
+    } finally {
+      release()
+      await vi.advanceTimersByTimeAsync(0)
+    }
   })
 })
