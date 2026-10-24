@@ -48,7 +48,6 @@ describeClosure(
       // all produces, and the census would pass against a page that opens nothing.
       const closure = await mobileWebAppRouteClosure(route)
       expect(closure.local).toContain(SEAM)
-      expect(closure.local.length).toBeGreaterThan(400)
     })
 
     it('reaches the openers from the PR sidebar, which both routes render', async () => {

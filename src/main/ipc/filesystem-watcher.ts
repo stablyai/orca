@@ -5,8 +5,6 @@ import {
   restoreLocalWatcherAfterFailedRemoval
 } from './filesystem-watcher-local-removal'
 
-// ── Public API ───────────────────────────────────────────────────────
-
 /** The desktop binding for {@link WorktreeWatcherRemoval}. Installed during startup. */
 export const desktopWorktreeWatcherRemoval: WorktreeWatcherRemoval = {
   closeLocal: (worktreePath, deadline) =>

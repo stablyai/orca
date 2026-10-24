@@ -1,5 +1,5 @@
 import { requireStrictJiraSite } from './jira-read-failure'
-import type { JiraProjectStatusOrder, JiraTransition } from '../../shared/jira-types'
+import type { JiraProjectStatusOrder, JiraTransition } from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, JiraApiError, jiraRequest } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -65,8 +65,7 @@ export async function getProjectStatusOrder(
   projectKey: string,
   siteId?: string | null
 ): Promise<JiraProjectStatusOrder> {
-  // Why: an omitted site can resolve to the persisted "all" selection; board
-  // metadata is only truthful when exactly one Jira connection owns the project.
+  // Omitted siteId can resolve to all-sites; board metadata needs one owning connection.
   const entries = getClients(siteId)
   const entry = entries.length === 1 ? entries[0] : undefined
   if (!entry) {
@@ -74,8 +73,7 @@ export async function getProjectStatusOrder(
   }
   await acquire()
   try {
-    // Why: without an explicit board picker there is no truthful way to choose
-    // among multiple project boards, so ambiguous projects keep alphabetical order.
+    // Without a board picker, ambiguous projects keep alphabetical status order.
     const params = new URLSearchParams({ projectKeyOrId: projectKey, maxResults: '2' })
     const boardsResponse = await jiraRequest<JiraPagedResponse<JiraRecord>>(
       entry,
@@ -101,8 +99,7 @@ export async function getProjectStatusOrder(
       return { statusIdsByColumn: [] }
     }
 
-    // Why: issues already carry status names and IDs, so returning board IDs
-    // avoids a second metadata request and keeps duplicate names unambiguous.
+    // Use status IDs already on issues to avoid metadata fetches and ambiguous duplicate names.
     const seenStatusIds = new Set<string>()
     const statusIdsByColumn: string[][] = []
     const boardColumns: NonNullable<JiraProjectStatusOrder['columns']> = []

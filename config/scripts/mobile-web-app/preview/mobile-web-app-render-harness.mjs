@@ -691,7 +691,9 @@ export function installSchedulerRecorder() {
  * report leaks a browser does not have. The set is the live listeners, which is what a snapshot
  * before and after a mount can be compared on.
  */
-export function installListenerRecorder() {
+export function installListenerRecorder({ selector } = {}) {
+  const elements = new WeakMap()
+  let nextElement = 0
   const live = new Map()
   globalThis.__orcaListeners = {
     snapshot: () =>
@@ -702,7 +704,13 @@ export function installListenerRecorder() {
       )
   }
   const keyFor = (target, type, options) => {
-    const where = target === globalThis ? 'window' : target === document ? 'document' : null
+    let where = target === globalThis ? 'window' : target === document ? 'document' : null
+    if (where === null && selector && target instanceof Element && target.matches(selector)) {
+      if (!elements.has(target)) {
+        elements.set(target, ++nextElement)
+      }
+      where = `element ${elements.get(target)}`
+    }
     if (where === null) {
       return null
     }
@@ -785,4 +793,13 @@ export async function terminalStyleReach(page) {
     }
     return { rules: sheet.cssRules.length, outside }
   })
+}
+
+export async function waitForPageFrames(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      )
+  )
 }

@@ -15,8 +15,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtE
 
 const RESUMED = { key: 'session_id' as const, id: 'resumed-session' }
 
-// #10923: Codex runs SessionStart only at its first turn, so a resumed pane is silent until the
-// user types; the host that launched the resume seeds the identity every reader joins on.
+// Codex may stay silent until the resumed pane's first turn; seed identity at launch for every reader.
 describe('a resume launch seeds the pane identity', () => {
   const servers: AgentHookServer[] = []
   let userDataPath: string
@@ -139,7 +138,6 @@ describe('a resume launch seeds the pane identity', () => {
       providerSession: RESUMED,
       launchedAt: Date.now()
     })
-    // Synchronous flush via stop() captures the trailing-debounced write.
     server.stop()
     servers.length = 0
     const restarted = await startServer()

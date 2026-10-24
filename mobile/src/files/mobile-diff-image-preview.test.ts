@@ -9,7 +9,7 @@ describe('mobileDiffImageDataUri', () => {
     expect(
       mobileDiffImageDataUri({
         kind: 'binary',
-        originalContent: PNG_BASE64,
+        originalContent: 'b2xk',
         modifiedContent: PNG_BASE64,
         isImage: true,
         mimeType: 'image/png'

@@ -103,7 +103,6 @@ vi.mock('./browser-webauthn-access', () => ({
   installBrowserWebAuthnAccessHandlers: mocks.installBrowserWebAuthnAccessHandlers
 }))
 
-/** The parts of a tab the permission handlers read. */
 type FakeTab = {
   id: number
   getURL: () => string
@@ -119,9 +118,7 @@ type PartitionPolicyInstaller = (
   }
 ) => void
 
-// Why imported per test rather than at the top: the installer remembers which partitions it has
-// already configured in module state, so a shared import would make the second test's install a
-// no-op and leave it reading the first test's listener.
+// Reset module state per test so partition-install memoization cannot reuse earlier listeners.
 async function loadInstaller(): Promise<PartitionPolicyInstaller> {
   const module = await import('./browser-session-partition-policies')
   return module.installBrowserSessionPartitionPolicies
@@ -137,7 +134,6 @@ function profileFor(partition: string): BrowserSessionProfile {
   }
 }
 
-/** Fires the partition's real `will-download` listener and reports what it decided. */
 function fireWillDownload(partition: string): { cancelled: boolean } {
   const sess = sessionsByPartition.get(partition)
   if (!sess || sess.listeners.length !== 1) {
@@ -155,8 +151,6 @@ beforeEach(() => {
 })
 
 describe('partition download policy', () => {
-  // The presence half: without it, a deny assertion passes for a partition that installed no
-  // listener at all, and would keep passing if the whole download path were removed.
   it('routes a download on a partition that did not ask for the deny', async () => {
     const install = await loadInstaller()
     install(profileFor('persist:browsing-1'))
@@ -175,9 +169,6 @@ describe('partition download policy', () => {
     expect(mocks.handleGuestWillDownload).not.toHaveBeenCalled()
   })
 
-  // Why in the same run as the routing test above: a refusal the reader cannot see is a pressed
-  // button that does nothing, and a notice on the routing partition would announce a download that
-  // is about to arrive normally.
   it('tells the reader about the refusal, and only on the partition that refused', async () => {
     const install = await loadInstaller()
     install(profileFor('orca-doc-preview'), { downloads: 'deny' })
@@ -192,8 +183,6 @@ describe('partition download policy', () => {
     )
   })
 
-  // Why both partitions in one run: the listener is module state shared across sessions, so a deny
-  // installed for one partition must not follow the next partition that installs after it.
   it('keeps each partition on its own decision', async () => {
     const install = await loadInstaller()
     install(profileFor('orca-doc-preview'), { downloads: 'deny' })
@@ -221,7 +210,6 @@ describe('partition permission policy', () => {
     const install = await loadInstaller()
     const store = await import('./browser-site-permission-store')
     store.configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
-    // The user allowed the site, so only the SSH rule can refuse.
     store.setBrowserSitePermissionDecisions(
       'persist:browsing-2',
       'https://a.test',
@@ -293,8 +281,6 @@ describe('partition permission policy', () => {
       requestingOrigin: string,
       details: Partial<Electron.PermissionCheckHandlerHandlerDetails>
     ) => boolean
-    // Tab a.test holds a srcdoc frame of its own, a cross-origin b.test frame, and a blank frame
-    // that b.test created, which inherits b.test's origin.
     const tab = {
       id: 12,
       getURL: () => 'https://a.test/',
@@ -312,7 +298,7 @@ describe('partition permission policy', () => {
         requestHandler(tab, 'notifications', resolve, { requestingUrl, isMainFrame: false })
       )
 
-    // Electron checks with the real origin, then asks again before it shows the notification.
+    // Permission checks carry inherited origins; requests may carry opaque frame URLs.
     expect(
       checkHandler(tab, 'notifications', 'https://a.test', {
         requestingUrl: 'about:srcdoc',
@@ -320,10 +306,9 @@ describe('partition permission policy', () => {
       })
     ).toBe(true)
     await expect(request('about:srcdoc')).resolves.toBe(true)
-    // The tab's Allow is not b.test's, including in the blank frame b.test made.
     await expect(request('about:blank')).resolves.toBe(false)
     tab.mainFrame.framesInSubtree.push({ url: 'about:blank', origin: 'https://a.test' })
-    // Two blank frames from different sites: Orca cannot tell which asked, so it refuses.
+    // Ambiguous blank-frame origins must be refused.
     await expect(request('about:blank')).resolves.toBe(false)
   })
 
@@ -408,17 +393,15 @@ describe('partition permission policy', () => {
     requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
     const [launchGuest, launchUrl, requestingUrl] = mocks.requestExternalAppLaunch.mock.calls[0]
     expect([launchGuest, launchUrl]).toEqual([guest, 'com-okta-authenticator:/deviceChallenge'])
-    // The frame that asked, not the top page.
     expect(requestingUrl()).toBe('https://login.acme.okta.com/frame')
     expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
 
-    // A link Orca refuses to ask about keeps the denial notice.
     mocks.requestExternalAppLaunch.mockReturnValueOnce(false)
     requestHandler(guest, 'openExternal', (allowed) => decisions.push(allowed), details)
     expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
       expect.objectContaining({ guestWebContentsId: 9, permission: 'openExternal' })
     )
-    // Chromium's own launch stays denied either way; Orca opens the app after the user says yes.
+    // Orca launches approved apps itself, so Chromium's launch remains denied.
     expect(decisions).toEqual([false, false])
   })
 

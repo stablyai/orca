@@ -74,9 +74,7 @@ describe('local filesystem watcher removal deadline', () => {
     vi.useFakeTimers()
     try {
       vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-      // Why mock the process-backed subscribe: the in-process fallback rejects on abort, so only a
-      // subscribe that ignores the abort signal exercises the deadline rather than the cancel path.
-      // Once, so the wedge cannot leak into the next test.
+      // Ignore abort once to test the drain deadline; the fallback's abort rejection would bypass it.
       vi.mocked(subscribeViaWatcherProcess).mockImplementationOnce(() => new Promise(() => {}))
       const sender = createWatcherSender(1)
 
@@ -111,8 +109,7 @@ describe('local filesystem watcher removal deadline', () => {
 
   it('bounds a wedged live unsubscribe so worktree deletion cannot hang forever', async () => {
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
-    // The in-process Parcel fallback has no unsubscribe timeout of its own, so only the shared
-    // removal deadline can stop this from hanging delete forever.
+    // Fallback unsubscribe has no native deadline; the shared removal budget must bound it.
     let resolveUnsubscribe: () => void = () => {}
     const unsubscribeMock = vi.fn(
       () =>
@@ -159,7 +156,7 @@ describe('local filesystem watcher removal deadline', () => {
         expect(subscribeViaWatcherProcess).toHaveBeenCalled()
       })
 
-      // Half the budget is already gone before the close starts; the drain may only spend the rest.
+      // A close starting halfway through a shared budget may spend only its remainder.
       const deadline = createWatcherRemovalDeadline()
       await vi.advanceTimersByTimeAsync(WATCHER_REMOVAL_DRAIN_BUDGET_MS / 2)
 
@@ -167,7 +164,7 @@ describe('local filesystem watcher removal deadline', () => {
       const closePromise = closeLocalWatcherForWorktreePath('/tmp/repo', deadline).then(() => {
         closed = true
       })
-      // Why assert mid-drain: without this a fresh (unshared) budget would also pass the final check.
+      // Check mid-drain so a fresh unshared budget cannot pass vacuously.
       await vi.advanceTimersByTimeAsync(
         WATCHER_REMOVAL_DRAIN_BUDGET_MS / 2 - WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS - 1
       )
@@ -205,8 +202,7 @@ describe('local filesystem watcher removal deadline', () => {
       vi.useRealTimers()
     }
 
-    // The delete this drain guarded already finished; a late native failure is stale news, and
-    // retaining it would leave this root permanently undeletable until the watcher process exits.
+    // Late failure after a completed delete must not permanently block later removal.
     rejectUnsubscribe(
       new WatcherProcessFailure(
         'file watcher process did not exit after termination deadline',

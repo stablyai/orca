@@ -53,8 +53,7 @@ afterEach(() => {
 
 describe('codexConfigSync:status handler', () => {
   it('reports the stall for the home the current selection actually mirrors into', () => {
-    // Why: a managed account mirrors into its own per-account home, not the
-    // shared one — reporting on the shared home would miss the stall entirely.
+    // Managed accounts mirror per-account homes, not the shared runtime home.
     const perAccountHome = join(root, 'codex-accounts', 'acct-1', 'home')
     mkdirSync(perAccountHome, { recursive: true })
     writeFileSync(join(perAccountHome, 'config.toml'), 'model = "runtime-model"\n', 'utf-8')
@@ -67,8 +66,7 @@ describe('codexConfigSync:status handler', () => {
   })
 
   it('reports synced when the selection runs directly on the real home', () => {
-    // Why: the system default has no mirror, so a stale shared runtime home
-    // must not produce a warning about a config that lane never reads.
+    // System default uses no mirror; stale shared homes must not produce warnings.
     const staleSharedHome = join(root, 'codex-runtime-home', 'home')
     mkdirSync(staleSharedHome, { recursive: true })
     writeFileSync(join(staleSharedHome, 'config.toml'), 'model = "stale"\n', 'utf-8')
@@ -102,11 +100,8 @@ describe('codexConfigSync:status handler', () => {
   })
 })
 
-// STA-4422: an unreadable managed home must not be reported as healthy. Before
-// the fix the resolver collapsed to `null`, which this channel reads as "no
-// mirror exists" and reports as synced.
+// Unreadable managed homes must not collapse into the healthy no-mirror state (STA-4422).
 it('reports a managed-home-unavailable stall instead of synced when the home is unreadable', () => {
-  // Anchor: a genuine no-mirror lane still reports synced.
   expect(invokeHandlerWithStatus({ kind: 'ready', homePath: null })).toEqual({
     state: 'synced',
     reason: null,

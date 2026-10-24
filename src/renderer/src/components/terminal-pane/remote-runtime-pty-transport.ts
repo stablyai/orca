@@ -12,6 +12,7 @@ import {
 } from './remote-runtime-input-journal'
 import type { AcceptedInputOptions } from './pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import { isSshSignInPendingTerminalError } from './terminal-ssh-sign-in-error'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -168,10 +169,12 @@ function isRemoteTerminalStaleMessage(message: string): boolean {
   return message.includes('terminal_handle_stale')
 }
 
-// Why: lost contact, host back-pressure, or a re-minted handle all leave the pane resolvable later.
+// Why: lost contact, host back-pressure, a re-minted handle, or a pending SSH sign-in all leave the
+// pane resolvable later; cancelling would drop the parked retry the post-sign-in revival fires (#31942).
 function isRetryableUnboundAttachError(error: unknown): boolean {
   const clientError = toRemoteRuntimeClientErrorLike(error)
   return (
+    isSshSignInPendingTerminalError(runtimeTerminalErrorMessage(error)) ||
     isRecoverableRemoteRuntimeConnectionError(clientError) ||
     isRuntimeRpcQueueOverloadError(clientError) ||
     isRemoteTerminalStaleMessage(runtimeTerminalErrorMessage(error))

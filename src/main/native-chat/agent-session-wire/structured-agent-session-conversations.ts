@@ -2,17 +2,8 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
-/**
- * The host's open conversations. A journal handle becomes a conversation's when it is set here,
- * and from then on every change it commits reaches that conversation's readers: no writer
- * publishes what it appended, so none can forget to.
- *
- * Delivery runs a microtask after the commit, so a reader that throws cannot fail a write that is
- * already durable. A handle this map has since replaced or dropped delivers nothing.
- *
- * Each entry also carries when it last saw activity — its open, then every journal publish — which
- * is the idle sweep's clock. In memory only, so it dies with the entry.
- */
+/** Bind commit delivery at adoption so writers cannot forget publication. Deliver in a microtask
+ * to isolate durable writes from reader failures; ignore replaced/dropped handles. Activity clocks are memory-only. */
 export class StructuredAgentSessionConversations extends Map<
   string,
   StructuredAgentSessionHostSession
@@ -22,10 +13,10 @@ export class StructuredAgentSessionConversations extends Map<
   constructor(
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
-      /** A person's Stop settle opened or closed: no row, so neither a publish nor activity. */
+      /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
-      /** A conversation became held: state that waited on it (queued drafts) re-derives. */
+      /** Opening makes waiting state re-derive. */
       onOpened?: (sessionId: string) => void
       now: () => number
     }

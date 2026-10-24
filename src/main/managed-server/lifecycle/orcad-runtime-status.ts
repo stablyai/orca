@@ -10,7 +10,7 @@ import { currentManagedOrcadUpdateDeferral } from './orcad-managed-update-deferr
 import { findIncompleteManagedOrcadMigration } from './orcad-managed-migration-status'
 import { collectManagedTerminalCensus } from '../../ssh/orcad-terminal-census-client'
 
-/** Read-only: what the host's activation record and journal say, without repairing either. */
+/** Read host records without repairing them. */
 export async function getManagedOrcadRuntimeStatus(
   userDataPath: string,
   selector: string,

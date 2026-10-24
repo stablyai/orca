@@ -1,17 +1,10 @@
-/**
- * Opt-in memory limits on each Linux terminal scope (see terminal-scopes.ts). Off by default:
- * an OOM kill at a limit nobody chose is worse than the host-wide pressure it prevents.
- *
- * `ORCA_TERMINAL_MEMORY_MAX` sets MemoryMax and `ORCA_TERMINAL_MEMORY_SWAP_MAX` sets
- * MemorySwapMax, per terminal. Sizes are bytes or K/M/G/T (base 1024), as systemd reads them.
- * A limit is applied only after the probe scope showed the kernel enforcing it.
- */
+/** Memory limits are opt-in and applied only after a probe confirms kernel enforcement. */
 export const TERMINAL_MEMORY_MAX_ENV = 'ORCA_TERMINAL_MEMORY_MAX'
 export const TERMINAL_MEMORY_SWAP_MAX_ENV = 'ORCA_TERMINAL_MEMORY_SWAP_MAX'
 
-/** Below this a shell plus one agent CLI is OOM-killed at startup. */
+/** Reserve headroom for shell and agent startup. */
 const MIN_MEMORY_MAX_BYTES = 256 * 1024 ** 2
-/** The kernel rounds a cgroup memory limit down to a page; 64 KiB covers every Linux page size. */
+/** Allow up to 64 KiB for kernel page rounding. */
 const PAGE_ROUNDING_BYTES = 64 * 1024
 const UNITS: Record<string, number> = { '': 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 }
 
@@ -25,7 +18,6 @@ const LIMITS = [
   { env: TERMINAL_MEMORY_SWAP_MAX_ENV, property: 'MemorySwapMax', file: 'memory.swap.max', min: 0 }
 ] as const
 
-/** Every cgroup file the probe scope must print for the limits to be checked. */
 export const TERMINAL_MEMORY_LIMIT_FILES = LIMITS.map((limit) => limit.file)
 
 export function parseMemorySize(raw: string): number | null {
@@ -38,9 +30,8 @@ export function parseMemorySize(raw: string): number | null {
 }
 
 export type TerminalMemoryLimitRequest = {
-  /** `--property=` values, in bytes, for the limits that parsed. */
+  /** Parsed --property= assignments in bytes. */
   properties: string[]
-  /** Env vars that were set but could not be used as a limit. */
   invalid: string[]
 }
 
@@ -61,7 +52,6 @@ export function requestedTerminalMemoryLimits(env: NodeJS.ProcessEnv): TerminalM
   return request
 }
 
-/** The requested properties the probe scope's cgroup files show the kernel enforcing. */
 export function enforcedTerminalMemoryLimits(
   properties: readonly string[],
   cgroupValues: Readonly<Record<string, string>>
@@ -70,7 +60,7 @@ export function enforcedTerminalMemoryLimits(
     const [name, value] = property.split('=')
     const file = LIMITS.find((limit) => limit.property === name)?.file
     const shown = file ? cgroupValues[file] : undefined
-    // Why check: managers without memory delegation accept MemoryMax and enforce nothing.
+    // A manager may accept MemoryMax without delegated memory enforcement.
     if (shown === undefined || !/^\d+$/.test(shown)) {
       return false
     }

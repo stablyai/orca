@@ -183,7 +183,9 @@ describe('editor saves guarded by the disk precondition', () => {
       expect(disk.writeFile).toHaveBeenCalledTimes(2)
       expect(disk.files.get(PATH)).toBe('a�b')
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      await requestEditorFileSave({ fileId: PATH })
+      // An explicit save asks first; once the user confirms the conversion it writes.
+      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/isn't UTF-8/)
+      await requestEditorFileSave({ fileId: PATH, convertToUtf8: true })
       expect(disk.files.get(PATH)).toBe('second edit')
     } finally {
       cleanup()
@@ -494,7 +496,8 @@ describe('editor saves guarded by the disk precondition', () => {
         expect.objectContaining({
           diskPrecondition: {
             expectedSignature: getDiskBaselineSignature('agent rewrite'),
-            allowMissing: true
+            allowMissing: true,
+            requireLosslessUtf8: true
           }
         })
       )

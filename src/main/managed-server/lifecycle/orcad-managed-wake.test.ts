@@ -42,7 +42,6 @@ function launches(): string[] {
   return host.commands.filter((command) => command.includes('nohup'))
 }
 
-/** The slot's process exited on its own, as an idle stop leaves it. */
 function stoppedHost(): FakeOrcadHost {
   const stopped = FakeOrcadHost.deployedOld()
   stopped.alive.clear()
@@ -53,11 +52,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
   vi.mocked(acquireInstallLock).mockImplementation(async (_conn, root, _host, options) => {
-    // A recovery takeover answers busy on a fence another run still holds.
     if (!host.acquireFence(options)) {
       throw new RemoteInstallLockBusyError(root, 0)
     }
-    // The real lock writes the owner token in the same command that creates it.
     host.wakeOwner = options?.owner?.token ?? null
   })
 })
@@ -110,7 +107,6 @@ describe('wakeStoppedManagedOrcad', () => {
   it('starts an active slot with no launch artifacts at all: nothing ever ran from it', async () => {
     host = stoppedHost()
     host.pidFiles.clear()
-    // Neither a PID file nor a readiness file, so the host answers NEVER_LAUNCHED, not UNKNOWN.
     vi.mocked(execCommand).mockImplementation(async (_conn, command) =>
       command.includes('echo LIVE;') && !host.alive.has(OLD) ? 'NEVER_LAUNCHED' : host.exec(command)
     )
@@ -153,7 +149,7 @@ describe('wakeStoppedManagedOrcad', () => {
 
   it('releases its own fence on reconnect when the drop surfaced as a plain failure', async () => {
     host = stoppedHost()
-    // A disconnect fails every later step, the fence release included, without the unconfirmed flag.
+    // Model dropped connections whose release failure lacks the unconfirmed-termination flag.
     const gone = new Error('Not connected')
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
       if (command.includes('nohup') || command.includes('echo RELEASED')) {
@@ -181,7 +177,7 @@ describe('wakeStoppedManagedOrcad', () => {
     })
     await expect(wakeStoppedManagedOrcad(slot)).rejects.toBe(lost)
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
-    // That fence was cleared unseen, and another desktop took a fresh one: no owner file yet.
+    // Recovery cleared our fence and a new owner has not yet written its token.
     host.wakeOwner = null
     host.fenceFresh = true
 
@@ -195,7 +191,6 @@ describe('wakeStoppedManagedOrcad', () => {
     const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
     let drop: (() => void) | undefined
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      // Drops the first wake under its fence, after its owner token landed but before its launch.
       if (host.fence && host.wakeOwner && command.includes('orcad-active.json') && !drop) {
         await new Promise<void>((resolve) => (drop = resolve))
         throw lost
@@ -205,7 +200,6 @@ describe('wakeStoppedManagedOrcad', () => {
     const dropped = wakeStoppedManagedOrcad(slot)
     await vi.waitFor(() => expect(drop).toBeDefined())
 
-    // The reconnected wake starts while the first is still holding the fence it just took.
     const reconnected = wakeStoppedManagedOrcad(slot)
     drop?.()
     await expect(dropped).rejects.toBe(lost)
@@ -217,7 +211,6 @@ describe('wakeStoppedManagedOrcad', () => {
   it('proves a fence its own wake took even when the drop hid whether the lock was created', async () => {
     host = stoppedHost()
     const lost = Object.assign(new Error('connection lost'), { sshChannelCloseConfirmed: false })
-    // The host created the lock (with its owner token), but the client never saw OK.
     vi.mocked(acquireInstallLock).mockImplementationOnce(async (_conn, _root, _host, options) => {
       host.acquireFence()
       host.wakeOwner = options?.owner?.token ?? null
@@ -242,7 +235,6 @@ describe('wakeStoppedManagedOrcad', () => {
       throw lost
     })
     const dropped = wakeStoppedManagedOrcad(slot)
-    // The reconnected wake starts while the first is still taking the fence.
     const reconnected = wakeStoppedManagedOrcad(slot)
     await vi.waitFor(() => expect(drop).toBeDefined())
     drop?.()
@@ -263,7 +255,6 @@ describe('wakeStoppedManagedOrcad', () => {
     })
     await expect(wakeStoppedManagedOrcad(slot)).rejects.toBe(lost)
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => host.exec(command))
-    // A recovery cleared that fence, then another run took the host before journaling.
     host.wakeOwner = 'another-run'
     host.fenceFresh = true
 
@@ -288,7 +279,6 @@ describe('wakeStoppedManagedOrcad', () => {
 
   it('drops an abandoned fence no journal backs, and starts the slot', async () => {
     host = stoppedHost()
-    // A stale or exited-own fence: the recovery takeover may take it.
     host.fence = true
     host.wakeOwner = 'exited-run'
 

@@ -62,6 +62,11 @@ export function resolveMessageRun(
     )
   }
   const targetRunId = params.to?.startsWith('run:') ? params.to.slice('run:'.length) : undefined
+  for (const namedRunId of new Set([params.runId, targetRunId])) {
+    if (namedRunId) {
+      rejectRemotelyHomedRun(db, namedRunId)
+    }
+  }
   const resolvedRunId = params.runId ?? targetRunId ?? dispatch?.run_id
   let run = resolvedRunId ? db.getRun(resolvedRunId) : undefined
 
@@ -151,8 +156,41 @@ export function interruptedAcknowledgedCheck(
   }
 }
 
-export function rejectFederatedExplicitTarget(params: { to?: string; run?: string }): void {
-  if (params.to || params.run) {
+/**
+ * A `remote` Run row is only this host's mirror of a Run that lives on its coordinator's computer;
+ * mail written into it reaches no one (#32292).
+ */
+export function rejectRemotelyHomedRun(
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  runId: string
+): void {
+  if (db.getRun(runId)?.home_database === 'remote') {
+    throw remoteRunHomeUnreachable(db, runId)
+  }
+}
+
+export function remoteRunHomeUnreachable(
+  db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+  runId: string
+): OrchestrationError {
+  const dispatchId = db.findRemoteAttachmentForHomeRun(runId)?.dispatch_id
+  const detached = dispatchId
+    ? `this terminal is no longer attached to its Dispatch ${dispatchId}`
+    : 'this terminal is not attached to one of its Dispatches'
+  return new OrchestrationError(
+    'run_home_unreachable',
+    `Run ${runId} lives on the computer that coordinates it, which isn't reachable from here: ${detached}. Nothing was sent.`
+  )
+}
+
+/** A federated worker reaches only its Run home; naming that home is the same as omitting it. */
+export function rejectFederatedExplicitTarget(
+  params: { to?: string; run?: string },
+  homeRunId: string
+): void {
+  const namesOnlyHome =
+    (!params.to || params.to === `run:${homeRunId}`) && (!params.run || params.run === homeRunId)
+  if (!namesOnlyHome) {
     throw new OrchestrationError(
       'invalid_argument',
       'Federated Dispatch messages route to their Run home; omit --to and --run.'

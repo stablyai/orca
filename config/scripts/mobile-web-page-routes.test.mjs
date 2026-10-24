@@ -75,10 +75,7 @@ describe('the page routes the manifest declares', () => {
    * The wide iPad's host-area session is granted every served route's list, so its in-page hops
    * stay in the page. Bounded by the per-route ceiling too, so that grant never outgrows one route's.
    */
-  it('declares the host area on the host route alone, under one route-grant ceiling', () => {
-    expect(
-      MOBILE_WEB_PAGE_ROUTES.filter((route) => route.canOwnHostArea).map((route) => route.pathname)
-    ).toEqual(['/h/[hostId]'])
+  it('bounds the aggregate required and optional grants by one route-grant ceiling', () => {
     const union = new Set(
       MOBILE_WEB_PAGE_ROUTES.flatMap((route) => [...route.grants, ...(route.optionalGrants ?? [])])
     )

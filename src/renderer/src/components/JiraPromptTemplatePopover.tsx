@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { copyJiraTextToClipboard } from './jira-issue-workspace-actions'
 import {
   getJiraPromptTemplates,

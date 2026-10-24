@@ -1,16 +1,4 @@
-// Codex 0.157's turn bookkeeping as `turn/start`, `turn/steer` and `turn/interrupt` see
-// it, for tests. From app-server `turn_processor.rs`: `turn/start` picks the turn before it
-// answers, a send while a turn is open is steered into it under the same id with no
-// second `turn/started`, `turn/steer` refuses with -32600 unless its `expectedTurnId` is
-// the running turn, and `turn_interrupt_inner`, with no turn active, refuses with -32600 "no
-// active turn to interrupt" until the thread runs (`run`, or `start`) and once the turn has ended.
-// An interrupt Codex takes is answered before its turn ends: on `TurnAborted`,
-// `bespoke_event_handling.rs` answers pending interrupts, then sends `turn/completed`
-// (interrupted) on the same channel; here that end comes on a later read. The `turn/start`
-// answer can be held, so a test can deliver it after the turn's own frames, as the wire
-// allows. `legacyStartAnswers` is a Codex before 0.148,
-// whose `turn/start` answers a steered send with its submission id, a turn that never opens,
-// and whose `turn/steer` finds no turn to steer until the picked one has started.
+// Models Codex 0.157 turn_processor.rs and bespoke_event_handling.rs ordering, with pre-0.148 reply mode.
 
 import { CodexAppServerRequestError } from './codex-app-server-connection'
 
@@ -22,21 +10,15 @@ export type CodexTurnLifecycleFake = {
     'turn/steer': (params: Record<string, unknown> | undefined) => unknown
     'turn/interrupt': (params: Record<string, unknown> | undefined) => unknown
   }
-  /** The next `turn/start` answer waits until the returned release runs. */
   holdNextAnswer: () => () => void
-  /** Codex emits `turn/started` for the turn it picked last. */
   start: () => void
-  /** The thread runs the picked turn, whose `turn/started` has yet to be read: an interrupt of it
-   *  is taken, and that `turn/started` comes ahead of the answer. */
+  /** Enable interruption before turn/started is read; that frame then precedes the reply. */
   run: () => void
-  /** Codex takes an interrupt of the running turn: it drops it as its active turn before it
-   *  answers, and that turn's `turn/completed` comes later (`end`). */
+  /** Clear active state at interrupt receipt; end() sends completion later. */
   takeInterrupt: () => string
-  /** Codex ends the picked or running turn on its own, or the one whose interrupt it took. */
   end: (status: 'completed' | 'interrupted' | 'failed', errorMessage?: string) => void
-  /** Codex fails the picked turn before starting it, which reports an `error` and no turn end. */
+  /** Pre-0.148 unopened failures report an error without turn/completed. */
   failUnopened: (message: string) => void
-  /** Codex echoes a user message it recorded in the current turn. */
   echo: (clientId: string) => void
   readonly turnId: string | null
 }
@@ -62,10 +44,9 @@ export function codexTurnLifecycleFake(
   let lastTurn: string | null = null
   let held: Promise<void> | null = null
   let pickedRuns = false
-  // The turn whose interrupt Codex took and whose `turn/completed` is still to come.
   let aborting: string | null = null
   const finish = (turnId: string, status: string, errorMessage?: string): void => {
-    // A taken interrupt's turn is no longer active: a turn picked since stays picked.
+    // Completing an aborted turn must preserve any replacement turn.
     if (aborting === turnId) {
       aborting = null
     } else {
@@ -73,7 +54,7 @@ export function codexTurnLifecycleFake(
       active = null
       pickedRuns = false
     }
-    // As Codex does: clearing `running` publishes the thread idle ahead of the turn's end.
+    // Codex reports idle before turn completion.
     notify()('thread/status/changed', { threadId, status: { type: 'idle' } })
     notify()('turn/completed', {
       threadId,
@@ -105,6 +86,7 @@ export function codexTurnLifecycleFake(
         const turnId = running ?? `turn-${++minted}`
         picked ??= active ? null : turnId
         lastTurn = turnId
+        // Pre-0.148 steered starts return a submission ID that never becomes a turn.
         const answeredId = options.legacyStartAnswers && running ? `turn-${++minted}` : turnId
         const answer = { turn: { id: answeredId, status: 'inProgress' } }
         const wait = held
@@ -140,7 +122,7 @@ export function codexTurnLifecycleFake(
           )
         }
         const aborted = takeInterrupt()
-        // Answered, then the turn's end on the next read; a turn that ends meanwhile is not ended twice.
+        // Completion follows the interrupt reply on a later read unless already delivered.
         setTimeout(() => {
           if (aborting === aborted) {
             finish(aborted, 'interrupted')
@@ -165,7 +147,7 @@ export function codexTurnLifecycleFake(
       pickedRuns = true
     },
     end: (status, errorMessage) => {
-      // A taken interrupt's turn/completed comes ahead of anything a later turn sends.
+      // An interrupted turn completes before its replacement.
       const turnId = aborting ?? active ?? picked
       if (!turnId) {
         throw new Error('no turn to end')

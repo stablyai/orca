@@ -1,7 +1,11 @@
+import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
+import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import {
@@ -53,25 +57,39 @@ export async function resolveDirectWorkItemAgent(args: {
   latestStore: AppState
 }): Promise<{ agent: TuiAgent | null; unavailable: boolean }> {
   // Why: the new workspace's own host answers; a paired server's project must not probe this client.
-  const detectedAgents: string[] =
+  const workspace = worktreeLaunchWorkspace(args.worktreeId)
+  const ids = (
     args.agentOverride === undefined &&
     args.detectedAgentsPromise &&
     args.launchConnectionId === args.repoConnectionId
       ? await args.detectedAgentsPromise
       : await ensureDetectedAgentsForNewWorktree(args.latestStore, args.worktreeId, args.repoHost)
+  ).filter(isTuiAgent)
+  const wanted = args.agentOverride ?? useAppStore.getState().settings?.defaultTuiAgent
+  // Chat facts can only change the pick when the wanted agent's CLI is not detected.
+  const choices =
+    wanted && wanted !== 'blank' && !ids.includes(wanted)
+      ? await acquireAgentLaunchChoices(workspace, async () => ids)
+      : null
+  const store = useAppStore.getState()
+  // A new workspace may not be in the store yet; its own detection answers then.
+  const detected = [...(choices?.detected ?? ids)]
+  // A chosen agent may open as a chat without its CLI; the automatic pick stays on detected ones.
   if (args.agentOverride !== undefined) {
     return {
       agent: args.agentOverride,
       unavailable:
-        !detectedAgents.includes(args.agentOverride) ||
-        !isTuiAgentEnabled(args.agentOverride, args.latestStore.settings?.disabledTuiAgents)
+        !isTuiAgentEnabled(args.agentOverride, store.settings?.disabledTuiAgents) ||
+        (!detected.includes(args.agentOverride) &&
+          !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
     }
   }
   return {
     agent: pickTuiAgent(
-      args.latestStore.settings?.defaultTuiAgent,
-      new Set(detectedAgents.filter((agent): agent is TuiAgent => agent in TUI_AGENT_CONFIG)),
-      args.latestStore.settings?.disabledTuiAgents
+      store.settings?.defaultTuiAgent,
+      detected,
+      store.settings?.disabledTuiAgents,
+      (chosen) => agentChoiceMayOpenAsChat(store, chosen, workspace, detected)
     ),
     unavailable: false
   }

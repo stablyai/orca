@@ -1,13 +1,4 @@
-/*
- * macOS reports OS-canonical paths (symlinks resolved, on-disk casing), which
- * land outside the root the caller subscribed with. Consumers derive a
- * worktree-relative path from that root and drop anything outside it, so an
- * agent's edit under a symlinked worktree never reloaded the editor tab, never
- * refreshed the File Explorer, and never re-ran Source Control status.
- *
- * The rewrite lives in the supervisor, the one boundary every desktop, runtime,
- * and relay watch passes, so assert it there for both subscription entry points.
- */
+/* Canonicalized events must map back to the subscribed alias, or desktop/runtime/relay consumers drop them as outside the worktree. */
 import type * as NodeFs from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,8 +25,7 @@ const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMo
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
 vi.mock('node:fs', async (importOriginal) => {
-  // Why: the supervisor resolves the watched root with realpathSync.native, so
-  // keep the real implementation while stubbing the child-launch surface.
+  // Preserve native realpath while mocking child launch.
   const actual = await importOriginal<typeof NodeFs>()
   return {
     existsSync: existsSyncMock,
@@ -61,8 +51,7 @@ describe('watcher-process root path rewrite', () => {
   beforeEach(() => {
     resetWatcherProcessForTest()
     resetRuntimeWatcherProcessForTest()
-    // Why: these assertions target the forked-process mode that ships, so hide
-    // the vitest marker that would route them to the in-process fallback.
+    // Hide the Vitest marker to exercise forked mode instead of the in-process fallback.
     vi.stubEnv('VITEST', '')
     existsSyncMock.mockReturnValue(true)
     forkMock.mockImplementation(() => new FakeWatcherChild())

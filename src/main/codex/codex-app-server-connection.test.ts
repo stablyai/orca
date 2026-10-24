@@ -34,12 +34,7 @@ afterEach(() => {
   }
 })
 
-/**
- * A real `node -e` child speaking the same JSONL framing Codex does. Slower than
- * a stub, but it is the only thing that proves the spawn, the environment, and
- * both traffic directions actually work end to end.
- */
-
+// A real child verifies spawning, environment and bidirectional JSONL traffic.
 async function openFakeServer(
   handlers: CodexAppServerConnectionHandlers = {},
   env?: Record<string, string>,
@@ -70,8 +65,7 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.stdin = new PassThrough()
-  // Keep the synthetic pid outside any real process table so teardown never
-  // mistakes an unrelated process for this stub.
+  // Keep the synthetic PID outside real process tables so teardown cannot target another process.
   child.pid = 9_999_999
   child.kill = vi.fn()
   const written: Record<string, unknown>[] = []
@@ -88,7 +82,6 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   return { child, spawnImpl: () => child, written }
 }
 
-/** Answers the handshake so `openCodexAppServerConnection` can resolve. */
 function answerInitialize(child: StubChild): void {
   child.stdin.once('data', () => {
     child.stdout.write(`${JSON.stringify({ id: 1, result: {} })}\n`)
@@ -312,7 +305,6 @@ describe('openCodexAppServerConnection', () => {
 
     expect(isCodexAppServerRequestError(refusal)).toBe(true)
     expect((refusal as Error).message).toContain('bad params')
-    // Codex's own words, apart from Orca's prefix, for a person to read.
     expect(providerDiagnosticOf(refusal)).toEqual({ text: 'bad params', audience: 'person' })
     expect(providerDiagnosticOf(missing)).toBeUndefined()
     expect(isCodexAppServerUnsupportedError(missing)).toBe(true)
@@ -545,7 +537,6 @@ describe('openCodexAppServerConnection', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
-  // A root that outlived one kill is killed again by the next ask, which then proves it gone.
   it('kills the root again on a close after an unproven attempt', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
@@ -798,7 +789,6 @@ describe('openCodexAppServerConnection', () => {
     child.emit('close', null, 'SIGKILL')
 
     expect(exits).toHaveLength(1)
-    // The first cause survives; the generic exit that follows does not overwrite it.
     expect(exits[0]).toContain('provider transport failed')
     await connection.close()
   })
@@ -844,8 +834,6 @@ describe('openCodexAppServerConnection', () => {
 
     expect((await inFlight).message).toContain('EPIPE')
     expect(exits).toHaveLength(0)
-    // A child nobody can write to is not a live session: the owner must see the
-    // connection as gone rather than keep issuing calls that can only time out.
     expect(connection.closed).toBe(true)
     child.emit('exit', null, 'SIGKILL')
     expect(exits).toHaveLength(1)
@@ -883,7 +871,6 @@ describe('openCodexAppServerConnection', () => {
     await expect(closing).resolves.toBe(true)
 
     expect((await inFlight).message).toContain('EPIPE')
-    // The root's exit is the close's own end, never an unexpected death.
     expect(exits).toEqual([true])
     expect(vi.getTimerCount()).toBe(0)
   })

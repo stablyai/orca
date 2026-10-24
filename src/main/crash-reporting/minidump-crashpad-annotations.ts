@@ -1,8 +1,4 @@
-// Reads Chromium's crash keys out of a Crashpad minidump's annotation streams.
-//
-// Some Chromium builds expose the fatal log line as `LOG_FATAL`; the signature
-// parser also handles builds that carry it only in captured process memory.
-// Layouts are from Crashpad's minidump_extensions.h.
+// Layouts follow Crashpad minidump_extensions.h.
 
 import {
   findStream,
@@ -11,7 +7,6 @@ import {
   type MinidumpView
 } from './minidump-stream-reader'
 
-// Why: a dump claiming an absurd annotation count is corrupt; cap before iterating.
 const MAX_ANNOTATIONS = 512
 
 const STREAM_TYPE_CRASHPAD_INFO = 0x43500001
@@ -29,28 +24,18 @@ const MODULE_CRASHPAD_INFO_ANNOTATION_OBJECTS_OFFSET = 20
 const ANNOTATION_RECORD_SIZE = 12
 const ANNOTATION_TYPE_STRING = 1
 
-/**
- * Crashpad annotations we copy into a crash report.
- *
- * Why an allowlist: annotations are an open key space and some Chromium keys
- * (`switch-N`, extension ids) carry command lines and user data. Diagnostic
- * value here is concentrated in a handful of keys, so default-deny.
- */
+// Exclude open-ended crash keys that can contain command lines or user data.
 const ANNOTATION_ALLOWLIST = new Set([
-  // The whole point of this module — Chromium's fatal log line.
   'LOG_FATAL',
   'abort-message',
-  // Which process died, independent of what Electron told us.
   'ptype',
   'ver',
   'prod',
   'plat',
   'osarch',
   'channel',
-  // Distinguishes a one-off from a crash loop.
   'crash-loop-before',
   'first-crash-time',
-  // The Linux SIGBUS/SIGSEGV reports are GPU-adjacent; driver identity matters.
   'gpu-gl-vendor',
   'gpu-gl-renderer',
   'gpu-driver-version',
@@ -124,7 +109,7 @@ async function readAnnotationObjects(
     }
     const raw = await view.byteArray(valueRva)
     if (raw) {
-      // Annotation strings are not NUL-terminated; trim a trailing one anyway.
+      // Tolerate trailing NULs even though annotation objects store unterminated strings.
       let value = raw.toString('utf8')
       while (value.endsWith('\0')) {
         value = value.slice(0, -1)
@@ -161,8 +146,7 @@ export async function readCrashpadAnnotations(view: MinidumpView): Promise<Recor
     if (!moduleInfo || moduleInfo.size < MODULE_CRASHPAD_INFO_MIN_SIZE) {
       continue
     }
-    // Why: Chromium's crash keys land in annotation_objects on current
-    // Crashpad, but older modules still populate the two legacy shapes.
+    // Support both legacy simple annotations and current annotation objects.
     await readSimpleAnnotations(
       view,
       await view.location(moduleInfo.rva + MODULE_CRASHPAD_INFO_SIMPLE_ANNOTATIONS_OFFSET),

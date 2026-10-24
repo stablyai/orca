@@ -172,8 +172,7 @@ describe('worktree base directory watch target resolution', () => {
     expect(statMock).not.toHaveBeenCalled()
   })
 
-  // A mirrored layout puts the working trees inside the distro while the gitdir
-  // stays on the Windows drive, so the UNC root skip must not take git-common with it.
+  // WSL-mirrored worktrees can have Windows Git metadata; UNC root refusal must preserve that watcher.
   it('keeps the Windows-side git-common watcher when only the workspace root is a WSL UNC path', async () => {
     const repo = makeRepo(0, {
       path: 'C:\\Users\\alice\\orca',

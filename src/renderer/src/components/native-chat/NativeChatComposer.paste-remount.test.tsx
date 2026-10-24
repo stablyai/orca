@@ -117,6 +117,7 @@ function composer(
       targetPtyId={null}
       agent="claude"
       structuredTransport={{
+        capturePresentation: () => () => true,
         send: vi.fn(() => true),
         dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
         optionsSurface: {

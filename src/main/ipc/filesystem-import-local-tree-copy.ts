@@ -3,10 +3,6 @@ import { lstat, mkdir, open, readdir, rm, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
-/**
- * Pre-scan a directory tree for symlinks. Returns true if any symlink
- * is found anywhere in the subtree.
- */
 export async function preScanForSymlinks(dirPath: string): Promise<boolean> {
   const entries = await readdir(dirPath, { withFileTypes: true })
   for (const entry of entries) {
@@ -87,9 +83,7 @@ export async function copyLocalFileNoFollow(
     ) {
       throw new Error(`File changed during import: '${basename(srcPath)}'`)
     }
-    // Why: copyFile(path, path) would follow a source symlink if the source is
-    // swapped after validation. Streaming from an O_NOFOLLOW handle keeps the
-    // authorized file identity pinned for the copy.
+    // Copy from the authorized O_NOFOLLOW handle so a swapped source cannot redirect through a symlink.
     destinationHandle = await open(dstPath, 'wx')
     destinationCreated = true
     await pipeline(sourceHandle.createReadStream(), destinationHandle.createWriteStream())

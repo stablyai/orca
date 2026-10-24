@@ -1,7 +1,4 @@
-// Every lease loads from disk unreconciled: the process that wrote it may still
-// be alive, so nothing the store persisted grants a writer until this host has
-// adjudicated it. Without this an attach after a restart is refused forever with
-// `execution_owner_reconciling`, and the session becomes unreachable.
+// Persisted leases grant no writer until this runtime reconciles them; their recorded process may still live.
 
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -12,8 +9,6 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 const MAX_RECONCILIATION_PASSES = 8
 
-/** Adjudicates leases loaded by this process.
- *  Answers with the refusal attach owes its caller, or null once settled. */
 export function createRestartReconciler(deps: {
   store: AgentSessionRecordStore
   probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
@@ -46,16 +41,12 @@ export function createRestartReconciler(deps: {
   }
 }
 
-/** Reports each distinct failure once, until `clear` says the bookkeeping settled again: the
- *  startup check, the restore pass and a restore retried after a failed journal open would each
- *  log the same store failure. */
+/** Deduplicate failures across startup/restore retries until bookkeeping succeeds. */
 export type ReaderBookkeepingFailures = {
   report: (failure: unknown) => void
   clear: () => void
 }
 
-/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
- *  recovery again before it acts. */
 export function reportEachFailureOnce(
   logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
@@ -77,9 +68,7 @@ export function reportEachFailureOnce(
   }
 }
 
-/** The reconcile a reader runs, at startup and before each restored read: it never throws, since
- *  an unreconciled lease grants no writer and the next send reconciles again before it acts.
- *  Answers whether the leases it checked are settled. */
+/** Reader reconciliation never throws or grants ownership; attach/send must retry strictly before acting. */
 export function createReaderReconcile<Args extends unknown[]>(
   reconcile: (...args: Args) => Promise<AgentSessionWireRefusal | null>,
   failures: ReaderBookkeepingFailures

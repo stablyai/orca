@@ -1,16 +1,37 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { _internals as codexInternals } from '../codex/hook-service'
+import { getManagedScript } from '../codex/codex-hook-script'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
-/** Managed hooks are installed into the user's agent config, so they also run when the
- *  agent is launched from a plain terminal. There they must be inert and silent. */
+const roots: string[] = []
+
+function createTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+  roots.push(dir)
+  return dir
+}
+
+afterEach(() => {
+  for (const dir of roots.splice(0)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+/** User-global hooks also run outside Orca, where they must stay inert and silent. */
 function runHook(dir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   const script = join(dir, 'codex-hook.sh')
-  writeFileSync(script, codexInternals.getManagedScript('posix'))
+  writeFileSync(script, getManagedScript('posix'))
   chmodSync(script, 0o755)
   const clean: NodeJS.ProcessEnv = {}
   for (const [k, v] of Object.entries(process.env)) {
@@ -26,9 +47,9 @@ function runHook(dir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   })
 }
 
-describe('managed hook outside an Orca terminal', () => {
+describe.skipIf(process.platform === 'win32')('managed hook outside an Orca terminal', () => {
   it('no Orca env at all: silent, exit 0, writes nothing', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-outside-'))
+    const dir = createTempDir('orca-outside-')
     const res = runHook(dir)
     expect(res.status).toBe(0)
     expect(res.stdout).toBe('')
@@ -37,7 +58,7 @@ describe('managed hook outside an Orca terminal', () => {
   })
 
   it('endpoint points at a path that does not exist: silent, exit 0', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-outside-stale-'))
+    const dir = createTempDir('orca-outside-stale-')
     const res = runHook(dir, {
       ORCA_AGENT_HOOK_ENDPOINT: join(dir, 'gone', 'deeper', 'endpoint.env'),
       ORCA_PANE_KEY: 'tab:0'
@@ -50,7 +71,7 @@ describe('managed hook outside an Orca terminal', () => {
   })
 
   it('readable endpoint without a pane key: silent, writes nothing', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-outside-readable-'))
+    const dir = createTempDir('orca-outside-readable-')
     const endpoint = join(dir, 'endpoint.env')
     writeFileSync(endpoint, 'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\n')
     const res = runHook(dir, { ORCA_AGENT_HOOK_ENDPOINT: endpoint })
@@ -62,12 +83,48 @@ describe('managed hook outside an Orca terminal', () => {
 })
 
 describe('antigravity out-of-band event name', () => {
-  it('records hookEventName and filters tool progress on it', () => {
-    const lines = buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT').join('\n')
-    expect(lines).toContain('"hookEventName":"%s"')
-    expect(lines).toContain('${ORCA_ANTIGRAVITY_EVENT:-}')
-    expect(lines).toContain('in PreToolUse|PostToolUse|PostToolUseFailure) return 0')
-    // payload-based filtering stays the default for every other provider
-    expect(buildPosixHookSpoolLines('codex').join('\n')).toContain('case "$payload" in')
+  it.skipIf(process.platform === 'win32').each([
+    ['antigravity', 'SessionStart', '{"type":"session"}', true],
+    ['antigravity', 'PreToolUse', '{"type":"session"}', false],
+    ['antigravity', 'PostToolUse', '{"type":"session"}', false],
+    ['antigravity', 'PostToolUseFailure', '{"type":"session"}', false],
+    ['codex', '', '{"hook_event_name":"PreToolUse"}', false],
+    ['codex', '', '{"hook_event_name":"Stop"}', true]
+  ])('spools %s %s according to its event source', (source, event, payload, shouldSpool) => {
+    const dir = createTempDir('orca-spool-event-')
+    const endpoint = join(dir, 'endpoint.env')
+    writeFileSync(endpoint, '')
+    const script = [
+      ...buildPosixHookSpoolLines(
+        source,
+        source === 'antigravity' ? 'ORCA_ANTIGRAVITY_EVENT' : undefined
+      ),
+      'payload="$ORCA_TEST_PAYLOAD"',
+      'spool_hook_event'
+    ].join('\n')
+    const result = spawnSync('/bin/sh', ['-c', script], {
+      env: {
+        PATH: '/usr/bin:/bin',
+        ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+        ORCA_PANE_KEY: 'tab:leaf',
+        ORCA_ANTIGRAVITY_EVENT: event,
+        ORCA_TEST_PAYLOAD: payload
+      },
+      timeout: 5000,
+      encoding: 'utf8'
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toBe('')
+    const spoolDir = join(dir, 'spool')
+    const files = existsSync(spoolDir) ? readdirSync(spoolDir) : []
+    expect(files).toHaveLength(shouldSpool ? 1 : 0)
+    if (shouldSpool) {
+      const record = JSON.parse(readFileSync(join(spoolDir, files[0]), 'utf8').trim())
+      expect(record.source).toBe(source)
+      expect(record.payload).toEqual(JSON.parse(payload))
+      expect(record.hookEventName).toBe(source === 'antigravity' ? event : undefined)
+    }
   })
 })

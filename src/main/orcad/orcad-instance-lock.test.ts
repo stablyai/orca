@@ -495,7 +495,7 @@ describe('acquireOrcadInstanceLock', () => {
     for (const role of ['orcad', 'desktop'] as const) {
       expect(() => acquireOrcadInstanceLock(root, hooks({ role }))).toThrow(
         expect.objectContaining({
-          code: 'orcad_instance_lock_held',
+          code: 'orcad_instance_lock_holder_unverifiable',
           message: expect.stringContaining('from another machine')
         })
       )
@@ -512,6 +512,16 @@ describe('acquireOrcadInstanceLock', () => {
     })
   })
 
+  it('never lets a confirmed reclaim take a lock another machine id holds', () => {
+    const root = makeRoot()
+    const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
+    writeFileSync(lockPath, JSON.stringify(persistedRecord({ machineIdentity: 'machine-b' })))
+    expect(() => acquireOrcadInstanceLock(root, hooks({ reclaimConfirmed: () => true }))).toThrow(
+      expect.objectContaining({ code: 'orcad_instance_lock_holder_unverifiable' })
+    )
+    expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
+  })
+
   it('reclaims a record naming no machine only when it is provably from this one', () => {
     const root = makeRoot()
     const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
@@ -519,11 +529,11 @@ describe('acquireOrcadInstanceLock', () => {
     writeFileSync(lockPath, JSON.stringify(persistedRecord({ bootId: 'boot-1' })))
     const shared = { dataRootIsOnLocalDisk: () => false }
     expect(() => acquireOrcadInstanceLock(root, hooks(shared))).toThrow(
-      expect.objectContaining({ code: 'orcad_instance_lock_held' })
+      expect.objectContaining({ code: 'orcad_instance_lock_holder_unverifiable' })
     )
     expect(() =>
       acquireOrcadInstanceLock(root, hooks({ ...shared, machineIdentity: () => null }))
-    ).toThrow(expect.objectContaining({ code: 'orcad_instance_lock_held' }))
+    ).toThrow(expect.objectContaining({ code: 'orcad_instance_lock_holder_unverifiable' }))
     expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
 
     // The same kernel boot is this machine.

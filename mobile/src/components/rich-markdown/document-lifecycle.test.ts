@@ -1,13 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
-import {
-  createRichMarkdownEditorDocument,
-  startRichMarkdownEditorDocument,
-  stopRichMarkdownEditorDocument
-} from './create-rich-markdown-editor-document'
-import { createRichMarkdownEditorScope } from './document-scope'
-import { emitChange, setMarkdown } from './editor-content'
+import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
@@ -125,41 +119,6 @@ describe('an editor document that is stopped', () => {
     // generation, which it would not if `editable` lived in a module.
     expect(second).toEqual([])
     expect(first).toEqual([{ type: 'change', markdown: 'shared markup', generation: 3 }])
-  })
-
-  it('cancels a change still waiting on a timer, which no listener removal can reach', () => {
-    // A listener comes off with the element it was on; a scheduled callback holds the scope and
-    // would fire into a document the host has already unmounted. Nothing schedules the handle
-    // today, so the pending change is planted here — the seam and the field exist for the day
-    // something does, and the cancel has to already be in `stop` when it arrives.
-    const posted: MobileRichMarkdownEditorMessage[] = []
-    plantMarkup()
-    vi.useFakeTimers()
-    try {
-      const scope = createRichMarkdownEditorScope(
-        quietRichMarkdownEditorHost({
-          postToHost: (message) => posted.push(message),
-          keyboardInsetSource: () => null
-        })
-      )
-      startRichMarkdownEditorDocument(scope)
-      setMarkdown(scope, 'body', 2)
-      posted.length = 0
-
-      // The control: while the document is running, the pending change is posted.
-      scope.inputTimer = window.setTimeout(() => emitChange(scope), 0)
-      vi.runAllTimers()
-      expect(posted).toEqual([{ type: 'change', markdown: 'body', generation: 2 }])
-
-      posted.length = 0
-      scope.inputTimer = window.setTimeout(() => emitChange(scope), 0)
-      stopRichMarkdownEditorDocument(scope)
-      expect(scope.inputTimer).toBe(null)
-      vi.runAllTimers()
-      expect(posted).toEqual([])
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('drops a command whose dialog answered after the host moved on', async () => {

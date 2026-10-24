@@ -60,7 +60,7 @@ overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdM
 
 const WORKSPACE = 'repo-host::/srv/app'
 
-/** A helper step reaching the page's CDP proxy now. */
+/** Simulate a helper CDP step at the page proxy. */
 function assertHelperStepAdmitted(): void {
   runUnderRemoteCliPageAdmission(100, () => assertRemoteCliPageAccess(100))
 }
@@ -147,9 +147,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
       }
     })
     revoked.abort()
-    // The helper's next CDP step reaches the page's proxy and is refused there.
     expect(() => assertHelperStepAdmitted()).toThrow('stopped sharing')
-    // Retired on the revocation itself, not when the helper's client times out.
     await vi.waitFor(() => expect(proxy.stop).toHaveBeenCalled())
     helperCallbacks[0]!(
       null,
@@ -159,7 +157,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
 
     await expect(click).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
     expect(() => assertHelperStepAdmitted()).not.toThrow()
-    // The helper's daemon outlives its client, so it is retired before the page is let go.
+    // Daemon retirement must precede releasing the page's admission hold.
     expect(heldWhenRetired).toBe(true)
     expect(execFileMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -293,8 +291,6 @@ describe('AgentBrowserBridge under a host revocation', () => {
         .filter((type) => type !== 'mouseMoved')
     }
 
-    // Why: `mouse down` and `mouse up` are separate host commands, so a host that lost its
-    // attachment between them left the desktop's page with a stuck button.
     it('is let go of off the page when the host is revoked between commands', async () => {
       const wc = mockWebContents(100)
       wc.debugger.sendCommand.mockResolvedValue({})
@@ -357,7 +353,6 @@ describe('AgentBrowserBridge under a host revocation', () => {
       host.abort()
       await Promise.resolve()
 
-      // The desktop's own drag keeps its button.
       expect(mouseTypes(wc)).toEqual(['mousePressed', 'mouseReleased', 'mousePressed'])
     })
 
@@ -408,7 +403,7 @@ describe('AgentBrowserBridge under a host revocation', () => {
       })
       webContentsFromIdMock.mockReturnValue(wc)
 
-      // The press landed before the revocation, so the command itself succeeds.
+      // The press landed before revocation, so the command succeeds.
       await hostCommand(host, () => bridge.mouseDown('left', undefined, 'tab-1'))
       await bridge.mouseMove(1, 2, undefined, 'tab-1')
 

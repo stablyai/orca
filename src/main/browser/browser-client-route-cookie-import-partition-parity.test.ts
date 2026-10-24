@@ -71,10 +71,9 @@ const authority: BrowserHostLeaseAuthority = {
   browserHostGeneration: 1
 }
 
-/** The partition an actual client-hosted page ends up in, through the shipping route + session path. */
 async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string> {
   const routes = new BrowserClientNetworkRouteRegistry({
-    // Why: native/WSL routes are admitted only under their own runtime's authority.
+    // Native and WSL routes require their own runtime authority.
     authority:
       host.kind === 'ssh' ? authority : { ...authority, authorityRuntimeId: host.runtimeId },
     authorityStorageKey: storageScope,
@@ -94,7 +93,7 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
     closeAllConnections: vi.fn(async () => {}),
     resolveProxy: vi.fn(async () => 'SOCKS5 127.0.0.1:43123')
   }
-  // Why: no derivePartition override — this is the same default derivation a real page gets.
+  // Exercise the default partition derivation used by real pages.
   const sessions = new BrowserRouteSessionRegistry({
     validateProfile: vi.fn(),
     getSession: () => session,
@@ -123,7 +122,6 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
   return partition
 }
 
-/** The partition a settings-level cookie import writes into, through the shipping import path. */
 async function importPartition(): Promise<string> {
   bindingStore.get.mockReturnValue(null)
   getProfileMock.mockReturnValue({ id: browserProfileId, partition: 'persist:legacy-server' })
@@ -134,8 +132,7 @@ async function importPartition(): Promise<string> {
   getRouteIdentityMock.mockReturnValue({
     orcaProfileId,
     authorityConnectionIdentity,
-    // Why: mirrors startPairedRuntimeBrowserClientHost — settings-level operations target the
-    // server's own machine, so the identity comes from the same helper the host uses.
+    // Settings imports target the server machine, using the host startup identity.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
     pairingAuthorityConnectionIdentity: 'paired-runtime:pairing-authority-a',
     legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
@@ -163,9 +160,7 @@ describe('cookie-import target vs. client-hosted page partition', () => {
     )
   })
 
-  // Why: records deliberate behavior, not a bug — a settings-level import names the server's own
-  // machine, so pages whose workspace lives on a nested SSH target or WSL distro keep their own
-  // partitions and are not covered by that import.
+  // Settings imports exclude nested SSH and WSL workspace partitions.
   it('does not reach pages hosted on a nested SSH target or WSL distro', async () => {
     const imported = await importPartition()
 

@@ -10,8 +10,7 @@ import {
 
 type GuideSelection = { full: boolean; reference: string | null; listReferences: boolean }
 
-// Why: the kernel's gate table names each document as `references/<file>.md`, so that
-// exact string must resolve as well as the bare name an agent is likely to retype.
+// Accept references/<file>.md exactly as published in the kernel's gate table.
 function normalizeReferenceSelector(value: string): string {
   return value
     .trim()

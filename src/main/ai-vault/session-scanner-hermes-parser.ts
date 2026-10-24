@@ -40,7 +40,6 @@ export async function parseHermesSessionFile(
   )
 }
 
-/** Remote transcript content, streamed from a host that has no reader attached. */
 export async function parseHermesSessionContent(
   file: FileWithMtime,
   content: string,

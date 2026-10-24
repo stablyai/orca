@@ -7,10 +7,7 @@ import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { shutdownOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { closeAllPlainSshTerminals } from '../../ssh/plain-ssh-terminal/plain-ssh-terminal-sessions'
 
-// Why one budget for the whole sequence rather than one per phase: an invalidated connect only
-// observes its cancellation at the next checkpoint, and one blocked in the transport handshake can
-// sit there for the whole SSH timeout. A per-phase timeout lets any single phase consume the global
-// quit deadline; a shared absolute deadline cannot.
+// One absolute deadline bounds all phases, including connects stuck before their next cancellation checkpoint.
 export const SSH_SHUTDOWN_BUDGET_MS = 6_000
 
 export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain'
@@ -67,13 +64,12 @@ function sshShutdownTasks(): SshShutdownTask[] {
       promise: connectionManager?.disconnectAll() ?? Promise.resolve()
     },
     {
-      // Why: a system-ssh forward is a separate `ssh -L` child that survives Orca's exit and keeps
-      // its local port, so the next launch cannot bind a managed tunnel's fixed port.
+      // Independent ssh -L children survive app exit and retain ports needed by the next launch.
       targetId: '*forwards',
       promise: Promise.all([portForwardManager?.closeAll(), shutdownOrcadManagedTunnels()])
     },
     {
-      // Why: nothing restores a plain SSH terminal, so none may outlive Orca.
+      // Plain SSH terminals have no restoration owner and must end with Orca.
       targetId: '*plain-ssh',
       promise: closeAllPlainSshTerminals()
     }
@@ -100,15 +96,13 @@ async function drainSshShutdown(inFlight: readonly SshShutdownTask[]): Promise<S
   }
 
   await runPhase('drain', sshShutdownTasks())
-  // Why a second drain after the join: a connect can open a transport before it reaches the
-  // cancellation checkpoint, so the first drain can miss it.
+  // Joining connects can reveal transports opened after the first drain.
   if (await runPhase('in-flight-join', inFlight)) {
     await runPhase('final-drain', sshShutdownTasks())
   }
 
   if (errors.length > 0 || unfinished.length > 0) {
-    // Why one aggregate line: per-target logging on the quit path competes with the final flush for
-    // the little time that remains.
+    // Aggregate quit-path logging to preserve time for the final flush.
     console.warn(
       `[ssh] Shutdown drain finished with ${errors.length} error(s); unfinished: ${
         unfinished.map((entry) => `${entry.targetId}/${entry.phase}`).join(', ') || 'none'
@@ -118,13 +112,8 @@ async function drainSshShutdown(inFlight: readonly SshShutdownTask[]): Promise<S
   return { unfinished, errors }
 }
 
-// Why one entry point that returns rather than awaits: every in-memory transition the final store
-// flush must snapshot happens synchronously here, before this returns, so the caller can start that
-// flush with no await in between. Idempotent — a later call joins the same drain and repeats no
-// state transition.
-//
-// Why no fence latch here: the committed quit path sets it before calling this, so it is already on
-// for the snapshot below. Called without that gate (tests), this degrades to a plain drain.
+/** Snapshot-affecting transitions run synchronously before returning the shared drain promise.
+ * Committed quit owns the fence; without it, this entry point only drains. */
 export function beginSshShutdown(): Promise<SshShutdownResult> {
   if (sshShutdownDrain) {
     return sshShutdownDrain

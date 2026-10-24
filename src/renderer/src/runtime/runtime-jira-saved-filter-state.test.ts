@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readJiraSavedFilterState, mutateJiraSavedFilters } from './runtime-jira-saved-filter-state'
-import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira-saved-filter-capability'
+import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-saved-filter-capability'
 const { assertCapability, rpc } = vi.hoisted(() => ({ assertCapability: vi.fn(), rpc: vi.fn() }))
 vi.mock('./runtime-rpc-client', () => ({
   assertRuntimeEnvironmentCapability: assertCapability,

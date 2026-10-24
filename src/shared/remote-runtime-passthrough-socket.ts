@@ -6,13 +6,13 @@ import {
   sendRemoteRuntimeTokenAuth
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
-import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
+import { openRemoteRuntimeWebSocket } from './remote-runtime/requests/remote-runtime-request-websocket'
 import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
 } from './remote-runtime-socket-liveness'
-import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
+import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime/requests/remote-runtime-subscription-outbound'
 
 export type RemoteRuntimePassthroughSocket = {
   /** Queues one plaintext RPC frame; false when the socket can no longer carry it. */

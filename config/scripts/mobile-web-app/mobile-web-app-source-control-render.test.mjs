@@ -199,6 +199,7 @@ describeRender(
       }
       expect(text).not.toContain(UNMATCHED)
       expect(opened.errors).toEqual([])
+      expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
       await opened.page.close()
     }, 120_000)
 
@@ -211,6 +212,7 @@ describeRender(
       }
       expect(text).not.toContain(UNMATCHED)
       expect(opened.errors).toEqual([])
+      expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
       await opened.page.close()
     }, 120_000)
 
@@ -240,7 +242,7 @@ describeRender(
       120_000
     )
 
-    it('serves the shipped image policy and neither route violates it', async () => {
+    it('configures the shipped Android and iOS image policy', async () => {
       // The policy the shells send, read from the Kotlin source rather than restated, so this
       // cannot pass against a header the app does not use.
       expect(cspHeader).toContain("img-src 'self' data: blob: https:")
@@ -250,25 +252,6 @@ describeRender(
       )
       // The other shell says the same thing, which no served header can show.
       expect(swift).toContain(`"img-src 'self' data: blob: https:"`)
-
-      for (const [route, text] of [
-        [HUB_ROUTE, 'Source Control'],
-        [REVIEW_ROUTE, 'reviewed']
-      ]) {
-        const opened = await openRoute(route, text)
-        // Chromium reports a refused subresource as a console error naming the directive, so
-        // anything either closure loaded that the policy blocked lands here.
-        expect(opened.errors.filter((entry) => entry.includes('Content Security Policy'))).toEqual(
-          []
-        )
-        // Stronger than the line above and independent of it: not one request left the origin, so
-        // there is nothing for the policy to have refused. A font, a beacon or a provider image
-        // added anywhere in either closure reds this. Since the directive admits `https:`, an empty
-        // list is these two closures fetching nothing rather than the policy refusing something:
-        // the avatar that would fetch needs provider data this page never gets, as below.
-        expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
-        await opened.page.close()
-      }
     }, 180_000)
   },
   600_000

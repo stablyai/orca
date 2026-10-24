@@ -41,8 +41,7 @@ const hooks = vi.hoisted(() => {
   return state
 })
 
-// Spy-wrap (real implementations still run) so the zero-disk-IO test can
-// assert the uninitialized module never touches the filesystem.
+// Preserve real I/O while measuring whether an uninitialized cache touches disk.
 vi.mock('node:fs/promises', { spy: true })
 vi.mock('./session-scanner-parse-cache', async (importOriginal) => {
   const actual = await importOriginal<typeof ParseCacheModule>()
@@ -131,8 +130,6 @@ async function parse(path: string): Promise<SessionParseStats> {
   return stats
 }
 
-// Clear the in-memory cache and the persistence module's memoized state, then
-// re-enable persistence against the same file — a fresh launch, same profile.
 function simulateRestart(cacheFile: string): void {
   resetSessionParseCacheForTests()
   resetSessionParseCachePersistenceForTests()
@@ -214,7 +211,7 @@ describe('session parse cache persistence', () => {
     await flushSessionParseCachePersist()
 
     simulateRestart(cacheFile)
-    // Deleting the transcript proves the hit needs no transcript read at all.
+    // Removing the transcript proves the restored hit needs no transcript read.
     await rm(transcript)
     const reusedStats = createSessionParseStats()
     const reused = await parseAgentSessionFileCached(candidate, process.platform, reusedStats)
@@ -229,7 +226,6 @@ describe('session parse cache persistence', () => {
     const roots = isolatedScanRoots(root)
     const transcript = join(roots.claudeProjectsDir, 'project', 'scan-session.jsonl')
     await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
-    // Same-length markers so the rewrite below preserves sizeBytes exactly.
     await writeFile(
       transcript,
       `${userRecord(0, 'persisted-scan-marker-AAAA')}\n${assistantRecord(1, 'answer')}\n`
@@ -242,8 +238,7 @@ describe('session parse cache persistence', () => {
     await flushSessionParseCachePersist()
 
     simulateRestart(cacheFile)
-    // Rewrite with identical length and mtime: only a cache hit can still
-    // return the original marker; a cold re-parse would see BBBB.
+    // Same size and mtime but different content distinguishes a persisted hit from a cold parse.
     await writeFile(
       transcript,
       `${userRecord(0, 'persisted-scan-marker-BBBB')}\n${assistantRecord(1, 'answer')}\n`
@@ -262,8 +257,7 @@ describe('session parse cache persistence', () => {
     await flushSessionParseCachePersist()
 
     simulateRestart(cacheFile)
-    // Restored rows have no resume state, so this is a full parse (not
-    // incremental) whose result matches a cold parse.
+    // Restored rows lack incremental state; changed transcripts need a full parse.
     await appendFile(transcript, `${userRecord(2, 'follow-up')}\n${assistantRecord(3, 'more')}\n`)
     const stats = createSessionParseStats()
     const reparsed = await parseAgentSessionFileCached(
@@ -325,7 +319,7 @@ describe('session parse cache persistence', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve
     })
-    // A stalled peer in the first batch must not strand its seven completed files.
+    // A hung eighth parse must not prevent the seven completed rows from persisting.
     hooks.beforeParse = () => (++started === 8 ? held : Promise.resolve())
 
     const scan = scanAiVaultSessions(roots)
@@ -348,7 +342,6 @@ describe('session parse cache persistence', () => {
     })
     const write = vi.spyOn(SessionParseCacheDatabase.prototype, 'write')
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    // A batch finishing every second keeps re-arming the 1.5 s debounce.
     for (let second = 0; second < 20; second++) {
       storeSessionParseCacheEntry('timed', {
         mtimeMs: second,
@@ -388,7 +381,7 @@ describe('session parse cache persistence', () => {
     await writeFile(orphan, '{"half":"written')
 
     simulateRestart(cacheFile)
-    // Tab-title sync parses a transcript before any History scan runs.
+    // Title synchronization can parse before the first History scan.
     await parse(await writeTranscript(root, 'baaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'))
     await flushSessionParseCachePersist()
     expect(existsSync(cacheFile)).toBe(false)
@@ -530,8 +523,7 @@ describe('session parse cache persistence', () => {
 
   it('swallows database failures and leaves scan results unaffected', async () => {
     const root = await makeTempDir()
-    // A regular file where the cache directory should be makes the open fail on
-    // every platform (no chmod tricks, which don't hold on Windows or as root).
+    // A file blocking the cache directory fails on Windows and as root, unlike chmod-based fixtures.
     const blocker = join(root, 'blocker')
     await writeFile(blocker, 'a file, not a directory')
     initSessionParseCachePersistence({

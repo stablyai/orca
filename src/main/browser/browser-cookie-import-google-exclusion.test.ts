@@ -1,7 +1,3 @@
-/**
- * STA-3811: an import must never write and never remove a google.com-family cookie, on any
- * path. Removing 'google.com' from NON_TRANSPLANTABLE_DOMAINS flips every test here red.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CookiesGetFilter } from 'electron'
 
@@ -41,8 +37,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
   }) => ({
     get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
-    // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
-    // a missing method cannot silently reroute every write down the rejected-cookie path.
+    // Route CDP writes to the same spy so a missing method cannot make rejection checks pass.
     writeCookieIdentity: (identity: Record<string, unknown>) =>
       targetSession.cookies.set!(identity),
     snapshotClearIdentities: async (
@@ -245,8 +240,6 @@ describe('native Chromium import excludes the Google cookie family', () => {
       googleCookiesSkipped: 1,
       domains: ['example.com']
     })
-    // Why (STA-4797): the bulk clear is gone, so the live Google session survives by never being
-    // named as a removal coordinate rather than by riding an excludeOrigins exemption.
     expect(clearDataMock).not.toHaveBeenCalled()
     expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'stale']])
     expect(cookiesSetMock.mock.calls.map(([details]) => details.domain)).toEqual(['.example.com'])
@@ -286,7 +279,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
       { domain: '.google.com', name: 'SID', value: 'live-sid' },
       { domain: '.example.com', name: 'stale', value: 'stale' }
     ])
-    // Why: a rejected set() forces the staged DB to be kept for cold-restart replay.
+    // Reject the live write so the staged image survives for cold-start replay.
     cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
 
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
@@ -301,16 +294,12 @@ describe('native Chromium import excludes the Google cookie family', () => {
     ])
   })
 
-  // Why (STA-4090): a rejected removal must restore cookies already deleted in the same clear
-  // without writing imported rows or touching the live Google session.
   it('fails the import without permanently deleting a cookie removed before a later rejection', async () => {
     const sourceCookiesPath = seedSource([
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
     seedTarget([{ domain: '.example.com', name: 'stale', value: 'stale' }])
-    // Why (STA-4797): the rejecting cookie has to sit on a domain this import actually replaces.
-    // Parked on an unrelated site it is out of the import scope, never enters the removal plan,
-    // and the rejection the case exists to exercise never happens.
+    // The rejecting cookie must be in scope so removal reaches it.
     let jar = [
       existingCookie('.google.com', 'SID'),
       existingCookie('.example.com', 'removed-first'),
@@ -343,7 +332,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
   })
 })
 
-// Why: freshly imported rows store the decrypted value as a BLOB; read both forms as text.
+// SQLite returns imported value BLOBs as bytes.
 function readStagedRows(stagedPath: string): { host_key: string; name: string; value: string }[] {
   const stagedDb = new DatabaseSync(stagedPath, { readOnly: true })
   const rows = stagedDb

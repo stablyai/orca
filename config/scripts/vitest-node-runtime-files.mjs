@@ -162,10 +162,10 @@ const NODE_RUNTIME_INCLUDE = [
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime-client.test.ts',
-  'src/shared/remote-runtime-connect-bound.test.ts',
+  'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
   // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
-  'src/shared/remote-runtime-request-websocket.test.ts',
-  'src/shared/remote-runtime-subscription-connect-bound.test.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
+  'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/codex-shared-server-probe.test.ts',
   'src/main/opencode/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
@@ -175,10 +175,13 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
   'src/main/runtime/structured-agent-session-startup-tab-restore.test.ts',
   'src/main/runtime/structured-agent-session-windowless-layout-host.test.ts',
-  'src/shared/remote-runtime-shared-control-connection.test.ts',
+  'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/relay-control-client.test.ts',
   'src/main/ipc/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
+  // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
+  'src/main/ipc/rebinding-file-watch.test.ts',
+  'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',

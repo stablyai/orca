@@ -167,7 +167,6 @@ describe('StructuredAgentSessionAdapterRouter optional lifecycle methods', () =>
       const stopSession = router[method]
 
       await expect(stopSession('session-1')).resolves.toBe(true)
-      // A host with no cause to name passes none; the adapter settles its turn as news.
       expect(closeSession).toHaveBeenCalledWith('session-1')
     }
   )
@@ -255,8 +254,7 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
 
     await router.closeAll()
 
-    // The routed session carries the shutdown's own exit proof; the other two are sessions this
-    // router has no record of, and an absent record is not a stop it can report.
+    // Unrouted sessions have no stop receipt even after adapter-wide shutdown.
     await expect(router.closeSession('session-1')).resolves.toBe(true)
     await expect(router.closeSession('never-routed')).resolves.toBe(false)
     router.acknowledgeSessionRelease('session-1')
@@ -337,7 +335,6 @@ describe('StructuredAgentSessionAdapterRouter.closeAll', () => {
     await router.closeAll()
     resolveAcquire(acquisition(2, 'spawn-2'))
 
-    // Shutdown preserves the stop receipt for an acquisition that resolves behind it.
     await expect(acquiring).rejects.toThrow('router is closed')
     await expect(router.closeSession('session-1')).resolves.toBe(true)
     expect(closeSession).not.toHaveBeenCalled()

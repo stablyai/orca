@@ -49,8 +49,7 @@ describe('isGoogleSourceBoundCookie', () => {
   })
 })
 
-// Why: mirrors what openCookieClearStore returns — get/remove plus the CDP identity pair, and
-// deliberately no 'set', so a partition-dropping reconstruction cannot be written against it.
+// Match the CDP-backed store so rollback cannot reconstruct cookies without partition keys.
 function replaceStore(
   existing: Cookie[],
   overrides: {
@@ -93,7 +92,6 @@ describe('replaceCookiesForImportedDomains', () => {
       ['https://accounts.google.com/signin', 'exact'],
       ['http://child.accounts.google.com/nested', 'child']
     ])
-    // Why: the snapshot must cover the whole removal plan before the first removal runs.
     expect(store.snapshotClearIdentities).toHaveBeenCalledOnce()
     expect(
       store.snapshotClearIdentities.mock.calls[0]?.[0].map(
@@ -137,9 +135,7 @@ describe('replaceCookiesForImportedDomains', () => {
     expect(store.remove).toHaveBeenCalledWith('https://local/', 'exact')
   })
 
-  // Why (STA-4097): cookies.get strips partitionKey and cookies.set ignores it, so a rollback
-  // that rebuilds cookies through the Electron API silently downgrades CHIPS cookies. The undo
-  // has to travel back through the CDP identities that actually carry the partition.
+  // Electron cookies.get/set lose partition keys; rollback must use captured CDP identities.
   it('restores removed cookies through CDP identities, keeping partition identity', async () => {
     const existing = [
       cookie('.example.com', 'first', '/one'),
@@ -165,7 +161,7 @@ describe('replaceCookiesForImportedDomains', () => {
 
     expect(store.restoreClearIdentities).toHaveBeenCalledOnce()
     const restored = store.restoreClearIdentities.mock.calls[0]?.[0] as CookieClearIdentity[]
-    // Why: the failing coordinate is restored too — a rejected remove cannot prove it survived.
+    // A rejected removal may already have changed the cookie.
     expect(restored.map(({ name }) => name)).toEqual(['second', 'first'])
     expect(restored.find(({ name }) => name === 'first')?.partitionKey).toEqual(partitionKey)
     expect(restored.find(({ name }) => name === 'first')?.url).toBe('https://example.com/one')
@@ -224,8 +220,7 @@ describe('isNonTransplantableCookieDomain', () => {
     expect(isNonTransplantableCookieDomain('')).toBe(false)
   })
 
-  // Why: youtube.com re-issues its cookies from a transplanted session, so excluding it would
-  // drop imports users asked for. Locking it in keeps a future "just add it too" edit honest.
+  // YouTube reissues imported sessions, so the Google exemption must not cover it.
   it('deliberately leaves youtube.com transplantable', () => {
     expect(isNonTransplantableCookieDomain('.youtube.com')).toBe(false)
     expect(isNonTransplantableCookieDomain('accounts.youtube.com')).toBe(false)
@@ -265,8 +260,7 @@ describe('removeTransplantableCookies', () => {
     }
   }
 
-  // Why (STA-4065/STA-4797): google.com is in the import scope in these fixtures on purpose — the
-  // non-transplantable exemption, not the scope, has to be what keeps the family out of the plan.
+  // Keep google.com in scope so only the non-transplantable exemption can protect it.
   it('removes the imported coordinates one by one and leaves the Google family alone', async () => {
     const { session, remove, set } = clearSession([
       cookie('.google.com', 'SID'),
@@ -330,10 +324,6 @@ describe('removeTransplantableCookies', () => {
     expect(remove).not.toHaveBeenCalled()
   })
 
-  // Why (STA-4797): a cookie with no usable domain cannot be in the scope of any import, so it is
-  // skipped rather than failing the clear — the scope test runs before the removal-URL derivation
-  // precisely so an unaddressable cookie in an unrelated corner of the jar cannot abort an import
-  // that was never going to touch it. Either way it is never mutated.
   it('skips a cookie that cannot be represented for rollback without mutating anything', async () => {
     const { session, remove, snapshotClearIdentities, restoreClearIdentities } = clearSession([
       { ...cookie('.example.com', 'session'), domain: '' }
@@ -348,8 +338,6 @@ describe('removeTransplantableCookies', () => {
     expect(restoreClearIdentities).not.toHaveBeenCalled()
   })
 
-  // Why (STA-4170): the clear may only mutate what the identity snapshot can undo, so the plan is
-  // frozen from a single read. Re-reading the jar widened the removal set past the restore set.
   it('removes only the frozen pre-clear plan and never re-reads the jar', async () => {
     const beforeAttempt = [
       cookie('.removed.test', 'gone-before-clear'),
@@ -368,7 +356,7 @@ describe('removeTransplantableCookies', () => {
     await removeTransplantableCookies(
       session,
       new Set(),
-      // arrived.test is in scope: only the frozen plan may be what spares it.
+      // Keep arrived.test in scope to test the frozen plan.
       importedDomainScope(['removed.test', 'survivor.test', 'arrived.test', 'google.com'])
     )
 
@@ -379,8 +367,6 @@ describe('removeTransplantableCookies', () => {
     ])
   })
 
-  // Why (STA-4170): arrival plus a later removal failure is the exact shape that deleted a login
-  // the user had just completed and still reported restoration. Mutated set must equal restore set.
   it('never touches a cookie that arrives after the removal plan is frozen', async () => {
     const beforeAttempt = [
       cookie('.example.com', 'first', '/one'),
@@ -418,8 +404,6 @@ describe('removeTransplantableCookies', () => {
     expect([...restored].sort()).toEqual(['first', 'second'])
   })
 
-  // Why: the exemption is enforced per coordinate, so no removal may ever be the path that finally
-  // deletes a live Google session.
   it('preserves Google cookies on the per-coordinate removal path', async () => {
     const { session, remove, set } = clearSession([
       cookie('.google.com', 'SID'),
@@ -437,7 +421,6 @@ describe('removeTransplantableCookies', () => {
     expect(set).not.toHaveBeenCalled()
   })
 
-  // Why (STA-4090): a failed clear must restore through captured identities, never cookies.set.
   it('restores removed cookies through captured identities when another removal fails', async () => {
     const { session, remove, set, restoreClearIdentities } = clearSession(
       [

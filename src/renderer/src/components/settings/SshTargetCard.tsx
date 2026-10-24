@@ -240,7 +240,7 @@ export function SshTargetCard({
         {state?.error && state.managedServer?.kind !== 'relay' ? (
           <p className="mt-0.5 text-xs text-destructive [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
-        <SshTargetServerStatusLine target={target} state={state} />
+        <SshTargetServerStatusLine target={target} state={state} onOpenDialog={setServerDialog} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

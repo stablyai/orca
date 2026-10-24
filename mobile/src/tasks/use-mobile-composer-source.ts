@@ -6,7 +6,7 @@ import { resolveComposerManualBranchNameChange } from '../../../src/shared/compo
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../transport/rpc-client'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,

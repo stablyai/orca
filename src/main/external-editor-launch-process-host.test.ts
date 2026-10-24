@@ -76,8 +76,7 @@ describe('VS Code Remote-SSH launch through @orca/process-host', () => {
     }
   )
 
-  // Why spaces on both sides: a plain `cmd /c` strips the outer quotes once a spaced code.cmd
-  // path meets a spaced argument, so the launch dies with "path not found" (seen on Windows 11).
+  // A plain cmd /c loses quotes when both the launcher path and its argument contain spaces.
   it('keeps a spaced code.cmd path and a spaced remote path intact on Windows', async () => {
     setPlatform('win32')
     const codeCmd = 'C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd'

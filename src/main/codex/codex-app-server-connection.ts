@@ -30,14 +30,9 @@ export {
 export { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 export { ROOT_ONLY_GRACEFUL_EXIT_MS as GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
 
-// Structured chat needs a persistent bidirectional child and per-request deadlines;
-// the request-scoped app-server runner cannot carry approvals or streamed turns.
-
+// Structured chat needs a persistent transport for approvals and streamed turns.
 export type CodexAppServerLaunch = ProviderProcessLaunch
 
-// Why: calls made after the start run in the session's queue, which a Stop or a close waits behind,
-// so their deadline is what frees it from a Codex that never answers. Temporary: it goes once a
-// Stop or close can end the child without queueing behind its request.
 export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 
 /** Builds the transport so an owner can record its process before initialization. */
@@ -56,9 +51,7 @@ async function connectCodexAppServer(
   let nextRequestId = 1
   let closing = false
   let exitReported = false
-  /** First terminal cause, or null while the transport is still usable. Set once:
-   *  a child that dies reaches us through several listeners, and the specific
-   *  first cause is the one worth reporting. */
+  // Several listeners can report one failure; preserve its first, specific cause.
   let terminalError: Error | null = null
 
   function buildExitError(cause?: Error): Error {
@@ -75,18 +68,12 @@ async function connectCodexAppServer(
     }
   })
 
-  /** A death nobody asked for kills every in-flight call AND tells the owner,
-   *  which is the only signal the session has that its lease is now worthless.
-   *  Once only: a fatal handler failure kills the child before `close` arrives,
-   *  and a spawn failure arrives as both `error` and `close`. */
+  // Fail pending calls immediately, but notify the owner only once root exit is proven.
   function handleUnexpectedEnd(cause?: Error): void {
     if (!terminalError) {
       terminalError = buildExitError(cause)
       dispatcher.failPending(terminalError)
     }
-    // Transport/protocol failures make the connection unusable immediately so
-    // callers do not hang, but recovery must not treat that as a child exit
-    // until the execution host has observed `exit`/`close`.
     if (managed.rootVerdict === 'exited' && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
@@ -98,11 +85,7 @@ async function connectCodexAppServer(
   })
   managed.onExit(() => handleUnexpectedEnd())
   child.stdin.on('error', (error) => {
-    // A broken pipe is terminal, not one failed write: every later request can
-    // only error or time out, so the session must learn its lease is worthless
-    // instead of staying live in front of a child nobody can reach. During a
-    // close the reap is already under way and `exited` must stay honest, or
-    // `close` would skip the kill it still owes.
+    // Broken pipes invalidate the transport; during close, fail calls without claiming root exit.
     if (closing) {
       dispatcher.failPending(error)
       return

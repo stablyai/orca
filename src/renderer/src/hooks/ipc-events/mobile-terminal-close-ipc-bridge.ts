@@ -3,6 +3,7 @@ import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-sleep-follower'
+import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -198,7 +199,19 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   // A sleep main runs, from this window or a phone: the window hides the workspace and its panes.
-  unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
+  if (window.api.ui.onProjectMovePause && window.api.ui.respondProjectMovePause) {
+    const movePause = createProjectMovePauseFollower(window.api.ui.respondProjectMovePause)
+    unsubs.push(
+      window.api.ui.onProjectMovePause((request) => {
+        void movePause.request(request).catch((error: unknown) => {
+          console.warn('[project-move-pause] renderer reply failed', error)
+        })
+      })
+    )
+    unsubs.push(window.api.ui.onWorkspaceSleep(movePause.follow))
+  } else {
+    unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
+  }
 
   unsubs.push(
     window.api.ui.onResumeSleepingAgents(({ worktreeId }) => {

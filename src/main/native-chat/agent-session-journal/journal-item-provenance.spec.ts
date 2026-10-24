@@ -1,6 +1,3 @@
-// Execution provenance (`JournalItemRow.ownerFence`): the generation whose execution produced an
-// item, kept apart from each row's writer fence. Creation states it; every revision keeps it.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,7 +47,6 @@ export function registerJournalItemProvenanceTests(): void {
 
   type StoredItemWrite = { kind?: string; ownerFence?: number; mutations?: StoredItemWrite[] }
 
-  /** Each stored item write's stated provenance, in write order, a lifecycle batch's included. */
   function storedOwnerFences(): (number | undefined)[] {
     return liveTestJournalRows(database.db, IDENTITY.sessionId).flatMap((row) => {
       const parsed: StoredItemWrite = JSON.parse(row.rowJson)
@@ -77,11 +73,8 @@ export function registerJournalItemProvenanceTests(): void {
     it("records the creating observation's owner, every revision keeps it, and a reopen reads it", async () => {
       const journal = await open()
       await journal.appendItem(TURN, RUNNING, { fence: 4, ownerFence: 3, turnScope: SCOPE })
-      // A newer run's provider revising it (a start's context-usage report on the newest saved turn).
       await journal.appendItem(TURN, RUNNING, { fence: 5, ownerFence: 5, turnScope: SCOPE })
-      // Host bookkeeping under a later writer fence states no owner of its own.
       await journal.appendItem(TURN, SETTLED, { fence: 5, turnScope: SCOPE })
-      // A first write with no stated owner is its writer generation's.
       await journal.appendItem(
         item(2),
         { kind: 'status', text: 'note' },
@@ -90,7 +83,6 @@ export function registerJournalItemProvenanceTests(): void {
 
       expect(journal.itemFence(TURN_ID)).toBe(3)
       expect(journal.itemFence(agentJournalItemKey(item(2)))).toBe(6)
-      // Every row states it: none leaves the reader to guess from the writer fence.
       expect(storedOwnerFences()).toEqual([3, 3, 3, 6])
       await journals.closeAll()
       expect((await open()).itemFence(TURN_ID)).toBe(3)
@@ -99,14 +91,12 @@ export function registerJournalItemProvenanceTests(): void {
     it('a lifecycle batch states it on each item: the batch owner, else the kept value', async () => {
       const journal = await open()
       await journal.appendItem(TURN, RUNNING, { fence: 2, ownerFence: 2, turnScope: SCOPE })
-      // A provider batch at the owner's fence creates one item.
       await journal.appendLifecycleBatch({
         settlementId: 'provider',
         fence: 3,
         ownerFence: 3,
         mutations: [{ kind: 'item', identity: item(2), body: RUNNING, turnScope: SCOPE }]
       })
-      // A settlement at a later fence revises the first: it keeps that item's owner.
       await journal.appendLifecycleBatch({
         settlementId: 'settlement',
         fence: 4,

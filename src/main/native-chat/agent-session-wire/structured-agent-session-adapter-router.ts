@@ -17,8 +17,6 @@ import {
   type SessionRoute
 } from './structured-agent-session-acquisition-route'
 
-/** Routes each session to the adapter its agent is registered with. Adding an agent is one more
- *  registration; nothing here names one. */
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly routes = new Map<string, SessionRoute>()
   private allAdaptersClosed = false
@@ -37,9 +35,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
     this.adapters().some((adapter) => adapter.supportsLocation?.(location) ?? false)
 
-  /** Every adapter already gates its own shutdown, so the router only has to stop UNDOING that:
-   *  a late acquire must not clear `allAdaptersClosed` and fan a session back out to closed
-   *  adapters. Once closed, the router stays closed. */
+  /** Closure is permanent; late acquisition must never reopen routing to closed adapters. */
   async acquire(input: Parameters<StructuredAgentSessionAdapter['acquire']>[0]) {
     if (this.allAdaptersClosed) {
       throw new Error('structured session adapter router is closed')
@@ -57,7 +53,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
-  /** The owner's declared rewind, narrowed by its adapter for this session; never widened. */
+  /** Session support may narrow the owner’s declared rewind, never widen it. */
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (
     sessionId,
     agent
@@ -207,9 +203,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   ): Promise<boolean> {
     const route = this.routes.get(sessionId)
     if (!route) {
-      // No route is loss of contact, never proof of a stop. Answering `true` here would hand a
-      // caller a receipt for a session this router never acted on — and the caller spends that
-      // receipt by releasing the durable lease.
+      // Missing routes prove no stop; claiming success would incorrectly release a durable lease.
       return false
     }
     if (route.state === 'stopped') {
@@ -253,10 +247,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.closePromise = (async () => {
       try {
         await this.closeAdapters()
-        // Adapter shutdown only resolves once every child is PROVEN stopped, so each routed
-        // session inherits that proof and keeps it per session. Clearing the map instead would
-        // leave one boolean as the only surviving evidence, and an empty map cannot tell a
-        // session this router stopped from one it never saw.
+        // Preserve per-session shutdown proof; an empty map cannot distinguish stopped from unseen sessions.
         for (const route of this.routes.values()) {
           route.state = 'stopped'
         }
@@ -268,7 +259,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return this.closePromise
   }
 
-  /** Drops a per-session stop receipt after the host releases its durable owner. */
+  /** Retain stop receipts until durable ownership is released. */
   acknowledgeSessionRelease = (
     sessionId: string,
     acquisition?: StructuredAgentSessionAcquisitionReceipt
@@ -286,7 +277,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return adapter
   }
 
-  /** The live owner, or for a session at rest the agent it would start under. */
   private capabilityOwner(sessionId: string, agent?: string): StructuredAgentRegistration | null {
     const route = this.routes.get(sessionId)
     if (route?.state === 'live') {

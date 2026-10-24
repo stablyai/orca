@@ -23,8 +23,7 @@ const sha = (text: string) => createHash('sha256').update(text).digest('hex')
 
 const { detectAgentsMock } = vi.hoisted(() => ({ detectAgentsMock: vi.fn() }))
 
-// Why: the real installer runs against a temp home; only the shipped bytes and the
-// host's agent probe are pinned so the test does not depend on this machine.
+// Use the real installer in a temporary home; pin bundled bytes and agent detection for portability.
 vi.mock('../main/skills/bundled-skill-install/bundled-skill-sources', () => ({
   BUNDLED_SKILL_SOURCES: [
     { name: NAME, text: NEW_TEXT, releasedDigests: [sha(OLD_TEXT), sha(NEW_TEXT)] }
@@ -33,7 +32,7 @@ vi.mock('../main/skills/bundled-skill-install/bundled-skill-sources', () => ({
 vi.mock('../main/preflight/installed-agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectAgentsMock
 }))
-// Why: a held lock should fail fast here instead of waiting out the real 5s default.
+// Avoid the production five-second lock wait in tests.
 vi.mock('../main/skills/bundled-skill-install/local-host', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalHost>()
   return {
@@ -130,7 +129,7 @@ describe('orca skills install/update', () => {
 
     const text = await run(['update', '--skill', NAME, '--agent', 'claude', '--dry-run'])
 
-    // Why no Claude line: update never adds the skill for an agent that does not have it.
+    // Updating must not install skills for an agent that lacks them.
     expect(text).toContain(`${NAME}\n  ${paths.shared}: Update\n\n`)
     expect(text).toMatch(/Plan digest: [0-9a-f]{64}\nRerun without --dry-run to update now\.\n$/u)
     expect(await skillText(paths.shared)).toBe(OLD_TEXT)
@@ -204,7 +203,6 @@ describe('orca skills install/update', () => {
 
   it('exits 1 when the run cannot apply the plan', async () => {
     await writeCopy(paths.shared, OLD_TEXT)
-    // Why: another install holding the target's lock is a run that wrote nothing.
     const release = await acquireSkillInstallLock({
       path: skillInstallLockPath(join(paths.userData, 'skill-installs'), paths.shared)
     })

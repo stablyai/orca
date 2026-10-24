@@ -39,7 +39,7 @@ vi.mock('./remote-install-transfers', () => ({
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
 const conn = {} as OrcadHostTransport
 const host = getRemoteHostPlatform('linux-x64')
-// What dash printed for the probe on a Docker host whose /root is a `noexec` tmpfs.
+// Captured dash output for executing from a noexec home filesystem.
 const NOEXEC_PROBE_REPLY = [
   REMOTE_NODE_RUNTIME_NOEXEC,
   'ORCA_RUNTIME_EXIT=126',

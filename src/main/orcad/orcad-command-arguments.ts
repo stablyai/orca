@@ -26,6 +26,10 @@ Options:
   --project-root <dir>     Existing absolute project directory for --recipe-json.
   --web-client-root <dir>  Serve the browser client from this directory (holds web-index.html).
   --help, -h               Print this text and exit without starting the server.
+  --reclaim-stale-lock [--yes]
+                           Without starting the server, check whether this data root's
+                           instance lock belongs to an orcad that stopped (same host,
+                           an earlier boot, nothing answering) and, with --yes, clear it.
 
 Environment:
   ORCA_USER_DATA           Data directory for this instance's profile and state.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { JiraProjectReference } from '../../../../shared/jira-project-reference'
+import type { JiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'

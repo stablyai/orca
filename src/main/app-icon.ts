@@ -180,7 +180,7 @@ function runBoundedMacDockIconCommand({
         finishAfterFallback()
         return
       }
-      // Why: the queue must not release while an older icon process can still win.
+      // Hold the queue until an older icon process can no longer overwrite the result.
       childProcess.once('exit', finishAfterFallback)
       childProcess.once('close', finishAfterFallback)
       forceFallback = setTimeout(finishAfterFallback, MAC_DOCK_ICON_COMMAND_FALLBACK_MS)
@@ -272,7 +272,6 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
   const iconId = normalizeAppIconId(value)
   const generation = ++macDockIconPersistenceGeneration
   enqueueMacDockIconPersistence(async () => {
-    // Why: stale queued writes must not reapply an older Dock pin icon.
     if (generation !== macDockIconPersistenceGeneration) {
       return
     }
@@ -280,8 +279,7 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
       await clearMacCustomIconMetadata(execFile, appBundlePath)
       return
     }
-    // Why: a stopped app's Dock tile is resolved from Finder metadata, not
-    // Electron's live app.dock.setIcon state.
+    // Finder metadata supplies the stopped app’s Dock icon; Electron only changes the live tile.
     await runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
   })
 }

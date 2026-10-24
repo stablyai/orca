@@ -95,8 +95,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       clearTimeout(state.timer)
       state.timer = null
     }
-    // The queue is no longer replayable. Drop it explicitly, release the read
-    // pause, and enter the adapter's generation-checked unexpected-exit seam.
+    // Unreplayable queues must release paused reads before host recovery.
     state.events.length = 0
     state.bytes = 0
     state.connection.resumeReading?.()
@@ -122,8 +121,6 @@ export function createCodexStructuredNotificationRetry(deps: {
       states.set(sessionId, state)
     }
     if (state.events.length >= MAX_RETRY_EVENTS) {
-      // A bounded queue cannot retain more traffic. Fail it truthfully so the
-      // provider's generation enters host recovery instead of stranding a pause.
       fail(sessionId, state, 'notification retry queue overflow')
       return
     }

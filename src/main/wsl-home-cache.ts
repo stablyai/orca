@@ -1,7 +1,7 @@
 const MAX_WSL_HOME_CACHE_ENTRIES = 64
 const wslHomeCache = new Map<string, string>()
 
-// Why: WSL distro names are case-insensitive, and paths and callers spell them differently.
+// Distro names are case-insensitive even when callers spell them differently.
 function cacheKey(distro: string): string {
   return distro.toLowerCase()
 }

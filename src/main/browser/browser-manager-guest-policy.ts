@@ -18,9 +18,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       return
     }
     this.policyAttachedGuestIds.add(guest.id)
-    // Why one door with a profile rather than a second installer beside it: whether a guest was
-    // policy-attached at all is what registration and teardown both key on, so a guest that took
-    // another path into the app is invisible to both.
+    // All profiles share attachment bookkeeping used by registration and teardown.
     if (policy.profile === 'workspace-doc') {
       this.attachWorkspaceDocGuestPolicies(guest, policy.host)
       return
@@ -29,7 +27,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
     const disposeDetachTracking = this.trackDebuggerDetachForCdpOverrides(guest)
-    // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
+    // Keep background compositor frames available for screenshots.
     guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
@@ -42,7 +40,6 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       }
     })
 
-    // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDetachTracking()
       disposePopupPolicy()
@@ -51,11 +48,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     })
   }
 
-  /**
-   * A workspace document is not the web: no popups, no link routing, no auth-identity tracking, and no
-   * navigation bookkeeping for chrome it does not have. What it does share with a browsing guest is
-   * this method's teardown, so a retired preview drops its listeners on the same path.
-   */
+  /** Document guests share teardown without installing browsing navigation or popup policies. */
   protected attachWorkspaceDocGuestPolicies(
     guest: Electron.WebContents,
     host: Electron.WebContents

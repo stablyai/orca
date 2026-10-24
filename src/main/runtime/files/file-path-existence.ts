@@ -2,7 +2,7 @@ import {
   capturePathExistence,
   type PathExistenceResult
 } from '../../../shared/path-existence-batch'
-import { isENOENT } from '../../ipc/filesystem-path-containment'
+import { isPathAbsentError } from '../../ipc/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,
   type RuntimeFileExplorerPath,
@@ -27,7 +27,7 @@ export async function readRuntimeFilePathExistence(
           await provider.stat(target.path)
           return true
         } catch (error) {
-          if (isENOENT(error)) {
+          if (isPathAbsentError(error)) {
             return false
           }
           throw error

@@ -15,7 +15,7 @@ jobs:
   selection_evidence:
     if: ${{ !cancelled() }}
     continue-on-error: true
-    runs-on: ubuntu-slim
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v6
         with:

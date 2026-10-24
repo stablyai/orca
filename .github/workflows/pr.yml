@@ -52,6 +52,7 @@ jobs:
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
       managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
+      windows_process_probe: ${{ steps.filter.outputs.windows_process_probe }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       layout_oracle: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.layout_oracle }}
       dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
@@ -573,7 +574,7 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.git_compatibility == 'true' &&
       needs.preflight.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Checkout
@@ -645,7 +646,7 @@ jobs:
       needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     env:
       CODEX_CLI_VERSION: '0.150.1'
       # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
@@ -746,7 +747,7 @@ jobs:
     # Why ARM: the patch check rebuilds 4 packages x 2 builds and byte-compares against the
     # checked-in bundles. Those were generated on Linux x64 and reproduce byte-for-byte on
     # darwin-arm64, so the output is neither host-arch nor host-OS dependent.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
 
     steps:
       - name: Checkout
@@ -778,7 +779,7 @@ jobs:
       needs.code_paths.outputs.shell_contracts == 'true' &&
       needs.preflight.result == 'success'
     # Exercise Linux ARM with the standalone aarch64 release and Ubuntu's zsh.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     # Bound stalled prerequisite downloads instead of waiting for GitHub's 6-hour default.
     timeout-minutes: 15
     env:
@@ -894,7 +895,7 @@ jobs:
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      runner: blacksmith-4vcpu-ubuntu-2404
+      runner: blacksmith-8vcpu-ubuntu-2404
       phase_diagnostics: true
       shards: ${{ needs.preflight.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
@@ -916,7 +917,7 @@ jobs:
     name: mobile web app bundle
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
 
     steps:
       - name: Checkout
@@ -998,7 +999,7 @@ jobs:
       needs.code_paths.outputs.cross-version-wire == 'true' &&
       needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
 
     steps:
       # Why fetch-depth 0: the harness extracts the newest release tag to skew
@@ -1046,7 +1047,7 @@ jobs:
       needs.code_paths.outputs.managed_hook_node18 == 'true' &&
       needs.preflight.result == 'success'
     # Retain the required check while sharing preflight's checkout and built packages.
-    runs-on: ubuntu-slim
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
 
     steps:
@@ -1063,7 +1064,7 @@ jobs:
     name: package
     needs: [code_paths, preflight]
     if: needs.code_paths.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
     timeout-minutes: 90
 
@@ -1341,6 +1342,9 @@ jobs:
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
+        if: needs.code_paths.outputs.windows_process_probe != 'false'
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         # Serialize the two suites so their cold PowerShell/CIM starts cannot contend.
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts

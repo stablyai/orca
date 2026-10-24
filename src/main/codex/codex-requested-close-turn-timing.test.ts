@@ -11,14 +11,11 @@ import type { CodexSession } from './codex-structured-session-state'
 afterEach(() => vi.useRealTimers())
 
 describe('requested-close durable turn timing', () => {
-  // The exit is observed, so a refused terminal row is the host's to settle, never a reason to
-  // keep the dead child indexed for a retry.
   it.each([true, false])(
     'ends the session with its exit receipt though its terminal row is refused (requestedClose=%s)',
     async (requestedClose) => {
       vi.useFakeTimers()
       vi.setSystemTime(1_000)
-      // Backpressure refuses the terminal row the close's end would write.
       const sink: StructuredAgentSessionEventSink = {
         appendItem: () => {},
         appendTombstone: () => {},

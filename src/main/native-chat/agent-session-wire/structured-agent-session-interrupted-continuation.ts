@@ -1,6 +1,4 @@
-// Continue, pressed in a chat whose reply an Orca stop cut off: the restart continuation, bound to
-// that cut turn rather than to a restart offer. An offer, when one survives, only picks the words;
-// none is needed, so a crash or a paired server's restart continues the same way.
+// Bind Continue to the cut turn; restart offers only select wording and may be absent.
 
 import { createHash, randomUUID } from 'node:crypto'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -16,8 +14,7 @@ import {
 
 export type StructuredAgentSessionInterruptedContinuationOutcome = {
   sessionId: string
-  /** `superseded`: the chat is no longer sitting on that cut (a message, or another Continue, came
-   *  first), so nothing was sent. */
+  /** Nothing sent: another message or Continue superseded this cut. */
   outcome: StructuredAgentSessionContinuationOutcome['outcome'] | 'superseded'
   reason?: string
 }
@@ -25,7 +22,7 @@ export type StructuredAgentSessionInterruptedContinuationOutcome = {
 const hex16 = (parts: readonly unknown[]): string =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16)
 
-/** Dated by the click, as the ledger requires of a new id; tagged with the cut it continues. */
+/** Timestamp new ledger IDs at the click; bind identity to the cut turn. */
 function interruptedContinuationId(
   sessionId: string,
   turnItemId: string,
@@ -35,17 +32,13 @@ function interruptedContinuationId(
   return `${Math.trunc(actionAt).toString().padStart(13, '0')}-${hex16([sessionId, turnItemId])}${hex16([sessionId, turnItemId, nonce])}`
 }
 
-/**
- * Sends the continuation when, at acceptance inside the session lock, the chat's latest turn is
- * still `turnItemId`, cut by an Orca stop with nothing sent since. A second Continue (another
- * client, a retry after a lost answer) finds the first one's message there and sends nothing.
- */
+/** Recheck the cut under serialization; prior acceptance makes concurrent/lost-reply retries no-ops. */
 export async function continueInterruptedStructuredAgentSessionTurn(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
   input: {
     sessionId: string
     turnItemId: string
-    /** The chat's restart offer, when one could be read: its words cover lost background work. */
+    /** Optional restart-offer wording for lost background work. */
     offer: Pick<AgentSessionResumeMarker, 'activity'> | null
     nonce: string
   }
@@ -62,15 +55,14 @@ export async function continueInterruptedStructuredAgentSessionTurn(
   const continuationId = interruptedContinuationId(sessionId, turnItemId, host.now(), input.nonce)
   try {
     const started = await startStructuredAgentSessionContinuation(
-      // As a send answers: a paired client's wait is shorter than an agent's start can be.
+      // A paired client may time out before provider startup completes.
       { ...continuationDeps(host, stillCut), answerAtAcceptance: true },
       sessionId,
       input.offer ?? {},
       continuationId
     )
     if ('verdict' in started) {
-      // Accepted: the agent's start and answer can take a whole turn, and the chat's own note
-      // reports a failure, so the click is answered now.
+      // Answer on acceptance; any later failure is reported by the chat’s own note.
       void started.verdict().catch(() => {
         host.logger.warn('settling an interrupted-turn continuation failed', {
           scope: 'interrupted-continuation',
@@ -92,10 +84,9 @@ export async function continueInterruptedStructuredAgentSessionTurn(
   }
 }
 
-/** Reading the offer only picks the words, so a slow recovery file never holds Continue. */
+/** Offer reads select wording only; bound them so slow recovery files cannot block Continue. */
 const OFFER_READ_TIMEOUT_MS = 2_000
 
-/** Continue for one host: its offer, when one can be read in time, picks the words. */
 export function createInterruptedContinuation(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
   readOffers: () => Promise<readonly AgentSessionResumeMarker[]>

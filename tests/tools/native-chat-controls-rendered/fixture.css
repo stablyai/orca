@@ -1,0 +1,6 @@
+@import '../../../src/renderer/src/assets/main.css';
+@source './fixture.tsx';
+@source '../../../src/renderer/src/components/native-chat/NativeChatPaneHeader.tsx';
+@source '../../../src/renderer/src/components/native-chat/NativeChatFindBar.tsx';
+@source '../../../src/renderer/src/components/native-chat/NativeChatContextClearFade.tsx';
+@source '../../../src/renderer/src/components/ui';

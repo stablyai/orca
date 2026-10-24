@@ -15,7 +15,7 @@ export const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'S
     rebase: 'REBASE'
   }
 
-// Why: GitHub rejects auto-merge on an already-mergeable PR ("clean status"); surface an actionable message instead of the raw error.
+// GitHub rejects auto-merge for clean/mergeable PRs; explain that state directly.
 export function classifySetAutoMergeError(message: string, enabled = true): string {
   if (enabled && /in clean status/i.test(message)) {
     return 'This pull request can already be merged. Use Merge instead of auto-merge.'
@@ -135,7 +135,7 @@ export async function enablePRAutoMerge(
   if (pr.headRefOid) {
     args.push('-f', `expectedHeadOid=${pr.headRefOid}`)
   }
-  // Why: `gh pr merge --auto` can merge immediately; this mutation only creates the auto-merge request, letting branch requirements gate it.
+  // Request auto-merge through the mutation; gh pr merge --auto can merge immediately.
   await ghExecFileAsync(args, {
     ...ghOptions,
     env: { ...process.env, GH_PROMPT_DISABLED: '1' }

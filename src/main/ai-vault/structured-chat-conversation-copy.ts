@@ -9,11 +9,7 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { isAiVaultAgent } from './session-list-result-validation'
 import { findResumeOwnership } from './structured-session-ownership'
 
-/**
- * A fork of a chat's conversation, for an agent whose chat makes the copy: the chat's host copies
- * it and answers the copy, which the terminal resumes and no chat owns. Null for any other prepare.
- * Runs on the host that runs the chat, as every resume preparation does.
- */
+/** On the chat’s execution host, create an unowned copy for agents whose adapters handle forks. */
 export async function copyStructuredChatConversation(
   args: AiVaultPrepareSessionResumeArgs
 ): Promise<AiVaultPrepareSessionResumeResult | null> {
@@ -66,7 +62,7 @@ export async function copyStructuredChatRecordConversation(
     useRealCodexHome: false,
     forkedSession: {
       ...forkedSession,
-      // The chat's own agent, not the row's: an OpenCode 2 row's chat runs `opencode`.
+      // Use the chat provider’s CLI; an opencode2 history row may run opencode.
       agent: record.provider
     }
   }

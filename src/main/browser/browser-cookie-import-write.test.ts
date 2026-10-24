@@ -45,9 +45,7 @@ describe('writeImportedCookies', () => {
       silentOptions
     )
 
-    // Why: assert the write was ATTEMPTED, not just that the counters look right — a store mock
-    // missing this method would throw a TypeError the catch swallows, and every counter below
-    // would still be reachable through the rejected path.
+    // A swallowed missing-method error must not masquerade as a tested write path.
     expect(store.writeCookieIdentity).toHaveBeenCalledTimes(1)
     expect(store.writeCookieIdentity.mock.calls[0][0]).toMatchObject({
       name: 'chips',
@@ -71,8 +69,6 @@ describe('writeImportedCookies', () => {
     expect(store.writeCookieIdentity.mock.calls[0][0]).not.toHaveProperty('partitionKey')
   })
 
-  // Why (STA-4300): the whole point of the change — an unreadable partition must never reach the
-  // store as an unpartitioned write.
   it('never writes a cookie whose partition could not be read, and counts it', async () => {
     const store = recordingStore()
     const logged: string[] = []
@@ -94,7 +90,6 @@ describe('writeImportedCookies', () => {
     expect(logged.join('\n')).toContain('unreadable partition')
   })
 
-  // Why: cookie values are secrets; a skip line that echoed one would leak it into the diag log.
   it('logs only the domain for a skipped cookie, never its name or value', async () => {
     const logged: string[] = []
 
@@ -134,13 +129,10 @@ describe('writeImportedCookies', () => {
     expect(store.writeCookieIdentity.mock.calls[0][0]).toMatchObject({
       hostOnly: true,
       path: '/',
-      // A host-prefixed cookie can still be partitioned; the prefix must not drop the partition.
       partitionKey: PARTITION_KEY
     })
   })
 
-  // Why: once existing cookies have been removed, the caller has to roll back, so the run must stop
-  // at the first rejection instead of writing over a jar it is about to restore.
   it('stops at the first rejection when the caller must roll back', async () => {
     const store = recordingStore()
     store.writeCookieIdentity.mockRejectedValueOnce(new Error('rejected'))
@@ -160,8 +152,6 @@ describe('writeImportedCookies', () => {
     expect(phase.failure).toBeInstanceOf(Error)
   })
 
-  // Why: the native path has a staged cold-start replay behind it, so one rejected cookie must not
-  // stop the rest from loading.
   it('keeps going past a rejection when the caller has a restart fallback', async () => {
     const store = recordingStore()
     store.writeCookieIdentity.mockRejectedValueOnce(new Error('rejected'))

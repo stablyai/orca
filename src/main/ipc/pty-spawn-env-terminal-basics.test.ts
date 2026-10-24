@@ -465,9 +465,7 @@ describe('registerPtyHandlers', () => {
       }
     )
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
-      // Why: the local provider spreads main's process.env, so a GUI launched from
-      // inside a Claude session would stamp every pane as a nested child and Claude
-      // would silently disable transcript persistence. Not gated on isDaemonHostSpawn.
+      // Local providers inherit main's env too; Claude child stamps would disable independent-pane transcript persistence.
       const env = await spawnAndGetEnv(undefined, {
         CLAUDE_CODE_CHILD_SESSION: '1',
         CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
@@ -478,8 +476,7 @@ describe('registerPtyHandlers', () => {
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
     })
     it('strips an inherited agent session id so a pane never claims that session', async () => {
-      // Why: an Orca launched inside a structured session inherits its id; every pane would then
-      // present that session as its orchestration caller instead of its own terminal.
+      // Inherited structured-session IDs must not make every pane claim the parent orchestration caller.
       const env = await spawnAndGetEnv(undefined, {
         ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
         ORCA_STRUCTURED_SESSION: '1'
@@ -524,7 +521,7 @@ describe('registerPtyHandlers', () => {
       expect(env.GCM_INTERACTIVE).toBe('never')
     })
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
-      // Why: supports-hyperlinks allowlists TERM_PROGRAM and reports false for Orca, so FORCE_HYPERLINK=1 forces detection on (xterm.js handles OSC 8 natively).
+      // Force OSC 8 support because supports-hyperlinks does not recognize Orca's TERM_PROGRAM.
       const env = await spawnAndGetEnv()
       expect(env.FORCE_HYPERLINK).toBe('1')
     })
@@ -542,7 +539,6 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
-      // Why: the app prepares a native pane's Codex home; only WSL panes run the preflight.
       expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
     })
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {

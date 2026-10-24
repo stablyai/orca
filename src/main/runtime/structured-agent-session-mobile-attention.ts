@@ -21,6 +21,10 @@ import type {
   NotificationDispatchRequest,
   NotificationSettings
 } from '../../shared/notification-settings-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'
@@ -88,7 +92,7 @@ export function createStructuredAttentionMobileDelivery(
       if (!news) {
         return
       }
-      const scope = edge.type === 'prompt' ? edge.prompt.scope : edge.completion.scope
+      const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
       if (deps.isWorkspaceMuted(scope)) {
         return
       }
@@ -121,6 +125,8 @@ export function createStructuredAttentionMobileDelivery(
         title,
         body,
         worktreeId: scope.workspaceId,
+        // The host has no window tab id; the phone matches this session-derived key to the chat.
+        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
         notificationId: attentionKey,
         attentionKey,
         ...(structuredAttentionOrigin(edge)

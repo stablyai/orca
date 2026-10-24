@@ -7,6 +7,7 @@ import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import { readLocalAgentInventoryOutcome } from './local-agent-inventory-outcome'
 import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
@@ -14,6 +15,7 @@ type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetect
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
   const detectPromises = new Map<string, Promise<TuiAgent[]>>()
   const refreshPromises = new Map<string, Promise<TuiAgent[]>>()
+  const keptThroughFailure = new WeakSet<TuiAgent[]>()
   const failedDetectContextKeys = new Set<string>()
   let detectedContextKey: string | null = null
   let legacyDetectContextKey: string | null = null
@@ -23,6 +25,8 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
   const actions = {
     ...createEmptyLocalDetectedAgentState(),
 
+    readLocalAgentInventory: (id?: string | null) =>
+      readLocalAgentInventoryOutcome(get(), id, failedDetectContextKeys, keptThroughFailure),
     ensureNativeDetectedAgents: (): Promise<TuiAgent[]> =>
       actions.ensureDetectedAgents(undefined, true),
     ensureDetectedAgents: (worktreeId?: string | null, nativeHost = false): Promise<TuiAgent[]> => {
@@ -229,6 +233,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
           ) {
+            keptThroughFailure.add(fallback)
             if (!hadUsableCache) {
               failedDetectContextKeys.add(contextKey)
             }

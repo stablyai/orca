@@ -377,13 +377,15 @@ export function BrowserPagePane({
               showFailureOverlay={showFailureOverlay}
               browserTab={browserTab}
               failureExternalUrl={failureExternalUrl}
-              failedNavigationUrl={failedNavigationUrl}
               onUpdatePageStateRef={onUpdatePageStateRef}
               retryGuestRecoveryRef={retryGuestRecoveryRef}
               navigateToUrl={nav.navigateToUrl}
-              setResourceNotice={setResourceNotice}
               certificateFailure={certificateFailure}
               sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
+              autoRetry={{
+                active: isPaintable,
+                whileWindowHidden: isMobileDriven || isRemotelyViewed
+              }}
               isBlankTab={isBlankTab}
               containerRef={containerRef}
               markupPortalContainer={pageViewport?.content ?? null}

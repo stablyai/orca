@@ -1,10 +1,4 @@
-// Live end-to-end oracle for the WSL hook relay HOST side: the real esbuild
-// bundle runs as a real child process (spawned via `node` instead of wsl.exe
-// — everything else identical), the real manager connects over the child's
-// actual stdio pipes, the real installers write through the fs bridge, and a
-// real HTTP POST in the exact Claude hook shape must land in a real
-// AgentHookServer.ingestRemote. This is the chain the Windows-rig GUI run
-// exercises minus the wsl.exe byte transport (validated separately on-rig).
+// Run the real bundle, stdio mux, installers, and HTTP ingest using node in place of wsl.exe.
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -32,9 +26,7 @@ async function pickFreePort(): Promise<number> {
   return port
 }
 
-// Why skipIf: the guest is always POSIX — the bundle derives its home from
-// $HOME, which os.homedir() ignores on Windows. Windows coverage comes from
-// the live rig runs against a real distro.
+// Guest home semantics require POSIX; Windows needs a real WSL distro.
 describe.skipIf(process.platform === 'win32')(
   'WSL hook relay live host chain (real bundle over real child stdio)',
   () => {
@@ -121,8 +113,7 @@ describe.skipIf(process.platform === 'win32')(
 
       manager.ensureForDistro('LiveDistro', codexHome)
 
-      // Waiting on Codex's artifact (not Claude's, which is written first) keeps the
-      // assertions behind the still-running 14-agent installer loop.
+      // Wait for Codex rather than the earlier Claude artifact so the installer loop reaches this assertion.
       await vi.waitFor(() => expect(existsSync(join(codexHome, 'hooks.json'))).toBe(true), {
         timeout: 15_000
       })
@@ -136,12 +127,10 @@ describe.skipIf(process.platform === 'win32')(
       )
       expect(claudeScript).toContain('/hook/claude')
 
-      // Trust TOML is deferred so the launch-path seed is never pre-empted.
       expect(existsSync(join(codexHome, 'config.toml'))).toBe(false)
       expect(existsSync(join(fakeHome, '.codex', 'hooks.json'))).toBe(false)
 
-      // Re-coordinate exactly like a hook script: read the relay-written
-      // endpoint file rather than assuming the preferred port bind won.
+      // Read the actual endpoint because the preferred port may have been occupied.
       const endpointFile = join(
         fakeHome,
         '.orca-wsl',
@@ -197,9 +186,7 @@ describe.skipIf(process.platform === 'win32')(
         { timeout: 10_000 }
       )
 
-      // Link death must be breadcrumbed and scheduled for restart — a silent
-      // mux/child death would blackhole every later envelope while the guest
-      // keeps returning 204 (the exact failure signature from the Windows rig).
+      // Link death must schedule recovery before later hook events disappear into a dead mux.
       child?.kill()
       await vi.waitFor(
         () => expect(warns.some((w) => w.includes('scheduling restart'))).toBe(true),

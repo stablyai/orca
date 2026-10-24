@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   JIRA_SAVED_FILTER_RUNTIME_CAPABILITY,
   JIRA_SAVED_FILTER_UPDATE_REQUIRED
-} from '../../../../shared/jira-saved-filter-capability'
+} from '../../../../shared/jira/jira-saved-filter-capability'
 import {
   JIRA_STATUS_FILTER_RUNTIME_CAPABILITY,
   JIRA_STATUS_FILTER_UPDATE_REQUIRED

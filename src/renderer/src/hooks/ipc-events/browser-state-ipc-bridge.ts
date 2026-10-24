@@ -8,6 +8,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/browser-page-window-close'
 import {
   beginAgentInputFocusGuard,
   clearAgentInputFocusGuards,
@@ -141,12 +142,15 @@ export function registerBrowserStateIpcBridge(
       if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
-      openUrlInTabBesideBrowserPage({
+      const openedPageId = openUrlInTabBesideBrowserPage({
         sourcePageId: browserPageId,
         worktreeId: sourcePage.worktreeId,
         url,
         activate: activate ?? true
       })
+      if (openedPageId) {
+        markBrowserPageOpenedByPage(openedPageId)
+      }
     })
   )
 }

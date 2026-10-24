@@ -104,8 +104,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
-      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings),
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings, args.hostPlatform),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
         : {})

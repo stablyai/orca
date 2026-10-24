@@ -22,25 +22,21 @@ export async function stopPtysForDestructiveWorktreeRemoval(
   options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
 ): Promise<void> {
   const { connectionId, allowUnverifiedStop } = options
-  // Why: this process holds no SSH PTY provider, so an SSH workspace's terminals cannot be stopped here.
+  // This process has no SSH PTY provider and cannot prove remote terminals stopped.
   if (connectionId) {
     throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
   }
   const teardownResult = await killAllProcessesForWorktree(worktreeId, {
     runtime,
-    // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
-    // workspace's terminals on another connection — and the selector lookup this replaces
-    // throws `selector_ambiguous` the moment two hosts own the id.
+    // Path-derived IDs repeat across hosts; exact ownership prevents ambiguous selectors or cross-host sweeps.
     resolvedWorktreeId: worktreeId,
     localProvider: getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
     requirePhysicalStop: true,
-    // Why (#11960): set only by an explicit Force Delete, never by the ordinary
-    // confirmation — otherwise the gate would be off on the primary delete path.
+    // Only explicit Force Delete may waive PTY-stop proof; ordinary force confirmation must remain strict.
     ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {})
   })
-  // Structured sessions are counted here too: closing a user's chat is now an ordinary outcome
-  // of this verb, and a removal that closed one but no PTY would otherwise log nothing at all.
+  // Count structured-chat closures even when no PTY stopped so teardown remains observable.
   const structuredStopped = teardownResult.structuredStopped ?? 0
   const total =
     teardownResult.runtimeStopped +
@@ -54,8 +50,7 @@ export async function stopPtysForDestructiveWorktreeRemoval(
   }
 }
 
-// Why: the worktree's own persisted host outranks the repo fallback; teardown and metadata purge must resolve the same owner
-// or the purge lands on the local partition while the SSH/runtime one keeps the workspace's tabs forever.
+// Persisted worktree ownership outranks repo fallback; teardown and metadata purge must target the same host.
 export function resolveWorktreeRemovalOwnerHostId(
   store: Store,
   worktreeId: string,
@@ -89,15 +84,15 @@ export function removeWorktreeMetadataAndTransientState(
     ((persistedHostId && persistedHostId !== hostId) ||
       hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
   )
-  // Why: worktree IDs are path-derived and reusable; drop process-local caches before the same ID can map to a new workspace.
+  // Path-derived IDs are reusable; retire old process state before a new workspace can inherit it.
   removeWorktreeMetaRow(store, worktreeId, hostId)
-  // Why outside the same-id gate: retirement is per host and per pane, so a surviving owner keeps its own.
+  // Status retirement is host/pane-scoped, even when another owner keeps the same workspace ID.
   agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
   if (!preservesSameIdOwner) {
     dropRemovedWorktreeProcessState(worktreeId)
-    // Why here, not in the shared drop: the PR-refresh queue is desktop-only and imports Electron.
+    // Keep Electron-dependent desktop PR cleanup outside the runtime-shared drop.
     pruneWorktreePRRefreshAliases(worktreeId)
-    // Why: the desktop also hosts browser pages for paired clients; the runtime path closes them too.
+    // Paired clients can own browser sessions here; retire them with the workspace.
     runtime.releaseRemovedWorktreeHostSessions(worktreeId, entryPoint)
   }
   pruneRemovedWorktreeSnapshots(

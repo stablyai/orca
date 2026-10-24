@@ -1,7 +1,7 @@
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 
-// Why short: config/read is a local file read; a slow answer must not hold the listing.
+// Bound config reads so a slow app-server cannot hold the model listing.
 const CONFIG_READ_TIMEOUT_MS = 3_000
 
 type CodexConfiguredLaunchDefaults = {
@@ -15,7 +15,6 @@ function configuredText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-/** The model and effort the user's Codex config selects, or null when Codex can't say. */
 export async function readCodexConfiguredLaunchDefaults(
   connection: Pick<CodexAppServerConnection, 'request'>,
   timeoutMs = CONFIG_READ_TIMEOUT_MS,
@@ -57,11 +56,7 @@ export async function readCodexConfiguredLaunchDefaults(
   }
 }
 
-/**
- * Re-points the listing's default at what a launch without an explicit pick
- * actually runs: `model/list` marks Codex's recommended model, but a launch
- * follows the user's configured model and effort.
- */
+/** Launches follow configured model/effort; model/list marks only Codex's recommendation. */
 export function applyCodexConfiguredLaunchDefaults(
   models: AgentSessionModelOption[],
   configured: CodexConfiguredLaunchDefaults | null

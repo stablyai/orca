@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildJiraBoardSections } from './task-page-jira-board-sections'
-import type { JiraIssue, JiraStatus } from '../../../shared/jira-types'
+import type { JiraIssue, JiraStatus } from '../../../shared/jira/jira-types'
 
 function status(id: string, name: string): JiraStatus {
   return { id, name, categoryKey: 'indeterminate', categoryName: 'In Progress' }

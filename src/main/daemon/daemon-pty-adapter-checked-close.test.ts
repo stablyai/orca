@@ -228,9 +228,8 @@ describe('DaemonPtyAdapter checked explicit close', () => {
     })
     const closing = provider.killFenced(checkedRequest(created.id, created.incarnationId))
     await waitFor(() => removing)
-    // A new user intent may reopen the id only after the explicit-close lifecycle finishes.
     const reopening = provider.spawn({ sessionId: created.id, cols: 80, rows: 24 })
-    // Attach rejection handling before releasing the lock, without accepting unrelated errors.
+    // Handle rejection before releasing the lock to avoid an unhandled promise rejection.
     const reopened = expect(reopening).rejects.toThrow('was explicitly killed')
     expect(existsSync(historyTree(created.id))).toBe(true)
     release()

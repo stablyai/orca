@@ -2,7 +2,7 @@ import { createDecipheriv, createHash } from 'node:crypto'
 import type { BrowserCookieImportSummary } from '../../shared/browser-workspace-types'
 import type { EncryptionKeyResult } from './browser-cookie-sqlite'
 
-// Why: Chromium 127+ prepends a 32-byte HMAC before the value; a hash is ~half non-printable, so ≥8 non-printable of the first 32 bytes flags the prefix.
+// The fallback heuristic treats 8 nonprintable bytes in a 32-byte prefix as a host hash.
 const CHROMIUM_COOKIE_HMAC_LEN = 32
 
 function hasHmacPrefix(buf: Buffer): boolean {
@@ -18,8 +18,7 @@ function hasHmacPrefix(buf: Buffer): boolean {
   return nonPrintable >= 8
 }
 
-// Why: DB schema 24+ prefixes SHA-256(host_key); an exact match also catches empty values, where the
-// plaintext is only the 32-byte hash and the length-gated heuristic below keeps it as the value.
+// Schema 24+ prefixes SHA-256(host_key); exact matching also handles empty cookie values.
 function hasHostKeyHashPrefix(buf: Buffer, hostKey: string): boolean {
   return (
     buf.length >= CHROMIUM_COOKIE_HMAC_LEN &&
@@ -33,8 +32,7 @@ function stripHmac(buf: Buffer, hostKey: string): Buffer {
     : buf
 }
 
-// Why: the version prefix is the only thing that survives a failed decrypt, so read it once and
-// share it between the decrypt path and the failure attribution.
+// Keep the readable version prefix available for decrypt-failure attribution.
 export function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null {
   if (encryptedBuffer.length < 3) {
     return null
@@ -43,7 +41,6 @@ export function cookieEncryptionVersion(encryptedBuffer: Buffer): string | null 
   return /^v\d\d$/.test(version) ? version : null
 }
 
-// Why: a named cause must carry only its exact count; tied causes fall back to unknown.
 export function buildUndecryptableWarning(counts: {
   decryptFailed: number
   appBoundFailed: number
@@ -91,7 +88,6 @@ export function decryptCookieValueRaw(
     return decryptAes256Gcm(encryptedBuffer.subarray(3), keyResult.key, hostKey)
   }
 
-  // AES-128-CBC (macOS and Linux)
   const key = version === 'v10' || version === 'v11' ? keyResult.keysByVersion[version] : undefined
   if (!key) {
     return null
@@ -114,7 +110,7 @@ export function decryptCookieValueRaw(
 }
 
 function decryptAes256Gcm(payload: Buffer, key: Buffer, hostKey: string): Buffer | null {
-  // Why: Windows AES-256-GCM layout is: [12-byte nonce][ciphertext][16-byte auth tag]
+  // Windows GCM payload: 12-byte nonce, ciphertext, then 16-byte authentication tag.
   if (payload.length < 12 + 16) {
     return null
   }

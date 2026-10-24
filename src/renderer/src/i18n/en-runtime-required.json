@@ -425,6 +425,9 @@
         },
         "editor": {
           "save": {
+            "notUtf8": {
+              "refused": "This file isn't UTF-8 text, so it wasn't saved."
+            },
             "sectionStale": {
               "notice": "This file changed on disk since this section loaded."
             },
@@ -2156,8 +2159,6 @@
           "01f45d3d8a": "sidebar",
           "021538e1d1": "SSH disconnected",
           "1d66d84f0b": "string",
-          "57eaa61b55": "Hide child workspaces",
-          "8cb634cda6": "Show child workspaces",
           "93aebe4529": "Folder",
           "automationCreated": "Created by automation",
           "branchFolderPathIdentity": "Branch or folder path",
@@ -2165,8 +2166,10 @@
           "ca74db7550": "Project on SSH host"
         },
         "WorktreeCardMeta": {
+          "ad25c3ff05": "View on {{value0}}",
           "ae76907ca6": "Unlink {{value0}}",
-          "eace1d2cf6": "neutral"
+          "eace1d2cf6": "neutral",
+          "reviewLinkLabel": "{{value0}} link"
         },
         "WorktreeCardMetadataStatusBadges": {
           "29df45afa2": "MR"
@@ -2174,6 +2177,10 @@
         "WorktreeCardPorts": {
           "34f733dda2": "Go to Worktree",
           "3e5f66564e": "Workspace unavailable"
+        },
+        "WorktreeCardReviewDetailSection": {
+          "copyLink": "Copy link",
+          "reviewHeader": "{{value0}} #{{value1}}"
         },
         "WorktreeIssueLinkField": {
           "0a7a2c6efd": "Not a GitHub issue number or issue URL.",
@@ -2605,7 +2612,9 @@
             "f7c3d7d5af": "Split Right"
           },
           "QuickLaunchButton": {
-            "chatLoading": "Checking chat support…"
+            "chatLoading": "Checking chat support…",
+            "hostUnreachable": "Can’t reach this workspace’s host to list its agents",
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
           },
           "SortableTabContextMenu": {
             "0ce4bae39d": "Split Left",
@@ -2983,6 +2992,25 @@
   "browser": {
     "clientHosted": {
       "popupBlocked": "Popup blocked: {{origin}}"
+    },
+    "loadFailure": {
+      "cantLoadPage": "Can't load this page",
+      "dnsDescription": "Check the address for typos.",
+      "dnsTitle": "Couldn't find {{host}}",
+      "notRunningDescription": "Start the dev server for this address.",
+      "notRunningSshDescription": "Start the dev server on the workspace's SSH host.",
+      "notRunningTitle": "Nothing is running on {{host}} yet",
+      "offlineTitle": "You're offline",
+      "refusedDescription": "The site may be down, or the address may be wrong.",
+      "refusedTitle": "{{host}} refused to connect",
+      "resetTitle": "The connection to {{host}} was interrupted",
+      "routeDownDescription": "This page loads through the workspace's SSH host, which isn't connected right now.",
+      "routeDownTitle": "Can't reach the SSH host",
+      "timeoutTitle": "{{host}} took too long to respond",
+      "waiting": "Reloads when the server responds",
+      "waitingForHost": "Reloads when the SSH host reconnects",
+      "waitingForNetwork": "Reloads when you're back online",
+      "waitingForServer": "Reloads when the server starts"
     },
     "sshEgress": {
       "localChip": "This device"
@@ -3454,6 +3482,11 @@
       "reopened_other": "Reopened {{count}} terminals",
       "resumed_one": "{{count}} agent session resumed.",
       "resumed_other": "{{count}} agent sessions resumed."
+    }
+  },
+  "workspace": {
+    "links": {
+      "manage": "Manage links…"
     }
   },
   "workspaceSpace": {

@@ -19,8 +19,7 @@ import {
 import { orcadLaunchCommand } from './orcad-remote-launch'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-// The readiness file carries the pairing offer's device token: under a login umask of 022 it must
-// still come out owner-only, and so must the slot and `~/.orca-remote` that hold it.
+// Pairing tokens in readiness require owner-only launch artifacts even under login umask 022.
 
 const posix = getRemoteHostPlatform('linux-x64')
 const READY_LINE = '{"type":"orca_server_ready","pairing":{"url":"orca://pair#token"}}'
@@ -36,7 +35,7 @@ function mode(path: string): number {
 async function launchUnderLoginUmask(): Promise<void> {
   const command = orcadLaunchCommand(posix, {
     remoteInstallDir: slotDir,
-    // No runtime marker in the slot, so this legacy path runs the stub entry below.
+    // Missing runtime marker selects the legacy stub entry.
     nodePath: '/bin/sh',
     fullVersion: '0.2.0+bb01',
     userDataDir: join(home, '.orca'),
@@ -91,7 +90,7 @@ describe.skipIf(process.platform === 'win32')('orcad launch file modes', () => {
     expect(mode(baseDir)).toBe(0o700)
   })
 
-  // Regression (#31125): git, terminals and agents the daemon spawns create the user's files.
+  // Daemon children create user files and must retain login umask (#31125).
   it('runs the daemon itself at the login umask', async () => {
     writeFileSync(
       join(slotDir, 'orcad.js'),

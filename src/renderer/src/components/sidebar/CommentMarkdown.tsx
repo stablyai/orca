@@ -6,6 +6,7 @@ import {
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
@@ -83,6 +84,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [
   remarkGfm,
+  remarkCjkFriendly,
   remarkAutolinkLiteralProseBoundary,
   remarkGitHubCallouts,
   remarkBreaks

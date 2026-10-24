@@ -40,11 +40,13 @@ function harness(options: {
   imageAttachments?: NativeChatComposerImageAttachment[]
   /** The PTY lane has no structured transport at all. */
   lane?: 'pty'
+  capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal, onError and onSubmitted.
   const structuredTransport = {
+    capturePresentation: options.capturePresentation ?? (() => () => true),
     onError,
     onSubmitted,
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
@@ -253,6 +255,26 @@ describe('composer goal mode', () => {
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
     expect(readNativeChatDraftCache(SCOPE)).toBe('Ship the parser and its tests')
     expect(hook.result.current.goalMode.active).toBe(true)
+  })
+
+  it('consumes an accepted captured goal after closure without touching local controls', async () => {
+    const reply = Promise.withResolvers<boolean>()
+    let current = true
+    const { hook, calls, type, onError } = harness({
+      draft: '/go',
+      threadGoal: { setObjective: () => reply.promise },
+      capturePresentation: () => () => current
+    })
+    act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
+    type('Ship it', 0)
+    act(() => hook.result.current.send())
+    calls.setCaret.mockClear()
+    hook.unmount()
+    current = false
+    await act(async () => reply.resolve(true))
+    expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    expect(calls.setCaret).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
   })
 
   it('does not send while an image waits to be attached again', () => {

@@ -57,9 +57,7 @@ export function useMarkdownPreviewComponents({
     sourceWorktree,
     openFile,
     openMarkdownPreview,
-    setMarkdownViewMode,
-    pendingEditorRevealFrameIdsRef,
-    setPendingEditorReveal
+    setMarkdownViewMode
   } = foundation
   const { scrollToAnchor } = viewport
   const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
@@ -80,8 +78,6 @@ export function useMarkdownPreviewComponents({
       openFile,
       openMarkdownPreview,
       setMarkdownViewMode,
-      pendingEditorRevealFrameIdsRef,
-      setPendingEditorReveal,
       scrollToAnchor
     }
 
@@ -302,7 +298,6 @@ export function useMarkdownPreviewComponents({
     renderAnnotationControls,
     scrollToAnchor,
     setMarkdownViewMode,
-    setPendingEditorReveal,
     sourceOwner,
     sourceWorktree,
     resolvedSourceRuntimeEnvironmentId,

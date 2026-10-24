@@ -81,14 +81,12 @@ const row = (uuid: string, parentUuid: string | null, extra = {}) =>
   `${JSON.stringify({ type: 'user', uuid, parentUuid, sessionId: 'provider', ...extra })}\n`
 const marker = (leafUuid: string, sessionId = 'provider') =>
   `${JSON.stringify({ type: 'last-prompt', leafUuid, sessionId })}\n`
-/** Carries no uuid, so it can be neither a tip nor a marker. */
 const SUMMARY = `${JSON.stringify({ type: 'summary', summary: 'title' })}\n`
 const ROOT = row('root', null)
 const CHILD = row('child', 'root')
 const SOURCE = ROOT + marker('root')
 let directory = ''
 let replayed: string[] = []
-// The live caller always anchors the replay at the cursor it already holds.
 const replay = (anchorUuid = 'root') =>
   replayClaudeTranscriptBranchAncestry({
     transcriptPath: state.path,
@@ -119,7 +117,7 @@ afterEach(async () => {
   try {
     expect(state.closes).toBe(state.opens)
     for (const handle of state.handles) {
-      // Another test can reuse a closed descriptor number in this process.
+      // Check the handle itself because descriptor numbers can be reused.
       expect(handle.fd).toBe(-1)
       await expect(handle.stat()).rejects.toMatchObject({ code: 'EBADF' })
     }

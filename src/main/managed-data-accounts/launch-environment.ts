@@ -36,7 +36,7 @@ export function applyManagedDataAccountEnvironment(
   environment.ORCA_DATA_ACCOUNT_STATE_HOME = selected.XDG_STATE_HOME
   environment.ORCA_DATA_ACCOUNT_PROVIDER = provider
   if (provider === 'opencode') {
-    // Database overrides and inline auth would bypass this profile's credentials.
+    // Clear overrides that could bypass the selected profile's credentials.
     environment.OPENCODE_AUTH_CONTENT = ''
     environment.OPENCODE_DB = 'opencode.db'
   }

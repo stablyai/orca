@@ -73,28 +73,26 @@ describe('registerPtyHandlers', () => {
       const ackData = getPtyAckDataListener()
       mainWindow.webContents.send.mockClear()
 
-      // Saturate the renderer in-flight window (512 KB) with no ACKs — the frozen/starved-renderer shape from field reports.
+      // Model a frozen renderer: saturate its in-flight window without ACKs.
       mockProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(2)
       for (let index = 0; index < 32; index++) {
         vi.advanceTimersByTime(1)
       }
 
-      // Keep flooding past the 2 MB per-PTY pending cap; main must not buffer unboundedly (previously: unbounded string concat).
       mockProc.emitData('y'.repeat(3 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 0
       })
 
-      // Later output while dropped must stay O(1), not start re-accumulating.
       mockProc.emitData('z'.repeat(64 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 0
       })
 
-      // On recover+ACK, the flush must deliver the droppedOutput sentinel so the pane repaints from the main-owned snapshot.
+      // Restore from the main snapshot after the pending cap drops bytes.
       mainWindow.webContents.send.mockClear()
       ackData(null, { id: spawn.id, charCount: 512 * 1024 })
       vi.advanceTimersByTime(2)
@@ -104,7 +102,6 @@ describe('registerPtyHandlers', () => {
         droppedOutput: true
       })
 
-      // Fresh output after the sentinel flows normally again.
       mainWindow.webContents.send.mockClear()
       mockProc.emitData('back to normal')
       vi.advanceTimersByTime(2)
@@ -174,7 +171,7 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
       mainWindow.webContents.send.mockClear()
 
-      // Saturate the in-flight window with no ACKs, then buffer 3 MB — over the floor, under the scaled cap: retain, don't drop.
+      // Retain output above the floor but below the scrollback-scaled cap.
       mockProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(2)
       for (let index = 0; index < 32; index++) {
@@ -183,7 +180,6 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('y'.repeat(3 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot().pendingChars).toBeGreaterThan(3 * 1024 * 1024)
 
-      // The scaled cap still bounds a runaway flood.
       mockProc.emitData('z'.repeat(4 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
@@ -201,7 +197,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       mainWindow.webContents.send.mockClear()
 
-      // Flood in 64KB chunks like a `yes`-style producer honoring pause — node-pty pause() stops the fd read, so it stops emitting.
+      // Model node-pty pause stopping reads by withholding further chunks while paused.
       const chunk = 'x'.repeat(64 * 1024)
       let chunks = 0
       while (provider.pauseProducer.mock.calls.length === 0 && chunks < 100) {
@@ -209,18 +205,15 @@ describe('registerPtyHandlers', () => {
         chunks++
       }
 
-      // Pause fires exactly once, on the first chunk past the 256KB high watermark (the 5th 64KB chunk), not per chunk.
       expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
       expect(provider.pauseProducer).toHaveBeenCalledWith('flood-pty')
       expect(chunks).toBe(5)
-      // Bounded: main buffered at most HIGH + one chunk while paused.
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 320 * 1024,
         peakPendingChars: 320 * 1024
       })
 
-      // Resume must fire exactly once at the 32KB low watermark, with no flapping across the 32-256KB hysteresis band.
       vi.runAllTimers()
       expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
       expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
@@ -247,7 +240,7 @@ describe('PTY producer flow control', () => {
       provider.emitData('flood-pty', finalPendingData)
       expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
 
-      // Exit while pending is above the low watermark: the exit path must release the pause, not leave a stale mark.
+      // Exit must release pause even when pending output never drained.
       provider.emitExit('flood-pty', 0)
       expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
       expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
@@ -265,8 +258,7 @@ describe('PTY producer flow control', () => {
       provider.emitData('flood-pty', 'x'.repeat(320 * 1024))
       expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
 
-      // Re-registration hands delivery to a new window; the outgoing session must run its real
-      // lifecycle reset before the bridge is neutralized or this shell stays paused forever.
+      // Re-registration must reset the outgoing session before neutralizing its bridge, or the shell remains paused.
       registerPtyHandlers(mainWindow as never)
       expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
     } finally {

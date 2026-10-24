@@ -26,8 +26,7 @@ type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
 const MAX_SPAWN_ADMISSION_WINDOW_MS = 12_000
 
-// Why half, capped: a paced fork must finish before the caller's own cancellation fires,
-// and remote clients give up on a terminal create after 15 s.
+// Leave time for the paced spawn to finish before caller cancellation (15 seconds on remote clients).
 function resolveSpawnAdmissionDeadline(cancelAfterMs: unknown): number {
   const windowMs =
     Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0

@@ -31,10 +31,6 @@ import { sweepAbandonedRuntimeUploadTempPath } from './runtime-upload-temp-sweep
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 
-/**
- * IPC handlers for file/folder creation and renaming.
- * Deletion is handled separately via `fs:deletePath` (shell.trashItem).
- */
 export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle(
     'fs:createFile',
@@ -54,7 +50,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const filePath = await resolveDesktopAuthorizedPath(args.filePath, store)
       await mkdir(dirname(filePath), { recursive: true })
       try {
-        // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
+        // Exclusive creation closes the existence-check race.
         await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
       } catch (error) {
         rethrowWithUserMessage(error, filePath)
@@ -83,9 +79,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Note: fs.rename throws EXDEV if old and new paths are on different
-  // filesystems/volumes. This is unlikely since both paths are under the same
-  // workspace root, but a cross-drive rename would surface as an IPC error.
+  // Cross-volume rename propagates EXDEV through IPC.
   ipcMain.handle(
     'fs:rename',
     async (
@@ -106,13 +100,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
-      // Why: rename() operates on directory entries, not file contents. If
-      // oldPath is a symlink, we must rename the link itself rather than
-      // resolving it to its target — following the link would rename the
-      // target file (potentially elsewhere in the worktree) and leave the
-      // symlink dangling. newPath must also preserve its leaf so we don't
-      // accidentally write into a symlinked destination name.
-      // Outside every project, a document the user opened may still be renamed, to any path.
+      // Preserve both leaves: rename acts on directory entries, including links; opened documents can move outside project roots.
       const { from, to } = await resolveLocalRenamePaths(
         args.oldPath,
         args.newPath,
@@ -149,8 +137,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         preserveSymlink: true
       })
       await mkdir(dirname(destinationPath), { recursive: true })
-      // Why: duplicate/copy callers deconflict before copying. COPYFILE_EXCL
-      // keeps a late race from silently overwriting an existing file.
+      // Keep deconflicted copy destinations exclusive against late collisions.
       await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
     }
   )
@@ -177,9 +164,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         throw new SshHostNotServedError(args.connectionId)
       }
 
-      // Why: destDir must be authorized before any copy work begins. If the
-      // destination is outside allowed roots, the entire import fails.
-      // An image inserted into a document the user opened lands in that document's own folder.
+      // Authorize before copying; opened-document images may target that document's own folder.
       const resolvedDest = await resolveLocalRequestPath(
         args.destDir,
         args.access,
@@ -209,8 +194,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { sourcePaths: string[]; nameExtensionlessImages?: boolean }
     ): Promise<{ sources: StagedExternalImportSource[] }> => {
       const sources: StagedExternalImportSource[] = []
-      // Why: one budget for the whole drop — per-source counters would let five
-      // 2 GB files through a ceiling meant to cap the drop.
+      // Apply the size ceiling across the whole drop, not separately to each source.
       let totalBytes = 0
       for (const sourcePath of args.sourcePaths) {
         const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes, {
@@ -223,22 +207,17 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Why: the file handle and the runtime socket both live in main, so the byte
-  // pump runs here. The renderer keeps deconflict/commit/rollback orchestration
-  // and never sees file contents.
+  // Main owns handles and runtime sockets; renderer retains commit/rollback orchestration without file bytes.
   ipcMain.handle(
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
-      // Why: the streamer's manual-disconnect check keys on the environment id,
-      // and the renderer may pass any selector the store resolves.
+      // Resolve selectors to the environment ID used by manual-disconnect checks.
       const request = {
         ...args,
         environmentId: resolveEnvironment(userDataPath, args.environmentId).id
       }
-      // Why: the renderer's own loop died with its window. Now that the bytes
-      // move in main, a reload or close has to stop the transfer explicitly,
-      // or a multi-GB upload outlives the window that asked for it.
+      // Main-owned uploads must abort when the requesting renderer reloads or closes.
       const lifetime = abortWhenRendererGone(event.sender)
       try {
         return await streamExternalFileToRuntime({
@@ -248,8 +227,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         })
       } catch (error) {
         if (lifetime.signal.aborted) {
-          // Why: the renderer owns temp cleanup, and it is gone — so the
-          // abandoned temp path is only collectable from here.
+          // The renderer cannot clean up its temp path after it disappears.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }
         throw error
@@ -259,10 +237,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
-  // unchanged (reference-in-place; preserves zero-latency drop). Kept as a
-  // separate IPC from fs:importExternalPaths because terminal semantics differ
-  // from the explorer's "copy into user-picked destDir".
+  // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
   ipcMain.handle(
     'fs:resolveDroppedPathsForAgent',
     async (
@@ -279,8 +254,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
-      // Why: `== null` (not `!args.connectionId`) so an empty string is
-      // treated as a renderer error, not silently routed to the local branch.
+      // Empty connection IDs are errors; only null/undefined selects local routing.
       if (args.connectionId == null) {
         return {
           resolvedPaths: resolveLocalDroppedPathsForAgent(args.paths, args.worktreePath),

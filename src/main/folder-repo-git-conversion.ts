@@ -30,13 +30,7 @@ function resolveRealPath(pathValue: string): string {
   }
 }
 
-/**
- * Git's verdict on a folder project's path, or null when it must stay a folder project.
- *
- * Refuse unless the folder *is* the work-tree root: git accepts any path inside a work tree, so a
- * project inside another repo would otherwise flip. The stamped root lets the listing map Git's
- * spelling back to the project's path, so the main workspace keeps its id (and its tabs).
- */
+/** Require the project itself to be the Git root; stamp Git’s spelling to preserve workspace ids. */
 export async function resolveFolderToGitConversion(
   repoPath: string
 ): Promise<FolderToGitConversion | null> {
@@ -54,11 +48,7 @@ export async function resolveFolderToGitConversion(
   }
 }
 
-/**
- * The extra fields a manual change of `repo` to `nextKind` must write with it. Throws when a
- * folder project's path is not a Git root, so callers write nothing. An SSH project's Git runs on
- * a host this process can't probe, so it keeps the unverified change it had before.
- */
+/** Prove local folder-to-Git changes before writing; SSH projects cannot be probed here. */
 export async function proveRepoKindChange(
   repo: Repo | undefined,
   nextKind: Repo['kind'] | undefined,
@@ -109,11 +99,7 @@ type ProjectHostSetupStore = Pick<Store, 'getRepos' | 'updateRepo'> & {
   getProjectHostSetups?: Store['getProjectHostSetups']
 }
 
-/**
- * A project setup update whose type change is proven first. The proven root is stamped right after
- * the setup write, with no await between, so nothing observes the project in between; a refused
- * setup write (folder workspaces a Git project can't show) throws before the stamp.
- */
+/** Stamp the proven root immediately after setup succeeds, with no intervening await. */
 export async function updateProjectHostSetupWithProvenKind(
   store: ProjectHostSetupStore,
   updateSetup: Store['updateProjectHostSetup'],
@@ -149,11 +135,7 @@ export async function updateProjectHostSetupWithProvenKind(
   )
 }
 
-/**
- * The fields that turn a folder project a clone just landed in into a Git project, or null to keep
- * it a folder project (other folder workspaces, or not a Git root). Re-checks after the Git probe:
- * a workspace created meanwhile would otherwise make the write refuse a finished clone.
- */
+/** Recheck after Git yields: new folder workspaces may prevent conversion of a finished clone. */
 export async function resolveClonedFolderConversion(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repo: Repo

@@ -1,6 +1,3 @@
-// A Grok start the host aborts — at quit, by a close, or by an admitted Stop — through the one
-// signal the host owns, with a scripted Grok, the real record store and an on-disk journal.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -21,13 +18,21 @@ afterEach(async () => {
 })
 
 const STALLED = Symbol('stalled')
-const within = <T>(promise: Promise<T>, ms: number): Promise<T | typeof STALLED> =>
-  Promise.race([
-    promise,
-    new Promise<typeof STALLED>((resolve) => setTimeout(resolve, ms, STALLED))
-  ])
+async function within<T>(promise: Promise<T>, ms: number): Promise<T | typeof STALLED> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<typeof STALLED>((resolve) => {
+        timer = setTimeout(resolve, ms, STALLED)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
-/** Runs `atEnd` once, right before the host ends an attach's controller: after its commit. */
+/** Runs after the attach commits, before its controller ends. */
 function beforeAttachEnds(host: StructuredAgentSessionHost, atEnd: () => void): void {
   const aborts = host.collaboratorsForTests().runtimeState.acquireAborts
   const begin = aborts.begin.bind(aborts)
@@ -47,7 +52,7 @@ function beforeAttachEnds(host: StructuredAgentSessionHost, atEnd: () => void): 
   }
 }
 
-/** Runs `during` once, while the attach is still probing the previous owner, before any launch. */
+/** Runs during owner probing, before launch. */
 function duringOwnerProbe(host: StructuredAgentSessionHost, during: () => void): void {
   const state = host.collaboratorsForTests().runtimeState
   const probe = state.probeOwner.bind(state)
@@ -68,7 +73,6 @@ describe('a Grok start the host aborts', () => {
     })
     const attaching = host.attach(CALLER, attachParams())
     await rig.frame('initialize')
-    // The start has no bound of its own: the quit is what ends it.
     expect(await within(host.flushAllStreamedEvents({ trigger: 'quit' }), 2_000)).not.toBe(STALLED)
     expect((await attaching).ok).toBe(true)
     expect(rig.child().exited).toBe(true)
@@ -114,7 +118,6 @@ describe('a Grok start the host aborts', () => {
   it('never launches Grok for a start a Stop reached while its attach was still reconciling', async () => {
     const { rig, host } = await openHostRig()
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
-    // The chat closes; the next send has to start Grok again.
     await host.close(SESSION, 'user-close')
     let stopping: ReturnType<typeof stop> | undefined
     duringOwnerProbe(host, () => {
@@ -137,7 +140,6 @@ describe('a Grok start the host aborts', () => {
     let second: Promise<string> | undefined
     duringOwnerProbe(host, () => {
       stopping = stop(host)
-      // Accepted while the aborted start is still unwinding.
       second = send(host, 'second')
     })
     await send(host, 'hello')
@@ -150,7 +152,6 @@ describe('a Grok start the host aborts', () => {
   it('starts Grok afresh for a message sent right after a Stop ended a hung handshake', async () => {
     const { rig, host, children } = await openClosedResumableChat({ hangsHandshake: 2 })
     const first = send(host, 'hello')
-    // The restart's own child, not the first one's.
     await waitFor(() => expect(children()).toBe(2))
     await rig.frame('initialize')
     const stopping = stop(host)
@@ -162,8 +163,7 @@ describe('a Grok start the host aborts', () => {
   })
 })
 
-/** A Grok chat the user closed; each later start loads it. `hangsHandshake`: that child never
- *  answers `initialize`. */
+/** `hangsHandshake` selects a child that never answers initialize. */
 async function openClosedResumableChat(options: { hangsHandshake?: number } = {}) {
   let children = 0
   let resumed = false
@@ -186,13 +186,16 @@ async function openClosedResumableChat(options: { hangsHandshake?: number } = {}
   return { ...rig, children: () => children }
 }
 
-/** The stopped message reads cancelled; the one sent after it reached Grok, with no failure row. */
 async function expectDeliveredAfterStop(
   { rig, host }: Pick<Awaited<ReturnType<typeof openHostRig>>, 'rig' | 'host'>,
   secondId: string
 ): Promise<void> {
   const prompt = await rig.frame('session/prompt')
-  expect(JSON.stringify(prompt.params)).toContain('second')
+  expect(prompt.params).toMatchObject({
+    sessionId: 'acp-session-1',
+    prompt: [{ type: 'text', text: 'second' }],
+    _meta: { promptId: `prompt:${secondId}`, requestId: `prompt:${secondId}` }
+  })
   rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
   await waitFor(() =>

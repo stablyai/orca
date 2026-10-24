@@ -38,12 +38,12 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     const token = this.token
     const statusHookGeneration = this.statusHookGeneration
     if (!this.ownerStateInitialized) {
-      // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
+      // Hydrate before binding so the first live hook sees restored ownership.
       if (this.lastStatusFilePath) {
         this.hydrateLastStatusFromDisk()
       }
       this.captureHydratedAuthorityCommitments()
-      // Drain before binding the listener so replay cannot race a live hook during startup.
+      // Drain before binding so replay cannot race live hooks.
       if (this.endpointDir) {
         const replayedPaneKeys = new Set<string>()
         await drainAgentHookSpoolAsync({
@@ -61,7 +61,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
         if (this.token !== token || this.statusHookGeneration !== statusHookGeneration) {
           return
         }
-        // Why: the owner may have died while Orca was down; check each replayed pane once.
+        // Replayed owners may have died while Orca was down; probe each pane once.
         for (const paneKey of replayedPaneKeys) {
           void this.checkAgentPresence(paneKey)
         }

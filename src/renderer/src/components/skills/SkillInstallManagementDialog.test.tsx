@@ -113,7 +113,6 @@ function skillsApi(
       }
     }),
     revokeShare: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
-    deletePackageVersion: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
     deletePackage: vi.fn().mockResolvedValue({ status: 'ok', value: undefined }),
     cancelInstall: vi.fn().mockResolvedValue({ cancelled: true }),
     onInstallProgress: vi.fn((listener) => {

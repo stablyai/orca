@@ -47,8 +47,6 @@ describe('browserNetworkExecutionHostStorageIdentity', () => {
     )
   })
 
-  // Why: runtimeId is a per-process randomUUID, so hashing it minted a fresh partition on
-  // every remote-server restart and dropped the user's cookies.
   it('survives the authority runtime restarting under a new runtimeId', () => {
     expect(
       browserNetworkExecutionHostStorageIdentity(
@@ -123,8 +121,7 @@ describe('browserNetworkExecutionHostStorageIdentity', () => {
     )
   })
 
-  // Why: these strings are hashed into persisted partition names, and the pre-migration forms
-  // name the jar adoption must find -- changing either relocates or strands the user's cookies.
+  // These serialized identities name persisted partitions, including migration sources.
   it('pins the storage identity of every host kind, current and pre-migration', () => {
     const tag = '"orca-browser-execution-host-storage",1'
 
@@ -176,8 +173,6 @@ describe('browserNetworkExecutionHostStorageIdentity', () => {
     ).toBe(`[${tag},"ssh","ssh-1"]`)
   })
 
-  // Why: adoption trusts the pre-migration name, so distros sharing one would hand a
-  // second distro the first one's logged-in jar.
   it('keeps pre-migration WSL distros apart on one runtime', () => {
     expect(
       legacyBrowserNetworkExecutionHostStorageIdentity({
@@ -196,8 +191,6 @@ describe('browserNetworkExecutionHostStorageIdentity', () => {
     )
   })
 
-  // Why: the kind tag is the only thing keeping an SSH record out of the paired server's
-  // own jar when the two records happen to carry the same key.
   it('never lets an SSH target share the paired server machine identity', () => {
     const shared = 'ssh-1700000000-aaa111'
 

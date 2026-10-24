@@ -61,7 +61,6 @@ describe('Windows runtime store commands', () => {
       `Get-CimInstance -ClassName Win32_Process -Filter "ExecutablePath LIKE '%\\\\runtimes\\\\%'" -Property ExecutablePath -ErrorAction Stop`
     )
     expect(script).not.toMatch(/Name\s*=|node\.exe|ProcessName/)
-    // A failed query must not report that the check ran.
     expect(script.indexOf("Write-Output 'PROCESS_CHECK cim'")).toBeGreaterThan(
       script.indexOf('Get-CimInstance')
     )
@@ -148,7 +147,6 @@ describe('gcRemoteNodeRuntimeStore on a Windows host', () => {
       currentPins: [sha('a')]
     })
 
-    // `a` is pinned and referenced, `b` is the newest other verified runtime (keep two).
     expect(result).toMatchObject({ state: 'collected', removed: [`node-${sha('c')}`] })
     const lockTaken = scripts.findIndex((s) => s.includes('CreateNew'))
     const inventoried = scripts.findIndex((s) => s.includes('Win32_Process'))
@@ -227,7 +225,6 @@ describe.runIf(powerShell)('Windows runtime store commands (real PowerShell)', (
     expect(inventory?.verifiedNewestFirst).toEqual([`node-${sha('b')}`, `node-${sha('a')}`])
   })
 
-  // Why Windows only: the hold comes from Win32_Process, which only Windows answers.
   it.runIf(process.platform === 'win32')(
     'holds a runtime whose node.exe is running, found by its image path',
     { timeout: 120_000 },
@@ -249,7 +246,7 @@ describe.runIf(powerShell)('Windows runtime store commands (real PowerShell)', (
         expect(inventory?.processCheckRan).toBe(true)
         expect([...(inventory?.held ?? [])]).toEqual([sha('d')])
       } finally {
-        // Why wait: Windows will not delete the temp store while its image is still running.
+        // Windows cannot delete a runtime while its image is running.
         if (child.pid !== undefined && child.exitCode === null) {
           const exited = new Promise((resolve) => child.once('exit', resolve))
           child.kill()

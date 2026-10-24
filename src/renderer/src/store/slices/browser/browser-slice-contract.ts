@@ -1,4 +1,8 @@
 import type { StateCreator } from 'zustand'
+import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
+
+/** What a new tab opens on; a partition only when it must not be derived from the profile. */
+export type NewBrowserTabProfile = { sessionProfileId: string | null; sessionPartition?: string }
 import type { AppState } from '../../types'
 import type {
   BrowserCertificateFailure,
@@ -239,6 +243,15 @@ export type BrowserSlice = {
     label: string
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
+  /** A repo's or workspace's own local profile, at once; a placeholder until main first creates it. */
+  ensureManagedBrowserSessionProfile: (
+    owner: ManagedBrowserProfileOwner,
+    label: string
+  ) => NewBrowserTabProfile
+  /** A removed repo's or workspace's own profile goes with it, whichever host ran the removal. */
+  deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
+  /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
+  managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
   importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {

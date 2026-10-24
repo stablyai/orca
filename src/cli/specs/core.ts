@@ -132,8 +132,6 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
-    // Why: agents reach for git's `remove`/`delete` verbs; accept them as
-    // aliases so a conventional guess resolves instead of dead-ending.
     aliases: [
       ['worktree', 'remove'],
       ['worktree', 'delete']
@@ -236,8 +234,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'switch'],
-    // Why: `focus` is the legacy verb for this action; keep it working as an
-    // alias rather than a duplicate spec + handler registration.
+    // Preserve the legacy focus verb.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',

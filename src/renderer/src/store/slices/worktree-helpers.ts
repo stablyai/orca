@@ -162,7 +162,7 @@ export type WorktreeSlice = {
   lastVisitedAtByWorktreeId: Record<string, number>
   /**
    * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
-   * `true` only after the first launch where every repo's `worktrees.list` IPC
+   * `true` only after the first launch where every repo's `worktrees.listDetected` IPC
    * call succeeded AND at least one repo returned a non-empty result — at that
    * moment the renderer has enough signal to treat the union of fetched ids as
    * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix

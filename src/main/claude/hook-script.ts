@@ -1,7 +1,4 @@
 import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
-/** The managed Claude-compatible hook script, built for local, POSIX-remote and Windows targets.
- *  Split from hook-service.ts so the service owns install/status and this owns script text,
- *  mirroring the same split under src/main/cursor/. */
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
@@ -21,10 +18,7 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 
-// Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-// pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-// Why exit, not the drain label: the drain parks in more.com and a worker is outside
-// an Orca pane — the abandoned-stdin hang #11549 guards against.
+// Daemon workers inherit stale pane keys; exit before draining their potentially abandoned stdin.
 export const WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD = 'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0'
 
 export function getManagedScript(
@@ -41,23 +35,22 @@ export function getManagedScript(
     return [
       '@echo off',
       'setlocal',
-      // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+      // Permission hooks fail closed on empty stdout, including skip paths.
       'echo {}',
-      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+      // Refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
-      // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
+      // Guard abandoned stdin before any skip path can drain it.
       ...buildWindowsHookEnvironmentGuardLines(),
       WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
       ...(options.skipWhenCursorImportsClaude ? buildWindowsCursorReplayGuardLines() : []),
       ...(options.skipWhenDevinImportsClaude
         ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
+            // Devin imports Claude hooks; skip duplicate posts to preserve Devin attribution.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
-      // Why: use curl.exe to avoid an extra PowerShell startup per hook.
+      // Avoid a PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
@@ -67,7 +60,7 @@ export function getManagedScript(
 
   return [
     '#!/bin/sh',
-    // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+    // Permission hooks fail closed on empty stdout, including skip paths.
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
@@ -75,20 +68,18 @@ export function getManagedScript(
     ...buildPosixHookSpoolLines(source),
     ...(options.skipWhenDevinImportsClaude
       ? [
-          // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
+          // Devin imports Claude hooks; skip duplicate posts to preserve Devin attribution.
           'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
           '  exit 0',
           'fi'
         ]
       : []),
-    // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-    // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+    // Daemon workers inherit pane keys that do not identify their own sessions.
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
     ...(source === 'claude' ? buildHookProcessCapture() : []),
-    // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
-    // Why: suppress parse errors so they neither leak nor trip outer set -e.
+    // Surviving PTYs need fresh endpoint coordinates; suppress errors and survive outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  unset ORCA_AGENT_HOOK_TRANSPORT',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
@@ -97,7 +88,7 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: keep full hook JSON off the command line and avoid IDS-friendly URL-encoded paths.
+    // Keep hook JSON off argv and avoid URL-encoded paths that trigger IDS rules.
     ...buildPosixAgentHookPostCommand(source).map((line, index, lines) =>
       index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
     ),

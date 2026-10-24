@@ -3,12 +3,17 @@
 // check run once, in the server's home rather than a workspace; a launch checks again in its own.
 
 import { homedir } from 'node:os'
+import { delimiter, isAbsolute } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../shared/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { onManagedRuntimeReleasesChanged } from '../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../preflight/workspace-agent-detection'
-import { observeStructuredAgentLaunch } from './structured-agent-launch-support'
+import {
+  observeStructuredAgentLaunch,
+  resolveHostStructuredAgentLaunchEnvironment
+} from './structured-agent-launch-support'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from './structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from './structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from './structured-agent-shell-environment'
@@ -61,8 +66,34 @@ async function observeHostAgent(
     : { agent, state: 'unknown' }
 }
 
+/** Where a chat start would find its program, spawning nothing. A bare name back is a miss unless
+ *  PATH has relative entries, which only the workspace's directory resolves. */
+async function observeChatProgram(
+  { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
+  runtime: HealthRuntime
+): Promise<NonNullable<AgentSessionAgentAvailability['chatProgram']>> {
+  if (!chatProgram) {
+    return 'unknown'
+  }
+  try {
+    const settings = runtime.requireStore().getSettings()
+    const shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    const { command, env } = chatProgram.resolve(shellEnv, settings)
+    if (isAbsolute(command)) {
+      return 'available'
+    }
+    const path = (env.PATH ?? env.Path ?? '').split(delimiter)
+    if (/[\\/]/.test(command) || path.some((entry) => entry.trim() && !isAbsolute(entry.trim()))) {
+      return 'unknown'
+    }
+  } catch {
+    return 'unknown'
+  }
+  return chatProgram.installable?.() ? 'installable' : 'missing'
+}
+
 /** The runtime's snapshot: taken after a fresh shell capture, initially and on launch settings or
- *  agent Refresh. No reader gates it, so a later one reads it at once. */
+ *  agent Refresh or runtime install. No reader gates it, so a later one reads it at once. */
 export function installStructuredAgentAvailability(
   store: Pick<RuntimeStore, 'onSettingsChanged'> | null,
   runtime: HealthRuntime
@@ -77,7 +108,12 @@ export function installStructuredAgentAvailability(
       .catch(() => undefined)
       .then(() =>
         Promise.all(
-          STRUCTURED_AGENT_RUNTIME_METADATA.map((agent) => observeHostAgent(agent, runtime))
+          STRUCTURED_AGENT_RUNTIME_METADATA.map(
+            async (agent): Promise<AgentSessionAgentAvailability> => ({
+              ...(await observeHostAgent(agent, runtime)),
+              chatProgram: await observeChatProgram(agent, runtime)
+            })
+          )
         )
       )
       .then((agents) => {
@@ -94,6 +130,7 @@ export function installStructuredAgentAvailability(
     }
   })
   onAgentsRefreshedOnHost(() => derive(false))
+  onManagedRuntimeReleasesChanged(() => derive(false))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

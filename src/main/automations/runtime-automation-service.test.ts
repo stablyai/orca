@@ -45,7 +45,6 @@ describe('headless automation dispatch', () => {
       })),
       showManagedWorktree: vi.fn(async () => ({ displayName: 'repo' })),
       waitForTerminal: vi.fn(),
-      // Not resolvable by pane key yet: the launch's own handle must still reach the watcher.
       getTerminalHandleForPaneKey: vi.fn(() => null),
       getAgentStatusRowsForPane: vi.fn(() => [])
     }

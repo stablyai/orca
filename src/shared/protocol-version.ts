@@ -65,7 +65,7 @@ export * from './ai-vault-runtime-capabilities'
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
-export * from './jira-detail-capabilities'
+
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
 export * from './source-control-runtime-capabilities'

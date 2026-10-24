@@ -58,7 +58,7 @@ describe.skipIf(process.platform === 'win32')('workspace-relative Codex selectio
       const sources = {
         resolveCommand: (options?: { pathEnv?: string | null; homePath?: string }) =>
           resolveStructuredAgentCommand('codex', settings, options),
-        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
+        resolveAgentLaunchEnv: () => resolveTuiAgentLaunchEnv('codex', settings)
       }
       const environment = createStructuredAgentEnvironmentResolvers(sources)
       const record: AgentSessionRecord = {

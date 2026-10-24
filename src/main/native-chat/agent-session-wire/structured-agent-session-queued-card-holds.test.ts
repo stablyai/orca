@@ -1,10 +1,3 @@
-// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
-// sends next. A client reading its updates one at a time, as the chat does, reads one working state
-// across a turn's end or a Resume and the queue's send of the next card: the working status and
-// row, the pickers, the composer's Stop and the card labels never flip in between. After a restart
-// nothing sends by itself and no pause shows: the chat's next turn runs first, then the cards.
-// Where the host would refuse the send, it names no next card, so the chat reads idle.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type {
@@ -62,7 +55,6 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** What a reader opening the chat now is told: the queue's pause and the card it sends next. */
 async function published(): Promise<{
   queuePause: AgentSessionQueuePause | null
   nextQueuedMessageId: string | null
@@ -77,7 +69,7 @@ async function published(): Promise<{
   }
 }
 
-/** The pauses in force, published or not: a restart's is never published. */
+/** Include the hidden restart pause. */
 function derivedPauses(): string[] {
   const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
   if (!journal) {
@@ -86,7 +78,6 @@ function derivedPauses(): string[] {
   return structuredQueuePauses(journal).map((pause) => pause.reason)
 }
 
-/** Lets the drain run its steps; none may hand a card off. */
 async function expectNothingSent(...draftIds: string[]): Promise<void> {
   await vi.advanceTimersByTimeAsync(250)
   for (const draftId of draftIds) {
@@ -95,26 +86,21 @@ async function expectNothingSent(...draftIds: string[]): Promise<void> {
 }
 
 type ClientView = {
-  /** The chat reads as working: transcript status, working row and timer, the pickers. */
   working: boolean
-  /** A Stop pressed now would stop something. */
   stopLive: boolean
-  /** The header row above the cards: the queue is held. */
   header: boolean
-  /** Each card's Send-now reads Steer. */
   steers: boolean[]
-  /** Why each card waits, which picks its caption: 'turn' is a plain waiting card. */
+  /** Card hold reason selects its caption; turn means ordinary waiting. */
   holds: string[]
   cards: number
   nextQueuedMessageId: string | null
 }
 
-/** A composer message: sent with the composer's queue delivery. */
 function composerSend(text: string): ReturnType<QueuedMessageTestRig['send']> {
   return rig.send(text, 'queue-if-active')
 }
 
-/** Folds every published update as the chat does, one at a time, into what it shows. */
+/** Fold publications individually to catch transient client states. */
 async function watchClient(): Promise<ClientView[]> {
   const views: ClientView[] = []
   const submissions = new Map<string, AgentJournalSubmission>()
@@ -146,10 +132,10 @@ async function watchClient(): Promise<ClientView[]> {
       const running = [...turns].find(([, state]) => state === 'running')?.[0] ?? null
       const all = [...submissions.values()]
       const hostWorking = isStructuredAgentSessionMainAgentWorking(running, all)
-      // As use-structured-agent-session.ts derives it.
+      // Match use-structured-agent-session.ts projection.
       const working = hostWorking || (nextQueuedMessageId !== null && !hostWorking)
       const cards = projectQueuedMessageCards(queued, all, { queuePaused: queuePause !== null })
-      // As use-structured-agent-session-queued-messages.ts derives them.
+      // Match use-structured-agent-session-queued-messages.ts projection.
       const header = queuedMessagesQueuePause(cards, queuePause) !== null
       views.push({
         working,
@@ -165,11 +151,10 @@ async function watchClient(): Promise<ClientView[]> {
   return views
 }
 
-/** Every update in the run reads working, with Stop and Steer, and the gap update is among them. */
 function expectOneWorkingRun(views: readonly ClientView[]): void {
   expect(views.filter((view) => !view.working)).toEqual([])
   expect(views.flatMap((view) => view.steers)).not.toContain(false)
-  // Between a turn's end (or a Resume) and the queue's send: nothing in flight yet, still working.
+  // Include the gap between settlement/Resume and the next handover.
   expect(views.some((view) => !view.stopLive && view.nextQueuedMessageId !== null)).toBe(true)
 }
 
@@ -180,7 +165,6 @@ describe('a Stop holds the queue, in order', () => {
     await rig.stop()
     const typed = await queuedDraft('typed while the stop lands')
     const views = await watchClient()
-    // Still winding down: the paused row shows while it runs, and stays once it is over.
     expect(views.at(-1)).toMatchObject({ working: true, header: true })
     await rig.settleAccepted(working, 'stopped')
     await eventually(() => expect(views.at(-1)).toMatchObject({ working: false, header: true }))
@@ -212,19 +196,16 @@ describe('a Stop holds the queue, in order', () => {
 })
 
 describe('after a restart, nothing sends by itself', () => {
-  /** A turn runs with cards A and B waiting, and Orca quits: a quit writes no Stop event. */
   async function restartedWithCards(): Promise<{ first: string; second: string }> {
     await rig.workingSend()
     const first = await queuedDraft('A')
     const second = await queuedDraft('B')
     rig.crashRestartHostProcess()
-    // The new host opens the chat for its first reader.
     await published()
     return { first, second }
   }
 
-  /** The same, through a restart whose old agent this rig can still settle, so the next turn can
-   *  reach the agent: the turn that ran ends before anything new is sent. */
+  /** Restart after settling the old child so a later turn can reach the provider. */
   async function restartedIdleWithCards(): Promise<{ first: string; second: string }> {
     const working = await rig.workingSend()
     const first = await queuedDraft('A')
@@ -241,11 +222,9 @@ describe('after a restart, nothing sends by itself', () => {
     await expectNothingSent(first, second)
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     expect(derivedPauses()).toEqual(['restarted'])
-    // Closed and opened again (the idle sweep, a reconnect): the same.
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     await expectNothingSent(first, second)
-    // The chat reads idle with plain cards: no paused row, no Resume.
     expect(views.at(-1)).toMatchObject({
       working: false,
       header: false,
@@ -263,7 +242,6 @@ describe('after a restart, nothing sends by itself', () => {
     const { first, second } = await restartedIdleWithCards()
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     const views = await watchClient()
-    // The restart prompt's Resume sends the carry-on as Orca's own message, straight to the agent.
     const carryOn = rig.send('continue where you left off')
     expect(await carryOn.result).toMatchObject({
       ok: true,
@@ -285,7 +263,6 @@ describe('after a restart, nothing sends by itself', () => {
   it("the person's own message goes straight to the agent first, then A, then B", async () => {
     const { first, second } = await restartedIdleWithCards()
     const views = await watchClient()
-    // Sent with the composer's queue delivery: nothing ahead may send, so it is not queued.
     const message = composerSend('a new instruction')
     expect(await message.result).toMatchObject({
       ok: true,
@@ -340,21 +317,18 @@ describe('after a restart, nothing sends by itself', () => {
 
   it('a card written after the restart waits while any card from before it waits; then it is an ordinary queue', async () => {
     const { first, second } = await restartedIdleWithCards()
-    // Your message goes straight to the agent; while it waits, the next one queues.
     const message = rig.send('a new instruction')
     await message.result
     await eventually(async () =>
       expect((await rig.submission(message.id))?.handedOverAt).toBeDefined()
     )
     const typed = await queuedDraft('typed while it waits')
-    // The agent refuses it: no turn started, so every card waits, the new one included.
     await rig.settleRejected(message.id, 'turn/start refused')
     await expectNothingSent(first, second, typed)
     expect(derivedPauses()).toEqual(['restarted'])
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     expect(await rig.deleteQueued(first)).toMatchObject({ ok: true, value: { deleted: true } })
     await expectNothingSent(second, typed)
-    // With nothing from before the restart left, the card sends like any queued card.
     expect(await rig.deleteQueued(second)).toMatchObject({ ok: true, value: { deleted: true } })
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
   })
@@ -367,9 +341,9 @@ describe('after a restart, nothing sends by itself', () => {
     const second = await queuedDraft('B')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    // The agent at rest goes; Resume's hand-off of A must start a new one, which never starts.
+    // Resume must start a new child after idle retirement.
     await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
-    // The hand-off is recorded, never handed over: the new child stays in its spawn.
+    // Hold spawn so the recorded handoff cannot reach the provider.
     const release = rig.holdNextStart()
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
@@ -378,7 +352,6 @@ describe('after a restart, nothing sends by itself', () => {
     rig.crashRestartHostProcess()
     release()
     await published()
-    // The new host refuses the leftover hand-off, and A waits again in its own place.
     await eventually(async () =>
       expect(await rig.drafts()).toEqual([
         { messageId: first, state: 'waiting' },
@@ -393,7 +366,7 @@ describe('after a restart, nothing sends by itself', () => {
   })
 
   it('an epoch replacement (a rewind or a legacy import) before any turn still holds the cards', async () => {
-    // A turn happened in this chat before, so the new epoch restates a lift.
+    // A prior turn makes the replacement epoch restate the lift.
     await rig.settleAccepted(await rig.workingSend(), 'earlier')
     const { first, second } = await restartedWithCards()
     const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
@@ -412,7 +385,6 @@ describe('after a restart, nothing sends by itself', () => {
 })
 
 describe('a message sent over a held queue', () => {
-  /** Two cards a Stop holds, the stopped turn over: the paused row and Resume show. */
   async function heldIdleQueue() {
     const working = await rig.workingSend()
     const first = await queuedDraft('first')
@@ -426,15 +398,13 @@ describe('a message sent over a held queue', () => {
 
   it('goes out at once: the paused row goes as it is sent and never comes back, and the held cards follow it in order', async () => {
     const { first, second, views } = await heldIdleQueue()
-    // Sent with the composer's queue delivery: no card ahead may send, so nothing queues it.
     const message = composerSend('a new instruction')
     const sentAt = views.length
     expect(await message.result).toMatchObject({
       ok: true,
       value: { submission: expect.anything() }
     })
-    // The cards stay held until the agent accepts the message's turn, but the host no longer says
-    // paused: that turn is on its way to lift it.
+    // Hide the pause while its lifting turn is in flight; cards stay held until provider acceptance.
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     expect(await rig.handoff(first)).toBeUndefined()
     await eventually(async () =>
@@ -447,7 +417,6 @@ describe('a message sent over a held queue', () => {
     expect(await rig.handoff(second)).toBeUndefined()
     await rig.settleAccepted(await rig.handoffId(first), 'first')
     await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
-    // Updates arrived while the message waited for the agent, with both cards still held.
     const waiting = views.slice(sentAt, acceptedAt)
     expect(waiting.some((view) => view.stopLive && view.cards === 2)).toBe(true)
     expect(views.slice(sentAt).filter((view) => view.header)).toEqual([])
@@ -496,7 +465,7 @@ describe("the queue's next card on a history page", () => {
     const card = await queuedDraft('held, then released')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    // The Resume row is written; the Resume itself, and so the drain behind it, waits.
+    // Commit Resume while holding its remaining work and the drain behind it.
     let release: () => void = () => undefined
     const held = new Promise<void>((resolve) => (release = resolve))
     const write = AgentSessionJournal.prototype.appendQueueResume
@@ -522,7 +491,6 @@ describe("the queue's next card on a history page", () => {
 })
 
 describe('where the host would refuse the send', () => {
-  /** A new card in the same conversation after /clear inherits no earlier pause. */
   async function cardAddedAfterClear() {
     await rig.settleAccepted(await rig.workingSend(), 'a')
     const fields = { command: 'clear' as const }
@@ -535,9 +503,7 @@ describe('where the host would refuse the send', () => {
     if (!journal) {
       throw new Error('expected the conversation open')
     }
-    // The clear's generation end wakes the drain, which would send the card; holding the session's
-    // lane keeps it waiting while the test reads the gate (`release` lets the drain run).
-    // The gate exists before the task runs: other work may be queued ahead of it on the lane.
+    // Hold delivery after clear while reading the gate; install the barrier before queuing the task.
     let release = (): void => undefined
     const gate = new Promise<void>((resolve) => (release = resolve))
     const held = rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, () => gate)
@@ -571,7 +537,6 @@ describe('where the host would refuse the send', () => {
     }))
     expect(next.nextQueuedMessageId).toBe(card)
     await done()
-    // Released, the drain the clear's end woke sends it.
     await vi.waitFor(() => expect(journal.queuedMessages.get(card)?.state).toBe('dispatched'))
   })
 

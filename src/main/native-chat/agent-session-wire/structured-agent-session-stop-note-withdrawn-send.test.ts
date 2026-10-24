@@ -1,7 +1,4 @@
-// A Stop that ends the child after its interrupt failed: its row reports on the run it stopped, so
-// one whose child end took back the send it found, with no turn running, leaves none. A client
-// draws that send where it was sent with its own row, and a second row would sit under the turn
-// before on an older client, as if that turn were stopped.
+// Withdrawn sends render their own feedback; another notice misattributes the old turn on legacy clients.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -136,7 +133,6 @@ describe('a Stop that ends the child after its interrupt failed', () => {
     })
   })
 
-  // That send was never this child's to take back, so it does not keep the row.
   it("leaves no row when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({

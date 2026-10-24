@@ -21,7 +21,8 @@ const TRIGGER_RANK: Record<EditorSaveTrigger, number> = {
   autosave: 0,
   user: 1,
   restart: 1,
-  overwrite: 2
+  convert: 2,
+  overwrite: 3
 }
 
 const ignore = (): void => undefined

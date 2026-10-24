@@ -7,7 +7,7 @@ import {
   getJiraStatusCatalogScopeKey,
   includeSelectedJiraStatuses
 } from './task-page-jira-status-catalog'
-import { restrictJiraQueryToProject } from '../../../shared/jira-project-reference'
+import { restrictJiraQueryToProject } from '../../../shared/jira/jira-project-reference'
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 
 export function TaskPageJiraStatusFilters({

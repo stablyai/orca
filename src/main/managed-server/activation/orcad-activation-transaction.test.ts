@@ -150,7 +150,6 @@ describe('planOrcadTransactionRecovery', () => {
       )
     ).toMatchObject({
       launchedVersion: OLD,
-      // The target started from the restored snapshot; whether it changed that decides.
       launchedFromState: { state: 'captured', dirName: before.snapshot?.dirName }
     })
   })
@@ -206,7 +205,7 @@ describe('activation fence', () => {
       relayGcClaim: false
     })
     const [release] = removals()
-    // Only while the lock still carries this run's token; the journal goes before the lock.
+    // Release must prove ownership and remove journal before lock.
     expect(release).toMatch(
       /^\[ "\$\(cat '[^']*\.orca-fence-owner' 2>\/dev\/null\)" = '[^']+' \] \|\| \{ echo SUPERSEDED; exit 0; \};/u
     )
@@ -228,7 +227,7 @@ describe('activation fence', () => {
     ).rejects.toThrow('mid-transaction')
     await locked(async (lock) => lock.retain())
     expect(removals()).toEqual([])
-    // A finished run's fence is ownerless; one an unconfirmed command may still use stays fresh.
+    // Completed work may orphan its fence; unconfirmed commands must keep theirs fresh.
     expect(orphanings()).toHaveLength(2)
   })
 

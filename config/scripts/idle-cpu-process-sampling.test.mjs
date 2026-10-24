@@ -80,6 +80,24 @@ describe('idle CPU process sampling window', () => {
 
     expect(result.workloadResult).toBe('complete')
     expect(result.samples.map((sample) => sample.at)).toEqual([10, 20, 30, 40])
+    expect(result.samples.at(-1)).toEqual({
+      at: 40,
+      elapsedMs: 10,
+      totalCpuPercent: expect.closeTo(50, 8),
+      totalRssBytes: 1_024,
+      processes: [
+        {
+          pid: 10,
+          ppid: 0,
+          percentCpu: 0,
+          rssBytes: 1_024,
+          cpuTimeSeconds: 0.02,
+          command: 'electron',
+          kind: 'main',
+          cpu: expect.closeTo(50, 8)
+        }
+      ]
+    })
     expect(result.samplingWindow).toEqual({
       requestedDurationMs: 20,
       measuredDurationMs: 40,

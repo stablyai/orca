@@ -1,8 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
-// What a Stop's row says when Codex took the interrupt, against the real host, journal and Codex
-// adapter. Codex answers a turn's interrupt as the turn aborts and sends the turn's end right after
-// the answer, so the end reaches Orca a moment after the Stop has its answer.
+// Codex interrupt replies precede turn-end frames; preserve note projection across both deliveries.
 
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -41,7 +39,6 @@ let host: StructuredAgentSessionHost
 let turns: ReturnType<typeof codexTurnLifecycleFake>
 let codex: ReturnType<typeof fakeCodex>
 let notify: (method: string, params: unknown) => void
-/** Read at each start, so a test can say what the next start resumes. */
 let launch: { resumeThreadId?: string | null }
 let adapter: CodexStructuredSessionAdapter
 
@@ -56,7 +53,6 @@ beforeEach(async () => {
   codex.routes['turn/start'] = turns.routes['turn/start']
   codex.routes['turn/interrupt'] = () => {
     const turnId = turns.turnId
-    // The answer first, then the turn's end on a later read of Codex's output.
     setTimeout(
       () =>
         notify('turn/completed', { threadId: THREAD, turn: { id: turnId, status: 'interrupted' } }),
@@ -65,7 +61,6 @@ beforeEach(async () => {
     return {}
   }
   const store = await openTestAgentSessionRecordStore(root)
-  // The runtime's wiring: an echo accepts its send, and every exit reaches the host.
   launch = {}
   adapter = adapterFor(codex, launch, [], {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
