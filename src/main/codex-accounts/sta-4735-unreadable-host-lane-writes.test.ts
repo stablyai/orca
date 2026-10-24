@@ -13,9 +13,6 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-// STA-4735: two host-lane reads still answered "absent" from a read that had
-// only failed, and both answers authorised a write over live data.
-
 const denials = vi.hoisted(() => {
   const state = {
     paths: new Set<string>(),
@@ -135,10 +132,7 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
     denials.deny(runtimeAuthPath)
     const wrote = service.writeRuntimeAuth(STALE, { owner: 'managed', accountId: 'account-1' })
 
-    // The fault really was consumed by the code under test.
     expect(denials.readsFor(runtimeAuthPath)).toBeGreaterThan(0)
-    // THE FIX. Before it, "could not read" counted as "differs" and the write
-    // below replaced a freshly rotated refresh token with Orca's stale copy.
     expect(wrote).toBe(false)
     expect(realFs.readFileSync(runtimeAuthPath, 'utf-8')).toBe(ROTATED)
   })
@@ -150,8 +144,6 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
     realFs.mkdirSync(join(runtimeAuthPath, '..'), { recursive: true })
     realFs.writeFileSync(runtimeAuthPath, 'stale\n', 'utf-8')
 
-    // Why: the anchor. A fix that simply stopped writing would pass the test
-    // above and break every credential sync.
     const wrote = service.writeRuntimeAuth(NEXT, { owner: 'managed', accountId: 'account-1' })
 
     expect(wrote).toBe(true)

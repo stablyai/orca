@@ -101,6 +101,7 @@ describe('bridge round trip: requests', () => {
     const error = await answer.catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(Error)
     expect(readError(error).name).toBe('RpcTimeoutError')
+    expect(error).toMatchObject({ code: 'ETIMEDOUT' })
     expect(readError(error).message).toBe('timed out after 50ms')
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     expect(readError(readError(error).cause).message).toBe('socket closed')
@@ -172,7 +173,11 @@ describe('bridge round trip: subscriptions', () => {
       }
       await pair.flush()
     }
-    expect(onData).toHaveBeenCalledTimes(400)
+    expect(onData.mock.calls.map(([payload]) => payload)).toEqual(
+      Array.from({ length: 8 }, (_, batch) =>
+        Array.from({ length: 50 }, (_, frame) => `frame-${batch}-${frame}`)
+      ).flat()
+    )
     expect(pair.diagnostics).toEqual([])
   })
 
@@ -263,8 +268,10 @@ describe('bridge round trip: notifications and state', () => {
 
   it('refuses a URL outside the grant without putting a frame on the wire', async () => {
     const pair = await ready(createFakeBridgePortPair())
+    const sent = pair.toShell.length
     expect(pair.client.notifyExternalLink('javascript:alert(1)')).toBe(false)
     await pair.flush()
+    expect(pair.toShell).toHaveLength(sent)
     expect(pair.externalLinks).toEqual([])
     expect(pair.hostDiagnostics).toEqual([])
   })

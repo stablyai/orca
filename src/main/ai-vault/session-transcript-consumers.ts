@@ -1,21 +1,19 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 
-// Why: the transcript reader owns discovery, per-file cursors and decoding; a
-// consumer only folds the message stream. Registering a second consumer (a
-// search index, a digest) must not require touching the reader or the parse
-// cache, so the reader publishes reads rather than knowing who reads them.
+// Publish reads so new consumers do not require reader or cache changes.
 
 export type TranscriptMessageRole = 'user' | 'assistant' | 'tool'
 
 export type TranscriptMessage = {
   role: TranscriptMessageRole
-  /** Untruncated decoded text; caps and redaction are consumer policy. */
+  /** Decoded text, subject to the reader's safety limits. */
   text: string
+  /** A size limit omitted some decoded text. */
+  textTruncated?: true
   timestamp: string | null
 }
 
-/** Where a parser hands its decoded messages; the reader supplies the instance. */
 export type TranscriptMessageSink = {
   /** False when nobody is listening: parsers skip the extraction entirely. */
   readonly active: boolean
@@ -29,14 +27,7 @@ export const NO_TRANSCRIPT_MESSAGES: TranscriptMessageSink = {
   push: () => undefined
 }
 
-/**
- * What a parser has decoded about the session so far, mid-read.
- *
- * Provisional by construction: it is read before the file ends, so a title can
- * still change and a timestamp can still move. Every field the transcript
- * formats put in their opening lines, which is what a consumer that has to
- * commit before the read finishes needs to name what it is holding.
- */
+/** Provisional mid-read identity; later records can change titles, paths, and timestamps. */
 export type TranscriptSessionIdentity = {
   sessionId: string
   cwd: string | null
@@ -51,41 +42,28 @@ export type TranscriptReadStart = {
   mode: 'replace' | 'append'
   /** Byte offset the messages of this read continue from. */
   previousByteOffset: number
-  /**
-   * The session identity decoded so far, or null before the parser has an id.
-   * Called during the read, never here: nothing is decoded yet when a read
-   * begins. Absent when the read has no resumable parse state to ask.
-   */
+  /** Query during the read after decoding begins; absent for parsers without resumable state. */
   identity?: () => TranscriptSessionIdentity | null
 }
 
 export type TranscriptReadOutcome = {
-  /** Null when the parser rejected the file (an excluded Codex worker transcript). */
+  /** Null when the parser rejected the file, such as an excluded Codex worker transcript. */
   session: AiVaultSession | null
   /** Byte offset just past the last complete line this read consumed. */
   byteOffset: number
-  /**
-   * The messages of this read are not the whole span: the read failed part way,
-   * or the parser decodes where the channel cannot reach it. A consumer must
-   * not record a cursor for an incomplete read.
-   */
+  /** Incomplete streams must not advance consumer cursors. */
   incomplete: boolean
-  /** The caller cancelled the read: not a failure, so the file stays owed as before. */
+  /** Cancellation leaves the file pending without recording a failure. */
   cancelled?: boolean
 }
 
-/** One consumer's view of one file read. */
 export type TranscriptReadConsumer = {
   message(message: TranscriptMessage): void
   finish(outcome: TranscriptReadOutcome): void
 }
 
 export type TranscriptConsumer = {
-  /**
-   * Open this read, or return null to ignore it. A consumer whose own cursor is
-   * behind `previousByteOffset` declines here and re-reads on its own schedule;
-   * it must never ask another consumer where it is.
-   */
+  /** Decline reads whose previousByteOffset exceeds your cursor, then request a whole read separately. */
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null
 }
 

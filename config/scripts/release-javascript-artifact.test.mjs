@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -97,7 +98,9 @@ describe('release JavaScript configuration', () => {
     const { root, env } = configurationFixture(version)
     const result = releaseJavascriptConfiguration(root, { ...env, ORCA_BUILD_IDENTITY: identity })
     expect(result.identity).toBe(identity)
-    expect(result.telemetryKeySha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(result.telemetryKeySha256).toBe(
+      createHash('sha256').update(env.ORCA_POSTHOG_WRITE_KEY).digest('hex')
+    )
     expect(result.sourceSha).toMatch(/^[a-f0-9]{40}$/)
   })
 
@@ -200,15 +203,16 @@ describe('release JavaScript transfer', () => {
   ])('rejects a different %s before replacing the current build', (field) => {
     const options = fixture()
     packReleaseJavascript(options)
+    writeFileSync(join(options.root, 'out', 'main', 'index.js'), 'current build')
+    writeFileSync(join(options.root, 'out', 'current-only.js'), 'current only')
+    const current = javascriptInventory(join(options.root, 'out'))
     expect(() =>
       restoreReleaseJavascript({
         ...options,
         configuration: { ...configuration, [field]: 'different' }
       })
     ).toThrow('JavaScript build configuration differs')
-    expect(readFileSync(join(options.root, 'out', 'main', 'index.js'), 'utf8')).toBe(
-      'main/index.js'
-    )
+    expect(javascriptInventory(join(options.root, 'out'))).toEqual(current)
   })
 
   it('rejects a damaged archive before replacing the current build', () => {
@@ -224,9 +228,13 @@ describe('release JavaScript transfer', () => {
   it('rejects a file inventory that no longer describes the archive', () => {
     const options = fixture()
     const manifest = packReleaseJavascript(options)
+    writeFileSync(join(options.root, 'out', 'main', 'index.js'), 'current build')
+    writeFileSync(join(options.root, 'out', 'current-only.js'), 'current only')
+    const current = javascriptInventory(join(options.root, 'out'))
     manifest.files[0].sha256 = 'c'.repeat(64)
     writeFileSync(join(options.artifactDir, 'manifest.json'), JSON.stringify(manifest))
     expect(() => restoreReleaseJavascript(options)).toThrow('JavaScript file inventory differs')
+    expect(javascriptInventory(join(options.root, 'out'))).toEqual(current)
   })
 
   it.each([
@@ -248,10 +256,9 @@ describe('release JavaScript transfer', () => {
     'rejects symlinks instead of following files outside the build',
     () => {
       const options = fixture()
-      symlinkSync(
-        join(options.root, 'out', 'main', 'index.js'),
-        join(options.root, 'out', 'linked.js')
-      )
+      const outside = join(options.root, 'outside.js')
+      writeFileSync(outside, 'outside the build')
+      symlinkSync(outside, join(options.root, 'out', 'linked.js'))
       expect(() => packReleaseJavascript(options)).toThrow('contains a symlink')
     }
   )

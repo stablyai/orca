@@ -18,9 +18,7 @@ export function registerLocalhostWorktreeLabelHandlers(store: Store): void {
     'localhostWorktreeLabels:register',
     async (_event, rawArgs: unknown): Promise<LocalhostWorktreeLabelResult> => {
       const route = parseRegisterArgs(rawArgs)
-      // Why: the proxy will forward to any host it's given, so we restrict the
-      // target to loopback or a host:port that matches a live workspace port —
-      // otherwise this IPC is an open proxy / SSRF vector.
+      // Restrict proxy targets to loopback or live workspace ports to prevent arbitrary forwarding.
       await assertAllowedTarget(store, route.targetUrl)
       return localhostWorktreeLabelProxy.registerRoute(route)
     }
@@ -39,11 +37,9 @@ async function assertAllowedTarget(store: Store, targetUrl: string): Promise<voi
     return
   }
 
-  // Why: URL drops the port for protocol defaults (e.g. http://host/ on 80),
-  // so compare against the effective port rather than the raw (empty) string.
+  // URL omits default ports; compare effective ports instead.
   const targetPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80')
-  // Why (#11161): a metadata-skipped scan drops advertisedUrl, which would
-  // silently narrow this allowlist on an EDR-hooked host.
+  // Require advertised metadata so EDR-skipped scans cannot silently narrow the allow-list (#11161).
   const scan = await scanWorkspacePortProbes(getStoreWorkspacePortProbes(store), {
     requireMetadata: true
   })

@@ -110,8 +110,8 @@ export async function writeWorkspaceMeta(
       await window.__store!.getState().updateWorktreesMeta(updates)
       const repoIds = [...new Set(updates.map(({ worktreeId }) => worktreeId.split('::')[0]!))]
       const listed = new Map(
-        (await Promise.all(repoIds.map((repoId) => window.api.worktrees.list({ repoId }))))
-          .flat()
+        (await Promise.all(repoIds.map((repoId) => window.api.worktrees.listDetected({ repoId }))))
+          .flatMap((result) => result.worktrees.filter((worktree) => worktree.visible))
           .map((worktree) => [worktree.id, worktree])
       )
       for (const { worktreeId, updates: written } of updates) {

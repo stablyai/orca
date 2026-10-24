@@ -102,6 +102,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
       'No startup skill-transaction recovery runs on orcad, so installs need not wait for one.'
   },
   {
+    wiring: 'ctor:workspaceSleepPlatform',
+    missingOn: 'orcad',
+    reason:
+      'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
+  },
+  {
     wiring: 'rpc-option:exposeNetworkByDefault',
     missingOn: 'orcad',
     reason: 'orcad pins its bind host instead, so exposure never widens itself.'
@@ -155,6 +161,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'host:setBrowserHostClientProfileResolver',
     missingOn: 'orcad',
     reason: 'Browser profiles live in Chromium sessions; orcad pages carry profile ids only.'
+  },
+  {
+    wiring: 'host:setManagedBrowserProfileDeleter',
+    missingOn: 'orcad',
+    reason: 'Managed profiles live in Chromium sessions; orcad has none to delete on removal.'
   },
   {
     wiring: 'host:setDesktopBrowserBridgeHostEnabled',

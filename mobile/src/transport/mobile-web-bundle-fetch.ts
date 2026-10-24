@@ -40,7 +40,11 @@ export type MobileWebBundleFetchProgress = {
 
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
+  /** The assets read over the wire, verified. */
   readonly assets: ReadonlyMap<string, Uint8Array>
+  /** The assets left for the stage to copy from the host's cached generation instead: a contract
+   *  with `stageGeneration`, which copies each one and fails rather than stage a tree without it. */
+  readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
 }
@@ -54,16 +58,31 @@ type AssetReassembly = {
 type WindowRead = { readonly asset: AssetReassembly; readonly offset: number }
 
 /**
- * Reads the manifest, pages every asset, and returns the verified bytes.
+ * Where a download may take an asset from instead of the wire: the host's cached generation. A
+ * match is by content (hash and length). The cache was hash-verified when it was written and is
+ * never modified in place, so the stage's copy of a reused asset is the bytes the page already
+ * opens from it.
+ */
+export type MobileWebBundleReusableAssets = {
+  readonly has: (asset: MobileWebBundleAssetRead) => boolean
+  /** Whether the cached file is still on disk at its full length: a native stat, no bytes read.
+   *  False downloads it instead; never rejects. */
+  readonly check: (asset: MobileWebBundleAssetRead) => Promise<boolean>
+}
+
+/**
+ * Reads the manifest, pages every asset it cannot reuse, and returns the verified bytes.
  *
- * Nothing is cached and nothing is rendered: this is the Phase A proof that the pipe carries a whole
- * bundle intact. Every asset is checked against the manifest's own sha256 before it is returned, so
- * a truncated or reordered reassembly fails here rather than in a webview much later.
+ * Every asset read is checked against the manifest's own sha256 before it is returned, so a
+ * truncated or reordered reassembly fails here rather than in a webview much later. Progress
+ * counts only what crosses the wire: reused assets cost no wait, so counting them would fill most
+ * of the bar at once and then crawl.
  */
 export async function fetchMobileWebBundle(args: {
   client: RpcClient
   signal?: AbortSignal
   onProgress?: (progress: MobileWebBundleFetchProgress) => void
+  reusable?: MobileWebBundleReusableAssets
 }): Promise<MobileWebBundleFetchResult> {
   const startedAt = Date.now()
   const stopped = new AbortController()
@@ -71,18 +90,30 @@ export async function fetchMobileWebBundle(args: {
   const opened = await runRpcOperation(args.client, mobileWebBundleManifestRead, null)
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
-  const queue = planWindowReads(manifest.assets, reader.windowBytes)
+  const reusable = args.reusable
+  const candidates = new Set(
+    reusable === undefined ? [] : manifest.assets.filter((entry) => reusable.has(entry))
+  )
+  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
+  const reused: string[] = []
   let receivedBytes = 0
+  let downloadBytes = 0
+  let downloadAssets = 0
+  let downloadedAssets = 0
   let stallTimer: ReturnType<typeof setTimeout> | null = null
   let failStalled: (error: Error) => void = () => {}
   const stalled = new Promise<never>((_, reject) => {
     failStalled = reject
   })
-  const armStallClock = (): void => {
+  const disarmStallClock = (): void => {
     if (stallTimer !== null) {
       clearTimeout(stallTimer)
+      stallTimer = null
     }
+  }
+  const armStallClock = (): void => {
+    disarmStallClock()
     // A read that lands after the fetch settled must not leave a timer behind.
     if (stopped.signal.aborted) {
       return
@@ -97,6 +128,14 @@ export async function fetchMobileWebBundle(args: {
         )
       )
     }, MOBILE_WEB_BUNDLE_WINDOW_STALL_MS)
+  }
+  const reportProgress = (): void => {
+    args.onProgress?.({
+      completedAssets: downloadedAssets,
+      totalAssets: downloadAssets,
+      receivedBytes,
+      totalBytes: downloadBytes
+    })
   }
 
   const readWindow = async ({ asset, offset }: WindowRead): Promise<void> => {
@@ -127,48 +166,87 @@ export async function fetchMobileWebBundle(args: {
         return
       }
       assets.set(asset.entry.path, verified)
+      downloadedAssets += 1
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
     receivedBytes += bytes.byteLength
-    args.onProgress?.({
-      completedAssets: assets.size,
-      totalAssets: manifest.assets.length,
-      receivedBytes,
-      totalBytes: manifest.totalBytes
-    })
+    reportProgress()
   }
 
-  const worker = async (): Promise<void> => {
-    try {
-      while (!stopped.signal.aborted) {
-        const read = queue.shift()
-        if (read === undefined) {
-          return
+  const readWindows = async (entries: readonly MobileWebBundleAssetRead[]): Promise<void> => {
+    const queue = planWindowReads(entries, reader.windowBytes)
+    if (queue.length === 0) {
+      return
+    }
+    const worker = async (): Promise<void> => {
+      try {
+        while (!stopped.signal.aborted) {
+          const read = queue.shift()
+          if (read === undefined) {
+            return
+          }
+          throwIfCallerAborted(args.signal)
+          await readWindow(read)
         }
-        throwIfCallerAborted(args.signal)
-        await readWindow(read)
+      } catch (error) {
+        // One failed window stops every other read: each read a worker would still send holds one
+        // of the host's four slots against the caller's retry.
+        stopped.abort()
+        throw error
       }
-    } catch (error) {
-      // One failed window stops every other read: each read a worker would still send holds one of
-      // the host's four slots against the caller's retry.
-      stopped.abort()
-      throw error
+    }
+    const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
+    armStallClock()
+    try {
+      await Promise.race([Promise.all(Array.from({ length: workers }, () => worker())), stalled])
+    } finally {
+      disarmStallClock()
     }
   }
 
-  const workers = Math.min(MAX_CONCURRENT_WINDOW_READS, queue.length)
-  armStallClock()
+  /** The candidates no longer whole in the cache, which are downloaded after all. */
+  const reuseCandidates = async (): Promise<MobileWebBundleAssetRead[]> => {
+    const missed: MobileWebBundleAssetRead[] = []
+    for (const entry of candidates) {
+      if (stopped.signal.aborted) {
+        break
+      }
+      throwIfCallerAborted(args.signal)
+      if (await reusable?.check(entry)) {
+        reused.push(entry.path)
+      } else {
+        missed.push(entry)
+      }
+    }
+    return missed
+  }
+
+  const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
+    downloadAssets += entries.length
+    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+  }
+
   try {
-    await Promise.race([Promise.all(Array.from({ length: workers }, () => worker())), stalled])
+    countDownload(fetched)
+    // The caption's total before any byte, when it is not the whole bundle the session assumed.
+    if (candidates.size > 0) {
+      reportProgress()
+    }
+    // Checked while the window reads are in flight: each is a native stat, and the download it
+    // would otherwise delay is waiting on the network.
+    const [, missed] = await Promise.all([readWindows(fetched), reuseCandidates()])
+    if (missed.length > 0 && !stopped.signal.aborted) {
+      countDownload(missed)
+      reportProgress()
+      await readWindows(missed)
+    }
   } finally {
     stopped.abort()
-    if (stallTimer !== null) {
-      clearTimeout(stallTimer)
-    }
+    disarmStallClock()
   }
   // The final window sends nothing after its last reply, so no worker would see this abort.
   throwIfCallerAborted(args.signal)
-  return { manifest, assets, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
+  return { manifest, assets, reused, totalBytes: receivedBytes, elapsedMs: Date.now() - startedAt }
 }
 
 /** Largest asset first, so the biggest script's tail is never the last read left in flight. Offsets

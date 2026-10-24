@@ -62,12 +62,12 @@ export function getSelectionRangeKeys(
 
 export function useSourceControlSelection({
   flatEntries,
-  onOpenFile,
+  onOpenDiff,
   shouldOpenAsSplit,
   containerRef
 }: {
   flatEntries: FlatEntry[]
-  onOpenFile: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
+  onOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   shouldOpenAsSplit?: (event: SourceControlRowOpenEvent) => boolean
   containerRef: RefObject<HTMLElement | null>
 }) {
@@ -76,7 +76,7 @@ export function useSourceControlSelection({
   const flatEntriesRef = useRef(flatEntries)
   const anchorKeyRef = useRef<string | null>(anchorKey)
   const selectedKeysRef = useRef(selectedKeys)
-  const onOpenFileRef = useRef(onOpenFile)
+  const onOpenDiffRef = useRef(onOpenDiff)
   const shouldOpenAsSplitRef = useRef(shouldOpenAsSplit)
 
   useEffect(() => {
@@ -92,8 +92,8 @@ export function useSourceControlSelection({
   }, [selectedKeys])
 
   useEffect(() => {
-    onOpenFileRef.current = onOpenFile
-  }, [onOpenFile])
+    onOpenDiffRef.current = onOpenDiff
+  }, [onOpenDiff])
 
   useEffect(() => {
     shouldOpenAsSplitRef.current = shouldOpenAsSplit
@@ -118,7 +118,7 @@ export function useSourceControlSelection({
     if (shouldOpenAsSplitRef.current?.(e)) {
       setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
       setAnchorKey(null)
-      onOpenFileRef.current(entry, e)
+      onOpenDiffRef.current(entry, e)
       return
     }
 
@@ -138,7 +138,7 @@ export function useSourceControlSelection({
       // stale invisible anchor.
       setSelectedKeys(new Set())
       setAnchorKey(key)
-      onOpenFileRef.current(entry)
+      onOpenDiffRef.current(entry)
     } else if (isCmdOrCtrl) {
       if (selectedKeysRef.current.has(key)) {
         setSelectedKeys((prev) => {
@@ -163,7 +163,7 @@ export function useSourceControlSelection({
         return prev
       })
       setAnchorKey(key)
-      onOpenFileRef.current(entry)
+      onOpenDiffRef.current(entry)
     }
   }, [])
 

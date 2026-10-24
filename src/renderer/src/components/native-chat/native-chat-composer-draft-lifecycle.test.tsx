@@ -70,6 +70,7 @@ function heldTransport(hostCommand = false): {
   })
   return {
     transport: {
+      capturePresentation: () => () => true,
       send: vi.fn(() => true),
       dispatchCommand: vi.fn(() => dispatched),
       optionsSurface: {

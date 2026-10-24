@@ -53,6 +53,10 @@ export function createLaunchFunnelStore(): {
   markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
   setTabAgentLaunchPane: ReturnType<typeof vi.fn>
   closeTab: ReturnType<typeof vi.fn>
+  readLocalAgentInventory: () => { ids: null; state: 'pending' }
+  runtimeDetectedAgentIds: Record<string, never>
+  runtimeAgentInventoryOutcome: () => 'pending'
+  runtimeAgentDetectionNeedsServerUpdate: Record<string, never>
 } {
   const store = {
     settings: launchFunnelSettings(),
@@ -71,7 +75,11 @@ export function createLaunchFunnelStore(): {
     seedNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchPromptFailed: vi.fn(),
     setTabAgentLaunchPane: vi.fn(),
-    closeTab: vi.fn()
+    closeTab: vi.fn(),
+    readLocalAgentInventory: () => ({ ids: null, state: 'pending' as const }),
+    runtimeDetectedAgentIds: {},
+    runtimeAgentInventoryOutcome: () => 'pending' as const,
+    runtimeAgentDetectionNeedsServerUpdate: {}
   }
   store.createTab.mockImplementation(createTabInto(store))
   return store

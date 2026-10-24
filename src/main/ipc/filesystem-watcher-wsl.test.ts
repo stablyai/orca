@@ -96,9 +96,7 @@ describe('createWslWatcher', () => {
       expect.objectContaining({
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
-        // Why a concrete directory (#16463): the watched path rides in argv, so
-        // an omitted cwd only means CreateProcessW inherits Orca's -- a worktree
-        // that can be deleted, after which every watcher start is ENOENT.
+        // Explicit cwd survives deletion of Orca's inherited worktree (#16463).
         cwd: expect.any(String)
       })
     )

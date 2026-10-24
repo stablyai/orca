@@ -425,7 +425,7 @@ test.describe('terminal reveal paused-render recovery', () => {
     ).toBe(true)
   })
 
-  test('@headful atlas recovery presents a synchronized-output WebGL frame', async ({
+  test('@headful atlas recovery keeps the coherent frame until synchronized output releases', async ({
     orcaPage
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
@@ -455,6 +455,7 @@ test.describe('terminal reveal paused-render recovery', () => {
       background: 17,
       release: true
     })
+    const baseline = await captureStableTabScreenshot(orcaPage, tabId)
     await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
       marker: 'REVEALED_FRAME',
       background: 52,
@@ -470,36 +471,45 @@ test.describe('terminal reveal paused-render recovery', () => {
     await expect
       .poll(async () => (await readSynchronizedRevealProbe(orcaPage)).atlasClears)
       .toBeGreaterThan(0)
-    const afterReveal = await captureStableTabScreenshot(orcaPage, tabId)
+    // Why not a stable capture: the atlas clear's redraw starts xterm's 1s DEC 2026 safety timeout.
+    const afterReveal = await captureFirstRevealedFrame(orcaPage, tabId)
+    const heldDiff = compareTerminalScreenshots(baseline, afterReveal)
 
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'REVEALED_FRAME',
+      background: 52,
+      release: true
+    })
+    const released = await captureStableTabScreenshot(orcaPage, tabId)
     await callSynchronizedRevealProbe(orcaPage, 'forceRendererPresent')
-    const afterForcedPresent = await captureStableTabScreenshot(orcaPage, tabId)
-    const diff = compareTerminalScreenshots(afterReveal, afterForcedPresent)
+    const direct = await captureStableTabScreenshot(orcaPage, tabId)
+    const releasedDiff = compareTerminalScreenshots(released, direct)
     const afterRevealPath = testInfo.outputPath('synchronized-frame-after-reveal.png')
-    const afterForcedPresentPath = testInfo.outputPath(
-      'synchronized-frame-after-forced-present.png'
-    )
+    const releasedPath = testInfo.outputPath('synchronized-frame-after-release.png')
     const pixelDiffPath = testInfo.outputPath('synchronized-frame-pixel-diff.json')
     await Promise.all([
       writeFile(afterRevealPath, afterReveal),
-      writeFile(afterForcedPresentPath, afterForcedPresent),
-      writeFile(pixelDiffPath, JSON.stringify(diff, null, 2))
+      writeFile(releasedPath, released),
+      writeFile(pixelDiffPath, JSON.stringify({ heldDiff, releasedDiff }, null, 2))
     ])
-    await testInfo.attach('synchronized-frame-after-reveal.png', {
-      path: afterRevealPath,
-      contentType: 'image/png'
-    })
-    await testInfo.attach('synchronized-frame-after-forced-present.png', {
-      path: afterForcedPresentPath,
-      contentType: 'image/png'
-    })
-    await testInfo.attach('synchronized-frame-pixel-diff.json', {
-      path: pixelDiffPath,
-      contentType: 'application/json'
-    })
+    for (const [name, path, contentType] of [
+      ['synchronized-frame-after-reveal.png', afterRevealPath, 'image/png'],
+      ['synchronized-frame-after-release.png', releasedPath, 'image/png'],
+      ['synchronized-frame-pixel-diff.json', pixelDiffPath, 'application/json']
+    ] as const) {
+      await testInfo.attach(name, { path, contentType })
+    }
     expect(
-      diff.matches,
-      `revealed pixels already match a forced buffer present (diffRatio=${diff.diffRatio})`
+      heldDiff.matches,
+      `atlas recovery keeps the coherent frame while DEC 2026 is held (diffRatio=${heldDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      compareTerminalScreenshots(baseline, released).matches,
+      'release replaces the coherent frame'
+    ).toBe(false)
+    expect(
+      releasedDiff.matches,
+      `release presents the completed frame (diffRatio=${releasedDiff.diffRatio})`
     ).toBe(true)
   })
 

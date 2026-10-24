@@ -13,8 +13,7 @@ export type AgentSessionReplayOutcomeDecision<TValue> =
   | { decision: 'rerun' }
   | { decision: 'refuse'; refusal: AgentSessionWireRefusal }
 
-/** A recorded id this host cannot answer from what it holds, so it neither ran it again nor
- *  refused it: the caller resends under the same id. */
+/** No reconstructable answer: request same-ID retry without repeating effects. */
 export function agentSessionOperationOutcomeUnknown(operationId: string): AgentSessionWireRefusal {
   return refuse(
     'agent_session_operation_unknown',
@@ -72,8 +71,7 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
     : { decision: 'rerun' }
 }
 
-/** The refusal a failed row recorded, so a replay says what the first answer said. A code this
- *  build does not know was refused for a reason it cannot name. */
+/** Preserve recorded refusal; unknown codes have no reason this build can name. */
 function recordedRefusal(code: string, details: unknown): AgentSessionRefusalReference {
   return (
     readAgentSessionRefusalReference({ code, details }) ?? {

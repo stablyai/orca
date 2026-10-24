@@ -34,7 +34,7 @@ type EditorTabOpen = {
 }
 
 /** What lets a reload or a second client rebuild the tab: an edit file's record, any view. */
-function editorTabContent(
+export function editorTabContent(
   file: OpenFile
 ): Pick<Extract<WindowLayoutCommand, { type: 'openEditorTab' }>, 'file' | 'view'> {
   const view = layoutEditorViewOfOpenFile(file)

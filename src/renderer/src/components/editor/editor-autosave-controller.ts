@@ -15,7 +15,10 @@ import {
   getAutosaveSubscriberInputs
 } from './editor-autosave-state-projections'
 import { createEditorSaveQueue, type AppStoreApi } from './editor-save-queue'
-import { EDITOR_STALE_SAVE_MESSAGE } from './editor-save-disk-precondition'
+import {
+  EDITOR_NOT_UTF8_SAVE_MESSAGE,
+  EDITOR_STALE_SAVE_MESSAGE
+} from './editor-save-disk-precondition'
 import { createEditorRestartSaveHandlers } from './editor-restart-save-handlers'
 import { createEditorExternalChangeTabReset } from './editor-external-change-tab-reset'
 import {
@@ -54,7 +57,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // Why: only a written save may close the tab; anything else keeps it and its edits.
         const result = await queueSave(file, draft)
         if (result !== 'written') {
-          onNotClosed?.(result === 'blocked-stale' ? 'blocked-stale' : 'not-saved')
+          onNotClosed?.(result === 'failed' ? 'not-saved' : result)
           return
         }
       } catch {
@@ -91,9 +94,16 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      const result = await queueSave(file, content, detail.overwrite ? 'overwrite' : 'user')
+      const trigger = detail.overwrite ? 'overwrite' : detail.convertToUtf8 ? 'convert' : 'user'
+      const result = await queueSave(file, content, trigger)
       if (result !== 'written') {
-        detail.reject(result === 'blocked-stale' ? EDITOR_STALE_SAVE_MESSAGE : NOT_SAVED_MESSAGE)
+        detail.reject(
+          result === 'blocked-stale'
+            ? EDITOR_STALE_SAVE_MESSAGE
+            : result === 'not-utf8'
+              ? EDITOR_NOT_UTF8_SAVE_MESSAGE
+              : NOT_SAVED_MESSAGE
+        )
         return
       }
       detail.resolve()

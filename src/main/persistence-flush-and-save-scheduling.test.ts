@@ -23,7 +23,6 @@ import type { WorkspaceSessionState } from '../shared/workspace-session-state-ty
 import { _resetTracerForTests, setActiveSink } from './observability/tracer'
 import { _resetPtyBindingSpanSamplingForTests } from './persistence/loading-store/pty-binding-span'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -77,7 +76,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 10. flush writes synchronously ─────────────────────────────────
 
   it('flush writes state to disk synchronously', async () => {
     const store = await createStore()
@@ -125,20 +123,15 @@ describe('Store', () => {
     }
   })
 
-  // ── 11. Debounced save ─────────────────────────────────────────────
-
   it('debounced save writes data after the delay', async () => {
     vi.useFakeTimers()
     try {
       const store = await createStore()
       store.addRepo(makeRepo())
 
-      // Before the debounce fires, file should not exist yet (or be stale)
       vi.advanceTimersByTime(100)
-      // The 1s debounce hasn't elapsed yet
 
       vi.advanceTimersByTime(1000)
-      // The timer fired; wait for the async disk write to complete
       await store.waitForPendingWrite()
 
       const persisted = readDataFile() as { repos: Repo[] }
@@ -148,9 +141,6 @@ describe('Store', () => {
       vi.useRealTimers()
     }
   })
-
-  // ── Content-hash write skipping ────────────────────────────────────
-  // Retained ciphertext makes an unintended secret rewrite visible in the SQL projection.
 
   it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
     vi.useFakeTimers()
@@ -193,7 +183,7 @@ describe('Store', () => {
     vi.useFakeTimers()
     try {
       const store = await createStore()
-      // Mutations every 500ms reset the 1s debounce; the 5s max-wait must force a write anyway.
+      // Keep resetting debounce past max-wait to verify sustained mutations still reach disk.
       let width = 400
       for (let i = 0; i < 11; i++) {
         store.updateUI({ sidebarWidth: width++ })
@@ -247,13 +237,10 @@ describe('Store', () => {
     await store.persistPtyBinding(binding)
     const stateBefore = readPersistedStateJson(dataFile())
 
-    // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
     await store.persistPtyBinding(binding)
 
     expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
   })
-
-  // ── worktreeMeta startup GC ────────────────────────────────────────
 
   it('garbage-collects stale local worktreeMeta at load with a 30-day grace', async () => {
     const OLD = Date.now() - 40 * 24 * 60 * 60 * 1000
@@ -293,11 +280,11 @@ describe('Store', () => {
     const store = await createStore()
     const kept = Object.keys(store.getAllWorktreeMeta())
 
-    expect(kept).toContain(liveKey) // path exists
-    expect(kept).toContain(recentKey) // inside the grace window
-    expect(kept).toContain(sshKey) // SSH repo: remote paths never checked locally
-    expect(kept).toContain(remoteHostKey) // remote hostId on the meta itself
-    expect(kept).toContain(wslKey) // WSL UNC path
+    expect(kept).toContain(liveKey)
+    expect(kept).toContain(recentKey)
+    expect(kept).toContain(sshKey)
+    expect(kept).toContain(remoteHostKey)
+    expect(kept).toContain(wslKey)
     expect(kept).not.toContain(deadKey)
     expect(kept).not.toContain(orphanKey)
     expect(store.getWorktreeLineage(deadKey)).toBeUndefined()
@@ -340,8 +327,6 @@ describe('Store', () => {
     store.flush()
     expect((readDataFile() as PersistedState).worktreeMeta).toEqual({})
   })
-
-  // ── GitHub cache sidecar ───────────────────────────────────────────
 
   it('cache refreshes never rewrite the durable state file', async () => {
     vi.useFakeTimers()
@@ -406,12 +391,9 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getGitHubCache().pr.legacy).toEqual({ fetchedAt: 1 })
 
-    // The legacy key marks the state dirty at load; the next write drops it.
     store.flush()
     expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
   })
-
-  // ── persistPtyBinding fast lane ────────────────────────────────────
 
   describe('persistPtyBinding fast lane', () => {
     const WORKTREE = 'repo1::/worktree'
@@ -497,7 +479,7 @@ describe('Store', () => {
       store.setWorkspaceSession(boundSession())
       await store.persistPtyBinding(binding)
       const stateBefore = readPersistedStateJson(dataFile())
-      // Bumps the write generation without changing any binding.
+      // Advance the write generation without changing binding content.
       store.setWorkspaceSession({ ...store.getWorkspaceSession() })
       const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
 
@@ -507,8 +489,7 @@ describe('Store', () => {
       )
       expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
 
-      // Without the writeToDiskSync counter fix the hash-match flush leaves the durable
-      // generation one behind and this third bind would flush again.
+      // Hash-matched flushes must advance durability or the next identical bind would flush again.
       expect(await store.persistPtyBinding(binding)).toBe(true)
       expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
         durableGenerationBefore
@@ -673,7 +654,7 @@ describe('Store', () => {
       const store = await createStore()
       store.setWorkspaceSession(boundSession())
       await store.persistPtyBinding(binding)
-      // A renderer publish schedules another save, so global durability must be re-established.
+      // Renderer publishes schedule saves, so binding durability must be re-established afterward.
       store.setWorkspaceSession({ ...store.getWorkspaceSession() })
       store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
       const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
@@ -723,13 +704,11 @@ describe('Store', () => {
         })
       )
       const sibling = { ...binding, leafId: TEST_LEAF_2, ptyId: 'pty-2' }
-      // First remount after a cold park: both panes reattach back to back.
       expect(await store.persistPtyBinding(binding)).toBe(true)
       expect(await store.persistPtyBinding(sibling)).toBe(true)
       expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.[0]?.ptyId).toBe('pty-1')
       const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
 
-      // Second remount: neither pane may rewrite the tab row, so neither flushes.
       expect(await store.persistPtyBinding(sibling)).toBe(true)
       expect(await store.persistPtyBinding(binding)).toBe(true)
 

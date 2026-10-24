@@ -17,13 +17,12 @@ import { hookOutcomeRowBody } from '../../../shared/agent-session-hook-outcome'
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem
   turnScope?: AgentJournalTurnScope
-  /** Why the frame surfaced. `error-surface` rows (failures, warnings, a hook's refusal) skip row caps. */
+  /** Failures/warnings/hook refusals bypass timeline row caps. */
   classification: 'timeline-substantive' | 'error-surface'
 }
 
 export type UnhandledProviderFrameJournalItemOptions = {
-  /** The caller's own translator judged this frame a failure, from facts its kind alone cannot
-   *  carry (a Claude result is one only when its turn was not stopped by the user). */
+  /** Translator-only facts decide failure, e.g. whether the user stopped a Claude result. */
   reportsFailure?: boolean
 }
 
@@ -36,8 +35,7 @@ function serializeProviderPayload(payload: unknown): string {
   }
 }
 
-/** Fields providers use for the human-facing sentence on a frame, most specific
- *  first. Nested one level because warnings arrive wrapped as often as not. */
+/** Prefer specific human sentences, including one-level warning wrappers. */
 const MESSAGE_KEYS = [
   'message',
   'text',
@@ -45,7 +43,6 @@ const MESSAGE_KEYS = [
   'detail',
   'description',
   'reason',
-  // Where a failure frame keeps its sentence (Codex's `error` nests it as `error.message`).
   'error'
 ] as const
 
@@ -66,7 +63,6 @@ function directReadableMessage(payload: unknown): string | null {
   return null
 }
 
-/** The provider's own sentence for a frame, when it carries one. */
 export function readableProviderFrameText(payload: unknown): string | null {
   const direct = directReadableMessage(payload)
   if (direct || typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
@@ -86,8 +82,7 @@ function hookText(value: unknown): string | null {
   return typeof value === 'string' ? value.trim() || null : null
 }
 
-/** A Codex prompt hook that refused the message: every entry but its context, in Codex's order.
- *  Other hooks' blocks reach the model as their tool's result, so they write no row of their own. */
+/** Prompt-hook refusals need rows; other hooks already surface through tool results. */
 function codexHookOutcomeRow(payload: unknown): AgentJournalPlainStatusItem | null {
   const run = isProviderRecord(payload) && isProviderRecord(payload.run) ? payload.run : null
   const status = run?.eventName === 'userPromptSubmit' ? run.status : null
@@ -136,8 +131,7 @@ function hookFailureFrameText(
   return null
 }
 
-/** Substantive adapter fallbacks become journal rows; a chat draws one only with a sentence. The
- *  row's readable text is kept whole. */
+/** Keep readable fallback text whole; clients render only frames carrying a sentence. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
@@ -145,7 +139,7 @@ export function unhandledProviderFrameJournalItem(
   limits: JournalPayloadLimits = PROVIDER_FRAME_PAYLOAD_LIMITS,
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
-  // Uncapped like Codex's own warnings, and drawn the same for every agent: no raw-frame disclosure.
+  // Match native warning rows: uncapped, without raw-frame disclosure.
   const hook =
     provider === 'codex' && kind === 'notification:hook/completed'
       ? codexHookOutcomeRow(payload)
@@ -154,7 +148,7 @@ export function unhandledProviderFrameJournalItem(
     return {
       body: hook,
       classification: 'error-surface',
-      // Codex never echoes a refused prompt, so the turn has no message to group under.
+      // Refused Codex prompts are never echoed, so no message can anchor this row.
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   }
@@ -171,9 +165,7 @@ export function unhandledProviderFrameJournalItem(
   }
   const serialized = serializeProviderPayload(payload)
   const bounded = boundPayload(serialized, limits)
-  // Why: the opcode alone ("codex · notification:warning") tells the user nothing
-  // and reads as protocol noise. Lead with the provider's own sentence when it has
-  // one; the raw frame stays behind the row's disclosure either way.
+  // Lead with the provider sentence; raw opcodes are unreadable protocol noise.
   const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
@@ -202,7 +194,6 @@ export function unhandledProviderFrameJournalItem(
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
         .join('\n\n') || message
   }
-  // A local slash command's output (`/usage`) is the answer the user asked for; it rides `content`.
   if (provider === 'claude' && kind === CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND) {
     const content =
       typeof payload === 'object' && payload !== null && 'content' in payload

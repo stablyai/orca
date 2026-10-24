@@ -45,7 +45,6 @@ describe('readNativeChatTranscript (claude)', () => {
 
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {
     const records: unknown[] = []
-    // 4 user/assistant turns = 8 messages, well past the AI-Vault preview cap.
     for (let turn = 0; turn < 4; turn++) {
       records.push({
         type: 'user',
@@ -60,7 +59,6 @@ describe('readNativeChatTranscript (claude)', () => {
         message: { role: 'assistant', content: [{ type: 'text', text: `Reply _${turn}_` }] }
       })
     }
-    // A tool_use then a tool_result (carried on a user record).
     records.push({
       type: 'assistant',
       uuid: 'a-tool',
@@ -90,7 +88,6 @@ describe('readNativeChatTranscript (claude)', () => {
     expect(result.messages.length).toBe(10)
     expect(result.messages.length).toBeGreaterThan(5)
     expect(result.messages[0]).toMatchObject({ role: 'user', source: 'transcript' })
-    // Markdown text preserved verbatim.
     expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'Prompt **0**' })
     expect(result.messages[1].blocks[0]).toEqual({ type: 'text', text: 'Reply _0_' })
 
@@ -262,8 +259,6 @@ describe('readNativeChatTranscript (codex)', () => {
 })
 
 describe('readNativeChatTranscript (errors)', () => {
-  // Why: ENOENT after a successful resolve is the same first-flush/rotation
-  // race as an unresolved path (#8401) — it must stay retry-worthy.
   it('marks an ENOENT on a directly-passed path as notFound (vanished after resolve)', async () => {
     const result = await readNativeChatTranscript('claude', 'sess', {
       filePath: join(tmpdir(), 'orca-native-chat-does-not-exist.jsonl')
@@ -277,7 +272,6 @@ describe('readNativeChatTranscript (errors)', () => {
   it('returns a real read error (no notFound) when the path exists but is unreadable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-unreadable-'))
     tempRoots.push(root)
-    // A directory instead of a file fails the read with a non-ENOENT error.
     const result = await readNativeChatTranscript('claude', 'sess', { filePath: root })
     expect('error' in result).toBe(true)
     if ('error' in result) {
@@ -285,9 +279,6 @@ describe('readNativeChatTranscript (errors)', () => {
     }
   })
 
-  // Why: a just-created Claude Code session's transcript can take up to minutes
-  // to exist on disk (#8401) — the miss must be marked retry-worthy so callers
-  // above (cache, watch, renderer) don't settle into a permanent error.
   it('marks an unresolved session as notFound so callers know to retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-noresolve-'))
     tempRoots.push(root)

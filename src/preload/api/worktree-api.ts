@@ -10,6 +10,7 @@ import type {
 } from '../../shared/detected-worktree-provider-contract'
 import type { NestedWorktreeRemovalApproval } from '../../shared/worktree/nested-removal'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../shared/workspace-sleep'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,
@@ -42,10 +43,7 @@ import type {
 } from '../../shared/worktree/types'
 
 export type WorktreeApi = {
-  list: (args: { repoId: string }) => Promise<Worktree[]>
-  /** Generated names already spent in this repo, including deleted workspaces. Name suggestions
-   *  exclude these so a recreated workspace never lands on a prior occupant's path. Compacted: a
-   *  fully spent tier is reported as the watermark rather than as its 552 names. */
+  /** Retired names prevent path reuse; fully spent tiers are compacted into a watermark. */
   listRetiredNames: (args: { repoId: string }) => Promise<RetiredNameRegistry>
   listDetected: {
     (
@@ -56,17 +54,14 @@ export type WorktreeApi = {
   listKnownForExecutionHost?: (
     args: ListKnownWorktreesForExecutionHostArgs
   ) => Promise<HostQualifiedKnownWorktreeResult>
-  /** Retires the persisted metadata an authoritative scan proved gone, so it stops feeding the read above. */
+  /** Retire metadata only after an authoritative scan proves the workspace is gone. */
   forgetRemovedForExecutionHost?: (
     args: ForgetRemovedWorktreesForExecutionHostArgs
   ) => Promise<ForgetRemovedWorktreesForExecutionHostResult>
   cancelListDetected?: (args: { providerRequestId: ProviderRequestId }) => Promise<void>
-  listAll: () => Promise<Worktree[]>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
-  /** Two-phase progress for a background `create`, correlated by `creationId`, plus git's
-   *  checkout meter for local creates. The remote/runtime create path emits nothing, so the
-   *  surface falls back to an indeterminate spinner. */
+  /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
   resolvePrBase: (args: {
@@ -76,9 +71,7 @@ export type WorktreeApi = {
     baseRefName?: string
     isCrossRepository?: boolean
   }) => Promise<GitHubPrStartPoint | { error: string }>
-  /** GitLab parallel of resolvePrBase. For same-project MRs returns
-   *  `<remote>/<source_branch>`; for fork MRs fetches
-   *  refs/merge-requests/<iid>/head and returns the SHA. */
+  /** Same-project MRs return a remote branch; forks fetch the MR head ref and return its SHA. */
   resolveMrBase: (args: {
     repoId: string
     mrIid: number
@@ -92,22 +85,23 @@ export type WorktreeApi = {
     worktreeId: string
     hostId?: ExecutionHostId
   }) => Promise<GitWorktreeInfo[]>
+  sleep: (request: WorkspaceSleepRequest) => Promise<WorkspaceSleepOutcome[]>
+  sleepReopened: (worktreeId: string) => Promise<void>
+  /** True once running, so the renderer's subsequent spawn reattaches. */
+  resumeSleptPane: (pane: { worktreeId: string; tabId: string; leafId: string }) => Promise<boolean>
   remove: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
     force?: boolean
     approvedNestedWorktrees?: NestedWorktreeRemovalApproval[]
-    // Why (#11960): distinct from `force`, which the plain Delete confirmation
-    // already sets to skip the dirty-file prompt. Only an explicit Force Delete
-    // may waive the proof that every PTY stopped.
+    // Only explicit Force Delete waives PTY-stop proof; force merely skips dirty-file prompts.
     allowUnverifiedPtyStop?: boolean
     skipArchive?: boolean
-    // Why (#19334): distinct from `skipArchive` (never runs the hook) and never implied by
-    // `force` — this waives a hook that ran and FAILED.
+    // Waives a failed hook, unlike skipArchive; force does not imply this approval.
     allowFailedArchiveHook?: boolean
     snapshotPruneBatchId?: string
   }) => Promise<RemoveWorktreeResult>
-  // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
+  // Forget local metadata without remote Git/FS work, even when the SSH host is unavailable.
   forgetLocal: (args: {
     worktreeId: string
     hostId?: ExecutionHostId
@@ -134,8 +128,7 @@ export type WorktreeApi = {
     noParent?: boolean
   }) => Promise<WorktreeLineage | null>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
-  /** Full CLI output of the last branch auto-rename generation failure, held
-   *  in main memory only — null after a restart or once the failure clears. */
+  /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
   onGitStatusMetadataChanged: (

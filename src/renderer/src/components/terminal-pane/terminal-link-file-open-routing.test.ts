@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getConnectionId } from '@/lib/connection-context'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -11,6 +12,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
+const showHintMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
@@ -46,11 +48,21 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: showHintMock
+}))
+
 installTerminalLinkTestEnvironment(doubles)
 
+beforeEach(() => {
+  findWorkspaceFileRouteMock.mockReset()
+})
+
 describe('handleOscLink', () => {
-  it('opens local .html file paths in Orca browser tabs with the platform modifier', async () => {
+  it('opens local .html file paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/report.html', null, null, deps)
 
@@ -67,14 +79,14 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     // Why: the browser tab is the surface — activation must not re-seed a shell into a
     // workspace whose last terminal the user closed.
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true,
-      executionHostId: 'local'
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
     })
   })
 
-  it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
+  it('also opens local .htm paths in Orca browser tabs when links route to Orca', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
 
     openDetectedFilePath('/tmp/legacy.HTM', null, null, deps)
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -89,17 +101,25 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
-  it('opens an HTML line link in source and reveals the requested line', async () => {
-    openDetectedFilePath('/tmp/report.html', 12, 3, deps)
+  it('opens local .html file paths in the system browser when links route there', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+
+    openDetectedFilePath('/tmp/report.html', null, null, deps)
     await flushAsyncWork()
-    await flushDoubleRaf()
+
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/report.html', mode: 'edit' }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ line: 12, column: 3, filePath: '/tmp/report.html' })
+
+    // Shift takes the other destination, as it does for http links.
+    openDetectedFilePath('/tmp/report.html', null, null, { ...deps, openWithSystemDefault: true })
+    await flushAsyncWork()
+
+    expect(openFilePathMock).toHaveBeenCalledTimes(1)
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'wt-1',
+      'file:///tmp/report.html',
+      expect.objectContaining({ title: 'report.html', activate: true })
     )
   })
 
@@ -133,50 +153,83 @@ describe('handleOscLink', () => {
     })
   })
 
-  it('opens a sibling folder-workspace path under its owning host and workspace', async () => {
+  it('opens a sibling folder-workspace file read-only here and names its workspace', async () => {
     const filePath = '/sibling/docs/SKILL.md'
-    storeState.openFiles = [{ filePath, worktreeId: 'folder:notes' }]
-    findWorkspaceFileRouteMock.mockReturnValueOnce({
+    const owner = {
       worktreeId: 'folder:notes',
       relativePath: 'docs/SKILL.md',
       executionHostId: 'local'
-    })
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['folder:notes'] = 'owned-skill'
-    })
+    }
+    findWorkspaceFileRouteMock.mockReturnValueOnce(owner)
 
     openDetectedFilePath(filePath, 12, null, deps)
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('folder:notes', {
+    expect(activateAndRevealWorkspace).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
       providesInitialSurface: true,
       executionHostId: 'local'
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath,
-        relativePath: 'docs/SKILL.md',
-        worktreeId: 'folder:notes'
+        relativePath: filePath,
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        readOnly: true
       }),
       { forceContentReload: true }
     )
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ fileId: 'owned-skill' })
-    )
+    expect(showHintMock).toHaveBeenCalledWith({
+      fileId: filePath,
+      filePath,
+      owner,
+      runtimeEnvironmentId: null,
+      position: { line: 12, column: null }
+    })
   })
 
-  it('leaves ordinary external ownership lookup to the editor loader', async () => {
+  it('opens a direct SSH link to a sibling workspace in that workspace, as before', async () => {
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    findWorkspaceFileRouteMock.mockReturnValue({
+      worktreeId: 'wt-2',
+      relativePath: 'x.ts',
+      executionHostId: 'ssh:ssh-1'
+    })
+
+    openDetectedFilePath('/other/x.ts', null, null, deps)
+    await flushAsyncWork()
+
+    // Why: a read-only absolute tab on a direct SSH connection would read as this computer's file.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-2', {
+      providesInitialSurface: true,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/other/x.ts',
+        relativePath: 'x.ts',
+        worktreeId: 'wt-2'
+      }),
+      { forceContentReload: true }
+    )
+    expect(openFileMock.mock.calls[0][0]).not.toHaveProperty('readOnly')
+    expect(showHintMock).not.toHaveBeenCalled()
+  })
+
+  it('opens a file outside every workspace here, editable and without a hint', async () => {
     const filePath = '/external/docs/readme.md'
 
     openDetectedFilePath(filePath, null, null, deps)
     await flushAsyncWork()
 
-    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: 'wt-1' }),
       { forceContentReload: true }
     )
+    expect(openFileMock.mock.calls[0][0]).not.toHaveProperty('readOnly')
+    expect(showHintMock).not.toHaveBeenCalled()
   })
 
   it('preserves explicit column for Orca opens from :line:column links', async () => {

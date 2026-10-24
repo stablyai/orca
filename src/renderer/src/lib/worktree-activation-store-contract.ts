@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -72,4 +73,6 @@ export type InitialTerminalOptions = {
   /** The user deliberately opened this workspace with no surface choice, so it may open their
    *  default agent chat instead of a bare shell. */
   seedUserDefaultSurface?: boolean
+  /** The host a create targeted: a same-path twin on another host cannot make the owner ambiguous. */
+  executionHostId?: ExecutionHostId
 }

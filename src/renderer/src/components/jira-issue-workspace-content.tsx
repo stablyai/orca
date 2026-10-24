@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 
 export type JiraIssueWorkspaceAction = {
   label: string

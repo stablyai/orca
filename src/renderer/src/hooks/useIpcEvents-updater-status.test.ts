@@ -130,7 +130,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -169,6 +169,7 @@ describe('useIpcEvents updater integration', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}

@@ -1,6 +1,3 @@
-// Grok's own model facts: the per-model effort menu it writes in each model's `_meta`, and the
-// models it lists during `initialize` (or serves from `x.ai/models/list`) with no session.
-
 import { z } from 'zod'
 import type {
   AgentSessionModelOption,
@@ -22,7 +19,7 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
   xhigh: 'X-High',
   max: 'Max'
 }
-// The menu Grok offers a model that supports effort but names none of its own.
+// Fallback only for effort-capable models without an advertised menu.
 const BUILT_IN_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const
 
 const effortEntrySchema = z.union([
@@ -48,8 +45,7 @@ function capitalized(id: string): string {
   return id.charAt(0).toUpperCase() + id.slice(1)
 }
 
-/** One model's effort menu as Grok advertises it. Choice values are Grok's option ids — what its
- *  effort config option takes — not the canonical sampling value behind them. */
+/** Effort choices use Grok's config option IDs, not underlying sampling values. */
 export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
   efforts: AgentSessionOptionChoice[]
   defaultEffort?: string
@@ -90,8 +86,7 @@ export function grokModelEfforts(model: Pick<ModelInfo, '_meta'>): {
   return { efforts, ...(defaultEffort ? { defaultEffort } : {}) }
 }
 
-/** Names no default: a session's own model can differ from the `currentModelId` computed without
- *  one (Grok resolves its default from remote config too), so a no-pick chat reports it instead. */
+/** Session-free currentModelId may differ from the model a chat runs; leave defaults to sessions. */
 export function grokModelCatalogFromState(state: SessionModelState): AgentSessionModelOption[] {
   return state.availableModels.map((model) => ({
     id: model.modelId,
@@ -102,7 +97,6 @@ export function grokModelCatalogFromState(state: SessionModelState): AgentSessio
   }))
 }
 
-/** The models `initialize` computed, else `x.ai/models/list`; neither creates a session. */
 export async function readGrokModelCatalog(
   initialized: InitializeResponse,
   connection: { requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> }

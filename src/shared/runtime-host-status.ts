@@ -1,4 +1,4 @@
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 

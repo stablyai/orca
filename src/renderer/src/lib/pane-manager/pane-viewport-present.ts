@@ -1,17 +1,13 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { isManagedPaneDisplayNone } from './pane-display-visibility'
-import {
-  forceFullViewportPresent,
-  requestFullViewportPresent
-} from './terminal-render-pause-release'
+import { requestFullViewportPresent } from './terminal-render-pause-release'
 
 // Presenting a pane's viewport is a distinct concern from owning the WebGL
 // addon's lifecycle: it runs for DOM-rendered panes too, and its retry loop is
 // about DOM visibility, not about the renderer.
 
 const DISPLAYED_PRESENT_RETRY_FRAMES = 16
-type ViewportPresentMode = 'preserve-synchronized-output' | 'force-current-buffer'
-type DisplayedPresentRetry = { frames: number; mode: ViewportPresentMode }
+type DisplayedPresentRetry = { frames: number }
 const pendingDisplayedPresentRetries = new WeakMap<ManagedPaneInternal, DisplayedPresentRetry>()
 // Public pane views are recreated; terminal teardown must cancel every view's retry.
 const presentRetryCancellations = new WeakMap<ManagedPane['terminal'], Set<() => void>>()
@@ -22,21 +18,14 @@ export function cancelPendingTerminalViewportPresents(terminal: ManagedPane['ter
   }
 }
 
-function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportPresentMode): void {
+function schedulePresentWhenDisplayed(pane: ManagedPaneInternal): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     return
   }
-  const pending = pendingDisplayedPresentRetries.get(pane)
-  if (pending) {
-    if (mode === 'force-current-buffer') {
-      pending.mode = mode
-    }
+  if (pendingDisplayedPresentRetries.has(pane)) {
     return
   }
-  pendingDisplayedPresentRetries.set(pane, {
-    frames: DISPLAYED_PRESENT_RETRY_FRAMES,
-    mode
-  })
+  pendingDisplayedPresentRetries.set(pane, { frames: DISPLAYED_PRESENT_RETRY_FRAMES })
   const terminal = pane.terminal
   const cancellations = presentRetryCancellations.get(terminal) ?? new Set<() => void>()
   presentRetryCancellations.set(terminal, cancellations)
@@ -78,12 +67,20 @@ function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportP
       return
     }
     finish()
-    presentPaneViewportWithMode(pane, retry.mode)
+    presentPaneViewport(pane)
   }
   frameId = globalThis.requestAnimationFrame(tick)
 }
 
-function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMode): void {
+/**
+ * Presents the full viewport, keeping the last coherent canvas while a TUI holds
+ * DEC 2026 synchronized output.
+ *
+ * Why one mode: a forced paint mid-frame publishes the TUI's erase-then-repaint
+ * half frame (a blank flash; #32198). Every reveal and atlas recovery waits for
+ * the frame instead, bounded by xterm's synchronized-output safety timeout.
+ */
+export function presentPaneViewport(pane: ManagedPane): void {
   const internal = pane as ManagedPaneInternal
   if (internal.webglDisabledAfterContextLoss) {
     return
@@ -112,14 +109,10 @@ function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMod
       // latches _needsFullRefresh; if IntersectionObserver never fires, the
       // canvas keeps pre-hide pixels until a user resize. Retry once the box
       // exists so the full present actually runs.
-      schedulePresentWhenDisplayed(internal, mode)
+      schedulePresentWhenDisplayed(internal)
       return
     }
-    const presented =
-      mode === 'force-current-buffer'
-        ? forceFullViewportPresent(pane.terminal)
-        : requestFullViewportPresent(pane.terminal)
-    if (!presented) {
+    if (!requestFullViewportPresent(pane.terminal)) {
       // Why: refresh even without a WebGL addon so recovery never silently
       // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
       pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -127,12 +120,4 @@ function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMod
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }
-}
-
-export function presentPaneViewport(pane: ManagedPane): void {
-  presentPaneViewportWithMode(pane, 'force-current-buffer')
-}
-
-export function presentPaneViewportPreservingSynchronizedOutput(pane: ManagedPane): void {
-  presentPaneViewportWithMode(pane, 'preserve-synchronized-output')
 }

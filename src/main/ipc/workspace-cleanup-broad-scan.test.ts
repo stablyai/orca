@@ -305,8 +305,6 @@ describe('workspace cleanup broad scan opt-in', () => {
       includeAllWorkspaces: true
     })
 
-    // Why: only the inactive row can ever be queued, so it is the only row worth
-    // a git read; the rest stream immediately with empty evidence.
     expect(getStatusMock).toHaveBeenCalledTimes(1)
     expect(getStatusMock).toHaveBeenCalledWith('/repo-old', expect.anything())
     expect(

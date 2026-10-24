@@ -72,12 +72,11 @@ export function useNotificationPaneNavigation({
     if (paneKey === null || paneKey === '' || !terminalsLoaded) {
       return
     }
-    // Consumed even when the pane has since closed: a request left standing is one a later render
-    // would serve.
-    pending.current = null
     applied.current = paneKey
     const tab = notificationPaneTab(sessionTabs, paneKey)
+    // Held while missing: a list loaded before a reconnect can predate the agent the push names.
     if (tab) {
+      pending.current = null
       switchSessionTab(tab)
     }
   }, [asked, sessionTabs, switchSessionTab, terminalsLoaded])

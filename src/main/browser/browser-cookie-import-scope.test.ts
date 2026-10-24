@@ -56,13 +56,9 @@ import { tmpdir } from 'node:os'
 import { importCookiesFromBrowser, type DetectedBrowser } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
-// Why (STA-4797): every other end-to-end fixture in this module starts with an empty target jar,
-// which is precisely why four gates — review, readiness audit, Electron QA and CI — passed an
-// import that signed the user out of every site in the partition. A jar with sessions for domains
-// OUTSIDE the import set is the only fixture that can observe the defect at all.
+/** Seed unrelated sessions so overbroad removal is observable. */
 function populatedTargetJar(): Record<string, unknown>[] {
   return [
-    // The site from the Electron QA report: a working login the import never mentions.
     {
       name: 'rack.session',
       value: 'live-login',
@@ -73,8 +69,7 @@ function populatedTargetJar(): Record<string, unknown>[] {
       httpOnly: true,
       sameSite: 'lax'
     },
-    // An unrelated site whose cookie has no derivable removal URL. Out of scope, so it must not
-    // fail the import either.
+    // An unrelated, unaddressable cookie must not abort the import.
     {
       name: 'orphan',
       value: 'no-domain',
@@ -85,7 +80,6 @@ function populatedTargetJar(): Record<string, unknown>[] {
       httpOnly: false,
       sameSite: 'no_restriction'
     },
-    // Google is exempt by policy (STA-3811) and stays exempt.
     {
       name: 'SID',
       value: 'google-live',
@@ -96,7 +90,6 @@ function populatedTargetJar(): Record<string, unknown>[] {
       httpOnly: true,
       sameSite: 'no_restriction'
     },
-    // In scope: the import brings github.com, so this stale cookie is what the clear is FOR.
     {
       name: 'user_session',
       value: 'stale-github',
@@ -173,7 +166,6 @@ describe('native cookie import clear scope', () => {
     const removedNames = cookiesRemoveMock.mock.calls.map(([, name]) => name)
     expect(removedNames).toEqual(['user_session'])
     expect(cookiesRemoveMock).toHaveBeenCalledWith('https://github.com/', 'user_session')
-    // The three assertions the whole ticket is about.
     expect(removedNames).not.toContain('rack.session')
     expect(removedNames).not.toContain('SID')
     expect(removedNames).not.toContain('orphan')
@@ -223,11 +215,9 @@ describe('native cookie import clear scope', () => {
     expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['gist-session'])
   })
 
-  // Why: cold-start replay uses the staged image after the live import has returned. An in-memory
-  // assertion cannot prove its rows and recorded merge scope preserve unrelated sessions.
+  // Verify the on-disk image: in-memory assertions cannot cover cold-start replay.
   it('keeps out-of-scope rows in the staged cold-start image', async () => {
-    // Why: no unaddressable cookie in this jar — the staged image is what this case is about, so
-    // the live clear must run to completion rather than aborting on something else.
+    // Omit the invalid coordinate so this case reaches staged replay.
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
         get: vi
@@ -272,15 +262,12 @@ describe('native cookie import clear scope', () => {
           .all() as { host_key: string; name: string; value: string | Uint8Array }[]
       ).map((row) => ({
         ...row,
-        // Why: a staged row copies the source value column verbatim, which node:sqlite hands back
-        // as bytes when it was written from a buffer.
+        // SQLite returns copied BLOB values as bytes.
         value: typeof row.value === 'string' ? row.value : Buffer.from(row.value).toString('latin1')
       }))
       expect(rows).toEqual([
-        // The stale github.com row was replaced by the imported one — the clear that is justified.
         { host_key: '.github.com', name: 'user_session', value: 'imported-github' },
         { host_key: '.google.com', name: 'SID', value: 'google-live' },
-        // Still signed in, one restart later.
         { host_key: 'the-internet.herokuapp.com', name: 'rack.session', value: 'live-login' }
       ])
     } finally {

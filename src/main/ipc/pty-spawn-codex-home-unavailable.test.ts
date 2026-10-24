@@ -72,14 +72,7 @@ type RuntimeSpawnController = {
   spawn(args: RuntimeSpawnRequest): Promise<{ id: string }>
 }
 
-/**
- * #STA-4422: launch prep refuses an unreadable managed home by throwing, because
- * `null` already means "launch the system default". A refusal that reached
- * either spawn path as `null` would start the pane on the user's real ~/.codex
- * while the UI still shows the managed account, so every assertion here pairs
- * the rejection with a zero-spawn check — existing suites prove a `null`
- * re-resolution deliberately launches with no CODEX_HOME.
- */
+/** Unreadable managed homes must reject with no spawn; null selects the system account and could misattribute the pane (STA-4422). */
 describe('registerPtyHandlers Codex launch refusal on an unreadable managed home', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
   const { setupDaemonAdapter } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
@@ -187,8 +180,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       await vi.advanceTimersByTimeAsync(2_000)
       await rejection
 
-      // Why: the first resolution must have succeeded, or the rejection would
-      // prove nothing about the re-resolution this test exists for.
+      // Prove the initial resolution succeeded before exercising failed re-resolution.
       expect(resolveHome).toHaveBeenCalledTimes(2)
       expect(resolveHome.mock.calls[1]?.[2]).toMatchObject({
         unavailableManagedHomePath: TEST_CODEX_HOME
@@ -233,10 +225,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       expect(daemonSpawn).not.toHaveBeenCalled()
     })
 
-    // Why (#STA-4422 P1g): the eager selected-home gate rejects the awaited
-    // resume preparation. That rejection has to reach the spawn, not be
-    // downgraded to "no resume" — a resume that proceeds picks its CODEX_HOME
-    // from whichever account's alias stayed readable.
+    // Eager resume refusal must propagate; treating it as no resume could launch another account's readable alias (STA-4422).
     it('refuses the spawn when the eager resume gate rejects', async () => {
       readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
       const daemonSpawn = setupDaemonAdapter()
@@ -363,8 +352,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
     })
   })
 
-  // Both lanes: only a launch whose caller named no session waits on a managed login. A host
-  // create operation's derived id is not caller-named, so it waits too.
+  // Derived operation IDs are not caller-selected sessions; those fresh launches still await managed login.
   it.each([
     {
       lane: 'host',
@@ -449,7 +437,6 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
     }
   )
 
-  // Why: only an Orca-launched Codex may wait for Codex's hook hashes; a plain terminal never does.
   describe('which spawns launch prep may make wait', () => {
     it('marks a Codex launch, and not a plain terminal, on the local spawn path', async () => {
       readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)

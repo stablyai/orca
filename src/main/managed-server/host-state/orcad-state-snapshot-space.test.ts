@@ -23,7 +23,7 @@ import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const SHELL = process.env.ORCA_TEST_POSIX_SHELL ?? '/bin/sh'
-// Root reads a mode-000 file anyway, so the unreadable-state case only exists for other users.
+// Root bypasses mode-000 permissions, so only non-root runs exercise unreadable-state failure.
 const ROOT = process.getuid?.() === 0
 
 async function sh(command: string, path?: string): Promise<string> {
@@ -64,7 +64,7 @@ describe.skipIf(process.platform === 'win32')('snapshot room on a real shell (#3
 
     expect(parseOrcadSnapshotCapture(output)).toBe('failed')
     expect(orcadSnapshotFailureReason(output)).toMatch(/Permission denied/u)
-    // A leftover partial is a full copy of the state, and it fills the disk the retry needs.
+    // Partial snapshots consume disk needed by retries and must be removed.
     expect(existsSync(snapshot)).toBe(false)
   })
 
@@ -104,7 +104,6 @@ describe.skipIf(process.platform === 'win32')('snapshot room on a real shell (#3
     expect(keepAll?.availableKb).toBe(0)
     expect(keepAll?.neededKb).toBeGreaterThanOrEqual(64)
     expect(keepOne?.availableKb).toBeGreaterThanOrEqual(64)
-    // Measuring never removes anything; only the capture prunes.
     expect(readdirSync(snapshots)).toHaveLength(3)
 
     const shortfall = orcadSnapshotShortfallKb(keepAll)
@@ -128,7 +127,7 @@ describe.skipIf(process.platform === 'win32')('snapshot room on a real shell (#3
   it('answers UNMEASURED, which reads as unknown, when a scan overruns its deadline', async () => {
     const bin = join(base, 'bin')
     mkdirSync(bin)
-    // Lets the syntax probe and the members' scan through; times out only the old snapshots'.
+    // Let syntax/member probes pass; time out only the old-snapshot scan.
     writeFileSync(
       join(bin, 'timeout'),
       '#!/bin/sh\nshift\ncase "$*" in *orcad-state-snapshots*) exit 124;; esac\nexec "$@"\n'

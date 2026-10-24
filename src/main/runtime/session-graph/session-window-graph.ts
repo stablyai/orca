@@ -156,8 +156,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
           ? existing.ptyGeneration + 1
           : (existing?.ptyGeneration ?? 0)
       const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
-      // Retained history stays addressable, but a renderer graph cannot revoke a host-certified exit.
-      const connected = ptyId !== null && this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+      // Retained history stays addressable; whether the terminal runs is graphLeafConnected's call.
+      const connected = this.graphLeafConnected(ptyId, leaf.worktreeId)
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
       nextLeaves.set(leafKey, {
@@ -189,7 +189,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
             : graphSyncedAt
       })
 
-      if (leaf.ptyId && connected) {
+      // Switch point: main's own pane is no evidence to record the terminal connected.
+      if (leaf.ptyId && connected && !this.mainDecidesLiveness(leaf.worktreeId)) {
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
           connected: true,
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,

@@ -1,8 +1,10 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: image surface size is measured with ResizeObserver and DOM refs, which are external layout systems outside render derivation. */
 import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import ImageViewerPopup from './ImageViewerPopup'
+import { EditorCommandOwnerContext } from './editor-command-owner-context'
+import { listenForViewerZoomRequests } from './viewer-zoom-request'
 import PdfViewer from './PdfViewer'
 import {
   type ApplyImageViewerZoomChange,
@@ -54,6 +56,7 @@ export default function ImageViewer({
   const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
   const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
+  const isCommandOwner = useContext(EditorCommandOwnerContext)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
@@ -216,6 +219,34 @@ export default function ImageViewer({
     observer.observe(surface)
     return () => observer.disconnect()
   }, [isPopupOpen])
+
+  useEffect(() => {
+    // Why: PDFs own their zoom; combined diff images yield to editor text until a popup opens.
+    if (!isCommandOwner || isPdf || (isIntrinsicLayout && !isPopupOpen)) {
+      return
+    }
+    const applyZoomChange = isPopupOpen ? applyPopupZoomChange : applyInlineZoomChange
+    return listenForViewerZoomRequests(
+      (direction) =>
+        applyZoomChange((currentZoom) => {
+          if (direction === 'reset') {
+            return 1
+          }
+          return direction === 'in'
+            ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
+            : currentZoom / IMAGE_VIEWER_ZOOM_STEP
+        }),
+      isPopupOpen ? popupSurfaceRef : inlineSurfaceRef,
+      isPopupOpen ? 'popup' : 'pane'
+    )
+  }, [
+    applyInlineZoomChange,
+    applyPopupZoomChange,
+    isCommandOwner,
+    isIntrinsicLayout,
+    isPdf,
+    isPopupOpen
+  ])
 
   if (isPdf) {
     return (

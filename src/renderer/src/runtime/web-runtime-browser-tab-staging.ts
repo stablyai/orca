@@ -71,7 +71,7 @@ export function stageWebRuntimeBrowserTab(args: {
       clientHosted: args.clientHosted === true,
       ...(tabId ? { tabId } : {})
     }
-    noteClientHosting(args.environmentId, args.worktreeId, staged)
+    holdStagedBrowserTab(args.environmentId, args.worktreeId, staged)
     return staged
   } catch (error) {
     // Why: staging is an optimization; a store-side refusal must not fail the create itself.
@@ -189,13 +189,19 @@ export function restageWebRuntimeBrowserTabHostingIntent(
     staged: true,
     ...(args.clientHosted ? { stagedClientHosted: true } : {})
   })
-  const restaged = { ...staged, clientHosted: args.clientHosted }
-  noteClientHosting(args.environmentId, args.worktreeId, restaged)
-  return restaged
+  return { ...staged, clientHosted: args.clientHosted }
 }
 
-/** A client-hosted page never enters its server's layout, so that server's frames keep the tab (L274). */
-function noteClientHosting(
+const stagedTabIds = (staged: Pick<StagedWebRuntimeBrowserTab, 'workspaceId' | 'tabId'>) => [
+  staged.workspaceId,
+  ...(staged.tabId ? [staged.tabId] : [])
+]
+
+/**
+ * The server's frames keep a staged tab: a client-hosted page never enters its server's layout
+ * (L274), and a server-hosted one is not there until the server publishes it (L285).
+ */
+function holdStagedBrowserTab(
   environmentId: string,
   worktreeId: string,
   staged: StagedWebRuntimeBrowserTab
@@ -205,11 +211,43 @@ function noteClientHosting(
     return
   }
   // By both ids: its browser workspace and its tab-bar entry.
-  for (const id of [staged.workspaceId, ...(staged.tabId ? [staged.tabId] : [])]) {
-    if (staged.clientHosted) {
-      noteDesktopCreatedServerTab(environmentId, worktreeId, id)
-    } else {
-      forgetDesktopCreatedServerTab(id)
+  for (const id of stagedTabIds(staged)) {
+    noteDesktopCreatedServerTab(environmentId, worktreeId, id)
+  }
+}
+
+/**
+ * A held browser tab whose page the server's layout now lists is the server's: its frames draw the
+ * page in their own tab and drop this one, which a create still in flight reads as the frames taking
+ * it over (L284). Also a tab the mirror adopted before the frames drew the workspace.
+ */
+export function releaseHeldBrowserTabsTheServerLists(
+  environmentId: string,
+  serverPageIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
+): void {
+  const state = useAppStore.getState()
+  const listed = [...serverPageIdsByWorkspace.values()]
+  const pageIds = new Set(
+    Object.entries(state.remoteBrowserPageHandlesByPageId).flatMap(([pageId, handle]) =>
+      handle?.environmentId === environmentId && listed.some((ids) => ids.has(handle.remotePageId))
+        ? [pageId]
+        : []
+    )
+  )
+  if (pageIds.size === 0) {
+    return
+  }
+  for (const worktreeId of serverPageIdsByWorkspace.keys()) {
+    for (const workspace of state.browserTabsByWorktree[worktreeId] ?? []) {
+      if (!workspace.pageIds?.some((pageId) => pageIds.has(pageId))) {
+        continue
+      }
+      const tabId = state.unifiedTabsByWorktree[worktreeId]?.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )?.id
+      for (const id of stagedTabIds({ workspaceId: workspace.id, ...(tabId ? { tabId } : {}) })) {
+        forgetDesktopCreatedServerTab(id)
+      }
     }
   }
 }

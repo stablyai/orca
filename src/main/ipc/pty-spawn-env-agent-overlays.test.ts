@@ -187,7 +187,6 @@ describe('registerPtyHandlers', () => {
       )
     })
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
-      // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
       const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })
       expect(openCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
       expect(openCodeBuildPtyEnvMock.mock.calls[0]?.[0]).toEqual(expect.any(String))
@@ -319,7 +318,7 @@ describe('registerPtyHandlers', () => {
     posixOnlyIt(
       'reproduces issue #1534: GUI-launched Orca mirrors zshrc-only OpenCode config',
       async () => {
-        // Why: the reporter's app didn't inherit OPENCODE_CONFIG_DIR; their interactive zsh later exported a company config repo.
+        // Model config exported by interactive zsh but absent from the GUI environment.
         readFileSyncMock.mockImplementation((path: string) => {
           if (path.endsWith('.zshrc')) {
             return [
@@ -411,7 +410,7 @@ describe('registerPtyHandlers', () => {
       withFreshOmpLaunch('omp', 'powershell'),
       withFreshOmpLaunch('omp', 'cmd')
     ])('threads OMP command %s through to the host integration', async (command) => {
-      // Why: OMP launches emit ORCA_OMP_* shadow vars, not Pi-named ones; only PI_CODING_AGENT_DIR stays (OMP's own binary reads it).
+      // OMP needs ORCA_OMP shadows; retain only the public Pi-named variable its binary reads.
       const env = await spawnAndGetEnv(
         undefined,
         { PI_CODING_AGENT_DIR: '/tmp/user-omp-agent' },
@@ -431,7 +430,6 @@ describe('registerPtyHandlers', () => {
         '/tmp/user-omp-agent/extensions/orca-agent-status.ts'
       )
       expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/tmp/user-omp-agent')
-      // CRITICAL: a Pi-named shadow MUST NOT leak into an OMP PTY env.
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })

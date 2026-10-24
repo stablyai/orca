@@ -40,7 +40,6 @@ function resolveLoginShell(): string {
   return candidate
 }
 
-/** The login shell's value for `envName`, or null when unset, invalid, or unreadable. */
 async function readLoginShellAgentHome(
   envName: AgentHomeEnvName,
   signal?: AbortSignal
@@ -49,7 +48,7 @@ async function readLoginShellAgentHome(
     const shell = resolveLoginShell()
     const shellName = basename(shell)
     const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
-    // Why: agent PTYs start login shells, so read the same profile-derived home override.
+    // Read profile overrides used by agent login-shell PTYs.
     const result = await runProcess({
       program: shell,
       args: [mode, `printenv ${envName} | head -c ${AGENT_HOME_MAX_LENGTH + 1}`],
@@ -75,7 +74,6 @@ export async function resolveLoginShellGrokHome(
   return (await readLoginShellAgentHome('GROK_HOME', signal)) ?? defaultAgentHome(home, '.grok')
 }
 
-/** `$KIRO_HOME` replaces `~/.kiro` outright, for agent configs and sessions alike. */
 export async function resolveLoginShellKiroHome(
   home: string,
   signal?: AbortSignal
@@ -83,10 +81,7 @@ export async function resolveLoginShellKiroHome(
   return (await readLoginShellAgentHome('KIRO_HOME', signal)) ?? defaultAgentHome(home, '.kiro')
 }
 
-/**
- * A process not started from a login shell (orcad over SSH) misses profile-only agent homes, so
- * its installers would write where the agents' login-shell panes never look. Never throws.
- */
+/** SSH hosts may lack profile-only agent homes; adopt them before installers choose paths. */
 export async function adoptLoginShellAgentHomes(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<void> {

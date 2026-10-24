@@ -20,7 +20,7 @@ type BrowserScreencastMessageHandlerDeps = {
   scheduleNavigationFrameCapture: () => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
-  /** True when the frame showed the guest at a size the stream must re-emulate for, so it is stale. */
+  /** True while guest frames must be dropped pending re-emulation. */
   observeGuestViewSize: (metadata: BrowserScreencastFrameMetadata) => boolean
   setDialogOpen: (open: boolean) => void
 }
@@ -99,13 +99,9 @@ export function createBrowserScreencastMessageHandler(
       const decoded = Buffer.from(data, 'base64')
       const image =
         decoded.buffer.byteLength === decoded.byteLength ? decoded : new Uint8Array(decoded)
-      // Why: image dimension parsing happens for every live frame; share the
-      // result between stale-frame rejection and metadata enrichment.
       const imageSize = readBrowserScreencastImageSize(image, options.format)
       if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
-        // Why: after tab switches/navigation Chromium can briefly stream the
-        // host surface instead of the requested client viewport. Dropping that
-        // frame keeps the client from rendering server-sized blank gutters.
+        // Tab switches and navigation can briefly stream the host surface instead of the client viewport.
         ackScreencastFrame(sessionId)
         scheduleNavigationFrameCapture()
         return

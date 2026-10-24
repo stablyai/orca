@@ -3,8 +3,7 @@ import {
   runtimeEnvironmentIdForWorkspaceOwner,
   runtimeEnvironmentIdUnlessTwin
 } from '@/lib/resolve-owner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { afterLayoutFrame, layoutFramePositionKey } from '@/runtime/layout-frame-position'
+import { callLayoutApply } from '@/runtime/layout-apply-call'
 import { holdTabPaneTree } from '@/runtime/layout-owner-pane-intents'
 import { holdDrawnTabs, type DrawnTabHold } from '@/runtime/layout-owner-drawn-tab-holds'
 import { holdsPaneTree, releaseLayoutApplyHolds } from '@/runtime/layout-apply-hold-release'
@@ -249,48 +248,33 @@ export function sendLayoutApply(
   const target: RuntimeClientTarget = server
     ? { kind: 'environment', environmentId: server.route.environmentId }
     : { kind: 'local' }
-  // Null: the call threw before any answer.
-  const answer = (reply: LayoutApplyReply | null): void => {
-    if (server) {
-      handleServerLayoutReply(server, command.type, reply, handlers)
-    } else if (reply) {
-      handleReply(state, worktreeId, command, reply, handlers)
-    } else {
-      handlers.refused?.('call_failed')
-    }
-  }
-  void callRuntimeRpc<LayoutApplyReply>(target, 'layout.apply', {
-    command: { ...(server?.command ?? command), workspace: worktreeId }
-  })
-    .then(
-      (reply) =>
-        afterLayoutFrame(
-          reply.frameSeq,
-          () => {
-            try {
-              answer(reply)
-            } finally {
-              release()
-            }
-          },
-          layoutFramePositionKey(target)
-        ),
-      (error: unknown) => {
-        // Why: a thrown write is rolled back. An indeterminate disk write is not, and may leave a
-        // pane main minted, which its frame then draws. Never sent again: main may have applied it.
-        console.warn(`[layout-owner] ${command.type} refused: call_failed`, errorMessage(error))
-        try {
-          answer(null)
-        } finally {
-          release()
-        }
+  callLayoutApply(target, worktreeId, server?.command ?? command, (reply) => {
+    try {
+      if (server) {
+        handleServerLayoutReply(server, command.type, reply, handlers)
+      } else if (reply) {
+        handleReply(state, worktreeId, command, reply, handlers)
+      } else {
+        handlers.refused?.('call_failed')
       }
-    )
-    // A throwing handler is not a failed call; it must not run the fallback too.
-    .catch((error: unknown) => {
-      console.warn(`[layout-owner] ${command.type} handler threw:`, errorMessage(error))
-    })
+    } finally {
+      release()
+    }
+  })
   return true
+}
+
+/**
+ * Sends one intent to a paired server's main, never this window's: a workspace's editor tabs
+ * handed over before that server's frames draw it (H5d).
+ */
+export function sendToServerMain(
+  environmentId: string,
+  worktreeId: string,
+  command: WindowLayoutCommand,
+  answer: (reply: LayoutApplyReply | null) => void
+): void {
+  callLayoutApply({ kind: 'environment', environmentId }, worktreeId, command, answer)
 }
 
 function handleReply(
@@ -336,8 +320,4 @@ export function recordLayoutApply(
     asToday: keepWindowCopy,
     drawn: true
   })
-}
-
-function errorMessage(error: unknown): unknown {
-  return error instanceof Error ? error.message : error
 }

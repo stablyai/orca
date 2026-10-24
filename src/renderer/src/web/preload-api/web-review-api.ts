@@ -15,7 +15,6 @@ export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
     check: async ({ repoId }) => callRuntimeResult('repo.hooksCheck', { repo: repoId }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
-    createIssueCommandRunner: async () => ({ launched: false }) as never,
     readIssueCommand: async ({ repoId }) =>
       callRuntimeResult('repo.issueCommandRead', { repo: repoId }),
     writeIssueCommand: async ({ repoId, content }) => {

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getGrokManagedScript } from './grok-hook-script'
 
-// Grok's own hook timeout; the budget these cases have to stay well inside.
 const GROK_HOOK_TIMEOUT_MS = 10_000
 const SESSION_START_BUDGET_MS = 1_500
 
@@ -18,7 +17,6 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
     }
   })
 
-  /** Writes the payload and leaves the pipe open, which is what Grok SessionStart does. */
   async function runHookWithoutEof(
     chunks: readonly Buffer[]
   ): Promise<{ exitCode: number | null; durationMs: number; stderr: string }> {
@@ -76,8 +74,7 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
     expect(result.durationMs).toBeLessThan(SESSION_START_BUDGET_MS)
   })
 
-  // Why: a non-ASCII payload arriving in pieces used to crash the reader, which
-  // fell through to `cat` and reinstated the very 10s timeout this hook avoids.
+  // Split UTF-8 must not trigger a fallback reader that blocks until Grok's timeout.
   it('returns just as fast when a multi-byte payload is split across writes', async () => {
     const bytes = Buffer.from(
       '{"hook_event_name":"session_start","cwd":"/tmp/漢字","tool":"🚀"}\n',

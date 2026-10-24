@@ -1,7 +1,8 @@
 import {
   forceFullViewportPresent,
   forceRepaintThroughRenderPause,
-  isSynchronizedOutputHeld
+  isSynchronizedOutputHeld,
+  requestFullViewportPresent
 } from './terminal-render-pause-release'
 import { retainTerminalReplayFrame } from './terminal-replay-frame'
 
@@ -23,6 +24,7 @@ type ReplayPresentation = {
   generation: number
   present: boolean
   timeout: ReturnType<typeof setTimeout>
+  frameWait: number | null
 }
 
 const presentations = new WeakMap<HTMLElement, ReplayPresentation>()
@@ -54,15 +56,23 @@ export function beginTerminalReplayPresentation(
       terminal.refresh?.(0, terminal.rows - 1)
     }
   }
-  const unhide = (held: ReplayPresentation): void => {
+  const unhide = (held: ReplayPresentation, atHoldCap = false): void => {
     clearTimeout(held.timeout)
+    if (held.frameWait !== null) {
+      cancelAnimationFrame(held.frameWait)
+      held.frameWait = null
+    }
     if (presentations.get(screen) === held) {
       presentations.delete(screen)
     }
     try {
       const bounds = element.getBoundingClientRect()
       if (held.present && bounds.width > 0 && bounds.height > 0 && terminal.rows) {
-        if (!forceFullViewportPresent(terminal)) {
+        // Only the hold cap may publish an unfinished DEC 2026 frame.
+        const presented = atHoldCap
+          ? forceFullViewportPresent(terminal)
+          : requestFullViewportPresent(terminal)
+        if (!presented) {
           refresh()
         }
       }
@@ -76,6 +86,28 @@ export function beginTerminalReplayPresentation(
       }
       held.frame?.remove()
     }
+  }
+  // Why: unhiding mid-DEC 2026 publishes the TUI's half-built frame over the
+  // retained copy; the hold cap still unhides a frame that never closes.
+  const unhideWhenFrameComplete = (held: ReplayPresentation): void => {
+    if (held.frameWait !== null) {
+      return
+    }
+    if (
+      held.present &&
+      held.frame &&
+      isSynchronizedOutputHeld(terminal) &&
+      typeof requestAnimationFrame === 'function'
+    ) {
+      held.frameWait = requestAnimationFrame(() => {
+        held.frameWait = null
+        if (held.pending === 0 && presentations.get(screen) === held) {
+          unhideWhenFrameComplete(held)
+        }
+      })
+      return
+    }
+    unhide(held)
   }
   let presentation = presentations.get(screen)
   if (!presentation) {
@@ -100,9 +132,10 @@ export function beginTerminalReplayPresentation(
       pending: 0,
       generation: 0,
       present: false,
+      frameWait: null,
       timeout: setTimeout(() => {
         created.present = true
-        unhide(created)
+        unhide(created, true)
       }, TERMINAL_REPLAY_PRESENTATION_MAX_HOLD_MS)
     }
     presentation = created
@@ -127,6 +160,6 @@ export function beginTerminalReplayPresentation(
     if (--held.pending > 0 || presentations.get(screen) !== held) {
       return
     }
-    unhide(held)
+    unhideWhenFrameComplete(held)
   }
 }

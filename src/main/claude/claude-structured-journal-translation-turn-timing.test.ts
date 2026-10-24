@@ -172,7 +172,6 @@ describe('Claude structured turn timing', () => {
 
     translator.handle(userTurn('user-1', 1_000))
 
-    // The echo itself is never a row; its provider key is what the submission adopted.
     expect(state.items.some((item) => item.body.kind === 'message')).toBe(false)
     expect(state.lifecycle().at(-1)?.userItemId).toBe(USER_1_KEY)
   })
@@ -188,8 +187,6 @@ describe('Claude structured turn timing', () => {
     expect(state.lifecycle().at(-1)).toEqual({
       turnId: 'user-1',
       state: 'completed',
-      // A result with no error is the provider saying the turn worked, so the
-      // ordinary path carries a positive verdict rather than leaving it unknown.
       outcome: 'success',
       startedAt: 1_000,
       completedAt: 4_500,

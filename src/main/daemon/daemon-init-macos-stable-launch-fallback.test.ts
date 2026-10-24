@@ -134,11 +134,10 @@ describe('daemon-init: macOS stable-bundle launch fallback', () => {
     stableLaunch.failure = 'unavailable'
     await launchOnce()
     const handoffMs = (stableLaunch.deadlinesMs[0] ?? Infinity) - launcherCalledAtMs
-    // A stable failure at the handoff deadline still leaves the whole fork budget in the gate...
+    // Stable handoff must leave the fork and adapter budgets inside the PTY gate.
     expect(handoffMs + DAEMON_CHILD_STARTUP_TIMEOUT_MS + 5_000).toBeLessThanOrEqual(
       LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS
     )
-    // ...without starving the stable launch of its own bootstrap and readiness time.
     expect(handoffMs).toBeGreaterThan(20_000)
   })
 

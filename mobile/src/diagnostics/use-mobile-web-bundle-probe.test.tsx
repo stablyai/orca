@@ -65,6 +65,7 @@ type ProbeHarness = {
   run: () => Promise<void>
   unmount: () => Promise<void>
 }
+const mounted: ReactTestRenderer[] = []
 
 async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
   let latest: ReturnType<typeof useMobileWebBundleProbe> | null = null
@@ -78,6 +79,7 @@ async function renderProbe(hostId: string | null): Promise<ProbeHarness> {
 
   await act(async () => {
     rendered.tree = create(createElement(RpcClientProvider, null, createElement(Probe)))
+    mounted.push(rendered.tree)
   })
   const read = () => {
     if (!latest) {
@@ -119,6 +121,7 @@ function fetchedBundle(): MobileWebBundleFetchResult {
       ]
     },
     assets: new Map([['index.html', new Uint8Array([1, 2, 3])]]),
+    reused: [],
     totalBytes: 3,
     elapsedMs: 12
   }
@@ -157,6 +160,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  for (const tree of mounted.splice(0)) {
+    act(() => tree.unmount())
+  }
   vi.useRealTimers()
 })
 
@@ -241,7 +247,7 @@ describe('useMobileWebBundleProbe', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('does not clear the deadline for a host that did arrive', async () => {
+  it('stops the host acquisition deadline once the client arrives, allowing a slow fetch', async () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValue(new Promise(() => {}))
     const probe = await renderProbe(HOST.id)

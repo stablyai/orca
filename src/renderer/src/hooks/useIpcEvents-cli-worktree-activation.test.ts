@@ -158,7 +158,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -194,6 +194,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -428,7 +429,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -464,6 +465,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}

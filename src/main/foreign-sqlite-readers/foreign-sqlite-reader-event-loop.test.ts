@@ -8,14 +8,7 @@ import { Worker } from 'node:worker_threads'
 import SyncDatabase from '../sqlite/sync-database'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 
-// Why: the reported freeze is a sole opener rebuilding the WAL index of a huge
-// un-checkpointed -wal. The fixture reproduces that shape at CI size; a small
-// page size multiplies the frames per MB so tens of MB block measurably.
-//
-// Both arms read identical copies and are compared against each other, not a
-// fixed threshold: the inline arm (the pre-worker main-thread read) establishes
-// how long the open blocks, and the worker arm must leave the calling thread's
-// timer on time and its event loop mostly idle meanwhile.
+// Compare identical large-WAL opens inline and in a worker; relative timings avoid fixed runner-speed assumptions.
 
 const PAGE_SIZE = 512
 const TRANSACTIONS = 2_400
@@ -31,11 +24,7 @@ function stateDbPath(name: string): string {
   return join(root, `${name}.vscdb`)
 }
 
-/**
- * Leave a WAL with no -shm beside it. A read-only connection that closes last
- * cannot checkpoint, so the writer's frames stay in the -wal; deleting the -shm
- * then forces the next opener to rebuild the index from every frame.
- */
+/** Leave WAL frames but remove shm so the next opener must rebuild the index. */
 function writeLargeWalFixture(): void {
   const path = stateDbPath('worker')
   const writer = new SyncDatabase(path)
@@ -76,7 +65,6 @@ function readTokenInline(path: string): string | null {
 
 type Measured<T> = { value: T; activeMs: number; wallMs: number; maxTimerLatenessMs: number }
 
-/** Run `fn` while a main-thread timer ticks, recording its worst lateness. */
 async function measure<T>(fn: () => Promise<T>): Promise<Measured<T>> {
   let maxTimerLatenessMs = 0
   let expectedAt = performance.now() + TIMER_INTERVAL_MS
@@ -88,12 +76,12 @@ async function measure<T>(fn: () => Promise<T>): Promise<Measured<T>> {
     timer = setTimeout(tick, TIMER_INTERVAL_MS)
   }
   timer = setTimeout(tick, TIMER_INTERVAL_MS)
-  // Let the timer arm before the read starts, so an inline block is seen as lateness.
+  // Arm the timer before opening so inline stalls register as lateness.
   await new Promise((done) => setTimeout(done, TIMER_INTERVAL_MS * 2))
   const before = performance.eventLoopUtilization()
   const startedAt = performance.now()
   const value = await fn()
-  // One more tick so a block that ended just now is observed.
+  // Let a post-read tick observe any stall that just ended.
   await new Promise((done) => setTimeout(done, TIMER_INTERVAL_MS * 2))
   const wallMs = performance.now() - startedAt
   const activeMs = performance.eventLoopUtilization(before).active
@@ -111,8 +99,7 @@ beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), 'orca-foreign-sqlite-event-loop-'))
   writeLargeWalFixture()
   workerEntryPath = join(root, 'foreign-sqlite-reader-entry.cjs')
-  // Why bundle here: `new Worker` needs JavaScript, and the production entry is
-  // emitted by the app build. Bundling the same source runs the real reader.
+  // Bundle the production reader source because Worker requires emitted JavaScript.
   await build({
     entryPoints: [resolve(__dirname, 'foreign-sqlite-reader-entry.ts')],
     outfile: workerEntryPath,
@@ -131,7 +118,7 @@ afterAll(() => {
 
 describe('foreign SQLite reader event-loop occupancy', () => {
   it('keeps the calling thread responsive while a large-WAL open blocks the worker', async () => {
-    // Presence precondition: a fixture whose WAL was checkpointed away would make both arms fast.
+    // A checkpointed-away WAL would make the test pass without exercising a slow open.
     expect(statSync(`${stateDbPath('worker')}-wal`).size).toBeGreaterThan(MIN_WAL_BYTES)
     expect(statSync(`${stateDbPath('inline')}-wal`).size).toBeGreaterThan(MIN_WAL_BYTES)
 
@@ -140,7 +127,7 @@ describe('foreign SQLite reader event-loop occupancy', () => {
       log: () => {}
     })
     try {
-      // Warm the thread first so the measured arm is the read, not the spawn.
+      // Exclude worker startup from the measured database-open interval.
       await expect(client.readCursorProfile(join(root, 'absent.vscdb'))).resolves.toEqual({
         status: 'missing'
       })
@@ -151,7 +138,6 @@ describe('foreign SQLite reader event-loop occupancy', () => {
       expect(inline.value).toBe(TOKEN)
 
       const report = `${describeArm('worker', worker)}; ${describeArm('inline', inline)}`
-      // The worker arm waited on the open, so it took about as long as the inline one.
       expect(worker.wallMs, report).toBeGreaterThan(inline.activeMs / 4)
       expect(worker.activeMs, report).toBeLessThan(inline.activeMs / 5)
       expect(worker.maxTimerLatenessMs, report).toBeLessThan(inline.maxTimerLatenessMs / 2)

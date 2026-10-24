@@ -4,6 +4,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import { applyWorktreeUpdates } from '../../worktree-helpers'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import type {
   HostedReviewLinkKey,
@@ -177,7 +178,7 @@ export function rememberHostedReviewLinkClear(
 
 export function sanitizeHostedReviewLinksForBranchClear<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head' | 'linkedItems'>>
 >(worktree: T, currentWorktrees?: readonly T[]): T {
   const hostedReviewWorktreeId = resolveHostedReviewLinkWorktreeId(worktree.id)
   const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(hostedReviewWorktreeId)
@@ -208,13 +209,13 @@ export function sanitizeHostedReviewLinksForBranchClear<
     ...worktree,
     branch: guardBranch,
     ...(guardHead !== undefined ? { head: guardHead } : {}),
-    ...CLEARED_HOSTED_REVIEW_LINK_UPDATES
+    ...normalizeWorkspaceAttachmentUpdate(worktree, CLEARED_HOSTED_REVIEW_LINK_UPDATES)
   }
 }
 
 export function sanitizeHostedReviewLinksForBranchClears<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head' | 'linkedItems'>>
 >(worktrees: readonly T[], currentWorktrees?: readonly T[]): T[] {
   let changed = false
   const sanitized = worktrees.map((worktree) => {

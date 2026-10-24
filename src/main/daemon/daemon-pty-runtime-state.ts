@@ -246,8 +246,7 @@ export abstract class DaemonPtyRuntimeState {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
-  // Why the id is read rather than ignored: the contract promises a fact about THIS pty, and
-  // answering from the protocol flag alone returned `true` for a session this daemon never owned.
+  // Snapshot authority requires this adapter to own the session, not just support its protocol.
   canProvideAuthoritativeBufferSnapshot(id: string): boolean {
     return this.supportsAuthoritativeBufferSnapshots && this.activeSessionIds.has(id)
   }

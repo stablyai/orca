@@ -56,3 +56,8 @@ export const DemoteRequestSchema = z.object({
   joinedAt: z.number().int().nonnegative()
 })
 export type DemoteRequest = z.infer<typeof DemoteRequestSchema>
+
+// `not-seated`: the cell holds no live session for that seat. Lenient for the same reason as
+// ReserveResponseSchema; every image since the route shipped answers `outcome`.
+export const DemoteResponseSchema = z.object({ v: z.literal(1), outcome: z.string() }).passthrough()
+export type DemoteOutcome = 'demoted' | 'already-demoted' | 'draining' | 'not-seated' | 'off'

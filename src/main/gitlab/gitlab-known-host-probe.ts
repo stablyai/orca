@@ -61,14 +61,7 @@ function unauthenticatedHostKey(
   return `${knownHostsExecutionKey(connectionId, localGitOptions)}\0${normalizeGitLabHost(host)}`
 }
 
-/**
- * Why: `glab auth status --hostname` is how a self-hosted instance that plain
- * `glab auth status` did not list gets discovered, so a remote that is not
- * GitLab at all runs it too. Project-ref negatives expire now, and without this
- * that becomes one `glab` spawn per repo per interval on the hosted-review poll.
- * The answer is per host, not per repo, and expires on the same clock so a
- * login still lands within an interval.
- */
+/** Share negative host-auth probes across repositories until expiry, avoiding a subprocess per repo on each poll. */
 export function isGlabHostKnownUnauthenticated(
   host: string,
   connectionId?: string | null,
@@ -150,8 +143,7 @@ export async function getGlabKnownHosts(
     knownHostsCacheByExecutionContext.set(key, cached)
     return cached
   }
-  // Why: only join a probe still young enough to answer, so a wedged one cannot
-  // pin every later retry for the life of the process (P1-D).
+  // Retire wedged probes so later retries can discover recovered auth.
   return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, (ownsKey) =>
     probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions)
   )
@@ -164,13 +156,10 @@ async function probeGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<readonly string[]> {
   try {
-    // Why: auth config belongs to the executing host; do not share native, WSL or
-    // connection results, and bound an otherwise global probe.
+    // Isolate native, WSL and connection probe state; bound each auth subprocess.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
-      // Why: a local probe would cache the default distro's auth under 'native'
-      // and wake an idle VM. A connection-keyed probe keeps the retry — glab never
-      // runs over SSH/relay, so the calls it gates take that same fallback.
+      // Native probes must not cache default-distro auth; connection-keyed API calls retain that same fallback.
       ...(connectionId ? {} : { allowDefaultWslFallback: false }),
       ...(!connectionId && localGitOptions.wslDistro
         ? { wslDistro: localGitOptions.wslDistro }
@@ -193,8 +182,7 @@ async function probeGlabKnownHosts(
 
 export function parseGlabAuthStatusHosts(output: string): string[] {
   const hosts = new Set<string>()
-  // Why: self-hosted GitLab can run on a non-default port; preserve it so
-  // services on the same hostname remain distinct downstream.
+  // Preserve non-default web ports so same-host services retain distinct identity.
   for (const match of output.matchAll(/logged in to ([a-zA-Z0-9.-]+(?::\d+)?)/gi)) {
     hosts.add(match[1].toLowerCase())
   }

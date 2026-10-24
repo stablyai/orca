@@ -140,7 +140,6 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     expect(registry.hostsPage('environment-a', 'page-b')).toBe(false)
     expect(registry.hostsPage('environment-b', 'page-a')).toBe(false)
     await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow()
-    // A tombstoned composition is being torn down; its pages are no longer this desktop's to serve.
     expect(registry.hostsPage('environment-a', 'page-a')).toBe(false)
   })
 

@@ -9,9 +9,7 @@ export type BrowserRouteDnsPrefetchProbeResult = {
   resolvedProxy: string
   probeHost: string
   controlHost: string
-  /** Names of the netLog event types that carried the prefetched host, e.g. HOST_RESOLVER_MANAGER_JOB. */
   probeHostResolverEvents: string[]
-  /** Same lookup for a host the page never references, so an over-matching parser cannot pass. */
   controlHostResolverEvents: string[]
 }
 
@@ -69,10 +67,7 @@ type NetLog = {
   events?: { type?: number; source?: { type?: number; id?: number }; params?: unknown }[]
 }
 
-/**
- * Chromium names the resolved host only on the source-creating event, so collect the netLog source ids that
- * mention the host and report every HOST_RESOLVER event type recorded against them.
- */
+// Correlate by source id: resolver task events may omit the hostname.
 function findHostResolverEvents(netLog: string, host: string): string[] {
   const parsed = parseNetLog(netLog)
   const eventTypeNames = invert(parsed.constants?.logEventTypes ?? {})
@@ -102,7 +97,7 @@ function parseNetLog(netLog: string): NetLog {
   try {
     return JSON.parse(netLog) as NetLog
   } catch {
-    // Why: Electron writes the events array incrementally, so a run cut short leaves the trailing bracket off.
+    // Incremental netLog writes may leave the final array/object unclosed.
     return JSON.parse(`${netLog.replace(/,\s*$/, '')}]}`) as NetLog
   }
 }

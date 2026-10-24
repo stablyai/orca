@@ -65,8 +65,7 @@ function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
   return url
 }
 
-// Why (STA-3494): Azure DevOps Server 400s versioned requests without -preview;
-// the rejection happens before the PR is created, so one retry is safe.
+// A preview-version rejection precedes PR creation, so retrying once is safe.
 async function requestCreatePullRequest(
   repo: AzureDevOpsRepoRef,
   path: string,

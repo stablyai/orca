@@ -27,11 +27,15 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionRecord | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, { scope: input.scope }),
+    readAgentSessionHistory(input.journal, input.request, {
+      scope: input.scope,
+      rowReplay: input.replaceNormalizedHistory === false
+    }),
     input.work
   )
   const fence = input.record?.lease.runtimeFence

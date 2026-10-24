@@ -22,7 +22,7 @@ const routingSchema = z.looseObject({
 })
 const optionRoutingSchema = z.looseObject({ optionId: z.string() })
 
-// Keeps every field the schema does not know or can read; drops (and names) the unreadable ones.
+// Preserve unknown fields for forward compatibility; report malformed known fields.
 function readableFields(
   knownFields: Record<string, z.ZodType>,
   value: Record<string, unknown>,
@@ -40,7 +40,7 @@ function readableFields(
   return kept
 }
 
-/** Validates only what answering needs (session, tool call id, options with ids); null if unusable. */
+/** Require routing IDs and usable options; tolerate malformed optional fields. */
 export function readAcpPermissionRequest(
   params: unknown,
   diagnose: (message: string) => void
@@ -92,7 +92,7 @@ export function readAcpPermissionRequest(
   return request.data
 }
 
-/** Asks the caller; any answer Orca cannot send (a throw, a bad reply, an unoffered option) is `cancelled`. */
+/** Cancel on handler failure, malformed replies or unoffered options. */
 export function answerAcpPermission(
   request: RequestPermissionRequest,
   context: AcpRequestContext,

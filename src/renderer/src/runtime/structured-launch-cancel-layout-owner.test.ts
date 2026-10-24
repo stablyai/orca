@@ -8,6 +8,12 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 
+import { useAppStore } from '@/store'
+import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
+import { acceptSessionTabsRuntimeId } from './web-session-tabs-sync/publisher-identity-fences'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
+import * as unlisted from '@/lib/structured-agent-session-unlisted-created-chats'
+
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
   closeSession:
@@ -38,6 +44,7 @@ vi.mock('./runtime-worktree-selector', () => ({
 
 import {
   getStructuredAgentSessionLaunchLifecycle,
+  getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
@@ -51,7 +58,6 @@ import {
 } from '@/lib/structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
-  acceptPairedHostStructuredSessions,
   beginStructuredAgentSessionTabClose,
   suppressCancelledStructuredSessionTabs
 } from './structured-agent-session-tab-retirement'
@@ -223,13 +229,13 @@ describe('a paired server, with main owning the layout', () => {
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
     expect(mocks.closeSession).not.toHaveBeenCalled()
 
-    expect(acceptPairedHostStructuredSessions(hostFrame(), 'server-1').tabs).toEqual([])
+    expect(suppressCancelledStructuredSessionTabs(hostFrame(), SERVER).tabs).toEqual([])
     expect(mocks.closeSession).toHaveBeenCalledWith(SERVER, SESSION)
   })
 
   it('create before the cancel: the published chat closes as any chat does, no tombstone', () => {
     pendingLaunch(SERVER_HOST, SERVER)
-    expect(acceptPairedHostStructuredSessions(hostFrame(), 'server-1').tabs).toHaveLength(1)
+    expect(suppressCancelledStructuredSessionTabs(hostFrame(), SERVER).tabs).toHaveLength(1)
 
     // Once the create has answered, the tab is not provisional, so its close cancels nothing.
     beginStructuredAgentSessionTabClose({
@@ -243,4 +249,24 @@ describe('a paired server, with main owning the layout', () => {
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
     expect(mocks.closeSession).toHaveBeenCalledWith(SERVER, SESSION)
   })
+})
+
+it.each([false, true])('rejected paired publication; reply=%s', async (replied) => {
+  if (replied) {
+    unlisted.recordUnlistedCreatedChat(WORKTREE, SESSION, SERVER_HOST)
+  } else {
+    pendingLaunch(SERVER_HOST, SERVER)
+  }
+  acceptSessionTabsRuntimeId('server-1', 'old')
+  acceptSessionTabsRuntimeId('server-1', 'new')
+  const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+    useAppStore.getState(),
+    hostFrame(),
+    'server-1',
+    { expectedRuntimeId: 'old' }
+  )
+  expect(decideWebSessionTabsSnapshot(recovered!, 'server-1', 'old').apply).toBe(false)
+  expect(getStructuredLaunchStateBySessionId(SESSION)?.hostListed).not.toBe(true)
+  expect(unlisted.isUnlistedCreatedChat(WORKTREE, SESSION)).toBe(replied)
+  unlisted.forgetUnlistedCreatedChat(WORKTREE, SESSION)
 })

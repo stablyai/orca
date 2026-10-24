@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../browser/browser-manager'
 import { browserSiteDisplayController } from '../browser/browser-site-display-controller'
 import { isBrowserPageZoomDirection } from '../../shared/browser-page-zoom'
@@ -20,8 +20,21 @@ import {
   type BrowserSetAnnotationViewportBridgeArgs
 } from '../../shared/browser-annotation-viewport-bridge'
 
+function isPagePoint(value: unknown): value is { x: number; y: number } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'x' in value &&
+    'y' in value &&
+    Number.isFinite(value.x) &&
+    Number.isFinite(value.y)
+  )
+}
+
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:addWordToDictionary')
+  ipcMain.removeHandler('browser:copyImageAt')
   ipcMain.removeHandler('browser:setViewportOverride')
   ipcMain.removeAllListeners?.('browser:reportViewportScrollState')
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
@@ -32,11 +45,20 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
 
-  // Why the page registry only: these act on a browser page, never on a document preview.
+  // Page/session operations exclude document previews.
   const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
     isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
       ? browserManager.getGuestWebContentsId(browserPageId)
       : null
+
+  const pageGuest = (
+    event: IpcMainInvokeEvent,
+    browserPageId: unknown
+  ): Electron.WebContents | null => {
+    const guestId = pageGuestId(event, browserPageId)
+    const guest = guestId === null ? undefined : webContents.fromId(guestId)
+    return guest && !guest.isDestroyed() ? guest : null
+  }
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',
@@ -73,12 +95,41 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
-  ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  ipcMain.handle(
+    'browser:openDevTools',
+    (event, args: { browserPageId: string; inspectAt?: unknown }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserManager.openDevTools(
+        args.browserPageId,
+        isPagePoint(args.inspectAt) ? args.inspectAt : undefined
+      )
     }
-    return browserManager.openDevTools(args.browserPageId)
-  })
+  )
+
+  ipcMain.handle(
+    'browser:addWordToDictionary',
+    (event, args: { browserPageId: string; word: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || typeof args.word !== 'string' || !args.word) {
+        return false
+      }
+      return guest.session.addWordToSpellCheckerDictionary(args.word)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:copyImageAt',
+    (event, args: { browserPageId: string; point: unknown }): boolean => {
+      const guest = pageGuest(event, args?.browserPageId)
+      if (!guest || !isPagePoint(args.point)) {
+        return false
+      }
+      guest.copyImageAt(args.point.x, args.point.y)
+      return true
+    }
+  )
 
   ipcMain.handle(
     'browser:setViewportOverride',
@@ -92,10 +143,7 @@ export function registerBrowserGuestViewHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
-      // Why: CDP misbehaves on non-finite/negative metrics (NaN/Infinity can
-      // wedge Emulation.setDeviceMetricsOverride and leave the page in a
-      // broken state). Validate at the main-process trust boundary so a buggy
-      // or compromised renderer cannot corrupt CDP state.
+      // Reject non-finite or negative renderer metrics before they can wedge CDP emulation.
       if (args.override !== null) {
         const { width, height, deviceScaleFactor, mobile } = args.override
         const isFinitePositive = (n: unknown): n is number =>
@@ -168,16 +216,13 @@ export function registerBrowserGuestViewHandlers(): void {
       ) {
         return false
       }
-      // Why resolve here: this is a tool acting on a guest the reader is looking at, so it answers
-      // for a workspace document too — and routing through the authority also pins the request to
-      // the renderer that owns the target, which page-id-only resolution never checked.
+      // Tools may target documents too; authority resolution binds either guest to its owning renderer.
       const resolveGuest = (): Electron.WebContents | null =>
         browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!resolveGuest()) {
         return false
       }
-      // Why hand over the resolver rather than that guest: the op is serialized per tab, and the
-      // one it finally runs against must be the one on screen then, not the one this request saw.
+      // Queued operations must resolve the current guest when they run.
       return browserManager.setAnnotationViewportBridge(
         args.browserPageId,
         {
@@ -192,9 +237,7 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
-  // Why this is not an ordinary runtime call: the runtime accepts page traffic only on the
-  // connection its browser-host lease attached on, and that lease lives here in main. A renderer
-  // publishing straight to the runtime is refused as a stale lease and the page's URL never moves.
+  // Publish through main's attached browser-host lease; direct renderer traffic would be refused as stale.
   ipcMain.handle(
     'browser:publishClientPageMetadata',
     async (

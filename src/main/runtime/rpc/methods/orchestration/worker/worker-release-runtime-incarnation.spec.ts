@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inspectWorkerTerminal } from './worker-observation'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 import { makePaneKey } from '../../../../../../shared/stable-pane-id'
+import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
 export function registerWorkerReleaseRuntimeIncarnationTests(): void {
   const PTY_ID = 'runtime_test:term_worker'
@@ -30,7 +31,7 @@ export function registerWorkerReleaseRuntimeIncarnationTests(): void {
           kill,
           getForegroundProcess: async () => null
         })
-        runtime.registerPty(PTY_ID, 'repo::worktree', null, {
+        registerBoundPty(runtime, PTY_ID, 'repo::worktree', null, {
           tabId: 'tab_worker',
           leafId: LEAF_ID,
           incarnationId: scenario === 'replacement' ? '2' : '1'

@@ -1,6 +1,6 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http'
 import { request as httpsRequest } from 'node:https'
-import { extractJpegFrames } from './mjpeg-frame-parser'
+import { MjpegFrameAccumulator } from './mjpeg-frame-parser'
 
 const RECONNECT_DELAY_MS = 1_000
 const REQUEST_TIMEOUT_MS = 10_000
@@ -41,7 +41,7 @@ function requestForUrl(url: URL, response: (res: IncomingMessage) => void): Clie
 }
 
 export class MjpegFrameStream {
-  private pending: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+  private readonly accumulator = new MjpegFrameAccumulator()
   private reconnectTimer: NodeJS.Timeout | null = null
   private request: ClientRequest | null = null
   private stopped = false
@@ -67,7 +67,7 @@ export class MjpegFrameStream {
     }
     this.request?.destroy()
     this.request = null
-    this.pending = Buffer.alloc(0)
+    this.accumulator.reset()
   }
 
   private scheduleReconnect(): void {
@@ -114,9 +114,7 @@ export class MjpegFrameStream {
   }
 
   private handleChunk(chunk: Buffer<ArrayBufferLike>): void {
-    const result = extractJpegFrames(this.pending, chunk)
-    this.pending = result.pending
-    for (const frame of result.frames) {
+    for (const frame of this.accumulator.push(chunk)) {
       const now = Date.now()
       if (this.lastFrameAt > 0 && now - this.lastFrameAt < MIN_FRAME_INTERVAL_MS) {
         continue

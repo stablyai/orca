@@ -1,4 +1,5 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -65,7 +66,7 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
-  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
@@ -96,13 +97,22 @@ export type BrowserApi = {
   onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void) => () => void
   onPagePromptClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondPagePrompt: (response: BrowserPagePromptResponse) => Promise<BrowserPagePromptResult>
-  openDevTools: (args: { browserPageId: string }) => Promise<boolean>
+  /** `inspectAt` (guest viewport coordinates) selects the element there. */
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }) => Promise<boolean>
+  addWordToDictionary: (args: { browserPageId: string; word: string }) => Promise<boolean>
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
   getPageSiteDisplay: (args: { browserPageId: string }) => Promise<BrowserPageSiteDisplay | null>
-  /** Zooms the page's site in its browser profile, or resets it to Default Zoom. */
+  /** Site zoom is scoped to the browser profile. */
   zoomPage: (args: {
     browserPageId: string
     direction: BrowserPageZoomDirection
@@ -117,7 +127,7 @@ export type BrowserApi = {
     state: BrowserViewportScrollState
   }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
-  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  /** Uses the owning runtime's host lease. */
   publishClientPageMetadata: (args: {
     environmentId: string
     params: BrowserClientPageMetadataParams
@@ -176,6 +186,7 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
+  onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {
     targetId: string
@@ -187,6 +198,10 @@ export type BrowserApi = {
     scope: BrowserSessionProfileScope
     label: string
   }) => Promise<BrowserSessionProfile | null>
+  sessionEnsureManagedProfile: (args: {
+    owner: ManagedBrowserProfileOwner
+    label: string
+  }) => Promise<BrowserSessionProfile>
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
@@ -209,14 +224,14 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
-  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  /** Import sources keyed by browser profile ID. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
-  /** Remembered Allow and Block answers for one browser profile on this computer, by site. */
+  /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
-  /** Null forgets the answer so the site is asked again; resolves the profile's updated list. */
+  /** Null forgets the answer so the site is asked again. */
   sitePermissionsSet: (args: {
     profileId: string
     origin: string

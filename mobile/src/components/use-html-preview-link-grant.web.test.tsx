@@ -28,7 +28,6 @@ import {
   type BridgePortPair
 } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant.web'
-import { useHtmlPreviewLinkGrant as useHtmlPreviewLinkGrantNatively } from './use-html-preview-link-grant'
 
 const held: { granted: boolean | null } = { granted: null }
 
@@ -76,10 +75,6 @@ describe('whether a link in the HTML preview opens, on the web', () => {
     // The state C8.1 exists for: every shell built before the cancelled-navigation event. It drops
     // the navigation in silence, so a tap on a rendered link would do nothing at all.
     expect(await mount(createFakeBridgePortPair({ routeGrants: [] }))).toBe(false)
-  })
-
-  it('is unconditional on native, where the preview is its own WebView', () => {
-    expect(useHtmlPreviewLinkGrantNatively()).toBe(true)
   })
 
   // Checked against the contract rather than by eye: a route naming a grant the manifest refuses

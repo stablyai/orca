@@ -1,17 +1,5 @@
-// Restart reconciliation for the crash boundary.
-//
-// A submission row is durable before dispatch, so after a crash the host knows
-// what it TRIED to send but not whether the provider took it. Every surviving
-// `pending` becomes `unknown` and is then matched against provider history.
-//
-// Matching is by identity only — an echoed client message id, else a provider
-// item id the journal already adopted, else the payload fingerprint when it
-// picks out exactly one unclaimed item. Never by text equality: the same
-// question asked twice is two messages, and collapsing them silently loses one.
-//
-// Orca never re-sends on the user's behalf. An unresolved submission stays
-// `unknown` — a displayed state meaning "delivery unconfirmed", neither sent nor
-// failed — and the user chooses to resend or discard.
+// Crash recovery resolves durable submissions against history without automatic redelivery.
+// Match echoed IDs, adopted keys, then unique fingerprints; identical sends must never collapse.
 
 import type {
   AgentJournalItemIdentity,
@@ -21,30 +9,21 @@ import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-
 import { DISPATCH_REJECTED_NOT_DELIVERED } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export type ProviderHistoryItem = {
-  /** The provider's own id for this item. Used to claim it at most once; the
-   *  journal key comes from `identity`, because a provider id is not stable. */
+  /** Claim each provider item once; derive journal keys from identity instead of unstable raw IDs. */
   providerItemId: string
-  /** The client message id when the provider echoes one (Codex carries it on
-   *  user messages); null for providers that drop it. */
+  /** Null when the provider does not echo client IDs. */
   clientMessageId: string | null
-  /** Fingerprint of the submitted payload, when the caller can compute one from
-   *  provider content. Used only to break an otherwise unique tie. */
+  /** Match only a unique unclaimed payload candidate. */
   payloadFingerprint: string | null
-  /** Absent when the provider keeps no identity of its own for the item: a submission it matches
-   *  keeps Orca's (`orca:<clientMessageId>`), which is the identity its row already has. */
+  /** Absent identity preserves the submission's existing Orca key. */
   identity?: AgentJournalItemIdentity
 }
 
 export type ProviderHistoryWindow = {
-  /** Provider items observed at or after the journal's last committed item. */
   items: readonly ProviderHistoryItem[]
-  /**
-   * The history read actually started at the journal's last committed item. A
-   * fork, a compacted provider log, or a truncated read makes absence
-   * meaningless, so a missing submission cannot be called "not delivered".
-   */
+  /** Only a complete, consistent history boundary can prove non-delivery by absence. */
   boundaryConsistent: boolean
-  /** The provider reports a turn still running: absence proves nothing yet. */
+  /** An in-flight turn makes absence inconclusive. */
   turnInFlight: boolean
 }
 
@@ -65,13 +44,7 @@ export type SubmissionUnknownReason =
   | 'turn_in_flight'
   | 'ambiguous_match'
 
-/**
- * Resolve every unsettled submission against provider history.
- *
- * Passes run strongest-first across ALL submissions before the next begins, so
- * a weak fingerprint tie can never claim an item that an echoed client message
- * id would have matched exactly. Each history item is claimable once.
- */
+/** Run stronger matches across all submissions first; weak matches cannot steal exact-ID candidates. */
 export function reconcileSubmissions(input: {
   submissions: readonly AgentJournalSubmission[]
   history: ProviderHistoryWindow
@@ -89,8 +62,7 @@ export function reconcileSubmissions(input: {
     claimed,
     matched,
     (submission, item) =>
-      // A submission that already adopted a key re-matches on that key, not on the
-      // provider's raw id — the raw id renumbers, the identity-derived key does not.
+      // Adopted keys survive provider raw-ID renumbering.
       Boolean(submission.providerItemId) &&
       item.identity !== undefined &&
       submission.providerItemId === agentJournalItemKey(item.identity)
@@ -104,9 +76,7 @@ export function reconcileSubmissions(input: {
       Boolean(item.clientMessageId) && item.clientMessageId === submission.clientMessageId
   )
 
-  // Resolve fingerprint candidates as a batch. Assigning the sole candidate to
-  // the first identical submission would make the later one look absent even
-  // though either submission could be the delivered one.
+  // Match fingerprint groups together: one candidate cannot distinguish identical submissions.
   const submissionsByFingerprint = new Map<string, AgentJournalSubmission[]>()
   for (const submission of unsettled) {
     if (matched.has(submission.clientMessageId) || !submission.payloadFingerprint) {
@@ -128,8 +98,7 @@ export function reconcileSubmissions(input: {
       continue
     }
     if (candidates.length > 0) {
-      // Equal payloads without an id cannot be assigned safely, including when
-      // fewer provider items exist than unsettled submissions.
+      // Equal payloads without IDs cannot establish which submission arrived.
       for (const submission of fingerprintSubmissions) {
         ambiguous.add(submission.clientMessageId)
       }
@@ -196,8 +165,6 @@ function resolveOne(
       reason: 'turn_in_flight'
     }
   }
-  // Absent from a history we can trust the boundary of, with nothing running:
-  // the provider never took it.
   return {
     clientMessageId: submission.clientMessageId,
     outcome: 'rejected',

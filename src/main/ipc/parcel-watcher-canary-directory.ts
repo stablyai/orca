@@ -6,8 +6,7 @@ export function createWatcherCanaryDirectory(): string | null {
   try {
     return mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
   } catch (error) {
-    // Why: the canary is diagnostic only; read-only temp storage must not
-    // disable the crash-isolated watcher itself.
+    // Read-only temp storage must not disable the watcher; the canary is diagnostic.
     console.warn('[parcel-watcher-process] canary directory unavailable:', error)
     return null
   }

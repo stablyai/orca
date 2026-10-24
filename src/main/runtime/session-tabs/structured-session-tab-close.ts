@@ -17,7 +17,12 @@ import { applyBrowserSessionTabSelection } from '../browser-session-tab-selectio
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
 import { retireStructuredAgentSessionTabFrom } from '../structured-agent-session-tab-retirement'
-import { chatTabId, withChatTabChanges, type ChatTabChange } from '../agent-session-tab-layout'
+import {
+  chatTabId,
+  withChatTabChanges,
+  type ChatTabChange,
+  type ChatTabPlacement
+} from '../agent-session-tab-layout'
 import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -276,10 +281,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   /** Saves a chat's tab in a windowless host's layout, where it is listed from once read there. */
   protected saveWindowlessAgentSessionTab(
     worktreeId: string,
-    chat: { sessionId: string; agent: StructuredAgentId }
+    chat: { sessionId: string; agent: StructuredAgentId; placement?: ChatTabPlacement }
   ): void {
     this.changeWindowlessChatTabs(worktreeId, [
-      { open: { sessionId: chat.sessionId, agent: chat.agent, tabId: chatTabId(chat.sessionId) } }
+      { open: { ...chat, tabId: chatTabId(chat.sessionId) } }
     ])
   }
 

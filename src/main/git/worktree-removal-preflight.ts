@@ -5,9 +5,6 @@ import { gitExecFileAsync } from './runner'
 import type { WorktreeRemovalPreflightOptions } from './worktree-operation-options'
 import { WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS, gitExecOptions } from './worktree-operation-options'
 
-/**
- * Assert a worktree is clean enough for non-force removal.
- */
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
   force = false,
@@ -25,7 +22,7 @@ export async function assertWorktreeCleanForRemoval(
       '--porcelain',
       ...(useNullTerminatedStatus ? ['-z'] : []),
       '--untracked-files=all',
-      // Why: a user's ignore-submodules setting would hide submodule edits from this dirty check.
+      // User ignore-submodules config must not hide edits from the dirty check.
       '--ignore-submodules=none'
     ],
     {
@@ -33,8 +30,7 @@ export async function assertWorktreeCleanForRemoval(
       timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
     }
   )
-  // Why one parse feeds both: the clean verdict and the error text must never
-  // disagree about which entries block removal.
+  // Use the same entries for the verdict and the error message.
   const blockingEntries = useNullTerminatedStatus
     ? getBlockingUntrackedStatusEntries(stdout, ignoredUntrackedPaths)
     : null
@@ -44,16 +40,11 @@ export async function assertWorktreeCleanForRemoval(
 
   const blockingStatus = blockingEntries ? blockingEntries.join('\n') : stdout
   if (await hasPopulatedSubmodule(worktreePath, gitOptions)) {
-    // Why: Force Delete also destroys the submodules' never-pushed commits, which the parent's
-    // status cannot show, so the refusal must say submodules. Status lines go after the detail
-    // because the formatter prefers stdout over the message.
+    // Force Delete also destroys submodule-only commits; put that detail before stdout for the formatter.
     throw new Error(`${SUBMODULE_DIRTY_REMOVAL_DETAIL}\n${blockingStatus.trim()}`)
   }
 
-  // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
-  // interior NULs, so attaching it verbatim put raw control bytes into the
-  // user-facing removal error — and listed the tolerated shared link, the one
-  // entry that is not the user's work and cannot be committed away.
+  // Render filtered entries without raw NULs or tolerated shared links.
   throw Object.assign(new Error('Worktree has uncommitted or untracked changes.'), {
     stdout: blockingStatus
   })
@@ -91,8 +82,7 @@ async function hasPopulatedSubmodule(
   }
 }
 
-/** The `git status --porcelain -z` entries that genuinely block removal:
- *  everything except the untracked shared links the caller tolerates. */
+/** Exclude only the untracked shared links tolerated by the caller. */
 function getBlockingUntrackedStatusEntries(
   status: string,
   ignoredUntrackedPaths: readonly string[]

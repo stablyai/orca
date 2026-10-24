@@ -13,24 +13,20 @@ export type ExitedSplitPaneFacts = {
   outputSeen: boolean
   /** A client's view of the pane was showing when it ended. */
   shown: boolean
-  /** A stop was asked for, or the host confirmed the death; not a raw code from lost contact. */
-  endVouched: boolean
 }
 
 /**
  * 'close' takes the pane out of its tab (a tab's last pane, the tab). 'keep' leaves it: a failed
  * process (its "Terminal exited" card stays), a newborn that died before anyone used it (a split
- * only while shown), or a negative code nothing vouches for (lost contact), as the window keeps it.
+ * only while shown), or any negative code, as the window keeps it (pty-exit-hibernate's
+ * isProvenProcessExit reads only the code, so a host-confirmed absence keeps its pane to recover).
  */
 export function exitedSplitPaneOutcome(
   facts: ExitedSplitPaneFacts,
   lastPane = false
 ): 'close' | 'keep' {
-  if (facts.exitCode > 0) {
+  if (facts.exitCode !== 0) {
     return 'keep'
-  }
-  if (facts.exitCode < 0) {
-    return facts.endVouched ? 'close' : 'keep'
   }
   if (lastPane) {
     return facts.freshSpawn && !facts.inputSeen ? 'keep' : 'close'
@@ -45,7 +41,7 @@ export function exitedSplitPaneFacts(
   pty: Pick<RuntimePtyWorktreeRecord, 'incarnationId' | 'lastOutputAt'> | undefined,
   ptyId: string,
   exitCode: number,
-  options: { viewShown?: boolean; endVouched: boolean }
+  options: { viewShown?: boolean }
 ): ExitedSplitPaneFacts {
   const run = runs.read(ptyId, pty?.incarnationId)
   return {
@@ -54,7 +50,6 @@ export function exitedSplitPaneFacts(
     freshSpawn: run.freshSpawn,
     inputSeen: run.firstUserInputAt !== null || runs.readLastInputAt(ptyId) !== null,
     outputSeen: pty?.lastOutputAt != null,
-    shown: options.viewShown === true,
-    endVouched: options.endVouched
+    shown: options.viewShown === true
   }
 }

@@ -11,6 +11,158 @@
   },
   "gates": [
     {
+      "id": "agent-status.codex-hook-child-transcript-completion",
+      "title": "Completed hook-only Codex children do not keep an idle pane working",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-status",
+      "layer": "shared-provider-contract",
+      "surfaces": ["Codex pane status", "subagent roster", "desktop and mobile status projection"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "ssh-relay", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Shared normalizer and real temporary transcripts exercised on macOS. Local and daemon PTY lifecycle and folder/worktree routing are unchanged. SSH/WSL use the same shared normalizer, but transport integration and Windows/Linux execution remain unverified; mobile consumes the same resulting status without a wire change.",
+      "motivatingLinks": ["session:01a162f3-a20c-7601-b086-e5ed951caa1b"],
+      "invariant": "Every hook-discovered Codex child with a known root transcript participates in bounded transcript reconciliation. A completed child cannot keep a done lead working when SubagentStop is missing, while a live child continues to hold the aggregate working. Explicit SubagentStop retires its transcript cursor.",
+      "oracle": "Start a hook-only child after the root stops; require working until its real child transcript completes, then done without a stop hook. A delayed start against a completed transcript must remain done, including with only a retained root path after restart. Explicit stop before transcript completion must settle and stop polling.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/shared/codex-hook-child-transcript.test.ts"
+      ],
+      "testFiles": ["src/shared/codex-hook-child-transcript.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/shared/codex-hook-child-transcript.test.ts",
+          "assertions": [
+            "keeps a live hook-only child working, then settles without a SubagentStop hook",
+            "does not resurrect a completed child when a delayed start hook arrives",
+            "reconciles a child after restart using the retained root session path",
+            "honors an explicit stop even before the child transcript has flushed its completion"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/shared/codex-hook-child-transcript.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.768,
+          "summary": "Four deterministic cases pass within the 127-test Codex regression suite. Actual 146 MB root rollout reconciles its completed hook-only child in approximately 10 ms with the existing 1 MB read cap."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "four deterministic shared-normalizer tests"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local verification only; no CI soak history."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before the fix the live child never schedules transcript polling and the delayed completed child reports working. Both regressions pass after enrollment in the existing reconciler."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Reuses existing per-pane polling cadence, bounded 1 MB cursor reads and per-pass directory cache; adds no timers, subprocesses or global scans. Tests prove polling ends after completion and explicit stop."
+      },
+      "promotionCriteria": ["Collect CI soak evidence and exercise SSH, WSL, Linux and Windows."],
+      "knownGaps": [
+        "Hidden Electron CDP screenshots prove yellow Working becomes green Done after a hook-only child transcript completes. Hook events were simulated; no real provider turn, SSH/WSL transport or mobile UI exercised.",
+        "A child lacking a known root transcript still relies on hook completion.",
+        "Physical launch-before-transcript-flush races and cross-day resumed-child discovery remain outside this gate."
+      ],
+      "demotionRule": "Keep experimental until platform and transport gaps are covered; demote on false completion or polling that survives child retirement."
+    },
+    {
+      "id": "agent-session.detached-account-restart-progress",
+      "title": "Independent hidden account restarts progress within a shared spawn limit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-store-provider-contract",
+      "surfaces": [
+        "hidden account-switch restart",
+        "Codex restart notices",
+        "Claude move-on-turn-end"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real renderer store and scheduler with synthetic PTY IPC. Covers slot admission, later requests, prompt recovery, mounted ownership, stale replacement cleanup and executor reinstall. Physical PTYs and account switches remain unproved. Foreign-runtime and mobile execution are unchanged.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/22243"],
+      "invariant": "One unresolved detached restart must not block independent accepted restarts, and after 90s it must re-ask instead of blocking silently. At most four unexpired claimed restarts may be in flight across sweeps; each claim must recheck current pane ownership before spawning and retain existing late-result adoption or reaping.",
+      "oracle": "Hold the first spawn pending and reject the second; require later panes to rebind and unblock. Add requests during a pending sweep and require four total in flight, with excess requests still queued. Free a slot after a queued tab mounts and require that mounted pane to remain untouched while another pane progresses. Reinstall the executor and settle an older claim to release a slot for new work. Stall four spawns past the deadline and require the fifth pane to restart, the stalled pane to ask again, and its late result to still adopt.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+        "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+        "src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts",
+        "src/renderer/src/lib/agent-account-restart-startup.test.ts",
+        "src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+          "assertions": [
+            "finishes later accepted panes while the first spawn stays pending and a second fails",
+            "admits later requests within a shared limit and rechecks mounted ownership as slots free",
+            "resumes queued work when a claim from an earlier executor installation settles",
+            "asks again and frees the slot when a spawn stalls, then adopts its late result"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+          "assertions": [
+            "rejects a detached spawn after the tab generation and leaf owner change",
+            "keeps the replacement when a pane mounts during the spawn, since main already stopped the old PTY"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.52,
+          "summary": "75 tests pass across five files. Initial serial code fails both progress regressions; a stale installation callback fails the reinstall regression until corrected."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "deterministic renderer store/provider contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local full gate pass; CI soak not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original serial sweep strands pane three and admits only one later request. Generation-bound settlement callbacks strand the fifth pane after reinstall. All three regressions pass after fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most four claimed restart IPCs across all concurrent sweeps; fake-clock test verifies admission and slot reuse. One 90s per-claim timer frees a stalled slot and re-asks; no polling, retries, cancellation or process enumeration. Existing pending store is the queue; no second pending collection."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Exercise live Codex and Claude hidden account-switch batches on Windows, Linux and macOS."
+      ],
+      "knownGaps": [
+        "A stalled spawn is not cancelled; its pane re-asks after 90s and stays claimed until main settles. Why a real Windows spawn stalls is not proved.",
+        "No live accounts, ConPTY, WSL or rendered prompt interaction exercised; no claim of closing broader restart/continuity reports.",
+        "Remote-runtime and mobile detached executors are unchanged; foreign-machine PTYs still wait for mounted transport."
+      ],
+      "demotionRule": "Keep experimental or demote if pending work spins, the shared limit is exceeded, mounted owners are replaced, or stale results leak or overwrite newer panes."
+    },
+    {
       "id": "terminal-provider.retired-macos-daemon-recovery",
       "title": "Restart releases retired macOS daemon conversation owners across upgrades",
       "maturity": "experimental",
@@ -615,12 +767,12 @@
       "oracle": "Assert unchanged JSON through final flush and maintenance, failure propagation before quit, missing-database refusal after marker publication, archived SQLite and latest committed JSON from inactive-profile conversion, unchanged active database/index/HTTP marker, and zero feed/check calls for incompatible pinned/local builds.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-compatibility.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/persistence/loading-store/profile-state-update-quit.test.ts",
-        "src/main/persistence/loading-store/profile-state-maintenance-compatibility.test.ts",
+        "src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts",
         "src/main/persistence/profile-state/profile-state-authority-marker.test.ts",
         "src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts",
         "src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts",
@@ -630,6 +782,13 @@
         "tests/e2e/profile-state-terminal-restart-persistence.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts",
+          "assertions": [
+            "checkpoints SQL without publishing JSON or rewriting explicit exports",
+            "preserves the existing SQL state and publishes no JSON during a recovery pause"
+          ]
+        },
         {
           "file": "src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts",
           "assertions": [
@@ -6412,7 +6571,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
@@ -6485,7 +6644,7 @@
         "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
         "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
         "src/shared/remote-runtime-client.test.ts",
-        "src/shared/remote-runtime-subscription-request.test.ts",
+        "src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
         "src/shared/ws-outbound-backpressure-queue.test.ts",
         "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
@@ -6992,7 +7151,7 @@
           ]
         },
         {
-          "file": "src/shared/remote-runtime-subscription-request.test.ts",
+          "file": "src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
           "assertions": [
             "nested JSON responses route by exact request ID under reverse-order delivery",
             "unknown and duplicate response IDs fail the authenticated subscription",
@@ -7087,7 +7246,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
           "result": "passed",
           "durationSeconds": 0.4,
           "summary": "Ten tests passed same-socket nested JSON request delivery, reverse-order exact-ID routing, unknown and duplicate response rejection, 32-request admission, serialization rollback, concurrent timeout teardown, queued/native memory release, and exact-once socket-registration and queue-claim denial."
@@ -9179,7 +9338,7 @@
       "invariant": "Reconnect, replay, or lifecycle observations from a viewer that negotiated explicit close intent must never kill a live PTY. A capable reasonless close must keep and republish; a legacy paired viewer must retain current-main behavior because its intentional close and cleanup echo are wire-identical. Lifecycle close requires the exact observed publication, terminal, environment, and authoritative liveness, never signals a process, and leaves renderer-owned or partial-split retirement to its owner. Legacy daemon hello and warm reattachment remain non-destructive.",
       "oracle": "Start isolated v25 and v26 daemon generations with one capable-viewer PTY and one legacy-viewer PTY per generation in four target worktrees plus an unaddressed control PTY in a fifth worktree. Route them through the production desktop scanner, runtime, RPC dispatcher, renderer-close relay, and daemon router. First issue sequential reasonless closes from an authenticated capable connection and require refusal, snapshot republish, zero shutdown calls, exact process survival, and post-close I/O. Then issue the byte-identical requests without the negotiated capability and require current-main behavior: two ordered immediate shutdowns, session-killed events, and exact root/descendant death, while capable and control PTYs survive. An observer lists all targets before, between, and after while issuing zero closes. Unit contracts also require in-process reasonless refusal, legacy runtime/mobile compatibility, explicit user closes, encrypted client-auth advertisement, and old-server lifecycle calls never to fall back.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-server-kill-attribution.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime-client.test.ts src/shared/remote-runtime-request-connection.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-server-kill-attribution.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/remote-runtime-request-connection.integration.test.ts src/main/runtime/rpc/runtime-close-attribution-topology.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/main/runtime/rpc/methods/session-tabs-schemas.test.ts src/main/runtime/rpc/e2ee-channel.test.ts src/main/runtime/rpc/e2ee-channel-v2.test.ts src/main/runtime/rpc/mobile-socket-wiring.test.ts src/main/runtime/rpc/runtime-client-capabilities.test.ts src/shared/remote-runtime-client.test.ts src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/cli/runtime/websocket-transport.test.ts src/renderer/src/web/web-runtime-client.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-close-intent.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/components/terminal/terminal-tab-actions.test.ts src/renderer/src/components/terminal/terminal-close-incarnation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts",
         "pnpm exec playwright test tests/e2e/daemon-generation-reconnect-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/daemon-generation-legacy-close-safety.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -9195,8 +9354,8 @@
         "src/main/runtime/rpc/mobile-socket-wiring.test.ts",
         "src/main/runtime/rpc/runtime-client-capabilities.test.ts",
         "src/shared/remote-runtime-client.test.ts",
-        "src/shared/remote-runtime-request-connection.test.ts",
-        "src/shared/remote-runtime-shared-control-connection.test.ts",
+        "src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts",
+        "src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
         "src/cli/runtime/websocket-transport.test.ts",
         "src/renderer/src/web/web-runtime-client.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
@@ -9275,13 +9434,13 @@
           ]
         },
         {
-          "file": "src/shared/remote-runtime-request-connection.test.ts",
+          "file": "src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts",
           "assertions": [
             "the cached paired-desktop request connection advertises close-intent support in encrypted authentication while reusing one socket"
           ]
         },
         {
-          "file": "src/shared/remote-runtime-shared-control-connection.test.ts",
+          "file": "src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
           "assertions": [
             "the reconnecting shared-control client advertises close-intent support in encrypted authentication"
           ]
@@ -11828,7 +11987,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts src/main/daemon/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-host-restart-background-sync.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -11882,7 +12041,7 @@
         "src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
         "src/renderer/src/runtime/runtime-client-events.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts",
-        "src/shared/remote-runtime-shared-control-connection.test.ts",
+        "src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
         "tests/e2e/paired-remote-terminal-lossy-initial-snapshot.spec.ts",
         "tests/e2e/paired-remote-terminal-truncated-tail-first-paint.spec.ts",
         "tests/e2e/paired-remote-terminal-stall-recovery.spec.ts",
@@ -12321,7 +12480,7 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
           "result": "passed",
           "durationSeconds": 3.16,
           "summary": "All 27 encrypted shared-control tests passed. The new oracle was red on rc.1-equivalent behavior with the exact Refreshing remote runtime control transport error, then passed with one replacement connection, one delivered host RPC, and zero retained pending bytes."
@@ -12863,26 +13022,52 @@
       "providers": ["daemon", "local"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["daemon", "local"],
-      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
+      "coverageNotes": "Deterministic provider contracts cover complete, incomplete, conflicting, refused, and identity-invalidated owner inventories; degraded fallback/current/legacy routing; repeated stale-binding classification; and fresh-session reattach without local fallback during unresolved ownership. Main IPC contracts cover exact persisted-binding retirement and one fresh replacement after confirmed absence. Acquisition-budget contracts preserve the pre-existing two-second shared RPC cap, one pending acquisition for later deadlines, one index for concurrent resolutions, post-timeout strict cleanup, and exact current-identity recovery while a legacy provider is unavailable. Scoped inventory contracts preserve established input routes while refusing ambiguous target ownership. Live Linux, Windows, WSL, SSH, paired-runtime, and packaged-upgrade journeys remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6830",
         "https://github.com/stablyai/orca/pull/6866",
         "https://github.com/stablyai/orca/pull/7002",
         "https://github.com/stablyai/orca/pull/12776"
       ],
-      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY.",
-      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. No attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY.",
+      "invariant": "Daemon startup reconciliation must preserve valid live daemon sessions and reap only true orphans. A persisted binding stays fail-closed while any possible owner is incomplete, conflicting, refusing attach, or identity-invalidated, but complete authoritative absence from every configured provider must retire that exact stale binding and let retry or reopen converge without attaching it through local fallback or duplicating a PTY. Scoped inventories must retain complete provider evidence and established input routes. Later reader deadlines must not supersede a pending acquisition or extend its existing two-second RPC cap; explicit identity invalidation must still permit prompt exact-owner recovery.",
+      "oracle": "Hold exact fallback, current-daemon, and legacy-daemon inventories behind controlled promises. Without unique incarnation proof, no attach may settle or dispatch until every provider answers. Complete zero-candidate inventories must report SessionNotFound; incomplete, duplicate, refused, and identity-invalidated attempts must remain owner-unverified. In degraded mode, repeated stale attempts scan each eligible provider once per attempt and dispatch no attach, then one explicit fresh spawn and exact reattach use only the recorded fresh route. Main IPC must compare-and-swap retire only the matching persisted PTY/incarnation, emit one synthetic exit, and create one different fresh PTY. After a deadline-obeying legacy provider times out a restore, a subsequent strict sweep must take a new inventory and stop a terminal created externally. Twenty later strict/diagnostic deadlines must share one provider RPC. One hundred concurrent resolutions over 4,096 rows must perform 8,192 id reads. Invalidating the current provider during a legacy scan must discover and reattach its exact live incarnation within the existing resolution budget. Unrelated ambiguity must not block scoped cleanup, while target ambiguity must still refuse it.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-session-owner-resolution.test.ts src/main/daemon/daemon-inventory-acquisition-budget.test.ts src/main/daemon/daemon-inventory-routing-authority.test.ts src/main/runtime/worktree-teardown-daemon-inventory.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty-dead-owner-respawn.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/daemon/daemon-session-owner-resolution.test.ts",
+        "src/main/daemon/daemon-inventory-acquisition-budget.test.ts",
+        "src/main/daemon/daemon-inventory-routing-authority.test.ts",
+        "src/main/runtime/worktree-teardown-daemon-inventory.test.ts",
         "src/main/daemon/daemon-pty-router.test.ts",
         "src/main/daemon/degraded-daemon-pty-provider.test.ts",
         "src/main/ipc/pty-dead-owner-respawn.test.ts",
         "src/main/ipc/pty-persisted-incarnation-repair.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-inventory-acquisition-budget.test.ts",
+          "assertions": [
+            "strict cleanup after a restore timeout freshly discovers and stops an externally created terminal",
+            "twenty increasing strict and diagnostic deadlines share one pending RPC capped at two seconds",
+            "one hundred concurrent resolutions index a 4,096-row incomplete observation once (8,192 id reads)",
+            "current identity invalidation and exact persisted reattach retain positive ownership despite a deadline-limited legacy provider"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-inventory-routing-authority.test.ts",
+          "assertions": [
+            "diagnostic complete, incomplete and conflicting inventories preserve established input recipients without inventing exact incarnation authority"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown-daemon-inventory.test.ts",
+          "assertions": [
+            "unrelated ambiguity permits scoped cleanup but target ambiguity or unavailable inventories refuse removal",
+            "target terminals stop and unrelated sessions survive for daemon router and degraded providers"
+          ]
+        },
         {
           "file": "src/main/daemon/daemon-session-owner-resolution.test.ts",
           "assertions": [
@@ -12941,7 +13126,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "One unresolved attempt performs one concurrent listProcesses call per eligible provider, concurrent pane attempts coalesce onto that inventory, and no polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Reattaching the newly recorded fresh route adds no inventory or daemon spawn."
+        "evidence": "The pre-existing acquisition budget remains min(caller deadline, start plus two seconds). Later deadlines reuse that acquisition without extension or replacement; concurrent resolutions share one index (8,192 id reads for 4,096 rows and 100 readers). No scheduler, partial-index cache, polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Exact fresh-route reattach adds no inventory or daemon spawn. Existing readers may share observations begun before their call within the original capped acquisition window; a universal post-caller freshness boundary and long diagnostic budgets are deferred. Missing-workspace ambiguous-list fallback batching remains pre-existing debt."
       },
       "promotionCriteria": [
         "Wire reconcileOnStartup or mark the production wiring gap explicitly.",
@@ -13198,7 +13383,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/pty-transport-detach-attach-handoff.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-error-accumulation.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
@@ -13231,9 +13416,9 @@
         "src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
         "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "src/shared/remote-runtime-socket-liveness.test.ts",
-        "src/shared/remote-runtime-shared-control-connection.test.ts",
-        "src/shared/remote-runtime-shared-control-socket-generation.test.ts",
-        "src/shared/remote-runtime-client-error-classification.test.ts",
+        "src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
+        "src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts",
+        "src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts",
         "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
         "src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts",
         "src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
@@ -13554,7 +13739,7 @@
           "date": "2026-07-21",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
           "result": "passed",
           "durationSeconds": 5,
           "summary": "Eleven fault-injection and recovery-UI files and 127 tests passed, covering suspended heartbeat clocks, stale socket, PTY, and create generations, canonical pre-ready close recovery with one replacement subscription, cold and repeated PTY reattachment, authoritative health, bounded PTY and terminal-create recovery, post-probe timeout clipping, manually retryable create cutoff, accurate capability-probe failures, same-PTY manual reconnect, pane-state cleanup, fatal error deduplication, stable create identity, cross-process PTY adoption, and fail-closed legacy inventory."

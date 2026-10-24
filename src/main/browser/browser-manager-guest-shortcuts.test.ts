@@ -103,9 +103,7 @@ describe('browserManager', () => {
 
     expect(beforeInputHandler).toBeTypeOf('function')
 
-    // Why: on Linux, Ctrl is the shortcut modifier, so Ctrl+R is the reload
-    // shortcut (not a readline chord). Only test Ctrl+R as a readline passthrough
-    // on macOS where Cmd is the modifier and Ctrl+R is genuinely a readline chord.
+    // Ctrl+R is a readline chord only on macOS; other platforms use it for reload.
     const readlineChords = [
       ...(process.platform === 'darwin'
         ? [
@@ -286,6 +284,15 @@ describe('browserManager', () => {
         control: !isDarwin,
         alt: false,
         shift: true
+      },
+      {
+        type: 'keyDown',
+        code: isDarwin ? 'KeyY' : 'KeyH',
+        key: isDarwin ? 'y' : 'h',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: false
       }
     ]
 
@@ -311,6 +318,9 @@ describe('browserManager', () => {
       browserPageId: 'browser-1'
     })
     expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage', {
+      browserPageId: 'browser-1'
+    })
+    expect(rendererSendMock).toHaveBeenNthCalledWith(11, 'ui:showBrowserHistory', {
       browserPageId: 'browser-1'
     })
   })
@@ -484,7 +494,7 @@ describe('browserManager', () => {
       }
     )
 
-    // Why: keydown must not preventDefault or Electron drops the commit keyup.
+    // Preventing keydown loses the commit keyup in Electron.
     expect(keyDownPreventDefault).not.toHaveBeenCalled()
     expect(keyUpPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:ctrlTabKeyDown', { shiftKey: false })

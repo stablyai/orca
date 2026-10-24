@@ -78,7 +78,6 @@ describe('paired runtime navigation isolation', () => {
         renameTerminal: vi.fn(),
         focusTerminal,
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })

@@ -21,11 +21,11 @@ import type { RawData } from 'ws'
 import { CellAdmitEffectiveWriter } from './cell-admit-effective-writer.js'
 import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
-import { classifyAssignmentLease } from './assignment-lease.js'
+import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
 import { CellReserveBook } from './cell-reserve-book.js'
 import type { DemoteRequest, ReserveRequest } from './cell-reserve-contract.js'
-import { AssignmentLeaseShadow } from './assignment-lease-shadow.js'
+import { AssignmentLeaseShadow } from './assignment/assignment-lease-shadow.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
@@ -52,6 +52,7 @@ import { CellReserveClient } from './cell-reserve-client.js'
 import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
 import { ReserveAssignment } from './reserve-assignment.js'
 import { ReservePlacer } from './reserve-placement.js'
+import { ReserveRehome, ReserveRehomeSwitch } from './reserve-rehome.js'
 import {
   reconcileReserveLedger,
   RESERVE_LEDGER_RECONCILE_MS,
@@ -200,6 +201,13 @@ export function createRelayServer(
     config.role === 'director' && shadowSeatPoller && config.reservePlacement === 'on'
       ? new ReserveLedgerWriter(observedDatabase, { now: options.now })
       : undefined
+  // Step 1 C: the operator's rehome switch is read only on a director with C switched on.
+  const rehomePercent = config.reserveRehomePercent ?? 0
+  const rehomeSwitch =
+    config.role === 'director' && shadowSeatPoller && rehomeAudience && config.reservePlacement === 'on' && rehomePercent > 0
+      ? new ReserveRehomeSwitch(async () => await assignments.regionRehomeSwitch(), options.now)
+      : undefined
+  rehomeSwitch?.start()
   const reservePlacement =
     config.role === 'director' &&
     shadowSeatPoller &&
@@ -220,6 +228,14 @@ export function createRelayServer(
           }),
           readRow: async (identity) => await assignments.hostWhereabouts(identity),
           databaseBusy: () => readRelayDatabasePoolPressure(database).databasePoolWaiting > 0,
+          ...(rehomeSwitch
+            ? {
+                rehome: new ReserveRehome({
+                  percent: rehomePercent,
+                  switchOpen: (now) => rehomeSwitch.isOpen(now)
+                })
+              }
+            : {}),
           now: options.now,
           random: options.random
         })
@@ -275,7 +291,7 @@ export function createRelayServer(
               }))
             ),
         demote: (seat, row) => {
-          reservePlacement?.demoteSeat(seat)
+          reservePlacement?.demoteSeat(seat, 'reconcile')
           // The re-assign mints above the row, so the mirror can take it.
           reservePlacement?.raiseEpochFloor(seat, row.epoch)
           console.warn(
@@ -875,6 +891,7 @@ export function createRelayServer(
     clients.close()
     dataSockets.close()
     store.resumeAudit.stop()
+    rehomeSwitch?.stop()
   })
   const resumeAuditDropped = (): number => {
     const drops = store.resumeAudit.drops()

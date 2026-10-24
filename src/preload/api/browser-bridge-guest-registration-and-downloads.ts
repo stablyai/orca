@@ -73,8 +73,16 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
     ipcRenderer.invoke('browser:respondPagePrompt', response),
-  openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
-    ipcRenderer.invoke('browser:openDevTools', args),
+  openDevTools: (args: {
+    browserPageId: string
+    inspectAt?: { x: number; y: number }
+  }): Promise<boolean> => ipcRenderer.invoke('browser:openDevTools', args),
+  addWordToDictionary: (args: { browserPageId: string; word: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:addWordToDictionary', args),
+  copyImageAt: (args: {
+    browserPageId: string
+    point: { x: number; y: number }
+  }): Promise<boolean> => ipcRenderer.invoke('browser:copyImageAt', args),
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null

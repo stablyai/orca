@@ -38,7 +38,6 @@ function createMockSubprocess(
       onExitCb = cb
     },
     dispose: vi.fn(),
-    // Test helpers
     get _onDataCb() {
       return onDataCb
     },
@@ -68,8 +67,7 @@ describe('TerminalHost', () => {
   let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
-    // Pin POSIX so plain-shell teardown is deterministic across host OSes (matches linux CI);
-    // the Windows taskkill /T /F tree-kill path is covered in terminal-session-teardown.test.ts.
+    // Pin POSIX for deterministic teardown; Windows tree termination has separate coverage.
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
@@ -125,7 +123,6 @@ describe('TerminalHost', () => {
       })
 
       expect(result.isNew).toBe(false)
-      // Should not spawn a second subprocess
       expect(spawnFn).toHaveBeenCalledOnce()
     })
 
@@ -181,10 +178,7 @@ describe('TerminalHost', () => {
 
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
-      // Why: the marker alone no longer flushes — the kernel can still have
-      // ECHO enabled when it arrives. The flush waits for the prompt draw
-      // plus a short delay so readline has switched the PTY into raw mode
-      // first. Otherwise the command would be visibly double-echoed.
+      // Delay post-marker input until prompt output and raw-mode setup prevent cooked echo.
       lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
@@ -266,7 +260,7 @@ describe('TerminalHost', () => {
       })
 
       const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
-      // Staged: the line sources a script holding the whole command, submitted with Enter's CR.
+      // Multiline launch commands are staged in a sourced script and submitted with Enter CR.
       const scriptPath = /^\. '(.*orca-launch-[0-9a-f]+\.sh)'\r$/.exec(written)?.[1]
       expect(scriptPath).toBeDefined()
       expect(readFileSync(scriptPath!, 'utf8')).toContain('claude "line one\nline two"\n')
@@ -420,9 +414,6 @@ describe('TerminalHost', () => {
       ).resolves.toMatchObject({ isNew: false })
     })
 
-    // Plain-shell immediate force-kill (POSIX no-sweep + Windows taskkill tree) is covered in
-    // terminal-host-session-reaping-leak.test.ts and terminal-session-teardown.test.ts.
-
     it('escalates an already-graceful termination and joins its physical exit', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -469,8 +460,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1)
         expect(lastSubprocess.dispose).not.toHaveBeenCalled()
         expect(host.listSessions()).toHaveLength(1)
-        // An unkillable child never releases the id: the create waits out its own budget and
-        // then reports absence rather than publishing a session teardown still owns.
+        // An unkillable child keeps its ID reserved across recreation attempts.
         const recreate = host.createOrAttach({
           sessionId: 'session-1',
           cols: 80,
@@ -504,8 +494,7 @@ describe('TerminalHost', () => {
 
       const killing = host.kill('agent-1', { immediate: true })
 
-      // Why order matters: force-killing first would let orphans reparent to
-      // pid 1 and escape the sweep's ppid walk entirely.
+      // Capture descendants before root exit can reparent them beyond the ppid walk.
       expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
         99999,
         expect.any(Function),
@@ -561,8 +550,7 @@ describe('TerminalHost', () => {
       await Promise.resolve()
       await Promise.resolve()
 
-      // Why it must not resolve yet: capture still owns the process, so publishing here would
-      // hand the caller a session teardown is about to kill.
+      // Publishing before capture ends would attach to a session teardown still owns.
       expect(respawned).toBe(false)
       expect(spawnFn).toHaveBeenCalledTimes(1)
       expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
@@ -589,8 +577,7 @@ describe('TerminalHost', () => {
       })
 
       const first = host.kill('agent-duplicate-kill', { immediate: true })
-      // The root can exit while the descendant scan is pending. Duplicate RPCs
-      // still own the original completion even after the session was reaped.
+      // Duplicate kills must join the original completion even if exit reaps the root during capture.
       lastSubprocess._onExitCb?.(0)
       const second = host.kill('agent-duplicate-kill', { immediate: true })
 
@@ -639,7 +626,6 @@ describe('TerminalHost', () => {
       await Promise.resolve()
       await Promise.resolve()
 
-      // The root is already reaped, but the scan still holds the id.
       expect(respawned).toBe(false)
       expect(spawnFn).toHaveBeenCalledTimes(1)
 
@@ -782,7 +768,6 @@ describe('TerminalHost', () => {
 
       host.detach('session-1', result.attachToken)
 
-      // Data after detach should not be received
       lastSubprocess._onDataCb?.('after detach')
       expect(onData).not.toHaveBeenCalled()
     })

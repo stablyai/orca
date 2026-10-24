@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { readRouteSnapshot } from './mobile-web-app-route-snapshot.mjs'
+import { readRouteSnapshot } from './mobile-web-app/mobile-web-app-route-snapshot.mjs'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -21,7 +21,7 @@ import {
   collectMobileWebAppRoutes,
   renderMobileWebAppRouteManifest,
   routePathnameFromKey
-} from './mobile-web-app-route-manifest.mjs'
+} from './mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))

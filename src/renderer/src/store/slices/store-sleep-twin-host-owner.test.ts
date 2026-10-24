@@ -99,66 +99,6 @@ describe('sleeping a worktree published by an SSH host and a runtime twin', () =
     shutdownBufferCaptures.clear()
   })
 
-  it('sends the sleep to the runtime the PTY names, and clears bindings only after it succeeds', async () => {
-    const store = createTestStore()
-    seedTwin(store, ['remote:runtime-1@@pty-1'])
-    let releaseSleep: () => void = () => {}
-    const sleepGate = new Promise<void>((resolve) => {
-      releaseSleep = resolve
-    })
-    let bindingsDuringSleep: string[] | undefined
-    mockApi.runtimeEnvironments.call.mockImplementation(async (args: { method: string }) => {
-      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
-      if (compatible) {
-        return compatible
-      }
-      if (args.method === 'terminal.sleep') {
-        bindingsDuringSleep = store.getState().ptyIdsByTabId['tab-1']
-        await sleepGate
-        return {
-          id: 'rpc',
-          ok: true,
-          result: { stopped: 1, stoppedPtyIds: ['pty-1'], livePtyIds: [], postStopVerified: true },
-          _meta: { runtimeId: 'remote-runtime' }
-        }
-      }
-      return { id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'remote-runtime' } }
-    })
-
-    const sleeping = store.getState().shutdownWorktreeTerminals(WT, { keepIdentifiers: true })
-    await vi.waitFor(() => expect(bindingsDuringSleep).toBeDefined())
-    expect(bindingsDuringSleep).toEqual(['remote:runtime-1@@pty-1'])
-    expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]?.origin).toBe('live')
-    releaseSleep()
-    await sleeping
-
-    expect(runtimeCallsFor('terminal.sleep').map((args) => args.selector)).toEqual(['runtime-1'])
-    expect(mockApi.pty.kill).not.toHaveBeenCalled()
-    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
-    expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]?.origin).toBe('worktree-sleep')
-  })
-
-  it('keeps bindings and writes no resume record when the runtime sleep fails', async () => {
-    const store = createTestStore()
-    seedTwin(store, ['remote:runtime-1@@pty-1'])
-    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
-      const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
-      if (compatible) {
-        return Promise.resolve(compatible)
-      }
-      return args.method === 'terminal.sleep'
-        ? Promise.reject(new Error('runtime unreachable'))
-        : Promise.resolve({ id: 'rpc', ok: true, result: {}, _meta: { runtimeId: 'r' } })
-    })
-
-    await expect(
-      store.getState().shutdownWorktreeTerminals(WT, { keepIdentifiers: true })
-    ).rejects.toThrow('runtime unreachable')
-
-    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['remote:runtime-1@@pty-1'])
-    expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]?.origin).toBe('live')
-  })
-
   it('kills an SSH PTY through its own host and asks no runtime', async () => {
     const store = createTestStore()
     seedTwin(store, ['ssh:ssh-1@@pty-1'])

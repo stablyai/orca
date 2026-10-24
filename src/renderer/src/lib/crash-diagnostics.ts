@@ -5,6 +5,7 @@ import {
   recordRendererMemorySample,
   resetRendererMemorySampling,
   setRendererMemorySamplingSurface,
+  startRendererLongTaskSampling,
   type RendererSurface
 } from './renderer-memory-sampling'
 
@@ -29,6 +30,7 @@ export function installRendererCrashDiagnostics(surface: RendererSurface = 'main
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
   if (readHeapMetrics()) {
+    startRendererLongTaskSampling()
     recordRendererMemorySample('startup')
     rendererMemoryInterval = window.setInterval(
       () => recordRendererMemorySample('interval'),

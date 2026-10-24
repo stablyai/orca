@@ -32,7 +32,7 @@ function fakeSender() {
   )
 }
 
-// Why: the root document's focus is on a cross-site frame (target F1); inside it, on a field.
+// Focus sits on a field inside cross-site frame F1.
 function crossSiteFrameSender(options: { attachable: boolean }) {
   return vi.fn<GuestCdpSender>(async (method, _params, sessionId) => {
     switch (method) {
@@ -141,7 +141,7 @@ describe('dispatchPageKeyEvent', () => {
 
     expect(page.focus).not.toHaveBeenCalled()
     expect(page.sendInputEvent).toHaveBeenCalledTimes(2)
-    // Why: the focus probe, then the round trip that waits for the page to handle the key.
+    // Probe focus, then wait for the page to handle the key.
     expect(send.mock.calls.map(([method]) => method)).toEqual([
       'Runtime.evaluate',
       'Runtime.evaluate'
@@ -291,7 +291,7 @@ describe('routePageTextInsertion', () => {
     expect(page.focus).toHaveBeenCalledTimes(1)
     await route.deliver({ text: 'a\nb' })
 
-    // Why: the caller releases, so an insert abandoned before delivery still gives focus back.
+    // Callers must be able to release focus even if they abandon delivery.
     expect(route.release).toBe(release)
     expect(page.sendInputEvent).not.toHaveBeenCalled()
     expect(send.mock.calls.map(([method]) => method)).toEqual([

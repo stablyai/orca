@@ -11,7 +11,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider, getLocalPtyProvider } from './pty/provider/registry'
 import { join } from 'node:path'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+// Wrapper roots are content-addressed.
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -118,7 +118,6 @@ describe('registerPtyHandlers', () => {
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(() => {
-        // Simulate node-pty behavior: kill triggers onExit callback
         exitCb?.({ exitCode: -1 })
       }),
       process: 'zsh',
@@ -141,7 +140,7 @@ describe('registerPtyHandlers', () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
     let exitCb: ((info: { exitCode: number }) => void) | undefined
-    // Why: hold a stable ref to the kill spy — destroyPtyProcess reassigns proc.kill to a no-op (docs/fix-pty-fd-leak.md), so reading proc.kill.mock later would crash.
+    // Keep the original spy: destroyPtyProcess replaces proc.kill with a no-op.
     const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
@@ -264,7 +263,7 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    // Why both: a reload fires the gate reset AND the orphan cleanup, so invoke every registered listener like a real did-finish-load.
+    // Fire all load listeners so gate reset cannot hide a missing orphan sweep.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
@@ -276,7 +275,7 @@ describe('registerPtyHandlers', () => {
     }
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    // First load after spawn only advances generation; the second sees this PTY as from a prior load and kills it as orphaned.
+    // First load advances generation; the second can identify the prior-load PTY as orphaned.
     didFinishLoad()
     didFinishLoad()
 
@@ -313,7 +312,6 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(firstWindow as never)
-    // Two listeners on the first (LocalPtyProvider) window: the renderer-gate reset and the orphan cleanup.
     const firstWindowLoadHandlers = firstWindow.webContents.on.mock.calls.filter(
       ([eventName]) => eventName === 'did-finish-load'
     )
@@ -332,21 +330,19 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(secondWindow as never)
 
-    // Every first-window load listener was detached from its webContents.
     for (const [, handler] of firstWindowLoadHandlers) {
       expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
         'did-finish-load',
         handler
       )
     }
-    // The non-Local provider keeps orphan cleanup off the second window — only the renderer-gate reset listener remains.
     expect(
       secondWindow.webContents.on.mock.calls.filter(
         ([eventName]) => eventName === 'did-finish-load'
       )
     ).toHaveLength(1)
   })
-  // Why (#5787): a recovery reload re-fires did-finish-load; suppress the orphan sweep so live LOCAL PTYs survive until session restore re-adopts them.
+  // Recovery reload must preserve live local PTYs until restore re-adopts them (#5787).
   it('does not sweep local PTYs during a recovery reload', async () => {
     const killSpy = vi.fn()
     const proc = {
@@ -377,7 +373,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
-    // Fire both did-finish-load listeners as a real reload does, else the suppression assertion passes vacuously without reaching the sweep.
+    // Fire all load listeners so this assertion actually reaches orphan cleanup.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
@@ -389,7 +385,6 @@ describe('registerPtyHandlers', () => {
       incarnationId: string
     }
 
-    // Without the guard the second load would sweep this PTY as a prior-generation orphan; under recovery-in-flight neither load may touch it.
     didFinishLoad()
     didFinishLoad()
 
@@ -398,7 +393,6 @@ describe('registerPtyHandlers', () => {
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(true)
   })
-  // Why: guard against over-suppression — with no recovery reload in flight the sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
     let exitCb: ((info: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn(() => {
@@ -435,7 +429,6 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
-    // Fire both did-finish-load listeners (gate reset + orphan sweep) as a real reload does.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
@@ -446,7 +439,7 @@ describe('registerPtyHandlers', () => {
       incarnationId: string
     }
 
-    // First load only advances generation; the second sees this PTY as a prior-load orphan — with the flag false the guard must NOT suppress the sweep.
+    // Normal second load must reclaim the prior-generation orphan.
     didFinishLoad()
     didFinishLoad()
     await Promise.resolve()
@@ -459,7 +452,6 @@ describe('registerPtyHandlers', () => {
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
   })
-  // Why (#5787): two PTYs in different load generations must BOTH survive a recovery reload — even the older one a normal sweep would reclaim.
   it('keeps local PTYs from different generations alive across recovery reloads', async () => {
     const killSpyA = vi.fn()
     const killSpyB = vi.fn()
@@ -481,7 +473,6 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
-    // Fire ALL did-finish-load listeners (gate reset + orphan sweep) as a real reload does; the sweep listener is under test.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
@@ -498,7 +489,7 @@ describe('registerPtyHandlers', () => {
     })
     const ptyA = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as { id: string }
 
-    // Advance the generation without sweeping (recovery-in-flight), then spawn a second PTY so the two live in different generations.
+    // Recovery advances generation without sweeping; a second spawn creates mixed-generation live PTYs.
     didFinishLoad()
 
     spawnMock.mockReturnValue({

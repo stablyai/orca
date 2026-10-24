@@ -121,12 +121,13 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       return
     }
     const pty = this.getLivePtyForHandle(created.tab.terminal)?.pty
+    const paneKey = this.paneOfPty(pty).paneKey
     // Why: an SSH pane's status rows belong to the relay on that host.
-    if (!pty?.paneKey || pty.connectionId) {
+    if (!pty || !paneKey || pty.connectionId) {
       return
     }
     seedResumeLaunchIdentity({
-      paneKey: pty.paneKey,
+      paneKey,
       launchAgent: opts.launchAgent,
       resumeProviderSession: opts.resumeProviderSession,
       worktreeId: pty.worktreeId,

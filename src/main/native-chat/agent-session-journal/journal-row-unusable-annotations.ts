@@ -1,6 +1,3 @@
-// Annotations on a persisted row this build cannot use, removed from a row it still keeps, before
-// the row's content is checked (journal-row-schema.ts).
-
 import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
 
 export function dropUnusableRowAnnotations(record: Record<string, unknown>): void {
@@ -19,15 +16,7 @@ export function dropUnusableRowAnnotations(record: Record<string, unknown>): voi
   dropUnusableContextUsage(record)
 }
 
-/** Linkage ids this build cannot trust, removed from a row it still keeps.
- *
- *  Deliberately NOT part of `isJournalRow`: rejecting a row there drops it from
- *  the timeline, so a validator tightened against one bad field becomes a
- *  whole-store kill switch. Dropping the field degrades the row to the
- *  session's own agent — what every row said before linkage existed — while
- *  keeping the content, which is always the safer direction. An `agentId` that
- *  survives is a real one: the reader scopes on PRESENCE, so `''` or a
- *  non-string left in place would hide the row from its own author for good. */
+/** Drop bad linkage, not content: readers scope by presence, so invalid IDs would hide the row. */
 function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
   for (const field of ['agentId', 'parentAgentId', 'providerParentRef', 'producerKind']) {
     const value = record[field]
@@ -40,8 +29,7 @@ function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
   }
 }
 
-/** A scope this build cannot place, removed like unusable linkage: the row then reads as one
- *  written before scopes existed, and the reducer derives its scope. */
+/** Missing scopes retain legacy replay-time derivation. */
 function dropUnusableTurnScope(record: Record<string, unknown>): void {
   const scope = record.turnScope
   if (
@@ -58,7 +46,7 @@ function dropUnusableTurnScope(record: Record<string, unknown>): void {
   }
 }
 
-/** Provenance this build cannot read, removed like linkage: the item's creating fence stands in. */
+/** Unreadable provenance falls back to the creating fence. */
 function dropUnusableOwnerFence(record: Record<string, unknown>): void {
   for (const key of ['ownerFence', 'executionOwner'] as const) {
     const value = record[key]
@@ -68,9 +56,7 @@ function dropUnusableOwnerFence(record: Record<string, unknown>): void {
   }
 }
 
-/** Context facts this build cannot read, removed from the turn row that carries
- *  them. Same reasoning as linkage: they are an annotation on the turn, and
- *  rejecting the row for them would truncate the journal from that row on. */
+/** Drop unreadable annotations without truncating journal replay. */
 function dropUnusableContextUsage(record: Record<string, unknown>): void {
   const bodies = [
     record.kind === 'item' ? record.body : undefined,

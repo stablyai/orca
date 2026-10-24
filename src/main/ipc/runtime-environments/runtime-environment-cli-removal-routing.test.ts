@@ -70,8 +70,7 @@ describe('runtime responses the app can no longer attribute to a saved server', 
     const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, transport)
     removeEnvironment(userDataPath, environment.id)
 
-    // A throw here escapes `void verify()` as an unhandled rejection and skips settleWaiters(),
-    // hanging every refresh() caller until its own 15s timeout.
+    // A thrown status callback bypasses settleWaiters and strands refresh callers until timeout.
     expect(() => owner.acceptVerified(statusResponse())).not.toThrow()
     // Teardown for a removed environment belongs to the removal watcher, not to a status reader.
     expect(transport.establish).toHaveBeenCalledOnce()
@@ -101,8 +100,7 @@ describe('runtime responses the app can no longer attribute to a saved server', 
     ['support-routed subscription on a host without shared control', 'files.watch']
   ])('forwards a %s response when the store file is unreadable', async (_label, method) => {
     const { deliver, onEvent } = await subscribed(method)
-    // Any store failure is fatal on this path, not just a removal: a half-written or
-    // ACL-hardened settings file reaches the same unguarded socket callback.
+    // Unreadable registries reach the same socket callback as removed environments.
     writeFileSync(getEnvironmentStorePath(userDataPath), '{not json')
     const response = {
       id: method,

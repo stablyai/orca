@@ -1,3 +1,8 @@
+import {
+  lastVerifiedRuntimeStatus,
+  isRuntimeHostContactRevoked
+} from '../../../../shared/runtime-host-status'
+import { useAppStore } from '@/store'
 // Host-aware resolution for composer attachments (STA-1465). The composer's
 // attach surfaces (file drop, file picker, image paste) receive client-local
 // paths. A structured chat on a paired server uploads into that server's
@@ -244,4 +249,21 @@ export function uploadNativeChatSessionAttachmentPaths(
   target: AgentSessionAttachmentUploadTarget
 ): Promise<AgentSessionAttachmentPathUploadResult> {
   return window.api.fs.uploadPathsToAgentSessionAttachments({ ...target, paths })
+}
+
+/** The runtime status slice evicts replaced peers and accepts only current pairing snapshots. */
+export function cachedNativeChatPasteUploadTarget(
+  owner: NativeChatRuntimeSessionAttachmentOwner
+): AgentSessionAttachmentUploadTarget | null {
+  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+  const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+  if (!status?.capabilities?.includes(AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY)) {
+    return null
+  }
+  return {
+    environmentId: owner.environmentId,
+    sessionId: owner.sessionId,
+    expectedEnvironmentPairingRevision: owner.pairingRevision,
+    expectedEnvironmentRuntimeId: status.runtimeId
+  }
 }

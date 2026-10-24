@@ -1,5 +1,5 @@
 import React from 'react'
-import { getPageNumbers } from '@/components/task-page-pagination-page-numbers'
+import { getPageNumbers } from '@/components/task-page/task-page-pagination-page-numbers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, LoaderCircle, ChevronRight } from 'lucide-react'

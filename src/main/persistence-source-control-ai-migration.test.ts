@@ -15,7 +15,6 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -67,7 +66,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // Invalid profile state must not silently replace user settings with defaults.
 
   it('refuses invalid legacy JSON without replacing it with defaults', () => {
     mkdirSync(testState.dir, { recursive: true })
@@ -77,8 +75,6 @@ describe('Store', () => {
     expect(readFileSync(dataFile(), 'utf8')).toBe('{{{invalid json')
   })
 
-  // ── 4. Schema migration: merges with defaults ───────────────────────
-
   it('merges loaded data with defaults for missing fields', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -86,18 +82,14 @@ describe('Store', () => {
       worktreeMeta: {},
       settings: { theme: 'dark' },
       githubCache: { pr: {}, issue: {} }
-      // ui and workspaceSession intentionally omitted
     })
 
     const store = await createStore()
-    // ui should have defaults
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(280)
     expect(ui.rightSidebarOpen).toBe(true)
     expect(ui.rightSidebarTab).toBe('explorer')
-    // settings should preserve the overridden value
     expect(store.getSettings().theme).toBe('dark')
-    // new fields get defaults when missing from persisted data
     expect(store.getSettings().editorAutoSave).toBe(false)
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
@@ -112,7 +104,6 @@ describe('Store', () => {
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
-    // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
   })
 

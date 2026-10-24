@@ -53,7 +53,7 @@ describe('CheckpointSessionQueue', () => {
 
     const healthy = await queue.run('healthy', async () => 'ran')
 
-    // Why assert entry: a stall that never started would prove nothing about isolation.
+    // Prove the stalled operation entered before testing other-session isolation.
     expect(stalledEntered).toBe(true)
     expect(healthy).toBe('ran')
     stalled.resolve()
@@ -79,8 +79,6 @@ describe('CheckpointSessionQueue', () => {
 
     expect(outcome).toBe('live')
     expect(onDeadlineFired).toHaveBeenCalledOnce()
-    // Why: abandoning the wait must not abandon the write, or a reattach deadline
-    // would drop durable history instead of merely delaying it.
     expect(completed).toBe(false)
     stalled.resolve()
     await vi.waitFor(() => expect(completed).toBe(true))

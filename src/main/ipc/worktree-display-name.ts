@@ -9,7 +9,7 @@ export function sanitizeWorktreeDisplayName(input: string): string | undefined {
     return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
   }).join('')
   const sanitized = withoutControls
-    // Why: titles come from external systems; bidi overrides could visually reorder sidebar text.
+    // External titles can contain bidi overrides that visually reorder sidebar text.
     .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -47,10 +47,7 @@ export function resolveWorktreeCreateDisplayNameRequest(
   cliCreated: boolean,
   nameWasGenerated = false
 ): { value: string | undefined; kind: DisplayNameKind } {
-  // The CLI name is always an explicit command argument; its marker wins over a
-  // missing or malformed kind so a future client cannot make it auto-managed.
-  // Legacy clients omitted displayNameKind: an explicit displayName was the artifact-title
-  // contract, while a name-only request was user-entered unless marked as generated.
+  // Explicit CLI labels remain user-owned; legacy displayName is artifact-derived while name-only input is user-owned unless generated.
   const effectiveKind = cliCreated
     ? 'user'
     : (kind ?? (input !== undefined || nameWasGenerated ? 'generated' : 'user'))

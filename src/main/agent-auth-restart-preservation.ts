@@ -20,7 +20,7 @@ export async function preserveAgentAuthBeforeRestart({
 }: AgentAuthRestartPreservationOptions): Promise<void> {
   const startedAt = Date.now()
   runCodexPreservationStep(codexRuntimeHome)
-  // Why: the drain owns guest-process timeouts; a shared 2s cutoff can relaunch before promotion.
+  // The WSL drain owns guest timeouts; a shared cutoff could relaunch before credential promotion.
   const wslCodexPreservation = runWslCodexPreservationStep(codexRuntimeHome)
 
   const storePreservation = store
@@ -67,8 +67,7 @@ async function runWithinLifecycleTimeout(
       logStepFailure(step, error)
     })
 
-  // Why: this timeout only releases the restart/update path. It does not
-  // cancel a sync that already started.
+  // Timeout releases the restart path without canceling an in-flight sync.
   const timeoutResult = new Promise<'timeout'>((resolve) => {
     timeout = setTimeout(() => resolve('timeout'), timeoutMs)
   })

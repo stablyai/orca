@@ -10,7 +10,7 @@ const generationRace = vi.hoisted(() => ({
   beforeGuardedReplace: null as (() => void) | null
 }))
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config

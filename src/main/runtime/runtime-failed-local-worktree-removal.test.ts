@@ -1,3 +1,4 @@
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 // Real-Git coverage for a delete Git fails partway: `git worktree remove --force` drops the
 // registration even when it cannot delete a file, so Orca must keep the leftover listed and
 // retryable itself. macOS only: `chflags uchg` is the portable way to make a file undeletable for
@@ -525,3 +526,5 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await listedRows()).toEqual([])
   })
 })
+
+installRealWorkerThreadChildProcesses()

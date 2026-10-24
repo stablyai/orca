@@ -6,7 +6,7 @@ import {
   replacePersistentWebview,
   webviewRegistry
 } from './webview-registry'
-import { recordLocalHtmlPreviewNavigation } from '../navigate/local-html-preview-freshness'
+import { handleGuestWindowCloseMessage } from './browser-page-window-close'
 
 export function setBrowserPageWebviewInputLock(
   webview: Electron.WebviewTag,
@@ -71,9 +71,6 @@ export function ensureBrowserPageWebview({
   setBrowserPageWebviewInputLock(webview, inputLocked)
   webview.style.background = 'var(--background)'
   const guest = webview
-  guest.addEventListener('did-start-navigation', (event) => {
-    recordLocalHtmlPreviewNavigation(guest, event)
-  })
   // A committed synthetic blank document belongs to New Tab, including while its first URL waits.
   guest.addEventListener('load-commit', (event) => {
     if (event.isMainFrame) {
@@ -83,6 +80,9 @@ export function ensureBrowserPageWebview({
   })
   guest.addEventListener('render-process-gone', () => {
     guest.style.visibility = 'hidden'
+  })
+  guest.addEventListener('ipc-message', (event) => {
+    handleGuestWindowCloseMessage(browserTabId, guest, event)
   })
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)

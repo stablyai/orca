@@ -1,7 +1,7 @@
 import {
   JIRA_PAYLOAD_CHUNK_CHARS,
   JIRA_PAYLOAD_MAX_CHARS
-} from '../../../../shared/jira-payload-stream'
+} from '../../../../shared/jira/jira-payload-stream'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import { JIRA_ATTACHMENT_IMAGE_METHODS } from './jira-attachment-image'
 import { JiraFavouriteFilterParams } from '../../../../shared/rpc-contract/jira-favourite-filter-params'

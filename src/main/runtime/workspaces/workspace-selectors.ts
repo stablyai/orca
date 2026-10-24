@@ -18,6 +18,7 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
+import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -140,6 +141,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   protected getOrchestrationDbIfAvailable(): OrchestrationDb | null {
     return this._orchestrationDb
+  }
+
+  isChatWorkerErrorEscalationEnabled(): boolean {
+    return chatWorkerErrorEscalationEnabled(this.store?.getSettings?.())
   }
 
   getNestedWorkerMaxDepth(): number {

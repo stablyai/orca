@@ -33,8 +33,7 @@ export function cancelPendingWatcherSubscribe({
     return
   }
   if (!child?.connected) {
-    // Why: disconnect starts physical termination before cancellation sees the
-    // child; destructive callers must join that exact termination generation.
+    // Disconnect already started termination; destructive callers must join that exact generation.
     void onChildUnavailable(child).then(
       () => pending.reject(error),
       (terminationError: unknown) =>
@@ -44,8 +43,7 @@ export function cancelPendingWatcherSubscribe({
     )
     return
   }
-  // Why: only the child knows whether native setup is queued, active, or
-  // resolved, so its physical teardown must precede caller settlement.
+  // Only the child knows native setup state; prove its teardown before settling the caller.
   cancelledSubscribes.begin(record.id, child, error, pending.reject, () => restartChild(child))
   sendCancel(child, record.id)
 }

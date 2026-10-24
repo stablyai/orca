@@ -17,7 +17,8 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
-  resetWorktreeSliceModuleMemory
+  resetWorktreeSliceModuleMemory,
+  worktreeListMock
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -269,7 +270,7 @@ describe('migrateWorktreeIdentity', () => {
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
-    mockApi.worktrees.list.mockResolvedValue([
+    worktreeListMock.mockResolvedValue([
       {
         ...switched,
         id: NEW,
@@ -316,7 +317,7 @@ describe('migrateWorktreeIdentity', () => {
     const switched = store.getState().worktreesByRepo.repo1[0]
     store.setState({ worktreesByRepo: { repo1: [{ ...switched, id: NEW }] } } as Partial<AppState>)
     store.getState().migrateWorktreeIdentity(OLD, NEW)
-    mockApi.worktrees.list.mockResolvedValue([
+    worktreeListMock.mockResolvedValue([
       {
         ...oldWorktree,
         head: 'old-head',

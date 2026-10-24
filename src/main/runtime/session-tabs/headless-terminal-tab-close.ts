@@ -19,10 +19,6 @@ import type { RuntimeTerminalRename } from '../../../shared/runtime-terminal-con
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
-  protected abstract applyHeadlessSessionTabPropsToSnapshot(
-    ...args: Parameters<HeadlessTabPropertiesMethods['applyHeadlessSessionTabPropsToSnapshot']>
-  ): ReturnType<HeadlessTabPropertiesMethods['applyHeadlessSessionTabPropsToSnapshot']>
-
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(
     ...args: Parameters<HeadlessTabPropertiesMethods['applyHeadlessTerminalPaneLayoutToSnapshot']>
   ): ReturnType<HeadlessTabPropertiesMethods['applyHeadlessTerminalPaneLayoutToSnapshot']>
@@ -34,10 +30,6 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
   protected abstract normalizeMobileSessionTabOrder(
     ...args: Parameters<PersistHeadlessTerminalTitleMethods['normalizeMobileSessionTabOrder']>
   ): ReturnType<PersistHeadlessTerminalTitleMethods['normalizeMobileSessionTabOrder']>
-
-  protected abstract persistHeadlessSessionTabProps(
-    ...args: Parameters<HeadlessTabPropertiesMethods['persistHeadlessSessionTabProps']>
-  ): ReturnType<HeadlessTabPropertiesMethods['persistHeadlessSessionTabProps']>
 
   protected abstract persistHeadlessTerminalPaneLayout(
     ...args: Parameters<HeadlessTabPropertiesMethods['persistHeadlessTerminalPaneLayout']>
@@ -72,6 +64,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       return proof ? [proof] : []
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
+    const liveTerminalOf = this.liveTerminalsOfClosedTab(worktreeId, snapshot, closedParentTabId)
     const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
       { kind: 'tab', tabId: closedParentTabId },
@@ -104,7 +97,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
           ? options.authorizedPty
           : null
-      const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate) ?? authorizedPty
+      const livePty = liveTerminalOf(candidate) ?? authorizedPty
       const ptyId = livePty?.ptyId ?? candidate.ptyId
       const hasOtherOwner = snapshot.tabs.some(
         (other) =>
@@ -272,79 +265,6 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
-    return { updated: true }
-  }
-
-  // Why: tab color/pin are host-authoritative for remote-server tabs but had no
-  // push path, so pinning or coloring a tab reverted on the next snapshot and
-  // was never persisted. Persist to the workspace session + live snapshot.
-  /** What `title` reads once a manual name is cleared; readers that predate `customTitle` show it. */
-  protected headlessTerminalFallbackTitle(worktreeId: string, tabId: string): string {
-    const tab = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[worktreeId]?.find(
-      (candidate) => candidate.id === tabId
-    )
-    return (
-      tab?.generatedTitle?.trim() || tab?.title?.trim() || tab?.defaultTitle?.trim() || 'Terminal'
-    )
-  }
-
-  async setMobileSessionTabProps(
-    worktreeSelector: string,
-    args: {
-      tabId: string
-      color?: string | null
-      isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
-      customTitle?: string | null
-    }
-  ): Promise<{ updated: true }> {
-    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: a renderer-authoritative host owns + republishes tab props, so a
-    // headless write would be overwritten. Persist only when headless.
-    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const hostTabId = snapshot
-      ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
-      : args.tabId
-    // Why by tab: a sleeping or starting pane has no handle for terminal.rename to name (#29975).
-    const customTitle =
-      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
-    // Switch point: a terminal tab main owns takes its props in main's layout, window or not.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
-      return { updated: true }
-    }
-    if (this.getAvailableAuthoritativeWindow()) {
-      if (customTitle !== undefined) {
-        this.notifier?.renameTerminal(hostTabId, customTitle)
-      }
-      return { updated: true }
-    }
-    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
-    // Why: a live pane's own title outranks the snapshot's, so name it the way terminal.rename does.
-    const liveHandles =
-      customTitle === undefined
-        ? []
-        : this.getPtyIdsForExplicitTabClose(worktreeId, hostTabId).flatMap((ptyId) => {
-            const handle = this.handleByPtyId.get(ptyId)
-            return handle ? [handle] : []
-          })
-    for (const handle of liveHandles) {
-      await this.renameTerminal(handle, customTitle ?? null)
-    }
-    if (customTitle !== undefined && liveHandles.length === 0) {
-      this.persistHeadlessTerminalTitle(worktreeId, hostTabId, customTitle)
-    }
-    // A live pane's rename above already set its title; only a paneless tab needs `title` here.
-    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, {
-      ...args,
-      ...(customTitle !== undefined && liveHandles.length === 0
-        ? {
-            customTitle,
-            title: customTitle ?? this.headlessTerminalFallbackTitle(worktreeId, hostTabId)
-          }
-        : {})
-    })
     return { updated: true }
   }
 }

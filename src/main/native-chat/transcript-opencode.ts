@@ -17,8 +17,6 @@ import type {
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 
-// OpenCode SQLite reads use the same bounded worker as AI Vault.
-
 export type OpenCodeTranscriptDeps = {
   resolveDbPath?: (
     sessionId?: string,
@@ -102,7 +100,7 @@ export async function readOpenCodeNativeChatTranscriptFull(
   signal?: AbortSignal,
   agent?: 'zcode'
 ): Promise<ReadTranscriptResult> {
-  // Pages arrive newest-window first; reverse windows, preserving message order.
+  // Reverse newest-first windows while preserving order inside each page.
   const pages: NativeChatMessage[][] = []
   let records = 0
   let bytes = 0

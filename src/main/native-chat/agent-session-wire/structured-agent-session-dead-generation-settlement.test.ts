@@ -109,7 +109,6 @@ describe('dead structured-session generation settlement', () => {
     ])
     expect(snapshot.items.map((item) => item.body)).toEqual(
       expect.arrayContaining([
-        // An unverifiable end proves no interruption.
         expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
         expect.objectContaining({
           kind: 'approval',
@@ -123,7 +122,7 @@ describe('dead structured-session generation settlement', () => {
       ])
     )
     expect(snapshot.items.some((item) => item.body.kind === 'status')).toBe(false)
-    // Kept beside its failed state, so a later proof naming its owner can correct it.
+    // Preserve unverifiable provenance for later correction by owner-specific exit proof.
     const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
     expect(tool?.body).toMatchObject({ state: 'failed', endedAs: 'unverifiable' })
   })
@@ -245,7 +244,6 @@ describe('dead structured-session generation settlement', () => {
       pendingSubmissionReason: 'provider_exited_before_acknowledgement',
       verdict: { state: 'interrupted', completedAt: 1_000 },
       showUnexpectedExitOutcome: true,
-      // Orca stopped the provider because its own journal failed.
       exitFailure: agentSessionFailureFact('hostFault')
     })
 
@@ -319,7 +317,6 @@ describe('dead structured-session generation settlement', () => {
       exitedDuringStartup: { generation: 'generation-1' }
     })
 
-    // The sentence is Orca's; the stderr the exit carried rides as a log detail only.
     expect(journal.submissions()).toEqual([
       expect.objectContaining({
         clientMessageId: 'client-held',
@@ -334,8 +331,7 @@ describe('dead structured-session generation settlement', () => {
   })
 
   it("keeps a subagent's settled rows the subagent's, in one batch and after a reopen", async () => {
-    // One batch settles rows several agents wrote and names none of them. Each
-    // row keeps the producer its first write named, including after a replay.
+    // Mixed-agent batch revisions must preserve each item’s original producer across replay.
     const child = { agentId: 'thread-child', producerKind: 'agent' as const }
     const childCall = {
       provider: 'codex' as const,
@@ -386,7 +382,6 @@ describe('dead structured-session generation settlement', () => {
         ])
 
     const settled = settledProducers()
-    // Every seeded row was revised by the batch, so these are revision-2 producers.
     expect(settled).toEqual([
       ['message', 0, undefined],
       ['tool-call', 2, undefined],

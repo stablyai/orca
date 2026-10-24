@@ -35,8 +35,7 @@ export class WatcherTerminationQueue {
   private current: Promise<void> | null = null
 
   waitFor<T>(operation: () => Promise<T>): Promise<T> | null {
-    // Why: an idle child may miss its exit deadline without poisoning the
-    // reusable supervisor; queued work must re-check state after either result.
+    // Either idle-termination outcome can leave this supervisor reusable; queued work must recheck state.
     return this.current?.then(operation, operation) ?? null
   }
 
@@ -78,8 +77,7 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
       resolve(exited)
     }
     const onExit = (): void => finish(true)
-    // Why: an asynchronous spawn failure can close without emitting exit; the
-    // close event is still definitive proof that the child owns no OS handles.
+    // Spawn failures may close without exit; close still proves all child handles are released.
     const onClose = (): void => finish(true)
     child.once('exit', onExit)
     child.once('close', onClose)

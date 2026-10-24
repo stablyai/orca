@@ -92,10 +92,7 @@ describe('triggerPtySpawnPushTargetMaterialization', () => {
     )
   })
 
-  // Why: many pty:spawn unit tests supply a narrow fake Store missing these methods --
-  // this is the actual bug the hook must guard against (#17828), not a hypothetical.
-  // Optional chaining degrades the lookups to undefined/null; the underlying trigger
-  // itself no-ops on an undefined push target, so this never blocks or throws on spawn.
+  // Narrow spawn fixtures omit these Store methods; the best-effort hook must tolerate them (#17828).
   it('does not throw when the store lacks getWorktreeMeta/getRepo, delegating with undefined/null', () => {
     const partialStore = {} as Store
     expect(() =>

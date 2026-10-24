@@ -1,7 +1,5 @@
-// In-memory counts of worktree creates and prepared-checkout disk work running in this process, so
-// a slow create can be read against what competed with it for the disk.
+// Record disk competition during each create, excluding its adopted preparation.
 
-/** One prepared-checkout build or discard; its identity lets the create that used it leave it out. */
 export type PreparationWork = { end(): void }
 
 type InFlightCreate = {
@@ -20,9 +18,9 @@ export type WorktreeCreateConcurrency = {
 }
 
 export type WorktreeCreateInFlightHandle = {
-  /** Leaves `work` out of this create's count: it is the prepared checkout this create waits on. */
+  /** Exclude the preparation this create adopted from competing work. */
   adoptPreparation(work: PreparationWork): void
-  /** Ends this create's membership; later calls return the same counts. */
+  /** End tracking; repeated calls return the same peaks. */
   end(): WorktreeCreateConcurrency
 }
 
@@ -39,7 +37,7 @@ function observePreparations(create: InFlightCreate): void {
   }
   for (const work of preparations) {
     if (!create.peakPreparationsWithout.has(work)) {
-      // Before it appeared, leaving it out changed nothing, so the plain peak so far applies.
+      // Before this item started, excluding it would leave the previous peak unchanged.
       create.peakPreparationsWithout.set(work, Math.max(create.peakPreparations, count - 1))
     }
   }
@@ -86,7 +84,6 @@ export function beginPreparationWork(): PreparationWork {
         return
       }
       ended = true
-      // Peaks only rise when work starts, so ending needs no observation.
       preparations.delete(work)
     }
   }
@@ -97,7 +94,6 @@ export function beginPreparationWork(): PreparationWork {
   return work
 }
 
-/** Counts `operation` as preparation work until it settles. */
 export function trackPreparationWork<T>(operation: Promise<T>): Promise<T> {
   const work = beginPreparationWork()
   return operation.finally(() => work.end())

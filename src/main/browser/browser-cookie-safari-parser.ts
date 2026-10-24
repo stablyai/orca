@@ -1,11 +1,7 @@
-import { deriveUrl } from './browser-cookie-validation'
-import type { ValidatedCookie } from './browser-cookie-validation'
+import { deriveUrl } from './cookies/sources/browser-cookie-validation'
+import type { ValidatedCookie } from './cookies/sources/browser-cookie-validation'
 
 const MAC_EPOCH_DELTA = 978_307_200
-
-// ---------------------------------------------------------------------------
-// Safari binary cookie parser
-// ---------------------------------------------------------------------------
 
 export function decodeSafariBinaryCookies(buffer: Buffer): ValidatedCookie[] {
   if (buffer.length < 8) {
@@ -39,7 +35,7 @@ export function appendSafariCookies(
   target: ValidatedCookie[],
   cookies: readonly ValidatedCookie[]
 ): void {
-  // Why: pages can hold large cookie lists; push per-item to avoid exceeding the spread argument limit.
+  // Avoid the spread argument limit on large cookie lists.
   for (const cookie of cookies) {
     target.push(cookie)
   }
@@ -78,7 +74,7 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   if (buf.length < 48) {
     return null
   }
-  // Why: size comes from the file and could be attacker-controlled; clamp so readCString can't escape the subarray.
+  // Clamp untrusted record sizes to keep string reads within the buffer.
   const size = Math.min(buf.readUInt32LE(0), buf.length)
   if (size < 48) {
     return null
@@ -93,7 +89,7 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   const pathOffset = buf.readUInt32LE(24)
   const valueOffset = buf.readUInt32LE(28)
 
-  // Why: Safari stores dates as Mac absolute time (seconds since 2001-01-01).
+  // Safari dates count seconds since 2001-01-01.
   const expiration = buf.length >= 48 ? buf.readDoubleLE(40) : 0
 
   const name = readCString(buf, nameOffset, size)
@@ -104,7 +100,7 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   const path = readCString(buf, pathOffset, size) ?? '/'
   const rawUrl = readCString(buf, urlOffset, size) ?? ''
 
-  // Why: Safari stores the domain in the URL field, not as a separate domain column.
+  // The binary format stores the cookie domain in its URL field.
   const domain = rawUrl.startsWith('.') ? rawUrl : rawUrl || null
   if (!domain) {
     return null
@@ -127,8 +123,7 @@ export function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
     httpOnly,
     sameSite: 'unspecified',
     expirationDate,
-    // Why: Cookies.binarycookies has no partition field — Safari's format predates CHIPS, so every
-    // decoded cookie is genuinely unpartitioned rather than missing an identity.
+    // This format has no partition field; decoded cookies are unpartitioned.
     partition: { status: 'unpartitioned' }
   }
 }

@@ -494,6 +494,24 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       )
     })
 
+    it('takes back its tab and spawns nothing when the launch record cannot open', async () => {
+      const runtime = hostWithWindow()
+      const verdicts: Promise<AgentLaunchPaneVerdict | 'unowned'>[] = []
+      const publish = runtime.publishAgentLaunchTab.getMockImplementation()!
+      runtime.publishAgentLaunchTab.mockImplementation((request) => {
+        const published = publish(request)
+        // The pane mounts as soon as the tab exists.
+        verdicts.push(paneVerdict(runtime, `${request.tabId}:${request.leafId}`))
+        return published
+      })
+      runtime.openAgentSessionRecordStore.mockRejectedValueOnce(new Error('EACCES'))
+
+      await expect(replayLaunch(runtime, { paneKey: PANE_KEY }, CLI)).rejects.toThrow('EACCES')
+
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      await expect(verdicts[0]).resolves.toEqual({ kind: 'withdrawn' })
+    })
+
     it('ends every shown pane nothing spawned into in a verdict, never a blank pane', async () => {
       // A tab the window already had (created: false) whose launch failed before its spawn.
       const runtime = hostWithWindow({ reply: { created: false } })

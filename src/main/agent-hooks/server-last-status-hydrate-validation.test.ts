@@ -162,21 +162,18 @@ describe('Last-status persistence', () => {
       JSON.stringify({
         version: 2,
         entries: {
-          // Missing colon — drop.
           'no-colon': {
             paneKey: 'no-colon',
             receivedAt: 1_700_000_000_000,
             stateStartedAt: 1_699_999_999_000,
             payload: { state: 'done', prompt: 'bad', agentType: 'claude' }
           },
-          // Embedded paneKey mismatch — drop.
           [PANE]: {
             paneKey: makePaneKey('tab-x', LEAF_2),
             receivedAt: 1_700_000_000_000,
             stateStartedAt: 1_699_999_999_000,
             payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
           },
-          // Valid.
           [GOOD_PANE]: {
             paneKey: GOOD_PANE,
             tabId: 'tab-good',
@@ -216,7 +213,6 @@ describe('Last-status persistence', () => {
       JSON.stringify({
         version: 2,
         entries: {
-          // Stale — should be dropped.
           [OLD_PANE]: {
             paneKey: OLD_PANE,
             tabId: 'tab-old',
@@ -224,7 +220,6 @@ describe('Last-status persistence', () => {
             stateStartedAt: eightDaysAgoMs - 1000,
             payload: { state: 'done', prompt: 'old', agentType: 'claude' }
           },
-          // Recent — should survive.
           [FRESH_PANE]: {
             paneKey: FRESH_PANE,
             tabId: 'tab-fresh',
@@ -364,7 +359,6 @@ describe('Last-status persistence', () => {
         entries: {
           [TAB_A_PANE]: {
             paneKey: TAB_A_PANE,
-            // Why: paneKey says tab-A but entry claims tab-B; sanitizer must drop the inconsistent row, not hydrate it.
             tabId: 'tab-B',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -424,10 +418,8 @@ describe('Last-status persistence', () => {
       server.flushStatusPersistSync()
       const firstMtime = statSync(lastStatusPath()).mtimeMs
 
-      // Why: clearPaneState on a paneKey not in the cache must not trigger a redundant write (clear bails when nothing was evicted).
       server.clearPaneState(makePaneKey('non-existent', LEAF_5))
       server.flushStatusPersistSync()
-      // Assert no rewrite happened: mtime unchanged after a forced sync flush.
       const secondMtime = statSync(lastStatusPath()).mtimeMs
       expect(secondMtime).toBe(firstMtime)
     } finally {
@@ -446,11 +438,10 @@ describe('Last-status persistence', () => {
         server,
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'flush me' })
       )
-      // Note: do NOT call flushStatusPersistSync explicitly — let stop() do it.
+      // Let stop flush the pending debounce instead of flushing explicitly.
     } finally {
       server.stop()
     }
-    // Why: stop() must synchronously drain the pending trailing-debounced timer even though we never explicitly flushed.
     expect(existsSync(lastStatusPath())).toBe(true)
     const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')

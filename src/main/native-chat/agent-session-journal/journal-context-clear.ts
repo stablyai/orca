@@ -2,7 +2,7 @@ import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-
 import type { JournalReducerState } from './journal-reducer'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
-import type { JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import type { JournalTombstoneRow } from './journal-row-schema'
 import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 
@@ -12,19 +12,21 @@ export function appendJournalContextClear(input: {
   cards: JournalQueuedMessages
   boundary: AgentSessionProviderContextBoundary
   receipt: JournalOperationReceipt
-  settledByOp: string
 }) {
   const { boundary, state } = input
-  let commandIds: string[] = []
+  let commands: JournalQueuePlan | undefined
   return input.writer
     .enqueueRows(
       () => {
         const cards = input.cards.list()
-        commandIds = cards
-          .filter(
-            (card) => card.body.command && (card.state === 'waiting' || card.state === 'returned')
-          )
-          .map((card) => card.messageId)
+        // Commands belong to the ended context and must move with its divider.
+        commands = input.cards.plan(
+          cards
+            .filter(
+              (card) => card.body.command && (card.state === 'waiting' || card.state === 'returned')
+            )
+            .map((card) => ({ messageId: card.messageId, change: { op: 'withdrawn' as const } }))
+        )
         const messageIds = cards
           .filter((card) => card.state === 'waiting' && !card.body.command)
           .map((card) => card.messageId)
@@ -47,18 +49,19 @@ export function appendJournalContextClear(input: {
               ts,
               fence: boundary.afterFence,
               clear: { operationId: boundary.operationId, messageIds }
-            })
+            }),
+          ...commands.rows
         ]
       },
       {
         write: (db) => {
-          input.cards.withdrawInTransaction(db, {
-            messageIds: commandIds,
-            settledByOp: input.settledByOp
-          })
+          commands?.receipt.write(db)
           input.receipt.write(db)
         },
-        committed: input.receipt.committed
+        committed: () => {
+          commands?.receipt.committed()
+          input.receipt.committed()
+        }
       }
     )
     .then((rows) => ({

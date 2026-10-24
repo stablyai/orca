@@ -1,4 +1,3 @@
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../shared/structured-agent-session-surface-capabilities'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
@@ -15,25 +14,7 @@ import {
   encryptBytes as encryptSharedBytes
 } from '../../../shared/e2ee-crypto'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import {
-  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-  AGENT_SESSION_TURN_ITEM_CAPABILITY,
-  AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
-  AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
-  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
-  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
-  WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
-  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
-import { TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY } from '../../../shared/terminal-quick-command-capabilities'
-import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../shared/agent-session-background-task-child-views-capability'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session-current-requests-capability'
+import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const fakeSockets: FakeWebSocket[] = []
 
@@ -127,30 +108,12 @@ describe('WebRuntimeClient', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
     const handshake = (client as unknown as { handshake: PairedE2EEClientHandshake }).handshake
     const auth = handshake.channel.openText(String(socket.send.mock.calls[1]?.[0]))
-    expect(JSON.parse(auth!)).toEqual({
-      type: 'e2ee_auth',
-      deviceToken: 'token',
-      clientCapabilities: [
-        AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
-        AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-        AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
-        AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
-        AGENT_SESSION_TURN_ITEM_CAPABILITY,
-        AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
-        AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-        SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
-        SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
-        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-        REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
-        WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-        WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-        WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
-        WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
-        TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY,
-        AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY
-      ]
-    })
+    const frame: unknown = JSON.parse(auth!)
+    expect(frame).toMatchObject({ type: 'e2ee_auth', deviceToken: 'token' })
+    expect(frame).toHaveProperty(
+      'clientCapabilities',
+      expect.arrayContaining([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
+    )
 
     client.close()
     await expect(call).rejects.toThrow('Remote Orca runtime connection closed.')

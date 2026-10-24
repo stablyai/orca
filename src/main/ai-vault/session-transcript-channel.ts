@@ -8,13 +8,7 @@ import {
   type TranscriptReadStart
 } from './session-transcript-consumers'
 
-/**
- * The sink a parser pushes into, and the fan-out to every registered consumer.
- *
- * One channel belongs to one file for as long as its resumable parse state
- * lives, because the cached state (and every clone of it) holds this reference.
- * A read re-points the channel at that read's consumers instead of replacing it.
- */
+/** Cached folds and clones share one channel; each read replaces only its consumers. */
 export class TranscriptMessageChannel implements TranscriptMessageSink {
   private readers: TranscriptReadConsumer[] = []
   private start: TranscriptReadStart | null = null
@@ -22,7 +16,6 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
 
   private muted = false
 
-  /** True while a read is open with at least one consumer attached. */
   get active(): boolean {
     return this.readers.length > 0
   }
@@ -32,7 +25,6 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     this.emitted = false
     this.muted = false
     this.readers = []
-    // Keeps a scan with no consumers allocation-free on its hottest path.
     if (!hasTranscriptConsumers()) {
       return
     }
@@ -43,7 +35,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
           this.readers.push(reader)
         }
       } catch {
-        // A consumer that cannot open this read simply does not see it.
+        // Isolate consumer failures from transcript parsing.
       }
     }
   }
@@ -53,9 +45,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
       return
     }
     this.emitted = true
-    // A throwing consumer is dropped for the rest of the read rather than
-    // failing the parse; it then gets no `finish`, so it never records a cursor
-    // for a stream it did not see in full.
+    // Drop failed consumers without finish(), preventing a cursor commit for a partial stream.
     let index = 0
     while (index < this.readers.length) {
       try {
@@ -76,11 +66,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     this.beginRead(start)
   }
 
-  /**
-   * Suppresses emission for a display-only re-read: the trailing unterminated
-   * line is shown in the list but is re-read once complete, so emitting it here
-   * would hand every consumer the same line twice. `fn` must be synchronous.
-   */
+  /** Synchronously mute display-only partial lines so consumers receive them only once complete. */
   mute<T>(fn: () => T): T {
     const previous = this.muted
     this.muted = true

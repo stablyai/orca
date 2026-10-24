@@ -254,8 +254,7 @@ describe('registerGitHubStackedPullRequest', () => {
   })
 
   it('does not claim registration when the stack no longer holds the parent', async () => {
-    // A concurrent stack edit can drop the parent while the child sits at index 0.
-    // Reading index 0 off a findIndex miss would report that pair as registered.
+    // A missing parent gives -1; reading its successor would falsely identify the first entry as its child.
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [42])]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify([stack(50, [42])]) })

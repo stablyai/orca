@@ -1,7 +1,3 @@
-// What the journal answers about its Stops beyond the queue's pause: the latest Stop event, which
-// the turn-end rule reads (`journal-stop-turn-end.ts`), whether a person's still decides, and what
-// a person's Stop that named no turn binds while and after it settles.
-
 import type { JournalReducerState } from './journal-reducer'
 import {
   beginJournalStopSettle,
@@ -12,14 +8,13 @@ import {
 import type { JournalStopFailedOn, JournalStopSettle } from './queued-message-pause'
 
 export class JournalStopMarks {
-  // Bumped on each settle edge: readers cached per commit see an edge that wrote no row.
+  // Settle edges write no row; invalidate readers cached per commit.
   private settleRevision = 0
   private onSettleEdge: (() => void) | null = null
 
   constructor(private readonly deps: { state: () => JournalReducerState }) {}
 
-  /** Told of each settle edge, which writes no row, so it is no commit: it moves only what reads
-   *  the settle. One listener: a later call replaces it. It must not throw. */
+  /** One nonthrowing listener, replaced on each call; settle edges do not trigger commits. */
   observeSettleEdges(listener: () => void): void {
     this.onSettleEdge = listener
   }
@@ -28,32 +23,28 @@ export class JournalStopMarks {
     return this.deps.state().queuePauseMarks.latestStop
   }
 
-  /** Changes whenever a settle opens or closes. */
   revision(): number {
     return this.settleRevision
   }
 
-  /** `latestAcceptedSendUnopened`: the latest accepted send's turn row may still be on its way. */
   latestAcceptedSendUnopened(): boolean {
     return latestAcceptedSendUnopened(this.deps.state())
   }
 
-  /** `personStopDecidesTurn`: a person's Stop decides how turn `turnId` ends. */
   personStopDecides(turnId: string | null, endedAt?: number): boolean {
     return personStopDecidesTurn(this.deps.state(), turnId, endedAt)
   }
 
-  /** `beginJournalStopSettle`: a turn that ends from here until `settled` is the Stop's. */
-  beginSettle(): JournalStopSettle | null {
-    const settle = beginJournalStopSettle(this.deps.state())
+  /** Until settled, session-ending Stops own every turn ending during settlement. */
+  beginSettle(endsSession = false): JournalStopSettle | null {
+    const settle = beginJournalStopSettle(this.deps.state(), endsSession)
     if (settle) {
       this.edge()
     }
     return settle
   }
 
-  /** Closes a settle `beginSettle` opened, binding `turnId` when the Stop stopped one, or marking
-   *  `failedOn` (display only) when it failed to stop that turn. */
+  /** Bind the stopped turn, or retain failedOn solely for display. */
   settled(settle: JournalStopSettle | null, turnId?: string, failedOn?: JournalStopFailedOn): void {
     if (!settle) {
       return

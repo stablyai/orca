@@ -1,6 +1,7 @@
 # Useful Commands
 
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
+- Local typechecks use incremental tsrs on Apple Silicon macOS and x64/arm64 Linux; other platforms use Bun. Keep `.cache/typecheck/` between checks; delete it to force a fresh local check. `pnpm typecheck:ci` explicitly uses Bun; `pnpm tc --compiler=native` uses TypeScript.
 - **Test**: `pnpm test [path/to/file.test.ts]`
 - **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
 - **Design system**: `pnpm run lint:design-system` for the full renderer report (not a gate); the changed-lines gate above is what CI enforces

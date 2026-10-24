@@ -4,7 +4,7 @@ import { AndroidEmulatorBackend } from './android-emulator-backend'
 import type { AndroidCommandResult, AndroidCommandRunner } from '../android/android-command-runner'
 import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 
-// The AVD boot spawns the emulator detached (not via the command runner).
+// AVD boot spawns directly, bypassing the injected command runner.
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
@@ -22,8 +22,6 @@ const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code
 const RUNNING_ADB =
   'List of devices attached\nemulator-5554\tdevice product:sdk_gphone64 model:Pixel_7 device:emu64a'
 
-// Default runner answering the standard discovery/query calls for a single
-// booted Pixel_7 emulator plus a shutdown Pixel_Tablet AVD.
 function defaultRunner(): ReturnType<typeof vi.fn> {
   return vi.fn(async (binary: string, args: readonly string[]) => {
     const a = args.join(' ')
@@ -276,8 +274,7 @@ describe('AndroidEmulatorBackend', () => {
   })
 
   it('preserves all unowned forwards when stopping without a live session', async () => {
-    // One adb server holds every device's forwards; `--list` and `--remove-all`
-    // ignore `-s`, and `--remove` matches the local name alone.
+    // adb forward listing/removal is server-wide, so unowned forwards must survive.
     const forwards = [
       'emulator-5554 tcp:41234 localabstract:scrcpy_1a2b3c4d',
       'emulator-5554 tcp:8081 tcp:8081',

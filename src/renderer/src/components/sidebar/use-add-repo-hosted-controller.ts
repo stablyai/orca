@@ -1,3 +1,4 @@
+import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
@@ -10,6 +11,7 @@ export type AddRepoDialogHostedController = {
   /** Called after a Git project is added; the host selects the new project
    *  instead of running the default-checkout navigation handoff. */
   onProjectAdded: (repoId: string) => void | Promise<void>
+  onProjectGroupImported?: (groupId: string) => boolean | Promise<boolean>
   /** Radix close-autofocus hook for the nested dialog. Lets the host redirect
    *  focus (e.g. to the composer's name field) instead of Radix restoring it
    *  to the already-unmounted combobox row that opened the dialog. */
@@ -23,27 +25,34 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
    *  composer selection. Hosted mode must close the composer too — leaving it
    *  open would hide the navigation behind a stale project selection. */
   closeForFolderHandoff: () => void
-  finishProjectAdd: ((repoId: string) => Promise<void>) | undefined
+  finishProjectAdd: CompleteGitRepoAdd | undefined
 } {
   const storeCloseModal = useAppStore((s) => s.closeModal)
   const hostedOnOpenChange = hosted?.onOpenChange
   const hostedOnProjectAdded = hosted?.onProjectAdded
+  const hostedOnProjectGroupImported = hosted?.onProjectGroupImported
   // Why: hosted mode (nested inside the workspace composer) must close only
   // this dialog, never the composer modal that lives in the activeModal slot.
   const closeModal = useMemo(
     () => (hostedOnOpenChange ? () => hostedOnOpenChange(false) : storeCloseModal),
     [hostedOnOpenChange, storeCloseModal]
   )
-  const finishProjectAdd = useMemo(
+  const finishProjectAdd = useMemo<CompleteGitRepoAdd | undefined>(
     () =>
       hostedOnOpenChange && hostedOnProjectAdded
-        ? async (repoId: string): Promise<void> => {
+        ? async (repoId, _source, _executionHostId, outcome): Promise<void> => {
             await markOnboardingProjectAdded('addedRepo')
             hostedOnOpenChange(false)
+            if (
+              outcome?.importedProjectGroupId &&
+              (await hostedOnProjectGroupImported?.(outcome.importedProjectGroupId))
+            ) {
+              return
+            }
             await hostedOnProjectAdded(repoId)
           }
         : undefined,
-    [hostedOnOpenChange, hostedOnProjectAdded]
+    [hostedOnOpenChange, hostedOnProjectAdded, hostedOnProjectGroupImported]
   )
   const closeForFolderHandoff = useMemo(
     () =>

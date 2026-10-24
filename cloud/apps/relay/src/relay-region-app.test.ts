@@ -11,6 +11,7 @@ vi.mock('./relay-token-verifier.js', () => ({
 }))
 
 import { createRelayApp } from './app.js'
+import { ReservePaceError } from './reserve-assignment.js'
 
 describe('Relay region API', () => {
   it('passes a valid preference to placement and records coarse outcomes', async () => {
@@ -152,7 +153,8 @@ describe('Relay region API', () => {
     }
     const assign = vi.fn(async () => assignment)
     const regionReserve = vi.fn(async () => null)
-    const plan = vi.fn(async () => ({ kind: 'database', regionReserve }))
+    const reserveSpill = vi.fn(async () => null)
+    const plan = vi.fn(async () => ({ kind: 'database', regionReserve, reserveSpill }))
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: {
@@ -175,17 +177,17 @@ describe('Relay region API', () => {
     expect(response.status).toBe(200)
     expect(plan).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
-      { reconnect: true, region: 'asia-east2', regionCorrection: true }
+      { reconnect: true, region: 'asia-east2', regionCorrection: true, preferred: true }
     )
     expect(assign).toHaveBeenCalledWith(
       { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
       'asia-east2',
       'asia-east2',
       undefined,
-      { regionReserve, hostRequested: true }
+      { regionReserve, reserveSpill, hostRequested: true }
     )
     plan.mockClear()
-    await app.request(
+    const report = await app.request(
       '/v1/assign',
       assignmentRequest('abcdefghijklmnop', {
         regionCorrection: {
@@ -199,7 +201,39 @@ describe('Relay region API', () => {
         }
       })
     )
+    expect(report.status).toBe(200)
     expect(plan).not.toHaveBeenCalled()
+  })
+
+  it('names a drained host’s pace as the drain’s on the reserve lane and in the database lane', async () => {
+    const causes: string[] = []
+    const drainedPace = new ReservePaceError(3, true)
+    const plan = vi.fn(async () => {
+      throw drainedPace
+    })
+    const assign = vi.fn(async () => {
+      throw new ReservePaceError(2, true)
+    })
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign } as never,
+      reservePlacement: { plan } as never,
+      drain: vi.fn(),
+      ready: async () => true,
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
+    })
+    const fromPlan = await app.request('/v1/assign', assignmentRequest('abcdefghijklmnop', {}))
+    expect(fromPlan.status).toBe(503)
+    expect(fromPlan.headers.get('Retry-After')).toBe('3')
+    plan.mockResolvedValue({ kind: 'database' } as never)
+    const fromAssign = await app.request('/v1/assign', assignmentRequest('abcdefghijklmnop', {}))
+    expect(fromAssign.status).toBe(503)
+    expect(fromAssign.headers.get('Retry-After')).toBe('2')
+    expect(causes).toEqual(['reserve-paced-drained', 'reserve-paced-drained'])
+    // Any other host's pace keeps today's cause.
+    plan.mockRejectedValue(new ReservePaceError(1))
+    await app.request('/v1/assign', assignmentRequest('abcdefghijklmnop', {}))
+    expect(causes.at(-1)).toBe('reserve-paced')
   })
 
   it('returns successful placement when optional window storage is unavailable', async () => {

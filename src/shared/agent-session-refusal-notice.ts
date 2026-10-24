@@ -267,6 +267,13 @@ export function agentSessionUnconfirmedSendParts(
   return [...cause, 'sendOutcomeLost']
 }
 
+/** A message over the host's size bound, caught before it is sent: what to do instead of resending. */
+export const AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS = [
+  'notDoneSend',
+  'messageTooLarge',
+  'shortenMessage'
+] as const satisfies readonly AgentSessionWriteNoticePart[]
+
 export function agentSessionWriteNoticeEnglish(
   parts: readonly AgentSessionWriteNoticePart[]
 ): string {

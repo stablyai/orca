@@ -22,9 +22,7 @@ export type ClaudeBackgroundTaskRow = {
   lastSerialized: string | null
   /** Immutable alias for persistence/coalescing; the final frame may enrich the block's parent. */
   toolUseId?: string
-  /** Whether the provider's terminal notification finalized this run. */
   terminalNotificationReceived: boolean
-  /** Which RUN of this task id the row records. 1 for the first. */
   generation: number
 }
 
@@ -120,12 +118,7 @@ export function newClaudeBackgroundTaskRow(
   }
 }
 
-/** The row a terminal notification opens on its own.
- *
- *  A terminal frame is self-sufficient: it states an outcome the transcript owes
- *  the user whether or not an announcement ever admitted the task, so the row is
- *  built from the frame's own fields — its summary as the sentence, its status as
- *  the state, its error, output path and usage. */
+/** A terminal notification can supply an outcome without a prior announcement. */
 export function newClaudeBackgroundTaskRowFromNotification(
   id: string,
   message: Record<string, unknown>,
@@ -164,23 +157,12 @@ export function shouldRestartClaudeBackgroundTaskRow(
     return false
   }
   const toolUseId = claudeBackgroundTaskToolUseId(message)
-  // One rule for a restart, the same one the terminal ledger applies to a row
-  // that has already been evicted: only when BOTH runs name their parent is a
-  // different alias the provider's restart signal. A finished run that named no
-  // parent cannot be proved distinct from this announcement, so it stands.
+  // Only distinct, known parent aliases prove a restart; a parentless run remains ambiguous.
   const parentToolUseId = row.block.parentToolUseId
   return parentToolUseId !== undefined && toolUseId !== undefined && toolUseId !== parentToolUseId
 }
 
-/** Task types the transcript materializes as a row.
- *
- *  Type is the whole gate. A MONITOR is never admitted: it is Claude's own
- *  ambient housekeeping, runs for the life of the session, and has no outcome a
- *  transcript row could report. A type this build does not recognise is not
- *  evidence of anything a row could truthfully say either. Agents are
- *  materialized too, by the subagent roster, which claims them upstream of this
- *  owner — so the set left here is the backgrounded shell command and the
- *  workflow. */
+// Subagents use their own roster; monitors are ambient and unknown kinds lack a transcript contract.
 const MATERIALIZED_TASK_KINDS: ReadonlySet<NativeChatBackgroundTaskBlock['kind']> = new Set([
   'command',
   'workflow'
@@ -190,8 +172,7 @@ export function isClaudeBackgroundTranscriptTask(
   message: Record<string, unknown>,
   kind: NativeChatBackgroundTaskBlock['kind']
 ): boolean {
-  // A task the provider explicitly calls foreground is the turn's own work and
-  // already has the tool row that invoked it.
+  // Foreground work already has its invoking tool row.
   return MATERIALIZED_TASK_KINDS.has(kind) && message.is_backgrounded !== false
 }
 

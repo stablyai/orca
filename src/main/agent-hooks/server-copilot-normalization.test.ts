@@ -133,7 +133,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
-    // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
+    // A retained tool name would hide the failure text in compact status cards.
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'command not found'

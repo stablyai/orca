@@ -92,8 +92,6 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
-  // ── Session naming ──
-
   it('uses browserPageId as session name', async () => {
     succeedWith({ snapshot: '...' })
     await bridge.snapshot()
@@ -103,13 +101,10 @@ describe('AgentBrowserBridge', () => {
     expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-1')
   })
 
-  // ── Embedded CDP ownership ──
-
   it('passes --cdp on every helper command family so a restarted daemon cannot launch Chrome', async () => {
     succeedWith({ snapshot: '...' })
     await bridge.snapshot()
 
-    // Why: calls[0] is stale-session 'close'; find the snapshot call
     const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
@@ -134,8 +129,6 @@ describe('AgentBrowserBridge', () => {
     }
   })
 
-  // ── --json always appended ──
-
   it('always appends --json to commands', async () => {
     succeedWith({ snapshot: '...' })
     await bridge.snapshot()
@@ -145,8 +138,6 @@ describe('AgentBrowserBridge', () => {
     )
     expect((snapshotCall![1] as string[]).at(-1)).toBe('--json')
   })
-
-  // ── Output translation ──
 
   it('translates success response to result', async () => {
     succeedWith({ snapshot: 'tree output' })
@@ -188,9 +179,6 @@ describe('AgentBrowserBridge', () => {
     await vi.waitFor(() => {
       expect(releaseSnapshot).not.toBeNull()
     })
-    // Why: this reproduces the teardown race where the tab close path has
-    // already removed the bridge session before agent-browser reports that
-    // its CDP proxy disappeared.
     ;(bridge as unknown as { sessions: Map<string, unknown> }).sessions.delete('orca-tab-tab-1')
     releaseSnapshot!()
 
@@ -210,21 +198,16 @@ describe('AgentBrowserBridge', () => {
     })
   })
 
-  // ── exec passthrough ──
-
   it('strips --cdp and --session from exec commands', async () => {
     succeedWith({ output: 'ok' })
     await bridge.exec(
       'dblclick @e3 --cdp ws://evil --session hijack --cdp=ws://evil-equals --session=hijack-equals'
     )
 
-    // Why: find the actual exec call (contains 'dblclick'), not the stale-session close
     const execCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('dblclick')
     )
     const args = execCall![1] as string[]
-    // The bridge's own --session and --cdp (for session init) are expected.
-    // Verify the user-injected ones were stripped, including --flag=value forms.
     expect(args.join(' ')).not.toContain('ws://evil')
     expect(args.join(' ')).not.toContain('ws://evil-equals')
     expect(args.join(' ')).not.toContain('hijack')
@@ -232,8 +215,6 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('dblclick')
     expect(args).toContain('@e3')
   })
-
-  // ── Command queue serialization ──
 
   it('serializes concurrent commands per session', async () => {
     const commandCalls: string[][] = []
@@ -248,13 +229,10 @@ describe('AgentBrowserBridge', () => {
     const [r1, r2] = await Promise.all([bridge.snapshot(), bridge.click('@e1')])
     expect(r1).toEqual({ browserPageId: 'tab-1', ok: true })
     expect(r2).toEqual({ ok: true })
-    // Why: close runs first (stale session cleanup), then commands execute sequentially
     const snapshotIdx = commandCalls.findIndex((a) => a.includes('snapshot'))
     const clickIdx = commandCalls.findIndex((a) => a.includes('click'))
     expect(snapshotIdx).toBeLessThan(clickIdx)
   })
-
-  // ── Cookie command arg building ──
 
   it('builds cookie set args with all options', async () => {
     succeedWith({ success: true })
@@ -285,8 +263,6 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('--expires')
     expect(args).toContain('1700000000')
   })
-
-  // ── Viewport command arg building ──
 
   it('applies viewport emulation through CDP so mobile mode is preserved', async () => {
     const wc = mockWebContents(100)
@@ -331,7 +307,6 @@ describe('AgentBrowserBridge', () => {
     expect(args).toContain('wait')
     expect(args).toContain('#ready')
     expect(options.timeout).toBe(2200)
-    // Why not toBe(process.env): the bridge hands the daemon an idle-lifetime bound (#16367).
     const env = options.env as NodeJS.ProcessEnv
     expect(env.PATH).toBe(process.env.PATH)
     expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))
@@ -360,8 +335,6 @@ describe('AgentBrowserBridge', () => {
     expect(CdpWsProxyMock.instances).toHaveLength(1)
   })
 
-  // ── Stderr passthrough on non-timeout errors ──
-
   it('passes stderr through as error message on execFile failure', async () => {
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
@@ -387,8 +360,6 @@ describe('AgentBrowserBridge', () => {
     )
     await expect(bridge.snapshot()).rejects.toThrow('Command failed')
   })
-
-  // ── Malformed JSON returns BrowserError ──
 
   it('returns browser_error with truncated output for malformed JSON', async () => {
     execFileMock.mockImplementation(
