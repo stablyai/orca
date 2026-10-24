@@ -1,8 +1,9 @@
 /**
  * The plugin-chrome exemption is a list of exact catalog paths, so it can rot in
- * two directions: a renamed key leaves a dead entry behind, and a key that moves
- * into a component the security tests name would widen the exemption silently.
- * These assertions catch both.
+ * three directions: a renamed key leaves a dead entry behind, a key that moves
+ * into a component the security tests name would widen the exemption silently,
+ * and a path that drops out of the list takes every list-driven case with it.
+ * These assertions catch all three.
  */
 import { describe, expect, it } from 'vitest'
 import { translatablePluginChromePaths } from '../../../shared/plugins/plugin-translatable-chrome'
@@ -52,5 +53,25 @@ describe('translatable plugin chrome', () => {
   // whole family rather than a per-message judgement.
   it('exempts no failure copy', () => {
     expect(translatablePluginChromePaths().filter((path) => path.endsWith('Failed'))).toEqual([])
+  })
+
+  // Why: every other case is driven off the list, so a shrinking list shrinks
+  // its own tests and still passes. A count per component is the one check the
+  // list cannot satisfy that way, and it does not keep a second copy of it.
+  it('exempts a fixed number of paths in each component', () => {
+    const counts: Record<string, number> = {}
+    for (const path of translatablePluginChromePaths()) {
+      const component = path.slice('auto.components.settings.'.length).split('.')[0]
+      counts[component] = (counts[component] ?? 0) + 1
+    }
+
+    expect(counts).toEqual({
+      PluginsSettingsSection: 9,
+      PluginMarketplaceBrowser: 14,
+      PluginDevelopmentSection: 6,
+      plugins: 6,
+      PluginInstallDialog: 13,
+      PluginSettingsRow: 9
+    })
   })
 })
