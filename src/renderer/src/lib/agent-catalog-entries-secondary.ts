@@ -158,6 +158,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
     },
     {
+      id: 'omh',
+      label: translate('auto.lib.agent.catalog.68f9e22b67', 'OMH'),
+      cmd: 'omh',
+      // Why: no faviconDomain — omh renders the hand-authored OmhIcon glyph.
+      homepageUrl: 'https://rlaope.github.io/oh-my-hermes/'
+    },
+    {
       id: 'devin',
       label: translate('auto.lib.agent.catalog.fc80296033', 'Devin'),
       cmd: 'devin',

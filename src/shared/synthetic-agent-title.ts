@@ -18,6 +18,7 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'omp',
   'droid',
   'hermes',
+  'omh',
   'devin',
   'zcode'
 ] as const satisfies readonly TuiAgent[]
@@ -70,7 +71,15 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   hermes: {
     workingLabel: 'Hermes',
     permissionLabel: 'Hermes - action required',
-    idleLabel: 'Hermes ready'
+    idleLabel: 'Hermes ready',
+    titleIdentityGroup: 'hermes-compatible'
+  },
+  omh: {
+    workingLabel: 'OMH',
+    permissionLabel: 'OMH - action required',
+    idleLabel: 'OMH ready',
+    // Why: OMH runs Hermes underneath, so Hermes hooks and `Hermes · <state>` titles reach its pane.
+    titleIdentityGroup: 'hermes-compatible'
   },
   devin: {
     workingLabel: 'Devin',

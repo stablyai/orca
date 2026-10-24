@@ -8,6 +8,7 @@ import {
   AiderIcon,
   CopilotIcon,
   KiloIcon,
+  OmhIcon,
   OmpIcon,
   OpenCodeIcon,
   PiIcon
@@ -67,6 +68,9 @@ export function AgentIcon({
   }
   if (agent === 'omp') {
     return <OmpIcon size={size} />
+  }
+  if (agent === 'omh') {
+    return <OmhIcon size={size} />
   }
   if (agent === 'aider') {
     return <AiderIcon size={size} />

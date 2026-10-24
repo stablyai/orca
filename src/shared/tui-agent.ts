@@ -35,6 +35,7 @@ export type TuiAgent =
   | 'qwen-code' // Qwen Code
   | 'rovo' // Rovo Dev
   | 'hermes' // Hermes Agent
+  | 'omh' // OMH (oh-my-hermes)
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI

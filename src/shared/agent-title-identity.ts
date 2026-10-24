@@ -15,6 +15,7 @@ import {
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
+import { getOmhSyntheticAgentLabel } from './omh-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /**
@@ -93,6 +94,10 @@ function computeAgentLabel(title: string): string | null {
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
   if (piCompatibleSyntheticAgentLabel) {
     return piCompatibleSyntheticAgentLabel
+  }
+  const omhSyntheticAgentLabel = getOmhSyntheticAgentLabel(title)
+  if (omhSyntheticAgentLabel) {
+    return omhSyntheticAgentLabel
   }
   if (isPiAgentTitle(title)) {
     return 'Pi'

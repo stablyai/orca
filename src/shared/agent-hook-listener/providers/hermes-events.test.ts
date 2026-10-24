@@ -40,6 +40,13 @@ describe('normalizeHermesEvent', () => {
     })
   })
 
+  it('reports OMH only when the plugin marks the Hermes session as an OMH launch', () => {
+    expect(normalize('pre_llm_call', { orca_agent: 'omh' })).toMatchObject({ agentType: 'omh' })
+    expect(normalize('pre_llm_call', { orca_agent: 'other' })).toMatchObject({
+      agentType: 'hermes'
+    })
+  })
+
   it('ignores events Orca does not subscribe to', () => {
     expect(normalize('subagent_stop')).toBeNull()
     expect(normalize('post_api_request')).toBeNull()

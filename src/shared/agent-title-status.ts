@@ -32,6 +32,7 @@ import {
   getPiCompatibleTitleSeparatorStatus,
   getPiCompatibleSyntheticAgentStatus
 } from './pi-compatible-synthetic-title'
+import { getOmhSyntheticAgentStatus } from './omh-synthetic-title'
 import { clearPiStateWorkingMarker, getPiStateTitleStatus } from './pi-state-title-marker'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
@@ -271,6 +272,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   const piCompatibleSyntheticAgentStatus = getPiCompatibleSyntheticAgentStatus(title)
   if (piCompatibleSyntheticAgentStatus) {
     return piCompatibleSyntheticAgentStatus
+  }
+  const omhSyntheticAgentStatus = getOmhSyntheticAgentStatus(title)
+  if (omhSyntheticAgentStatus) {
+    return omhSyntheticAgentStatus
   }
 
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {

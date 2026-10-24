@@ -152,6 +152,9 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
 
 def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {"hook_event_name": event_name, "cwd": os.getcwd()}
+    # Why: \`omh\` launches its TUI over Hermes with this set, so the pane reports as OMH.
+    if os.environ.get("OMH_TUI_PYTHON"):
+        payload["orca_agent"] = "omh"
     for key in SELECTED_KEYS.get(event_name, ()):
         if key in kwargs:
             payload[key] = _jsonable(kwargs[key])

@@ -10,6 +10,7 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAnyLegacyAgentName
 } from '../../../../shared/agent-name-token-match'
+import { getOmhSyntheticAgentLabel } from '../../../../shared/omh-synthetic-title'
 
 const EXTRA_TITLE_AGENT_TOKEN_RE =
   /(?<![\w./\\-])(?:cursor-agent|pi)(?:\.(?:exe|cmd|bat|ps1))?(?![\w./\\-])/i
@@ -33,6 +34,7 @@ export function titleHasExplicitAgentIdentity(title: string): boolean {
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title) ||
+    getOmhSyntheticAgentLabel(title) !== null ||
     EXTRA_TITLE_AGENT_TOKEN_RE.test(title)
   )
 }
