@@ -113,7 +113,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               worktreeRanges={result.worktreeRanges}
             />
             <PaletteRowShortcutBadge
-              index={controller.recentTabShortcutIndexByItem.get(entry)}
+              index={controller.rowShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
             />
           </div>

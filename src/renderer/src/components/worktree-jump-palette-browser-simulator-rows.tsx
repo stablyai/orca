@@ -102,7 +102,7 @@ export function WorktreeJumpPaletteSimulatorRow({
               worktreeRanges={result.worktreeRanges}
             />
             <PaletteRowShortcutBadge
-              index={controller.recentTabShortcutIndexByItem.get(entry)}
+              index={controller.rowShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
             />
           </div>
@@ -193,7 +193,7 @@ export function WorktreeJumpPaletteBrowserRow({
               worktreeRanges={result.worktreeRanges}
             />
             <PaletteRowShortcutBadge
-              index={controller.recentTabShortcutIndexByItem.get(entry)}
+              index={controller.rowShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
             />
           </div>

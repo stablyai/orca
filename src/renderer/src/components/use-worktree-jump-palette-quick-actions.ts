@@ -5,7 +5,10 @@ import {
   buildCmdJQuickActionContext,
   getUnavailableQuickActionMessage
 } from '@/components/cmd-j/quick-action-context'
-import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
+import {
+  rankCmdJMiddleResults,
+  type CmdJRankedMiddleResult
+} from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
@@ -38,7 +41,7 @@ function getComposerPrefetchRepoId(
 }
 
 type WorktreeJumpPaletteQuickActionsInput = WorktreeJumpPaletteStoreState &
-  Pick<WorktreeJumpPaletteLocalState, 'activeGroupSnapshotRef' | 'deferredQuery'> &
+  Pick<WorktreeJumpPaletteLocalState, 'activeGroupSnapshotRef' | 'deferredQuery' | 'view'> &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteWorktrees, 'isLoading'> &
   Pick<WorktreeJumpPaletteOpenTabs, never>
@@ -64,6 +67,7 @@ export function useWorktreeJumpPaletteQuickActions({
   settings,
   runtimeStatusByEnvironmentId,
   deferredQuery,
+  view,
   settingsResults
 }: WorktreeJumpPaletteQuickActionsInput) {
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
@@ -175,11 +179,22 @@ export function useWorktreeJumpPaletteQuickActions({
     runtimeStatusByEnvironmentId
   ])
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(() => {
-    const results = rankCmdJMiddleResults({
-      query: deferredQuery,
-      settingsResults,
-      actionResults: availableActions.actionResults
-    })
+    // Why: ranking needs two characters, so the focused Actions view browses (and prefix-narrows)
+    // every action and pane until then instead of blanking on the first keystroke.
+    const browseQuery = deferredQuery.trim().toLowerCase()
+    const results: CmdJRankedMiddleResult[] =
+      view === 'actions' && browseQuery.length < 2
+        ? [
+            ...availableActions.actionResults,
+            ...settingsResults.filter((result) => !result.targetSectionId)
+          ]
+            .filter((result) => result.title.toLowerCase().startsWith(browseQuery))
+            .map((result) => ({ ...result, qualityClass: 'exact-intent' as const }))
+        : rankCmdJMiddleResults({
+            query: deferredQuery,
+            settingsResults,
+            actionResults: availableActions.actionResults
+          })
     const navigationAction = buildCmdJBrowserNavigationAction(deferredQuery)
     if (navigationAction?.isAvailable(availableActions.context).available) {
       results.unshift({ ...navigationAction, order: 0, qualityClass: 'exact-intent' })
@@ -189,7 +204,7 @@ export function useWorktreeJumpPaletteQuickActions({
         ? { id: result.id, type: 'settings' as const, result }
         : { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
     )
-  }, [availableActions, deferredQuery, settingsResults])
+  }, [availableActions, deferredQuery, settingsResults, view])
   return { prefetchCreateWorkspaceBaseForComposer, buildQuickActionContext, middleItems }
 }
 

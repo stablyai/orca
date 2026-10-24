@@ -14,12 +14,20 @@ import {
   PALETTE_SECTION_RENDER_CAP,
   TYPED_QUERY_LEADING_PREVIEW
 } from '@/components/cmd-j/palette-section-render-cap'
+import { cmdJPaletteViewShows, type CmdJPaletteViewSection } from '@/components/cmd-j/palette-view'
+import {
+  buildCmdJPaletteAlternateViewHint,
+  buildCmdJPaletteViewCounts,
+  cmdJPaletteMiddleItemSection,
+  pickCmdJPaletteAlternateView
+} from '@/components/cmd-j/palette-view-counts'
 import {
   DIGIT_INDEX_ACTION_ID,
   DIGIT_INDEX_ADDRESSABLE_ROWS,
   EMPTY_QUERY_RECENT_TAB_CAP,
   EMPTY_QUERY_ROW_BUDGET,
   EMPTY_QUERY_WORKTREE_CAP,
+  FOCUSED_VIEW_EMPTY_QUERY_CAP,
   type OpenTabPaletteItem,
   type PaletteItem,
   type WorktreePaletteItem
@@ -30,12 +38,14 @@ import type { WorktreeJumpPaletteProjectTargets } from './use-worktree-jump-pale
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-task-search'
 
 type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteRecentTabs &
   WorktreeJumpPaletteProjectTargets &
   Pick<WorktreeJumpPaletteQuickActions, 'middleItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
+  Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   Pick<
     WorktreeJumpPaletteLocalState,
     | 'createWorktreeName'
@@ -43,21 +53,79 @@ type WorktreeJumpPaletteSectionsInput = WorktreeJumpPaletteOpenTabs &
     | 'expandedSectionCaps'
     | 'setExpandedSectionCaps'
     | 'selectedItemId'
+    | 'view'
+    | 'setView'
   >
 
 export function useWorktreeJumpPaletteSections({
   hasQuery,
-  worktreeItems,
-  openTabItems,
-  recentTabItems,
-  projectTargetItems,
-  middleItems,
+  worktreeItems: allWorktreeItems,
+  openTabItems: allOpenTabItems,
+  recentTabItems: allRecentTabItems,
+  projectTargetItems: allProjectTargetItems,
+  middleItems: allMiddleItems,
   createWorktreeName,
-  showCreateAction,
+  showCreateAction: createActionAvailable,
   expandedSectionCaps,
   setExpandedSectionCaps,
-  selectedItemId
+  selectedItemId,
+  view,
+  setView,
+  taskItems
 }: WorktreeJumpPaletteSectionsInput) {
+  const viewCounts = useMemo(
+    () =>
+      hasQuery
+        ? buildCmdJPaletteViewCounts({
+            worktrees: allWorktreeItems.length,
+            projects: allProjectTargetItems.length,
+            openTabs: allOpenTabItems.length,
+            tasks: taskItems.length,
+            middleItems: allMiddleItems
+          })
+        : null,
+    [
+      allMiddleItems,
+      allOpenTabItems.length,
+      allProjectTargetItems.length,
+      allWorktreeItems.length,
+      hasQuery,
+      taskItems.length
+    ]
+  )
+  const alternateView = useMemo(
+    () => pickCmdJPaletteAlternateView(view, viewCounts),
+    [view, viewCounts]
+  )
+  // Why first in the list: Enter on it switches views, so a query matching only elsewhere is never a dead end.
+  const alternateViewHint = useMemo(
+    () =>
+      alternateView && viewCounts
+        ? buildCmdJPaletteAlternateViewHint(alternateView, viewCounts, setView)
+        : null,
+    [alternateView, setView, viewCounts]
+  )
+  const viewScope = useMemo(() => {
+    const shows = (section: CmdJPaletteViewSection): boolean => cmdJPaletteViewShows(view, section)
+    return {
+      worktreeItems: shows('worktrees') ? allWorktreeItems : [],
+      openTabItems: shows('open-tabs') ? allOpenTabItems : [],
+      recentTabItems: shows('open-tabs') ? allRecentTabItems : [],
+      projectTargetItems: shows('projects') ? allProjectTargetItems : [],
+      middleItems: allMiddleItems.filter((item) => shows(cmdJPaletteMiddleItemSection(item)))
+    }
+  }, [
+    allMiddleItems,
+    allOpenTabItems,
+    allProjectTargetItems,
+    allRecentTabItems,
+    allWorktreeItems,
+    view
+  ])
+  const { worktreeItems, openTabItems, recentTabItems, projectTargetItems, middleItems } = viewScope
+  const showCreateAction = createActionAvailable && cmdJPaletteViewShows(view, 'create-worktree')
+  // Why: a single-kind view has the whole list to itself, so it drops the mixed-list row budget.
+  const focusedView = view !== 'all'
   const openTabsLeadSections = useMemo(() => {
     if (!hasQuery) {
       return true
@@ -127,18 +195,22 @@ export function useWorktreeJumpPaletteSections({
     const retainWorktree = (item: { id: string }): boolean => item.id === retainedWorktreeId
     // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
     // click reveals the whole recent history the shared render cap allows.
-    const recentTabsCap = expandedSectionCaps['open-tabs']
-      ? openTabsCap
-      : EMPTY_QUERY_RECENT_TAB_CAP
+    const recentTabsCap = focusedView
+      ? FOCUSED_VIEW_EMPTY_QUERY_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
+      : expandedSectionCaps['open-tabs']
+        ? openTabsCap
+        : EMPTY_QUERY_RECENT_TAB_CAP
     const openTabs = hasQuery
       ? capPaletteSection(openTabItems, openTabsCap, retainOpenTab)
       : capPaletteSection(recentTabItems, recentTabsCap)
     const baseWorktreeCap = hasQuery
       ? Infinity
-      : Math.min(
-          openTabs.visible.length === 0 ? EMPTY_QUERY_ROW_BUDGET : EMPTY_QUERY_WORKTREE_CAP,
-          Math.max(1, EMPTY_QUERY_ROW_BUDGET - openTabs.visible.length)
-        )
+      : focusedView
+        ? FOCUSED_VIEW_EMPTY_QUERY_CAP
+        : Math.min(
+            openTabs.visible.length === 0 ? EMPTY_QUERY_ROW_BUDGET : EMPTY_QUERY_WORKTREE_CAP,
+            Math.max(1, EMPTY_QUERY_ROW_BUDGET - openTabs.visible.length)
+          )
     const worktreeCap = hasQuery
       ? typedWorktreeCap
       : baseWorktreeCap + (expandedSectionCaps.worktrees ?? 0)
@@ -153,7 +225,7 @@ export function useWorktreeJumpPaletteSections({
       PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.projects ?? 0)
     )
     const middle = capPaletteSection(
-      hasQuery ? middleItems : [],
+      hasQuery || focusedView ? middleItems : [],
       PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.middle ?? 0)
     )
     const multiPrimaryFirstScreen =
@@ -189,6 +261,7 @@ export function useWorktreeJumpPaletteSections({
     }
   }, [
     expandedSectionCaps,
+    focusedView,
     hasQuery,
     middleItems,
     openTabItems,
@@ -202,39 +275,34 @@ export function useWorktreeJumpPaletteSections({
     worktreeItems
   ])
 
-  // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query, and an
-  // expanded section leaves its unaddressable rows unbadged rather than advertising ⌘10.
-  const recentTabShortcutIndexByItem = useMemo(
-    () =>
-      new Map(
-        hasQuery
-          ? []
-          : paletteSections.visibleOpenTabItems
-              .slice(0, DIGIT_INDEX_ADDRESSABLE_ROWS)
-              .map((item, index) => [item, index])
-      ),
-    [hasQuery, paletteSections]
-  )
-  const recentTabShortcutIndexById = useMemo(
-    () =>
-      new Map(
-        hasQuery
-          ? []
-          : paletteSections.visibleOpenTabItems
-              .slice(0, DIGIT_INDEX_ADDRESSABLE_ROWS)
-              .map((item, index) => [item.id, index])
-      ),
-    [hasQuery, paletteSections]
+  // Why: badges number the snapshotted empty-query rows only — ⌘N is meaningless on a typed query, and
+  // an expanded section leaves its unaddressable rows unbadged rather than advertising ⌘10.
+  const digitShortcutItems = useMemo<readonly PaletteItem[]>(() => {
+    if (hasQuery) {
+      return []
+    }
+    const rows =
+      view === 'worktrees'
+        ? paletteSections.visibleWorktreeItems
+        : paletteSections.visibleOpenTabItems
+    return rows.slice(0, DIGIT_INDEX_ADDRESSABLE_ROWS)
+  }, [hasQuery, paletteSections, view])
+  const rowShortcutIndexByItem = useMemo(
+    () => new Map(digitShortcutItems.map((item, index) => [item, index])),
+    [digitShortcutItems]
   )
   const digitShortcutModifiers =
     useShortcutKeyComboDetails(DIGIT_INDEX_ACTION_ID)[0]?.keys.slice(0, -1) ?? []
 
   return {
+    viewCounts,
+    alternateView,
+    alternateViewHint,
     openTabsLeadSections,
     middleLeadsSections,
     paletteSections,
-    recentTabShortcutIndexByItem,
-    recentTabShortcutIndexById,
+    digitShortcutItems,
+    rowShortcutIndexByItem,
     digitShortcutModifiers,
     createWorktreeName,
     showCreateAction,

@@ -106,6 +106,7 @@ export function useWorktreeJumpPaletteController({
     ...recentTabs,
     ...projectTargets,
     ...quickActions,
+    ...taskSearch,
     ...taskUrl
   })
   const listEntries = useWorktreeJumpPaletteListEntries({

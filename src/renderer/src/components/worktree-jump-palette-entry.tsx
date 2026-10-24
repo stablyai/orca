@@ -57,7 +57,7 @@ export function WorktreeJumpPaletteEntry({
         <span className="truncate">{entry.label}</span>
         {entry.onSeeMore ? (
           <span className="h-6 shrink-0 rounded-md border border-input bg-background px-2 text-xs font-medium leading-6 text-foreground">
-            {translate('worktreeJumpPalette.seeMore', 'See more')}
+            {entry.actionLabel ?? translate('worktreeJumpPalette.seeMore', 'See more')}
           </span>
         ) : null}
       </CommandItem>

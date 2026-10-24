@@ -5,9 +5,17 @@ import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/compon
 import { TooltipProvider } from '@/components/ui/tooltip'
 import PaletteFilterMenu from '@/components/cmd-j/PaletteFilterMenu'
 import PaletteFilterChips from '@/components/cmd-j/PaletteFilterChips'
+import PaletteViewSwitcher from '@/components/cmd-j/PaletteViewSwitcher'
+import {
+  cmdJPaletteViewShows,
+  cycleCmdJPaletteView,
+  getCmdJPaletteViewLabel,
+  getCmdJPaletteViewPlaceholder
+} from '@/components/cmd-j/palette-view'
 import { PaletteLiveStatusProvider } from '@/components/cmd-j/palette-live-status'
 import { getPaletteFilterSelectionCount } from '@/components/cmd-j/palette-filter'
 import { translate } from '@/i18n/i18n'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { WorktreeJumpPaletteEntry } from './worktree-jump-palette-entry'
@@ -25,7 +33,8 @@ export function WorktreeJumpPaletteSurface({
   const selectedTask = controller.taskItems.find(
     (item) => item.id === controller.commandSelectedItemId
   )
-  const modKey = navigator.userAgent.includes('Mac') ? '⌘' : 'Ctrl'
+  const isMac = navigator.userAgent.includes('Mac')
+  const modKey = isMac ? '⌘' : 'Ctrl'
   const emptyState = getWorktreeJumpPaletteEmptyState(controller)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
   const paletteDialog = (
@@ -69,15 +78,43 @@ export function WorktreeJumpPaletteSurface({
     >
       <CommandInput
         ref={controller.inputRef}
-        placeholder={translate(
-          'auto.components.WorktreeJumpPalette.27f10cca63',
-          'Search chats, terminals, workspaces, tasks, settings, and actions...'
-        )}
+        placeholder={getCmdJPaletteViewPlaceholder(controller.view)}
         value={controller.query}
         onValueChange={controller.emojiInput.handleValueChange}
         onClick={(event) => controller.emojiInput.syncCursor(event.currentTarget)}
         onSelect={(event) => controller.emojiInput.syncCursor(event.currentTarget)}
-        onKeyDown={(event) => controller.emojiInput.handleKeyDown(event)}
+        onKeyDown={(event) => {
+          if (controller.emojiInput.handleKeyDown(event)) {
+            return
+          }
+          // Why: Tab now switches views, so the filter needs its own keyboard path.
+          if (
+            event.key.toLowerCase() === 'f' &&
+            (isMac ? event.metaKey : event.ctrlKey) &&
+            !event.shiftKey &&
+            !event.altKey
+          ) {
+            event.preventDefault()
+            controller.dialogElement
+              ?.querySelector<HTMLElement>('[data-palette-filter-trigger]')
+              ?.click()
+            return
+          }
+          if (
+            event.key === 'Tab' &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            !isImeCompositionKeyDown(event)
+          ) {
+            // Why stop: the dialog's focus scope wraps Shift+Tab off the first field even when prevented.
+            event.preventDefault()
+            event.stopPropagation()
+            controller.handleViewChange(
+              cycleCmdJPaletteView(controller.view, event.shiftKey ? -1 : 1)
+            )
+          }
+        }}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 min-w-0 flex-1"
@@ -106,6 +143,11 @@ export function WorktreeJumpPaletteSurface({
         side="bottom"
         contentClassName="w-80"
       />
+      <PaletteViewSwitcher
+        view={controller.view}
+        onViewChange={controller.handleViewChange}
+        counts={controller.viewCounts}
+      />
       <PaletteFilterChips
         model={controller.filterModel}
         filter={controller.filter}
@@ -131,7 +173,9 @@ export function WorktreeJumpPaletteSurface({
               'Gathering your recent worktrees and open tabs.'
             )}
           />
-        ) : controller.selectableItems.length === 0 && !controller.showCreateAction ? (
+        ) : controller.selectableItems.length === 0 &&
+          !controller.showCreateAction &&
+          !controller.alternateView ? (
           <CommandEmpty className="py-0">
             <PaletteState title={emptyState.title} subtitle={emptyState.subtitle} />
           </CommandEmpty>
@@ -147,11 +191,13 @@ export function WorktreeJumpPaletteSurface({
             ))}
           </>
         )}
-        <WorktreeJumpPaletteTaskSearchStatus
-          loading={controller.taskSearchLoading}
-          failures={controller.taskSearchFailures}
-          onRetry={controller.retryTaskSearch}
-        />
+        {cmdJPaletteViewShows(controller.view, 'tasks') ? (
+          <WorktreeJumpPaletteTaskSearchStatus
+            loading={controller.taskSearchLoading}
+            failures={controller.taskSearchFailures}
+            onRetry={controller.retryTaskSearch}
+          />
+        ) : null}
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
@@ -172,10 +218,13 @@ export function WorktreeJumpPaletteSurface({
           <FooterKey>↑↓</FooterKey>
           <span>{translate('auto.components.WorktreeJumpPalette.ac037cfac2', 'Move')}</span>
           <FooterKey>{translate('worktreeJumpPalette.filter.tabKey', 'Tab')}</FooterKey>
+          <span>{translate('worktreeJumpPalette.view.switchHint', 'Switch view')}</span>
+          <FooterKey>{isMac ? '⌘F' : 'Ctrl+F'}</FooterKey>
           <span>{translate('worktreeJumpPalette.filter.label', 'Filter')}</span>
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
+        {`${getCmdJPaletteViewLabel(controller.view)}. `}
         {controller.filterActive
           ? `${translate('worktreeJumpPalette.filter.ariaActive', 'Filter: {{value0}} active.', {
               value0: getPaletteFilterSelectionCount(controller.filter)

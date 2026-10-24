@@ -23,7 +23,7 @@ type WorktreeJumpPaletteCreateActionInput = WorktreeJumpPaletteStoreState &
 
 export function useWorktreeJumpPaletteCreateAction({
   digitShortcutItemsRef,
-  paletteSections,
+  digitShortcutItems,
   visible,
   hasQuery,
   query,
@@ -33,8 +33,8 @@ export function useWorktreeJumpPaletteCreateAction({
   ...createWorktreeInput
 }: WorktreeJumpPaletteCreateActionInput) {
   useLayoutEffect(() => {
-    digitShortcutItemsRef.current = paletteSections.visibleOpenTabItems
-  }, [digitShortcutItemsRef, paletteSections])
+    digitShortcutItemsRef.current = digitShortcutItems
+  }, [digitShortcutItemsRef, digitShortcutItems])
   useEffect(() => {
     if (!visible || hasQuery || query.length > 0) {
       return

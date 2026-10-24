@@ -69,8 +69,8 @@ function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput
     hasQuery: true,
     openTabsLeadSections: true,
     middleLeadsSections: true,
-    recentTabShortcutIndexByItem: new Map(),
-    recentTabShortcutIndexById: new Map(),
+    digitShortcutItems: [],
+    rowShortcutIndexByItem: new Map(),
     digitShortcutModifiers: [],
     paletteSections: {
       hasExactEntityDestination: false,
@@ -91,6 +91,10 @@ function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput
     taskSourceUrl: null,
     handleExpandSection: vi.fn(),
     taskItems: [],
+    view: 'all',
+    viewCounts: null,
+    alternateView: null,
+    alternateViewHint: null,
     ...overrides
   }
 }
@@ -138,6 +142,7 @@ describe('Cmd+J website selection', () => {
         repos: [makeRepo()],
         activeWorktreeId: 'wt-alpha',
         activeModal: 'worktree-palette',
+        modalData: { view: 'all' },
         closeModal: vi.fn(),
         openNewBrowserTabInActiveWorkspace: vi.fn().mockResolvedValue(undefined),
         prefetchWorktreeCreateBase: vi.fn().mockResolvedValue(undefined)

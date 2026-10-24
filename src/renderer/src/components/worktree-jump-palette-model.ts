@@ -68,6 +68,8 @@ export type HintRow = {
   id: string
   type: 'hint'
   label: string
+  /** Button text for onSeeMore; defaults to "See more". */
+  actionLabel?: string
   onSeeMore?: () => void
 }
 export type CreateWorktreePaletteItem = {
@@ -107,6 +109,8 @@ export const DIGIT_INDEX_ADDRESSABLE_ROWS = 9
 export const EMPTY_QUERY_RECENT_TAB_CAP = 6
 export const EMPTY_QUERY_ROW_BUDGET = 10
 export const EMPTY_QUERY_WORKTREE_CAP = 5
+// Why not the 50-row render cap: keeps first paint of the default view cheap; "more" reveals the rest.
+export const FOCUSED_VIEW_EMPTY_QUERY_CAP = 20
 export const EMPTY_RECENT_TAB_ORDER: readonly string[] = []
 export const EMPTY_SORTED_WORKTREES: Worktree[] = []
 export const CONTINUED_SECTION_HEADER_ID_SUFFIX = '__continued'

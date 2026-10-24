@@ -12,6 +12,7 @@ import {
 } from './worktree-jump-palette-model'
 import { buildPaletteListEntryRenderKeys } from '@/components/cmd-j/palette-list-entry-render-keys'
 import { BROWSER_NAVIGATION_ACTION_ID } from '@/components/cmd-j/browser-navigation-action'
+import { cmdJPaletteViewShows } from '@/components/cmd-j/palette-view'
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
@@ -21,7 +22,7 @@ import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-
 type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
   Pick<WorktreeJumpPaletteTaskSearch, 'taskItems'> &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
-  Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
+  Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl' | 'view'> &
   Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
 
 export function useWorktreeJumpPaletteListEntries({
@@ -33,7 +34,9 @@ export function useWorktreeJumpPaletteListEntries({
   taskSourceUrl,
   handleExpandSection,
   middleLeadsSections,
-  taskItems
+  taskItems: allTaskItems,
+  view,
+  alternateViewHint
 }: WorktreeJumpPaletteListEntriesInput) {
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
@@ -58,6 +61,10 @@ export function useWorktreeJumpPaletteListEntries({
           )
         : undefined
     const visibleMiddleItems = middleItems.filter((item) => item !== browserNavigationItem)
+    const taskItems = cmdJPaletteViewShows(view, 'tasks') ? allTaskItems : []
+    if (alternateViewHint) {
+      entries.push(alternateViewHint)
+    }
     const pushTasks = (): void => {
       if (taskItems.length) {
         entries.push({
@@ -80,10 +87,12 @@ export function useWorktreeJumpPaletteListEntries({
         })
       }
     }
-    const showWorktreeHeader = visibleWorktreeItems.length > 0
-    const showOpenTabsHeader = visibleOpenTabItems.length > 0
-    const showProjectTargetHeader = visibleProjectTargetItems.length > 0
-    const showMiddleHeader = visibleMiddleItems.length > 0
+    // Why: a single-kind view is already named by its switcher tab, so a section header only repeats it.
+    const showHeaders = view === 'all'
+    const showWorktreeHeader = showHeaders && visibleWorktreeItems.length > 0
+    const showOpenTabsHeader = showHeaders && visibleOpenTabItems.length > 0
+    const showProjectTargetHeader = showHeaders && visibleProjectTargetItems.length > 0
+    const showMiddleHeader = showHeaders && visibleMiddleItems.length > 0
     const pushOpenTabsHeader = (idSuffix = ''): void => {
       if (!showOpenTabsHeader) {
         return
@@ -182,6 +191,7 @@ export function useWorktreeJumpPaletteListEntries({
     if (!hasQuery) {
       pushOpenTabSection()
       pushWorktreeSection()
+      pushProjectAndMiddleSections()
       return entries
     }
     if (browserNavigationItem) {
@@ -267,7 +277,9 @@ export function useWorktreeJumpPaletteListEntries({
     paletteSections,
     showCreateAction,
     taskSourceUrl,
-    taskItems
+    allTaskItems,
+    view,
+    alternateViewHint
   ])
   const selectableItems = useMemo<PaletteItem[]>(
     () =>

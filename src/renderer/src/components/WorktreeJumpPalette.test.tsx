@@ -168,6 +168,7 @@ async function flushEffects(): Promise<void> {
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   useAppStore.setState({
     activeModal: 'worktree-palette',
+    modalData: { view: 'all' },
     activeWorktreeId: null,
     repos: [makeRepo()],
     tabsByWorktree: {},
@@ -181,7 +182,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
     alwaysShowDefaultBranchWorkspace: true,
     lastVisitedAtByWorktreeId: {},
     ...overrides
-  } as Partial<AppState>)
+  })
 
   await act(async () => {
     testRoot.render(<WorktreeJumpPalette />)
@@ -195,6 +196,35 @@ function getWorktreeRows(): string[] {
       `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
     )
   ].map((node) => node.textContent ?? '')
+}
+
+function getListItemIds(): string[] {
+  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
+    (node) => node.dataset.commandItem ?? ''
+  )
+}
+
+async function pressTab(shiftKey = false): Promise<void> {
+  const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
+  expect(input).not.toBeNull()
+  await act(async () => fireEvent.keyDown(input!, { key: 'Tab', shiftKey }))
+  await flushEffects()
+}
+
+async function renderPaletteInDefaultView(): Promise<void> {
+  await renderPalette({
+    modalData: {},
+    worktreesByRepo: {
+      'repo-1': [makeWorktree('wt-a', 'alpha'), makeWorktree('wt-g', 'gamma')]
+    },
+    showSleepingWorkspaces: true,
+    tabsByWorktree: { 'wt-a': [makeTerminalTab('term-1', 'wt-a', 'Research chat')] },
+    unifiedTabsByWorktree: {
+      'wt-a': [makeUnifiedTab('tab-1', 'wt-a', 'term-1', 'Research chat')]
+    },
+    groupsByWorktree: { 'wt-a': [makeGroup('wt-a', ['tab-1'])] },
+    activeGroupIdByWorktree: { 'wt-a': 'group-wt-a' }
+  })
 }
 
 describe('WorktreeJumpPalette', () => {
@@ -216,6 +246,86 @@ describe('WorktreeJumpPalette', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  describe('view switcher', () => {
+    const worktreePrefix = encodePaletteIdentity(['worktree'])
+    const workspaceTabPrefix = encodePaletteIdentity(['workspace-tab'])
+
+    it('opens on workspace rows only, without tabs, actions, or section headers', async () => {
+      await renderPaletteInDefaultView()
+
+      const ids = getListItemIds()
+      expect(ids).toHaveLength(2)
+      expect(ids.every((id) => id.startsWith(worktreePrefix))).toBe(true)
+      const listText = testContainer.querySelector('[data-command-list]')?.textContent
+      expect(listText).not.toContain('Open Tabs')
+      expect(listText).not.toContain('Workspaces')
+    })
+
+    it('cycles to the Tabs view with Tab and back with Shift+Tab', async () => {
+      await renderPaletteInDefaultView()
+
+      await pressTab()
+      expect(getListItemIds()).toEqual([
+        encodePaletteIdentity(['workspace-tab', '', 'wt-a', 'tab-1'])
+      ])
+
+      await pressTab(true)
+      const ids = getListItemIds()
+      expect(ids).toHaveLength(2)
+      expect(ids.every((id) => id.startsWith(worktreePrefix))).toBe(true)
+    })
+
+    it('keeps actions out of a Workspaces query but shows them in the All view', async () => {
+      await renderPaletteInDefaultView()
+      await act(async () => setCommandQuery?.('new'))
+      await flushEffects()
+      expect(getListItemIds().some((id) => id.startsWith('quick-action:'))).toBe(false)
+
+      await pressTab(true)
+      expect(getListItemIds()).toContain('quick-action:create-workspace')
+    })
+
+    it('switches views from a pointer press on the switcher', async () => {
+      await renderPaletteInDefaultView()
+      const tabsTrigger = [...testContainer.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+        (node) => node.textContent?.startsWith('Tabs')
+      )
+      await act(async () => fireEvent.mouseDown(tabsTrigger!, { button: 0 }))
+      await flushEffects()
+
+      expect(tabsTrigger?.dataset.state).toBe('active')
+      expect(getListItemIds().some((id) => id.startsWith(workspaceTabPrefix))).toBe(true)
+    })
+
+    it('points to other views when a query only matches outside the current one', async () => {
+      await renderPaletteInDefaultView()
+      await pressTab()
+      await act(async () => setCommandQuery?.('gamma'))
+      await flushEffects()
+
+      expect(getListItemIds().some((id) => id.startsWith(workspaceTabPrefix))).toBe(false)
+      expect(getListItemIds()[0]).toBe('__hint_alternate_view__')
+      expect(testContainer.textContent).toContain('1 in Workspaces')
+
+      // The hint is what Enter activates; the cmdk mock activates rows by click.
+      expect(
+        testContainer.querySelector<HTMLElement>('[data-command-dialog]')?.dataset.commandValue
+      ).toBe('__hint_alternate_view__')
+      await act(async () =>
+        testContainer
+          .querySelector<HTMLElement>('[data-command-item="__hint_alternate_view__"]')
+          ?.click()
+      )
+      await flushEffects()
+
+      expect(
+        testContainer.querySelector('[role="tab"][data-state="active"]')?.textContent
+      ).toContain('Workspaces')
+      expect(getListItemIds()).not.toContain('__hint_alternate_view__')
+      expect(getListItemIds().length).toBeGreaterThan(0)
+    })
   })
 
   it('lists actual folder workspaces with no repositories or active terminals', async () => {

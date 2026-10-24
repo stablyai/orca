@@ -24,7 +24,8 @@ import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,
   HighlightedText,
-  PaletteHostBadgeChip
+  PaletteHostBadgeChip,
+  PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 
 export function WorktreeJumpPaletteWorktreeRow({
@@ -169,6 +170,10 @@ export function WorktreeJumpPaletteWorktreeRow({
                 </span>
               </span>
             )}
+            <PaletteRowShortcutBadge
+              index={controller.rowShortcutIndexByItem.get(entry)}
+              modifierKeys={controller.digitShortcutModifiers}
+            />
           </div>
         </div>
       </div>

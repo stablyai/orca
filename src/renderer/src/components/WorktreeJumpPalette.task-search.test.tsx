@@ -89,6 +89,7 @@ beforeEach(() => {
   openTaskPage.mockClear()
   useAppStore.setState({
     activeModal: 'worktree-palette',
+    modalData: { view: 'all' },
     repos: [],
     worktreesByRepo: {},
     settings: createGlobalSettingsFixture({ visibleTaskProviders: ['jira'] }),
