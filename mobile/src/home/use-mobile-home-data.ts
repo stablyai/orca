@@ -11,11 +11,9 @@ import {
 } from '../onboarding/mobile-onboarding-plan'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import type { TaskProvider } from '../../../src/shared/task-providers'
-import {
-  selectConnectableHostProfiles,
-  sortHostsByLastConnected
-} from '../transport/host-catalog-selection'
-import { loadHostCatalog } from '../transport/host-store'
+import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
+import { loadHostCatalog, reorderHosts } from '../transport/host-store'
+import { orderHostsByIds } from '../transport/host-list-order'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from '../worktree/home-worktree-info'
@@ -42,6 +40,8 @@ export function useMobileHomeData() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+  const catalogEditRevisionRef = useRef(0)
+  const catalogReadRevisionRef = useRef(0)
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
@@ -90,14 +90,29 @@ export function useMobileHomeData() {
     allClientsRef.current = connections.allClients
   }, [connections.allClients])
 
+  // Every catalog read uses the same fence, including pairing rechecks and removal refreshes.
+  const refreshHostCatalog = useCallback(async (isStale: () => boolean = () => false) => {
+    const editRevision = catalogEditRevisionRef.current
+    const readRevision = ++catalogReadRevisionRef.current
+    const catalog = await loadHostCatalog()
+    if (
+      isStale() ||
+      catalogEditRevisionRef.current !== editRevision ||
+      catalogReadRevisionRef.current !== readRevision
+    ) {
+      return null
+    }
+    setHostCatalog(catalog)
+    return catalog
+  }, [])
+
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHostCatalog().then(async (catalog) => {
-        if (stale) {
+      void refreshHostCatalog(() => stale).then(async (catalog) => {
+        if (!catalog) {
           return
         }
-        setHostCatalog(catalog)
         if (catalog.length === 0 || onboardingCheckedRef.current) {
           return
         }
@@ -128,11 +143,30 @@ export function useMobileHomeData() {
       return () => {
         stale = true
       }
-    }, [router])
+    }, [router, refreshHostCatalog])
   )
 
-  const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
-  const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
+  // Pairing appends; metadata/status changes preserve this durable, user-chosen order.
+  const sortedHosts = hosts
+  const sortedHostCatalog = hostCatalog
+  const reorderHostCatalog = useCallback(
+    async (orderedIds: string[]) => {
+      const revision = ++catalogEditRevisionRef.current
+      setHostCatalog((current) => orderHostsByIds(current, orderedIds))
+      try {
+        await reorderHosts(orderedIds)
+      } catch (error) {
+        if (catalogEditRevisionRef.current === revision) {
+          await refreshHostCatalog()
+        }
+        throw error
+      }
+      if (catalogEditRevisionRef.current === revision) {
+        await refreshHostCatalog()
+      }
+    },
+    [refreshHostCatalog]
+  )
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const resumeCard = useMemo(
@@ -176,8 +210,9 @@ export function useMobileHomeData() {
     hostCatalog,
     hostConnections,
     resumeCard,
+    reorderHostCatalog,
     router,
-    setHostCatalog,
+    refreshHostCatalog,
     sortedHostCatalog,
     stats,
     taskProvidersByHost,

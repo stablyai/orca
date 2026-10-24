@@ -32,7 +32,11 @@ export const setRelayRouting = (_hostId: string, _relay: MobileRelayEndpoint): P
   Promise.resolve()
 export const removeHost = (_hostId: string): Promise<void> => Promise.resolve()
 
-/** A native write the page drops: recency orders the app's host list, which the page does not show. */
+/** The page has one host; ordering the native host catalog is outside its write surface. */
+export const reorderHosts = (_orderedIds: readonly string[]): Promise<void> =>
+  Promise.reject(new Error('Desktop ordering is available in the native home screen'))
+
+/** A native write the page drops: connection history belongs to the app's host list. */
 export const updateLastConnected = (_hostId: string): Promise<void> => Promise.resolve()
 
 export function updateHostNameAndEndpoint(

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { HomeStatsSummary } from '../stats/home-stats-total'
 import { colors, spacing } from '../theme/mobile-theme'
 import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
@@ -15,7 +15,13 @@ function formatDuration(ms: number): string {
   return totalHours > 0 ? `${totalHours}h ${minutes}m` : `${totalMinutes}m`
 }
 
-export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null }) {
+export function MobileHomeListHeader({
+  stats,
+  onReorder
+}: {
+  stats: HomeStatsSummary | null
+  onReorder?: () => void
+}) {
   return (
     <View>
       <View style={styles.hero}>
@@ -38,7 +44,19 @@ export function MobileHomeListHeader({ stats }: { stats: HomeStatsSummary | null
         </View>
       ) : null}
       <MobileHomeAppUpdateCard />
-      <Text style={styles.sectionHeading}>Desktops</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeading}>Desktops</Text>
+        {onReorder ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reorder desktops"
+            hitSlop={8}
+            onPress={onReorder}
+          >
+            <Text style={styles.reorder}>Reorder</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   )
 }
@@ -68,13 +86,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3
   },
   statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '500', marginTop: 2 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm
+  },
+  reorder: { color: colors.textSecondary, fontSize: 12, paddingHorizontal: spacing.xs },
   sectionHeading: {
     fontSize: 11,
     fontWeight: '600',
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs
   }
 })

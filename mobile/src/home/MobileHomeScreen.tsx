@@ -20,13 +20,13 @@ import {
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
 import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
+import { MobileHomeHostOrderDrawer } from './MobileHomeHostOrderDrawer'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
@@ -43,6 +43,7 @@ export function MobileHomeScreen() {
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
+  const [hostOrderOpen, setHostOrderOpen] = useState(false)
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
 
@@ -66,12 +67,22 @@ export function MobileHomeScreen() {
     [data.router, openMobileSession]
   )
 
+  const closeHostOrder = useCallback(() => setHostOrderOpen(false), [])
+  const reorderHostOrder = useCallback(
+    (ids: string[]) => {
+      void data.reorderHostCatalog(ids).catch(() => {
+        Alert.alert('Could not save desktop order', 'Please try again.')
+      })
+    },
+    [data.reorderHostCatalog]
+  )
+
   function openHost(host: HostCatalogEntry): void {
     if (host.credentialStatus === 'missing') {
       data.router.push('/pair-scan')
     } else if (host.credentialStatus === 'temporarily-unavailable') {
-      void loadHostCatalog()
-        .then(data.setHostCatalog)
+      void data
+        .refreshHostCatalog()
         .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
     } else {
       data.router.push(`/h/${host.id}`)
@@ -94,7 +105,7 @@ export function MobileHomeScreen() {
     try {
       await removeHostAndCloseClient(host.id, forgetHostClient)
       setConfirmRemove(null)
-      data.setHostCatalog(await loadHostCatalog())
+      await data.refreshHostCatalog()
     } catch {
       setConfirmRemove(host)
       Alert.alert('Could not remove host', 'Please try again.')
@@ -147,8 +158,15 @@ export function MobileHomeScreen() {
             openHostActions(host)
           }}
           onOpenActions={openHostActions}
+          onReorder={() => setHostOrderOpen(true)}
         />
       )}
+      <MobileHomeHostOrderDrawer
+        visible={hostOrderOpen}
+        hosts={data.sortedHostCatalog}
+        onClose={closeHostOrder}
+        onReorder={reorderHostOrder}
+      />
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
