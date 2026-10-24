@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { RpcClient } from '../transport/rpc-client'
-import { MAX_QUICK_COMMANDS } from '../terminal/quick-commands'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -342,8 +341,8 @@ describe('QuickCommandsSheet', () => {
     client.close()
   })
 
-  it('keeps creation closed when the host command limit is reached', async () => {
-    mocks.commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
+  it('allows saving another command when forty commands already exist', async () => {
+    mocks.commands = Array.from({ length: 40 }, (_, index) => ({
       ...command,
       id: `command-${index}`
     }))
@@ -362,8 +361,15 @@ describe('QuickCommandsSheet', () => {
     })
 
     const list = renderer!.root.findByType(quickCommandsList)
-    expect(list.props.canAdd).toBe(false)
     act(() => list.props.onAdd())
+    const editor = () => renderer!.root.findByType(quickCommandEditorForm)
+    act(() => editor().props.onChange({ label: 'Another command', command: 'echo saved' }))
+    mocks.persist.mockResolvedValue(true)
+    await act(async () => editor().props.onSave())
+    expect(mocks.persist).toHaveBeenCalledWith({
+      type: 'upsert',
+      command: expect.objectContaining({ label: 'Another command', command: 'echo saved' })
+    })
     expect(renderer!.root.findAllByType(quickCommandEditorForm)).toHaveLength(0)
   })
 

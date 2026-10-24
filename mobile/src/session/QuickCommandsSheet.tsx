@@ -5,11 +5,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import {
-  getQuickCommandPreview,
-  MAX_QUICK_COMMANDS,
-  quickCommandMatchesRepo
-} from '../terminal/quick-commands'
+import { getQuickCommandPreview, quickCommandMatchesRepo } from '../terminal/quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -96,11 +92,6 @@ export function QuickCommandsSheet({
   const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
 
   const openEditor = (command?: TerminalQuickCommand) => {
-    // Why: the host rejects full-list updates above this cap; existing rows
-    // must remain editable/deletable when creation is no longer possible.
-    if (!command && commands.length >= MAX_QUICK_COMMANDS) {
-      return
-    }
     draftRevisionRef.current += 1
     editorGenerationRef.current += 1
     setDraft(
@@ -213,7 +204,6 @@ export function QuickCommandsSheet({
           query={query}
           loading={loading}
           disabled={!ready}
-          canAdd={commands.length < MAX_QUICK_COMMANDS}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}

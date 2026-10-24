@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
-import { MAX_QUICK_COMMANDS } from '../../../shared/terminal-quick-commands'
 import {
   getTerminalQuickCommandPromptMessageBytes,
   MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES,
@@ -49,6 +48,19 @@ function agentCommand(id: string, prompt: string): TerminalQuickCommand {
 
 // Local saves and paired saves both reach the store here, so this is the one place the bound holds.
 describe('updateSettings terminalQuickCommands', () => {
+  it('stores every command in a list larger than forty, including missing projects', () => {
+    const commands = Array.from({ length: 100 }, (_, index) => ({
+      ...agentCommand(`command-${index}`, 'Review this project'),
+      scope: { type: 'repo' as const, repoId: `missing-project-${index}` }
+    }))
+    const operations = makeOperations()
+
+    const saved = updateSettings(operations, { terminalQuickCommands: commands })
+
+    expect(saved.terminalQuickCommands).toEqual(commands)
+    expect(operations.state.settings.terminalQuickCommands).toEqual(commands)
+  })
+
   it('stores a prompt at the limit whole', () => {
     const prompt = promptAtLimit('x')
     const saved = updateSettings(makeOperations(), {
@@ -74,7 +86,7 @@ describe('updateSettings terminalQuickCommands', () => {
 
   it('refuses a list too large for one paired reply', () => {
     // Forty prompts at the limit total about 10 MB of JSON.
-    const commands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) =>
+    const commands = Array.from({ length: 40 }, (_, index) =>
       agentCommand(`c${index}`, promptAtLimit('界'))
     )
 
