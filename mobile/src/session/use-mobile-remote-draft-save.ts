@@ -72,6 +72,9 @@ export function useMobileRemoteDraftSave({
       showToast('Result unknown — check the terminal before retrying', 2600)
       return
     }
+    if (generation !== operationGeneration(current.handle)) {
+      return
+    }
     if (activeSessionChanged(sessionRef.current, current)) {
       return
     }

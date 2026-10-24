@@ -118,6 +118,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       }
       loadSeqRef.current += 1
       const seq = loadSeqRef.current
+      const generation = operationGeneration(handle)
       let result
       try {
         const response = await terminalDraftBegin.request(
@@ -159,8 +160,6 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         return
       }
       if (
-        seq !== loadSeqRef.current ||
-        handle !== activeHandleRef.current ||
         result.epoch === undefined ||
         typeof result.text !== 'string' ||
         typeof result.sourceToken !== 'string'
@@ -173,6 +172,18 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         baseToken: result.sourceToken,
         remoteText: result.text
       }
+      if (
+        seq !== loadSeqRef.current ||
+        generation !== operationGeneration(handle) ||
+        handle !== activeHandleRef.current
+      ) {
+        const live = sessionRef.current
+        // Release a lease the user abandoned (Exit or another terminal), but not one a newer load owns.
+        if (!live || live.handle !== handle || live.epoch !== next.epoch) {
+          release(next)
+        }
+        return
+      }
       setSession(next)
       setConflict(null)
       clearUncertain(handle)
@@ -180,7 +191,16 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       bufferedTerminalDraftState.setInput(result.text)
       showToast('Loaded terminal draft', 1200)
     },
-    [activeHandle, activeHandleRef, bufferedTerminalDraftState, client, connState, showToast]
+    [
+      activeHandle,
+      activeHandleRef,
+      bufferedTerminalDraftState,
+      client,
+      connState,
+      operationGeneration,
+      release,
+      showToast
+    ]
   )
 
   const loadRemoteDraft = useCallback(() => {

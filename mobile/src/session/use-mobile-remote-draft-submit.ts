@@ -70,11 +70,15 @@ export function useMobileRemoteDraftSubmit({
         showToast("This Orca host doesn't support draft editing yet", 2200)
         return { applied: false }
       }
-      if (
-        result.ok &&
-        result.status === 'submit_unknown' &&
-        operationGeneration(current.handle) === generation
-      ) {
+      if (operationGeneration(current.handle) !== generation) {
+        return result.ok
+          ? {
+              applied: true,
+              status: result.status === 'submitted' ? 'submitted' : 'submit_unknown'
+            }
+          : { applied: false }
+      }
+      if (result.ok && result.status === 'submit_unknown') {
         markUncertain(current.handle)
       }
       if (

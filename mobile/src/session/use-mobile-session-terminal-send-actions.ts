@@ -212,7 +212,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
         showToast,
         isBlocked: () => isRemoteDraftUncertain(handle)
       }),
-    [showToast]
+    [isRemoteDraftUncertain, showToast]
   )
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
