@@ -3,6 +3,7 @@ import { getRichMarkdownSerializationDocument } from './rich-markdown-trailing-p
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { prepareMarkdownCodeSpans } from './rich-markdown-code'
 
 const MAX_LITERAL_BLOCK_CODE_UNITS = 50_000
 const LITERAL_BLOCK_TYPES = new Set([
@@ -85,6 +86,7 @@ export function preserveLiteralMarkdownSource(
   editor.getMarkdown = () => {
     const document = getRichMarkdownSerializationDocument(editor)
     const json = document.toJSON()
+    prepareMarkdownCodeSpans(json)
     const markdown = manager.serialize(json)
     if (!/\\[_[\]~`*]/.test(markdown)) {
       return markdown
