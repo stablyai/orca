@@ -89,8 +89,12 @@ function isStockPlaceholder(
   afterCursor: string,
   continuationRows: { text: string; wrapped: boolean }[]
 ): boolean {
-  const text = [afterCursor, ...continuationRows.map((row) => row.text)]
-    .join(' ')
+  // A soft-wrapped row continues its predecessor mid-word; only a hard break is a real separator.
+  const text = continuationRows
+    .reduce(
+      (joined, row) => (row.wrapped ? `${joined}${row.text}` : `${joined} ${row.text}`),
+      afterCursor
+    )
     .replace(/\s+/g, ' ')
     .trim()
   return (
