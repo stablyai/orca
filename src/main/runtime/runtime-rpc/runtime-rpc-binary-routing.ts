@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import { DeviceRegistry } from '../device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../e2ee-keypair'
+import { e2eeKeyHostBinding, readE2EEKeyHostSignals } from '../e2ee-keypair-host-binding'
 import { RuntimeRpcState } from './runtime-rpc-state'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -86,6 +87,21 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
   }
 
   protected initializePairingIdentity(): PairingIdentityInitialization {
+    // Why the key first: replacing a key minted on another machine also sets aside the device
+    // registry, whose pairings were all made with that key.
+    let e2eeKeypair: E2EEKeypair
+    try {
+      e2eeKeypair = loadOrCreateE2EEKeypair(
+        this.userDataPath,
+        e2eeKeyHostBinding(readE2EEKeyHostSignals(this.userDataPath))
+      )
+    } catch (error) {
+      console.error('[runtime] Failed to initialize E2EE identity:', error)
+      return {
+        ok: false,
+        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
+      }
+    }
     let deviceRegistry: DeviceRegistry
     try {
       deviceRegistry = new DeviceRegistry(this.userDataPath)
@@ -97,16 +113,6 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
           'device_registry_unavailable',
           DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE
         )
-      }
-    }
-    let e2eeKeypair: E2EEKeypair
-    try {
-      e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
-    } catch (error) {
-      console.error('[runtime] Failed to initialize E2EE identity:', error)
-      return {
-        ok: false,
-        failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
       }
     }
     return { ok: true, deviceRegistry, e2eeKeypair }
