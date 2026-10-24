@@ -5724,7 +5724,9 @@
           "51001182e3": "Répertoire vide",
           "971d85cc84": "S'ouvre comme projet sur cet hôte · {{value0}}",
           "00c4235c10": "Aucun résultat pour « {{value0}} »",
-          "largeInputNoMatches": "Aucun résultat pour cette saisie longue"
+          "largeInputNoMatches": "Aucun résultat pour cette saisie longue",
+          "entriesLabel": "Éléments du dossier",
+          "inputLabel": "Filtre ou chemin"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",

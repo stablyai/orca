@@ -1,12 +1,13 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { filterEntries, joinPath, parentPath, type DirEntry } from './remote-file-browser-helpers'
 import { RemoteFileBrowserBreadcrumbs } from './RemoteFileBrowserBreadcrumbs'
 import { RemoteFileBrowserEntryList } from './RemoteFileBrowserEntryList'
+import { initialRemoteFileBrowserHighlight } from './remote-file-browser-highlight'
 import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
@@ -24,6 +25,7 @@ type RemoteFileBrowserProps = (
 }
 
 const FILE_HINT_MS = 2000
+const NO_ENTRIES: readonly DirEntry[] = []
 const FILE_HINT_TEXT = "Files can't be opened as a project"
 
 export function RemoteFileBrowser({
@@ -40,6 +42,12 @@ export function RemoteFileBrowser({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [fileHint, setFileHint] = useState(false)
+  // Tied to the list it was moved on, so any new listing or filter starts from its own default.
+  const [highlight, setHighlight] = useState<{
+    entries: readonly DirEntry[]
+    index: number
+  } | null>(null)
+  const listboxId = useId()
   const genRef = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -156,6 +164,22 @@ export function RemoteFileBrowser({
   }, [resolvedPath, navigate, pathFlavor])
 
   const filteredEntries = useMemo(() => filterEntries(entries, filter), [entries, filter])
+  const previewFilteredEntries = useMemo(
+    () => (preview ? filterEntries(preview.entries, preview.filter) : null),
+    [preview]
+  )
+  // Why: while a listing loads only the spinner renders, so the prior rows can't be targeted.
+  const displayEntries = loading ? NO_ENTRIES : (previewFilteredEntries ?? filteredEntries)
+  // Why: a resolving preview keeps its prior rows on screen, but they are no longer targetable.
+  const activeIndex = preview?.loading
+    ? -1
+    : highlight?.entries === displayEntries
+      ? highlight.index
+      : initialRemoteFileBrowserHighlight(displayEntries, preview !== null && preview.filter === '')
+  const moveHighlight = useCallback(
+    (index: number) => setHighlight({ entries: displayEntries, index }),
+    [displayEntries]
+  )
 
   const triggerFileHint = useCallback(() => {
     if (fileHintTimerRef.current) {
@@ -213,9 +237,14 @@ export function RemoteFileBrowser({
   )
 
   const handleFilterKeyDown = useRemoteFileBrowserFilterKeyCommands({
+    loading,
     filter,
     setFilter,
     filteredEntries,
+    displayEntries,
+    activeIndex,
+    moveHighlight,
+    listParentPath,
     preview,
     discardPreview,
     resolvedPath,
@@ -250,6 +279,13 @@ export function RemoteFileBrowser({
         <ImeInput
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded
+          aria-autocomplete="list"
+          aria-label={translate(
+            'auto.components.sidebar.RemoteFileBrowser.inputLabel',
+            'Filter or path'
+          )}
           autoFocus
           value={filter}
           onChange={(e) => handleInputChange(e.target.value)}
@@ -259,6 +295,8 @@ export function RemoteFileBrowser({
             'auto.components.sidebar.RemoteFileBrowser.2300612806',
             'Type to filter or enter a path…'
           )}
+          aria-controls={listboxId}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -286,7 +324,9 @@ export function RemoteFileBrowser({
         loading={loading}
         error={error}
         entries={entries}
-        filteredEntries={filteredEntries}
+        displayEntries={displayEntries}
+        activeIndex={activeIndex}
+        listboxId={listboxId}
         filter={filter}
         preview={preview}
         isPreviewActive={isPreviewActive}
