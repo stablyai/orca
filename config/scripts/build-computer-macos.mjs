@@ -29,7 +29,17 @@ createHelperApp()
 
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
+    run('swift', [
+      'build',
+      '--build-system',
+      'native',
+      '-c',
+      'release',
+      '--package-path',
+      packagePath,
+      '--triple',
+      triple
+    ])
     return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
