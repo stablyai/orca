@@ -39,7 +39,8 @@ export type UiWindowApi = {
   writeSelectionClipboardText: (text: string) => Promise<void>
   writeClipboardImage: (dataUrl: string) => Promise<void>
   performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void
-  performNativeSelectionAction: (action: 'copy' | 'select-all') => void
+  /** Reports native action dispatch, not clipboard delivery. */
+  performNativeSelectionAction: (action: 'copy' | 'select-all') => Promise<boolean>
   writeClipboardFile: (
     args:
       | {
