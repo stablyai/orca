@@ -77,6 +77,7 @@ function buildSurfaceVariables(args: {
   if (overrideTextTokens) {
     vars['--background'] = background
     vars['--foreground'] = foreground
+    vars.color = foreground
     vars['--card'] = `color-mix(in srgb, ${foreground} 4%, ${background})`
     vars['--card-foreground'] = foreground
     vars['--accent'] = `color-mix(in srgb, ${foreground} 9%, ${background})`
