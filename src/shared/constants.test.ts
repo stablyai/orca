@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('inherits the Codex tar command by default', () => {
+    expect(getDefaultSettings('/tmp').terminalWindowsCodexTar).toBe('inherit')
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

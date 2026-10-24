@@ -195,7 +195,7 @@ __orca_deferred_init() {
     # which otherwise rewrites this header at parse time and aborts the whole file.
     function codex {
       # Why local: zsh's warn_create_global warns for each global a function creates.
-      local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}"
+      local __orca_codex_arg __orca_codex_isolate="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="${ORCA_CODEX_ISOLATE:-1}" __orca_codex_tar_path
       if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
         "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
       fi
@@ -216,7 +216,15 @@ __orca_deferred_init() {
       if [[ "$__orca_codex_isolate" != 0 ]]; then
         case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
       fi
-      command codex "$@"
+      if [[ -n "${ORCA_CODEX_WINDOWS_TAR_SHIM_DIR:-}" ]]; then
+        __orca_codex_tar_path="${ORCA_CODEX_WINDOWS_TAR_SHIM_DIR}"
+        if command -v cygpath >/dev/null 2>&1; then
+          __orca_codex_tar_path="$(cygpath -u "$__orca_codex_tar_path" 2>/dev/null || printf '%s' "$__orca_codex_tar_path")"
+        fi
+        PATH="$__orca_codex_tar_path:$PATH" command codex "$@"
+      else
+        command codex "$@"
+      fi
     }
   fi
   unset __orca_codex_binary

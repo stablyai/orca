@@ -15,7 +15,10 @@ import {
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import { getTerminalWindowsPowershellImplementationSearchEntry } from './terminal-windows-search'
+import {
+  getTerminalWindowsCodexTarSearchEntry,
+  getTerminalWindowsPowershellImplementationSearchEntry
+} from './terminal-windows-search'
 import { TerminalMacKeyboardSection } from './TerminalMacKeyboardSection'
 import { translate } from '@/i18n/i18n'
 
@@ -26,6 +29,7 @@ type TerminalAdvancedSectionProps = {
   setScrollbackMode: (mode: 'preset' | 'custom') => void
   searchQuery: string
   showWindowsPowerShellImplementation: boolean
+  showWindowsCodexTar: boolean
   pwshAvailable?: boolean
   isMac: boolean
 }
@@ -41,6 +45,7 @@ export function TerminalAdvancedSection({
   setScrollbackMode,
   searchQuery,
   showWindowsPowerShellImplementation,
+  showWindowsCodexTar,
   pwshAvailable,
   isMac
 }: TerminalAdvancedSectionProps): React.JSX.Element {
@@ -59,6 +64,8 @@ export function TerminalAdvancedSection({
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+  const windowsCodexTar = settings.terminalWindowsCodexTar ?? 'inherit'
+  const windowsCodexTarSearchEntry = getTerminalWindowsCodexTarSearchEntry()[0]
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
     const value = Number(trimmed)
@@ -288,6 +295,39 @@ export function TerminalAdvancedSection({
                         'PowerShell 7+'
                       ),
                       disabled: !pwshAvailable
+                    }
+                  ]}
+                />
+              }
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {showWindowsCodexTar && matchesSettingsSearch(searchQuery, windowsCodexTarSearchEntry) ? (
+          <SearchableSetting {...windowsCodexTarSearchEntry}>
+            <SettingsRow
+              alignTop
+              label={windowsCodexTarSearchEntry.title}
+              description={windowsCodexTarSearchEntry.description}
+              control={
+                <SettingsSegmentedControl
+                  ariaLabel={windowsCodexTarSearchEntry.title}
+                  value={windowsCodexTar}
+                  onChange={(value) => updateSettings({ terminalWindowsCodexTar: value })}
+                  options={[
+                    {
+                      value: 'inherit',
+                      label: translate(
+                        'settings.terminal.windows.codexTar.inheritPath',
+                        'Inherit PATH'
+                      )
+                    },
+                    {
+                      value: 'system',
+                      label: translate(
+                        'settings.terminal.windows.codexTar.windowsSystemTar',
+                        'Windows system tar'
+                      )
                     }
                   ]}
                 />

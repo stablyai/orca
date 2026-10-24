@@ -97,6 +97,7 @@ export function configureLocalPtyProvider(args: {
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
         terminalInlineImages: ptySettings?.terminalInlineImages,
+        terminalWindowsCodexTar: ptySettings?.terminalWindowsCodexTar,
         disabledTuiAgents: ptySettings?.disabledTuiAgents,
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()

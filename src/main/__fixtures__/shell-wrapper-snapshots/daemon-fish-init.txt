@@ -21,6 +21,13 @@ if test "$__orca_codex_type" = file
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '^(agents|queue|--remote|--no-daemon|--remote=.*)$' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
+    if test -n "$ORCA_CODEX_WINDOWS_TAR_SHIM_DIR"
+      set -l __orca_codex_tar_path "$ORCA_CODEX_WINDOWS_TAR_SHIM_DIR"
+      if type -q cygpath
+        set __orca_codex_tar_path (cygpath -u "$__orca_codex_tar_path" 2>/dev/null; or echo "$__orca_codex_tar_path")
+      end
+      set -lx PATH $__orca_codex_tar_path $PATH
+    end
     command codex $argv
   end
 end

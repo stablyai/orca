@@ -125,6 +125,24 @@ export const getTerminalWindowsPowershellImplementationSearchEntry = createLocal
   }
 ])
 
+export const getTerminalWindowsCodexTarSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.terminal.windows.codexTar.title', 'Codex tar command'),
+    description: translate(
+      'settings.terminal.windows.codexTar.description',
+      "Choose the tar command for Codex launched in new local Windows terminal panes. Your terminal's own tar is unchanged."
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordTar', 'tar'),
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordCodex', 'codex'),
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordArchive', 'archive'),
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordUpdate', 'update'),
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordPath', 'path'),
+      ...translateSearchKeyword('settings.terminal.windows.codexTar.keywordSystem', 'system')
+    ]
+  }
+])
+
 export const getTerminalRightClickToPasteSearchEntry = createLocalizedCatalog(() => [
   {
     title: translate(

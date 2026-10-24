@@ -29,15 +29,25 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
   })
 
+  it('includes the Codex tar setting on Windows', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    expect(entries.some((entry) => entry.title === 'Codex tar command')).toBe(true)
+    for (const query of ['codex', 'tar', 'archive', 'update']) {
+      expect(matchesSettingsSearch(query, entries)).toBe(true)
+    }
+  })
+
   it('keeps Windows host entries separate from Windows client entries', () => {
     const entries = getTerminalPaneSearchEntries({
       isWindows: false,
+      isLocalWindowsHost: false,
       isWindowsTerminalHost: true,
       isMac: false
     })
 
     expect(entries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    expect(entries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
   })
 
@@ -57,6 +67,11 @@ describe('getTerminalPaneSearchEntries', () => {
   it('omits the PowerShell version setting elsewhere', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(false)
+  })
+
+  it('omits the Codex tar setting for non-Windows hosts', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    expect(entries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
   })
 
   it('includes the Option as Alt setting on macOS', () => {

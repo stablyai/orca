@@ -24,6 +24,8 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
+export const CODEX_WINDOWS_TAR_SHIM_DIR_ENV = 'ORCA_CODEX_WINDOWS_TAR_SHIM_DIR'
+
 // Why values holding `'` are skipped: a TOML literal can't carry one, and Codex's fallback for the
 // failed parse truncates some (`/a'`, `/a' #b`) — a wrong path is worse than none.
 const identitySetArg = (key: string, value: string): string =>
@@ -41,7 +43,7 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_tar_path
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -58,7 +60,15 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\
     if [[ "$__orca_codex_isolate" != 0 ]]; then
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
     fi
-    command codex "$@"
+    if [[ -n "\${${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}:-}" ]]; then
+      __orca_codex_tar_path="\${${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}}"
+      if command -v cygpath >/dev/null 2>&1; then
+        __orca_codex_tar_path="$(cygpath -u "$__orca_codex_tar_path" 2>/dev/null || printf '%s' "$__orca_codex_tar_path")"
+      fi
+      PATH="$__orca_codex_tar_path:$PATH" command codex "$@"
+    else
+      command codex "$@"
+    fi
   }
 fi
 unset __orca_codex_binary
@@ -80,6 +90,13 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
+    end
+    if test -n "$${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}"
+      set -l __orca_codex_tar_path "$${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}"
+      if type -q cygpath
+        set __orca_codex_tar_path (cygpath -u "$__orca_codex_tar_path" 2>/dev/null; or echo "$__orca_codex_tar_path")
+      end
+      set -lx PATH $__orca_codex_tar_path $PATH
     end
     command codex $argv
   end
@@ -121,13 +138,23 @@ if ($orcaCodexCommand -and
             foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
-        # Why: a native command inside a function never sees the function's pipeline input on its own.
-        if ($MyInvocation.ExpectingInput) {
-            $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
-        } else {
-            & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+        $orcaCodexOriginalPath = $env:Path
+        $orcaCodexExitCode = 1
+        try {
+            if ($env:${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}) {
+                $env:Path = "$env:${CODEX_WINDOWS_TAR_SHIM_DIR_ENV};$env:Path"
+            }
+            # Why: a native command inside a function never sees the function's pipeline input on its own.
+            if ($MyInvocation.ExpectingInput) {
+                $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            } else {
+                & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            }
+            $orcaCodexExitCode = $LASTEXITCODE
+        } finally {
+            $env:Path = $orcaCodexOriginalPath
         }
-        $global:LASTEXITCODE = $LASTEXITCODE
+        $global:LASTEXITCODE = $orcaCodexExitCode
     }
 }
 Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`

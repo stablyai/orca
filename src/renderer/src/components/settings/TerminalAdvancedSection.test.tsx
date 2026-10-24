@@ -4,13 +4,15 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, defaultValue: string) => defaultValue
 }))
 
-describe('TerminalAdvancedSection scrollback rows', () => {
+describe('TerminalAdvancedSection', () => {
   let container: HTMLDivElement
   let root: Root
 
@@ -26,16 +28,21 @@ describe('TerminalAdvancedSection scrollback rows', () => {
     document.body.replaceChildren()
   })
 
-  function renderSection(updateSettings = vi.fn()): void {
+  function renderSection(
+    updateSettings = vi.fn(),
+    settings: Partial<GlobalSettings> = {},
+    showWindowsCodexTar = false
+  ): void {
     act(() => {
       root.render(
         <TerminalAdvancedSection
-          settings={{ terminalScrollbackRows: 5000 } as GlobalSettings}
+          settings={createGlobalSettingsFixture({ terminalScrollbackRows: 5000, ...settings })}
           updateSettings={updateSettings}
           scrollbackMode="custom"
           setScrollbackMode={vi.fn()}
           searchQuery=""
           showWindowsPowerShellImplementation={false}
+          showWindowsCodexTar={showWindowsCodexTar}
           isMac={false}
         />
       )
@@ -102,5 +109,27 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollbackRows: 12345 })
     expect(input.value).toBe('12345')
+  })
+
+  it('writes the Windows system tar policy for Codex', () => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings, { terminalWindowsCodexTar: 'inherit' }, true)
+
+    const radios = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    const inheritPath = radios.find((button) => button.textContent === 'Inherit PATH')
+    const systemTar = radios.find((button) => button.textContent === 'Windows system tar')
+    expect(inheritPath?.getAttribute('aria-checked')).toBe('true')
+    expect(systemTar).toBeDefined()
+
+    act(() => systemTar?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({ terminalWindowsCodexTar: 'system' })
+  })
+
+  it('hides the Codex tar policy for non-Windows hosts', () => {
+    renderSection(vi.fn(), { terminalWindowsCodexTar: 'inherit' })
+
+    expect(container.textContent).not.toContain('Codex tar command')
+    expect(container.textContent).not.toContain('Windows system tar')
   })
 })

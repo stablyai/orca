@@ -74,6 +74,7 @@ import {
   stripLegacyTerminalShimEnv
 } from '../pty/legacy-terminal-shim-dir'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import { CODEX_WINDOWS_TAR_SHIM_DIR_ENV } from '../../shared/codex-shell-function'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -123,6 +124,7 @@ describe('createPtySubprocess', () => {
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
       ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
       ORCA_WSL_CLI_DIR: process.env.ORCA_WSL_CLI_DIR,
+      [CODEX_WINDOWS_TAR_SHIM_DIR_ENV]: process.env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV],
       ORCA_ORCAD_MANAGED_ACTIVATION_ROOT: process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT
     }
     process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT = '/home/u/.orca-remote/.activation'
@@ -130,6 +132,7 @@ describe('createPtySubprocess', () => {
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
     process.env.ORCA_WSL_CLI_DIR = 'C:/parent/wsl-managed-cli'
+    process.env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV] = 'C:/parent/codex-tar-shim'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -148,6 +151,7 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_TAB_ID).toBeUndefined()
     expect(env.ORCA_WORKTREE_ID).toBeUndefined()
     expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
+    expect(env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV]).toBeUndefined()
     expect(env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT).toBeUndefined()
   })
 
@@ -157,11 +161,13 @@ describe('createPtySubprocess', () => {
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
+      [CODEX_WINDOWS_TAR_SHIM_DIR_ENV]: process.env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV]
     }
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV] = 'C:/parent/codex-tar-shim'
 
     try {
       await createPtySubprocess({
@@ -171,7 +177,8 @@ describe('createPtySubprocess', () => {
         env: {
           ORCA_PANE_KEY: 'child-tab:child-leaf',
           ORCA_TAB_ID: 'child-tab',
-          ORCA_WORKTREE_ID: 'child-worktree'
+          ORCA_WORKTREE_ID: 'child-worktree',
+          [CODEX_WINDOWS_TAR_SHIM_DIR_ENV]: 'C:/child/codex-tar-shim'
         }
       })
     } finally {
@@ -188,6 +195,7 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
     expect(env.ORCA_TAB_ID).toBe('child-tab')
     expect(env.ORCA_WORKTREE_ID).toBe('child-worktree')
+    expect(env[CODEX_WINDOWS_TAR_SHIM_DIR_ENV]).toBe('C:/child/codex-tar-shim')
   })
 
   it.each([

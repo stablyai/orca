@@ -348,6 +348,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
     // Right-click to paste is now exposed on every platform (#8322), so it is
     // indexed even when only the terminal host — not the client — is Windows.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
@@ -375,7 +376,22 @@ describe('settings navigation metadata', () => {
       false
     )
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
+  })
+
+  it('keeps the local Codex tar setting out of a Windows web host search', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isLocalWindowsHost: true,
+      isWindowsTerminalHost: true,
+      isWebClient: true,
+      repos: [repo]
+    })
+
+    const terminal = sections.find((section) => section.id === 'terminal')
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
   })
 
   it('keeps local runtime settings but hides remote Linux entries on a Windows desktop', () => {

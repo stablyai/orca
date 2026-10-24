@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
@@ -26,6 +27,7 @@ export type BuildPtyHostEnvOptions = {
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   terminalInlineImages?: boolean
+  terminalWindowsCodexTar?: GlobalSettings['terminalWindowsCodexTar']
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null
   networkProxySettings?: NetworkProxySettings

@@ -72,6 +72,8 @@ export function useSettingsTerminalModel(
     hostPlatform: localWindowsRuntimeCapabilities.hostPlatform
   })
   const isWindowsTerminalHost = runtimeWslSupportedPlatform
+  const showWindowsCodexTar =
+    !model.isWebClient && runtimeTarget.kind === 'local' && isWindowsTerminalHost
 
   if ([...navigation.neededSectionIds].some((id) => !model.mountedSectionIds.has(id))) {
     // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
@@ -116,6 +118,7 @@ export function useSettingsTerminalModel(
     runtimeWslSupportedPlatform,
     localWslSupportedPlatform,
     isWindowsTerminalHost,
+    showWindowsCodexTar,
     neededRepos
   }
 }
