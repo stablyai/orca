@@ -35,7 +35,8 @@ export const defaultGiteaStatus = {
   authenticated: false,
   account: null,
   baseUrl: null,
-  tokenConfigured: false
+  tokenConfigured: false,
+  authError: null
 }
 
 export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap): void {
