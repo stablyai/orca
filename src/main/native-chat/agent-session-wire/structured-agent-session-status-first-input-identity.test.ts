@@ -40,19 +40,23 @@ const command = {
   blocks: [],
   command: { name: 'compact' }
 }
-it('visits only new insertion-ordered submissions, even when the host clock steps backward', async () => {
+it.each([10, 100])('scopes %i old commands incrementally across clear', async (count) => {
   let clock = 100
   const journal = await open(() => clock)
   const projections = new StructuredAgentSessionJournalProjections()
-  await journal.appendSubmission({
-    clientMessageId: 'command',
-    payloadFingerprint: 'command',
-    fence: 7,
-    body: command
-  })
+  for (let index = 0; index < count; index++) {
+    await journal.appendSubmission({
+      clientMessageId: `command-${index}`,
+      payloadFingerprint: 'command',
+      fence: 7,
+      body: command
+    })
+  }
   const item = vi.spyOn(journal, 'item')
+  const floor = vi.spyOn(journal.context, 'floor')
   expect(projections.read(journal, null).firstInputSubmissionKey).toBeNull()
-  expect(item).toHaveBeenCalledTimes(1)
+  expect(item).toHaveBeenCalledTimes(count)
+  expect(floor).toHaveBeenCalledTimes(1)
   for (let index = 0; index < 12; index++) {
     await journal.appendItem(
       { provider: 'codex', threadId: 'provider', turnId: 'compact', ordinal: index },
@@ -70,10 +74,7 @@ it('visits only new insertion-ordered submissions, even when the host clock step
     fence: 7,
     body: { kind: 'message', role: 'user', blocks: [] }
   })
-  expect(journal.snapshot().submissions.map((submission) => submission.clientMessageId)).toEqual([
-    'real',
-    'command'
-  ])
+  expect(journal.snapshot().submissions[0]?.clientMessageId).toBe('real')
   item.mockClear()
   expect(projections.read(journal, null).firstInputSubmissionKey).toBe(
     JSON.stringify([journal.cursor().epoch, 'real'])
@@ -90,6 +91,35 @@ it('visits only new insertion-ordered submissions, even when the host clock step
     JSON.stringify([journal.cursor().epoch, 'real'])
   )
   expect(item).not.toHaveBeenCalled()
+  const boundary = { operationId: 'clear', afterFence: 7, clearedAt: 101 }
+  await journal.context.clear(boundary, { write: () => {}, committed: () => {} })
+  const record = { ...agentSessionRecordFixture(), providerContextBoundary: boundary }
+  item.mockClear()
+  floor.mockClear()
+  expect(projections.read(journal, record).firstInputSubmissionKey).toBeNull()
+  expect(item).toHaveBeenCalledTimes(count + 2)
+  expect(floor).toHaveBeenCalledTimes(1)
+  await journal.appendSubmission({
+    clientMessageId: 'maintenance',
+    payloadFingerprint: 'maintenance',
+    fence: 7,
+    body: command
+  })
+  expect(projections.read(journal, record).firstInputSubmissionKey).toBeNull()
+  item.mockClear()
+  expect(projections.read(journal, record).firstInputSubmissionKey).toBeNull()
+  expect(item).not.toHaveBeenCalled()
+  await journal.appendSubmission({
+    clientMessageId: 'fresh',
+    payloadFingerprint: 'fresh',
+    fence: 7,
+    body: { kind: 'message', role: 'user', blocks: [] }
+  })
+  item.mockClear()
+  expect(projections.read(journal, record).firstInputSubmissionKey).toBe(
+    JSON.stringify([journal.cursor().epoch, 'fresh'])
+  )
+  expect(item).toHaveBeenCalledTimes(1)
 })
 it('observes a first empty real input without broadcasting an unchanged visible summary', async () => {
   const journal = await open(() => 100)

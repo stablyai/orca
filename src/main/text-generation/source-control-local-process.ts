@@ -93,10 +93,9 @@ export function runLocalSourceControlPlan(input: {
   emptyResultName: string
   operation: TextGenerationOperation
   wslDistro?: string
-  holdHomeLockUntilExit: boolean
   spawnAgent: SpawnSourceControlAgent
 }): LocalProcessExecution<InternalTextGenerationResult> {
-  const { plan, cwd, operation, holdHomeLockUntilExit } = input
+  const { plan, cwd, operation } = input
   let markProcessClosed!: () => void
   const processClosed = new Promise<void>((resolve) => {
     markProcessClosed = resolve
@@ -146,13 +145,18 @@ export function runLocalSourceControlPlan(input: {
     let canceledByUser = false
     const laneKey = localGenerationLaneKey(operation, cwd)
     let timer: ReturnType<typeof setTimeout> | null = null
+    let terminal = false
     let terminationComplete: Promise<void> | null = null
     let detachChildListeners = (): void => {}
     const startTermination = (): void => {
-      terminationComplete ??= killSourceControlAgentProcess(child)
+      terminationComplete ??= killSourceControlAgentProcess(child).catch((error: unknown) => {
+        console.error('[commit-message] Local generator termination failed:', error)
+      })
     }
     const markClosedAfterTermination = (): void => {
-      void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)
+      if (terminal && settled) {
+        void (terminationComplete ?? Promise.resolve()).then(markProcessClosed)
+      }
     }
     const finalize = (value: InternalTextGenerationResult): void => {
       if (settled) {
@@ -165,10 +169,8 @@ export function runLocalSourceControlPlan(input: {
       }
       detachChildListeners()
       clearLocalGenerationCancelToken(laneKey, cancel)
-      if (!holdHomeLockUntilExit) {
-        markProcessClosed()
-      }
       resolve(value)
+      markClosedAfterTermination()
     }
     const cancel = (): void => {
       canceledByUser = true
@@ -209,6 +211,8 @@ export function runLocalSourceControlPlan(input: {
     const onError = (error: Error): void => {
       if (!child.pid) {
         markProcessClosed()
+      } else if (!terminal && child.exitCode == null && child.signalCode == null) {
+        startTermination()
       }
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         finalize({
@@ -224,6 +228,8 @@ export function runLocalSourceControlPlan(input: {
       })
     }
     const onClose = (code: number | null): void => {
+      terminal = true
+      child.off?.('close', onClose)
       markClosedAfterTermination()
       if (canceledByUser) {
         finalize({
@@ -265,17 +271,15 @@ export function runLocalSourceControlPlan(input: {
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
-    if (holdHomeLockUntilExit) {
-      child.once('exit', markClosedAfterTermination)
-      child.once('close', markClosedAfterTermination)
-    }
     child.on('error', onError)
     child.on('close', onClose)
+    child.on('exit', () => {
+      terminal = true
+      markClosedAfterTermination()
+    })
     detachChildListeners = () => {
       child.stdout?.off?.('data', onStdoutData)
       child.stderr?.off?.('data', onStderrData)
-      child.off?.('error', onError)
-      child.off?.('close', onClose)
     }
     try {
       child.stdin?.end(plan.stdinPayload ?? undefined)

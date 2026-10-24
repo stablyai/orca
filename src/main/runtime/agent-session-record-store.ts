@@ -173,8 +173,8 @@ export class AgentSessionRecordStore {
   setUserConversationName = (sessionId: string, name: string, write: AgentSessionUserNameWrite) =>
     setAgentSessionRecordUserNameThrough((apply) => this.mutate(sessionId, apply), name, write)
 
-  compareAndSetConversationName: CompareAndSetConversationName = (sessionId, name, expected) =>
-    compareAndSetAgentSessionRecordName((apply) => this.mutate(sessionId, apply), name, expected)
+  compareAndSetConversationName: CompareAndSetConversationName = (id, name, expected, context) =>
+    compareAndSetAgentSessionRecordName((apply) => this.mutate(id, apply), name, expected, context)
 
   /** Unfenced like the name: it records where a launch ran and never contends with the lease. */
   pinLaunchDirectory = (sessionId: string, launchDirectory: string): Promise<AgentSessionRecord> =>

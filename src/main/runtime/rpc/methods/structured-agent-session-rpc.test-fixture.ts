@@ -95,17 +95,18 @@ export const STATUS_ITEMS: AgentJournalRenderItem[] = [
 ]
 
 /** One indexed session over a journal that reads back fixed items; the projection is real. */
-function statusFeed(): StructuredAgentSessionStatusFeed {
-  return new StructuredAgentSessionStatusFeed({
+const statusFeed = () =>
+  new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), itemFence() and runningTurn() of a journal with no sends.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, context.floor(), snapshot(), itemFence() and runningTurn() of a journal with no sends.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
+            context: { floor: () => null },
             stopMarks: { latest: () => null, revision: () => 0 },
             snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
             itemFence: () => undefined,
@@ -126,7 +127,6 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
     getRecord: () => null,
     now: () => 1_000
   })
-}
 
 export function hostStub(): StructuredAgentSessionHost {
   reset(hostCalls)
