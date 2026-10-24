@@ -41,6 +41,7 @@ export function upsertJournalItem(
   }
   if (!existing) {
     state.items.set(itemId, next)
+    state.mailHandoffs.item(itemId, existing, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
     return
@@ -62,6 +63,7 @@ export function upsertJournalItem(
     observedAt: existing.observedAt,
     turnScope: existing.turnScope ?? next.turnScope
   })
+  state.mailHandoffs.item(itemId, existing, state.items.get(itemId))
   state.tombstones.delete(itemId)
 }
 
@@ -91,6 +93,7 @@ export function removeJournalItem(
     }
   }
   state.tombstones.set(itemId, revision)
+  state.mailHandoffs.item(itemId, existing)
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)

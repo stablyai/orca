@@ -345,7 +345,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
       handles = new Set([
         ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+        ...(db?.getOpenMailHandoffHandles?.() ?? [])
       ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)

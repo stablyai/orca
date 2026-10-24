@@ -15,6 +15,7 @@ import type {
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
 type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
+  validateHandoff?: () => boolean | readonly { id: string; type: string }[]
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
@@ -55,7 +56,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
   let preserveAmbiguousDelivery = false
   let deferredUntilIdle = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
-  const messageIds = input.messages.map((message) => message.id)
+  let messageIds = input.messages.map((message) => message.id)
   const reservationTarget = {
     ptyId: input.ptyId,
     processIncarnation: input.expectedTarget.processIncarnation
@@ -99,7 +100,13 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       } else if (!queueSafe) {
         releaseWithoutRedrive = true
       } else {
+        const members = deps.validateHandoff?.()
+        if (members && typeof members !== 'boolean') {
+          input.messages = members
+          messageIds = members.map((message) => message.id)
+        }
         if (
+          members === false ||
           shouldReleaseOrchestrationPointer(
             deps.getDb(),
             input.mailboxHandle,
@@ -124,6 +131,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
           // nor rolling it back to a state that would send a second Enter is provable here.
           if (enterSettlement.outcome === 'refused') {
+            db.markMailboxPointerWriteAttempted(messageIds, reservationTarget, true)
             releaseWithoutRedrive = true
           }
         }
@@ -149,7 +157,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
             // Runtime teardown can close the DB while this delayed submit is settling.
             rollbackPersisted = false
           }
-        } else if (submitted || releaseWithoutRedrive) {
+        } else if (submitted) {
           try {
             deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
           } catch {

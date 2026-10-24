@@ -37,6 +37,8 @@ export function agentHookRuntimeDeps(
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
     readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
+    readTerminalMailTarget: (paneKey) => server.readTerminalMailTarget(paneKey),
+    terminalMailTargetWasAbandoned: (target) => server.terminalMailTargetWasAbandoned(target),
     checkHookAgentPresence: (paneKey, exitedSince) =>
       exitedSince === undefined
         ? server.checkAgentPresence(paneKey)

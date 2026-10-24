@@ -16,6 +16,7 @@ export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  state.submissionTurnScopes.set(row.clientMessageId, row.turnScope ?? null)
   const options = readAgentSessionExecutionOptions(row.options)
   state.submissions.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
@@ -36,6 +37,7 @@ export function applyJournalSubmission(
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
     ...(options ? { options } : {})
   })
+  state.mailHandoffs.submission(row.clientMessageId, state.submissions.get(row.clientMessageId))
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // Delayed handovers belong to no turn until dispatch names one.
   const turnScope = row.handoverRecorded
@@ -138,6 +140,7 @@ export function acceptSubmissionFromProviderItem(
   submission.providerItemId = providerItemId
   submission.reason = null
   submission.resolvedAt = row.ts
+  state.mailHandoffs.submission(submission.clientMessageId, submission)
   delete submission.recovered
   state.receipts.set(submission.clientMessageId, {
     clientMessageId: submission.clientMessageId,

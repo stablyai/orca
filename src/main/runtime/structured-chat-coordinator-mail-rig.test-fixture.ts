@@ -144,7 +144,8 @@ export function sendUserMessage(sessionId: string, text: string) {
           fields: { body }
         })
       },
-      body
+      body,
+      userSend: true
     }
   )
 }
@@ -248,7 +249,12 @@ beforeEach(async () => {
   codex = fakeCodex()
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
-  host = await ensureStructuredAgentSessionHost({
+  host = await createMailHost()
+  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+})
+
+function createMailHost() {
+  return ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     stateDirectory: root,
     hostId: 'local',
@@ -266,8 +272,14 @@ beforeEach(async () => {
     },
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
   })
-  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-})
+}
+
+export async function restartHostAndRuntime(): Promise<void> {
+  await stopStructuredAgentSessionRuntime()
+  restartRuntime()
+  host = await createMailHost()
+  await host.restoreReadableSessions([COORDINATOR])
+}
 
 /** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
 export function startRuntime(): OrcaRuntimeService {

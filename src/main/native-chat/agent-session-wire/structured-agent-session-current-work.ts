@@ -1,3 +1,5 @@
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { currentRequestsProjection } from './agent-session-current-requests'
 // Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
 // Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
@@ -263,8 +265,14 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   /** Project interrupted turns immediately from observed/replaced-runtime death, before settlement persists. */
-  diedTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
-    const running = this.journal.runningTurn()
+  diedTurn(itemId?: string): { item: AgentJournalRenderItem; turnId: string } | null {
+    const item = itemId ? this.journal.item(itemId) : null
+    const turn = item && isRootAgentJournalItem(item) ? readAgentJournalTurn(item.body) : null
+    const running = itemId
+      ? item && turn?.state === 'running'
+        ? { item, turnId: turn.turnId }
+        : null
+      : this.journal.runningTurn()
     if (!running || this.isCurrentItem(running.item.itemId)) {
       return null
     }

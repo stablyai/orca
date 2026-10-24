@@ -255,6 +255,8 @@ export type MessageRow = {
   sender_pane_key: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
+  handoff?: string | null
+  recovery_used?: number
   pointer_process_incarnation?: string | null
 }
 

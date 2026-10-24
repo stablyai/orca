@@ -5,11 +5,13 @@ import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mail
 import type { OrchestrationMailboxPointerSubmitTarget } from './mailbox-pointer-submit'
 import type { OrchestrationCliCommand } from './cli-command'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { TerminalMailTarget } from '../../agent-hooks/server/terminal-mail-target'
 
 export type OrchestrationMailboxPointerMessage = {
   id: string
   type: string
   sequence: number
+  handoff?: string | null
   pointer_enter_pending?: number
   pointer_pty_id?: string | null
   pointer_process_incarnation?: string | null
@@ -32,6 +34,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
     leaf: OrchestrationMailboxLeaf,
     ptyId: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
+  readMailTarget?: (leaf: OrchestrationMailboxLeaf) => TerminalMailTarget | null
+  mailTargetWasAbandoned?: (target: TerminalMailTarget) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>

@@ -7,6 +7,8 @@ export function retireRewoundJournalSubmission(state: JournalReducerState, itemI
     return
   }
   state.submissions.delete(identity.clientMessageId)
+  state.mailHandoffs.submission(identity.clientMessageId)
+  state.submissionTurnScopes.delete(identity.clientMessageId)
   state.receipts.delete(identity.clientMessageId)
   for (const [providerItemId, submissionItemId] of state.aliases) {
     if (submissionItemId === itemId) {

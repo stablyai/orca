@@ -8,7 +8,9 @@ const INTERNAL_MESSAGE_COLUMNS = [
   'sender_pane_key',
   'pointer_enter_pending',
   'pointer_pty_id',
-  'pointer_process_incarnation'
+  'pointer_process_incarnation',
+  'handoff',
+  'recovery_used'
 ] as const
 
 export type MailboxMessageReceipt = Omit<MessageRow, (typeof INTERNAL_MESSAGE_COLUMNS)[number]>

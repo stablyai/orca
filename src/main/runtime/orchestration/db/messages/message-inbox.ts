@@ -1,3 +1,4 @@
+import { UNKNOWN_MAIL_HANDOFF } from '../../mail-handoff'
 import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -98,6 +99,7 @@ export function getUndeliveredUnreadMessages(
     'to_handle = ?',
     'read = 0',
     'delivered_at IS NULL',
+    'handoff IS NULL',
     'pointer_enter_pending = 0',
     "delivery_contract = 'current_delivery'"
   ]
@@ -173,7 +175,9 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[], mailboxHan
     ids,
     (placeholders) =>
       `UPDATE messages
-       SET delivered_at = datetime('now'), pointer_enter_pending = 0,
+       SET handoff = CASE WHEN json_valid(handoff) AND json_extract(handoff, '$.kind') = 'terminal'
+             THEN json_set(handoff, '$.phase', 'offered') ELSE COALESCE(handoff, '${UNKNOWN_MAIL_HANDOFF}') END,
+           delivered_at = datetime('now'), pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
        WHERE to_handle = ? AND id IN (${placeholders})`,
     [mailboxHandle]

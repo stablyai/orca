@@ -54,7 +54,9 @@ async function heldDispatchMail(): Promise<string> {
   chat.handlers.onExit?.(new Error('provider died before the echo'))
   await idleEdges(PEER_CHAT)
   expect(chat.turns).toHaveLength(1)
-  expect(db.getUndeliveredUnreadMessages(mailbox, undefined, {})).toHaveLength(1)
+  expect(
+    db.getUnreadMessages(mailbox).filter((message) => message.delivered_at === null)
+  ).toHaveLength(1)
   return mailbox
 }
 
@@ -70,28 +72,40 @@ async function nextTurn(sessionId: string): Promise<{ turns: { text: string }[] 
   return revived
 }
 
-describe("a chat worker's held Dispatch mail is pointed again", () => {
+describe('uncertain Dispatch mail remains readable across context changes', () => {
   // Also covered by the restored-mail repoint a restart schedules; this pins the end result.
   it('after a restart', async () => {
     observationClock.start()
-    await heldDispatchMail()
+    const mailbox = await heldDispatchMail()
     restartRuntime()
 
     const revived = await nextTurn(PEER_CHAT)
 
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(turnText(revived.turns[1]!)).toMatch(POINTER)
+    expect(revived.turns).toHaveLength(1)
+    const checked = await call(
+      'orchestration.check',
+      { terminal: WORKER },
+      { sessionId: PEER_CHAT }
+    )
+    expect(checked).toMatchObject({ count: 1 })
+    expect(db.getUnreadMessages(mailbox)).toHaveLength(1)
   })
 
   it('in the same chat after /clear', async () => {
     observationClock.start()
-    await heldDispatchMail()
+    const mailbox = await heldDispatchMail()
     const cleared = await clearChat(PEER_CHAT)
     expect(cleared).toBe(PEER_CHAT)
 
     const revived = await nextTurn(cleared)
 
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(turnText(revived.turns[1]!)).toMatch(POINTER)
+    expect(revived.turns).toHaveLength(1)
+    const checked = await call(
+      'orchestration.check',
+      { terminal: WORKER },
+      { sessionId: PEER_CHAT }
+    )
+    expect(checked).toMatchObject({ count: 1 })
+    expect(db.getUnreadMessages(mailbox)).toHaveLength(1)
   })
 })

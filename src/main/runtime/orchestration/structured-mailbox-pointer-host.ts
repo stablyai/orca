@@ -18,6 +18,8 @@ import {
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
+import { isAdmissibleAgentJournalMessageBody } from '../../../shared/agent-session-journal-schemas'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -59,17 +61,12 @@ export async function readStructuredSessionGateFacts(
 async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
-  const snapshot = await readSessionJournal(sessionId)
-  if (!snapshot) {
+  const host = getStructuredAgentSessionHost()
+  const evidence = await host?.readMailHandoffEvidence(sessionId, '').catch(() => null)
+  if (!evidence) {
     return null
   }
-  const host = getStructuredAgentSessionHost()
-  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
-  return {
-    submissions: boundary
-      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
-      : snapshot.submissions
-  }
+  return { epoch: evidence.epoch, frontier: evidence.frontier }
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -91,6 +88,60 @@ async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapsh
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
+    readReceipt(reference) {
+      const unreadable = {
+        verdict: 'unreadable',
+        scope: { kind: 'global' },
+        operationId: reference.operationId
+      } as const
+      const host = getStructuredAgentSessionHost()
+      if (!host) {
+        return unreadable
+      }
+      const read = host.deps.store.readCommandReceipt({ kind: 'global' }, reference.operationId)
+      if (read.verdict !== 'readable') {
+        return read
+      }
+      const manifest = reference.manifest
+      const body: unknown = manifest && JSON.parse(manifest.body)
+      const caller = manifest?.dispatchId
+        ? structuredPointerCallerKey(manifest.dispatchId)
+        : structuredSessionPointerCallerKey(reference.sessionId)
+      if (
+        manifest &&
+        isAdmissibleAgentJournalMessageBody(body) &&
+        read.receipt.sessionId === reference.sessionId &&
+        read.receipt.method === 'agentSession.send' &&
+        read.receipt.callerKey === caller &&
+        read.receipt.fingerprint ===
+          structuredAgentSessionMessageSendMutation({
+            sessionId: reference.sessionId,
+            clientOperationId: reference.operationId,
+            expectedRuntimeFence: manifest.runtimeFence,
+            body
+          }).envelope.payloadFingerprint
+      ) {
+        return read
+      }
+      return unreadable
+    },
+    async readHandoffEvidence(reference) {
+      return (
+        (await getStructuredAgentSessionHost()?.readMailHandoffEvidence(
+          reference.sessionId,
+          reference.clientMessageId
+        )) ?? null
+      )
+    },
+
+    readHandoffEvidenceNow(reference) {
+      return (
+        getStructuredAgentSessionHost()?.readMailHandoffEvidenceNow(
+          reference.sessionId,
+          reference.clientMessageId
+        ) ?? null
+      )
+    },
     readSessionFacts(sessionId) {
       return readPointerSessionFacts(sessionId)
     },
@@ -131,6 +182,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
+              if (!input.beforeRun()) {
+                throw new StructuredMailSupersededError()
+              }
               if (
                 input.body.from?.orchestration?.message === 'mail-notice' &&
                 host.currentWork(input.sessionId)?.hasActionablePrompt()
@@ -141,6 +195,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           }
         })
       } catch (error) {
+        if (error instanceof StructuredMailSupersededError) {
+          return { kind: 'superseded', noEffect: true }
+        }
         if (error instanceof StructuredMailHeldError) {
           return { kind: 'held' }
         }
@@ -148,17 +205,30 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       }
       switch (outcome.kind) {
         case 'refused':
+          if (
+            outcome.refusal.code === 'agent_session_operation_invalid' &&
+            outcome.refusal.details?.reason === 'conversationCommandInFlight'
+          ) {
+            return { kind: 'held' }
+          }
           return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
             ? { kind: 'unattached' }
-            : { kind: 'sent', state: 'rejected' }
+            : {
+                kind: 'sent',
+                state: 'rejected',
+                ...(outcome.refusal.code === 'agent_session_operation_expired'
+                  ? { nonAdmission: 'expired' as const }
+                  : {})
+              }
         case 'queued':
-          return { kind: 'queued' }
+          return { kind: 'queued', clientMessageId: outcome.clientMessageId }
         case 'sent': {
           // `pending` is not yet an acknowledgement; only `accepted` may consume mail. A send still
           // pending after the wait parks for the next journal edge.
           const state = outcome.submission?.dispatchState
           return {
             kind: 'sent',
+            clientMessageId: outcome.submission?.clientMessageId ?? outcome.clientMessageId,
             state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
           }
         }
@@ -168,3 +238,5 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 }
 
 class StructuredMailHeldError extends Error {}
+
+class StructuredMailSupersededError extends Error {}

@@ -12,6 +12,7 @@ import {
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
 import { refuse } from '../../shared/agent-session-wire-refusals'
+import { readMailHandoff } from './orchestration/mail-handoff'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
@@ -44,7 +45,7 @@ import {
   ptyPointer,
   turnText,
   queuedCardTexts,
-  restartRuntime
+  restartHostAndRuntime
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
@@ -80,7 +81,10 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await settleTurn(COORDINATOR, 0)
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
     await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
+      () =>
+        expect(
+          db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+        ).toEqual([]),
       WAIT
     )
     expect(chat.turns).toHaveLength(1)
@@ -105,7 +109,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       .map((submission) => submission.clientMessageId)
   }
 
-  it('keeps a pointer whose provider died before the echo, and points it after the next turn that runs', async () => {
+  it('keeps unconfirmed input readable after provider death without attributing it to a later person turn', async () => {
     // A provider that dies before echoing never ran the pointer: the mail stays unpointed, and
     // neither the death's own edge nor an idle one starts the provider again for it.
     const chat = await openChat(COORDINATOR)
@@ -118,7 +122,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     await edgesAnswered()
     expect(codex.connections.length).toBe(before)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(
+      db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+    ).toHaveLength(1)
 
     // The user's next message starts the agent; once its turn runs, the pointer follows it.
     expect(await sendUserMessage(COORDINATOR, 'again')).toMatchObject({ ok: true })
@@ -127,13 +133,11 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
     expect(revived.turns[0]!.text).toContain('again')
     await settleTurn(COORDINATOR, 0)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(revived.turns[1]!.text).toMatch(POINTER)
-    await settleTurn(COORDINATOR, 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    await edgesAnswered()
+    expect(revived.turns).toHaveLength(1)
+    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+      count: 1
+    })
   })
 
   it('does not restart a provider that dies before every echo, however many edges follow', async () => {
@@ -151,7 +155,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     expect(codex.connections.length - before).toBe(0)
     expect(providerFaults.turnStarts).toBe(1)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(
+      db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+    ).toHaveLength(1)
   })
 
   it.each(['exit-then-throw', 'throw-then-exit'] as const)(
@@ -171,11 +177,13 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       expect(providerFaults.starts - before).toBe(0)
       expect(providerFaults.turnStarts).toBe(1)
       expect(await pointerSends()).toHaveLength(1)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+      expect(
+        db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+      ).toHaveLength(1)
     }
   )
 
-  it('points the next result once after a transient death, then holds nothing', async () => {
+  it('wakes for the next result after transient death and keeps uncertain older mail readable', async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const second = await call(
@@ -194,13 +202,12 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
     const revived = connectionFor(COORDINATOR)
     expect(turnText(revived.turns.at(-1)!)).toBe(
-      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
+      formatMessagePointer(1, `run:${runId}`, localOrchestrationCliCommand()).trim()
     )
     await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+      count: 2
+    })
     expect(providerFaults.starts - before).toBe(1)
     expect(providerFaults.turnStarts).toBe(2)
   })
@@ -242,33 +249,41 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await edgesAnswered()
     expect(providerFaults.starts - before).toBe(1)
     expect(providerFaults.turnStarts).toBe(0)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(
+      db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+    ).toHaveLength(1)
   })
 
-  it('points a held pointer once more after Orca restarts, under a new id', async () => {
+  it('retries definitively unadmitted mail once in a new host incarnation, preserving its authorization', async () => {
     observationClock.start()
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
-    providerFaults.dieBeforeEveryEcho = true
+    await host.close(COORDINATOR, 'evict')
+    providerFaults.refuseStart = () => new AgentSessionAcquisitionRefusal('no login', 'notSignedIn')
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
-    await edgesAnswered()
-    const [held] = await pointerSends()
-
-    // The next process: a fresh runtime over the same database redrives restored mail. The
-    // provider still dies, so exactly one start proves it is pointed once, not in a loop.
-    restartRuntime()
+    await vi.waitFor(
+      async () =>
+        expect((await host.journalSnapshot(COORDINATOR)).submissions[0]?.dispatchState).toBe(
+          'rejected'
+        ),
+      WAIT
+    )
+    const held = readMailHandoff(db.getUnreadMessages(`run:${runId}`)[0]?.handoff)
     const before = providerFaults.starts
-    await observationClock.observe(2_000)
-    await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
-    await observationClock.observe(1_500)
+    await restartHostAndRuntime()
+    await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
+    await observationClock.observe(500)
     await edgesAnswered()
-    expect(providerFaults.starts - before).toBe(1)
-    expect(providerFaults.turnStarts).toBe(2)
-    const sends = await pointerSends()
-    expect(sends).toHaveLength(2)
-    expect(sends[0]).toBe(held)
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    expect(providerFaults.starts).toBe(before + 1)
+    const replacement = readMailHandoff(db.getUnreadMessages(`run:${runId}`)[0]?.handoff)
+    expect(held?.kind).toBe('structured')
+    expect(replacement?.kind).toBe('structured')
+    if (held?.kind !== 'structured' || replacement?.kind !== 'structured') {
+      throw new Error('Missing reservation')
+    }
+    expect(replacement.authorizationId).toBe(held.authorizationId)
+    expect(replacement.operationId).not.toBe(held.operationId)
+    expect(db.getUnreadMessages(`run:${runId}`)[0]?.recovery_used).toBe(0)
   })
 
   /** Mail for a chat whose agent is stopped and whose every start is refused; resolves after it. */
@@ -284,7 +299,10 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.starts).toBe(before + 1), WAIT)
     await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1),
+      () =>
+        expect(
+          db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+        ).toHaveLength(1),
       WAIT
     )
     // A fixed window, not a poll: a retry loop would start it several times in it.
@@ -318,7 +336,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
       await edgesAnswered()
       expect(providerFaults.starts).toBe(before)
       expect(await pointerSends()).toHaveLength(1)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+      expect(
+        db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+      ).toHaveLength(1)
 
       // Fixed, the person's next message starts the agent, and the pointer follows its turn.
       providerFaults.refuseStart = null
@@ -333,9 +353,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     }
   )
 
-  it('points held mail after the next turn that runs, even once a rewind dropped its send', async () => {
+  it('keeps uncertain input readable after rewind without inferring ownership from a later turn', async () => {
     const chat = await openChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
+    const { taskId } = await coordinatorRunAndTask()
     providerFaults.crashOnTurnStart = 'exit-then-throw'
     await finishWorker(taskId)
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(1), WAIT)
@@ -354,15 +374,14 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const revived = connectionFor(COORDINATOR)
     expect(revived).not.toBe(chat)
     await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(() => expect(turnText(revived.turns.at(-1)!)).toMatch(POINTER), WAIT)
-    await settleTurn(COORDINATOR, revived.turns.length - 1)
-    await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
-      WAIT
-    )
+    await edgesAnswered()
+    expect(revived.turns).toHaveLength(1)
+    expect(await call('orchestration.check', {}, { sessionId: COORDINATOR })).toMatchObject({
+      count: 1
+    })
   })
 
-  it('points again under a new id once a send the host never recorded is too old to admit', async () => {
+  it('rotates an unadmitted transport key only after the host positively refuses it as expired', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     // The first pointer is refused before the host records it, so the journal holds no verdict.
@@ -375,12 +394,23 @@ describe('a worker result reaches the structured chat that coordinates it', () =
         'busy'
       )
     }))
+    refused.mockImplementationOnce(async () => ({
+      ok: false as const,
+      refusal: refuse(
+        'agent_session_operation_expired',
+        { reason: 'operationExpired' },
+        'This operation is too old to admit.'
+      )
+    }))
     refused.mockImplementation((caller, params) => realSend(caller, params))
     await finishWorker(taskId)
     await vi.waitFor(() => expect(refused).toHaveBeenCalledTimes(1), WAIT)
-    const held = db.getStructuredPointerOperation(`run:${runId}`)
-    expect(held).toMatchObject({ session_id: COORDINATOR, operation_id: expect.any(String) })
-    const heldId = held!.operation_id
+    const held = readMailHandoff(db.getUnreadMessages(`run:${runId}`)[0]?.handoff)
+    expect(held).toMatchObject({ sessionId: COORDINATOR, operationId: expect.any(String) })
+    if (held?.kind !== 'structured') {
+      throw new Error('Missing reservation')
+    }
+    const heldId = held.operationId
     expect(heldId).not.toBe('')
     expect(refused.mock.calls[0]?.[1].envelope.clientOperationId).toBe(heldId)
     expect(await pointerSends()).toEqual([])
@@ -399,12 +429,15 @@ describe('a worker result reaches the structured chat that coordinates it', () =
         expect(sends).toHaveLength(1)
         expect(sends[0]).toBeTruthy()
         expect(sends[0]).not.toBe(heldId)
-        expect(db.getStructuredPointerOperation(`run:${runId}`)).toMatchObject({
-          session_id: COORDINATOR,
-          operation_id: sends[0]
+        expect(readMailHandoff(db.getUnreadMessages(`run:${runId}`)[0]?.handoff)).toMatchObject({
+          sessionId: COORDINATOR,
+          operationId: sends[0],
+          authorizationId: held.authorizationId
         })
       }, WAIT)
-      expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+      expect(
+        db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+      ).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -431,7 +464,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     expect(turnText(chat.turns[0]!)).toBe(
-      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
+      formatMessagePointer(1, `run:${runId}`, localOrchestrationCliCommand()).trim()
     )
     expect(await queuedCardTexts()).toEqual([])
     expect(codex.connections.length).toBe(before)
@@ -532,16 +565,19 @@ describe('a /clear keeps the chat its orchestration address', () => {
 
   it('points mail the earlier context never took at the fresh context, without a user message', async () => {
     observationClock.start()
-    const chat = await openChat(COORDINATOR)
+    await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
+    await host.close(COORDINATOR, 'evict')
+    providerFaults.refuseStart = () => new AgentSessionAcquisitionRefusal('no login', 'notSignedIn')
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    // The provider dies before it runs the pointer, so the mail is still unpointed at the /clear.
-    chat.handlers.onExit?.(new Error('provider died before the echo'))
-    await vi.waitFor(() =>
-      expect(host.deps.store.getRecord(COORDINATOR)?.lease.claimStatus).toBe('released')
+    await vi.waitFor(
+      async () =>
+        expect((await host.journalSnapshot(COORDINATOR)).submissions[0]?.dispatchState).toBe(
+          'rejected'
+        ),
+      WAIT
     )
-    expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
+    providerFaults.refuseStart = null
 
     const cleared = await clearChat(COORDINATOR)
     expect(cleared).toBe(COORDINATOR)
@@ -549,7 +585,10 @@ describe('a /clear keeps the chat its orchestration address', () => {
     await vi.waitFor(() => expect(connectionFor(cleared).turns[0]?.text).toMatch(POINTER), WAIT)
     await settleTurn(cleared, 0)
     await vi.waitFor(
-      () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
+      () =>
+        expect(
+          db.getUnreadMessages(`run:${runId}`).filter((message) => message.delivered_at === null)
+        ).toEqual([]),
       WAIT
     )
   })

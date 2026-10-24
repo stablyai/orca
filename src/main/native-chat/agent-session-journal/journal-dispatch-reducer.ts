@@ -49,6 +49,7 @@ export function applyJournalDispatchRow(
   }
   submission.resolvedAt = row.state === 'pending' ? null : row.ts
   if (row.state === 'pending') {
+    state.submissionTurnScopes.set(row.clientMessageId, row.turnScope ?? null)
     submission.handedOverAt = row.ts
     placeHandedOverMessage(state, submission, row)
     foldStoppedHistoryCarried(state, row)
@@ -63,6 +64,7 @@ export function applyJournalDispatchRow(
   if (row.state === 'accepted') {
     noteTurnAccepted(state, submission)
   }
+  state.mailHandoffs.submission(row.clientMessageId, submission)
   if (row.state !== 'accepted' || !row.providerItemId) {
     return
   }

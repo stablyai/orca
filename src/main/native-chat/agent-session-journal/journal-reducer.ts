@@ -1,3 +1,4 @@
+import { JournalMailHandoffs } from './journal-submission-handoff'
 import { journalItemDeclaresEcho } from './journal-item-echo'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
@@ -6,7 +7,8 @@ import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
@@ -60,6 +62,8 @@ export type JournalReducerState = {
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
   submissions: Map<string, AgentJournalSubmission>
+  mailHandoffs: JournalMailHandoffs
+  submissionTurnScopes: Map<string, AgentJournalTurnScope | null>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
   aliases: Map<string, string>
@@ -97,6 +101,8 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     tombstones: new Map(),
     removedTurnIds: new Set(),
     submissions: new Map(),
+    mailHandoffs: new JournalMailHandoffs(),
+    submissionTurnScopes: new Map(),
     receipts: new Map(),
     aliases: new Map(),
     itemEchoes: new Map(),

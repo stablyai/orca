@@ -1,3 +1,6 @@
+import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
+import { MAILBOX_POINTER_WRITE_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
+import type { MessageType } from './orchestration/types'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -227,254 +230,25 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
   })
 })
 
-type StoredMessageRow = {
-  id: string
-  run_id: string
-  from_handle: string
-  to_handle: string
-  subject: string
-  body: string
-  type: string
-  priority: string
-  thread_id: string | null
-  payload: string | null
-  read: number
-  sequence: number
-  created_at: string
-  delivered_at: string | null
-  sender_pane_key: null
-  pointer_enter_pending: number
-  pointer_pty_id: string | null
-  pointer_process_incarnation: string | null
-}
-
 function makeOrchestrationDbStub(toHandle: () => string) {
-  const rows: StoredMessageRow[] = []
+  const db = new InMemoryOrchestrationMessages()
   const runMailbox = 'run:run_test'
-  const clearMailboxPointerEnter = (ids: ReadonlySet<string>) => {
-    for (const row of rows) {
-      if (ids.has(row.id)) {
-        row.pointer_enter_pending = 0
-        row.pointer_pty_id = null
-        row.pointer_process_incarnation = null
-      }
-    }
-  }
-  const markAsDelivered = vi.fn((ids: string[]) => {
-    const deliveredIds = new Set(ids)
-    for (const row of rows) {
-      if (deliveredIds.has(row.id)) {
-        row.delivered_at = 'now'
-      }
-    }
-    clearMailboxPointerEnter(deliveredIds)
-  })
-  const markAsUndelivered = vi.fn((ids: string[]) => {
-    const releasedIds = new Set(ids)
-    for (const row of rows) {
-      if (releasedIds.has(row.id) && row.read === 0) {
-        row.delivered_at = null
-      }
-    }
-    clearMailboxPointerEnter(releasedIds)
-  })
-  const stageMailboxPointerEnter = vi.fn(
-    (ids: string[], target: { ptyId: string; processIncarnation: string }) => {
-      const stagedIds = new Set(ids)
-      let changed = 0
-      for (const row of rows) {
-        if (stagedIds.has(row.id) && row.read === 0) {
-          row.pointer_enter_pending = 1
-          row.pointer_pty_id = target.ptyId
-          row.pointer_process_incarnation = target.processIncarnation
-          changed += 1
-        }
-      }
-      return changed === ids.length
-    }
-  )
-  const matchesReservation = (
-    row: StoredMessageRow,
-    target: { ptyId: string; processIncarnation: string }
-  ): boolean =>
-    row.pointer_pty_id === target.ptyId &&
-    row.pointer_process_incarnation === target.processIncarnation
-  const advanceMailboxPointerPhase = (
-    ids: string[],
-    target: { ptyId: string; processIncarnation: string },
-    from: number,
-    to: number
-  ): boolean => {
-    const selected = new Set(ids)
-    let changed = 0
-    for (const row of rows) {
-      if (
-        selected.has(row.id) &&
-        row.read === 0 &&
-        row.pointer_enter_pending === from &&
-        matchesReservation(row, target)
-      ) {
-        row.pointer_enter_pending = to
-        changed += 1
-      }
-    }
-    return changed === ids.length
-  }
-  const markMailboxPointerWriteAttempted = vi.fn(
-    (ids: string[], target: { ptyId: string; processIncarnation: string }) =>
-      advanceMailboxPointerPhase(ids, target, 1, 2)
-  )
-  const markMailboxPointerEnterAttempted = vi.fn(
-    (ids: string[], target: { ptyId: string; processIncarnation: string }) =>
-      advanceMailboxPointerPhase(ids, target, 2, 3)
-  )
-  const selectReservation = (
-    ids: string[],
-    target: { ptyId: string; processIncarnation: string },
-    expectedPhases: readonly number[]
-  ): Set<string> =>
-    new Set(
-      rows
-        .filter(
-          (row) =>
-            ids.includes(row.id) &&
-            expectedPhases.includes(row.pointer_enter_pending) &&
-            matchesReservation(row, target)
-        )
-        .map((row) => row.id)
-    )
-  const settleMailboxPointerEnter = vi.fn(
-    (
-      ids: string[],
-      target: { ptyId: string; processIncarnation: string },
-      expectedPhases: readonly number[]
-    ) => {
-      const settled = selectReservation(ids, target, expectedPhases)
-      for (const row of rows) {
-        if (settled.has(row.id)) {
-          row.delivered_at ??= 'now'
-        }
-      }
-      clearMailboxPointerEnter(settled)
-    }
-  )
-  const releaseMailboxPointerEnter = vi.fn(
-    (
-      ids: string[],
-      target: { ptyId: string; processIncarnation: string },
-      expectedPhases: readonly number[]
-    ) => {
-      const released = selectReservation(ids, target, expectedPhases)
-      for (const row of rows) {
-        if (released.has(row.id) && row.read === 0) {
-          row.delivered_at = null
-        }
-      }
-      clearMailboxPointerEnter(released)
-    }
-  )
-  const releasePendingMailboxPointerForPty = vi.fn((ptyId: string) => {
-    const reservedIds = new Set(
-      rows
-        .filter((row) => row.pointer_enter_pending === 1 && row.pointer_pty_id === ptyId)
-        .map((row) => row.id)
-    )
-    const pendingIds = new Set(
-      rows
-        .filter((row) => row.pointer_enter_pending > 0 && row.pointer_pty_id === ptyId)
-        .map((row) => row.id)
-    )
-    for (const row of rows) {
-      if (reservedIds.has(row.id) && row.read === 0) {
-        row.delivered_at = null
-      } else if (pendingIds.has(row.id) && row.read === 0) {
-        row.delivered_at ??= 'now'
-      }
-    }
-    clearMailboxPointerEnter(pendingIds)
+  db.setRun({
+    id: 'run_test',
+    coordinator_handle: toHandle(),
+    coordinator_pane_key: `tab-1:${LEAF_ID}`
   })
   return {
-    rows,
+    rows: db.rows,
     runMailbox,
-    markAsDelivered,
-    markAsUndelivered,
-    releaseMailboxPointerEnter,
-    stageMailboxPointerEnter,
-    insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
-      rows.push({
-        id: `msg_${rows.length + 1}`,
-        run_id: 'run_test',
-        from_handle: 'term_sender',
-        to_handle: toHandle(),
-        subject,
-        body: '',
-        type,
-        priority: 'normal',
-        thread_id: null,
-        payload: null,
-        read: 0,
-        sequence: rows.length + 1,
-        created_at: 'now',
-        delivered_at: null,
-        sender_pane_key: null,
-        pointer_enter_pending: 0,
-        pointer_pty_id: null,
-        pointer_process_incarnation: null
-      })
+    markAsDelivered: vi.spyOn(db, 'markAsDelivered'),
+    markAsUndelivered: vi.spyOn(db, 'markAsUndelivered'),
+    releaseMailboxPointerEnter: vi.spyOn(db, 'releaseMailboxPointerEnter'),
+    stageMailboxPointerEnter: vi.spyOn(db, 'stageMailboxPointerEnter'),
+    insert(subject: string, type: MessageType = 'status'): void {
+      db.insertMessage({ from: 'term_sender', to: toHandle(), subject, type })
     },
-    db: {
-      // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
-      getUndeliveredUnreadMessages: (handle: string) =>
-        rows.filter((row) => row.to_handle === handle && row.read === 0 && !row.delivered_at),
-      getUndeliveredUnreadMailboxHandles: () => [toHandle()],
-      getPendingMailboxPointerMessages: (handle: string) =>
-        rows.filter(
-          (row) => row.to_handle === handle && row.read === 0 && row.pointer_enter_pending === 1
-        ),
-      getPendingMailboxPointerHandles: () => [
-        ...new Set(
-          rows
-            .filter((row) => row.read === 0 && row.pointer_enter_pending === 1)
-            .map((row) => row.to_handle)
-        )
-      ],
-      getActiveCoordinatorRun: () => null,
-      getCurrentRunForPane: () => ({ id: 'run_test' }),
-      getRun: () => ({ id: 'run_test', coordinator_handle: toHandle() }),
-      hasUndeliveredDirectMessageForRun: (runId: string, handle: string) =>
-        rows.some(
-          (row) =>
-            row.run_id === runId && row.to_handle === handle && row.read === 0 && !row.delivered_at
-        ),
-      routeUnreadDirectMessagesToRunMailbox: (runId: string, handle: string) => {
-        const routed = rows.filter(
-          (row) => row.run_id === runId && row.to_handle === handle && row.read === 0
-        )
-        for (const row of routed) {
-          row.to_handle = runMailbox
-        }
-        return {
-          routedCount: routed.length,
-          hasMore: false,
-          types: [...new Set(routed.map((row) => row.type))]
-        }
-      },
-      areUnreadMessages: (handle: string, ids: string[]) =>
-        ids.every((id) =>
-          rows.some((row) => row.id === id && row.to_handle === handle && row.read === 0)
-        ),
-      // Consulted by onPtyExit's dispatch-failure path.
-      getActiveDispatchForTerminal: () => null,
-      stageMailboxPointerEnter,
-      markMailboxPointerWriteAttempted,
-      markMailboxPointerEnterAttempted,
-      settleMailboxPointerEnter,
-      releaseMailboxPointerEnter,
-      releasePendingMailboxPointerForPty,
-      markAsDelivered,
-      markAsUndelivered,
-      close: () => {}
-    }
+    db
   }
 }
 
@@ -772,7 +546,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter.mock.calls.filter(([ids]) => ids.length > 0)).toEqual([
+        [
+          [stub.rows[0].id],
+          stub.stageMailboxPointerEnter.mock.calls[0]?.[1],
+          [1, MAILBOX_POINTER_WRITE_ATTEMPTED]
+        ]
+      ])
+      expect(stub.rows[0]).toMatchObject({
+        pointer_enter_pending: 0,
+        pointer_pty_id: null,
+        pointer_process_incarnation: null
+      })
       expect(stub.rows[0].delivered_at).toBeNull()
 
       // The replacement's own delivery starts a fresh flight and completes —
@@ -817,7 +602,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter.mock.calls.filter(([ids]) => ids.length > 0)).toEqual([
+        [
+          [stub.rows[0].id],
+          stub.stageMailboxPointerEnter.mock.calls[0]?.[1],
+          [1, MAILBOX_POINTER_WRITE_ATTEMPTED]
+        ]
+      ])
+      expect(stub.rows[0]).toMatchObject({
+        pointer_enter_pending: 0,
+        pointer_pty_id: null,
+        pointer_process_incarnation: null
+      })
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
       expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
@@ -848,7 +644,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter.mock.calls.filter(([ids]) => ids.length > 0)).toEqual([
+        [
+          [stub.rows[0].id],
+          stub.stageMailboxPointerEnter.mock.calls[0]?.[1],
+          [1, MAILBOX_POINTER_WRITE_ATTEMPTED]
+        ]
+      ])
+      expect(stub.rows[0]).toMatchObject({
+        pointer_enter_pending: 0,
+        pointer_pty_id: null,
+        pointer_process_incarnation: null
+      })
       expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()

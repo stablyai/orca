@@ -27,7 +27,7 @@ export function createCoordinatorMailObservationClock(
       runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
       wait: { timeout: number }
     ): Promise<void> {
-      const reads = vi.spyOn(getHost(), 'journalSnapshot')
+      const reads = vi.spyOn(getHost(), 'readMailHandoffEvidence')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
       await vi.waitFor(() => expect(reads).toHaveBeenCalled(), wait)

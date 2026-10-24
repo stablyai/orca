@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import { selectTerminalMailHandoff } from './terminal-mail-settlement'
+import type { TerminalMailTarget } from '../../agent-hooks/server/terminal-mail-target'
 import { OrchestrationDb } from './db'
 import { OrchestrationMailboxPointerDelivery } from './mailbox-pointer-delivery'
-import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
+import {
+  OrchestrationMailboxPointerState,
+  type OrchestrationMailboxDeliveryFlight
+} from './mailbox-pointer-state'
+import { OrchestrationMailboxOwner } from './mailbox-owner'
+import { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
+import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 import {
   WRITE_ACCEPTED,
@@ -12,6 +21,7 @@ import {
 const LEAF = {
   tabId: 'tab-1',
   leafId: 'leaf-1',
+  paneRuntimeId: 1,
   ptyId: 'pty-1',
   writable: true,
   lastAgentStatus: 'idle' as const,
@@ -20,9 +30,34 @@ const LEAF = {
 }
 
 function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
+  db.db
+    .prepare(
+      "INSERT OR IGNORE INTO runs (id, objective, coordinator_handle, consumer_generation, legacy) VALUES ('run-1', 'mail transport', 'consumer', 1, 0)"
+    )
+    .run()
+  const mailboxOwner = new OrchestrationMailboxOwner({
+    getDb: () => db,
+    getLeaf: () => LEAF,
+    getLeafKey: (tabId, leafId) => `${tabId}:${leafId}`,
+    getTerminalHandleForLeafKey: () => 'term-1',
+    getTerminalProcessIncarnation: () => 'inc-1',
+    onRoutedMessageTypes: () => {},
+    onForeignMailboxRouted: () => {}
+  })
+  vi.spyOn(mailboxOwner, 'resolve').mockReturnValue('run:run-1')
+  const deliveryTarget = new OrchestrationMailboxDeliveryTarget({
+    getDb: () => db,
+    getTerminalHandleForPaneKey: () => 'term-1',
+    hasTerminalHandle: (handle) => handle === 'term-1',
+    isStructuredSessionOwner: () => false,
+    canProbePtyLiveness: () => false,
+    controllerKnowsPtyIsLive: () => true,
+    isLeafPtyProvenAbsent: async () => false
+  })
+  vi.spyOn(deliveryTarget, 'resolveTerminalHandle').mockReturnValue('term-1')
   return {
-    mailboxOwner: { resolve: () => 'run:run-1' },
-    deliveryTarget: { resolveTerminalHandle: () => 'term-1', deferForAbsenceProbe: () => false },
+    mailboxOwner,
+    deliveryTarget,
     getDb: () => db,
     getLeaf: () => LEAF,
     getLeafKey: () => 'tab-1:leaf-1',
@@ -41,7 +76,7 @@ function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
     isLeafPtyProvenAbsent: async () => false,
     redriveMailbox: vi.fn(),
     writePty
-  }
+  } satisfies PointerDeliveryDependencies<OrchestrationMessageWaiter>
 }
 
 function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState) {
@@ -53,7 +88,8 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
     newestSequence: 1,
     enterDelayMs: 5,
     leafKey: 'tab-1:leaf-1',
-    settle: (ptyId: string, flight: never) => state.settleFlight(ptyId, flight),
+    settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) =>
+      state.settleFlight(ptyId, flight),
     redrive: vi.fn()
   }
 }
@@ -273,3 +309,94 @@ describe('retiring a pty mid-delivery', () => {
     }
   })
 })
+
+it.each([
+  { survivor: true, consumed: false },
+  { survivor: false, consumed: false },
+  { survivor: true, consumed: true }
+])(
+  'keeps staged survivor progress and honest skipped Enter for %j',
+  async ({ survivor, consumed }) => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const state = new OrchestrationMailboxPointerState()
+      const args = stageArgs(db, state)
+      const old: TerminalMailTarget = {
+        paneKey: 'tab-1:leaf-1',
+        owner: 'A',
+        turnKey: 'T1',
+        process: { pid: 10, platform: 'linux', startTime: 'birth-A' }
+      }
+      let target: TerminalMailTarget | null = old
+      let abandoned = true
+      const select = () =>
+        selectTerminalMailHandoff({
+          db,
+          mailbox: 'run:run-1',
+          target,
+          wasAbandoned: () => abandoned,
+          waiters: undefined,
+          reservedTypes: undefined
+        })
+      const m = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'old' })
+      select()
+      db.markAsDelivered([m.id], 'run:run-1')
+      const n = survivor ? db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'new' }) : null
+      const messages = select()
+      const writes: string[] = []
+      let settleText: ((settlement: WriteSettlement) => void) | undefined
+      const deps = {
+        ...args.deps,
+        readMailTarget: () => target,
+        mailTargetWasAbandoned: () => abandoned,
+        writePty: (_pty: string, text: string) => {
+          writes.push(text)
+          return consumed && text !== '\r'
+            ? new Promise<WriteSettlement>((resolve) => {
+                settleText = resolve
+              })
+            : WRITE_ACCEPTED
+        }
+      }
+      stageOrchestrationMailboxPointer({ ...args, deps, messages })
+      expect(writes).toHaveLength(1)
+      target = {
+        ...old,
+        owner: 'B',
+        turnKey: 'T2',
+        process: { ...old.process, pid: 11, startTime: 'birth-B' }
+      }
+      abandoned = false
+      if (consumed) {
+        db.recordUnknownMailRead([m])
+        settleText?.(WRITE_ACCEPTED)
+      }
+      await vi.advanceTimersByTimeAsync(10)
+      expect(writes).toHaveLength(survivor ? 2 : 1)
+      if (n) {
+        expect(writes[1]).toBe('\r')
+        expect(JSON.parse(db.getMessageById(n.id)!.handoff!)).toMatchObject({
+          phase: 'offered',
+          target
+        })
+        expect(db.getMessageById(m.id)).toMatchObject({
+          recovery_used: 1,
+          pointer_enter_pending: 0
+        })
+      } else {
+        expect(db.getMessageById(m.id)).toMatchObject({
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 2
+        })
+        expect(JSON.parse(db.getMessageById(m.id)!.handoff!)).toMatchObject({
+          phase: 'reserved',
+          target: old
+        })
+      }
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  }
+)

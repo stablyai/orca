@@ -46,7 +46,7 @@ export function handHelperMailToRun(db: OrchestrationDb, dispatchId: string): vo
   db.db
     .prepare(
       `UPDATE messages
-       SET to_handle = ?, read = 0, delivered_at = NULL, pointer_enter_pending = 0,
+       SET to_handle = ?, read = 0, delivered_at = NULL, handoff = NULL, pointer_enter_pending = 0,
            pointer_pty_id = NULL, pointer_process_incarnation = NULL
        WHERE id IN (SELECT value FROM json_each(?))`
     )

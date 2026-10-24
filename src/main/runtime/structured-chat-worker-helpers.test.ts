@@ -306,6 +306,9 @@ describe('a helper whose creator settles between it and the Run', () => {
     const ids = db.getAllMessages(mailbox).map((message) => message.id)
     // The middle worker's pointer for both already landed.
     db.markAsDelivered(ids, mailbox)
+    const beforeTransfer = ids.map((id) => db.getMessageById(id)!)
+    expect(beforeTransfer.every((row) => row.handoff !== null)).toBe(true)
+    db.db.prepare('UPDATE messages SET recovery_used = 1 WHERE id = ?').run(ids[0]!)
     const notify = vi.spyOn(runtime, 'notifyMessageArrived')
 
     db.db.exec('BEGIN IMMEDIATE')
@@ -324,6 +327,8 @@ describe('a helper whose creator settles between it and the Run', () => {
       expect.arrayContaining(ids)
     )
 
+    expect(db.getMessageById(ids[0]!)).toMatchObject({ recovery_used: 1, handoff: null })
+    expect(db.getMessageById(ids[1]!)).toMatchObject({ recovery_used: 0, handoff: null })
     restartRuntime()
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
     expect(turnText(chat.turns[0]!)).toMatch(/orchestration message/)

@@ -1,3 +1,4 @@
+import type { MailHandoffStoreMethods } from './messages/mail-handoff-store'
 import type { AttemptObservationStoreMethods } from './attempt-observation-store'
 import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-run-store'
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
@@ -66,7 +67,8 @@ import type { StructuredPointerOperationStoreMethods } from './messages/structur
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
-export type OrchestrationDbMethods = AttemptObservationStoreMethods &
+export type OrchestrationDbMethods = MailHandoffStoreMethods &
+  AttemptObservationStoreMethods &
   CreateTablesMethods &
   SchemaMigrateMethods &
   SchemaColumnProbesMethods &

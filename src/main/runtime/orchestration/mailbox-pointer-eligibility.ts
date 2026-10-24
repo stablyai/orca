@@ -62,10 +62,14 @@ export function selectOrchestrationPointerBatch(input: {
 export function shouldReleaseOrchestrationPointer(
   db: OrchestrationDb | null,
   mailboxHandle: string,
-  messages: readonly { id: string; type: string }[],
+  messages: readonly { id: string; type: string; handoff?: string | null }[],
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
 ): boolean {
-  if (db?.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
+  if (
+    messages.some(
+      (message) => (db?.getMessageById?.(message.id)?.handoff ?? null) !== (message.handoff ?? null)
+    )
+  ) {
     return true
   }
   if (messages.some((message) => messageTypeHasOrchestrationWaiter(waiters, message.type))) {

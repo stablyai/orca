@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { openAttachedHostRig, send, hello, framesOf } from './acp-structured-host.test-support'
 import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
@@ -39,15 +39,18 @@ it('holds mail without interrupting an answerable ACP question', async () => {
   expect(questions).toHaveLength(1)
   const operationId = mintAgentSessionOperationId(Date.now())
   const expectedRuntimeFence = host.deps.store.getRecord(SESSION)!.lease.runtimeFence
+  const beforeRun = vi.fn(() => true)
   expect(
     await pointer.send({
       sessionId: SESSION,
       dispatchId: null,
       operationId,
       expectedRuntimeFence,
+      beforeRun,
       body
     })
   ).toEqual({ kind: 'held' })
+  expect(beforeRun).toHaveBeenCalled()
   const after = await host.journalSnapshot(SESSION)
   expect(before.submissions).toHaveLength(1)
   expect(after.submissions).toEqual(before.submissions)

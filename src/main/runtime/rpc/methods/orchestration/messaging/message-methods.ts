@@ -173,12 +173,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
-      const messages = params.terminal
+      const rows = params.terminal
         ? db.getAllMessagesForHandle(
             resolveOrchestrationParty(params.terminal, db).address,
             params.limit
           )
         : db.getInbox(params.limit)
+      const messages = rows.map(({ handoff: _handoff, recovery_used: _budget, ...row }) => row)
       return { messages, count: messages.length }
     }
   }),

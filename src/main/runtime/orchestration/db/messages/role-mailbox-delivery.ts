@@ -53,6 +53,7 @@ export function getOrCreateMailboxDelivery(
         )
       }
       const messages = this.getDeliveryMessages(existing)
+      this.recordUnknownMailRead(messages)
       this.db.exec('COMMIT')
       return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
     }
@@ -99,6 +100,7 @@ export function getOrCreateMailboxDelivery(
         params.consumerGeneration,
         JSON.stringify(messages.map((message) => message.id))
       )
+    this.recordUnknownMailRead(messages)
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
     this.db.exec('COMMIT')
     return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }

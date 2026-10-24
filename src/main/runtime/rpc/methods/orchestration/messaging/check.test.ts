@@ -5,6 +5,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { selectTerminalMailHandoff } from '../../../../orchestration/terminal-mail-settlement'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -827,6 +828,49 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.inbox', () => {
+    it.each([{}, { terminal: 'b' }, { terminal: 'b', limit: 2 }])(
+      'preserves prior inbox fields while excluding private ownership for %j',
+      async (params) => {
+        setup()
+        db.insertMessage({ from: 'a', to: 'b', subject: 'read history' })
+        db.markAsRead(db.getInbox().map((row) => row.id))
+        const owned = db.insertMessage({ from: 'a', to: 'b', subject: 'owned' })
+        selectTerminalMailHandoff({
+          db,
+          mailbox: 'b',
+          target: null,
+          wasAbandoned: () => false,
+          waiters: undefined,
+          reservedTypes: undefined
+        })
+        db.db.prepare('UPDATE messages SET recovery_used = 1 WHERE id = ?').run(owned.id)
+        db.insertMessage({ from: 'a', to: 'b', subject: 'fresh' })
+        const rows = db.getAllMessagesForHandle('b', params.limit ?? 20)
+        expect(db.getMessageById(owned.id)).toMatchObject({
+          handoff: expect.any(String),
+          recovery_used: 1
+        })
+        const messages = rows.map(({ handoff, recovery_used, ...priorInboxFields }) => {
+          expect(handoff === null || typeof handoff === 'string').toBe(true)
+          expect(recovery_used).toBeTypeOf('number')
+          return priorInboxFields
+        })
+        expect(messages[0]).toMatchObject({
+          read: 0,
+          sequence: expect.any(Number),
+          sender_pane_key: null,
+          pointer_enter_pending: 0,
+          pointer_pty_id: null,
+          pointer_process_incarnation: null
+        })
+        expect(await call('orchestration.inbox', params)).toEqual({
+          messages,
+          count: messages.length
+        })
+        expect(db.getAllMessagesForHandle('b')).toEqual(db.getInbox())
+      }
+    )
+
     it('returns all messages', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })

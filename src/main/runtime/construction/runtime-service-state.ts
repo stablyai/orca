@@ -1,3 +1,4 @@
+import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
 
 import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
@@ -44,6 +45,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId {
+  protected readonly readTerminalMailTargetFn!: HostBindings['readTerminalMailTarget'] | null
+  protected readonly terminalMailTargetWasAbandonedFn!:
+    | HostBindings['terminalMailTargetWasAbandoned']
+    | null
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -249,6 +254,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
     resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
+    readMailTarget: (leaf) =>
+      this.readTerminalMailTargetFn?.(this.makeRuntimePaneKey(leaf)) ?? null,
+    mailTargetWasAbandoned: (target) => this.terminalMailTargetWasAbandonedFn?.(target) ?? false,
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),

@@ -4,6 +4,7 @@ import type { OrchestrationDb } from './db'
 export type OrchestrationMailboxLeaf = {
   tabId: string
   leafId: string
+  paneRuntimeId: number
   ptyId: string | null
   writable: boolean
   lastAgentStatus: AgentStatus | null

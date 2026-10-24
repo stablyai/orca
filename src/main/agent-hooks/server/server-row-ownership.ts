@@ -9,6 +9,7 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import { TerminalMailTargets } from './terminal-mail-target'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -50,6 +51,7 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  protected readonly terminalMailTargets = new TerminalMailTargets()
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
   }
@@ -91,6 +93,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     after: EnrichedAgentHookEventPayload | null | undefined,
     emit = true
   ): boolean {
+    this.terminalMailTargets.observeRow(before, after)
     if (
       before?.terminalHandle &&
       this.paneKeyByTerminalHandle.get(before.terminalHandle) === before.paneKey
