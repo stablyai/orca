@@ -177,6 +177,9 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
+  /** Construction intent and the first admitted root init belong to this process only. */
+  launchPermissionMode?: string
+  firstRootInit?: { permissionMode: string | null }
   /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
   retiredModel?: string
   /** Fast was omitted from launch settings and must be applied before message input. */

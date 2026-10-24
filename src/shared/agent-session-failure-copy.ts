@@ -18,6 +18,7 @@ export const WAIT_FOR_BACKGROUND_TASKS = 'Wait for the background tasks to finis
 export const AGENT_STARTING = 'The agent is still starting.'
 export const WAIT_FOR_START = 'Wait for the agent to finish starting.'
 export const AGENT_STILL_WORKING = 'The agent is still working.'
+export const WAIT_FOR_TURN = 'Wait for the agent to finish responding, or stop it.'
 
 /** Every piece a failure sentence is made of, whole so desktop can translate each on its own.
  *  `{{agent}}` is the agent's name or `theAgent`, `{{command}}` a conversation command's name; the
@@ -128,6 +129,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   agentStarting: AGENT_STARTING,
   waitForStart: WAIT_FOR_START,
   agentStillWorking: AGENT_STILL_WORKING,
+  waitForTurn: WAIT_FOR_TURN,
   runCommandWhenDone: "Run /{{command}} when it's done.",
   commandAfterAnswer: "Answer the agent's question or approval, then run /{{command}}.",
   compactionFailed: 'Compaction failed.',

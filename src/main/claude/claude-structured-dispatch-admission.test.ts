@@ -29,7 +29,8 @@ describe('Claude structured dispatch admission', () => {
     await dispatchClaudeTurn(session, {
       clientMessageId: 'client-b',
       body: userMessage([{ type: 'text', text: 'b' }]),
-      requestedAt: 200
+      requestedAt: 150,
+      admitPreparedInput: async (offer) => offer(200)
     })
     await dispatchClaudeTurn(session, {
       clientMessageId: 'client-c',
@@ -122,7 +123,7 @@ describe('Claude structured dispatch admission', () => {
 
   it('bounds pending replay identities instead of retaining an unbounded queue', async () => {
     const session = sessionFor()
-    for (let index = 0; index < 64; index += 1) {
+    for (let index = 0; index < 63; index += 1) {
       await expect(
         dispatchClaudeTurn(session, {
           clientMessageId: `client-${index}`,
@@ -130,6 +131,22 @@ describe('Claude structured dispatch admission', () => {
         })
       ).resolves.toEqual({ state: 'admitted' })
     }
+
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'prepared-at-capacity',
+        body: userMessage([{ type: 'text', text: 'prepared before the last slot filled' }]),
+        admitPreparedInput: async (offer) => {
+          await dispatchClaudeTurn(session, {
+            clientMessageId: 'last-slot',
+            body: userMessage([{ type: 'text', text: 'fills the last slot' }])
+          })
+          await offer(200)
+        }
+      })
+    ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'writeFailed' } })
+    expect(session.dispatchWaiters).toHaveLength(64)
+    expect(session.connection.send).toHaveBeenCalledTimes(64)
 
     await expect(
       dispatchClaudeTurn(session, {

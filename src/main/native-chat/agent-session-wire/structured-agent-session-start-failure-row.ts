@@ -17,6 +17,31 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { failedProviderChildStart } from './structured-agent-session-provider-child'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+
+export async function recordStructuredAgentSessionDeliveryStartFailure(
+  deps: {
+    sessions: ReadonlyMap<string, Pick<StructuredAgentSessionHostSession, 'journal'>>
+    conversationFence: (sessionId: string) => number
+    failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
+  },
+  sessionId: string,
+  failure: NonNullable<ReturnType<typeof startThatFailedWhileQueued>>,
+  acceptedBy?: AgentJournalCursor
+): Promise<void> {
+  const session = deps.sessions.get(sessionId)
+  if (session) {
+    await recordStructuredAgentSessionStartFailure(
+      { journal: session.journal, fence: deps.conversationFence(sessionId) },
+      {
+        startKey: failure.startKey,
+        ...structuredAgentSessionStartFailure(failure.cause, deps.failureTextContext(sessionId))
+      },
+      acceptedBy && acceptedNoLaterThan(session.journal, acceptedBy)
+    )
+  }
+}
 
 export function startThatFailedWhileQueued(
   session: StructuredAgentSessionHostSession,

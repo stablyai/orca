@@ -1,5 +1,8 @@
 // Commit pending/settlement around an external provider call so concurrent sends remain acceptable.
 
+import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
+import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -11,13 +14,16 @@ import { isAbortSignalReason } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type {
+  AgentJournalCursor,
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionDispatchOutcome } from './structured-agent-session-adapter'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin,
@@ -30,6 +36,17 @@ import {
   beginStructuredAgentSessionHandover,
   whileStructuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
+
+export type StructuredAgentSessionPreparedDelivery =
+  | 'stop'
+  | 'continue'
+  | { start: StructuredAgentSessionStartClaim; acceptedBy: AgentJournalCursor }
+  | {
+      ok: true
+      awaited: StructuredAgentSessionProviderChildIdentity
+      readiness: StructuredAgentSessionStartReadiness | null
+      before: Promise<void>
+    }
 
 export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
   acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
@@ -49,7 +66,8 @@ export type StructuredAgentSessionPendingHandover = {
 export async function beginSubmissionHandover(
   ctx: AgentSessionHandoverContext,
   submission: AgentJournalSubmission,
-  stillCurrent: () => boolean
+  stillCurrent: () => boolean,
+  keepsTurn?: (providerTurn: () => string | null) => boolean
 ): Promise<StructuredAgentSessionPendingHandover | null> {
   const { clientMessageId } = submission
   const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
@@ -83,14 +101,24 @@ export async function beginSubmissionHandover(
   )
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true)
   const queued = submission.queuedMessageId !== undefined
+  const executionOptions = keepsTurn ? undefined : submission.options
+  let reconsider = false
+  const pending = (receipt?: JournalOperationReceipt) =>
+    ctx.journal.resolveDispatch(
+      {
+        clientMessageId,
+        state: 'pending',
+        fence: ctx.fence,
+        turnScope,
+        ...(carried ? { carries: carried.covers } : {})
+      },
+      undefined,
+      receipt
+    )
   try {
-    await ctx.journal.resolveDispatch({
-      clientMessageId,
-      state: 'pending',
-      fence: ctx.fence,
-      turnScope,
-      ...(carried ? { carries: carried.covers } : {})
-    })
+    if (!keepsTurn) {
+      await pending()
+    }
   } catch (error) {
     released()
     release?.()
@@ -117,20 +145,48 @@ export async function beginSubmissionHandover(
                 clientMessageId,
                 carried ? withStoppedHistory(body, carried.messages) : body,
                 requestedAt,
-                submission.options,
+                executionOptions,
                 queued,
-                attempt?.signal
+                attempt?.signal,
+                keepsTurn
+                  ? async (offer, providerTurn) => {
+                      let written!: Promise<void>
+                      let origin!: number
+                      await pending({
+                        write: (_db, row) => {
+                          if (!row) {
+                            throw new Error('pending dispatch receipt has no row')
+                          }
+                          origin = row.ts
+                          attempt?.signal.throwIfAborted()
+                          if (!stillCurrent() || !keepsTurn(providerTurn)) {
+                            reconsider = true
+                            throw new AgentSessionPreDispatchError('steer-target-ended')
+                          }
+                        },
+                        committed: () => {
+                          written = offer(origin)
+                          // The offer stays observed even if the subsequent fold throws.
+                          void written.catch(() => undefined)
+                        }
+                      })
+                      await written
+                    }
+                  : undefined
               )
             : null
       } finally {
         attempt?.end()
+      }
+      if (reconsider) {
+        return async () => undefined
       }
       // The journal writer orders proof before teardown; the host lane may be closing the child.
       await resolveHandover(ctx, clientMessageId, outcome)
       return async () => {
         if (outcome?.state === 'accepted' || outcome?.state === 'admitted') {
           await ctx.recordRanOptions?.({
-            message: submission.options,
+            message: executionOptions,
             executed: outcome.ranOptions
           })
         }
@@ -189,7 +245,10 @@ async function dispatchSafely(
   requestedAt: number,
   executionOptions: AgentSessionExecutionOptions | undefined,
   queued: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  admitPreparedInput?: Parameters<
+    AgentSessionHandoverContext['adapter']['dispatch']
+  >[0]['admitPreparedInput']
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     const outcome = await ctx.adapter.dispatch({
@@ -200,6 +259,7 @@ async function dispatchSafely(
       ...(signal ? { signal } : {}),
       fence: ctx.fence,
       requestedAt,
+      ...(admitPreparedInput ? { admitPreparedInput } : {}),
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
