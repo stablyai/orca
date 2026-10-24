@@ -6,7 +6,7 @@
 import type { WslMoveProjectionScope } from './wsl-move-state-projection'
 
 /** Subtrees of user-authored text and terminal output, compared byte for byte. */
-const FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
+export const WSL_MOVE_FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
   'dirtyDraftContent',
   'comment',
   'prompt',
@@ -113,7 +113,7 @@ export function canonicalizeWslMoveValue(
       child,
       normalize,
       droppedKeys,
-      freeText || FREE_TEXT_KEYS.has(key)
+      freeText || WSL_MOVE_FREE_TEXT_KEYS.has(key)
     )
     const earlier = originalByKey.get(normalizedKey)
     if (earlier !== undefined) {
