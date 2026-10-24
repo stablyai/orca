@@ -91,10 +91,13 @@ export function createOrcadMigrationManifest(
       : {})
   }
   try {
-    return parseOrcadMigrationManifest({
-      ...unsigned,
-      manifestSha256: computeOrcadMigrationManifestSha256(unsigned)
+    // Sign what the journal and the host read back: the parsed form (the parser keeps only the fields
+    // it knows) of the JSON (a value with toJSON serializes differently), never the live objects.
+    const { manifestSha256: _unsigned, ...normalized } = parseOrcadMigrationManifest({
+      ...JSON.parse(JSON.stringify(unsigned)),
+      manifestSha256: UNSIGNED_DIGEST
     })
+    return { ...normalized, manifestSha256: computeOrcadMigrationManifestSha256(normalized) }
   } catch (error) {
     if (error instanceof Error && error.message === ORCAD_MIGRATION_MANIFEST_TOO_LARGE) {
       throw new Error(describeOversizedOrcadMigrationPayload(payload))
@@ -104,6 +107,7 @@ export function createOrcadMigrationManifest(
 }
 
 const ORCAD_MIGRATION_MANIFEST_TOO_LARGE = 'orcad_migration_manifest_too_large'
+const UNSIGNED_DIGEST = '0'.repeat(64)
 
 // Request id, device token, method name and JSON framing around the params.
 const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
