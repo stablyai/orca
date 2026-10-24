@@ -6,7 +6,9 @@ import type {
 } from '../../../shared/wsl-move/wsl-moved-project'
 
 const movedProjects = vi.hoisted((): { kind: string; id: string; displayName: string }[] => [])
-const openFiles = vi.hoisted((): { id: string; relativePath: string; isDirty: boolean }[] => [])
+const openFiles = vi.hoisted(
+  (): { id: string; relativePath: string; worktreeId: string; isDirty: boolean }[] => []
+)
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ wslMovedProjects: movedProjects, openFiles }) }
 }))
@@ -43,10 +45,33 @@ describe('bringWslMovedProjectBack', () => {
     openFiles.length = 0
   })
 
-  // awin verify-5: an unsaved file vetoed main's reload, so the window kept the moved layout and
-  // its panes stayed bound to dead terminals.
-  it('asks for unsaved files to be saved first, before anything is released', async () => {
-    openFiles.push({ id: 'f1', relativePath: 'README.md', isDirty: true })
+  // awin verify-8: p6's unsaved README blocked bringing p9 back; only the move's own files count.
+  it("asks for the move's unsaved files to be saved first, naming only those", async () => {
+    openFiles.push(
+      { id: 'f1', relativePath: 'README.md', worktreeId: 'repo-1::/w', isDirty: true },
+      { id: 'f2', relativePath: 'other.md', worktreeId: 'repo-2::/w', isDirty: true },
+      { id: 'f3', relativePath: 'saved.md', worktreeId: 'repo-3::/w', isDirty: false }
+    )
+    const call = stubApi({
+      released: false,
+      reason: 'unsaved-files',
+      unsavedWorkspaceIds: ['repo-1::/w']
+    })
+    const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
+    await bringWslMovedProjectBack(project, confirm)
+    expect(call).toHaveBeenCalledWith({
+      kind: 'repo',
+      id: 'repo-1',
+      unsavedWorkspaceIds: ['repo-1::/w', 'repo-2::/w']
+    })
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm.mock.calls[1]?.[0]).toMatchObject({ acknowledgeOnly: true })
+    expect(confirm.mock.calls[1]?.[0]?.description).toContain('README.md')
+    expect(confirm.mock.calls[1]?.[0]?.description).not.toContain('other.md')
+  })
+
+  it("brings the project back when the unsaved files are another project's", async () => {
+    openFiles.push({ id: 'f2', relativePath: 'other.md', worktreeId: 'repo-2::/w', isDirty: true })
     const call = stubApi({
       released: true,
       distro: 'Ubuntu',
@@ -55,10 +80,8 @@ describe('bringWslMovedProjectBack', () => {
     })
     const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
     await bringWslMovedProjectBack(project, confirm)
-    expect(call).not.toHaveBeenCalled()
+    expect(call).toHaveBeenCalledOnce()
     expect(confirm).toHaveBeenCalledTimes(1)
-    expect(confirm.mock.calls[0]?.[0]).toMatchObject({ acknowledgeOnly: true })
-    expect(confirm.mock.calls[0]?.[0]?.description).toContain('README.md')
   })
 
   it('does nothing unless the user confirms', async () => {
@@ -87,7 +110,7 @@ describe('bringWslMovedProjectBack', () => {
     })
     const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
     await bringWslMovedProjectBack(project, confirm)
-    expect(call).toHaveBeenCalledWith({ kind: 'repo', id: 'repo-1' })
+    expect(call).toHaveBeenCalledWith({ kind: 'repo', id: 'repo-1', unsavedWorkspaceIds: [] })
     expect(confirm).toHaveBeenCalledTimes(1)
   })
 

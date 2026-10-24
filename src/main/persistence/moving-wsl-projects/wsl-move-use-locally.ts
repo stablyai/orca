@@ -16,7 +16,7 @@ import {
   listWslMoveCutovers,
   removeCommittedWslMoveCutover
 } from './wsl-move-cutover-journal'
-import type { WslMoveProjectRef } from './wsl-move-scope-guard'
+import { type WslMoveProjectRef, wslMoveProjectRefForWorkspace } from './wsl-move-scope-guard'
 
 const COMMITTED_FROM = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
 
@@ -25,6 +25,17 @@ function inScope(cutover: WslMoveCutover, ref: WslMoveProjectRef): boolean {
   return 'repoId' in ref
     ? scopeRepoIds.includes(ref.repoId)
     : scopeFolderWorkspaceIds.includes(ref.folderWorkspaceId)
+}
+
+/** The workspaces among `workspaceIds` whose projects the move brings back. */
+export function wslMoveWorkspacesInScope(
+  move: WslMoveCutover,
+  workspaceIds: readonly string[]
+): string[] {
+  return workspaceIds.filter((workspaceId) => {
+    const ref = wslMoveProjectRefForWorkspace(workspaceId)
+    return ref !== null && inScope(move, ref)
+  })
 }
 
 /** The committed move that holds the project, newest in its distro's chain, or why there is none. */

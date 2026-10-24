@@ -148,6 +148,33 @@ describe('WSL move IPC', () => {
     setWslMoveReloadableWindow(() => null)
   })
 
+  // awin verify-8: p6's unsaved README blocked bringing p9 back.
+  it("refuses only for unsaved files in the move's own workspaces, before stopping the host", async () => {
+    const stopHostCopies = vi.fn(async () => 'stopped' as const)
+    registerWslMoveHandlers(
+      () => userDataPath,
+      (senderId) => senderId === MAIN_WINDOW_ID,
+      undefined,
+      () => ({ stopHostCopies })
+    )
+    const request = (unsavedWorkspaceIds: unknown) => ({
+      kind: 'repo',
+      id: 'repo-1',
+      unsavedWorkspaceIds
+    })
+    expect(
+      await invoke('wslMove:useProjectHereAgain', request(['repo-2::/w', 'repo-1::/w', 7]))
+    ).toEqual({ released: false, reason: 'unsaved-files', unsavedWorkspaceIds: ['repo-1::/w'] })
+    expect(stopHostCopies).not.toHaveBeenCalled()
+    expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
+
+    setWslMoveReloadableWindow(() => null)
+    expect(await invoke('wslMove:useProjectHereAgain', request(['repo-2::/w']))).toMatchObject({
+      released: true
+    })
+    expect(stopHostCopies).toHaveBeenCalledOnce()
+  })
+
   it('brings a project back only for the main window, and only with the gate open', async () => {
     expect(await invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'repo-1' }, 8)).toEqual({
       released: false,

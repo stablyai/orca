@@ -29,7 +29,11 @@ export type WslMoveUseLocallyResult =
         | 'host-still-running'
         /** The host is not answering, so its copies of the project's agents may still run. */
         | 'host-unreachable'
+        /** The reload would drop unsaved files in the move's own workspaces. */
+        | 'unsaved-files'
       detail?: string
+      /** `unsaved-files`: the asked-about workspaces that the move brings back. */
+      unsavedWorkspaceIds?: string[]
       /** `superseded`: the newest move of the distro, which has to come back first. */
       newerMove?: { repoIds: string[]; folderWorkspaceIds: string[] }
     }

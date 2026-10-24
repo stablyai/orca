@@ -31,7 +31,8 @@ import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import {
   findWslMovedProjectMove,
-  releaseWslMove
+  releaseWslMove,
+  wslMoveWorkspacesInScope
 } from '../persistence/moving-wsl-projects/wsl-move-use-locally'
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import {
@@ -178,6 +179,16 @@ function registerWslMoveUseHereHandler(
       const found = findWslMovedProjectMove(userDataPath, ref)
       if (!('move' in found)) {
         return found
+      }
+      // Only the move's own workspaces reload from their pre-move state; other unsaved files stay.
+      const unsavedWorkspaceIds = wslMoveWorkspacesInScope(
+        found.move,
+        'unsavedWorkspaceIds' in request && Array.isArray(request.unsavedWorkspaceIds)
+          ? request.unsavedWorkspaceIds.filter((id): id is string => typeof id === 'string')
+          : []
+      )
+      if (unsavedWorkspaceIds.length > 0) {
+        return { released: false, reason: 'unsaved-files', unsavedWorkspaceIds }
       }
       // The host's copies stop first, or an agent the move resumed there runs beside this one.
       const stop = await createUndoPorts().stopHostCopies(found.move)
