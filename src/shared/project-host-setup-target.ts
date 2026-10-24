@@ -1,5 +1,8 @@
 import type { ExecutionHostId } from './execution-host'
 
+export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
+  "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
+
 /**
  * Names one setup. Repo-backed setups take the repo id, so twins on different hosts share
  * `setupId` and `hostId` picks the host; older clients omit it and keep the first match by id.

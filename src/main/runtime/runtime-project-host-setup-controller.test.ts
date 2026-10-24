@@ -63,11 +63,11 @@ describe('RuntimeProjectHostSetupController host routing', () => {
     })
 
     await expect(setup).rejects.toThrow(SshHostNotServedError)
-    await expect(setup).rejects.toThrow(`SSH connection "${TARGET_ID}" not found or not connected`)
+    await expect(setup).rejects.toThrow(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
     expect(addRepo).not.toHaveBeenCalled()
   })
 
-  it('names the decoded connection id of a percent-encoded SSH target', async () => {
+  it('preserves the decoded connection id when refusing a percent-encoded SSH target', async () => {
     const { controller, addRepo, projectId } = makeController()
 
     await expect(
@@ -77,7 +77,11 @@ describe('RuntimeProjectHostSetupController host routing', () => {
         path: REPO_PATH,
         kind: 'folder'
       })
-    ).rejects.toThrow('SSH connection "my host" not found or not connected')
+    ).rejects.toMatchObject({
+      code: 'ssh_host_not_served',
+      connectionId: 'my host',
+      message: SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
+    })
     expect(addRepo).not.toHaveBeenCalled()
   })
 

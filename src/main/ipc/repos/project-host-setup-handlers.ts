@@ -29,7 +29,7 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { sshTargetNotConnectedMessage } from '../../providers/ssh-host-not-served-error'
+import { SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE } from '../../../shared/project-host-setup-target'
 import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable
@@ -170,7 +170,7 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
         parsedHost.kind === 'local'
           ? await addLocalRepoFromPath(store, args.path, args.kind)
           : parsedHost.kind === 'ssh'
-            ? { error: sshTargetNotConnectedMessage(parsedHost.targetId) }
+            ? { error: SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE }
             : {
                 error:
                   'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'

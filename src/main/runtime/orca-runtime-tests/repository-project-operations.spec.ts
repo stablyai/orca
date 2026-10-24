@@ -647,10 +647,10 @@ describe('OrcaRuntimeService', () => {
       expect(cloneError).toMatchObject({
         message: expect.stringMatching(/Cloning onto an SSH host is not supported/)
       })
-      // Registering an existing remote path does have one, so this now fails on the host's own
-      // terms — the SSH connection is not registered — rather than on a categorical refusal.
       expect(existingFolderError).toMatchObject({
-        message: expect.stringMatching(/SSH connection "openclaw" not found or not connected/)
+        code: 'ssh_host_not_served',
+        connectionId: 'openclaw',
+        message: expect.stringContaining("This Orca server can't add projects on its SSH hosts.")
       })
     } finally {
       spawnSpy.mockRestore()

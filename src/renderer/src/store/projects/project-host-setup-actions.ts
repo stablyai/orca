@@ -13,6 +13,7 @@ import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE } from '../../../../shared/project-host-setup-target'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
@@ -39,6 +40,9 @@ export function createProjectHostSetupActions(
   return {
     setupProjectExistingFolder: async (args) => {
       try {
+        if (parseExecutionHostId(args.hostId)?.kind === 'ssh') {
+          throw new Error(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
+        }
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
         const projectProviderIdentity =
@@ -254,10 +258,8 @@ export function createProjectHostSetupActions(
 
     setupProjectClone: async (args) => {
       try {
-        const parsedHost = parseExecutionHostId(args.hostId)
-        // Why: an SSH host clones only through its paired server; never fall back to this computer.
-        if (parsedHost?.kind === 'ssh') {
-          throw new Error(`SSH connection "${parsedHost.targetId}" not found or not connected`)
+        if (parseExecutionHostId(args.hostId)?.kind === 'ssh') {
+          throw new Error(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
         }
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
