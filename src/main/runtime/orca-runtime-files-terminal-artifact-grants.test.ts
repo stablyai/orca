@@ -12,6 +12,7 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
+import { RuntimeTerminalArtifacts } from './terminal/artifacts/terminal-artifacts'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -369,6 +370,42 @@ describe('RuntimeFileCommands', () => {
       })
       expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
       expect(statMock).not.toHaveBeenCalled()
+    })
+
+    it('mints a read-only exact-path grant for a terminal-cited file outside temp roots', async () => {
+      const artifactPath = await tempFile('ai_era_early_childhood_education.md', '# Guide')
+      const canonicalPath = await realpath(artifactPath)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      vi.spyOn(
+        RuntimeTerminalArtifacts.prototype,
+        'resolveAllowedTerminalArtifactPath'
+      ).mockResolvedValueOnce(null)
+
+      const result = await resolveTerminalArtifactPath(commands, artifactPath)
+
+      expect(result).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: canonicalPath,
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: canonicalPath,
+          readOnly: true
+        }
+      })
+      const target = absoluteFileTarget(result)
+      await expect(
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          '# Modified',
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_read_only')
     })
 
     it('does not grant remote temp artifacts that resolve outside allowed temp roots', async () => {

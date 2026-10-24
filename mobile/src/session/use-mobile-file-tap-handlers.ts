@@ -1,7 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
-import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
+import {
+  openMobileFileTap,
+  type FileTapSessionTab,
+  type MobileFileTapResolvedConfirmation
+} from './mobile-file-tap-open'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
@@ -21,6 +25,11 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
   reportChatTapFailure: (message: string) => void
+  confirmTerminalFileTapOpen?: (
+    target: MobileFileTapResolvedConfirmation,
+    proceed: () => void
+  ) => void
+  onRevealFileLine?: (relativePath: string, line: number) => void
 }
 
 /**
@@ -44,12 +53,14 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   const {
     activeHandleRef,
     client,
+    confirmTerminalFileTapOpen,
     fetchSessionTabs,
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    onRevealFileLine,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -68,12 +79,14 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     optionsRef.current = {
       activeHandleRef,
       client,
+      confirmTerminalFileTapOpen,
       fetchSessionTabs,
       getActiveSessionTabId,
       getActiveSessionTabType,
       getSessionTabs,
       hostId,
       nativeChatSessionId,
+      onRevealFileLine,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -85,12 +98,14 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   }, [
     activeHandleRef,
     client,
+    confirmTerminalFileTapOpen,
     fetchSessionTabs,
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    onRevealFileLine,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -133,7 +148,9 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
           activeTabType: current.getActiveSessionTabType()
         }),
         switchSessionTab: current.switchSessionTab,
-        scheduleDelayedAction: current.scheduleDelayedAction
+        scheduleDelayedAction: current.scheduleDelayedAction,
+        confirmResolvedOpen: current.confirmTerminalFileTapOpen,
+        onRevealFileLine: current.onRevealFileLine
       })
     },
     []
@@ -176,6 +193,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       }),
       switchSessionTab: current.switchSessionTab,
       scheduleDelayedAction: current.scheduleDelayedAction,
+      onRevealFileLine: current.onRevealFileLine,
       onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
     })
   }, [])

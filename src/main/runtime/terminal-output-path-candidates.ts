@@ -24,27 +24,28 @@ export function appendRecentPtyPathCandidates(
   return pruneRecentPtyPathCandidates(next)
 }
 
+function buildPathCandidateSet(pathText: string, absolutePath: string): Set<string> {
+  return new Set(
+    [
+      pathText,
+      absolutePath,
+      ...wslTerminalOutputAliases(pathText),
+      ...wslTerminalOutputAliases(absolutePath),
+      ...windowsDriveSlashAliases(pathText),
+      ...windowsDriveSlashAliases(absolutePath)
+    ]
+      .map((candidate) => candidate.trim())
+      .filter((candidate) => candidate.length > 0)
+  )
+}
+
 export function recentTerminalPathCandidatesIncludePath(
   recentCandidates: readonly string[],
   pathText: string,
   absolutePath: string
 ): boolean {
-  const candidates = new Set(
-    [
-      pathText,
-      absolutePath,
-      ...wslTerminalOutputAliases(pathText),
-      ...wslTerminalOutputAliases(absolutePath)
-    ]
-      .map((candidate) => candidate.trim())
-      .filter((candidate) => candidate.length > 0)
-  )
-  for (const recent of recentCandidates) {
-    if (candidates.has(recent)) {
-      return true
-    }
-  }
-  return false
+  const candidates = buildPathCandidateSet(pathText, absolutePath)
+  return recentCandidates.some((recent) => candidates.has(recent))
 }
 
 function pruneRecentPtyPathCandidates(candidates: string[]): string[] {
@@ -70,11 +71,7 @@ export function recentTerminalOutputIncludesPath(
   pathText: string,
   absolutePath: string
 ): boolean {
-  const candidates = new Set(
-    [pathText, absolutePath]
-      .map((candidate) => candidate.trim())
-      .filter((candidate) => candidate.length > 0)
-  )
+  const candidates = buildPathCandidateSet(pathText, absolutePath)
   if (candidates.size === 0) {
     return false
   }
@@ -87,6 +84,51 @@ export function recentTerminalOutputIncludesPath(
   if (decodedOutput !== recentOutput) {
     for (const candidate of candidates) {
       if (outputContainsPathCandidate(decodedOutput, candidate)) {
+        return true
+      }
+    }
+  }
+  return outputContainsWrappedPathCandidate(decodedOutput, candidates)
+}
+
+function outputContainsWrappedPathCandidate(
+  output: string,
+  candidates: ReadonlySet<string>
+): boolean {
+  const stripped = output.replace(
+    /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g,
+    ''
+  )
+  if (stripped !== output) {
+    for (const candidate of candidates) {
+      if (outputContainsPathCandidate(stripped, candidate)) {
+        return true
+      }
+    }
+  }
+  const breakPositions = new Set<number>()
+  let unwrapped = ''
+  let lastIndex = 0
+  for (const match of stripped.matchAll(/[ \t│┃║╎╏┆┇┊┋|]*[\r\n]+[ \t│┃║╎╏┆┇┊┋|]*/g)) {
+    const matchIndex = match.index ?? 0
+    unwrapped += stripped.slice(lastIndex, matchIndex)
+    breakPositions.add(unwrapped.length)
+    lastIndex = matchIndex + match[0].length
+  }
+  if (breakPositions.size === 0) {
+    return false
+  }
+  unwrapped += stripped.slice(lastIndex)
+  for (const candidate of candidates) {
+    if (!/[\\/]/.test(candidate)) {
+      continue
+    }
+    for (let start = unwrapped.indexOf(candidate); start !== -1; start = unwrapped.indexOf(candidate, start + 1)) {
+      const end = start + candidate.length
+      if (
+        (breakPositions.has(start) || isPathCandidateStartBoundary(unwrapped, start)) &&
+        (breakPositions.has(end) || isPathCandidateEndBoundary(unwrapped, end))
+      ) {
         return true
       }
     }
@@ -182,7 +224,7 @@ function collectTerminalOutputLinePathCandidates(line: string, add: (value: stri
     }
   }
   for (const match of line.matchAll(
-    /(?:\/(?:tmp|private\/tmp)\/|[A-Za-z]:[\\/])[^\r\n\x1b"'<>]+/g
+    /(?:\/(?:tmp|private\/tmp)\/|~[\\/]|[A-Za-z]:[\\/])[^\r\n\x1b"'<>]+/g
   )) {
     if (isInsideNonLocalFileUri(line, match.index)) {
       continue
@@ -266,4 +308,11 @@ function wslTerminalOutputAliases(value: string): string[] {
   }
   const linuxPath = match[1]!.replace(/\\/g, '/')
   return linuxPath.startsWith('/') ? [linuxPath] : [`/${linuxPath}`]
+}
+
+function windowsDriveSlashAliases(value: string): string[] {
+  if (!/^[A-Za-z]:[\\/]/.test(value)) {
+    return []
+  }
+  return [value.replace(/\\/g, '/'), value.replace(/\//g, '\\')]
 }

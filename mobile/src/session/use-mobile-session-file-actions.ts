@@ -1,10 +1,15 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { openExternalLink } from '../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
+import type { MobileFileTapResolvedConfirmation } from './mobile-file-tap-open'
 import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
+
+export type PendingTerminalFileTap = MobileFileTapResolvedConfirmation & {
+  onOpen: () => void
+}
 
 export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActionsModel) {
   const {
@@ -26,6 +31,22 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     nativeChatSendError,
     fetchSessionTabs
   } = scope
+  const [pendingTerminalFileTap, setPendingTerminalFileTap] =
+    useState<PendingTerminalFileTap | null>(null)
+  const fileInitialLineSeqRef = useRef(0)
+  const [fileInitialLines, setFileInitialLines] = useState<
+    ReadonlyMap<string, { line: number; seq: number }>
+  >(() => new Map())
+  const confirmTerminalFileTapOpen = useCallback(
+    (target: MobileFileTapResolvedConfirmation, proceed: () => void) => {
+      setPendingTerminalFileTap({ ...target, onOpen: proceed })
+    },
+    []
+  )
+  const revealFileLine = useCallback((relativePath: string, line: number) => {
+    const seq = ++fileInitialLineSeqRef.current
+    setFileInitialLines((prev) => new Map(prev).set(relativePath, { line, seq }))
+  }, [])
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
     client,
@@ -42,7 +63,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     getActiveSessionTabType: () => activeSessionTabTypeRef.current,
     switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
     scheduleDelayedAction,
-    reportChatTapFailure: nativeChatSendError.show
+    reportChatTapFailure: nativeChatSendError.show,
+    confirmTerminalFileTapOpen,
+    onRevealFileLine: revealFileLine
   })
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
@@ -100,6 +123,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     [terminalLinkOpenMode, isFloatingWorkspaceRoute]
   )
   return {
+    pendingTerminalFileTap,
+    setPendingTerminalFileTap,
+    fileInitialLines,
     handleFileTap,
     handleNativeChatFileTap,
     handleOpenedFileDiffActivationSeqRef,

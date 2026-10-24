@@ -5,13 +5,18 @@ export type ParsedFileLinkLocation = {
 }
 
 export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
+  const match =
+    /^(.*?)(?:#(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?|(?::(\d+)(?:-\d+)?)(?::(\d+))?)?$/i.exec(
+      value
+    )
   const pathText = match?.[1]
   if (!pathText) {
     return null
   }
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
+  const lineRaw = match[2] ?? match[4]
+  const columnRaw = match[3] ?? match[5]
+  const line = lineRaw ? Number.parseInt(lineRaw, 10) : null
+  const column = columnRaw ? Number.parseInt(columnRaw, 10) : null
   if ((line !== null && line < 1) || (column !== null && column < 1)) {
     return null
   }

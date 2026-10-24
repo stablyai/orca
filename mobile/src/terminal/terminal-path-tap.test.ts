@@ -3,8 +3,15 @@ import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
 } from '../../../src/shared/terminal-file-link-conformance'
-import { matchFilePathAtColumn as documentMatchFilePathAtColumn } from './document/path-tap'
-import { matchFilePathAtColumn, parsePathWithOptionalLineColumn } from './terminal-path-tap'
+import {
+  matchFilePathAtColumn as documentMatchFilePathAtColumn,
+  matchWrappedFilePathAtRowColumn as documentMatchWrappedFilePathAtRowColumn
+} from './document/path-tap'
+import {
+  matchFilePathAtColumn,
+  matchWrappedFilePathAtRowColumn,
+  parsePathWithOptionalLineColumn
+} from './terminal-path-tap'
 
 type InjectedPathMatcher = typeof matchFilePathAtColumn
 
@@ -162,6 +169,62 @@ describe('matchFilePathAtColumn', () => {
   it('does not match a plain word without an extension', () => {
     const line = '• Here you go: README.md'
     expect(matchFilePathAtColumn(line, colOf(line, 'Here'))).toBeNull()
+  })
+
+  it('reconstructs a long file path wrapped across multiple TUI rows', () => {
+    const rows = [
+      { text: '  • C:/Users/zhangxaochen260423/.gemini/antigravity-' },
+      { text: '    cli/brain/0b183352-a8fd-43fe-ab03-3ff674bc67a9/ai_era_early_childhoo' },
+      { text: '    d_education.md' }
+    ]
+    const expected = {
+      pathText:
+        'C:/Users/zhangxaochen260423/.gemini/antigravity-cli/brain/0b183352-a8fd-43fe-ab03-3ff674bc67a9/ai_era_early_childhood_education.md',
+      line: null,
+      column: null
+    }
+    expect(matchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'Users'))).toEqual(
+      expected
+    )
+    expect(matchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, 'brain'))).toEqual(
+      expected
+    )
+    expect(matchWrappedFilePathAtRowColumn(rows, 2, colOf(rows[2]!.text, 'education'))).toEqual(
+      expected
+    )
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(rows, 2, colOf(rows[2]!.text, 'education'))
+    ).toEqual(expected)
+  })
+
+  it('preserves trailing :line when a wrapped path splits right before or inside the line suffix', () => {
+    const rows = [{ text: '  D:/code/orca/mobile/web-entry/index.tsx' }, { text: '  :136' }]
+    const expected = {
+      pathText: 'D:/code/orca/mobile/web-entry/index.tsx',
+      line: 136,
+      column: null
+    }
+    expect(matchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'index.tsx'))).toEqual(
+      expected
+    )
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'index.tsx'))
+    ).toEqual(expected)
+    expect(matchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, '136'))).toEqual(expected)
+  })
+
+  it('does not merge two separate file paths on adjacent rows', () => {
+    const rows = [{ text: '  src/a.ts' }, { text: '  src/b.ts' }]
+    expect(matchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'a.ts'))).toEqual({
+      pathText: 'src/a.ts',
+      line: null,
+      column: null
+    })
+    expect(matchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, 'b.ts'))).toEqual({
+      pathText: 'src/b.ts',
+      line: null,
+      column: null
+    })
   })
 })
 

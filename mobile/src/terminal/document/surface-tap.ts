@@ -17,11 +17,20 @@ export function notifyTerminalSurfaceTap(
 ) {
   const tappedOscLink = oscLinkAtViewportPoint(scope, originX, originY)
   if (tappedOscLink && tappedOscLink.kind === 'file') {
+    let line = tappedOscLink.fileTap.line
+    let column = tappedOscLink.fileTap.column
+    if (line === null) {
+      const visiblePath = filePathAtViewportPoint(scope, originX, originY)
+      if (visiblePath && visiblePath.line !== null) {
+        line = visiblePath.line
+        column = visiblePath.column
+      }
+    }
     notify(scope, {
       type: 'terminal-file-tap',
       pathText: tappedOscLink.fileTap.pathText,
-      line: tappedOscLink.fileTap.line,
-      column: tappedOscLink.fileTap.column
+      line: line,
+      column: column
     })
     return
   }
