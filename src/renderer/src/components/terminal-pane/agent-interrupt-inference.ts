@@ -279,3 +279,13 @@ export function createAgentInterruptInference({
     }
   }
 }
+
+/** A typed key's interrupt inference, for surfaces that write the key straight to the runtime.
+ *  `capturedEntry` is the pane status from before the write, as for an acknowledged typed key. */
+export function inferInterruptFromDirectInput(
+  deps: AgentInterruptInferenceDeps,
+  intent: AgentInterruptInputIntent,
+  capturedEntry: AgentStatusEntry | null
+): void {
+  void createAgentInterruptInference(deps).observeInputIntent(intent, capturedEntry)
+}

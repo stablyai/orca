@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   inferQuestionAnswered: vi.fn(() => Promise.resolve(true)),
+  inferInterrupt: vi.fn(() => Promise.resolve(true)),
   sendRuntimePtyInput: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn((..._args: unknown[]) => Promise.resolve(true)),
   sendNativeChatAskAnswer: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: (...args: unknown[]) => mocks.sendNativeChatMessage(...args)
 }))
 
+import { AGENT_INTERRUPT_SETTLE_MS } from '../../../../shared/agent-interrupt-intent'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import type { AskPrompt } from './native-chat-interactive-prompt'
 
@@ -57,7 +59,12 @@ describe('useNativeChatInteractiveSend', () => {
     mocks.storeState = { agentStatusByPaneKey: { [PANE_KEY]: waitingQuestion } }
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { agentStatus: { inferQuestionAnswered: mocks.inferQuestionAnswered } }
+      value: {
+        agentStatus: {
+          inferQuestionAnswered: mocks.inferQuestionAnswered,
+          inferInterrupt: mocks.inferInterrupt
+        }
+      }
     })
     const handle = { cancel: mocks.cancel, settleAfterMs: 500 }
     mocks.sendNativeChatAskAnswer.mockReturnValue(handle)
@@ -206,7 +213,95 @@ describe('useNativeChatInteractiveSend', () => {
     act(() => result.current.cancel())
 
     expect(mocks.cancel).toHaveBeenCalledOnce()
-    expect(mocks.sendRuntimePtyInput).toHaveBeenCalledWith('pty-1', '\x1b', 'driving')
+    expect(mocks.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', '\x1b', 'driving')
+  })
+
+  // Qoder fires no hook on Escape; Claude's Escape also closes views, so only its own evidence counts.
+  // A refused write never reached the TUI.
+  it.each([
+    ['qoder', true, 1],
+    ['qoder', false, 0],
+    ['claude', true, 0]
+  ] as const)(
+    'gives a %s Stop (Escape accepted: %s) the interrupt inference a typed Escape gets',
+    async (agent, accepted, inferences) => {
+      vi.useFakeTimers()
+      try {
+        const at = Date.now()
+        mocks.storeState = {
+          agentStatusByPaneKey: {
+            [PANE_KEY]: {
+              state: 'working',
+              prompt: 'run sleep 60',
+              updatedAt: at,
+              stateStartedAt: at,
+              agentType: agent,
+              paneKey: PANE_KEY,
+              stateHistory: []
+            }
+          }
+        }
+        mocks.sendRuntimePtyInputVerified.mockResolvedValueOnce(accepted)
+        const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', agent))
+
+        await act(async () => result.current.cancel())
+        expect(mocks.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', '\x1b', 'driving')
+        expect(mocks.inferInterrupt).not.toHaveBeenCalled()
+        await act(async () => {
+          vi.advanceTimersByTime(AGENT_INTERRUPT_SETTLE_MS)
+        })
+
+        expect(mocks.inferInterrupt).toHaveBeenCalledTimes(inferences)
+        if (inferences > 0) {
+          expect(mocks.inferInterrupt).toHaveBeenCalledWith({
+            paneKey: PANE_KEY,
+            baselineUpdatedAt: at,
+            baselineStateStartedAt: at,
+            baselinePrompt: 'run sleep 60',
+            baselineAgentType: agent,
+            intent: 'plain-escape'
+          })
+        }
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  // A slow remote acceptance must not settle a turn that started after the Stop.
+  it('infers a Stop from the status before its Escape, not a turn that began mid-send', async () => {
+    vi.useFakeTimers()
+    try {
+      const at = Date.now()
+      const working = (prompt: string, startedAt: number): Record<string, unknown> => ({
+        state: 'working',
+        prompt,
+        updatedAt: startedAt,
+        stateStartedAt: startedAt,
+        agentType: 'qoder',
+        paneKey: PANE_KEY,
+        stateHistory: []
+      })
+      mocks.storeState = { agentStatusByPaneKey: { [PANE_KEY]: working('run sleep 60', at) } }
+      let accept: (accepted: boolean) => void = () => {}
+      mocks.sendRuntimePtyInputVerified.mockReturnValueOnce(
+        new Promise<boolean>((resolve) => {
+          accept = resolve
+        })
+      )
+      const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'qoder'))
+
+      act(() => result.current.cancel())
+      mocks.storeState = { agentStatusByPaneKey: { [PANE_KEY]: working('next prompt', at + 1) } }
+      await act(async () => accept(true))
+      await act(async () => {
+        vi.advanceTimersByTime(AGENT_INTERRUPT_SETTLE_MS)
+      })
+
+      expect(mocks.inferInterrupt).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it.each(['opencode', 'opencode2'] as const)(
@@ -270,6 +365,7 @@ describe('useNativeChatInteractiveSend', () => {
 
     expect(mocks.cancel).toHaveBeenCalledOnce()
     expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
   it('infers a Claude question answer only after every runtime write was delivered', () => {

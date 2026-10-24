@@ -22,6 +22,7 @@ import {
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
 import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
+import { inferInterruptFromDirectInput } from '../terminal-pane/agent-interrupt-inference'
 
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
@@ -179,8 +180,35 @@ export function useNativeChatInteractiveSend(
       inFlightRef.current = sendNativeChatAskAnswer(targetPtyId, [{ raw: ESC }, { raw: ESC }])
       return
     }
-    sendRaw(ESC)
-  }, [agent, cancelInFlight, sendRaw, targetPtyId])
+    if (!targetPtyId) {
+      return
+    }
+    // Why: this Escape bypasses xterm.onData, so a TUI that fires no hook on interrupt stays working.
+    // Like a typed Escape, infer only once the write is accepted, from the status before it.
+    const statusBeforeEscape = useAppStore.getState().agentStatusByPaneKey[paneKey] ?? null
+    void sendRuntimePtyInputVerified(targetPtyId, ESC, 'driving')
+      .then((accepted) => {
+        if (!accepted) {
+          return
+        }
+        inferInterruptFromDirectInput(
+          {
+            paneKey,
+            getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[paneKey],
+            inferInterrupt: (request) =>
+              window.api.agentStatus.inferInterrupt(request).catch((err) => {
+                console.warn('[agent-interrupt] native-chat inference failed:', err)
+                return false
+              })
+          },
+          'plain-escape',
+          statusBeforeEscape
+        )
+      })
+      .catch((err) => {
+        console.warn('[agent-interrupt] native-chat Stop write failed:', err)
+      })
+  }, [agent, cancelInFlight, paneKey, targetPtyId])
 
   return { sendAnswer, sendRaw, sendRawVerified, cancelPending: cancelInFlight, cancelAsk, cancel }
 }
