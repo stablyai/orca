@@ -92,7 +92,10 @@ vi.mock('./diff-editor-word-wrap-options', () => ({
 vi.mock('./diff-model-swap-view-state', () => ({
   preserveDiffViewStateAcrossModelSwaps: () => ({ dispose: vi.fn() })
 }))
-vi.mock('./editor-shortcuts', () => ({ installMonacoDiffChangeNavigationShortcut: () => vi.fn() }))
+vi.mock('./editor-shortcuts', () => ({
+  installMonacoDiffChangeNavigationShortcut: () => vi.fn(),
+  installMonacoEditorCommandPaletteShortcut: () => vi.fn()
+}))
 vi.mock('./LargeDiffFallback', () => ({ LargeDiffFallback: () => <div>Large diff</div> }))
 
 function NavigationProbe(): React.JSX.Element {

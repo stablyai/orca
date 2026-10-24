@@ -8,6 +8,7 @@ import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover
 import {
   installEditorAddReviewNoteShortcut,
   installEditorSaveShortcut,
+  installMonacoEditorCommandPaletteShortcut,
   installMonacoEditorFindShortcut
 } from './editor-shortcuts'
 import {
@@ -59,6 +60,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -137,6 +139,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       cleanupAddReviewNoteShortcut()
       editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
