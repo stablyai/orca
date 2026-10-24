@@ -18,6 +18,9 @@ const conversion = vi.hoisted(() => ({
   convertWslDriveProjectToWindowsGit: vi.fn(async () => ({ ok: false, blockers: [] }))
 }))
 vi.mock('../wsl/wsl-drive-project-windows-git', () => conversion)
+vi.mock('./wsl-drive-unc-conversion-handlers', () => ({
+  registerWslDriveUncConversionHandlers: vi.fn()
+}))
 
 import { registerWslDriveProjectHandlers, readWorktreeLinks } from './wsl-drive-project-handlers'
 
@@ -34,7 +37,7 @@ beforeEach(() => {
   conversion.previewWslDriveProjectWindowsGit.mockClear()
   conversion.convertWslDriveProjectToWindowsGit.mockClear()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The conversion is mocked; the handler only builds deps.
-  registerWslDriveProjectHandlers({} as never)
+  registerWslDriveProjectHandlers({} as never, {} as never)
 })
 afterEach(() => {
   vi.unstubAllEnvs()
