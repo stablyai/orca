@@ -146,16 +146,13 @@ it('keeps a migrated browser profile with omitted maps on DSH own settings', () 
   expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
 })
 
-it('leaves a command-overridden DSH manual in a pre-migration browser profile', () => {
+it('leaves a command-overridden DSH manual when a pre-migration profile omits its maps', () => {
   const loaded = mergeSettings(
     getDefaultSettings('~'),
-    migrateStoredWebSettings({
-      agentCmdOverrides: { dsh: 'custom-dsh' },
-      agentDefaultArgs: {},
-      agentDefaultEnv: {}
-    })
+    migrateStoredWebSettings({ agentCmdOverrides: { dsh: 'custom-dsh' } })
   )
 
   expect(resolveAgentPermission('dsh', loaded).choice).toBe('own')
   expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
+  expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
 })

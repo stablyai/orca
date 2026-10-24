@@ -223,7 +223,8 @@ function migrateBrowserSavedAgentPermission(
   if (
     stored.agentYoloDefaultsMigrated !== true &&
     !stored.agentDefaultArgs &&
-    !stored.agentDefaultEnv
+    !stored.agentDefaultEnv &&
+    !stored.agentCmdOverrides
   ) {
     return {}
   }
