@@ -110,6 +110,14 @@ export async function activateFinder(): Promise<void> {
   await delay(1000)
 }
 
+export async function frontmostMacAppName(): Promise<string> {
+  const result = await execFileAsync('osascript', [
+    '-e',
+    'tell application "System Events" to get name of first application process whose frontmost is true'
+  ])
+  return result.stdout.trim()
+}
+
 async function waitForMacAppWindow(appName: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {

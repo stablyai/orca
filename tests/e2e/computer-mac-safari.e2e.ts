@@ -5,10 +5,12 @@ import type {
   ComputerSnapshotResult
 } from '../../src/shared/runtime-types'
 import {
+  activateFinder,
   closeSafariDraftFixture,
   ensureOrcaRuntimeLaunched,
   ensureSafariDraftFixtureLaunched,
   findRoleIndex,
+  frontmostMacAppName,
   parseJsonOutput,
   runOrcaCli,
   type SafariDraftFixture
@@ -168,6 +170,50 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
     expect(saved.result.action?.actionName).toBe('AXPress')
     expect(saved.result.snapshot.treeText).toContain(`Draft ready: ${recipient} / ${body}`)
   })
+
+  test.each([false, true])(
+    'accessibility clicks restore the app only when requested (%s)',
+    async (restoreWindow) => {
+      const targetArgs = await safariFixtureWindowTargetArgs(fixture.title)
+      await activateFinder()
+      const foreground = await frontmostMacAppName()
+      expect(foreground).toBe('Finder')
+      const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'get-app-state',
+            '--app',
+            'com.apple.Safari',
+            ...targetArgs,
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      )
+      const saveIndex = findRoleIndex(state.result.snapshot.treeText, 'button Save draft')
+      expect(saveIndex).toBeGreaterThanOrEqual(0)
+      const clicked = parseJsonOutput<{ result: ComputerActionResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'click',
+            '--app',
+            'com.apple.Safari',
+            ...targetArgs,
+            '--element-index',
+            String(saveIndex),
+            ...(restoreWindow ? ['--restore-window'] : []),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      )
+      expect(clicked.result.action?.path).toBe('accessibility')
+      expect(clicked.result.action?.actionName).toBe('AXPress')
+      expect(await frontmostMacAppName()).toBe(restoreWindow ? 'Safari' : foreground)
+    }
+  )
 
   test('delivers an element-index middle click to the browser receiver', async () => {
     const targetArgs = await safariFixtureWindowTargetArgs(fixture.title)
