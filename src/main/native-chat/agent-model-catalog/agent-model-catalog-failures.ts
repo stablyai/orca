@@ -25,7 +25,16 @@ export class AgentModelCatalogFailures {
     return this.failures.get(fingerprint) ?? null
   }
 
-  /** Expired unavailability stays readable during reprobe; expired plain failures disappear. */
+  /** Inside its TTL. An expired reason stays readable until the next probe replaces it, so a read
+   *  can still serve it while the probe that re-derives it runs; an expired plain failure dies. */
+  detail(fingerprint: string): string | null {
+    return this.isActive(fingerprint) ? (this.get(fingerprint)?.detail ?? null) : null
+  }
+
+  unavailableDue(fingerprint: string): boolean {
+    return this.get(fingerprint)?.unavailable !== undefined && !this.isActive(fingerprint)
+  }
+
   isActive(fingerprint: string): boolean {
     const failure = this.failures.get(fingerprint)
     if (!failure) {

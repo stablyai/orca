@@ -15,24 +15,9 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  const initial = session.options.messageDefault()
-  const model = options?.model ?? initial.model
-  const defaultEffort =
-    model === initial.model
-      ? initial.effort
-      : session.options.read().models.find((entry) => entry.id === model)?.defaultEffort
   for (const key of ['model', 'effort'] as const) {
-    const value = options?.[key] ?? (key === 'model' ? initial.model : defaultEffort)
-    if (value === undefined) {
-      const applied = session.options.applied.get(key)
-      if (applied !== undefined && applied !== initial[key]) {
-        throw new AgentSessionOptionRejectedError(
-          new Error(`The default ${key} for this model is unknown`)
-        )
-      }
-      continue
-    }
-    if (session.options.currentProof.has(key) && session.options.reported()[key] === value) {
+    const value = options[key]
+    if (value === undefined || session.options.appliedInput.get(key) === value) {
       continue
     }
     try {

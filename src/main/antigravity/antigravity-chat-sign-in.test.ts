@@ -1,3 +1,8 @@
+import { structuredAgentHostLaunchSources } from '../runtime/structured-agent-launch-support'
+import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
+import * as profileStorage from '../orca-profiles/profile-storage-paths'
+// The chat sign-in against a scripted Antigravity server.
+
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -32,6 +37,16 @@ vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
     async () => 'unverifiable'
   )
+}))
+
+const checkingShell = vi.hoisted(() => ({ path: '/fixture', next: '/fixture' }))
+vi.mock('../startup/login-shell-environment', () => ({
+  resolveLoginShellEnvironment: async (options?: { startedAfter?: number }) => {
+    if (options?.startedAfter !== undefined) {
+      checkingShell.path = checkingShell.next
+    }
+    return { PATH: checkingShell.path }
+  }
 }))
 
 const GOOGLE_LINK =
@@ -81,6 +96,7 @@ async function signInAgainst(
     stream?: 'stdout' | 'stderr'
     metaCwd?: string
     sessionResult?: Record<string, unknown>
+    realLaunchSources?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -110,13 +126,36 @@ async function signInAgainst(
   const bin = join(stateDirectory, 'bin')
   await mkdir(bin)
   await writeFile(join(bin, ANTIGRAVITY_LAUNCH_SPEC.command), '', { mode: 0o755 })
+  if (options.realLaunchSources) {
+    checkingShell.path = bin
+    checkingShell.next = bin
+    vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(stateDirectory)
+  }
   const host = {
-    launchSources: async () => ({
-      accountHome: { variable: 'GEMINI_HOME', path: folder },
-      env: { PATH: bin },
-      commandSettings: {},
-      dataDirectory: stateDirectory
-    }),
+    launchSources: options.realLaunchSources
+      ? (signal: AbortSignal) =>
+          structuredAgentHostLaunchSources(
+            'antigravity',
+            {
+              requireStore: () => ({
+                getSettings: () => ({
+                  nativeChatInheritShellEnvironment: true,
+                  agentDefaultEnv: {}
+                })
+              }),
+              resolveStructuredAgentAccountHome: async () => ({
+                variable: 'GEMINI_HOME',
+                path: folder
+              })
+            },
+            signal
+          )
+      : async () => ({
+          accountHome: { variable: 'GEMINI_HOME', path: folder },
+          env: { PATH: bin },
+          commandSettings: {},
+          dataDirectory: stateDirectory
+        }),
     stopLiveChats: async () => {},
     connect: vi.fn<ConnectAcpAgent<AcpAgentConnection>>((launch, connectionOptions) => {
       const connection = createAcpAgentConnection(launch, connectionOptions, () => child)
@@ -524,5 +563,94 @@ it('expires a waiting sign-in quietly and releases its launch gate', async () =>
     expect(warn).not.toHaveBeenCalled()
   } finally {
     vi.useRealTimers()
+  }
+})
+
+it('drops checking-session models when cancellation wins while start is pending', async () => {
+  const started = deferred<Awaited<ReturnType<AcpAgentConnection['start']>>>()
+  const enter = vi.fn()
+  const run = await signInAgainst(() => helperOutput(GOOGLE_LINK), {
+    configure: (connection) => {
+      vi.spyOn(connection, 'start').mockImplementation(() => {
+        enter()
+        return started.promise
+      })
+    }
+  })
+  await stateAfter(run.flowId, 'starting')
+  run.finishBrowser()
+  await vi.waitFor(() => expect(enter).toHaveBeenCalledTimes(1))
+  const cancelling = cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+  started.resolve({
+    kind: 'new',
+    sessionId: SESSION,
+    response: {
+      sessionId: SESSION,
+      configOptions: [
+        {
+          id: 'model',
+          name: 'Model',
+          category: 'model',
+          type: 'select',
+          currentValue: 'late',
+          options: [{ value: 'late', name: 'Late' }]
+        }
+      ]
+    }
+  })
+  expect((await cancelling)?.phase).toBe('cancelled')
+  const key = agentModelCatalogFingerprint({
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: run.folder },
+    wslDistro: null
+  })
+  expect(agentModelCatalogStore.get(key)).toBeNull()
+})
+
+it('retires a cold checking producer on effective Refresh while valid sign-in still completes', async () => {
+  const configOptions = [
+    {
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      type: 'select',
+      currentValue: 'old-A',
+      options: [{ value: 'old-A', name: 'A' }]
+    }
+  ]
+  const run = await signInAgainst(printed(GOOGLE_LINK), {
+    realLaunchSources: true,
+    sessionResult: { configOptions }
+  })
+  const key = agentModelCatalogFingerprint({
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: run.folder },
+    wslDistro: null
+  })
+  try {
+    await stateAfter(run.flowId, 'starting')
+    const before = agentModelCatalogStore.retirementRevision('antigravity')
+    await captureHostShellEnvironment(async () => {
+      checkingShell.next = '/changed-install'
+    })
+    expect(agentModelCatalogStore.retirementRevision('antigravity')).not.toBe(before)
+    run.finishBrowser()
+    await stateAfter(run.flowId, 'waiting')
+    run.openSession()
+    expect(await stateAfter(run.flowId, 'verifying')).toMatchObject({ phase: 'signedIn' })
+    expect(agentModelCatalogStore.get(key)).toBeNull()
+    // The completed checking lifetime no longer participates in Refresh.
+    const released = agentModelCatalogStore.retirementRevision('antigravity')
+    await captureHostShellEnvironment(async () => {
+      checkingShell.next = '/another-install'
+    })
+    expect(agentModelCatalogStore.retirementRevision('antigravity')).toBe(released)
+  } finally {
+    run.finishBrowser()
+    run.openSession()
+    const shown = readAntigravityChatSignInStatus(DESKTOP).flow
+    if (shown && ['starting', 'waiting', 'verifying'].includes(shown.phase)) {
+      await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+    }
   }
 })

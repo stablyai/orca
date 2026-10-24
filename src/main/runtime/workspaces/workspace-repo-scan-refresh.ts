@@ -197,9 +197,16 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
         }
       }
     }
+    const registered = new Set(
+      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
+    )
     for (const key of scopeKeys) {
-      this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
+      if (registered.has(key)) {
+        this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
+      } else {
+        this.worktreeScanGenerations.delete(key)
+        this.worktreeScanCache.delete(key)
+      }
       this.worktreeScanInFlight.delete(key)
     }
   }
@@ -217,7 +224,6 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     )
     for (const key of affectedScopeKeys) {
       this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
-      this.worktreeScanCache.delete(key)
       this.worktreeScanInFlight.delete(key)
     }
     if (affectedScopeKeys.size > 0) {

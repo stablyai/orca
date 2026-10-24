@@ -83,23 +83,6 @@ export function createNativeChatPtySessionOptions(
   if (args.reportedValues && applyNativeChatReportedSessionOptions(record, args.reportedValues)) {
     writeNativeChatSessionOptionCache(args.scopeKey, record)
   }
-  /** Why: an authoritative probe proved this id gone; left tracked it would re-enter
-   *  the picker via re-injection and re-persist the fatal `-m` on any later option
-   *  write, undoing the settings retirement. */
-  const untrackRetiredModel = (): boolean => {
-    if (!catalog.discoveredModelsAreAuthoritative || !modelsAreDiscovered) {
-      return false
-    }
-    const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
-    if (!trackedId || models.some((model) => model.id === trackedId)) {
-      return false
-    }
-    clearNativeChatSessionModel(record)
-    return true
-  }
-  if (untrackRetiredModel()) {
-    writeNativeChatSessionOptionCache(args.scopeKey, record)
-  }
   const activeModels = (): CatalogModel[] => withTrackedNativeChatModel(catalog, models, record)
   let snapshot = buildNativeChatSessionOptionSnapshot({
     catalog,
@@ -221,7 +204,6 @@ export function createNativeChatPtySessionOptions(
     replaceModels: (nextModels) => {
       models = [...nextModels]
       modelsAreDiscovered = true
-      untrackRetiredModel()
       publish()
     },
     contextWindowTokens: (modelId) =>

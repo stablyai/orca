@@ -1,3 +1,4 @@
+import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { startSpan } from '../../observability/tracer'
@@ -27,7 +28,27 @@ export type AgentModelCatalogSessionAccess = {
   accountHomePath: string
 }
 
-export type InFlightListings = Map<AgentModelCatalogLister, Promise<AgentModelCatalogEntry | null>>
+export type InFlightListings = {
+  agent: string
+  current?: () => boolean
+  requests: Map<AgentModelCatalogLister, Promise<AgentModelCatalogEntry | null>>
+}
+
+/** Retiring a generation also detaches joiners; its eventual result cannot ingest. */
+export function retireAgentModelCatalogListings(
+  refreshes: Map<string, InFlightListings>,
+  latestWrittenOrder: Map<string, number>,
+  listingWaiters: AgentModelCatalogListingWaiters,
+  agent?: string
+): void {
+  for (const [key, listing] of refreshes) {
+    if (agent === undefined ? listing.current?.() === false : listing.agent === agent) {
+      refreshes.delete(key)
+      latestWrittenOrder.delete(key)
+      listingWaiters.notify(key)
+    }
+  }
+}
 
 type CatalogSuccessWriter = (
   fingerprint: string,
@@ -42,6 +63,7 @@ export function refreshAgentModelCatalogListing(input: {
   agent: string
   lister: AgentModelCatalogLister
   listModels: () => Promise<AgentModelCatalogSuccess>
+  current?: () => boolean
   refreshes: Map<string, InFlightListings>
   entries: ReadonlyMap<string, AgentModelCatalogEntry>
   latestWrittenOrder: Map<string, number>
@@ -58,16 +80,20 @@ export function refreshAgentModelCatalogListing(input: {
   recordFailure: (fingerprint: string, detail: string, agent?: string) => void
 }): Promise<AgentModelCatalogEntry | null> {
   const { fingerprint, agent, lister, listModels } = input
-  const listers: InFlightListings = input.refreshes.get(fingerprint) ?? new Map()
+  const listers: InFlightListings = input.refreshes.get(fingerprint) ?? {
+    agent,
+    current: input.current,
+    requests: new Map()
+  }
   const inFlight = independentAgentModelCatalog(agent)
-    ? listers.values().next().value
-    : listers.get(lister)
+    ? listers.requests.values().next().value
+    : listers.requests.get(lister)
   if (inFlight) {
     return inFlight
   }
   const settle = (): void => {
-    listers.delete(lister)
-    if (listers.size === 0 && input.refreshes.get(fingerprint) === listers) {
+    listers.requests.delete(lister)
+    if (listers.requests.size === 0 && input.refreshes.get(fingerprint) === listers) {
       input.refreshes.delete(fingerprint)
       input.latestWrittenOrder.delete(fingerprint)
     }
@@ -80,6 +106,11 @@ export function refreshAgentModelCatalogListing(input: {
   })
   const run = listModels().then(
     (success) => {
+      if (input.refreshes.get(fingerprint) !== listers || listers.current?.() === false) {
+        span.end()
+        settle()
+        return null
+      }
       span.setAttribute('models', success.models.length)
       span.end()
       // Superseded callers receive their results without overwriting newer discovery.
@@ -96,6 +127,11 @@ export function refreshAgentModelCatalogListing(input: {
     },
     (error: unknown) => {
       span.fail(error instanceof Error ? error : String(error))
+      if (input.refreshes.get(fingerprint) !== listers || listers.current?.() === false) {
+        settle()
+        return null
+      }
+      // Probes are functions; a live session lists through its access object.
       if (typeof lister === 'function') {
         if (!(error instanceof AgentModelCatalogListingStoppedError)) {
           input.failures.probeFailed(fingerprint, agent, error)
@@ -111,13 +147,14 @@ export function refreshAgentModelCatalogListing(input: {
       return null
     }
   )
-  listers.set(lister, run)
+  listers.requests.set(lister, run)
   input.refreshes.set(fingerprint, listers)
   return run
 }
 
 export function scopedAgentModelCatalogLister(input: {
   legacy?: boolean
+  operation?: StructuredAgentResolutionOperation
   admission: PrioritySemaphore
   signal: AbortSignal
   resolved: AgentModelCatalogResolvedProbe | undefined
@@ -139,7 +176,11 @@ export function scopedAgentModelCatalogLister(input: {
       if (!probe || !probeHome) {
         throw new AgentModelCatalogListingStoppedError('catalog scope unavailable')
       }
-      return await probe(probeHome, { signal: attemptSignal, workspacePath })
+      return await probe(probeHome, {
+        signal: attemptSignal,
+        workspacePath,
+        operation: input.operation
+      })
     } catch (error) {
       throw signal.aborted ? new AgentModelCatalogListingStoppedError(String(error)) : error
     } finally {

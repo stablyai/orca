@@ -1,7 +1,19 @@
+import {
+  assertStructuredAgentResolutionCurrent,
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentResolutionOperation
+} from '../native-chat/structured-agent-command-resolution'
+// How a durable session record becomes a Codex process launch.
+//
+// Every input is read back from the record the store already made durable, not
+// from the call that triggered spawn. A client that attaches twice must
+// land in the same working directory under the same account home, and a resume
+// must name the thread this session actually proved — never one a caller asks
+// for, which is how a resume becomes a fork wearing a resume's name.
+
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
@@ -21,6 +33,7 @@ export type CodexStructuredInvocationDeps = Pick<
   CodexStructuredLaunchPartDeps,
   'resolveCommand'
 > & {
+  operation?: StructuredAgentResolutionOperation
   /** Fresh spawn environment, never persisted in the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   /** Refresh after a missing binary; absence disables retry. */
@@ -41,14 +54,17 @@ export function resolveCodexStructuredInvocation(
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readCodexStructuredInvocation(deps),
     deps.refreshEnvironmentAfterMiss,
-    { env: ({ environment }) => environment, cwd: deps.resolveWorkingDirectory }
+    { env: ({ environment }) => environment, cwd: deps.resolveWorkingDirectory },
+    deps.operation
   )
 }
 
 async function readCodexStructuredInvocation(
   deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const environment = await deps.resolveEnvironment?.()
+  assertStructuredAgentResolutionCurrent(deps.operation)
   const pathEnv = environment?.PATH ?? environment?.Path ?? null
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const command = (deps.resolveCommand ?? resolveCodexCommand)({

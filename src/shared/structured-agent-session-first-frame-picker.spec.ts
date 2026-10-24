@@ -64,7 +64,7 @@ describe('the first frame of every agent’s picker', () => {
             settable: false,
             kind: { choices: [] }
           })
-          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(false)
+          expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(true)
         } else {
           // A built-in list is presentation only: no value is tracked from it.
           expect(state.record.values.model).toBeUndefined()

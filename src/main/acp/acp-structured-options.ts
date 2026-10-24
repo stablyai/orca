@@ -51,7 +51,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+    private readonly dialect: Pick<
+      AcpDialect,
+      'modelEfforts' | 'withheldCommands' | 'effortChangesModel'
+    > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
@@ -60,12 +63,20 @@ export class AcpStructuredOptions {
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
-  /** Last successful Orca writes, distinct from agent-reported values. */
-  readonly applied = new Map<string, string>()
-  private initialChoice: Readonly<Record<string, string>> = {}
-  currentProof = new Set<string>()
+  readonly appliedInput = new Map<string, string>()
   writeRevision = 0
 
+  invalidateInput(key: string): void {
+    this.appliedInput.delete(key)
+    if (key === 'model') {
+      this.appliedInput.delete('effort')
+    }
+    if (key === 'effort' && this.dialect.effortChangesModel) {
+      this.appliedInput.delete('model')
+    }
+  }
+
+  /** The session state a new, load or resume response reported. */
   adoptSession(
     response: {
       configOptions?: SessionConfigOption[] | null
@@ -76,13 +87,7 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
-    this.initialChoice = this.reported()
-    this.currentProof = new Set(Object.keys(this.initialChoice))
-  }
-
-  /** Native selection before any message changed this child. */
-  messageDefault(): Readonly<Record<string, string>> {
-    return this.initialChoice
+    this.appliedInput.clear()
   }
 
   notePick(key: string): void {
@@ -241,17 +246,13 @@ export function writeAcpSessionOption(
     return Promise.reject(abortSignalReason(signal))
   }
   const revision = ++options.writeRevision
-  options.currentProof.delete(bound.key)
-  if (bound.key === 'model') {
-    options.currentProof.delete('effort')
-  }
+  options.invalidateInput(bound.key)
   const adopt = (apply: () => void): void => {
     if (options.writeRevision !== revision) {
       throw new Error(`${agent} option write was superseded`)
     }
     apply()
-    options.currentProof.add(bound.key)
-    options.applied.set(bound.key, bound.value)
+    options.appliedInput.set(bound.key, write.method === 'config' ? write.value : write.modelId)
   }
   const applied =
     write.method === 'config'

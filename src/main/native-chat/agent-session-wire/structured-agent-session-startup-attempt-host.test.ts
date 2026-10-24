@@ -96,6 +96,11 @@ async function startHost(): Promise<void> {
       setOption
     },
     modelCatalog: {
+      snapshot: vi.fn(() => ({ origin: 'unknown' as const })),
+      demand: vi.fn(async () => {}),
+      prepareSaved: vi.fn(async () => ({ origin: 'unknown' as const })),
+      captureSource: () => () => true,
+      retireContext: vi.fn(),
       peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
       recordLiveListing,
@@ -444,7 +449,9 @@ describe('what a started child reports', () => {
     await proveOpen()
     await reported
 
-    await eventually(() => expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing))
+    await eventually(() =>
+      expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing, expect.any(Function))
+    )
   })
 })
 

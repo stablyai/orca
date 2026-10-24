@@ -81,6 +81,7 @@ export async function settleStructuredAgentSessionProviderStarted(
     ) {
       return null
     }
+    const sourceChild = session.child
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
     await noteStructuredAgentSessionReportedOptions(
       context,
@@ -89,9 +90,22 @@ export async function settleStructuredAgentSessionProviderStarted(
       event.reportedOptions
     )
     void context.wakeDelivery(event.sessionId)
-    noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
+    noteStructuredAgentSessionProviderStarted(
+      context.deps,
+      event.sessionId,
+      () =>
+        context.sessions.get(event.sessionId)?.child === sourceChild &&
+        sourceChild?.catalogSource?.() !== false
+    )
     if (event.catalogListing) {
-      saveStructuredAgentSessionListing(context, event.sessionId, event.catalogListing)
+      saveStructuredAgentSessionListing(
+        context,
+        event.sessionId,
+        event.catalogListing,
+        () =>
+          context.sessions.get(event.sessionId)?.child === sourceChild &&
+          sourceChild?.catalogSource?.() !== false
+      )
     }
     context.publishStatus?.(event.sessionId)
     return undefined
@@ -208,11 +222,12 @@ async function recordStartedHandle(
 /** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */
 export function noteStructuredAgentSessionProviderStarted(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
-  sessionId: string
+  sessionId: string,
+  source?: () => boolean
 ): void {
   const record = deps.store.getRecord(sessionId)
   if (record) {
-    deps.modelCatalog?.providerStarted(record)
+    deps.modelCatalog?.providerStarted(record, source)
   }
 }
 

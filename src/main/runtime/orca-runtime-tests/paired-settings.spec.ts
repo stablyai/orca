@@ -143,7 +143,7 @@ describe('OrcaRuntimeService', () => {
     expect(updateSettings).toHaveBeenCalledTimes(2)
   })
 
-  it('compares retired models against the host record at mutation time', () => {
+  it('retires a missing future-launch default when an older client asks to prune from inventory', () => {
     let settings = {
       ...store.getSettings(),
       nativeChatSessionOptions: { grok: { model: 'grok-5' } }
@@ -170,6 +170,10 @@ describe('OrcaRuntimeService', () => {
       availableModelIds: ['grok-4.5']
     })
     expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
+    expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
+      { nativeChatSessionOptions: { grok: {} } },
+      { notifyListeners: true }
+    )
   })
 
   it('rejects a concurrent add after the quick command limit is reached', () => {

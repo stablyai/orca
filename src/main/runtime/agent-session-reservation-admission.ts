@@ -10,7 +10,7 @@
  */
 
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import { assertAgentSessionOptionsAdmitted } from './agent-session-record-options'
+import type { AgentSessionAdmissionModels } from './agent-session-record-options'
 import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -65,7 +65,7 @@ export type AgentSessionReserveRequest = {
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
   /** Saved catalog rows those options are admitted against; transient, never written. */
-  models?: Parameters<typeof assertAgentSessionOptionsAdmitted>[1]
+  models?: AgentSessionAdmissionModels
   /** The tab id a create reserved for this conversation, taken when its tab is published. An id
    *  another session's tab holds is refused here, before anything is spawned. */
   surfaceTabId?: string
@@ -157,7 +157,6 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
-  assertAgentSessionOptionsAdmitted(request.provider, request.models, request.options)
 }
 
 export function applyAgentSessionReservation(

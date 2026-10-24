@@ -35,6 +35,11 @@ function launchPermission(
     return answer
   })
   const modelCatalog = {
+    snapshot: () => ({ origin: 'unknown' as const }),
+    demand: async () => {},
+    retireContext: () => {},
+    prepareSaved: read,
+    captureSource: () => () => true,
     peek: () => null,
     read,
     retainedLiveModelIds: vi.fn(async () => []),

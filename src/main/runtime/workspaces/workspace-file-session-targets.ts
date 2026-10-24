@@ -306,8 +306,14 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
       }
     }
 
+    return this.runtimeFileTargetForWorktree(await this.resolveWorktreeSelector(worktreeSelector))
+  }
+
+  protected runtimeFileTargetForWorktree(worktree: ResolvedWorktree): {
+    worktree: ResolvedWorktree
+    executionHostId: ExecutionHostId
+  } {
     const store = this.requireStore()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')

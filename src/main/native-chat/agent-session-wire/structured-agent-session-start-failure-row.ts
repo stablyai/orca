@@ -1,3 +1,5 @@
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
@@ -146,4 +148,17 @@ export function oldestQueuedSubmission(
     }
   }
   return oldest
+}
+
+export async function recordStructuredAgentSessionDeliveryFailure(
+  session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
+  failure: NonNullable<ReturnType<typeof startThatFailedWhileQueued>>,
+  context: AgentSessionFailureWordsContext,
+  acceptedBy?: AgentJournalCursor
+): Promise<void> {
+  await recordStructuredAgentSessionStartFailure(
+    session,
+    { startKey: failure.startKey, ...structuredAgentSessionStartFailure(failure.cause, context) },
+    acceptedBy && acceptedNoLaterThan(session.journal, acceptedBy)
+  )
 }

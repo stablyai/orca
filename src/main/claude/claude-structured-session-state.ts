@@ -168,6 +168,7 @@ export type ClaudeSession = {
   fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
+  fastModeDisabledMutation?: number
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
@@ -190,6 +191,7 @@ export type ClaudeSession = {
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
   /** Fences overlapping option writes so a late completion cannot restore stale state. */
+  settingsObservation?: { pending: boolean }
   optionMutationSequence: number
   /** Latest resume point written at a turn end; close and exit persist after it settles. */
   resumePointWrite?: { leafUuid: string; settled: Promise<void> }

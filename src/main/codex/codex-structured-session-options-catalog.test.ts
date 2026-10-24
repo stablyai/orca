@@ -57,6 +57,7 @@ it('uses installed choices after an update and keeps saved values for the next t
     ['model', 'A'],
     ['effort', 'low']
   ])
+  session.appliedTurnOptions = { model: 'A', effort: 'low' }
   const store = new AgentModelCatalogStore()
   const install = (models: AgentSessionOptionsResult['models']) =>
     store.recordSuccess('scope', 'codex', { origin: 'probe', complete: true, models }, 'discovery')
@@ -70,9 +71,9 @@ it('uses installed choices after an update and keeps saved values for the next t
   const before = await readLiveCodexSessionOptions(session, 100)
   expect(before.models[0]?.efforts).toEqual([{ value: 'high', label: 'High' }])
   expect(before.current).toMatchObject({ model: 'A', effort: 'low' })
-  await expect(applyCodexStructuredSessionOption(session, 'effort', 'low')).rejects.toThrow(
-    'does not support low'
-  )
+  await expect(applyCodexStructuredSessionOption(session, 'effort', 'low')).resolves.toMatchObject({
+    effort: 'low'
+  })
   install([{ id: 'B', label: 'B', isDefault: true, efforts: [] }])
   const after = await readLiveCodexSessionOptions(session, 100)
   expect(after.models.map((row) => row.id)).toEqual(['B', 'A'])

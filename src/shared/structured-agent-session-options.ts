@@ -11,10 +11,7 @@ import {
 } from './native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 import { usesInstalledAgentModelCatalog } from './agent-model-catalog-ownership'
-import {
-  structuredAgentSessionDescribedModel,
-  structuredAgentSessionShownModel
-} from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from './native-chat-session-options'
 import type {
   AgentSessionModelCatalogResult,
@@ -191,7 +188,10 @@ export function applyStructuredAgentSessionOptions(
         ? 'default'
         : current.confirmed?.includes(id)
           ? 'reported'
-          : 'dispatched'
+          : id === 'serviceTier' && current.defaulted !== undefined
+            ? 'applied'
+            : 'dispatched',
+    state.record.agent === 'codex' && current.defaulted !== undefined
   )
   return {
     ...state,
@@ -242,23 +242,14 @@ export function commitStructuredAgentSessionOption(
   return { ...state, pendingId: null }
 }
 
-/** Whether a pick of `modelId` held before launch keeps another held value (decoded or encoded):
- *  no host exists yet to reconcile it, so only what the model's controls offer stays. A model the
- *  list does not describe keeps every value, since nothing says what it takes. */
+/** Inventory describes controls; it cannot retire an accepted input on model changes. */
 export function structuredAgentSessionModelOffers(
-  state: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>,
-  modelId: string,
-  id: string,
-  value: SessionOptionValue
+  _state: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>,
+  _modelId: string,
+  _id: string,
+  _value: SessionOptionValue
 ): boolean {
-  const model = structuredAgentSessionDescribedModel(state, modelId)
-  if (id === 'model' || id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID || !model) {
-    return true
-  }
-  const option = model.options.find((entry) => entry.id === id)
-  return option?.kind.type === 'select'
-    ? option.kind.choices.some((choice) => choice.value === value)
-    : option !== undefined
+  return true
 }
 
 export function commitStructuredAgentSessionOptionValues(

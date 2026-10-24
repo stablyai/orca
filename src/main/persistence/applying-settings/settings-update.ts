@@ -1,7 +1,7 @@
+import { publishSettingsUpdate } from './settings-update-effects'
 import { normalizeAgentNativeChatPermissionModes } from '../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
@@ -33,10 +33,7 @@ import {
   normalizeSourceControlAiSettings,
   projectSourceControlAiToLegacyCommitMessageAi
 } from '../../../shared/source-control-ai'
-import {
-  PROTECTED_SECRET_SLOT,
-  type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
@@ -271,32 +268,6 @@ export function updateSettings(
     }),
     ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
   }
-  if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
-    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
-  }
-  if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
-    operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
-  }
-  if (
-    !Object.is(
-      previousSettings.localWindowsRuntimeDefault,
-      operations.state.settings.localWindowsRuntimeDefault
-    )
-  ) {
-    for (const repoId of new Set(operations.state.repos.map(({ id }) => id))) {
-      operations.bumpLocalWorktreeScanGeneration(repoId)
-    }
-  }
-  operations.scheduleSave()
-  const changedUpdates = {} as Partial<GlobalSettings> & Record<string, unknown>
-  for (const key of Object.keys(sanitizedUpdates) as (keyof GlobalSettings)[]) {
-    if (!Object.is(previousSettings[key], operations.state.settings[key])) {
-      changedUpdates[String(key)] = operations.state.settings[key]
-    }
-  }
-  retireAtRestCommandSettings(Object.keys(changedUpdates))
-  if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
-    operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
-  }
+  publishSettingsUpdate(operations, updates, sanitizedUpdates, previousSettings, options)
   return operations.state.settings
 }

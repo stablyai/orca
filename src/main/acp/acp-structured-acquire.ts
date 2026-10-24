@@ -160,7 +160,8 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.read().current
+          reportedOptions: options.read().current,
+          catalogListing: { models: options.read().models }
         })
       }
     })

@@ -12,7 +12,7 @@ import { PiRpcMessages } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { piRpcMessageSchema } from './rpc-protocol'
+import { type PiRpcState, piRpcMessageSchema } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
@@ -29,6 +29,7 @@ export type PiRpcTurnDeps = {
   turnEnded?: () => void
   failed: (error: Error) => void
   diagnostic?: (error: unknown) => void
+  prepareStateObservation?: () => (state: PiRpcState) => void
 }
 
 /** Prompt replies can be idless and arrive after dialogs; they have no elapsed-time deadline. */
@@ -51,6 +52,7 @@ export class PiRpcTurns {
     this.messages = new PiRpcMessages(deps.generation, this.context)
     this.idleCheck = new PiRpcIdleCheck({
       request: () => deps.request('get_state'),
+      prepareObservation: deps.prepareStateObservation,
       current: (revision) =>
         !this.ended && this.settling && !this.compacting && revision === this.revision,
       settled: (state) => {

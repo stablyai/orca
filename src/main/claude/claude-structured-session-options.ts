@@ -79,9 +79,11 @@ export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknow
   }
   if (facts.disabledReason) {
     session.fastModeDisabledReason = facts.disabledReason
+    session.fastModeDisabledMutation = session.optionMutationSequence
   } else if (facts.state || facts.disabledReasonReported) {
     // A state frame without a reason clears the block; the child omits the key instead of sending null.
     delete session.fastModeDisabledReason
+    delete session.fastModeDisabledMutation
   }
 }
 
@@ -118,12 +120,34 @@ export function claudeFallbackModelOptions(): WireClaudeModel[] {
 
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
-  timeoutMs: number | undefined
+  _timeoutMs?: number
 ): Promise<StructuredAgentSessionLiveOptions> {
-  const readMutationSequence = session.optionMutationSequence
-  const settings = await session.connection.getSettings({ timeoutMs }).catch(() => null)
-  observeClaudeSettingsReadback(session, settings, readMutationSequence)
   return claudeStructuredSessionOptionsFrom(session, null)
+}
+
+/** Native turn completion owns optional settings observations, independently of user actions. */
+export async function refreshClaudeStructuredSessionOptions(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  current: () => boolean,
+  report: (options: StructuredAgentSessionLiveOptions) => void
+): Promise<void> {
+  const sequence = session.optionMutationSequence
+  const token = { pending: session.settingsObservation?.pending ?? false }
+  session.settingsObservation = token
+  const connection = session.connection
+  const settings = await connection.getSettings({ timeoutMs }).catch(() => null)
+  if (
+    !current() ||
+    connection.closed ||
+    token.pending ||
+    session.settingsObservation !== token ||
+    sequence !== session.optionMutationSequence
+  ) {
+    return
+  }
+  observeClaudeSettingsReadback(session, settings, sequence)
+  report(claudeStructuredSessionOptionsFrom(session, null))
 }
 
 function observeClaudeSettingsReadback(

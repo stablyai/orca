@@ -1,3 +1,4 @@
+import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
@@ -11,13 +12,22 @@ export type AgentModelCatalogLookup = 'saved' | 'snapshot' | 'recover'
 
 export type AgentModelCatalogProbe = ((
   accountHome: AgentSessionAccountHome,
-  options?: { signal?: AbortSignal; workspacePath?: string; cwd?: string }
+  options?: {
+    signal?: AbortSignal
+    workspacePath?: string
+    cwd?: string
+    operation?: StructuredAgentResolutionOperation
+  }
 ) => Promise<AgentModelCatalogSuccess>) & {
-  resolveLegacy?: (home: AgentSessionAccountHome) => Promise<AgentModelCatalogResolvedProbe>
+  resolveLegacy?: (
+    home: AgentSessionAccountHome,
+    operation?: StructuredAgentResolutionOperation
+  ) => Promise<AgentModelCatalogResolvedProbe>
   resolve?: (
     home: AgentSessionAccountHome,
     cwd: string,
-    lookup?: AgentModelCatalogLookup
+    lookup?: AgentModelCatalogLookup,
+    operation?: StructuredAgentResolutionOperation
   ) => Promise<AgentModelCatalogResolvedProbe>
 }
 

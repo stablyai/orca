@@ -10,16 +10,14 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionStartClaim } from './structured-agent-session-agent-start'
 import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 import {
-  acceptedNoLaterThan,
   oldestQueuedSubmission,
-  recordStructuredAgentSessionStartFailure,
+  recordStructuredAgentSessionDeliveryFailure,
   refusedStructuredAgentSessionStart,
   startThatFailedWhileQueued
 } from './structured-agent-session-start-failure-row'
@@ -274,7 +272,13 @@ export class StructuredAgentSessionDeliveryLoop {
       }
     }
     if (
-      waitsForCodexTurnOptions(this.deps.record(sessionId), session.journal, next, awaitedChild)
+      waitsForCodexTurnOptions(
+        this.deps.record(sessionId),
+        session.journal,
+        next,
+        awaitedChild,
+        this.deps.adapter
+      )
     ) {
       return this.stop(sessionId)
     }
@@ -315,16 +319,11 @@ export class StructuredAgentSessionDeliveryLoop {
   ): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
-      await recordStructuredAgentSessionStartFailure(
+      await recordStructuredAgentSessionDeliveryFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
-        {
-          startKey: failure.startKey,
-          ...structuredAgentSessionStartFailure(
-            failure.cause,
-            this.deps.failureTextContext(sessionId)
-          )
-        },
-        acceptedBy && acceptedNoLaterThan(session.journal, acceptedBy)
+        failure,
+        this.deps.failureTextContext(sessionId),
+        acceptedBy
       )
     }
   }

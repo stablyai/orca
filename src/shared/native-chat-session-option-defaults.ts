@@ -150,8 +150,7 @@ export function applyNativeChatSessionOptionPicks(args: {
   return persisted
 }
 
-/** Applies one host-owned delta to the latest record. Returning null means the
- * authoritative model list found nothing to retire. */
+/** Applies a host-owned delta; null means no future launch default needs retirement. */
 export function applyNativeChatSessionOptionSettingsMutation(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   mutation: NativeChatSessionOptionSettingsMutation
@@ -170,9 +169,7 @@ export function applyNativeChatSessionOptionSettingsMutation(
   return clearNativeChatSessionOptionModel(persisted, mutation.agent)
 }
 
-/** Why: an authoritative probe proved this id gone, and a stale `model` is emitted
- *  verbatim as a launch flag — grok exits fatally on an unknown one. Dropping only
- *  `model` keeps the per-model option values for a later reselect. */
+/** Explicitly clears a model while retaining its per-model values for a later reselect. */
 export function clearNativeChatSessionOptionModel(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType

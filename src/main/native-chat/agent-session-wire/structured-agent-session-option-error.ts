@@ -1,3 +1,5 @@
+import { AGENT_SESSION_FAILURE_COPY } from '../../../shared/agent-session-failure-copy'
+
 /** Option validation failed before the provider session was mutated. */
 export class AgentSessionOptionRejectedError extends Error {
   constructor(
@@ -14,4 +16,10 @@ export function isAgentSessionOptionRejectedError(
   error: unknown
 ): error is AgentSessionOptionRejectedError {
   return error instanceof Error && error.name === 'AgentSessionOptionRejectedError'
+}
+
+export class ClaudeEffortValidationError extends AgentSessionOptionRejectedError {
+  constructor() {
+    super(AGENT_SESSION_FAILURE_COPY.claudeEffortInvalid)
+  }
 }

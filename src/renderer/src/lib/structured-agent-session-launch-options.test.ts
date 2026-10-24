@@ -247,7 +247,7 @@ describe('picks made while a chat launches', () => {
     expect(mutations().map((mutation) => mutation.value)).toEqual(['gpt-picked', 'gpt-repicked'])
   })
 
-  it('drops a held Fast the picked model does not offer: neither sent nor remembered', async () => {
+  it('sends held Fast with the picked model even when its catalog omits that tier', async () => {
     const created = deferred<{ sessionId: string; fence: number }>()
     mocks.launch.mockReturnValue(created.promise)
     const launch = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-tier' })
@@ -272,14 +272,25 @@ describe('picks made while a chat launches', () => {
     )
     const tierPick = holdStructuredAgentSessionLaunchOption(SESSION_ID, 'serviceTier', 'priority')
     holdStructuredAgentSessionLaunchOption(SESSION_ID, 'model', 'gpt-nofast', picker)
-    // Superseded, so the picker never saves it as the next launch's preference.
-    await expect(tierPick).resolves.toEqual({ kind: 'superseded' })
+    expect(getStructuredAgentSessionLaunchSelection(SESSION_ID)?.held).toEqual({
+      model: 'gpt-nofast',
+      serviceTier: 'priority'
+    })
     created.resolve({ sessionId: SESSION_ID, fence: 3 })
     await settle()
     setOptionReplies[0]!.resolve(ACCEPTED)
+    await settle()
+    setOptionReplies[1]!.resolve({ ok: true, value: { options: { serviceTier: 'priority' } } })
     await launch.launchResult
 
-    expect(mutations().map(({ key, value }) => [key, value])).toEqual([['model', 'gpt-nofast']])
+    await expect(tierPick).resolves.toEqual({
+      kind: 'accepted',
+      options: { serviceTier: 'priority' }
+    })
+    expect(mutations().map(({ key, value }) => [key, value])).toEqual([
+      ['model', 'gpt-nofast'],
+      ['serviceTier', 'priority']
+    ])
   })
 
   it('reports a refused pick to its picker and publishes all the same', async () => {

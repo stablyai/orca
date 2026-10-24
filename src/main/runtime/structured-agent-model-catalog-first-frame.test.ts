@@ -36,7 +36,8 @@ function context(): StructuredAgentModelCatalogContext {
     environment: {
       resolveBaseEnvironment: unused,
       resolveAgentEnvironment: unused,
-      refreshAfterMissingProgram: unused
+      refreshAfterMissingProgram: unused,
+      bindCatalogSources: () => () => {}
     }
   }
 }

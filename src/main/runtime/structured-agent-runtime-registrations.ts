@@ -76,7 +76,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     readModelCatalog: (sessionId, verifiedOnly) =>
       host()?.deps.modelCatalog?.peek(sessionId, verifiedOnly) ?? null,
     demandModelCatalog: async (sessionId, legacy) =>
-      host()?.deps.modelCatalog?.read({
+      host()?.deps.modelCatalog?.demand({
         agent: 'codex',
         sessionId,
         ...(legacy ? { legacy: true } : {})

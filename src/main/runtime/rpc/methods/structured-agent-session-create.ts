@@ -19,7 +19,6 @@ import type {
   StructuredAgentSessionFirstMessage
 } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
-import { savedAgentSessionCatalogModels } from '../../../native-chat/agent-session-wire/structured-agent-session-pick-reply'
 import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -33,7 +32,6 @@ import {
 } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
-import { structuredLaunchSeedOnSavedListing } from '../../session-tabs/structured-launch-seed-listing'
 import type { ChatTabPlacement } from '../../agent-session/agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
@@ -149,34 +147,12 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       ? { ...resolved.options, ...args.options }
       : { ...seededPermissionMode(resolved.options), ...args.options }
     : resolved.options
-  // The folder the new-chat picker read its list for, resolved once: the seed and the host's
-  // admission read the same list.
-  let folder: Promise<string | null> | undefined
-  const catalogFolder = () =>
-    (folder ??= args.runtime
-      .resolveStructuredAgentSessionLocalWorkspacePath(args.worktree)
-      .catch(() => null))
-  // After the fingerprints: a remembered model the saved listing no longer names moves, with the
-  // effort the create runs under it. A model the create names itself is never moved.
-  const options = args.options?.model
-    ? picked
-    : await structuredLaunchSeedOnSavedListing(host, args.agent, picked, catalogFolder)
-  const catalogModels =
-    options && host.deps.modelCatalog
-      ? await savedAgentSessionCatalogModels(
-          host.deps,
-          resolved.provider,
-          args.envelope.sessionId,
-          await catalogFolder()
-        )
-      : undefined
   return {
     host,
-    ...(catalogModels ? { catalogModels } : {}),
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
     attachParams: {
       ...resolvedAttach,
-      ...(options ? { options } : {}),
+      ...(picked ? { options: picked } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
