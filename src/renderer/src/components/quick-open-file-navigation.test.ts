@@ -69,7 +69,8 @@ it('validates pasted local paths with user-named access and uses the owner-quali
       filePath: '/external/guide.md',
       relativePath: '/external/guide.md',
       runtimeEnvironmentId: null
-    })
+    }),
+    { focusEditor: true }
   )
   expect(mocks.source).toHaveBeenCalledWith('owner-file-id', 'source')
   expect(mocks.reveal).toHaveBeenCalledWith(
@@ -89,7 +90,10 @@ it('keeps a literal colon filename when it exists instead of applying its appare
     { pathQuery: '/repo/report', line: 12 },
     '/repo/report:12'
   )
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/report:12' }))
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({ filePath: '/repo/report:12' }),
+    { focusEditor: true }
+  )
   expect(mocks.reveal).not.toHaveBeenCalled()
 })
 
@@ -102,7 +106,9 @@ it('falls back from a missing literal colon filename to line navigation', async 
     { pathQuery: '/repo/file.ts', line: 12 },
     '/repo/file.ts:12'
   )
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/file.ts' }))
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/file.ts' }), {
+    focusEditor: true
+  })
   expect(mocks.reveal).toHaveBeenCalledWith(
     expect.any(Function),
     '/repo/file.ts',
@@ -121,7 +127,10 @@ it('probes SSH paths only on their owning host', async () => {
     '/external/file.ts',
     { kind: 'user-file' }
   )
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ externalSshTargetId: 'ssh-a' }))
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({ externalSshTargetId: 'ssh-a' }),
+    { focusEditor: true }
+  )
 })
 
 it('resolves paired paths on the host and never falls back to client filesystem access', async () => {
@@ -136,7 +145,8 @@ it('resolves paired paths on the host and never falls back to client filesystem 
   expect(mocks.stat).not.toHaveBeenCalled()
   expect(mocks.authorize).not.toHaveBeenCalled()
   expect(mocks.open).toHaveBeenCalledWith(
-    expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' })
+    expect.objectContaining({ runtimeEnvironmentId: 'env-a', relativePath: 'file.ts' }),
+    { focusEditor: true }
   )
   mocks.rpc.mockResolvedValue({
     exists: true,
@@ -200,7 +210,10 @@ it('resolves literal colon names on a paired host before treating the suffix as 
     '/repo/report:12'
   )
   expect(mocks.rpc).toHaveBeenCalledOnce()
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/repo/report:12' }))
+  expect(mocks.open).toHaveBeenCalledWith(
+    expect.objectContaining({ filePath: '/repo/report:12' }),
+    { focusEditor: true }
+  )
   expect(mocks.reveal).not.toHaveBeenCalled()
   expect(mocks.stat).not.toHaveBeenCalled()
 })
@@ -220,7 +233,9 @@ it('keeps a pasted POSIX file on the local workspace WSL distro before any files
     expect.anything(),
     '\\\\wsl.localhost\\Ubuntu\\home\\repo\\file.ts'
   )
-  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'file.ts' }))
+  expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ relativePath: 'file.ts' }), {
+    focusEditor: true
+  })
   mocks.route.current.connectionId = 'ssh-a'
   await openQuickOpenFile('/home/repo/file.ts', 'wt', '\\\\wsl.localhost\\Ubuntu\\home\\repo', {
     pathQuery: '/home/repo/file.ts'
@@ -244,7 +259,8 @@ it.each(['literal:12', 'nested/literal:12', 'literal:12:3'])(
       query
     )
     expect(mocks.open).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: `/repo/${selected}` })
+      expect.objectContaining({ filePath: `/repo/${selected}` }),
+      { focusEditor: true }
     )
     expect(mocks.reveal).not.toHaveBeenCalled()
   }
