@@ -412,6 +412,20 @@ test('a moved pane shows its own history once, in its folder, across three reloa
               existsSync(path.join(folder, name))
                 ? readFileSync(path.join(folder, name), 'utf8').slice(0, 300)
                 : 'missing'
+            // A login profile that changes folder or HOME moves every login shell (Blacksmith's does).
+            const profileDir = '/etc/profile.d'
+            const profiles = existsSync(profileDir)
+              ? readdirSync(profileDir)
+                  .filter((name) => name.endsWith('.sh'))
+                  .map((name) => {
+                    const text = readFileSync(path.join(profileDir, name), 'utf8')
+                    return `${name}: ${text
+                      .split('\n')
+                      .filter((line) => /\bcd\b|HOME|PWD/.test(line))
+                      .join(' | ')}`
+                  })
+              : []
+            console.log(`[restore-lifecycle] login profiles: ${JSON.stringify(profiles)}`)
             console.log(
               `[restore-lifecycle] wrong folder: terminals=${JSON.stringify(listed.result)} meta=${read('meta.json')} checkpointCwd=${JSON.stringify(/"cwd":"[^"]*"/.exec(read('checkpoint.json'))?.[0] ?? null)} tail=${JSON.stringify(pane.content.slice(-900))}`
             )
