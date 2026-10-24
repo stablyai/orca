@@ -12,10 +12,15 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
-import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
+import type { StructuredAgentSessionTransitionStep } from '../native-chat/agent-session-wire/structured-agent-session-transition'
+import {
+  agentJournalTurnRowReservedBytes,
+  resolveAgentJournalTurnRowWrite,
+  writeAgentJournalTurnRow
+} from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
-import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
+import { claudeQuotaTurnEndStep, refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
 import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
 import type { ClaudeStartedSend } from './claude-structured-session-state'
 
@@ -24,7 +29,11 @@ export type ClaudeOpenTurnDeps = {
   /** The superseded turn's spawn calls get no announcement now. */
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
-  endOpenWork: (completedAt: number) => void
+  endOpenWork: (
+    completedAt: number,
+    settlement?: StructuredAgentSessionTransitionStep
+  ) => boolean | void
+  /** A turn opening moves the conversation on. */
   onOpen?: () => void
 }
 
@@ -108,12 +117,9 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(observedAt)
-      this.publish(this.current, {
-        state: 'interrupted',
-        completedAt: observedAt,
-        outcome: 'superseded'
-      })
+      if (!this.finish({ state: 'interrupted', completedAt: observedAt, outcome: 'superseded' })) {
+        return
+      }
     }
     this.current = turn
     this.publish(turn)
@@ -126,12 +132,11 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(turn.startedAt)
-      this.publish(this.current, {
-        state: 'interrupted',
-        completedAt: turn.startedAt,
-        outcome: 'superseded'
-      })
+      if (
+        !this.finish({ state: 'interrupted', completedAt: turn.startedAt, outcome: 'superseded' })
+      ) {
+        return
+      }
     }
     this.current = turn
     this.deps.sink.setActivity?.(null)
@@ -169,15 +174,47 @@ export class ClaudeOpenTurn {
     this.suppressReopenOnFailure(quotaEnd)
     this.cycleWorkObserved = false
     this.usageLimitEvidence = null
-    // End suppressed work even when no turn is open.
-    this.deps.endOpenWork(end.completedAt)
-    if (this.current) {
-      this.publish(this.current, end, contextUsage, quotaEnd)
-      this.current = null
+    // Even with no turn open: work a suppressed turn produced still ends here.
+    if (!this.finish(end, contextUsage, quotaEnd)) {
+      return
     }
+    this.current = null
     this.deps.sink.setActivity?.(null)
   }
 
+  private finish(
+    end: ClaudeTurnEnd,
+    contextUsage?: AgentSessionContextUsage,
+    quotaEnd = false
+  ): boolean {
+    const turn = this.current
+    if (!this.deps.sink.tryAppendTransition) {
+      if (this.deps.endOpenWork(end.completedAt) === false) {
+        return false
+      }
+      if (turn) {
+        this.publish(turn, end, contextUsage, quotaEnd)
+      }
+      return true
+    }
+    const item = turn ? claudeTurnLifecycleItem(turn, end) : null
+    const target = item ? { identity: item.identity } : null
+    const write = item ? { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) } : null
+    const reservedBytes = target && write ? agentJournalTurnRowReservedBytes(target, write) : 0
+    const step: StructuredAgentSessionTransitionStep | undefined =
+      item && target && write
+        ? ((quotaEnd ? claudeQuotaTurnEndStep(this.deps.sink, item.identity, write) : null) ?? {
+            kind: 'item',
+            reservedBytes,
+            resolve: (journal) =>
+              resolveAgentJournalTurnRowWrite(journal, target, write, reservedBytes),
+            options: { ...item.options, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          })
+        : undefined
+    return this.deps.endOpenWork(end.completedAt, step) !== false
+  }
+
+  /** An accepted send is the only thing that lifts the latch. */
   allowReopen(): void {
     this.reopenSuppressed = false
   }

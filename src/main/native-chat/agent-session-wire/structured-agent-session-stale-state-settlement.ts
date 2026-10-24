@@ -43,7 +43,7 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'lastProviderActivityAt'
   | 'cursor'
   | 'appendPlannedLifecycleBatch'
->
+> & { hasUnwitnessedText?: AgentSessionJournal['hasUnwitnessedText'] }
 
 export type StaleStructuredAgentSessionStateInput = {
   journal: StaleStructuredAgentSessionStateJournal
@@ -126,7 +126,11 @@ function staleMutations(
     // Honor existing personal Stop; only running turns need new evidence.
     const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
     const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-    const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
+    // One revision per item: a live subagent or background task it holds ends with it.
+    const body =
+      lostLiveWorkJournalBody(terminal ?? item.body) ??
+      terminal ??
+      (journal.hasUnwitnessedText?.(item.itemId) ? item.body : null)
     if (body) {
       mutations.push({
         kind: 'item',

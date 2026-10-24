@@ -80,7 +80,7 @@ function journalClosedSets() {
 
 // Changing closed sets requires an explicit row-version compatibility decision.
 const SNAPSHOT = {
-  v: 4,
+  v: 5,
   closed: {
     'row.kind': [
       'dispatch',
@@ -89,6 +89,7 @@ const SNAPSHOT = {
       'lifecycle-batch',
       'queue',
       'submission',
+      'text-delta',
       'tombstone'
     ],
     'row.mutations[].kind': ['item', 'tombstone'],

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   agentSessionProviderHandleKey,
@@ -53,6 +54,7 @@ function journalWithTurns(...providerSessions: string[]): JournalLoad {
       revision: 1,
       sequence: index + 2,
       observedAt: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       body: { kind: 'turn', turnId, state: 'completed' }
     })
   })
@@ -226,6 +228,7 @@ describe('ACP launch resolution', () => {
         revision: 1,
         sequence: 2,
         observedAt: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
         body: { kind: 'status', tone: 'warning', text: 'forgot' }
       })
       return load

@@ -12,7 +12,22 @@ afterEach(closeProviderTimelineRigs)
 describe('recorded ACP traffic through the journal', () => {
   it('assembles basic chunks and partial tool calls with stable identities and usage', async () => {
     const fixture = await openAcpFixtureRig()
-    const rows = await fixture.feed(await readAcpFixture('s1-basic'))
+    const frames = await readAcpFixture('s1-basic')
+    await fixture.feed(frames.slice(0, 2))
+    const first = (await fixture.rig.rows()).find((row) => row.body.kind === 'message')!
+    expect(messageText(first.body)).toBe("I'll")
+    await fixture.feed(frames.slice(2, 3))
+    const next = (await fixture.rig.rows()).find((row) => row.itemId === first.itemId)!
+    expect(messageText(next.body)).toBe("I'll list")
+    expect(next.sequence).toBe(first.sequence)
+    const saved = fixture.rig.journal.readSince({ epoch: fixture.rig.journal.epoch, sequence: 0 })
+    expect(saved.ok && saved.rows.findLast((row) => row.kind === 'text-delta')).toMatchObject({
+      suffix: ' list',
+      baseLength: 4
+    })
+    const rows = await fixture.feed(frames.slice(3))
+    const reopened = await fixture.rig.reopenJournal()
+    expect(reopened.snapshot().items).toEqual(rows)
     const tools = rows.filter((row) => row.body.kind === 'tool-call')
     expect(tools).toHaveLength(2)
     expect(tools.map((row) => row.body)).toEqual(

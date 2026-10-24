@@ -1,6 +1,18 @@
+import { JournalTextPolicies } from './journal-text-rows'
+import { applyJournalTextDelta } from './journal-text-fold'
 import { journalItemDeclaresEcho } from './journal-item-echo'
-// Live append and replay share this fold. Revisions change content, preserving creation position
-// and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
+import { JournalTextIndex } from './journal-text-index'
+// THE reducer. One implementation folds rows into the render model, and both
+// the live append path and replay call it — a live-only shortcut is how a
+// reconnect starts disagreeing with the screen it replaced.
+//
+// Rules: highest revision wins, a tombstone removes, a late lower revision is
+// dropped rather than resurrecting stale content, and ordering is by the
+// position (sequence, then place in the row) of the write that CREATED an item
+// (a later revision updates the body, it does not move the bubble) — except a
+// queued message, which sits where its handover put it, and a rejected one, which
+// sits where it was rejected. Producer linkage is likewise the creating write's: a
+// revision naming no producer keeps it, one naming any replaces it.
 
 import type {
   AgentJournalAcceptanceReceipt,
@@ -49,13 +61,18 @@ export type JournalReducerState = {
   /** Earliest individually replayable sequence. */
   oldestSequence: number
   highestFence: number
-  items: Map<string, AgentJournalRenderItem>
+  items: Map<string, ReturnType<typeof journalRenderItem>>
   /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: Map<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
   itemExecutionOwners: Map<string, number>
   providerActivityAt: Map<number, number>
-  /** Retain removed revisions to prevent stale resurrection. */
+  providerActivityWitness: Map<number, number>
+  /** Present only while the streamed replay is private and unfinished. */
+  replayTextDebt: Map<string, number> | null
+  textPolicy: JournalTextPolicies
+  textIndex: JournalTextIndex
+  /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
@@ -94,6 +111,10 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     itemFences: new Map(),
     itemExecutionOwners: new Map(),
     providerActivityAt: new Map(),
+    providerActivityWitness: new Map(),
+    replayTextDebt: null,
+    textPolicy: new JournalTextPolicies(),
+    textIndex: new JournalTextIndex(),
     tombstones: new Map(),
     removedTurnIds: new Set(),
     submissions: new Map(),
@@ -133,6 +154,10 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     return
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+  if (row.kind === 'text-delta') {
+    applyJournalTextDelta(state, row, savedAt)
+    return
+  }
   if (row.kind === 'item') {
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return
@@ -144,13 +169,20 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     if (!state.itemEchoes.has(row.itemId)) {
       acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     }
-    upsertJournalItem(
+    const applied = upsertJournalItem(
       state,
       itemId,
       row.revision,
       journalRenderItem(itemId, row.revision, row.body, row, statedOrDerivedTurnScope(state, row)),
       { fence: row.fence, ownerFence: row.ownerFence, executionOwner: row.executionOwner }
     )
+    if (applied) {
+      state.replayTextDebt?.delete(itemId)
+      state.textIndex.whole(row, itemId, row.revision, row.body)
+      if (row.recovered) {
+        state.textPolicy.delete(itemId)
+      }
+    }
     const fence = journalItemExecutionFence(state, itemId) ?? row.fence
     observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt, fence)
     return
@@ -187,10 +219,17 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
         item.observedAt = mutation.observedAt ?? row.ts
-        upsertJournalItem(state, itemId, revision, item, {
+        const applied = upsertJournalItem(state, itemId, revision, item, {
           fence: row.fence,
           ownerFence: mutation.ownerFence
         })
+        if (applied) {
+          state.replayTextDebt?.delete(itemId)
+          state.textIndex.whole(row, itemId, revision, body)
+          if (row.recovered) {
+            state.textPolicy.delete(itemId)
+          }
+        }
         const fence = journalItemExecutionFence(state, itemId) ?? row.fence
         observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
       } else {

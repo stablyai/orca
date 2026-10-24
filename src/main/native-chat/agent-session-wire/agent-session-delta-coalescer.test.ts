@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_DELTA_COALESCE_MS,
   createAgentSessionDeltaCoalescer
@@ -245,39 +245,43 @@ describe('agent-session delta coalescer', () => {
   })
 })
 
-describe('snapshot admission before assembly', () => {
-  it('reports retained UTF-16 length after Unicode appends and byte truncation', () => {
+describe('suffix admission before assembly', () => {
+  it('keeps refused increments and materializes authoritative Unicode corrections', () => {
     const clock = manualClock()
-    const shouldEmit = vi.fn(() => true)
-    const emitted: [string, string][] = []
+    let refuse = false
+    const windows: { baseLength: number; suffix: string; text: () => string; replace?: true }[] = []
     const instance = createAgentSessionDeltaCoalescer({
       schedule: clock.schedule,
       maxRetainedBytes: 40,
-      shouldEmit,
-      emit: (key, text) => emitted.push([key, text])
+      emit: () => {
+        throw new Error('whole-window path used')
+      },
+      emitDelta: (_key, window) => {
+        if (refuse) {
+          return false
+        }
+        windows.push(window)
+        return true
+      }
     })
     instance.append('unicode', 'éé')
-    instance.append('surrogate', '\ud83d')
-    instance.append('surrogate', '\ude00')
     clock.fire()
-    expect(shouldEmit.mock.calls).toEqual([
-      ['unicode', 2],
-      ['surrogate', 2]
+    refuse = true
+    instance.append('unicode', 'tail')
+    clock.fire()
+    instance.append('unicode', '!')
+    refuse = false
+    clock.fire()
+    expect(windows.map(({ baseLength, suffix }) => [baseLength, suffix])).toEqual([
+      [0, 'éé'],
+      [2, 'tail!']
     ])
-    expect(emitted).toEqual([
-      ['unicode', 'éé'],
-      ['surrogate', '😀']
-    ])
-
-    instance.append('unicode', `${'é'.repeat(20)}more`)
+    expect(windows[0].text()).toBe('éé')
+    expect(windows[1].text()).toBe('éétail!')
+    instance.append('unicode', 'é'.repeat(30))
     clock.fire()
-    const truncated = 'ééé\n[Orca: streamed output truncated]'
-    expect(shouldEmit).toHaveBeenLastCalledWith('unicode', truncated.length)
-    expect(emitted.at(-1)).toEqual(['unicode', truncated])
-    const calls = shouldEmit.mock.calls.length
-    instance.append('unicode', 'ignored')
-    clock.fire()
-    expect(shouldEmit).toHaveBeenCalledTimes(calls)
+    expect(windows.at(-1)?.replace).toBe(true)
+    expect(Buffer.byteLength(windows.at(-1)?.text() ?? '')).toBeLessThanOrEqual(40)
     instance.dispose()
   })
 })

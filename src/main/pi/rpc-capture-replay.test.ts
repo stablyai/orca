@@ -87,6 +87,7 @@ async function replay(name: string) {
     turns.end()
     lane.dispose()
   })
+  const streamed: string[] = []
   let sequence = 0
   for (const { dir, frame } of frames) {
     if (dir === 'in' && frame.type === 'prompt') {
@@ -97,6 +98,20 @@ async function replay(name: string) {
     }
     if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
       turns.receive(frame)
+      const delta = z
+        .object({
+          assistantMessageEvent: z.object({ type: z.literal('text_delta'), delta: z.string() })
+        })
+        .safeParse(frame)
+      if (name === 'steer-followup' && delta.success) {
+        lane.flush()
+        const rows = await rig.rows()
+        streamed.push(
+          transcript(
+            rows.filter((row) => row.body.kind === 'message' && row.body.role === 'assistant')
+          )
+        )
+      }
     }
     if (dir === 'out' && frame.type === 'response' && frame.command === 'get_state') {
       // The idle probe resolved here in the captured run.
@@ -106,7 +121,11 @@ async function replay(name: string) {
   await new Promise<void>((resolve) => setImmediate(resolve))
   lane.flush()
   const rows = await rig.rows()
-  return { rows, turns: await rig.turns(), accepted, failed, idle, settled }
+  const reopened = name === 'steer-followup' ? await rig.reopenJournal() : undefined
+  if (reopened) {
+    expect(reopened.snapshot().items).toEqual(rows)
+  }
+  return { rows, turns: await rig.turns(), accepted, failed, idle, settled, streamed }
 }
 
 function transcript(rows: Awaited<ReturnType<typeof replay>>['rows']): string {
@@ -129,8 +148,20 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
     expect(
       result.rows.some((row) => row.body.kind === 'tool-call' && row.body.state === 'completed')
     ).toBe(true)
-    expect(transcript(result.rows)).toContain('STEER_CONSUMED')
-    expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
+    expect(
+      result.rows.flatMap((row) =>
+        row.body.kind === 'message' && row.body.role === 'assistant'
+          ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+          : []
+      )
+    ).toEqual(['STEER_CONSUMED', 'FOLLOWUP_CONSUMED'])
+    expect(result.streamed.slice(0, 5)).toEqual([
+      'STE',
+      'STEER',
+      'STEER_CON',
+      'STEER_CONSUM',
+      'STEER_CONSUMED'
+    ])
   })
   it.each(['provider-fetch-error', 'provider-socket-error'])(
     'marks captured %s as failure with the provider diagnostic',

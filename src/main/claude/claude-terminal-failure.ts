@@ -88,13 +88,29 @@ export function refineClaudeQuotaTurnEnd(
   if (!revise || !write.lifecycle || write.lifecycle.outcome !== undefined) {
     return false
   }
+  const step = claudeQuotaTurnEndStep(sink, identity, write)
+  if (!step) {
+    return false
+  }
+  revise.call(sink, step.reservedBytes, step.resolve, step.options)
+  return true
+}
+
+export function claudeQuotaTurnEndStep(
+  sink: StructuredAgentSessionEventSink,
+  identity: AgentJournalItemIdentity,
+  write: AgentJournalTurnRowWrite
+) {
+  if (!write.lifecycle || write.lifecycle.outcome !== undefined) {
+    return null
+  }
   const lifecycle = write.lifecycle
   const target = { identity }
   const reservedBytes = agentJournalTurnRowReservedBytes(target, write)
-  revise.call(
-    sink,
+  return {
+    kind: 'item' as const,
     reservedBytes,
-    (journal) => {
+    resolve: (journal: StructuredAgentSessionRevisionJournal) => {
       const itemId = agentJournalItemKey(identity)
       const row = journal.item(agentJournalItemKey(claudeTerminalFailureIdentity(itemId)))
       const quota =
@@ -117,7 +133,6 @@ export function refineClaudeQuotaTurnEnd(
         reservedBytes
       )
     },
-    { turnScope: { kind: 'thread' }, lifecycle: true }
-  )
-  return true
+    options: { turnScope: { kind: 'thread' as const }, lifecycle: true }
+  }
 }

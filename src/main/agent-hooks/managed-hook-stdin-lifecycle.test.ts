@@ -188,7 +188,8 @@ function runHookProcess(
   args: string[],
   env: NodeJS.ProcessEnv,
   // An open, unwritten pipe exposes read-to-EOF hangs outside an Orca pane.
-  stdin: 'close' | 'abandon' = 'close'
+  stdin: 'close' | 'abandon' = 'close',
+  context?: string
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
     const child = spawnProcess({
@@ -203,7 +204,20 @@ function runHookProcess(
     const timeout = setTimeout(() => {
       child.stdin.destroy()
       child.kill('SIGKILL')
-      reject(new Error(`hook did not finish with stdin ${stdin}d`))
+      reject(
+        new Error(
+          `hook did not finish with stdin ${stdin}d: ${JSON.stringify({
+            context,
+            executable,
+            exitCode: child.exitCode,
+            signalCode: child.signalCode,
+            stdinFinished: child.stdin.writableFinished,
+            stdinErrors: stdinErrors.map((error) => error.code),
+            stdoutBytes: Buffer.byteLength(stdout),
+            stderrBytes: Buffer.byteLength(stderr)
+          })}`
+        )
+      )
     }, 10_000)
     child.on('error', (error) => {
       clearTimeout(timeout)
@@ -411,7 +425,13 @@ describe('Windows managed hook stdin structure', () => {
             : fileName.endsWith('.ps1')
               ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
               : [scriptPath]
-          const result = await runHookProcess(executable, args, hookEnvironment())
+          const result = await runHookProcess(
+            executable,
+            args,
+            hookEnvironment(),
+            'close',
+            `${fileName} outside Orca`
+          )
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
           // Only missing-context Windows paths permit broken writers; in-pane hooks must drain.
           for (const error of result.stdinErrors) {
@@ -437,7 +457,9 @@ describe('Windows managed hook stdin structure', () => {
           const outside = await runHookProcess(
             launcher.executable,
             launcher.args,
-            hookEnvironment()
+            hookEnvironment(),
+            'close',
+            `${launcher.name} outside Orca`
           )
           expect(outside.exitCode, `${launcher.name} exit code`).toBe(0)
           for (const error of outside.stdinErrors) {
@@ -452,7 +474,9 @@ describe('Windows managed hook stdin structure', () => {
               ORCA_AGENT_HOOK_PORT: '59999',
               ORCA_AGENT_HOOK_TOKEN: 'token',
               ORCA_PANE_KEY: 'tab:leaf'
-            })
+            }),
+            'close',
+            `${launcher.name} in pane`
           )
           expect(insideAPane.exitCode, `${launcher.name} in-pane exit code`).toBe(0)
           expect(insideAPane.stdinErrors, `${launcher.name} in-pane stdin errors`).toHaveLength(0)
@@ -461,7 +485,8 @@ describe('Windows managed hook stdin structure', () => {
             launcher.executable,
             launcher.args,
             hookEnvironment(),
-            'abandon'
+            'abandon',
+            `${launcher.name} abandoned stdin outside Orca`
           )
           expect(abandoned.exitCode, `${launcher.name} abandoned-stdin exit code`).toBe(0)
         }

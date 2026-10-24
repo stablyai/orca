@@ -599,7 +599,8 @@ describe('StructuredAgentSessionStatusFeed', () => {
       })
       expect(await deferred.drained()).toEqual({ ok: true })
       expect(seen).toEqual(['idle', 'working', 'idle'])
-      expect(publications).toBe(2)
+      // Claude's terminal transition publishes atomically; the manual calls coalesce separately.
+      expect(publications).toBe(agent === 'claude' ? 3 : 2)
       expect(activityPublications).toBe(agent === 'claude' ? 1 : 0)
       expect(deferred.state()).toMatchObject({ queuedBytes: 0, queuedOperations: 0 })
       deferred.close()

@@ -12,6 +12,9 @@ export function structuredAgentSessionJournalAppendOptions(
 ): JournalItemAppendOptions {
   return {
     fence,
+    ...(options.applied ? { applied: options.applied } : {}),
+    ...(options.retireText ? { retireText: true } : {}),
+    ...(options.streamText ? { streamText: options.streamText } : {}),
     ...journalItemEchoFields(options),
     ownerFence: fence,
     ...(options.executes ? { executionOwner: fence } : {}),

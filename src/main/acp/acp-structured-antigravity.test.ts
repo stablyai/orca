@@ -76,6 +76,13 @@ it('signs a first chat in, asks in default mode, and answers a question with one
       expect.objectContaining({ state: 'completed', outcome: 'success' })
     ])
   )
+  expect(
+    (await rig.rig.rows()).flatMap((row) =>
+      row.body.kind === 'message' && row.body.role === 'assistant'
+        ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+  ).toEqual(['blue'])
 })
 
 it('launches on its own private folder with file sign-in and no other Google credentials', async () => {

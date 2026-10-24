@@ -72,7 +72,13 @@ export function planStructuredAgentSessionDeadGeneration(
 ): { mutations: JournalLifecycleMutationInput[]; dispatches: ResolveDispatchInput[] } {
   const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
   const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
-  if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
+  const allItems = input.journal.snapshot().items
+  const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
+  if (
+    !showUnexpectedExitOutcome &&
+    !hasUnfinishedWork &&
+    !items.some((item) => input.journal.hasUnwitnessedText?.(item.itemId))
+  ) {
     return { mutations: [], dispatches: [] }
   }
   // Leave queued sends to delivery. Failed-start handoffs never ran; ready-child handoffs remain uncertain.
@@ -94,8 +100,6 @@ export function planStructuredAgentSessionDeadGeneration(
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
     )
   ]
-  const allItems = input.journal.snapshot().items
-  const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
   const proven = watchedExitRevisions(items, input.exit, input.journal)
   const mutations: JournalLifecycleMutationInput[] = []
   if (showUnexpectedExitOutcome && input.exitedDuringStartup && startupFailure) {
@@ -131,7 +135,11 @@ export function planStructuredAgentSessionDeadGeneration(
     // Calls inherit turn outcomes; open reasoning ends without adding duplicate unfinished-work evidence.
     const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
     const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
-    const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
+    // One revision per item: its live subagents and background tasks end with it.
+    const body =
+      lostLiveWorkJournalBody(terminal ?? item.body) ??
+      terminal ??
+      (input.journal.hasUnwitnessedText?.(item.itemId) ? item.body : null)
     if (body) {
       mutations.push({
         kind: 'item',

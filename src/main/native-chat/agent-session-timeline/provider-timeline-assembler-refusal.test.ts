@@ -47,13 +47,29 @@ describe('a refused event changes nothing and its retry lands it once', () => {
       channel: 'assistant',
       text: 'Observed text'
     })
+    assembler.flush()
+    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe('Observed text')
+    assembler.apply({
+      type: 'text.delta',
+      item: { id: 'm1' },
+      channel: 'assistant',
+      text: ' suffix'
+    })
     refusing = true
     expect(assembler.apply({ type: 'text.close', item: { id: 'm1' } }).admission).toEqual(
       BACKPRESSURE
     )
     refusing = false
-    assembler.flush()
-    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe('Observed text')
+    expect(assembler.apply({ type: 'text.close', item: { id: 'm1' } }).admission.accepted).toBe(
+      true
+    )
+    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe(
+      'Observed text suffix'
+    )
+    const reopened = await rig.reopenJournal()
+    expect(messageText(reopened.item(providerItemId('item', 'm1'))?.body)).toBe(
+      'Observed text suffix'
+    )
   })
 
   it('keeps window text while the sink is full and retries it, and lets it go once the sink is gone', async () => {
@@ -189,5 +205,19 @@ describe('what the assembler holds open is bounded', () => {
       admitted += admission.accepted ? 1 : 0
     }
     expect(admitted).toBe(MAX_PROVIDER_TIMELINE_OPEN_ENTRIES)
+    expect(rig.assembler.apply({ type: 'text.close', item: { id: 'm0' } }).admission.accepted).toBe(
+      true
+    )
+    expect(
+      rig.assembler.apply({
+        type: 'text.delta',
+        item: { id: 'retry' },
+        channel: 'assistant',
+        text: 'sentinel'
+      }).admission.accepted
+    ).toBe(true)
+    rig.assembler.flush()
+    expect(messageText((await rig.row(providerItemId('item', 'm0')))?.body)).toBe('x')
+    expect(messageText((await rig.row(providerItemId('item', 'retry')))?.body)).toBe('sentinel')
   })
 })

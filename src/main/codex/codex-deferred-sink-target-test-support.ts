@@ -21,6 +21,10 @@ export function deferredTarget(
       appendTombstone: async () => ({ epoch: 'e', sequence: log.length }),
       // Holds no rows to read back, so a turn row's revision is its lifecycle.
       itemBody: () => null,
+      item: () => undefined,
+      textSource: () => undefined,
+      textSourceByRaw: () => undefined,
+      textSources: () => [].values(),
       appendLifecycleBatch: async (input: {
         mutations: readonly JournalLifecycleMutationInput[]
       }) => {

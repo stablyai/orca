@@ -1,3 +1,4 @@
+import { journalTextFields } from './journal-text-rows'
 import { journalItemEchoFields } from './journal-item-echo'
 import { isDeepStrictEqual } from 'node:util'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
@@ -153,6 +154,9 @@ export class JournalLifecycleBatchAppender {
           return !previouslyPlanned &&
             existing &&
             isDeepStrictEqual(existing.body, only.body) &&
+            !journalTextFields(only.body).some((field) =>
+              current.textIndex.unwitnessed(itemId, field)
+            ) &&
             (!Object.hasOwn(only, 'echoOf') || current.itemEchoes.has(itemId)) &&
             (only.linkage === undefined ||
               isDeepStrictEqual(

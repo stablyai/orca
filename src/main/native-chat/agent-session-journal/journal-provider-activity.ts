@@ -6,7 +6,7 @@ import type { JournalRow } from './journal-row-schema'
 
 /** Count provider output by execution owner; client/recovery writes cannot extend turns. */
 export function observeJournalProviderActivity(
-  state: Pick<JournalReducerState, 'providerActivityAt'>,
+  state: Pick<JournalReducerState, 'providerActivityAt' | 'providerActivityWitness' | 'textIndex'>,
   row: JournalRow,
   itemId: string,
   body: AgentJournalItemBody,
@@ -26,7 +26,11 @@ export function observeJournalProviderActivity(
   ) {
     return
   }
-  state.providerActivityAt.set(fence, Math.max(state.providerActivityAt.get(fence) ?? 0, savedAt))
+  if (savedAt >= (state.providerActivityAt.get(fence) ?? 0)) {
+    state.providerActivityAt.set(fence, savedAt)
+    state.textIndex.protectionMoved(state.providerActivityWitness.get(fence), row.seq)
+    state.providerActivityWitness.set(fence, row.seq)
+  }
 }
 
 function isProviderActivity(body: AgentJournalItemBody): boolean {

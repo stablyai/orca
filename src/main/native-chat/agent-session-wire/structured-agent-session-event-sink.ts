@@ -1,3 +1,21 @@
+import {
+  DEFAULT_WATERMARKS,
+  type StructuredAgentSessionSinkWatermarks,
+  type StructuredAgentSessionSinkAdmission,
+  type StructuredAgentSessionSinkState,
+  type StructuredAgentSessionSinkBarrier
+} from './structured-agent-session-sink-admission'
+export type { StructuredAgentSessionSinkWatermarks } from './structured-agent-session-sink-admission'
+import {
+  createStructuredAgentSessionTextAppend,
+  type StructuredAgentSessionTextSink
+} from './structured-agent-session-text-append'
+export type {
+  StructuredAgentSessionSinkAdmission,
+  StructuredAgentSessionSinkState,
+  StructuredAgentSessionSinkBarrier
+} from './structured-agent-session-sink-admission'
+import type { JournalTextAdmission } from '../agent-session-journal/journal-text-rows'
 import type { JournalItemEcho } from '../agent-session-journal/journal-item-echo'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
@@ -34,20 +52,8 @@ export type {
 } from './structured-agent-session-journal-views'
 import { StructuredAgentSessionExitObservation } from './structured-agent-session-exit-observation'
 
-export type StructuredAgentSessionSinkAdmission =
-  | { accepted: true }
-  | { accepted: false; reason: 'backpressure' | 'failed' | 'closed' }
-
-export type StructuredAgentSessionSinkState = {
-  queuedBytes: number
-  queuedOperations: number
-  backpressured: boolean
-  failed: boolean
-}
-
-export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
-
-/** Omitted producer linkage means session/root agent. */
+/** Linkage a producer stamps on the rows it writes. Absent on every append the
+ *  session's own agent makes, which is what makes absence mean root. */
 export type StructuredAgentSessionAppendOptions = AgentJournalProducerLinkage & {
   lifecycle?: boolean
   observedAt?: number
@@ -62,6 +68,10 @@ export type StructuredAgentSessionPublishOptions = Pick<
 
 /** Creation fixes turn scope; revisions keep it. */
 export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppendOptions & {
+  rawTextKey?: string
+  retireText?: true
+  streamText?: JournalTextAdmission
+  applied?: () => void
   echoOf?: JournalItemEcho['echoOf']
   turnScope: AgentJournalTurnScope
   /** A later child execution assumes this reusable row. */
@@ -70,79 +80,93 @@ export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppe
 
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
-export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
-  observeExit?: StructuredAgentSessionExitObservation['record']
-  appendItem(
-    identity: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    options: StructuredAgentSessionItemAppendOptions
-  ): void
-  appendTombstone(
-    identity: AgentJournalItemIdentity,
-    options?: StructuredAgentSessionAppendOptions
-  ): void
-  tryAppendTombstone?(
-    identity: AgentJournalItemIdentity,
-    options?: StructuredAgentSessionAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  publish(options?: StructuredAgentSessionPublishOptions): void
-  /** Not ok if any admitted write failed or close dropped it unwritten. */
-  written?(): Promise<StructuredAgentSessionSinkBarrier>
-  setActivity?(activity: AgentSessionTurnActivity | null): void
-  tryAppendItem?(
-    identity: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    options: StructuredAgentSessionItemAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  tryAppendResolvedItem?(
-    identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options: StructuredAgentSessionItemAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  tryAppendResolvedItemAndPublish?(
-    identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options: StructuredAgentSessionItemAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  /** Reserved bytes must bound the eventual resolved revision. */
-  tryReviseResolvedItem?(
-    reservedBytes: number,
-    resolve: StructuredAgentSessionRevisionResolver,
-    options: StructuredAgentSessionRevisionOptions
-  ): StructuredAgentSessionSinkAdmission
-  tryReviseResolvedItemAndPublish?(
-    reservedBytes: number,
-    resolve: StructuredAgentSessionRevisionResolver,
-    options: StructuredAgentSessionRevisionOptions
-  ): StructuredAgentSessionSinkAdmission
-  /** Resolve on the journal lane; null appends nothing. */
-  tryAppendLifecycleTransition?(
-    identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
-    options: StructuredAgentSessionItemAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  journalEpoch?(): string | null
-  journalLinkage?(): StructuredAgentSessionLinkageJournal | null
-  journalHistory?(): StructuredAgentSessionHistoryJournal | null
-  /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
-  journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
-  appendLifecycleBatch?(
-    settlementId: string,
-    mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options?: StructuredAgentSessionAppendOptions
-  ): StructuredAgentSessionSinkAdmission | void
-  tryAppendLifecycleBatch?(
-    settlementId: string,
-    mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options?: StructuredAgentSessionAppendOptions
-  ): StructuredAgentSessionSinkAdmission
-  tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
-  /** Couples durable-queue pressure to the exact provider stream producing it. */
-  bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
-}
+export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink &
+  StructuredAgentSessionTextSink & {
+    observeExit?: StructuredAgentSessionExitObservation['record']
+    appendItem(
+      identity: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      options: StructuredAgentSessionItemAppendOptions
+    ): void
+    appendTombstone(
+      identity: AgentJournalItemIdentity,
+      options?: StructuredAgentSessionAppendOptions
+    ): void
+    tryAppendTombstone?(
+      identity: AgentJournalItemIdentity,
+      options?: StructuredAgentSessionAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    publish(options?: StructuredAgentSessionPublishOptions): void
+    /** Resolves `ok` once every write admitted so far has landed in the journal; not `ok` when one
+     *  failed or a close dropped it unwritten. */
+    written?(): Promise<StructuredAgentSessionSinkBarrier>
+    setActivity?(activity: AgentSessionTurnActivity | null): void
+    tryAppendItem?(
+      identity: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      options: StructuredAgentSessionItemAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    tryAppendStreamedItem?(
+      identity: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      options: StructuredAgentSessionItemAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Queues an ordinary append whose identity is resolved after journal bind. */
+    tryAppendResolvedItem?(
+      identitySizeBound: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      resolveIdentity: StructuredAgentSessionIdentityResolver,
+      options: StructuredAgentSessionItemAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Queues one resolved append and its publication as a single admitted operation. */
+    tryAppendResolvedItemAndPublish?(
+      identitySizeBound: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      resolveIdentity: StructuredAgentSessionIdentityResolver,
+      options: StructuredAgentSessionItemAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Queues a read-modify-write of one row; `reservedBytes` must bound the resolved write. */
+    tryReviseResolvedItem?(
+      reservedBytes: number,
+      resolve: StructuredAgentSessionRevisionResolver,
+      options: StructuredAgentSessionRevisionOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Queues one revision and its publication as a single admitted operation. */
+    tryReviseResolvedItemAndPublish?(
+      reservedBytes: number,
+      resolve: StructuredAgentSessionRevisionResolver,
+      options: StructuredAgentSessionRevisionOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+    tryAppendLifecycleTransition?(
+      identitySizeBound: AgentJournalItemIdentity,
+      body: AgentJournalItemBody,
+      resolveIdentity: StructuredAgentSessionIdentityResolver,
+      options: StructuredAgentSessionItemAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    /** Current durable epoch, when this deferred sink is bound to its journal. */
+    journalEpoch?(): string | null
+    /** The bound journal's producer linkage; null until bound. */
+    journalLinkage?(): StructuredAgentSessionLinkageJournal | null
+    /** The bound journal's rows and current epoch; null until bound. */
+    journalHistory?(): StructuredAgentSessionHistoryJournal | null
+    /** Whether the bound journal's Stop rule makes turn `turnId`, ending at `endedAt` with no verdict
+     *  of its own, a person's cancellation (`personStopDecidesTurn`); false until bound. */
+    journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
+    appendLifecycleBatch?(
+      settlementId: string,
+      mutations: readonly JournalLifecycleIdentityMutationInput[],
+      options?: StructuredAgentSessionAppendOptions
+    ): StructuredAgentSessionSinkAdmission | void
+    tryAppendLifecycleBatch?(
+      settlementId: string,
+      mutations: readonly JournalLifecycleIdentityMutationInput[],
+      options?: StructuredAgentSessionAppendOptions
+    ): StructuredAgentSessionSinkAdmission
+    tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
+    /** Couples durable-queue pressure to the exact provider stream producing it. */
+    bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
+  }
 
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
@@ -161,31 +185,9 @@ export type DeferredStructuredAgentSessionEventSink = {
   state(): StructuredAgentSessionSinkState
 }
 
-export type StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: number
-  maxQueuedBytes: number
-  lowQueuedBytes: number
-  pauseQueuedOperations: number
-  maxQueuedOperations: number
-  lowQueuedOperations: number
-  maxLifecycleQueuedBytes: number
-  maxLifecycleQueuedOperations: number
-}
-
 export type StructuredAgentSessionReadingControl = {
   pauseReading(): void
   resumeReading(): void
-}
-
-const DEFAULT_WATERMARKS: StructuredAgentSessionSinkWatermarks = {
-  pauseQueuedBytes: 16 * 1024 * 1024,
-  maxQueuedBytes: 32 * 1024 * 1024,
-  lowQueuedBytes: 8 * 1024 * 1024,
-  pauseQueuedOperations: 512,
-  maxQueuedOperations: 1_024,
-  lowQueuedOperations: 256,
-  maxLifecycleQueuedBytes: 16 * 1024 * 1024,
-  maxLifecycleQueuedOperations: 1_024
 }
 
 export function createDeferredStructuredAgentSessionEventSink(deps: {
@@ -213,7 +215,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
     ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
   })
-  const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue)
+  const text = createStructuredAgentSessionTextAppend(queue)
+  const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue, text.hold)
 
   const appendLifecycleBatch = (
     settlementId: string,
@@ -255,13 +258,13 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   ) =>
     queue.submit(
       {
-        bytes: estimateStructuredAgentSessionItemBytes(identity, body),
+        bytes: estimateStructuredAgentSessionItemBytes(identity, body, options),
+        ...text.hold(estimateStructuredAgentSessionItemBytes(identity, body, options)),
         run: (bound) =>
-          bound.journal.appendItem(
-            identity,
-            body,
-            structuredAgentSessionJournalAppendOptions(bound.fence, options)
-          )
+          bound.journal.appendItem(identity, body, {
+            ...structuredAgentSessionJournalAppendOptions(bound.fence, options),
+            reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body, options)
+          })
       },
       options
     )
@@ -272,8 +275,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       observeExit: exit.record,
       appendItem: (identity, body, options) => void appendItem(identity, body, options),
       tryAppendItem: appendItem,
+      ...text,
       ...resolvedAppend,
-      ...createStructuredAgentSessionTransitionMembers(queue),
+      ...createStructuredAgentSessionTransitionMembers(queue, text.hold),
       journalEpoch: queue.journalEpoch,
       journalLinkage: queue.journalLinkage,
       journalHistory: queue.journalHistory,

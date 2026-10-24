@@ -8,13 +8,13 @@ export function isJournalStreamedTextRevision(
   state: JournalReducerState,
   row: JournalRow
 ): boolean {
-  if (row.kind !== 'item' || row.recovered) {
+  if ((row.kind !== 'item' && row.kind !== 'text-delta') || row.recovered) {
     return false
   }
-  const { body } = row
   const previous = state.items.get(row.itemId)
+  const body = row.kind === 'text-delta' ? previous?.body : row.body
   if (
-    body.kind !== 'message' ||
+    body?.kind !== 'message' ||
     body.role !== 'assistant' ||
     !body.blocks.every((block) => block.type === 'text') ||
     body.sentAs !== undefined ||

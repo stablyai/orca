@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 
 /** Absolute registration-time ceiling, independent of shorter protocol-step bounds. */
@@ -36,6 +37,17 @@ export type StructuredAgentSessionStartupAttempt = {
   /** Stop/close/quit/expiry requires adapter cleanup and failed spawn. */
   readonly signal?: AbortSignal
 }
+
+/** Host passes the whole startup attempt; optional fields permit minimal adapter test inputs. */
+export type StructuredAgentSessionAcquireInput = Pick<
+  StructuredAgentSessionStartupAttempt,
+  'identity' | 'fence' | 'spawnToken'
+> &
+  Partial<Omit<StructuredAgentSessionStartupAttempt, 'identity' | 'fence' | 'spawnToken'>> & {
+    recordPhase?: AgentSessionCreatePhaseRecorder
+    /** Persist process identity before handshake so mid-start crashes leave a recoverable owner; returned process must match. */
+    onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
+  }
 
 export class StructuredAgentSessionStartupExpiredError extends Error {
   constructor() {

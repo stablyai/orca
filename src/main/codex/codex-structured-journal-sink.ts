@@ -1,8 +1,16 @@
+import { codexLiveTextKey } from './codex-thread-item-identity'
+import type {
+  CodexItemStreamDeps,
+  CodexItemStreamState
+} from './codex-structured-item-stream-contracts'
+import type { AgentSessionDeltaWindow } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalRowAttribution
 } from '../../shared/agent-session-journal-types'
+import { withJournalReasoningLifecycle } from '../native-chat/agent-session-journal/journal-reasoning-row'
+import { codexStreamingJournalItem } from './codex-structured-item-translation'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionEventSink,
@@ -14,11 +22,31 @@ import {
   type JournalLifecycleIdentityMutationInput
 } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
-import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
-import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
+import {
+  CODEX_JOURNAL_ADMITTED,
+  type CodexJournalTranslationAdmission
+} from './codex-structured-journal-contracts'
 import { reviseCodexTurnRow } from './codex-structured-journal-translation-turns'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
+
+export function appendCodexRunningStream(
+  sink: StructuredAgentSessionEventSink,
+  state: CodexItemStreamState,
+  text: string,
+  options: StructuredAgentSessionItemAppendOptions
+): boolean {
+  const translated = codexStreamingJournalItem(state.item, text)
+  return (
+    !translated.body ||
+    appendCodexItemAndPublish(
+      sink,
+      state.identity,
+      withJournalReasoningLifecycle(translated.body, { state: 'running' }),
+      options
+    ).accepted
+  )
+}
 
 export function appendCodexLifecycleMutations(
   sink: StructuredAgentSessionEventSink,
@@ -94,6 +122,9 @@ export function appendCodexItemAndPublish(
   body: AgentJournalItemBody,
   options: StructuredAgentSessionItemAppendOptions
 ): StructuredAgentSessionSinkAdmission {
+  if (options.streamText && sink.tryAppendStreamedItem) {
+    return sink.tryAppendStreamedItem(identity, body, options)
+  }
   const admission = sink.tryAppendItem
     ? sink.tryAppendItem(identity, body, options)
     : (sink.appendItem(identity, body, options), ADMITTED)
@@ -105,7 +136,7 @@ export function appendCodexItemAndPublish(
 
 function criticalAdmission(
   admission: StructuredAgentSessionSinkAdmission
-): CodexJournalTranslationAdmission {
+): StructuredAgentSessionSinkAdmission {
   return admission.accepted ? CODEX_JOURNAL_ADMITTED : admission
 }
 
@@ -115,8 +146,8 @@ export function appendCodexLifecycleItem(
   body: AgentJournalItemBody,
   /** observedAt overrides append time for a delayed first write. */
   attribution: AgentJournalRowAttribution & { observedAt?: number }
-): CodexJournalTranslationAdmission {
-  const options = { lifecycle: true, ...attribution }
+): StructuredAgentSessionSinkAdmission {
+  const options = { lifecycle: true, retireText: true as const, ...attribution }
   if (sink.tryAppendItem) {
     return criticalAdmission(sink.tryAppendItem(identity, body, options))
   }
@@ -130,7 +161,7 @@ export function appendCodexLifecycleTransition(
   body: AgentJournalItemBody,
   resolveIdentity: StructuredAgentSessionIdentityResolver,
   attribution: AgentJournalRowAttribution
-): CodexJournalTranslationAdmission {
+): StructuredAgentSessionSinkAdmission {
   if (sink.tryAppendLifecycleTransition) {
     return criticalAdmission(
       sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity, attribution)
@@ -142,7 +173,7 @@ export function appendCodexLifecycleTransition(
 
 export function publishCodexLifecycle(
   sink: StructuredAgentSessionEventSink
-): CodexJournalTranslationAdmission {
+): StructuredAgentSessionSinkAdmission {
   if (sink.tryPublish) {
     return criticalAdmission(sink.tryPublish({ lifecycle: true }))
   }
@@ -176,4 +207,33 @@ export function admitCodexLifecycleItems(
     }
   }
   return publishCodexLifecycle(sink)
+}
+
+export function appendCodexStreamWindow(
+  deps: Pick<CodexItemStreamDeps, 'sink' | 'historyImport'>,
+  producer: { threadId: string; turnId: string | null },
+  state: CodexItemStreamState,
+  text: string,
+  attribution: AgentJournalRowAttribution,
+  window?: AgentSessionDeltaWindow
+): boolean {
+  return appendCodexRunningStream(deps.sink, state, text, {
+    ...attribution,
+    ...(window
+      ? {
+          rawTextKey: codexLiveTextKey(
+            producer.threadId,
+            producer.turnId,
+            state.item,
+            deps.historyImport
+          ),
+          streamText: {
+            ...window,
+            operation: window.replace ? ('replace' as const) : ('append' as const),
+            field: 0
+          }
+        }
+      : {}),
+    ...(state.startedAt === undefined ? {} : { observedAt: state.startedAt })
+  })
 }

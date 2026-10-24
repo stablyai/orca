@@ -116,10 +116,10 @@ describe('streaming journal replay', () => {
     expect(checkpoints.map((entry) => entry.busy)).toEqual([0, 0])
   })
 
-  it('reads past a gap to a future row, which names the newer row and no damage', () => {
+  it('reads past a legacy-prefix gap to a future row, which names the newer row and no damage', () => {
     put(anchor())
-    put(revision(2))
-    put(revision(4))
+    put({ ...revision(2), v: 4 })
+    put({ ...revision(4), v: 4 })
     put({ ...revision(5), v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1 })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded).toMatchObject({ newer: { sequence: 5 }, damage: null })
@@ -131,8 +131,8 @@ describe('streaming journal replay', () => {
 
   it('names the first damage when a later row is malformed too', () => {
     put(anchor())
-    put(revision(2))
-    put(revision(4))
+    put({ ...revision(2), v: 4 })
+    put({ ...revision(4), v: 4 })
     insertTestJournalRowJson(opened.db, sessionId, 5, '{')
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded).toMatchObject({

@@ -42,11 +42,11 @@ afterEach(async () => {
   }
 })
 
-async function seedJournal(count: number) {
+async function seedJournal(count: number, version = AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
   root = await mkdtemp(join(tmpdir(), 'orca-history-read-budget-'))
   const { db } = openTestJournalHostDatabase(root)
   const base = {
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+    v: version,
     epoch: 'epoch-1',
     fence: 1,
     ts: 1_000
@@ -149,8 +149,8 @@ describe('forward history SQL read budget', () => {
     expect(unlimited.ok && unlimited.rows).toHaveLength(6)
   })
 
-  it('reports a sequence gap when the next page reaches it', async () => {
-    const journal = await seedJournal(6)
+  it('reports a legacy sequence gap when the next page reaches it', async () => {
+    const journal = await seedJournal(6, 4)
     const { db } = openTestJournalHostDatabase(root!)
     deleteTestJournalRow(db, identity.sessionId, 4)
     const first = readAgentSessionHistory(journal, {
@@ -195,4 +195,24 @@ describe('forward history SQL read budget', () => {
       expect(page.page.items.map((item) => item.itemId)).toEqual(['item-0', 'item-1'])
     }
   )
+})
+
+it('pages actual sparse-format rows after an interior external deletion', async () => {
+  const journal = await seedJournal(6)
+  const { db } = openTestJournalHostDatabase(root!)
+  deleteTestJournalRow(db, identity.sessionId, 4)
+  const page = readAgentSessionHistory(journal, {
+    sessionId: identity.sessionId,
+    direction: 'after',
+    cursor: { epoch: journal.epoch, sequence: 3 },
+    limit: 2
+  })
+  expect(page).toMatchObject({
+    ok: true,
+    page: {
+      items: [{ itemId: 'item-3' }, { itemId: 'item-4' }],
+      window: { nextCursor: { sequence: 6 } },
+      hasNewer: true
+    }
+  })
 })

@@ -61,6 +61,10 @@ export function createClaudeJournalFailureHandler(input: {
 function retryOwedWritesOnDrain(
   translator: ClaudeJournalTranslator | null
 ): StructuredAgentSessionSinkAdmission {
+  const stream = translator?.retryPendingStream?.()
+  if (stream && !stream.accepted) {
+    return stream
+  }
   const tasks = translator?.retryPendingTaskRows?.() ?? { accepted: true }
   if (!tasks.accepted && tasks.reason === 'backpressure') {
     return tasks

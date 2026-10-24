@@ -1,3 +1,12 @@
+// Journaling ONE Claude message envelope: its body, tool calls, tool results,
+// reasoning, and the unmodeled content that falls back to a generic row.
+//
+// Split out of the translator when that file reached its line budget. The body
+// moved unchanged; the only edit is that what were closure variables are now
+// read off an explicit context, so the open turn and the collaborators it
+// writes through stay owned by the translator.
+
+import { appendClaudeStreamedWhole } from './claude-streamed-text-checkpoints'
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -109,11 +118,9 @@ export function journalClaudeMessage(
     messageBody ??
     ordinaryFailure
   const terminalIdentity = terminal && ctx.turn.identity && usageLimit ? ctx.turn.identity : null
-  const identity =
-    (body && envelope.role === 'assistant'
-      ? ctx.streamedBlocks.reconcile(envelope)?.identity
-      : null) ?? claudeMessageIdentity(envelope)
-  ctx.streamedText.forget(agentJournalItemKey(identity))
+  const streamed =
+    body && envelope.role === 'assistant' ? ctx.streamedBlocks.reconcile(envelope) : null
+  const identity = streamed?.identity ?? claudeMessageIdentity(envelope)
   const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   if (body) {
     // Open before appending so backward scans include the turn's first output.
@@ -121,7 +128,13 @@ export function journalClaudeMessage(
     if (terminalIdentity) {
       writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
     } else {
-      ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
+      if (streamed) {
+        if (appendClaudeStreamedWhole(ctx.sink, identity, body, stamp(identity, body))) {
+          ctx.streamedText.forget(agentJournalItemKey(identity))
+        }
+      } else {
+        ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
+      }
     }
     changed = true
   }
@@ -167,12 +180,15 @@ export function journalClaudeMessage(
   }
   if (thinking) {
     ctx.turn.ensureOpen(message, source, observedAt)
-    // Preserve this terminal write under pressure so the thinking row cannot stay open.
-    ctx.sink.appendItem(thinking.identity, thinking.body, {
+    // The write that ends the row: shed under pressure, the row would read open for good.
+    const accepted = appendClaudeStreamedWhole(ctx.sink, thinking.identity, thinking.body, {
       ...stamp(thinking.identity, thinking.body),
       ...(thinking.startedAt === undefined ? {} : { observedAt: thinking.startedAt }),
       lifecycle: true
     })
+    if (accepted) {
+      ctx.streamedThinking.forget(thinking.identity)
+    }
     changed = true
   }
   changed =

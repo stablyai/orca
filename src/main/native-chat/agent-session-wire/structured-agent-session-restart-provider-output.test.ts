@@ -1,4 +1,5 @@
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { codexTurnLifecycleIdentity } from '../../codex/codex-structured-journal-translation-turns'
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,8 +30,9 @@ import {
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const SAVED_AT = HOST_TEST_NOW + 60_000
 const RESTARTED_AT = HOST_TEST_NOW + 3_600_000
-const TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'stream-turn', ordinal: 0 }
-const REPLY = { ...TURN, ordinal: 1 }
+const TURN_ID = 'stream-turn'
+const TURN = codexTurnLifecycleIdentity(SESSION, TURN_ID)
+const REPLY = { provider: 'codex' as const, threadId: THREAD, turnId: TURN_ID, ordinal: 1 }
 const TURN_SCOPE = { kind: 'turn' as const, turnItemId: agentJournalItemKey(TURN) }
 
 let rig: RestTestRig
@@ -81,7 +83,7 @@ async function beginTurn() {
   }
   events.appendItem(
     TURN,
-    { kind: 'turn', turnId: TURN.turnId, state: 'running', startedAt: HOST_TEST_NOW },
+    { kind: 'turn', turnId: TURN_ID, state: 'running', startedAt: HOST_TEST_NOW },
     { turnScope: AGENT_JOURNAL_THREAD_SCOPE, observedAt: HOST_TEST_NOW }
   )
   return events
@@ -116,8 +118,16 @@ describe('provider output survives host restart', () => {
       sessionId: SESSION,
       threadId: THREAD,
       method: 'turn/started',
-      params: { turn: { id: TURN.turnId } },
+      params: { turn: { id: TURN_ID } },
       observedAt: receivedAt
+    })
+    translator.handle({
+      type: 'notification',
+      sessionId: SESSION,
+      threadId: THREAD,
+      method: 'item/completed',
+      params: { turnId: TURN_ID, item: { id: 'prompt', type: 'userMessage', text: 'review' } },
+      observedAt: HOST_TEST_NOW
     })
     translator.handle({
       type: 'notification',
@@ -125,7 +135,7 @@ describe('provider output survives host restart', () => {
       threadId: THREAD,
       method: 'item/started',
       params: {
-        turnId: TURN.turnId,
+        turnId: TURN_ID,
         item: {
           id: 'actual-reply',
           type,
@@ -147,7 +157,7 @@ describe('provider output survives host restart', () => {
           threadId: THREAD,
           method,
           params: {
-            turnId: TURN.turnId,
+            turnId: TURN_ID,
             itemId: 'actual-reply',
             delta: `actual chunk ${chunk} `.repeat(4)
           },
@@ -210,7 +220,15 @@ describe('provider output survives host restart', () => {
       sessionId: SESSION,
       threadId: THREAD,
       method: 'turn/started',
-      params: { turn: { id: TURN.turnId } },
+      params: { turn: { id: TURN_ID } },
+      observedAt: HOST_TEST_NOW
+    })
+    translator.handle({
+      type: 'notification',
+      sessionId: SESSION,
+      threadId: THREAD,
+      method: 'item/completed',
+      params: { turnId: TURN_ID, item: { id: 'prompt', type: 'userMessage', text: 'review' } },
       observedAt: HOST_TEST_NOW
     })
     translator.handle({
@@ -218,7 +236,7 @@ describe('provider output survives host restart', () => {
       sessionId: SESSION,
       threadId: THREAD,
       method: 'item/started',
-      params: { turnId: TURN.turnId, item: { id: 'late-first', type: 'agentMessage', text: '' } },
+      params: { turnId: TURN_ID, item: { id: 'late-first', type: 'agentMessage', text: '' } },
       observedAt: HOST_TEST_NOW
     })
     translator.handle({
@@ -226,7 +244,7 @@ describe('provider output survives host restart', () => {
       sessionId: SESSION,
       threadId: THREAD,
       method: 'item/agentMessage/delta',
-      params: { turnId: TURN.turnId, itemId: 'late-first', delta: 'first durable output' },
+      params: { turnId: TURN_ID, itemId: 'late-first', delta: 'first durable output' },
       observedAt: LAST_CHUNK_AT
     })
     rig.clock.now = SAVED_AT

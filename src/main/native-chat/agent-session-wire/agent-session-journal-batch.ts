@@ -25,10 +25,12 @@ export function projectJournalBatch(input: {
   snapshot: AgentJournalSnapshot
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
+  coversGap?: (first: number, last: number) => boolean
 }): JournalBatchProjection {
   const gap = findSequenceGap(
     input.rows.map((row) => row.seq),
-    input.afterSequence + 1
+    input.afterSequence + 1,
+    input.coversGap
   )
   if (gap) {
     return { ok: false, reset: 'journal_gap' }
@@ -51,7 +53,7 @@ export function projectJournalBatch(input: {
       // Stop/Resume markers are host-only; publish derived queue pauses separately.
       continue
     }
-    if (row.kind === 'item' || row.kind === 'tombstone') {
+    if (row.kind === 'item' || row.kind === 'tombstone' || row.kind === 'text-delta') {
       touchedItemIds.add(
         input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
       )

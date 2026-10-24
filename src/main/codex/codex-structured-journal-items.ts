@@ -2,6 +2,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalRowAttribution
 } from '../../shared/agent-session-journal-types'
+import { codexLiveTextKey } from './codex-thread-item-identity'
 import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
   codexItemIdentity,
@@ -32,13 +33,12 @@ import { readCodexJournalString } from './codex-structured-journal-translation-v
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { readCodexDispatchEcho } from './codex-structured-dispatch-echo'
 import {
-  codexActiveItemBody,
   codexCompletedItem,
-  interruptedCodexItemBody
+  withCodexItemLifecycle,
+  settleEvictedCodexItem
 } from './codex-unfinished-item-body'
 import {
   endedJournalReasoning,
-  withJournalReasoningLifecycle,
   type JournalReasoningLifecycle
 } from '../native-chat/agent-session-journal/journal-reasoning-row'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
@@ -61,6 +61,7 @@ export class CodexJournalItems {
   ) {
     this.streams = createCodexStructuredItemStreams({
       sink: deps.sink,
+      historyImport: deps.historyImport,
       coalesceMs: deps.coalesceMs,
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
@@ -110,7 +111,20 @@ export class CodexJournalItems {
           ? // Without a recorded start, completion cannot establish a duration.
             endedJournalReasoning(active?.startedAt === undefined ? undefined : receivedAt)
           : { state: 'running' }
-    const translated = withItemLifecycle(
+    if (
+      event.method === 'item/completed' &&
+      item.type === 'reasoning' &&
+      !codexJournalItem(item).body &&
+      this.deps.sink.prepareText
+    ) {
+      const admission = this.streams.finish(event.threadId, turnId, receivedAt, item)
+      if (admission.accepted) {
+        this.streams.forget(event.threadId, item.id)
+        this.activeItems.delete(itemKey)
+      }
+      return { handled: true, admission }
+    }
+    const translated = withCodexItemLifecycle(
       codexCompletedItem(
         codexJournalItem(item, this.helperName, active?.item),
         active,
@@ -229,7 +243,10 @@ export class CodexJournalItems {
     const key = this.deps.historyImport
       ? JSON.stringify([threadId, turnId, item.id])
       : codexStructuredItemKey(threadId, item.id)
-    const existing = this.identities.get(key)
+    const live = this.deps.sink.liveText?.(
+      codexLiveTextKey(threadId, turnId, item, this.deps.historyImport)
+    )
+    const existing = live?.live?.identity ?? this.identities.get(key)
     if (existing) {
       return existing
     }
@@ -272,34 +289,17 @@ export class CodexJournalItems {
       }
       const evicted = this.activeItems.get(oldest)
       if (evicted) {
-        const body = interruptedCodexItemBody(codexActiveItemBody(evicted, this.streams))
-        if (body) {
-          const admission = appendCodexLifecycleItem(this.deps.sink, evicted.identity, body, {
-            ...this.deps.attributionFor(evicted.threadId, evicted.turnId),
-            ...(evicted.startedAt === undefined ? {} : { observedAt: evicted.startedAt })
-          })
-          if (!admission.accepted) {
-            return admission
-          }
-          const published = publishCodexLifecycle(this.deps.sink)
-          if (!published.accepted) {
-            return published
-          }
+        const admission = settleEvictedCodexItem(this.deps, evicted, this.streams)
+        if (!admission.accepted) {
+          return admission
         }
         this.streams.forget(evicted.threadId, evicted.item.id)
-        this.suppress(evicted.threadId, evicted.turnId ?? 'outside-turn')
+        if (!this.deps.sink.textSource?.(evicted.identity)) {
+          this.suppress(evicted.threadId, evicted.turnId ?? 'outside-turn')
+        }
       }
       this.activeItems.delete(oldest)
     }
     return CODEX_JOURNAL_ADMITTED
   }
-}
-
-function withItemLifecycle(
-  translated: ReturnType<typeof codexJournalItem>,
-  lifecycle: JournalReasoningLifecycle
-): ReturnType<typeof codexJournalItem> {
-  return translated.body
-    ? { ...translated, body: withJournalReasoningLifecycle(translated.body, lifecycle) }
-    : translated
 }

@@ -10,7 +10,7 @@ import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
 > &
-  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written'>
+  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written' | 'prepareText' | 'textSource'>
 
 type ItemStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>
 type SettlementStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'settlement' }>
@@ -21,6 +21,18 @@ export class ProviderTimelinePlan {
   private readonly steps: StructuredAgentSessionTransitionStep[] = []
   private readonly admitted: (() => void)[] = []
   private lifecycle = false
+  private readonly textWrites = new Map<string, number>()
+
+  text(key: string, step: Omit<ItemStep, 'kind'>, lifecycle: boolean): void {
+    const index = this.textWrites.get(key)
+    if (index === undefined) {
+      this.textWrites.set(key, this.steps.length)
+      this.item(step, lifecycle)
+    } else {
+      this.steps[index] = { kind: 'item', ...step }
+      this.lifecycle ||= lifecycle
+    }
+  }
 
   item(step: Omit<ItemStep, 'kind'>, lifecycle = false): void {
     this.steps.push({ kind: 'item', ...step })
@@ -68,6 +80,8 @@ export function providerTimelineSink(
   return {
     tryAppendTransition: (transition) => tryAppendTransition.call(sink, transition),
     journalItems: () => journalItems.call(sink),
+    prepareText: sink.prepareText,
+    textSource: sink.textSource,
     ...(written ? { written: () => written.call(sink) } : {}),
     ...(setActivity
       ? {

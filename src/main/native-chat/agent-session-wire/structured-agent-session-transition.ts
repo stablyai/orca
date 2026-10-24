@@ -8,7 +8,6 @@ import type {
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'
-import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionSinkAdmission
@@ -18,7 +17,16 @@ import { structuredAgentSessionJournalAppendOptions } from './structured-agent-s
 
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
-  'epoch' | 'visitItems' | 'itemBody' | 'item' | 'visitItemsWithLinkage' | 'canonicalItemId'
+  | 'textSource'
+  | 'textSourceByRaw'
+  | 'textSources'
+  | 'retireText'
+  | 'epoch'
+  | 'visitItems'
+  | 'itemBody'
+  | 'item'
+  | 'visitItemsWithLinkage'
+  | 'canonicalItemId'
 >
 
 export type StructuredAgentSessionTransitionStep =
@@ -30,6 +38,8 @@ export type StructuredAgentSessionTransitionStep =
         identity: AgentJournalItemIdentity
         body: AgentJournalItemBody
       } | null
+      install?: () => void
+      release?: () => void
       options: StructuredAgentSessionItemAppendOptions
     }
   | {
@@ -56,8 +66,7 @@ export type StructuredAgentSessionTransition = {
   onPublished?: () => void
 }
 
-const STEP_OVERFLOW = 'structured agent-session transition step exceeded its reserved size'
-
+/** The sink members a transition writer uses. */
 export type StructuredAgentSessionTransitionSink = {
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
@@ -67,16 +76,41 @@ export type StructuredAgentSessionTransitionSink = {
 }
 
 export function createStructuredAgentSessionTransitionMembers(
-  queue: StructuredAgentSessionSinkQueue
+  queue: StructuredAgentSessionSinkQueue,
+  hold: (bytes: number) => { install: () => void; release: () => void }
 ): Required<StructuredAgentSessionTransitionSink> {
-  return { tryAppendTransition: transitionAppend(queue), journalItems: queue.journalItems }
+  return { tryAppendTransition: transitionAppend(queue, hold), journalItems: queue.journalItems }
 }
 
 function transitionAppend(
-  queue: StructuredAgentSessionSinkQueue
+  queue: StructuredAgentSessionSinkQueue,
+  hold: (bytes: number) => { install: () => void; release: () => void }
 ): (transition: StructuredAgentSessionTransition) => StructuredAgentSessionSinkAdmission {
-  return (transition) =>
-    queue.submit({
+  return (transition) => {
+    const holdCredit = hold(
+      transition.steps.reduce(
+        (total, step) =>
+          total + (step.kind === 'item' && step.options.streamText ? 0 : step.reservedBytes),
+        0
+      )
+    )
+    return queue.submit({
+      install: () => {
+        holdCredit.install()
+        for (const step of transition.steps) {
+          if (step.kind === 'item') {
+            step.install?.()
+          }
+        }
+      },
+      release: () => {
+        holdCredit.release()
+        for (const step of transition.steps) {
+          if (step.kind === 'item') {
+            step.release?.()
+          }
+        }
+      },
       bytes:
         transition.steps.reduce((total, step) => total + step.reservedBytes, 0) +
         (transition.publish ? 1 : 0),
@@ -89,18 +123,11 @@ function transitionAppend(
             step.kind === 'item'
               ? {
                   kind: 'item',
-                  resolve: () => {
-                    const resolved = step.resolve(journal)
-                    if (
-                      resolved &&
-                      estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
-                        step.reservedBytes
-                    ) {
-                      throw new Error(STEP_OVERFLOW)
-                    }
-                    return resolved
-                  },
-                  options: structuredAgentSessionJournalAppendOptions(fence, step.options)
+                  resolve: () => step.resolve(journal),
+                  options: {
+                    ...structuredAgentSessionJournalAppendOptions(fence, step.options),
+                    reservedBytes: step.reservedBytes
+                  }
                 }
               : {
                   kind: 'settlement',
@@ -120,4 +147,5 @@ function transitionAppend(
         transition.onPublished?.()
       }
     })
+  }
 }

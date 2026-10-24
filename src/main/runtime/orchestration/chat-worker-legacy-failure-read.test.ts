@@ -163,6 +163,7 @@ it.each([100, 1000])(
       submissionCopies: 1,
       submissionEntries: n + 1
     }
+    // Publication builds this revision once; the detached failure read reuses it.
     expect(failure).toEqual({
       publication: oneDisplay,
       failure: {

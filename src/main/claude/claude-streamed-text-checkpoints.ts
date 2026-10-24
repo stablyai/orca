@@ -1,49 +1,44 @@
+import type {
+  ClaudeStreamedTextCheckpointDeps,
+  ClaudeStreamedTextCheckpoints,
+  ClaudeStreamedTextSelection,
+  ClaudePreparedTextEnd
+} from './claude-streamed-text-contracts'
+export type {
+  ClaudeStreamedTextCheckpointDeps,
+  ClaudeStreamedTextCheckpoints,
+  ClaudeStreamedBlockEnd,
+  ClaudePreparedTextEnd
+} from './claude-streamed-text-contracts'
+import {
+  claudeStreamedTextStep,
+  appendClaudePreparedSteps,
+  appendClaudeStreamedWhole
+} from './claude-streamed-terminal'
+import { appendStructuredAgentSessionTextWindow } from '../native-chat/agent-session-wire/structured-agent-session-text-append'
+import { claudeStreamingMessageBody } from './claude-structured-item-translation'
 import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionAppendOptions,
+  StructuredAgentSessionEventSink
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   createAgentSessionDeltaCoalescer,
+  type AgentSessionDeltaWindow,
   type AgentSessionDeltaCoalescerDeps
 } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
-export type ClaudeStreamedTextCheckpointDeps = {
-  /** Rewrite accumulated text; ended marks the last write when no final frame will arrive. */
-  persist: (
-    identity: AgentJournalItemIdentity,
-    text: string,
-    options: StructuredAgentSessionAppendOptions,
-    ended?: ClaudeStreamedBlockEnd
-  ) => void
-  producer: ClaudeSubagentLinkageSource
-  coalesceMs?: number
-  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-}
-
-/** Host time of completion or interruption. */
-export type ClaudeStreamedBlockEnd = { completedAt?: number }
-
-export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
-  append: (
-    identity: AgentJournalItemIdentity,
-    text: string,
-    parentToolUseId?: string | null
-  ) => void
-  flush: () => void
-  /** Correct provisional producers even for blocks that stopped receiving checkpoints. */
-  reattribute: () => void
-  forget: (key: string) => void
-  latest: (key: string) => string | undefined
-  /** End matching rows whose final frames will never arrive; discard empty blocks. */
-  finish: (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean) => void
-  /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
-  settle: () => void
-  readonly pending: number
-  dispose: () => void
-}
-
+/**
+ * Growth of a streamed block's row between its deltas and its final frame.
+ *
+ * Windows share one cadence; whole values remain available for finalization.
+ */
 function sameLinkage(
   left: StructuredAgentSessionAppendOptions,
   right: StructuredAgentSessionAppendOptions
@@ -60,115 +55,234 @@ function sameLinkage(
 export function createClaudeStreamedTextCheckpoints(
   deps: ClaudeStreamedTextCheckpointDeps
 ): ClaudeStreamedTextCheckpoints {
-  const identities = new Map<string, AgentJournalItemIdentity>()
-  /** Retain producer scope because persist has no frame to read. */
-  const scopes = new Map<string, string | null>()
-  /** Last written linkage, used only to skip revisions that change nothing. */
-  const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
-  const latestText = new Map<string, string>()
-  const checkpointLengths = new Map<string, number>()
+  const records = new Map<
+    string,
+    {
+      identity: AgentJournalItemIdentity
+      scope: string | null
+      written?: StructuredAgentSessionAppendOptions
+      startedAt?: number
+    }
+  >()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
-    const scope = scopes.get(key) ?? null
+    const scope = records.get(key)?.scope ?? null
     if (scope === null) {
       return {}
     }
     return agentJournalLinkageFields(deps.producer.settledLinkageFor(scope).linkage)
   }
 
-  const persist = (key: string, text: string, force: boolean): void => {
-    latestText.set(key, text)
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
-      return
-    }
-    const identity = identities.get(key)
-    if (!identity) {
-      return
+  const persist = (key: string, text: string): boolean => {
+    const record = records.get(key)
+    if (!record) {
+      return true
     }
     const options = producerOptions(key)
-    checkpointLengths.set(key, text.length)
-    writtenLinkage.set(key, options)
-    deps.persist(identity, text, options)
+    if (deps.persist(record.identity, text, options) === false) {
+      return false
+    }
+    record.written = options
+    return true
   }
 
   const coalescer = createAgentSessionDeltaCoalescer({
+    ...(deps.source
+      ? {
+          source: (key: string) => {
+            const record = records.get(key)
+            return record ? deps.source?.(record.identity) : undefined
+          }
+        }
+      : {}),
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    emit: (key, text) => persist(key, text, false)
+    emit: (key, text) => persist(key, text),
+    ...(deps.persistDelta
+      ? {
+          emitDelta: (key: string, window: AgentSessionDeltaWindow) => {
+            const record = records.get(key)
+            const identity = record?.identity
+            if (!identity) {
+              return true
+            }
+            const options = producerOptions(key)
+            const accepted = deps.persistDelta?.(identity, window, options) !== false
+            if (accepted) {
+              record.written = options
+            }
+            return accepted
+          }
+        }
+      : {})
   })
 
   const drop = (key: string): void => {
     coalescer.forget(key)
-    identities.delete(key)
-    scopes.delete(key)
-    writtenLinkage.delete(key)
-    latestText.delete(key)
-    checkpointLengths.delete(key)
+    records.delete(key)
   }
 
+  const prepareOne = (
+    key: string,
+    extra?: { identity: AgentJournalItemIdentity; text: string }
+  ): ClaudePreparedTextEnd | undefined => {
+    const record = records.get(key)
+    if (!record) {
+      return undefined
+    }
+    const window = coalescer.window(key)
+    const held = extra && agentJournalItemKey(extra.identity) === key ? extra.text : ''
+    return {
+      identity: record.identity,
+      startedAt: record.startedAt,
+      scope: record.scope,
+      get text() {
+        return window && !window.source ? window.text() : undefined
+      },
+      hasText:
+        (window?.hasText ?? (deps.source?.(record.identity)?.length ?? 0) > 0) ||
+        held.trim().length > 0,
+      options: producerOptions(key),
+      step: (body, options, finish = true) =>
+        claudeStreamedTextStep(deps, record.identity, window, held, body, options, finish),
+      forget: () => drop(key)
+    }
+  }
+
+  const prepareFinish = (
+    only?: ClaudeStreamedTextSelection,
+    extra?: { identity: AgentJournalItemIdentity; text: string }
+  ): ClaudePreparedTextEnd[] =>
+    [...records].flatMap(([key, record]) => {
+      const block = !only || only(key, record) ? prepareOne(key, extra) : undefined
+      return block ? [block] : []
+    })
+
   return {
-    append: (identity, text, parentToolUseId = null) => {
+    prepareFinish,
+    startedAt: (key) => records.get(key)?.startedAt,
+    append: (identity, text, parentToolUseId = null, startedAt) => {
       const key = agentJournalItemKey(identity)
-      identities.set(key, identity)
-      scopes.set(key, parentToolUseId)
-      coalescer.append(key, text)
+      if (!records.has(key)) {
+        records.set(key, { identity, scope: parentToolUseId, startedAt })
+      }
+      return coalescer.append(key, text)
     },
     flush: () => {
       coalescer.flushAll()
-      for (const [key, text] of latestText) {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
     },
     reattribute: () => {
-      for (const [key, identity] of identities) {
-        const text = latestText.get(key)
-        if (text === undefined) {
-          continue
-        }
+      for (const [key, record] of records) {
         const options = producerOptions(key)
-        const written = writtenLinkage.get(key)
+        const written = record.written
+        // Nothing resolved differently: a duplicate must not burn a revision.
         if (written && sameLinkage(written, options)) {
           continue
         }
-        writtenLinkage.set(key, options)
-        deps.persist(identity, text, options)
+        const block = prepareOne(key)
+        if (
+          block &&
+          (deps.persistPrepared
+            ? deps.persistPrepared(block)
+            : block.text !== undefined &&
+              deps.persist(record.identity, block.text, options) !== false)
+        ) {
+          coalescer.markFlushed(key)
+          record.written = options
+        }
       }
     },
     forget: drop,
-    latest: (key) => coalescer.snapshot(key)?.text ?? latestText.get(key),
+    latest: (key) => coalescer.snapshot(key)?.text,
     finish: (ended, only) => {
-      for (const [key, identity] of identities) {
-        if (only && !only(key)) {
-          continue
+      let accepted = true
+      for (const block of prepareFinish(only)) {
+        if (
+          !(deps.persistPrepared
+            ? deps.persistPrepared(block, ended)
+            : block.text !== undefined &&
+              deps.persist(block.identity, block.text, block.options, ended) !== false)
+        ) {
+          accepted = false
+        } else {
+          block.forget()
         }
-        coalescer.flush(key)
-        const text = latestText.get(key)
-        if (text !== undefined) {
-          deps.persist(identity, text, producerOptions(key), ended)
-        }
-        drop(key)
       }
-    },
-    settle: () => {
-      for (const key of identities.keys()) {
-        drop(key)
-      }
+      return accepted
     },
     get pending() {
-      return identities.size
+      return records.size
     },
     dispose: () => {
       coalescer.dispose()
-      identities.clear()
-      scopes.clear()
-      writtenLinkage.clear()
-      latestText.clear()
-      checkpointLengths.clear()
+      records.clear()
     }
   }
+}
+
+export function createClaudeStreamedTextAdmission(
+  sink: StructuredAgentSessionEventSink,
+  turnScope: () => AgentJournalTurnScope
+): ClaudeStreamedTextCheckpointDeps['persistDelta'] {
+  return (identity, window, options) =>
+    appendStructuredAgentSessionTextWindow(sink, identity, claudeStreamingMessageBody(''), window, {
+      ...options,
+      turnScope: turnScope()
+    })
+}
+
+export {
+  appendClaudeStreamedWhole,
+  claudeStreamedWholeStep,
+  appendClaudeTerminalSteps
+} from './claude-streamed-terminal'
+
+export function createClaudeProseCheckpoints(
+  deps: {
+    sink: StructuredAgentSessionEventSink
+    coalesceMs?: number
+    schedule?: AgentSessionDeltaCoalescerDeps['schedule']
+  },
+  turnScope: () => AgentJournalTurnScope,
+  producer: ClaudeSubagentLinkageSource
+): ClaudeStreamedTextCheckpoints {
+  return createClaudeStreamedTextCheckpoints({
+    ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
+    ...(deps.schedule ? { schedule: deps.schedule } : {}),
+    producer,
+    source: deps.sink.textSource,
+    prepareText: deps.sink.prepareText,
+    persistDelta: createClaudeStreamedTextAdmission(deps.sink, turnScope),
+    persistPrepared: (block, ended) =>
+      !deps.sink.prepareText && block.text !== undefined
+        ? appendClaudeStreamedWhole(
+            deps.sink,
+            block.identity,
+            claudeStreamingMessageBody(block.text),
+            { ...block.options, turnScope: turnScope() }
+          )
+        : appendClaudePreparedSteps(deps.sink, [
+            block.step(
+              claudeStreamingMessageBody(''),
+              {
+                ...block.options,
+                turnScope: turnScope()
+              },
+              ended !== undefined
+            )
+          ]),
+    persist: (identity, text, options, ended) => {
+      const body = claudeStreamingMessageBody(text)
+      if (ended) {
+        return appendClaudeStreamedWhole(deps.sink, identity, body, {
+          ...options,
+          turnScope: turnScope()
+        })
+      }
+      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
+      deps.sink.publish()
+      return undefined
+    }
+  })
 }

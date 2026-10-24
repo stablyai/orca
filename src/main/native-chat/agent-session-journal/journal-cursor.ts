@@ -43,14 +43,15 @@ export function resolveJournalResume(
 /** Gaps invalidate replay; never render a partial timeline. */
 export function findSequenceGap(
   sequences: readonly number[],
-  expectedFirst: number
+  expectedFirst: number,
+  coversGap?: (first: number, last: number) => boolean
 ): { gapAt: number } | null {
   let expected = expectedFirst
   for (const sequence of sequences) {
-    if (sequence !== expected) {
+    if (sequence !== expected && (sequence < expected || !coversGap?.(expected, sequence - 1))) {
       return { gapAt: expected }
     }
-    expected += 1
+    expected = sequence + 1
   }
   return null
 }
@@ -58,6 +59,7 @@ export function findSequenceGap(
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }
+    sparseAfter?: number | null
     rowsAfter: (afterSequence: number) => JournalRow[]
   },
   cursor: AgentJournalCursor,
@@ -70,6 +72,7 @@ export function readJournalSince(
   return {
     ok: true,
     rows: source.rowsAfter(resume.afterSequence),
-    cursor: currentCursor()
+    cursor: currentCursor(),
+    coversGap: (first) => source.sparseAfter != null && first > source.sparseAfter
   }
 }

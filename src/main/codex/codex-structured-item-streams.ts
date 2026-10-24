@@ -1,18 +1,22 @@
+import { restoreCodexTextState, finishCodexStreams } from './codex-stream-finishes'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
 } from '../../shared/agent-session-journal-types'
-import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import {
+  createAgentSessionDeltaCoalescer,
+  type AgentSessionDeltaWindow
+} from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
-import { appendCodexItemAndPublish } from './codex-structured-journal-sink'
-import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../native-chat/agent-session-journal/journal-reasoning-row'
+import { appendCodexItemAndPublish, appendCodexStreamWindow } from './codex-structured-journal-sink'
+import { codexJournalItem } from './codex-structured-item-translation'
 import {
   codexStructuredItemKey,
-  MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCH_BYTES,
   MAX_CODEX_ITEM_STREAM_RETAINED_BYTES,
   codexItemStreamState,
+  codexToolStreamWindowDue,
+  evictCodexPendingPatches,
   pendingPatchBytes
 } from './codex-structured-item-stream-bounds'
 import {
@@ -80,51 +84,24 @@ export function createCodexStructuredItemStreams(
       if (typeof oldest !== 'string') {
         break
       }
-      const pending = coalescer.snapshot(oldest)
-      if (pending && pending.text.length > 0 && !persist(oldest, pending.text, true)) {
-        // Keep buffered output until its final checkpoint is accepted.
+      if (!coalescer.flush(oldest)) {
+        // Keep the state (and its buffered text) until the sink recovers. A
+        // bounded map is preferable to silently losing streamed output.
         break
       }
       forgetState(oldest)
     }
   }
 
-  const trimPendingPatches = (): void => {
-    while (pendingPatches.size > MAX_CODEX_ITEM_STREAM_PENDING_PATCHES) {
-      const oldest = pendingPatches.keys().next().value
-      if (typeof oldest !== 'string') {
-        break
-      }
-      const pending = pendingPatches.get(oldest)
-      if (pending) {
-        retainedPatchBytes = Math.max(0, retainedPatchBytes - pendingPatchBytes(pending))
-      }
-      pendingPatches.delete(oldest)
-    }
-  }
+  const append = (
+    key: string,
+    state: CodexItemStreamState,
+    text: string,
+    window?: AgentSessionDeltaWindow
+  ): boolean =>
+    appendCodexStreamWindow(deps, producers.get(key)!, state, text, attributionOf(key), window)
 
-  const append = (key: string, state: CodexItemStreamState, text: string): boolean => {
-    const translated = codexStreamingJournalItem(state.item, text)
-    if (!translated.body) {
-      return true
-    }
-    const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
-    return appendCodexItemAndPublish(deps.sink, state.identity, body, {
-      ...attributionOf(key),
-      ...(state.startedAt === undefined ? {} : { observedAt: state.startedAt })
-    }).accepted
-  }
-
-  const shouldPersist = (key: string, textLength: number): boolean => {
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    return !(checkpointLength > 0 && textLength < nextLength)
-  }
-
-  const persist = (key: string, text: string, force: boolean): boolean => {
-    if (!force && !shouldPersist(key, text.length)) {
-      return true
-    }
+  const persist = (key: string, text: string): boolean => {
     const state = states.get(key)
     if (state && append(key, state, text)) {
       checkpointLengths.set(key, text.length)
@@ -135,15 +112,39 @@ export function createCodexStructuredItemStreams(
   }
 
   const coalescer = createAgentSessionDeltaCoalescer({
+    source: deps.sink.textSource
+      ? (key) => {
+          const state = states.get(key)
+          return state ? deps.sink.textSource?.(state.identity) : undefined
+        }
+      : undefined,
     windowMs: deps.coalesceMs,
     maxRetainedBytes: deps.maxRetainedBytes,
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
-    shouldEmit: shouldPersist,
-    emit: (key, text) => {
-      return persist(key, text, false)
-    }
+    emitDelta: (key, window) => {
+      const state = states.get(key)
+      if (!state) {
+        return false
+      }
+      if (state.item.type !== 'agentMessage' && state.item.type !== 'reasoning') {
+        if (!codexToolStreamWindowDue(window, checkpointLengths.get(key))) {
+          return true
+        }
+        return persist(key, window.text())
+      }
+      if (state.item.type === 'reasoning' && !window.hasText) {
+        return true
+      }
+      if (!append(key, state, deps.sink.prepareText ? 'x' : window.text(), window)) {
+        return false
+      }
+      checkpointLengths.set(key, window.length)
+      pendingCheckpoints.delete(key)
+      return true
+    },
+    emit: (key, text) => persist(key, text)
   })
 
   const ensureState = (
@@ -157,9 +158,8 @@ export function createCodexStructuredItemStreams(
     if (existing) {
       return existing
     }
-    const item = { type, id: itemId }
     const turnId = deps.turnIdFor(threadId, params)
-    const state = { item, identity: deps.identityFor(threadId, turnId, item) }
+    const state = restoreCodexTextState(deps, threadId, turnId, itemId, type)
     states.retain(key, state)
     producers.set(key, { threadId, turnId })
     trimStates()
@@ -170,8 +170,12 @@ export function createCodexStructuredItemStreams(
     let flushed = coalescer.flushAll()
     for (const key of pendingCheckpoints) {
       const snapshot = coalescer.snapshot(key)
-      if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
-        flushed = persist(key, snapshot.text, true) && flushed
+      if (
+        snapshot &&
+        !deps.sink.textSource?.(states.get(key)!.identity) &&
+        checkpointLengths.get(key) !== snapshot.text.length
+      ) {
+        flushed = persist(key, snapshot.text) && flushed
       } else {
         pendingCheckpoints.delete(key)
       }
@@ -244,7 +248,10 @@ export function createCodexStructuredItemStreams(
           }
           retainedPatchBytes = Math.max(0, retainedPatchBytes - previousBytes) + nextBytes
           pendingPatches.set(key, nextPending)
-          trimPendingPatches()
+          retainedPatchBytes = Math.max(
+            0,
+            retainedPatchBytes - evictCodexPendingPatches(pendingPatches)
+          )
           if (streamFlushed) {
             const admission = flushPatch(key)
             if (!admission.accepted) {
@@ -280,6 +287,14 @@ export function createCodexStructuredItemStreams(
       const key = codexStructuredItemKey(threadId, itemId)
       forgetState(key)
     },
+    finish: (threadId, turnId, at, item) =>
+      finishCodexStreams(deps, states, producers, coalescer, forgetState, {
+        threadId,
+        turnId,
+        at,
+        item,
+        historyImport: deps.historyImport
+      }),
     flush,
     dispose: () => {
       coalescer.dispose()

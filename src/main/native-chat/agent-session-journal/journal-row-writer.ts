@@ -43,8 +43,10 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
-  /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
+  commit: (rows: readonly JournalRow[], savedAt: number, adopt?: () => void) => void
+  afterCommit?: (rows: readonly JournalRow[]) => void
+  /** Rows an OS crash may lose without losing anything but streamed text; they commit without
+   *  the per-commit fsync (`isJournalStreamedTextRevision`). */
   streamedTextRevision?: (row: JournalRow) => boolean
 }
 
@@ -53,7 +55,8 @@ export class JournalRowWriter {
 
   enqueue(
     build: (seq: number, ts: number) => JournalRow,
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    adopt?: (row: JournalRow) => void
   ): Promise<JournalRow> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
@@ -69,7 +72,8 @@ export class JournalRowWriter {
       )
       // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
-      this.deps.commit([row], savedAt)
+      this.deps.commit([row], savedAt, () => adopt?.(row))
+      this.deps.afterCommit?.([row])
       return row
     })
   }
@@ -87,7 +91,8 @@ export class JournalRowWriter {
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt,
-    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined,
+    adopt?: (rows: readonly JournalRow[]) => void
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
     const first = this.deps.nextSequence()
@@ -109,7 +114,8 @@ export class JournalRowWriter {
       !receipt && this.streamed(rows)
     )
     receipt?.committed()
-    this.deps.commit(rows, ts)
+    this.deps.commit(rows, ts, () => adopt?.(rows))
+    this.deps.afterCommit?.(rows)
     return rows
   }
 

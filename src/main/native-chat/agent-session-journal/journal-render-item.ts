@@ -19,7 +19,7 @@ export function journalRenderItem(
   turnScope: AgentJournalTurnScope,
   producer: AgentJournalProducerLinkage = row,
   sequenceIndex = 0
-): AgentJournalRenderItem {
+): AgentJournalRenderItem & { turnScope: AgentJournalTurnScope } {
   return {
     itemId,
     revision,

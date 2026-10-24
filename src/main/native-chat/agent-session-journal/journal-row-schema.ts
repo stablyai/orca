@@ -1,7 +1,27 @@
 import type { JournalItemEcho } from './journal-item-echo'
-// Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
-// New kinds need reader-first rollout or a version bump because older builds may delete them.
-// Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
+import { journalTextRowContent, type JournalTextDeltaRow } from './journal-text-rows'
+// Persisted journal row shapes plus read-time upcasting.
+//
+// The journal is append-only, so migration is upcasting on read and never an
+// in-place rewrite. A row whose version this build does not understand is
+// UNREADABLE, not skippable: the caller fails the load as a newer Orca's chat rather
+// than render a partial timeline or compact past a row it cannot interpret.
+//
+// A row whose KIND this build does not know is UNREADABLE the same way, and kept
+// on disk, when it has the envelope every row keeps: a non-empty `epoch`, an
+// integer `seq` >= 1, an integer `fence` and a numeric `ts`. So a new kind keeps
+// that envelope; changing the envelope is a `v` bump. Builds from before this
+// rule delete the journal from an unknown kind, so a new kind either ships its
+// reader first and is written only once no supported build lacks that reader,
+// or is written at a bumped `v`.
+//
+// Inside a known row with that envelope the same holds a level down. A lifecycle mutation of a kind
+// this build does not know, or a sent message of a kind it does not know, is UNREADABLE, whatever
+// else in the row fails; unusable annotations are dropped. A body of a kind it does not know is
+// READABLE and drawn by nobody (agent-session-journal-schemas.ts). Any other failure is damage, and
+// the chat fails to load with every row kept (journal-open.ts). Builds from before this rule delete
+// the journal from such a row, so the same reader-first-or-`v` rule applies to a new mutation or
+// sent-message kind.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
@@ -175,6 +195,7 @@ export const MAX_JOURNAL_LIFECYCLE_BATCH_BYTES = 1_500_000
 export const MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS = 200
 
 export type JournalRow =
+  | JournalTextDeltaRow
   | JournalEpochRow
   | JournalItemRow
   | JournalTombstoneRow
@@ -193,7 +214,11 @@ export function serializeJournalRow(row: JournalRow): string {
   return JSON.stringify(row)
 }
 
-export function parseJournalRow(line: string): JournalRowParse {
+/**
+ * Parse one persisted line. Older versions are upcast; newer versions and newer
+ * kinds are reported as unreadable so the caller fails closed.
+ */
+export function parseJournalRow(line: string, preserveVersion = false): JournalRowParse {
   let parsed: unknown
   try {
     parsed = JSON.parse(line)
@@ -212,6 +237,9 @@ export function parseJournalRow(line: string): JournalRowParse {
     return { ok: false, unreadable: true }
   }
   const upcast = upcastRow(record, version)
+  if (preserveVersion) {
+    upcast.v = version
+  }
   dropUnusableRowAnnotations(upcast)
   if (isJournalRow(upcast)) {
     return { ok: true, row: upcast }
@@ -220,13 +248,8 @@ export function parseJournalRow(line: string): JournalRowParse {
 }
 
 function upcastRow(record: Record<string, unknown>, version: number): Record<string, unknown> {
-  let current = record
-  let at = version
-  while (at < AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
-    current = { ...current, v: at + 1 }
-    at += 1
-  }
-  return current
+  // No shape converters yet: versions differ only in the kinds their readers understand.
+  return { ...record, v: Math.max(version, AGENT_SESSION_JOURNAL_SCHEMA_VERSION) }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -308,7 +331,8 @@ const ROW_CONTENT_CHECK_BY_KIND: Record<
       ...mutations.map((mutation) => lifecycleMutationContent(mutation))
     )
   },
-  queue: journalQueueRowContent
+  queue: journalQueueRowContent,
+  'text-delta': (record) => fieldsContent(journalTextRowContent(record))
 }
 export const KNOWN_ROW_KINDS = new Map(Object.entries(ROW_CONTENT_CHECK_BY_KIND))
 

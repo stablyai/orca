@@ -1,4 +1,12 @@
-// Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
+import { isDeepStrictEqual } from 'node:util'
+// Loading a journal: the session projection names the live epoch, and that
+// epoch's rows are folded through the reducer in sequence order.
+//
+// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
+// roll deletes them in the same transaction that publishes the new epoch. A row
+// this build cannot parse, a strict-prefix gap, or a first row that is not the epoch's is
+// damage, and a row a newer Orca wrote is one this build cannot place: the load
+// names either and the open fails on it. Nothing is deleted.
 
 import type Database from '../../sqlite/sync-database'
 import {
@@ -47,6 +55,7 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
   finish: () => JournalLoad
 } {
   const state = createJournalReducerState(input.sessionId, input.epoch)
+  state.replayTextDebt = new Map()
   let expectedSequence = FIRST_JOURNAL_SEQUENCE
   let damage: JournalDamage | null = null
   let anchored = false
@@ -55,7 +64,7 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
 
   const add = (entry: { seq: number; rowJson: string; ts?: number }): boolean => {
     empty = false
-    const parsed = parseJournalRow(entry.rowJson)
+    const parsed = parseJournalRow(entry.rowJson, true)
     if (!parsed.ok && parsed.unreadable) {
       newer = { sequence: entry.seq }
       return false
@@ -65,8 +74,8 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
       damage ??= { sequence: entry.seq, cause: 'unparseable-row' }
       return true
     }
-    // Key/body sequence mismatches would make future writes number against the wrong prefix.
-    if (parsed.row.seq !== entry.seq) {
+    // A body naming another sequence than its key: writes would number past the key.
+    if (parsed.row.seq !== entry.seq || parsed.row.epoch !== input.epoch) {
       damage ??= { sequence: entry.seq, cause: 'misnumbered-row' }
       return true
     }
@@ -74,23 +83,36 @@ export function startJournalRowFold(input: { sessionId: string; epoch: string })
       return true
     }
     const row = parsed.row
-    if (row.seq !== expectedSequence) {
+    if (
+      row.seq < expectedSequence ||
+      (row.seq !== expectedSequence && state.textIndex.sparseAfter === null)
+    ) {
       const cause = expectedSequence === FIRST_JOURNAL_SEQUENCE ? 'no-epoch-row' : 'sequence-gap'
       damage = { sequence: expectedSequence, cause }
       return true
     }
-    expectedSequence += 1
+    expectedSequence = row.seq + 1
     if (row.seq === FIRST_JOURNAL_SEQUENCE && row.kind !== 'epoch') {
       damage = { sequence: row.seq, cause: 'no-epoch-row' }
       return true
     }
     anchored = true
-    applyJournalRow(state, row, entry.ts)
+    try {
+      applyJournalRow(state, row, entry.ts)
+    } catch {
+      damage = { sequence: row.seq, cause: 'unparseable-row' }
+    }
     return true
   }
   const finish = (): JournalLoad => {
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
-    // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
+    // An epoch with no rows at all holds nothing to lose: the open founds a fresh one over it.
+    for (const sequence of state.replayTextDebt?.values() ?? []) {
+      if (!damage || sequence < damage.sequence) {
+        damage = { sequence, cause: 'unparseable-row' }
+      }
+    }
+    state.replayTextDebt = null
     const found =
       damage ??
       (anchored || empty
@@ -120,11 +142,29 @@ export function readJournalRowsAfterCursor(
 ): JournalRow[] {
   const rows: JournalRow[] = []
   for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
-    const parsed = parseJournalRow(stored.rowJson)
-    if (!parsed.ok) {
+    const parsed = parseJournalRow(stored.rowJson, true)
+    if (!parsed.ok || parsed.row.seq !== stored.seq || parsed.row.epoch !== epoch) {
       break
     }
     rows.push(parsed.row)
   }
   return rows
+}
+
+export function preserveJournalLiveText(
+  state: JournalReducerState,
+  loaded: JournalLoad
+): JournalReducerState {
+  if (state.epoch === loaded.state.epoch) {
+    for (const [key, policy] of state.textPolicy) {
+      if (
+        isDeepStrictEqual(state.items.get(key), loaded.state.items.get(key)) &&
+        state.itemFences.get(key) === loaded.state.itemFences.get(key) &&
+        state.itemExecutionOwners.get(key) === loaded.state.itemExecutionOwners.get(key)
+      ) {
+        loaded.state.textPolicy.set(key, policy)
+      }
+    }
+  }
+  return loaded.state
 }

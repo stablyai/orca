@@ -525,9 +525,9 @@ it('retains exit ownership through kept reattach and final-tail failure recovery
     event.type === 'ended' ? lateEvent.promise.then(() => handle(event)) : handle(event)
   )
   const journal = host['sessions'].get(SESSION)!.journal
-  const append = journal.appendResolvedItem.bind(journal)
-  vi.spyOn(journal, 'appendResolvedItem').mockImplementationOnce(async (resolve, options) => {
-    await append(resolve, options)
+  const append = journal.appendSteps.bind(journal)
+  vi.spyOn(journal, 'appendSteps').mockImplementationOnce(async (steps) => {
+    await append(steps)
     now += 30_000
     throw new Error('final journal write acknowledgement lost')
   })

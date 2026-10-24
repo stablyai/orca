@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
 import {
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
@@ -142,6 +143,23 @@ describe('callStructuredAgentSession timeouts', () => {
     await callStructuredAgentSession(target, 'agentSession.modelCatalog', params)
     const [, , , options] = mocks.call.mock.calls[0]!
     expect(options.timeoutMs).toBeGreaterThan(80_000)
+  })
+
+  it('routes history to its selected host without changing the journal request', async () => {
+    const params = { sessionId: 'session-1', direction: 'tail', limit: 40 }
+    const page = { ok: true, page: { items: [] } }
+    mocks.call.mockResolvedValue(page)
+    const remote = runtimeRpcTargetForAuthorityKey('runtime:env-1')
+    const local = runtimeRpcTargetForAuthorityKey('local')
+    expect(runtimeRpcTargetForAuthorityKey('ssh:box')).toBeNull()
+    if (!remote || !local) {
+      throw new Error('missing fixture runtime target')
+    }
+    expect(await callStructuredAgentSession(remote, 'agentSession.history', params)).toBe(page)
+    expect(mocks.call).toHaveBeenLastCalledWith(target, 'agentSession.history', params)
+    expect(await callStructuredAgentSession(local, 'agentSession.history', params)).toBe(page)
+    expect(mocks.call).toHaveBeenLastCalledWith(local, 'agentSession.history', params)
+    expect(mocks.supportsCapability).not.toHaveBeenCalled()
   })
 
   it('leaves other reads on the default timeout', async () => {

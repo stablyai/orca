@@ -1,3 +1,4 @@
+import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import type {
   AgentJournalStatusItem,
   AgentJournalTurnScope
@@ -221,4 +222,19 @@ export function appendUnmodeledContent(
       ) || changed
   }
   return changed
+}
+
+export function publishClaudeFrameActivity(
+  sink: StructuredAgentSessionEventSink,
+  turnId: string | null,
+  kind: string,
+  payload: unknown
+): void {
+  if (turnId === null) {
+    return
+  }
+  const text = claudeProviderFrameActivity(kind, payload)
+  if (text !== undefined) {
+    sink.setActivity?.(text ? { turnId, text } : null)
+  }
 }

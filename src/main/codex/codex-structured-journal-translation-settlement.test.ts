@@ -726,7 +726,7 @@ describe('codex journal translation', () => {
     ])
   })
 
-  it('checkpoints long streams geometrically and flushes the final snapshot', () => {
+  it('publishes each text window throughout a long stream and flushes the final snapshot', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
     translator.handle(
@@ -739,7 +739,7 @@ describe('codex journal translation', () => {
     }
     translator.flush()
 
-    expect(tap.rows.length).toBeLessThan(40)
+    expect(tap.rows.length).toBe(512)
     expect(tap.rows.at(-1)?.body).toMatchObject({
       blocks: [{ type: 'text', text: 'x'.repeat(512) }]
     })

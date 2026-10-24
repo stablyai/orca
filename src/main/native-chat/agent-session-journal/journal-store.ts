@@ -1,4 +1,7 @@
-// Each session owns its fold and queue; all statements use the host's shared database connection.
+import { createJournalItemReaders } from './journal-item-readers'
+import type { JournalTextPruner } from './journal-text-pruner'
+// Append-only journal store for one agent session. It owns the chat's fold and write queue, and no
+// connection: every statement goes through the host's one journal database.
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
@@ -8,23 +11,17 @@ import type {
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
   AgentJournalThreadGoal,
-  AgentJournalTurnLifecycle,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
-import {
-  newestStructuredAgentSessionTurnBySequence,
-  runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/structured-agent-session-live-turn'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
-import { journalRowsAfterReader, type JournalLoad } from './journal-open'
+import { journalRowsAfterReader, preserveJournalLiveText } from './journal-open'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
@@ -41,7 +38,6 @@ import type {
   AgentSessionJournalOptions,
   JournalAppendResult,
   JournalItemAppendOptions,
-  JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
   JournalPlannedLifecycleBatchInput,
   JournalReadSince,
@@ -61,7 +57,6 @@ import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-wr
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
-import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
@@ -74,6 +69,7 @@ import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal
 export { AgentSessionJournalError } from './journal-write-guards'
 
 export class AgentSessionJournal {
+  private readonly textPruner: JournalTextPruner
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
   private readonly now: () => number
@@ -115,20 +111,22 @@ export class AgentSessionJournal {
       readOnly: () => this.database.readOnly,
       cursor: this.cursor,
       adopt: (loaded) => {
-        this.adoptLoadedJournal(loaded)
+        this.state = preserveJournalLiveText(this.state, loaded)
         this.onCommitted?.()
       },
-      commit: (rows, savedAt) => {
+      commit: (rows, savedAt, adopt) => {
         for (const row of rows) {
           applyJournalRow(this.state, row, savedAt)
         }
+        adopt?.()
         this.onCommitted?.(rows)
       },
       notifyCommitted: () => this.onCommitted?.([]),
       journal: () => this,
-      enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
+      enqueue: (build, receipt, adopt) => this.rowWriter.enqueue(build, receipt, adopt)
     })
     this.rowWriter = collaborators.rowWriter
+    this.textPruner = collaborators.textPruner
     this.epochController = collaborators.epochController
     this.itemAppender = collaborators.itemAppender
     this.lifecycleBatchAppender = collaborators.lifecycleBatchAppender
@@ -166,10 +164,12 @@ export class AgentSessionJournal {
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
+    this.textPruner.schedule()
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
   close(): Promise<void> {
+    this.textPruner.close()
     this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
@@ -190,36 +190,21 @@ export class AgentSessionJournal {
   publicRead = () =>
     this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
 
-  /** Visit without allocating/sorting a snapshot. */
-  visitItems = (
-    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
-  ): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body)
-    }
-  }
+  private readonly itemReaders = createJournalItemReaders(() => this.state)
 
-  itemBody = (itemId: string): AgentJournalItemBody | null =>
-    this.state.items.get(itemId)?.body ?? null
+  visitItems = this.itemReaders.visitItems
+  itemBody = this.itemReaders.itemBody
+  hasUnwitnessedText = this.itemReaders.hasUnwitnessedText
+  stoppedHistoryCarried = this.itemReaders.stoppedHistoryCarried
+  textSource = this.itemReaders.textSource
+  textSourceByRaw = this.itemReaders.textSourceByRaw
+  textSources = this.itemReaders.textSources
+  retireText = this.itemReaders.retireText
+  item = this.itemReaders.item
+  visitItemsWithLinkage = this.itemReaders.visitItemsWithLinkage
 
-  /** Host-only stopped-history IDs carried by each send. */
-  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    this.state.stoppedHistoryCarried
-
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
-
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
-
-  /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
-
-  newestTurn = (): AgentJournalTurnLifecycle | null =>
-    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
+  runningTurn = this.itemReaders.runningTurn
+  newestTurn = this.itemReaders.newestTurn
 
   threadGoalSource = (): JournalThreadGoalSource =>
     journalThreadGoalSource(this.state.items.values())
@@ -234,14 +219,9 @@ export class AgentSessionJournal {
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
-  /** Prefer later execution ownership for reusable children, otherwise creation provenance. */
-  itemFence = (itemId: string): number | undefined => journalItemExecutionFence(this.state, itemId)
-
-  /** Preserve both provenance fields during rebuild. */
-  itemProvenance = (itemId: string) => journalItemProvenance(this.state, itemId)
-
-  /** Excludes client actions and recovery bookkeeping. */
-  lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
+  itemFence = this.itemReaders.itemFence
+  itemProvenance = this.itemReaders.itemProvenance
+  lastProviderActivityAt = this.itemReaders.lastProviderActivityAt
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
@@ -263,9 +243,20 @@ export class AgentSessionJournal {
   }
 
   readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
-    const { sessionId } = this.identity
-    const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    return readJournalSince({ state: this.state, rowsAfter }, cursor, () => this.cursor())
+    return readJournalSince(
+      {
+        state: this.state,
+        rowsAfter: journalRowsAfterReader(
+          this.database.db,
+          this.identity.sessionId,
+          this.state.epoch,
+          limit
+        ),
+        sparseAfter: this.state.textIndex.sparseAfter
+      },
+      cursor,
+      this.cursor
+    )
   }
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */
@@ -367,9 +358,5 @@ export class AgentSessionJournal {
     ...args: Parameters<JournalEpochController['replace']>
   ): Promise<AgentJournalCursor> {
     return this.epochController.replace(...args)
-  }
-
-  private adoptLoadedJournal(loaded: JournalLoad): void {
-    this.state = loaded.state
   }
 }

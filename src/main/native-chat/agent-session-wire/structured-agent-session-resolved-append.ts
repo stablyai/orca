@@ -15,7 +15,8 @@ type ResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItem
 
 /** Resolve at execution in the journal queue, seeing prior writes and no later ones. */
 export function createStructuredAgentSessionResolvedAppend(
-  queue: StructuredAgentSessionSinkQueue
+  queue: StructuredAgentSessionSinkQueue,
+  hold: (bytes: number) => { install: () => void; release: () => void }
 ): Required<
   Pick<
     StructuredAgentSessionEventSink,
@@ -35,6 +36,7 @@ export function createStructuredAgentSessionResolvedAppend(
     queue.submit(
       {
         bytes: reservedBytes,
+        ...hold(reservedBytes),
         ...(input.lifecycle ? { lifecycle: true } : {}),
         run: async (bound) => {
           const landed = await bound.journal.appendResolvedItem(
@@ -50,7 +52,7 @@ export function createStructuredAgentSessionResolvedAppend(
               }
               return resolved
             },
-            structuredAgentSessionJournalAppendOptions(bound.fence, options)
+            { ...structuredAgentSessionJournalAppendOptions(bound.fence, options), reservedBytes }
           )
           if (landed !== null && input.publish) {
             bound.publish()
@@ -63,7 +65,8 @@ export function createStructuredAgentSessionResolvedAppend(
   const identityOnly = (publish: boolean) =>
     ((identitySizeBound, body, resolveIdentity, options) =>
       submit(
-        estimateStructuredAgentSessionItemBytes(identitySizeBound, body) + (publish ? 1 : 0),
+        estimateStructuredAgentSessionItemBytes(identitySizeBound, body, options) +
+          (publish ? 1 : 0),
         (journal) => {
           const identity = resolveIdentity(journal)
           return identity === null ? null : { identity, body }
@@ -80,7 +83,7 @@ export function createStructuredAgentSessionResolvedAppend(
       submit(reservedBytes + 1, resolve, options, { publish: true, overflow: ITEM_OVERFLOW }),
     tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) =>
       submit(
-        estimateStructuredAgentSessionItemBytes(identitySizeBound, body),
+        estimateStructuredAgentSessionItemBytes(identitySizeBound, body, options),
         (journal) => {
           const identity = resolveIdentity(journal)
           return identity === null ? null : { identity, body }

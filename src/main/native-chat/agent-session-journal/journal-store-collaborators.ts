@@ -23,6 +23,7 @@ import type { JournalWriteBody } from './journal-write-queue'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
+import { JournalTextPruner } from './journal-text-pruner'
 
 export type JournalStoreHost = {
   /** Notify readers of durable draft-only transactions that append no journal row. */
@@ -36,15 +37,17 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
-  commit: (rows: readonly JournalRow[], savedAt: number) => void
+  commit: (rows: readonly JournalRow[], savedAt: number, adopt?: () => void) => void
   journal: () => AgentSessionJournal
   enqueue: (
     build: (seq: number, ts: number) => JournalRow,
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    adopt?: (row: JournalRow) => void
   ) => Promise<JournalRow>
 }
 
 export type JournalStoreCollaborators = {
+  textPruner: JournalTextPruner
   rowWriter: JournalRowWriter
   epochController: JournalEpochController
   itemAppender: JournalItemAppender
@@ -87,6 +90,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ...(previous ? { previous } : {}),
       now: host.now()
     })
+  let textPruner: JournalTextPruner | undefined
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
     now: host.now,
@@ -96,8 +100,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     commit: host.commit,
+    afterCommit: (rows) => textPruner?.committed(rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
   })
+  textPruner = new JournalTextPruner(host)
   const queuedMessages = new JournalQueuedMessages({
     sessionId: host.identity.sessionId,
     serialize: host.serialize,
@@ -115,6 +121,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     enqueueRows: (plan) => rowWriter.enqueueRows(plan)
   })
   return {
+    textPruner,
     epochController,
     queuedMessages,
     stopMarks: new JournalStopMarks({ state: host.state }),
@@ -143,7 +150,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     stepWriter: new JournalStepWriter({
       serialize: host.serialize,
       state: host.state,
-      writeRows: (plan) => rowWriter.writeRows(plan),
+      writeRows: (plan, receipt, receiptRow, adopt) =>
+        rowWriter.writeRows(plan, receipt, receiptRow, adopt),
       planSettlement: (batch) => lifecycleBatchAppender.planResolved(batch)
     })
   }

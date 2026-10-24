@@ -29,7 +29,7 @@ export function planProviderTimelineBarrier(
   const replaced = decision.closes ? streams.get(decision.closes) : undefined
   streams.planFlush(plan, replaced)
   if (replaced) {
-    streams.planRelease(plan, (stream) => stream === replaced)
+    streams.planRelease(plan, (stream) => stream === replaced, false)
   }
   if (event.type === 'session.ended') {
     streams.planRelease(plan, () => true)
@@ -80,7 +80,7 @@ export function planProviderTimelineWrites(
       {
         reservedBytes: write.reservedBytes,
         resolve: write.resolve,
-        options: write.options
+        options: { ...write.options, ...(decision.closes ? { retireText: true as const } : {}) }
       },
       write.lifecycle
     )

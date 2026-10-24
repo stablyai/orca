@@ -6,7 +6,10 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-jou
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
+import {
+  projectStructuredItemsToNativeChat,
+  activeStructuredAgentSessionTurnId
+} from '../../../../shared/structured-agent-session-projection'
 import {
   hostTestAttachParams,
   hostTestMessage,
@@ -93,6 +96,74 @@ afterEach(async () => {
 })
 
 describe('opening a chat at rest (P2-01)', () => {
+  it('reads retired new-format text through history, messages, status and record consumers after restart', async () => {
+    await foundRestTestChat(rig)
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const identity = {
+      provider: 'codex',
+      threadId: REST_TEST_THREAD,
+      turnId: 'turn-1',
+      ordinal: 900
+    } as const
+    const options = { fence: 1, ownerFence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    const body = { ...hostTestMessage(''), role: 'assistant' as const }
+    await journal.appendItem(identity, body, {
+      ...options,
+      streamText: { operation: 'start', field: 0, baseLength: 0, suffix: 'saved ' }
+    })
+    rig.clock.now += 10
+    await journal.appendItem(identity, body, {
+      ...options,
+      streamText: { operation: 'append', field: 0, baseLength: 6, suffix: 'reply' }
+    })
+    const before = liveTestJournalRows(openTestJournalHostDatabase(rig.root).db, SESSION)
+    const delta = before.find((row) => JSON.parse(row.rowJson).kind === 'text-delta')!
+    expect(before.some((row) => JSON.parse(row.rowJson).v === 5)).toBe(true)
+    await journal.appendItem(
+      identity,
+      { ...body, blocks: [{ type: 'text', text: 'saved reply' }] },
+      options
+    )
+    expect(
+      liveTestJournalRows(openTestJournalHostDatabase(rig.root).db, SESSION).some(
+        (row) => row.seq === delta.seq
+      )
+    ).toBe(false)
+    await rig.store.replaceSessionOptions({
+      sessionId: SESSION,
+      fence: 1,
+      options: { model: 'gpt-saved' },
+      now: rig.clock.now
+    })
+    const record = rig.store.getRecord(SESSION)
+    await rig.restart()
+    setStructuredAgentSessionHost(rig.host)
+    rig.adapter.acquire.mockClear()
+
+    const history = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history.ok).toBe(true)
+    const [rpc] = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' })
+    expect(rpc).toMatchObject({ ok: true, result: history })
+    expect(projectStructuredItemsToNativeChat(history.page.items)).toContainEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'saved reply' }]
+      })
+    )
+    expect(history.providerSession).toEqual({ key: 'session_id', id: REST_TEST_THREAD })
+    expect(rig.host.readStatusSummary(SESSION)).toMatchObject({
+      sessionId: SESSION,
+      agent: 'codex',
+      workspaceId: record!.location.workspaceId,
+      model: 'gpt-saved',
+      providerSession: history.providerSession
+    })
+    const [owner] = await call('agentSession.handoffStatus', { sessionId: SESSION })
+    expect(owner).toMatchObject({ ok: true, result: { owner: 'native', phase: 'idle' } })
+    expect(rig.store.getRecord(SESSION)?.providerHandleChain).toEqual(record!.providerHandleChain)
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  })
+
   it('reads, subscribes and answers everything without starting an agent', async () => {
     await restingChat()
     expect(rig.host.hasSession(SESSION)).toBe(false)

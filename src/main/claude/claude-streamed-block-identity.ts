@@ -1,3 +1,7 @@
+import type { createClaudeStreamedThinking } from './claude-streamed-thinking'
+import type { ClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import type { ClaudeOpenTurn } from './claude-open-turn'
+import { claudeStreamTurnSource, claudeStreamTurnStartSource } from './claude-turn-opening'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 
@@ -125,4 +129,30 @@ export function createClaudeStreamedBlockRegistry(
     },
     clear: () => messages.clear()
   }
+}
+
+export function observeClaudeStreamedText(
+  streamedBlocks: ReturnType<typeof createClaudeStreamedBlockRegistry>,
+  streamedThinking: Pick<ReturnType<typeof createClaudeStreamedThinking>, 'observe'>,
+  streamedText: Pick<ClaudeStreamedTextCheckpoints, 'append'>,
+  turn: Pick<ClaudeOpenTurn, 'ensureOpen'>,
+  hold: (delta: ClaudeStreamedTextDelta, retry: () => boolean) => void,
+  message: Record<string, unknown>,
+  observedAt: number
+): boolean {
+  const delta = streamedBlocks.observe(message, observedAt)
+  const thinking = streamedThinking.observe(message, observedAt)
+  // `message_start` is the provider's turn boundary. Keep the first content
+  // delta as a compatibility fallback for streams that omit it.
+  const source =
+    delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+  turn.ensureOpen(message, source, observedAt)
+  if (delta) {
+    const retry = () =>
+      streamedText.append(delta.identity, delta.text, delta.parentToolUseId, delta.startedAt)
+    if (!retry()) {
+      hold(delta, retry)
+    }
+  }
+  return delta !== null || thinking
 }

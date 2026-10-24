@@ -24,7 +24,30 @@ export function readCodexThreadItem(value: unknown): CodexThreadItem | null {
     : null
 }
 
-/** Separate live/history fallback namespaces because non-message provider IDs can change on resume. */
+/**
+ * Durable identity for a Codex item, or null for one that has none.
+ *
+ * Non-message items fall back to the `orca` namespace keyed by the Codex item
+ * id. That id is unstable across resume, so those rows are live-session detail
+ * that a recovered journal simply will not contain — which is correct: Codex
+ * itself does not persist them either.
+ */
+export function codexLiveTextKey(
+  threadId: string,
+  turnId: string | null,
+  item: Pick<CodexThreadItem, 'id' | 'type'>,
+  historyImport?: true
+): string {
+  return JSON.stringify([
+    'codex',
+    historyImport ? 'history' : 'live',
+    threadId,
+    turnId,
+    item.type,
+    item.id
+  ])
+}
+
 export function codexItemIdentity(input: {
   threadId: string
   turnId: string | null

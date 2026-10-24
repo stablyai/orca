@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
@@ -82,6 +83,7 @@ describe('OpenCode recordings through the adapter', () => {
       (row) => row.body.kind === 'tool-call' && row.body.exitCode !== undefined
     )
     expect(shell?.body).toMatchObject({ state: 'completed', exitCode: 0 })
+    await assertCapturedText(rig, 'opencode-v1-tool')
   })
 
   it('a rejected permission fails its tool and the turn still ends', async () => {
@@ -146,6 +148,7 @@ describe('OpenCode 2 recordings through the adapter', () => {
       exitCode: 0,
       output: { head: 'TOOL-OK\n', truncated: false }
     })
+    await assertCapturedText(rig, 'opencode-v2-tool')
   })
 
   // OpenCode 2.x ends denied-permission turns as cancelled, unlike 1.x.
@@ -173,3 +176,43 @@ describe('OpenCode 2 recordings through the adapter', () => {
     expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
   })
 })
+
+async function assertCapturedText(rig: AcpAdapterRig, name: string) {
+  const expected = new Map<string, { role: string; text: string }>()
+  for (const frame of await readAcpFixture(name)) {
+    const parsed = z
+      .object({
+        update: z.object({
+          sessionUpdate: z.enum(['agent_message_chunk', 'agent_thought_chunk']),
+          messageId: z.string(),
+          content: z.object({ type: z.literal('text'), text: z.string() })
+        })
+      })
+      .safeParse(frame.message.params)
+    if (!parsed.success) {
+      continue
+    }
+    const update = parsed.data.update
+    const key = `${update.sessionUpdate}:${update.messageId}`
+    const value = expected.get(key) ?? {
+      role: update.sessionUpdate === 'agent_message_chunk' ? 'assistant' : 'reasoning',
+      text: ''
+    }
+    value.text += update.content.text
+    expected.set(key, value)
+  }
+  expect(
+    (await rowsOf(rig, 'message')).flatMap((row) =>
+      row.body.kind === 'message' && row.body.role !== 'user'
+        ? [
+            {
+              role: row.body.role,
+              text: row.body.blocks
+                .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+                .join('')
+            }
+          ]
+        : []
+    )
+  ).toEqual([...expected.values()])
+}

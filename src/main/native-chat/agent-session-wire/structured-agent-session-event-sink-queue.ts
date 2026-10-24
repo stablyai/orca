@@ -14,6 +14,8 @@ import { StructuredAgentSessionFinalTailReservation } from './structured-agent-s
 
 export type StructuredAgentSessionSinkOperation = {
   sequence: number
+  install?: () => void
+  release?: () => void
   bytes: number
   lifecycleBytes?: number
   lifecycle?: boolean
@@ -198,6 +200,7 @@ export class StructuredAgentSessionSinkQueue {
     this.queuedOperations = nextOperations
     this.lifecycleQueuedBytes = nextLifecycleBytes
     this.lifecycleQueuedOperations = nextLifecycleOperations
+    accepted.install?.()
     if (this.target) {
       this.handOver(accepted, this.target)
     } else {
@@ -243,6 +246,7 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   private release(operation: Admitted): void {
+    operation.release?.()
     operation.releaseFinalTail?.()
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
     this.queuedOperations = Math.max(0, this.queuedOperations - 1)
