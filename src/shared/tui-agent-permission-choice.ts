@@ -28,6 +28,8 @@ export type AgentPermissionGlobalSettings = {
   agentPermissionDefault?: AgentPermissionChoice
   /** Agents given their own permission instead of the all-agents one. */
   agentPermissionOverrides?: Partial<Record<TuiAgent, AgentPermissionChoice>>
+  /** One-shot guard for leaving DSH on its own permission when it joins Agent Permissions. */
+  dshAgentPermissionMigrated?: boolean
 }
 
 export function isAgentPermissionChoice(value: unknown): value is AgentPermissionChoice {

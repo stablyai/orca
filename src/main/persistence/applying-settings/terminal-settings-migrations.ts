@@ -5,6 +5,10 @@ import {
   normalizeDesktopTerminalScrollbackRows
 } from '../../../shared/terminal-scrollback-policy'
 import {
+  normalizeAgentPermissionOverrides,
+  resolveAgentPermission
+} from '../../../shared/tui-agent-permission-choice'
+import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
@@ -212,4 +216,34 @@ export function migrateAgentYoloDefaults(
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true
   }
+}
+
+type DshAgentPermissionSettings = Partial<
+  Pick<
+    GlobalSettings,
+    'agentPermissionDefault' | 'agentPermissionOverrides' | 'dshAgentPermissionMigrated'
+  >
+>
+
+/**
+ * DSH joined the permission recipes after typed profiles were saved. Full access is the
+ * all-agents choice, so without this marker the upgrade would silently widen DSH; old profiles
+ * keep its own settings instead. Fresh profiles carry the marker and follow the choice.
+ */
+export function migrateDshAgentPermission(
+  settings: DshAgentPermissionSettings | undefined,
+  typedProfile: boolean
+): Pick<GlobalSettings, 'agentPermissionOverrides' | 'dshAgentPermissionMigrated'> {
+  const agentPermissionOverrides = normalizeAgentPermissionOverrides(
+    settings?.agentPermissionOverrides
+  )
+  if (
+    typedProfile &&
+    settings?.dshAgentPermissionMigrated !== true &&
+    !Object.hasOwn(agentPermissionOverrides, 'dsh') &&
+    resolveAgentPermission('dsh', settings).choice === 'full-access'
+  ) {
+    agentPermissionOverrides.dsh = 'own'
+  }
+  return { agentPermissionOverrides, dshAgentPermissionMigrated: true }
 }

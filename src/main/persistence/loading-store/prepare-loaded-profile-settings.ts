@@ -16,7 +16,10 @@ import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-def
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
-import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import {
+  migrateAgentYoloDefaults,
+  migrateDshAgentPermission
+} from '../applying-settings/terminal-settings-migrations'
 import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
 import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
 import {
@@ -52,7 +55,8 @@ export type PreparedLoadedProfileSettings = {
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
   >
   /** The same launch profile with permissions moved into the stored choice; this is what's saved. */
-  migratedAgentPermission: ReturnType<typeof migrateAgentPermissionChoice>
+  migratedAgentPermission: ReturnType<typeof migrateAgentPermissionChoice> &
+    Pick<GlobalSettings, 'dshAgentPermissionMigrated'>
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
   loadedCompactWorktreeCards: boolean
@@ -150,7 +154,8 @@ export function prepareLoadedProfileSettings(
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
-  const migratedAgentPermission = migrateAgentPermissionChoice(
+  const typedProfile = hasTypedAgentPermission(parsed.settings)
+  const migratedAgentPermissionChoice = migrateAgentPermissionChoice(
     {
       ...migratedAgentYoloDefaults,
       agentPermissionDefault: parsed.settings?.agentPermissionDefault,
@@ -158,9 +163,21 @@ export function prepareLoadedProfileSettings(
     },
     process.platform
   )
+  const migratedAgentPermission = {
+    ...migratedAgentPermissionChoice,
+    ...migrateDshAgentPermission(
+      {
+        agentPermissionDefault: migratedAgentPermissionChoice.agentPermissionDefault,
+        agentPermissionOverrides: migratedAgentPermissionChoice.agentPermissionOverrides,
+        dshAgentPermissionMigrated: parsed.settings?.dshAgentPermissionMigrated
+      },
+      typedProfile
+    )
+  }
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
-    !hasTypedAgentPermission(parsed.settings) ||
+    !typedProfile ||
+    parsed.settings?.dshAgentPermissionMigrated !== true ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||

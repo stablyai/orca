@@ -229,6 +229,7 @@ export function buildDefaultSettings(args: {
     agentDefaultArgs: {},
     agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
+    dshAgentPermissionMigrated: true,
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: {},
     agentStatusHooksEnabled: true,

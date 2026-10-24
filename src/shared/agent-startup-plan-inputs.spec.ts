@@ -158,3 +158,57 @@ describe('a picked session option outranks configured launch arguments', () => {
     )
   })
 })
+
+describe('DSH permission env reaches every startup path', () => {
+  const fullAccess: AgentStartupSettings = {
+    agentPermissionDefault: 'full-access',
+    agentPermissionOverrides: {}
+  }
+
+  it.each([
+    ['darwin', false],
+    ['win32', false],
+    ['linux', true]
+  ] as const)('carries the pin for %s (remote: %s)', (platform, isRemote) => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'dsh',
+      settings: fullAccess,
+      platform,
+      isRemote,
+      shell: undefined
+    })
+    expect(inputs.agentEnv).toEqual({ DSH_PERMISSION_MODE: 'danger-full-access' })
+    expect(
+      buildAgentStartupPlan({
+        ...inputs,
+        prompt: '',
+        allowEmptyPromptLaunch: true
+      })?.env
+    ).toEqual({ DSH_PERMISSION_MODE: 'danger-full-access' })
+  })
+
+  it('sends no permission pin when DSH is on its own settings', () => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'dsh',
+      settings: { ...fullAccess, agentPermissionOverrides: { dsh: 'own' } },
+      platform: 'darwin',
+      isRemote: false,
+      shell: undefined
+    })
+    expect(inputs.agentEnv).toEqual({})
+  })
+
+  it('keeps unrelated user env beside the pin', () => {
+    const inputs = resolveAgentStartupPlanInputs({
+      agent: 'dsh',
+      settings: { ...fullAccess, agentDefaultEnv: { dsh: { DSH_TUI_THEME: 'dark' } } },
+      platform: 'darwin',
+      isRemote: false,
+      shell: undefined
+    })
+    expect(inputs.agentEnv).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access',
+      DSH_TUI_THEME: 'dark'
+    })
+  })
+})

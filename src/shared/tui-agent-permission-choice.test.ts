@@ -18,7 +18,11 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from './tui-agent-launch-defaults'
-import { applyAllAgentsPermission, resolveAgentPermission } from './tui-agent-permission-choice'
+import {
+  agentPermissionChoices,
+  applyAllAgentsPermission,
+  resolveAgentPermission
+} from './tui-agent-permission-choice'
 import { agentArgsSetPermission, migrateAgentPermissionChoice } from './tui-agent-permission-lift'
 
 const legacy = (
@@ -678,4 +682,55 @@ it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
     expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
     expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])
   }
+})
+
+describe('DSH reads Orca permissions through its launch env', () => {
+  it('offers own and full access, not modes DSH has no verified launch pin for', () => {
+    expect(agentPermissionChoices('dsh')).toEqual(['own', 'full-access'])
+  })
+
+  it('keeps a migrated legacy profile that stored an empty DSH env at own settings', () => {
+    const migrated = migrateAgentPermissionChoice(legacy({}, { dsh: {} }), 'linux')
+    expect(migrated.agentPermissionDefault).toBe('full-access')
+    expect(resolveAgentPermission('dsh', migrated).choice).toBe('own')
+    expect(resolveTuiAgentLaunchEnv('dsh', migrated)).toEqual({})
+  })
+
+  it('lifts the Orca full-access pin into the stored choice and keeps other entries', () => {
+    const migrated = migrateAgentPermissionChoice(
+      legacy({}, { dsh: { DSH_PERMISSION_MODE: 'danger-full-access', DSH_TUI_THEME: 'dark' } }),
+      'linux'
+    )
+    expect(resolveAgentPermission('dsh', migrated).choice).toBe('full-access')
+    expect(migrated.agentDefaultEnv.dsh).toEqual({ DSH_TUI_THEME: 'dark' })
+    expect(resolveTuiAgentLaunchEnv('dsh', migrated)).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access',
+      DSH_TUI_THEME: 'dark'
+    })
+  })
+
+  it('writes and removes the pin through the host permission mutation', () => {
+    const before: AgentLaunchSettingsSource = {
+      agentPermissionDefault: 'own',
+      agentPermissionOverrides: {},
+      agentDefaultEnv: { dsh: { DSH_TUI_THEME: 'dark' } }
+    }
+    const yolo = agentLaunchSettingsMutationUpdates(
+      before,
+      { type: 'permission', agent: 'dsh', choice: 'full-access' },
+      'darwin'
+    )
+    expect(resolveTuiAgentLaunchEnv('dsh', { ...before, ...yolo })).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access',
+      DSH_TUI_THEME: 'dark'
+    })
+    const own = agentLaunchSettingsMutationUpdates(
+      { ...before, ...yolo },
+      { type: 'permission', agent: 'dsh', choice: 'own' },
+      'darwin'
+    )
+    expect(resolveTuiAgentLaunchEnv('dsh', { ...before, ...yolo, ...own })).toEqual({
+      DSH_TUI_THEME: 'dark'
+    })
+  })
 })

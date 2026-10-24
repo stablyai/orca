@@ -8,7 +8,10 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { applyAgentPermissionMode } from '../../../shared/tui-agent-permissions'
 import { resolveAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 
 // Simulates a profile created before the dedicated Experimental switch was persisted.
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
@@ -304,5 +307,46 @@ describe('terminal default shell', () => {
       normalizeLegacyProfile({ terminalDefaultShell: '  /bin/zsh  ' }).terminalDefaultShell
     ).toBe('/bin/zsh')
     expect(normalizeLegacyProfile({ terminalDefaultShell: '   ' }).terminalDefaultShell).toBe('')
+  })
+})
+
+describe('DSH joining Agent Permissions', () => {
+  it('keeps an old typed profile on its own DSH settings instead of inheriting full access', () => {
+    const normalized = normalizeLegacyProfile({
+      agentYoloDefaultsMigrated: true,
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionDefault: 'full-access',
+      agentPermissionOverrides: {},
+      dshAgentPermissionMigrated: undefined
+    })
+
+    expect(normalized.dshAgentPermissionMigrated).toBe(true)
+    expect(normalized.agentPermissionOverrides?.dsh).toBe('own')
+    expect(resolveAgentPermission('dsh', normalized).choice).toBe('own')
+    expect(resolveTuiAgentLaunchEnv('dsh', normalized)).toEqual({})
+  })
+
+  it('keeps an explicit DSH full-access choice', () => {
+    const normalized = normalizeLegacyProfile({
+      agentPermissionDefault: 'full-access',
+      agentPermissionOverrides: { dsh: 'full-access' },
+      dshAgentPermissionMigrated: undefined
+    })
+
+    expect(resolveAgentPermission('dsh', normalized).choice).toBe('full-access')
+    expect(resolveTuiAgentLaunchEnv('dsh', normalized)).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access'
+    })
+  })
+
+  it('leaves a fresh profile following the all-agents full-access choice', () => {
+    const normalized = normalizeLegacyProfile({})
+
+    expect(normalized.dshAgentPermissionMigrated).toBe(true)
+    expect(resolveAgentPermission('dsh', normalized).choice).toBe('full-access')
+    expect(resolveTuiAgentLaunchEnv('dsh', normalized)).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access'
+    })
   })
 })

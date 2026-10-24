@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   resolvedTuiAgentArgsBypassPermissions,
   resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv,
   tuiAgentArgsBypassPermissions
 } from './tui-agent-launch-defaults'
-import { applyAgentPermissionMode, YOLO_TUI_AGENT_ARGS } from './tui-agent-permissions'
+import {
+  applyAgentPermissionMode,
+  YOLO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ENV
+} from './tui-agent-permissions'
 import { isTuiAgent } from './tui-agent-config'
 
 describe('tuiAgentArgsBypassPermissions', () => {
@@ -135,5 +140,48 @@ describe('resolveTuiAgentLaunchArgs', () => {
   it('adds no permission argument to OMP or OpenCode terminals', () => {
     expect(resolveTuiAgentLaunchArgs('omp', {})).toBe('')
     expect(resolveTuiAgentLaunchArgs('opencode', {})).toBe('')
+  })
+})
+
+describe('resolveTuiAgentLaunchEnv', () => {
+  it('gives an untouched DSH launch the default full-access pin', () => {
+    expect(resolveTuiAgentLaunchEnv('dsh', {})).toEqual(YOLO_TUI_AGENT_ENV.dsh)
+    expect(resolveTuiAgentLaunchEnv('dsh', { agentDefaultEnv: {} })).toEqual(YOLO_TUI_AGENT_ENV.dsh)
+  })
+
+  it('treats an explicitly empty DSH env as manual', () => {
+    expect(resolveTuiAgentLaunchEnv('dsh', { agentDefaultEnv: { dsh: {} } })).toEqual({})
+  })
+
+  it('adds and removes the pin for typed full access and own settings', () => {
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        agentPermissionDefault: 'full-access',
+        agentPermissionOverrides: {},
+        agentDefaultEnv: {}
+      })
+    ).toEqual(YOLO_TUI_AGENT_ENV.dsh)
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        agentPermissionDefault: 'full-access',
+        agentPermissionOverrides: { dsh: 'own' },
+        agentDefaultEnv: {}
+      })
+    ).toEqual({})
+  })
+
+  it('keeps unrelated user env and their own explicit permission pin', () => {
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        agentPermissionDefault: 'full-access',
+        agentDefaultEnv: { dsh: { DSH_TUI_THEME: 'dark' } }
+      })
+    ).toEqual({ DSH_PERMISSION_MODE: 'danger-full-access', DSH_TUI_THEME: 'dark' })
+    expect(
+      resolveTuiAgentLaunchEnv('dsh', {
+        agentPermissionDefault: 'full-access',
+        agentDefaultEnv: { dsh: { DSH_PERMISSION_MODE: 'workspace-write', DSH_TUI_THEME: 'dark' } }
+      })
+    ).toEqual({ DSH_PERMISSION_MODE: 'workspace-write', DSH_TUI_THEME: 'dark' })
   })
 })

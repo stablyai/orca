@@ -88,7 +88,10 @@ describe('tui agent permissions', () => {
     expect(
       resolveNonAutoAgentPermissionMode({
         agentDefaultArgs: { ...automatic.agentDefaultArgs, ...custom },
-        agentDefaultEnv: { goose: { GOOSE_MODE: 'custom' } }
+        agentDefaultEnv: {
+          goose: { GOOSE_MODE: 'custom' },
+          dsh: { DSH_PERMISSION_MODE: 'workspace-write' }
+        }
       })
     ).toBe('mixed')
   })
@@ -138,6 +141,7 @@ describe('tui agent permissions', () => {
     expect(result.agentDefaultArgs.claude).toBe('')
     expect(result.agentDefaultArgs.codex).toBe('--model gpt-5')
     expect(result.agentDefaultEnv.goose).toEqual({})
+    expect(result.agentDefaultEnv.dsh).toEqual({})
   })
 
   it('ignores custom arguments when summarizing the shared mode', () => {
@@ -203,5 +207,60 @@ describe('tui agent permissions', () => {
         agentEnv: YOLO_TUI_AGENT_ENV.goose
       })
     ).toBe('yolo')
+  })
+
+  it('covers DSH through the permission env its launcher reads', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'dsh',
+        agentArgs: '',
+        agentEnv: YOLO_TUI_AGENT_ENV.dsh
+      })
+    ).toBe('yolo')
+    expect(YOLO_TUI_AGENT_ENV.dsh).toEqual({
+      DSH_PERMISSION_MODE: 'danger-full-access'
+    })
+
+    const yolo = applyAgentPermissionMode({ mode: 'yolo' })
+    expect(yolo.agentDefaultEnv.dsh).toEqual(YOLO_TUI_AGENT_ENV.dsh)
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'dsh', agentEnv: yolo.agentDefaultEnv.dsh })
+    ).toBe('yolo')
+
+    const manual = applyAgentPermissionMode({ mode: 'manual', ...yolo })
+    expect(manual.agentDefaultEnv.dsh).toEqual({})
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'dsh', agentEnv: manual.agentDefaultEnv.dsh })
+    ).toBe('manual')
+  })
+
+  it('counts DSH in the shared permission summary', () => {
+    const envWithoutDsh = { ...YOLO_TUI_AGENT_ENV }
+    delete envWithoutDsh.dsh
+    expect(
+      resolveAgentPermissionModeSummary({
+        agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+        agentDefaultEnv: envWithoutDsh
+      })
+    ).toBe('mixed')
+    expect(
+      resolveAgentPermissionModeSummary({
+        agentDefaultArgs: YOLO_TUI_AGENT_ARGS,
+        agentDefaultEnv: YOLO_TUI_AGENT_ENV
+      })
+    ).toBe('yolo')
+  })
+
+  it('leaves custom DSH env alone when applying manual mode', () => {
+    const custom = { DSH_PERMISSION_MODE: 'workspace-write', DSH_TUI_THEME: 'dark' }
+    const result = applyAgentPermissionMode({
+      mode: 'manual',
+      agentDefaultEnv: { dsh: custom }
+    })
+
+    expect(result.agentDefaultEnv.dsh).toEqual(custom)
+    expect(
+      resolveTuiAgentPermissionMode({ agent: 'dsh', agentEnv: result.agentDefaultEnv.dsh })
+    ).toBe('mixed')
   })
 })
