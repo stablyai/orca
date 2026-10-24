@@ -32,6 +32,7 @@ import { pruneDeregisteredRepoUiResidue } from './repo-lifecycle-ui-residue'
 import { isWslMoveProjectSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { applyNewWindowsDriveProjectDefault } from '../../wsl/wsl-drive-project-new-default'
 
 // A paused WSL move keeps its local rows for a downgrade.
 function removeLocalRepoSession(
@@ -68,6 +69,10 @@ export class RepoLifecycleOperations {
   addRepo(repo: Repo): void {
     bumpLocalWorktreeScanGeneration(repo.id)
     getRepoOrderOperations(this).addRepo(repo)
+    const context = this[repoLifecycleOperationsContext]
+    if (applyNewWindowsDriveProjectDefault(context.runtime.state, repo)) {
+      scheduleSave(context.scheduling)
+    }
   }
 
   reorderRepos(orderedIds: string[]): boolean {
