@@ -70,8 +70,14 @@ export function rewriteWslDriveUncState(
       Object.assign(next, { [field]: rewriteWslDriveUncValue(state[field], rewriter) })
     }
   }
-  next.projects = withWindowsGit(next.projects, repoIds, scope.distro)
-  next.projectGroups = withConvertedGroupFolders(next, repoIds, folderWorkspaceIds, scope.distro)
+  next.projects = sameIfUnchanged(
+    next.projects,
+    withWindowsGit(next.projects, repoIds, scope.distro)
+  )
+  next.projectGroups = sameIfUnchanged(
+    next.projectGroups,
+    withConvertedGroupFolders(next, repoIds, folderWorkspaceIds, scope.distro)
+  )
   next.worktreeMeta = withPriorIds(next.worktreeMeta, worktreeIds, (id) => [id])
   if (next.worktreeMetaByIdentity) {
     next.worktreeMetaByIdentity = withPriorIds(
@@ -83,6 +89,11 @@ export function rewriteWslDriveUncState(
     )
   }
   return { state: next, worktreeIds }
+}
+
+/** Keeps the original array when no row changed, so an unchanged field is not written. */
+function sameIfUnchanged<T>(before: T[], after: T[]): T[] {
+  return after.every((row, index) => row === before[index]) ? before : after
 }
 
 function isStateField(field: string): field is keyof PersistedState {

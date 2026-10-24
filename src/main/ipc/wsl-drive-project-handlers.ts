@@ -6,6 +6,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { resolveLocalProjectRuntimeForProject } from '../local-project-runtime-resolution'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
@@ -20,10 +22,11 @@ export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
   'wslDriveProject:convert'
 ] as const
 
-export function registerWslDriveProjectHandlers(store: Store): void {
+export function registerWslDriveProjectHandlers(store: Store, runtime: OrcaRuntimeService): void {
   for (const channel of WSL_DRIVE_PROJECT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
+  registerWslDriveUncConversionHandlers(store, runtime)
   ipcMain.handle('wslDriveProject:preview', async (_event, projectId: unknown) =>
     previewWslDriveProjectWindowsGit(gatedDeps(store), requireId(projectId))
   )

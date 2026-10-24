@@ -11,6 +11,7 @@ export type AppRelaunchReason =
   | 'profile-transfer'
   | 'renderer-request'
   | 'windows-administrator'
+  | 'wsl-drive-conversion'
 
 export function relaunchApp(
   reason: AppRelaunchReason,
