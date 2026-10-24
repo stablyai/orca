@@ -19,7 +19,7 @@ export function useMobileRemoteDraftSubmit({
   sessionRef,
   setSession,
   setConflict,
-  setUncertain,
+  markUncertain,
   release,
   showToast
 }: {
@@ -29,7 +29,7 @@ export function useMobileRemoteDraftSubmit({
   sessionRef: RefObject<MobileRemoteDraftSession | null>
   setSession: (session: MobileRemoteDraftSession | null) => void
   setConflict: (conflict: MobileRemoteDraftConflict | null) => void
-  setUncertain: (uncertain: boolean) => void
+  markUncertain: (handle: string) => void
   release: (session: MobileRemoteDraftSession | null) => void
   showToast: (message: string, duration?: number) => void
 }) {
@@ -61,7 +61,7 @@ export function useMobileRemoteDraftSubmit({
           activeHandleRef.current === current.handle &&
           sessionRef.current?.epoch === current.epoch
         ) {
-          setUncertain(true)
+          markUncertain(current.handle)
           showToast('Result unknown — check the terminal before sending again', 2600)
         }
         return { applied: false }
@@ -89,7 +89,6 @@ export function useMobileRemoteDraftSubmit({
         release(current)
         setSession(null)
         setConflict(null)
-        setUncertain(false)
         showToast('Sent to the terminal', 1200)
         return { applied: true, status: 'submitted' }
       }
@@ -105,7 +104,7 @@ export function useMobileRemoteDraftSubmit({
         if (result.sourceToken) {
           setSession({ ...current, baseToken: result.sourceToken })
         }
-        setUncertain(true)
+        markUncertain(current.handle)
         showToast('Result unknown — check the terminal before sending again', 2600)
         return { applied: true, status: 'submit_unknown' }
       }
@@ -128,9 +127,9 @@ export function useMobileRemoteDraftSubmit({
       deviceTokenRef,
       release,
       sessionRef,
+      markUncertain,
       setConflict,
       setSession,
-      setUncertain,
       showToast
     ]
   )

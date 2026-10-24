@@ -46,11 +46,31 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
   } = scope
   const [session, setSession] = useState<MobileRemoteDraftSession | null>(null)
   const [conflict, setConflict] = useState<MobileRemoteDraftConflict | null>(null)
-  const [uncertain, setUncertain] = useState(false)
+  const [uncertainHandles, setUncertainHandles] = useState<ReadonlySet<string>>(new Set())
   const sessionRef = useRef<MobileRemoteDraftSession | null>(null)
   const inputRef = useRef(bufferedTerminalDraftState.input)
   inputRef.current = bufferedTerminalDraftState.input
   const loadSeqRef = useRef(0)
+  const markUncertain = useCallback((handle: string) => {
+    setUncertainHandles((current) => {
+      if (current.has(handle)) {
+        return current
+      }
+      const next = new Set(current)
+      next.add(handle)
+      return next
+    })
+  }, [])
+  const clearUncertain = useCallback((handle: string) => {
+    setUncertainHandles((current) => {
+      if (!current.has(handle)) {
+        return current
+      }
+      const next = new Set(current)
+      next.delete(handle)
+      return next
+    })
+  }, [])
   sessionRef.current = session
 
   const release = useCallback((target: MobileRemoteDraftSession | null) => {
@@ -151,7 +171,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       }
       setSession(next)
       setConflict(null)
-      setUncertain(false)
+      clearUncertain(handle)
       bufferedTerminalDraftState.setInput(result.text)
       showToast('Loaded terminal draft', 1200)
     },
@@ -187,7 +207,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       showToast('Load the terminal draft first', 1600)
       return
     }
-    if (uncertain) {
+    if (uncertainHandles.has(current.handle)) {
       showToast('Result unknown — check the terminal before saving again', 2200)
       return
     }
@@ -212,7 +232,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         activeHandleRef.current === current.handle &&
         sessionRef.current?.epoch === current.epoch
       ) {
-        setUncertain(true)
+        markUncertain(current.handle)
         showToast('Result unknown — check the terminal before retrying', 2600)
       }
       return
@@ -253,7 +273,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         : 'Could not save the draft',
       2400
     )
-  }, [bufferedTerminalDraftState.input, client, showToast, uncertain])
+  }, [bufferedTerminalDraftState.input, client, markUncertain, showToast, uncertainHandles])
 
   const submitRemoteDraft = useMobileRemoteDraftSubmit({
     client,
@@ -262,7 +282,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     sessionRef,
     setSession,
     setConflict,
-    setUncertain,
+    markUncertain,
     release,
     showToast
   })
@@ -272,17 +292,21 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     sessionRef,
     setSession,
     setConflict,
-    setUncertain,
+    clearUncertain,
     setInput: (value) => bufferedTerminalDraftState.setInput(value),
     input: bufferedTerminalDraftState.input,
     release,
     showToast
   })
 
+  const remoteDraftUncertain = session ? uncertainHandles.has(session.handle) : false
   return {
     remoteDraftSession: session,
     remoteDraftConflict: conflict,
-    remoteDraftUncertain: uncertain,
+    remoteDraftUncertain,
+    isRemoteDraftUncertain: (handle: string | null) =>
+      handle !== null && uncertainHandles.has(handle),
+    reloadUncertainDraft: () => void begin(false),
     loadRemoteDraft,
     saveRemoteDraft,
     submitRemoteDraft,

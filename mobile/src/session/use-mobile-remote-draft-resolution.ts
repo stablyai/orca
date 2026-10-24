@@ -9,7 +9,7 @@ export function useMobileRemoteDraftResolution({
   sessionRef,
   setSession,
   setConflict,
-  setUncertain,
+  clearUncertain,
   setInput,
   input,
   release,
@@ -19,7 +19,7 @@ export function useMobileRemoteDraftResolution({
   sessionRef: { current: MobileRemoteDraftSession | null }
   setSession: (session: MobileRemoteDraftSession | null) => void
   setConflict: (conflict: MobileRemoteDraftConflict | null) => void
-  setUncertain: (uncertain: boolean) => void
+  clearUncertain: (handle: string) => void
   setInput: (value: string) => void
   input: string
   release: (session: MobileRemoteDraftSession | null) => void
@@ -33,9 +33,9 @@ export function useMobileRemoteDraftResolution({
     setInput(conflict.text)
     setSession({ ...current, baseToken: conflict.sourceToken, remoteText: conflict.text })
     setConflict(null)
-    setUncertain(false)
+    clearUncertain(current.handle)
     showToast('Loaded the terminal version', 1400)
-  }, [conflict, sessionRef, setConflict, setInput, setSession, setUncertain, showToast])
+  }, [clearUncertain, conflict, sessionRef, setConflict, setInput, setSession, showToast])
 
   const keepConflictMine = useCallback(() => {
     const current = sessionRef.current
@@ -44,17 +44,20 @@ export function useMobileRemoteDraftResolution({
     }
     setSession({ ...current, baseToken: conflict.sourceToken })
     setConflict(null)
-    setUncertain(false)
+    clearUncertain(current.handle)
     showToast('Saving will overwrite the terminal draft', 1800)
-  }, [conflict, sessionRef, setConflict, setSession, setUncertain, showToast])
+  }, [clearUncertain, conflict, sessionRef, setConflict, setSession, showToast])
 
   const exitRemoteDraft = useCallback(() => {
-    release(sessionRef.current)
+    const current = sessionRef.current
+    release(current)
     setSession(null)
     setConflict(null)
-    setUncertain(false)
+    if (current) {
+      clearUncertain(current.handle)
+    }
     showToast('Stopped editing the terminal draft', 1400)
-  }, [release, sessionRef, setConflict, setSession, setUncertain, showToast])
+  }, [clearUncertain, release, sessionRef, setConflict, setSession, showToast])
 
   return { reloadConflict, keepConflictMine, exitRemoteDraft, input }
 }

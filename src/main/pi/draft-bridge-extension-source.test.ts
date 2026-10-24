@@ -166,7 +166,7 @@ describe('Pi draft bridge extension', () => {
     })
     expect(harness.editor.text).toBe('line    with tab')
 
-    harness.editor.text = 'already spaced'
+    harness.editor.text = 'already    spaced'
     const second = sendRequest(harness.dir, harness.token, { op: 'capture' })
     const secondCapture = await waitResponse(harness.dir, second.id)
     const normalizeToExisting = sendRequest(harness.dir, harness.token, {

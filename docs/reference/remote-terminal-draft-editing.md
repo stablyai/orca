@@ -88,7 +88,8 @@ rejected as `stale_lease`. The lease expires after five minutes without use.
 All coordinator operations for one PTY are serialized. A takeover therefore waits for an
 in-flight save instead of interleaving with it, overlapping submissions with the same
 `operationId` collapse to one Enter, and epochs are monotonic per PTY even after release. PTY
-disposal advances a generation fence; a capture or replace that finishes after disposal cannot
+disposal advances a generation fence captured when work is queued; queued work from before the
+disposal is rejected, and capture, replace, and Enter completions are rechecked before they may
 install a lease or cache a result for the replacement process.
 
 `terminal.draft.save` writes the whole text and does not press Enter.

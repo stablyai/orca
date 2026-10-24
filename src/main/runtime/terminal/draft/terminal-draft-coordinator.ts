@@ -1,11 +1,9 @@
 import type {
   TerminalDraftBeginResult,
   TerminalDraftClient,
-  TerminalDraftHolder,
   TerminalDraftSaveResult,
   TerminalDraftSubmitResult
 } from '../../../../shared/terminal-draft-contract'
-import type { PiDraftBridgePaths } from '../../../pi/draft-bridge-directory'
 import {
   createPiTerminalDraftDeps,
   type TerminalDraftBridgeDeps,
@@ -15,6 +13,7 @@ import { buildSubmitResult } from './terminal-draft-submit-result'
 import { TerminalDraftOperationCache } from './terminal-draft-operation-cache'
 import { settleDraftReplace } from './terminal-draft-settlement'
 import { TerminalDraftOperationGate } from './terminal-draft-operation-gate'
+import { prepareDraftEdit } from './terminal-draft-edit-preparation'
 
 const LEASE_TTL_MS = 5 * 60_000
 
@@ -24,10 +23,6 @@ type Lease = {
   clientType: 'desktop' | 'mobile'
   bridgeToken: string
   updatedAt: number
-}
-
-function holderOf(lease: Lease): TerminalDraftHolder {
-  return { clientId: lease.clientId, clientType: lease.clientType }
 }
 
 /**
@@ -46,17 +41,22 @@ export class TerminalDraftCoordinator {
     this.deps = { ...createPiTerminalDraftDeps(userDataPath), ...deps }
   }
 
-  private async beginLocked(input: {
-    ptyId: string
-    client: TerminalDraftClient
-    force?: boolean
-  }): Promise<TerminalDraftBeginResult> {
-    const generation = this.gate.generation(input.ptyId)
+  private async beginLocked(
+    input: {
+      ptyId: string
+      client: TerminalDraftClient
+      force?: boolean
+    },
+    generation: number
+  ): Promise<TerminalDraftBeginResult> {
     const paths = this.deps.readSession(input.ptyId)
     if (!paths) {
       return { ok: false, supported: false, reason: 'no_bridge' }
     }
     const capability = await this.deps.readCapability(paths)
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, supported: false, reason: 'not_live' }
+    }
     if (!capability.supported) {
       return {
         ok: false,
@@ -79,7 +79,7 @@ export class TerminalDraftCoordinator {
         adapter: 'pi-editor',
         processIncarnation: capability.processIncarnation,
         reason: 'locked',
-        holder: holderOf(active)
+        holder: { clientId: active.clientId, clientType: active.clientType }
       }
     }
     const sameHolder = active?.clientId === input.client.id
@@ -136,7 +136,11 @@ export class TerminalDraftCoordinator {
     client: TerminalDraftClient
     force?: boolean
   }): Promise<TerminalDraftBeginResult> {
-    return this.gate.runExclusive(input.ptyId, () => this.beginLocked(input))
+    return this.gate.runExclusive(input.ptyId, (generation) =>
+      generation === this.gate.generation(input.ptyId)
+        ? this.beginLocked(input, generation)
+        : { ok: false, supported: false, reason: 'not_live' }
+    )
   }
 
   release(input: {
@@ -144,7 +148,9 @@ export class TerminalDraftCoordinator {
     epoch: number
     client: TerminalDraftClient
   }): Promise<{ ok: boolean }> {
-    return this.gate.runExclusive(input.ptyId, () => this.releaseLocked(input))
+    return this.gate.runExclusive(input.ptyId, (generation) =>
+      generation === this.gate.generation(input.ptyId) ? this.releaseLocked(input) : { ok: false }
+    )
   }
 
   save(input: {
@@ -155,7 +161,11 @@ export class TerminalDraftCoordinator {
     text: string
     operationId: string
   }): Promise<TerminalDraftSaveResult> {
-    return this.gate.runExclusive(input.ptyId, () => this.saveLocked(input))
+    return this.gate.runExclusive(input.ptyId, (generation) =>
+      generation === this.gate.generation(input.ptyId)
+        ? this.saveLocked(input, generation)
+        : { ok: false, status: 'unknown', reason: 'disposed' }
+    )
   }
 
   submit(input: {
@@ -167,7 +177,11 @@ export class TerminalDraftCoordinator {
     operationId: string
     submitInput: TerminalDraftSubmitInput
   }): Promise<TerminalDraftSubmitResult> {
-    return this.gate.runExclusive(input.ptyId, () => this.submitLocked(input))
+    return this.gate.runExclusive(input.ptyId, (generation) =>
+      generation === this.gate.generation(input.ptyId)
+        ? this.submitLocked(input, generation)
+        : { ok: false, status: 'unknown', reason: 'disposed' }
+    )
   }
 
   dispose(ptyId: string): void {
@@ -182,31 +196,30 @@ export class TerminalDraftCoordinator {
     this.epochCounters.set(ptyId, next)
     return next
   }
-
-  isCurrentLease(ptyId: string, epoch: number, client: TerminalDraftClient): boolean {
-    const lease = this.leases.get(ptyId)
-    return (
-      !!lease &&
-      lease.epoch === epoch &&
-      lease.clientId === client.id &&
-      this.deps.now() - lease.updatedAt <= LEASE_TTL_MS
-    )
-  }
-
-  private async saveLocked(input: {
-    ptyId: string
-    client: TerminalDraftClient
-    epoch: number
-    baseToken: string
-    text: string
-    operationId: string
-  }): Promise<TerminalDraftSaveResult> {
-    const generation = this.gate.generation(input.ptyId)
+  private async saveLocked(
+    input: {
+      ptyId: string
+      client: TerminalDraftClient
+      epoch: number
+      baseToken: string
+      text: string
+      operationId: string
+    },
+    generation: number
+  ): Promise<TerminalDraftSaveResult> {
     const cached = this.operations.readSave(input.ptyId, input.operationId)
     if (cached) {
       return cached.ok ? { ...cached, replayed: true } : cached
     }
-    const prepared = await this.prepareEdit(input)
+    const prepared = await prepareDraftEdit({
+      deps: this.deps,
+      leases: this.leases,
+      leaseTtlMs: LEASE_TTL_MS,
+      edit: input
+    })
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, status: 'unknown', reason: 'disposed' }
+    }
     if ('result' in prepared) {
       this.operations.rememberSave(input.ptyId, input.operationId, prepared.result)
       return prepared.result
@@ -220,21 +233,31 @@ export class TerminalDraftCoordinator {
     return result
   }
 
-  private async submitLocked(input: {
-    ptyId: string
-    client: TerminalDraftClient
-    epoch: number
-    baseToken: string
-    text: string
-    operationId: string
-    submitInput: TerminalDraftSubmitInput
-  }): Promise<TerminalDraftSubmitResult> {
-    const generation = this.gate.generation(input.ptyId)
+  private async submitLocked(
+    input: {
+      ptyId: string
+      client: TerminalDraftClient
+      epoch: number
+      baseToken: string
+      text: string
+      operationId: string
+      submitInput: TerminalDraftSubmitInput
+    },
+    generation: number
+  ): Promise<TerminalDraftSubmitResult> {
     const cached = this.operations.readSubmit(input.ptyId, input.operationId)
     if (cached) {
       return cached.ok ? { ...cached, replayed: true } : cached
     }
-    const prepared = await this.prepareEdit(input)
+    const prepared = await prepareDraftEdit({
+      deps: this.deps,
+      leases: this.leases,
+      leaseTtlMs: LEASE_TTL_MS,
+      edit: input
+    })
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, status: 'unknown', reason: 'disposed' }
+    }
     if ('result' in prepared) {
       const failure =
         prepared.result.status === 'conflict'
@@ -262,34 +285,10 @@ export class TerminalDraftCoordinator {
     } catch (error) {
       result = buildSubmitResult({ replaced, error })
     }
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, status: 'unknown', reason: 'disposed' }
+    }
     this.operations.rememberSubmit(input.ptyId, input.operationId, result)
     return result
-  }
-
-  private async prepareEdit(input: {
-    ptyId: string
-    client: TerminalDraftClient
-    epoch: number
-  }): Promise<
-    { paths: PiDraftBridgePaths } | { result: Exclude<TerminalDraftSaveResult, { ok: true }> }
-  > {
-    const lease = this.leases.get(input.ptyId)
-    const paths = this.deps.readSession(input.ptyId)
-    if (
-      !lease ||
-      lease.epoch !== input.epoch ||
-      lease.clientId !== input.client.id ||
-      !paths ||
-      paths.session.token !== lease.bridgeToken ||
-      this.deps.now() - lease.updatedAt > LEASE_TTL_MS
-    ) {
-      return { result: { ok: false, status: 'stale_lease', epoch: lease?.epoch ?? 0 } }
-    }
-    const capability = await this.deps.readCapability(paths)
-    if (!capability.supported) {
-      return { result: { ok: false, status: 'unsupported', reason: capability.reason } }
-    }
-    lease.updatedAt = this.deps.now()
-    return { paths }
   }
 }

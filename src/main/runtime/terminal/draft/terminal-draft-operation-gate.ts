@@ -2,6 +2,7 @@
 export class TerminalDraftOperationGate {
   private readonly queues = new Map<string, Promise<unknown>>()
   private readonly generations = new Map<string, number>()
+  private readonly disposed = new Set<string>()
 
   generation(ptyId: string): number {
     return this.generations.get(ptyId) ?? 0
@@ -10,11 +11,14 @@ export class TerminalDraftOperationGate {
   dispose(ptyId: string): void {
     // The queue is not dropped: a pending task must still finish before a replacement PTY writes.
     this.generations.set(ptyId, this.generation(ptyId) + 1)
+    this.disposed.add(ptyId)
   }
 
-  async runExclusive<T>(ptyId: string, task: () => Promise<T> | T): Promise<T> {
+  async runExclusive<T>(ptyId: string, task: (generation: number) => Promise<T> | T): Promise<T> {
+    const generation = this.generation(ptyId)
     const previous = this.queues.get(ptyId) ?? Promise.resolve()
-    const next = previous.then(task, task)
+    const run = (): Promise<T> | T => task(generation)
+    const next = previous.then(run, run)
     const guarded = next.catch(() => {})
     this.queues.set(ptyId, guarded)
     try {
@@ -22,6 +26,10 @@ export class TerminalDraftOperationGate {
     } finally {
       if (this.queues.get(ptyId) === guarded) {
         this.queues.delete(ptyId)
+        // Why: all work for this generation drained, so the per-PTY fence no longer needs a slot.
+        if (this.disposed.delete(ptyId)) {
+          this.generations.delete(ptyId)
+        }
       }
     }
   }

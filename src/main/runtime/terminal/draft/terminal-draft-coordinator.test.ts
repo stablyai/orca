@@ -351,16 +351,58 @@ describe('TerminalDraftCoordinator', () => {
     while (!releaseCapture) {
       await new Promise((resolve) => setTimeout(resolve, 5))
     }
+    const queuedBeforeDispose = coordinator.begin({ ptyId: 'pty-1', client: desktop })
     coordinator.dispose('pty-1')
-    const second = coordinator.begin({ ptyId: 'pty-1', client: mobile })
+    const replacement = coordinator.begin({ ptyId: 'pty-1', client: mobile })
     releaseCapture()
     expect(await first).toMatchObject({ ok: false, supported: false, reason: 'not_live' })
-    const acquired = await second
+    expect(await queuedBeforeDispose).toMatchObject({
+      ok: false,
+      supported: false,
+      reason: 'not_live'
+    })
+    const acquired = await replacement
     expect(acquired).toMatchObject({ ok: true })
     if (!acquired.ok) {
-      throw new Error('expected second begin')
+      throw new Error('expected replacement begin')
     }
-    expect(coordinator.isCurrentLease('pty-1', acquired.epoch, mobile)).toBe(true)
+    expect(
+      await coordinator.save({
+        ptyId: 'pty-1',
+        client: mobile,
+        epoch: acquired.epoch,
+        baseToken: 'token:first\nsecond\nthird\nfourth',
+        text: 'replacement writes',
+        operationId: 'op-replacement'
+      })
+    ).toMatchObject({ ok: true, status: 'applied' })
+  })
+
+  it('fences a submit whose Enter settles after the PTY was disposed', async () => {
+    const harness = createHarness()
+    const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!begun.ok) {
+      throw new Error('expected begin')
+    }
+    let resolveEnter: (() => void) | undefined
+    const submitted = harness.coordinator.submit({
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: begun.sourceToken,
+      text: 'send then dispose',
+      operationId: 'op-dispose-enter',
+      submitInput: () =>
+        new Promise((resolve) => {
+          resolveEnter = () => resolve({ accepted: true })
+        })
+    })
+    while (!resolveEnter) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    harness.coordinator.dispose('pty-1')
+    resolveEnter()
+    expect(await submitted).toMatchObject({ ok: false, status: 'unknown', reason: 'disposed' })
   })
 
   it('does not reuse an epoch after release', async () => {

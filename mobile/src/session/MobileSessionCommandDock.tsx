@@ -36,6 +36,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     saveRemoteDraft,
     exitRemoteDraft,
     reloadConflict,
+    reloadUncertainDraft,
     keepConflictMine,
     autocompleteEnabled,
     liveInputCapture,
@@ -267,7 +268,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           editing={Boolean(remoteDraftSession)}
           changed={Boolean(remoteDraftConflict)}
           uncertain={remoteDraftUncertain}
-          onReload={reloadConflict}
+          onReload={remoteDraftUncertain ? reloadUncertainDraft : reloadConflict}
           onKeepMine={keepConflictMine}
           onExit={exitRemoteDraft}
         />
@@ -357,7 +358,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
               returnKeyType={remoteDraftSession ? 'default' : 'send'}
               blurOnSubmit={false}
-              // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
               // Why: in draft mode Return must insert a newline; the arrow is the only submit.
               onSubmitEditing={remoteDraftSession ? undefined : () => void handleSend()}
