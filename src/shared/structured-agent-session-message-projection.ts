@@ -54,23 +54,19 @@ export function structuredAgentSessionRejectedShownInPlace(
   commandItemIds: ReadonlySet<string>,
   clearSequences: readonly number[] = []
 ): Set<string> {
-  // Each body's copies, as positions in submission order. A withdrawn one is no failed copy, so it
-  // supersedes nothing.
-  const copies = new Map<string, { index: number; submittedAt: number }[]>()
+  const latest = new Map<string, number>()
+  const later = Array.from<number | undefined>({ length: submissions.length })
   const scopeKey = (submission: AgentJournalSubmission) =>
     JSON.stringify([
       agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
       submission.payloadFingerprint
     ])
-  for (const [index, submission] of submissions.entries()) {
+  for (let index = submissions.length - 1; index >= 0; index--) {
+    const submission = submissions[index]
+    const key = scopeKey(submission)
+    later[index] = latest.get(key)
     if (!dispatchWasWithdrawn(submission)) {
-      const copy = { index, submittedAt: submission.submittedAt }
-      const same = copies.get(scopeKey(submission))
-      if (same) {
-        same.push(copy)
-      } else {
-        copies.set(scopeKey(submission), [copy])
-      }
+      latest.set(key, Math.max(latest.get(key) ?? -Infinity, submission.submittedAt))
     }
   }
   const shown = new Set<string>()
@@ -86,10 +82,7 @@ export function structuredAgentSessionRejectedShownInPlace(
       // Collapses resends of a rejected message: past Retries resent it under a new id, and the
       // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
       // was known counts, so a repeat sent before it is kept.
-      (resolvedAt !== null &&
-        (copies.get(scopeKey(submission)) ?? []).some(
-          (copy) => copy.index > index && copy.submittedAt >= resolvedAt
-        ))
+      (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt)
     ) {
       continue
     }
