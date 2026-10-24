@@ -1,4 +1,5 @@
 import { AppState } from 'react-native'
+import { dismissConsumedTrayNotifications } from './consumed-notification-tray-dismissal'
 import {
   dismissInAppNotificationBanner,
   getCurrentInAppNotificationBanner
@@ -41,6 +42,7 @@ function dismissBannerMatchingViewingWorkspace(): void {
     })
   ) {
     dismissInAppNotificationBanner(banner.id)
+    void dismissConsumedTrayNotifications(banner)
   }
 }
 
@@ -62,6 +64,7 @@ export function setNotificationViewingWorkspace(
     inPageViewing = null
   }
   dismissBannerMatchingViewingWorkspace()
+  void dismissConsumedTrayNotifications(value)
 }
 
 export function setInPageNotificationViewingWorkspace(
@@ -70,6 +73,7 @@ export function setInPageNotificationViewingWorkspace(
   inPageViewing = value
   if (value !== null) {
     dismissBannerMatchingViewingWorkspace()
+    void dismissConsumedTrayNotifications(value)
   }
 }
 

@@ -11,6 +11,11 @@ import {
 } from './desktop-notification-channel'
 import type { DesktopNotificationDispatchEvent } from './desktop-notification-events'
 import {
+  dismissConsumedTrayNotifications,
+  dismissSupersededPaneTrayNotifications,
+  isNotificationTargetConsumed
+} from './consumed-notification-tray-dismissal'
+import {
   publishInAppNotificationBanner,
   type NotificationTone
 } from './in-app-notification-banner-store'
@@ -155,10 +160,12 @@ export async function presentSocketNotificationFallback(
   const hostName = host.name?.trim() || hostId
   const osNotificationIdentifier = payload.notificationId
     ? `${hostFingerprint}:${payload.notificationId}`
-    : undefined
+    : payload.worktreeId && payload.paneKey
+      ? `${hostFingerprint}:pane:${payload.worktreeId}:${payload.paneKey}`
+      : `${hostId}:${Date.now()}`
   if (AppState.currentState === 'active') {
     publishInAppNotificationBanner({
-      id: osNotificationIdentifier ?? `${hostId}:${Date.now()}`,
+      id: osNotificationIdentifier,
       tone,
       hostId,
       hostName,
@@ -173,6 +180,15 @@ export async function presentSocketNotificationFallback(
     })
   }
   await ensureDesktopNotificationChannel()
+  if (
+    isDisposed?.() ||
+    isNotificationTargetConsumed({
+      osNotificationIdentifier,
+      notificationId: payload.notificationId
+    })
+  ) {
+    return
+  }
   const Notifications = await import('expo-notifications')
   const channelId = notificationChannelId(preferences.sound, tone)
   const vibrationPattern = tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN
@@ -183,7 +199,7 @@ export async function presentSocketNotificationFallback(
         ? 'Terminal bell'
         : 'Task complete'
   await Notifications.scheduleNotificationAsync({
-    ...(osNotificationIdentifier ? { identifier: osNotificationIdentifier } : {}),
+    identifier: osNotificationIdentifier,
     content: {
       title: `${tone === 'urgent' ? '⚡ ' : '✅ '}${title || 'Orca'}`,
       subtitle: `${hostName} · ${subtitleLabel}`,
@@ -199,6 +215,33 @@ export async function presentSocketNotificationFallback(
     },
     trigger: Platform.OS === 'android' ? { channelId } : null
   })
+  if (
+    isNotificationTargetConsumed({
+      osNotificationIdentifier,
+      notificationId: payload.notificationId
+    })
+  ) {
+    await dismissConsumedTrayNotifications({
+      osNotificationIdentifier,
+      notificationId: payload.notificationId,
+      hostId,
+      hostFingerprint,
+      worktreeId: payload.worktreeId,
+      paneKey: payload.paneKey,
+      executionHost: payload.executionHost
+    })
+    return
+  }
+  await dismissSupersededPaneTrayNotifications(
+    {
+      hostId,
+      hostFingerprint,
+      worktreeId: payload.worktreeId,
+      paneKey: payload.paneKey,
+      executionHost: payload.executionHost
+    },
+    osNotificationIdentifier
+  )
 }
 
 export async function sendLocalNotificationDisplayTest(): Promise<void> {
@@ -211,17 +254,7 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
   const primaryHost = hosts[0]
   const hostName = primaryHost?.name?.trim() || 'Orca Desktop'
   const channelId = notificationChannelId(preferences.sound, 'complete')
-  if (AppState.currentState === 'active') {
-    publishInAppNotificationBanner({
-      id: `test:${Date.now()}`,
-      tone: 'complete',
-      hostName,
-      title: 'Orca',
-      body: 'Test notification from Orca.',
-      createdAt: Date.now()
-    })
-  }
-  await Notifications.scheduleNotificationAsync({
+  const scheduledId = await Notifications.scheduleNotificationAsync({
     content: {
       title: '✅ Orca',
       subtitle: `${hostName} · Task complete`,
@@ -233,6 +266,21 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
     },
     trigger: Platform.OS === 'android' ? { channelId } : null
   })
+  const osNotificationIdentifier =
+    typeof scheduledId === 'string' && scheduledId.length > 0
+      ? scheduledId
+      : `test:${Date.now()}`
+  if (AppState.currentState === 'active') {
+    publishInAppNotificationBanner({
+      id: osNotificationIdentifier,
+      tone: 'complete',
+      hostName,
+      title: 'Orca',
+      body: 'Test notification from Orca.',
+      osNotificationIdentifier,
+      createdAt: Date.now()
+    })
+  }
 }
 
 function notificationChannelId(sound: boolean, tone: NotificationTone): string {

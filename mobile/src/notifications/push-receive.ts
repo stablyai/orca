@@ -1,3 +1,4 @@
+import { isNotificationTargetConsumed } from './consumed-notification-tray-dismissal'
 import { wasPushDismissed } from './push-dismissal-watermarks'
 import { dismissPresentedPushNotification } from './push-tray-dismissal'
 import { shouldSuppressNotificationWhileViewing } from './notification-viewing-policy'
@@ -55,6 +56,11 @@ export async function foregroundNotificationBehavior(
   const data = readNativeNotificationData(notification.request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
+  const reqIdentifier = (notification.request as { readonly identifier?: unknown })?.identifier
+  const alreadyConsumed = isNotificationTargetConsumed({
+    osNotificationIdentifier: typeof reqIdentifier === 'string' ? reqIdentifier : undefined,
+    notificationId: payload?.notificationId
+  })
   // Unrecognized notifications retain normal behavior; recognized pushes fail closed
   // when consent, host, viewing, or dismissal checks cannot complete.
   const ineligible = await shouldSuppressForegroundPush(
@@ -62,7 +68,10 @@ export async function foregroundNotificationBehavior(
     preferences.suppressWhileViewing
   ).catch(() => payload !== null)
   const suppressed =
-    isTerminalBellTitle || ineligible || (payload !== null && !claimForegroundPush(payload))
+    isTerminalBellTitle ||
+    alreadyConsumed ||
+    ineligible ||
+    (payload !== null && !claimForegroundPush(payload))
   return {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,

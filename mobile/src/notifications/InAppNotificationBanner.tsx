@@ -1,11 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import * as Notifications from 'expo-notifications'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { firstParam } from '../navigation/route-param-reader'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { dismissConsumedTrayNotifications } from './consumed-notification-tray-dismissal'
 import {
   dismissInAppNotificationBanner,
   getCurrentInAppNotificationBanner,
@@ -78,9 +78,7 @@ export function InAppNotificationBanner() {
 
   const handlePress = () => {
     dismissInAppNotificationBanner(banner.id)
-    if (banner.osNotificationIdentifier) {
-      void Notifications.dismissNotificationAsync(banner.osNotificationIdentifier).catch(() => {})
-    }
+    void dismissConsumedTrayNotifications(banner)
     if (!canNavigate) {
       return
     }
@@ -140,6 +138,7 @@ export function InAppNotificationBanner() {
 
   const handleDismiss = () => {
     dismissInAppNotificationBanner(banner.id)
+    void dismissConsumedTrayNotifications(banner)
   }
 
   return (
