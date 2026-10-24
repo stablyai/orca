@@ -36,6 +36,7 @@ import {
   setSetupScriptProbeCache,
   subscribeSetupScriptProbeCache
 } from './setup-script-probe-cache'
+import { useCliStatus } from './use-cli-status'
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
@@ -239,6 +240,8 @@ export function useSetupGuideProgress(
     }
   }, [computerUseSkillInstalled, readComputerUsePermissions, shouldRefreshCoreState])
 
+  const { cliPathRegistered, cliInstallStatusChecked } = useCliStatus(shouldRefreshCoreState)
+
   const taskSourceStatus = deriveIntegrationConnectionStatus({
     preflightStatus,
     preflightStatusChecked,
@@ -278,6 +281,7 @@ export function useSetupGuideProgress(
     computerUseSkillDiscoveryLoading: computerUseSkillLoading,
     orchestrationSkillDiscoveryLoading: detectedOrchestrationSkillLoading,
     setupScriptProbeReady: currentSetupScriptProbe.ready,
+    cliInstallStatusChecked,
     computerUseSkillInstalled,
     computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
   })
@@ -290,6 +294,7 @@ export function useSetupGuideProgress(
         featureInteractions,
         hasConnectedTaskSource,
         browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
+        cliPathRegistered,
         computerUseSkillInstalled,
         computerUsePermissionsReady: currentComputerUsePermissionsReady,
         computerUseUnavailable: currentComputerUseUnavailable,
@@ -302,6 +307,7 @@ export function useSetupGuideProgress(
     [
       browserUseSkillInstalled,
       ready,
+      cliPathRegistered,
       currentComputerUseUnavailable,
       currentComputerUsePermissionsReady,
       computerUseSkillInstalled,
@@ -316,9 +322,8 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
-  const historicalSplitTerminalDone = hasFeatureInteraction(
-    featureInteractions,
-    'terminal-pane-split'
+  return useSetupGuideBrowserMilestoneProgress(
+    rawProgress,
+    hasFeatureInteraction(featureInteractions, 'terminal-pane-split')
   )
-  return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
 }

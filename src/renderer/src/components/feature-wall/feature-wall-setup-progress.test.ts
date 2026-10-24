@@ -16,6 +16,7 @@ function makeInput(
     featureInteractions: {},
     hasConnectedTaskSource: false,
     browserUseSkillInstalled: false,
+    cliPathRegistered: false,
     computerUseSkillInstalled: false,
     computerUsePermissionsReady: false,
     orchestrationSkillInstalled: false,
@@ -47,7 +48,7 @@ describe('getFeatureWallSetupProgress', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ gitRepoCount: 2 }))
 
     expect(progress.stepDone['add-two-repos']).toBe(true)
-    expect(progress.coreTotal).toBe(8)
+    expect(progress.coreTotal).toBe(9)
   })
 
   it('preserves the durable setup step definition order', () => {
@@ -56,6 +57,7 @@ describe('getFeatureWallSetupProgress', () => {
       'browser',
       'notifications',
       'default-agent',
+      'cli-setup',
       'agent-capabilities',
       'task-sources',
       'setup-script',
@@ -71,6 +73,7 @@ describe('getFeatureWallSetupProgress', () => {
     expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
       'notifications',
       'default-agent',
+      'cli-setup',
       'agent-capabilities',
       'task-sources',
       'setup-script',
@@ -88,6 +91,7 @@ describe('getFeatureWallSetupProgress', () => {
         hasConnectedTaskSource: true,
         hasSetupScript: true,
         gitRepoCount: 2,
+        cliPathRegistered: true,
         browserUseSkillInstalled: true,
         computerUseSkillInstalled: true,
         computerUsePermissionsReady: true,
@@ -108,7 +112,7 @@ describe('getFeatureWallSetupProgress', () => {
     )
 
     expect(Object.hasOwn(progress.stepDone, 'split-terminal')).toBe(false)
-    expect(progress.coreTotal).toBe(8)
+    expect(progress.coreTotal).toBe(9)
   })
 
   it('marks all active steps complete without historical terminal split interaction', () => {
@@ -127,6 +131,7 @@ describe('getFeatureWallSetupProgress', () => {
         hasConnectedTaskSource: true,
         hasSetupScript: true,
         gitRepoCount: 2,
+        cliPathRegistered: true,
         browserUseSkillInstalled: true,
         computerUseSkillInstalled: true,
         computerUsePermissionsReady: true,
@@ -134,7 +139,7 @@ describe('getFeatureWallSetupProgress', () => {
       })
     )
 
-    expect(progress.coreDoneCount).toBe(8)
+    expect(progress.coreDoneCount).toBe(9)
     expect(Object.values(progress.stepDone).every(Boolean)).toBe(true)
   })
 
@@ -288,5 +293,21 @@ describe('getFeatureWallSetupProgress', () => {
     expect(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)).not.toBe(
       'agent-capabilities'
     )
+  })
+
+  it('marks the CLI setup step complete only when the PATH command and the CLI skill are both ready', () => {
+    expect(
+      getFeatureWallSetupProgress(makeInput({ browserUseSkillInstalled: true })).stepDone[
+        'cli-setup'
+      ]
+    ).toBe(false)
+    expect(
+      getFeatureWallSetupProgress(makeInput({ cliPathRegistered: true })).stepDone['cli-setup']
+    ).toBe(false)
+    expect(
+      getFeatureWallSetupProgress(
+        makeInput({ cliPathRegistered: true, browserUseSkillInstalled: true })
+      ).stepDone['cli-setup']
+    ).toBe(true)
   })
 })
