@@ -67,20 +67,22 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   )
 
   // Daemon providers lack configure().onData; feed runtime records/streams here.
+  // Why per event: a degraded daemon provider relays its in-process fallback, which already fed the runtime.
   const isLocalProvider = localProvider instanceof LocalPtyProvider
 
   setLocalDataUnsub(
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
-      const outputSeq = isLocalProvider
-        ? session.runtime?.getPtyOutputSequence(payload.id)
-        : session.runtime?.onPtyData(
-            payload.id,
-            payload.data,
-            Date.now(),
-            rawLength,
-            payload.transformed
-          )
+      const outputSeq =
+        isLocalProvider || payload.runtimeFed
+          ? session.runtime?.getPtyOutputSequence(payload.id)
+          : session.runtime?.onPtyData(
+              payload.id,
+              payload.data,
+              Date.now(),
+              rawLength,
+              payload.transformed
+            )
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })
   )
@@ -99,7 +101,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           )
         : undefined
       try {
-        if (!isLocalProvider) {
+        if (!isLocalProvider && !payload.runtimeHandled) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
           clearProviderPtyState(payload.id)
           ptyOwnership.delete(payload.id)
