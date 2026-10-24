@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { createElement as h, useMemo, type ReactElement, type ReactNode } from 'react'
 import {
   act,
@@ -33,7 +34,7 @@ vi.mock('react-native', async () => {
     scrollToEnd = (): void => {}
     scrollTo = (): void => {}
     getScrollableNode = (): unknown => scrollable.node
-    getInnerViewNode = (): object => ({})
+    getInnerViewNode = () => document.createElement('div')
     render(): ReactNode {
       return React.createElement('div', null, this.props.children)
     }

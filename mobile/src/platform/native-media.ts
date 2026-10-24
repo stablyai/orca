@@ -33,7 +33,7 @@ import { MobileImageBase64Accumulator } from '../session/mobile-image-base64-acc
 /** A staged file as this handler reads it: the shape `expo-file-system`'s `File` already has. */
 export type NativeMediaFileHandle = {
   offset: number | null
-  readBytes: (length: number) => Uint8Array
+  readBytes: (length: number) => Uint8Array | Promise<Uint8Array>
   close: () => void
 }
 
@@ -246,14 +246,14 @@ export function createNativeMediaVerbServer(
    * strings: only the last chunk of a read ends on a partial group, and a reader that joined the
    * text would fold that padding into the middle of the file.
    */
-  function readRange(uri: string, start: number, end: number): string {
+  async function readRange(uri: string, start: number, end: number): Promise<string> {
     const handle = deps.openFile(uri).open()
     try {
       handle.offset = start
       const accumulator = new MobileImageBase64Accumulator()
       let read = start
       while (read < end) {
-        const bytes = handle.readBytes(Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, end - read))
+        const bytes = await handle.readBytes(Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, end - read))
         if (bytes.byteLength === 0) {
           break
         }
@@ -274,7 +274,7 @@ export function createNativeMediaVerbServer(
     if (verb === 'native.media.read') {
       const { handle, offset, length } = mediaReadParamsSchema.parse(params)
       const range = deps.registry.read(handle, offset, length)
-      return { base64: readRange(range.uri, range.start, range.end), eof: range.eof }
+      return { base64: await readRange(range.uri, range.start, range.end), eof: range.eof }
     }
     if (verb === 'native.media.name') {
       const { handle } = mediaNameParamsSchema.parse(params)

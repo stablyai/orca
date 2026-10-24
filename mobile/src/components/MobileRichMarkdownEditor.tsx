@@ -1,3 +1,4 @@
+import { type ViewInstance, StyleSheet, View } from 'react-native'
 import {
   forwardRef,
   memo,
@@ -9,7 +10,6 @@ import {
   useState,
   type ForwardedRef
 } from 'react'
-import { StyleSheet, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { openExternalLink } from '../platform/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
@@ -60,7 +60,7 @@ function MobileRichMarkdownEditorWebInner(
   { content, editable, onChange, onOpenLink }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
-  const hostRef = useRef<View>(null)
+  const hostRef = useRef<ViewInstance>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
   // The document reports itself ready from inside the mount call, so the controller answers it —
   // setting the content and the editable flag — while the effect below is still on the line that

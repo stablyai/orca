@@ -1,5 +1,13 @@
+import {
+  type ScrollViewInstance,
+  View,
+  Pressable,
+  useWindowDimensions,
+  ScrollView,
+  Keyboard,
+  Modal
+} from 'react-native'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { View, Pressable, useWindowDimensions, ScrollView, Keyboard, Modal } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -69,7 +77,7 @@ export function MountedBottomDrawer({
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   useEffect(() => {
     if (scrollResetKey !== null) {
       scrollRef.current?.scrollTo({ y: 0, animated: false })

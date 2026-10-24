@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-binding'
 import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-submit-binding.web'
@@ -8,9 +8,9 @@ import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-
 vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
 /** A ref holding whatever the platform hands back, which on RN Web is the DOM node. */
-const asField = (node: unknown): TextInput | null =>
+const asField = (node: unknown): TextInputInstance | null =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the point of these cases is that a DOM node is what the native signature receives on RN Web, which is the mismatch this sibling exists for.
-  node as TextInput | null
+  node as TextInputInstance | null
 
 function mountField(): HTMLInputElement {
   const field = document.createElement('input')

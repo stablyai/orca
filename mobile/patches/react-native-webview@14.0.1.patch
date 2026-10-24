@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java b/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
-index 80c68034b193a47bedb56ca527352de9548e8ac6..977c068a74c88c0322fca2a4bbffab8bc1ba719d 100644
+index 80c68034b193a47bedb56ca527352de9548e8ac6..b95790fa7a4f9e57322d72adf47a1a827962e9b3 100644
 --- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
 +++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
 @@ -253,6 +253,12 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
@@ -16,10 +16,10 @@ index 80c68034b193a47bedb56ca527352de9548e8ac6..977c068a74c88c0322fca2a4bbffab8b
                }
              };
 diff --git a/apple/RNCWebViewImpl.m b/apple/RNCWebViewImpl.m
-index 7f5c24d6e2cfb26eddbc513bf17a81c24a7273e2..d70cb58a3c81cb22bd549a2c37340ba53853cfcf 100644
+index 38904266dc37b006274104f4680778ffbfece369..28bd1df80722396ef33fa48bf539dc4abbb1ead9 100644
 --- a/apple/RNCWebViewImpl.m
 +++ b/apple/RNCWebViewImpl.m
-@@ -776,12 +776,21 @@ - (void)userContentController:(WKUserContentController *)userContentController
+@@ -790,12 +790,21 @@ RCTAutoInsetsProtocol>
        didReceiveScriptMessage:(WKScriptMessage *)message
  {
    if ([message.name isEqualToString:HistoryShimName]) {

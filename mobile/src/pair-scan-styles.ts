@@ -56,10 +56,10 @@ export const pairScanStyles = StyleSheet.create({
     borderRadius: radii.camera
   },
   camera: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   reticle: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center'
   },

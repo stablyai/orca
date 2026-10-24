@@ -1,5 +1,5 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react'
 import {
+  type ViewInstance,
   ActivityIndicator,
   Image,
   Pressable,
@@ -10,6 +10,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
+import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
@@ -68,7 +69,7 @@ type MobileBrowserPaneViewProps = {
   setAddressValue: Dispatch<SetStateAction<string>>
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
-  setRootViewRef: (view: View | null) => void
+  setRootViewRef: (view: ViewInstance | null) => void
   tab: MobileBrowserTab
   togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState

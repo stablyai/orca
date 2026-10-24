@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     marginTop: 1
   },
   uploading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: radii.composerItem,
     alignItems: 'center',
     justifyContent: 'center',

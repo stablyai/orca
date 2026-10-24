@@ -97,7 +97,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
-    let previousAppState: AppStateStatus | null = AppState.currentState
+    let previousAppState: typeof AppState.currentState = AppState.currentState
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRecover = shouldRecoverTerminalOnAppStateChange(
         previousAppState,

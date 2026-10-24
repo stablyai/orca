@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const requireNativeModule = vi.hoisted(() => vi.fn())
-vi.mock('expo-modules-core', () => ({ requireNativeModule }))
+vi.mock('expo', () => ({ requireNativeModule }))
 
 beforeEach(() => {
   vi.resetModules()

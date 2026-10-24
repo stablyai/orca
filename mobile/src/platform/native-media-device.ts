@@ -62,7 +62,7 @@ export function copyPickedMediaIntoCache(uri: string): string {
   const destination = stagedMediaFile('bin')
   destination.create({ overwrite: true })
   try {
-    destination.write(new FsFile(uri).bytesSync())
+    destination.writeSync(new FsFile(uri).bytesSync())
   } catch (error) {
     // The empty file this just created is nobody's otherwise: the caller never learns its name.
     discardUnreturnedMediaFile(destination)
@@ -99,7 +99,7 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
       const file = stagedMediaFile('png')
       file.create({ overwrite: true })
       try {
-        file.write(base64, { encoding: 'base64' })
+        file.writeSync(base64, { encoding: 'base64' })
       } catch (error) {
         discardUnreturnedMediaFile(file)
         throw error

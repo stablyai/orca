@@ -1,5 +1,5 @@
+import { type TextInputInstance, ActivityIndicator, Keyboard, Pressable, View } from 'react-native'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { NATIVE_CHAT_COMPOSER_PLACEHOLDER } from '../../../src/shared/native-chat-turn-status'
@@ -40,7 +40,7 @@ export type MobileNativeChatStructuredComposer = {
 
 type Props = {
   /** Lets the owner focus the field, e.g. after Edit moves a queued message into it. */
-  inputRef?: React.RefObject<TextInput | null>
+  inputRef?: React.RefObject<TextInputInstance | null>
   /** Absent on a terminal-backed chat, whose + only adds photos and whose menu keeps its curated
    *  commands. */
   structured?: MobileNativeChatStructuredComposer | null
@@ -107,7 +107,7 @@ export function MobileNativeChatComposer({
   onNeedFiles,
   stop = null
 }: Props): React.JSX.Element {
-  const fallbackInputRef = useRef<TextInput>(null)
+  const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const [focused, setFocused] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)

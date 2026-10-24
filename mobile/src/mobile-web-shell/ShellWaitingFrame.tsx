@@ -89,7 +89,7 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
 
 const styles = StyleSheet.create({
   cover: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgBase,

@@ -1,4 +1,4 @@
-import { requireNativeViewManager } from 'expo-modules-core'
+import { requireNativeView } from 'expo'
 import type { ComponentType, RefAttributes } from 'react'
 import type { NativeSyntheticEvent, ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -78,9 +78,9 @@ export type OrcaMobileWebShellViewHandle = {
  */
 export const OrcaMobileWebShellView: ComponentType<
   OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
-> = requireNativeViewManager<
-  OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>
->('OrcaMobileWebShell')
+> = requireNativeView<OrcaMobileWebShellViewProps & RefAttributes<OrcaMobileWebShellViewHandle>>(
+  'OrcaMobileWebShell'
+)
 
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,

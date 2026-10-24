@@ -1,4 +1,4 @@
-import type { Image, View } from 'react-native'
+import type { ImageInstance, ViewInstance } from 'react-native'
 import type { FrameLayer } from './mobile-browser-frame-state'
 import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
 
@@ -12,12 +12,12 @@ import type { BrowserFrameDisplayHandlers } from './browser-frame-layer-paint'
  * streaming writes never move it: it holds the frame the layers mounted with, which is what a
  * screen reader and the browser's image context menu see.
  */
-function elementOf(node: Image | View | null): HTMLElement | null {
+function elementOf(node: ImageInstance | ViewInstance | null): HTMLElement | null {
   return node instanceof HTMLElement ? node : null
 }
 
 export function updateBrowserLayerVisibility(
-  layers: [View | null, View | null],
+  layers: [ViewInstance | null, ViewInstance | null],
   visible: FrameLayer
 ): void {
   for (const [index, layer] of layers.entries()) {
@@ -28,7 +28,7 @@ export function updateBrowserLayerVisibility(
   }
 }
 
-export function updateBrowserImageSource(image: Image | null, uri: string): void {
+export function updateBrowserImageSource(image: ImageInstance | null, uri: string): void {
   const host = elementOf(image)
   if (host === null) {
     return

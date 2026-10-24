@@ -1,4 +1,4 @@
-import { createPermissionHook } from 'expo-modules-core'
+import { createPermissionHook } from 'expo'
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   getMicrophonePermissionsAsync,

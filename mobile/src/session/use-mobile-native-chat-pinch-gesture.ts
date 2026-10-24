@@ -1,13 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
 import { Gesture } from 'react-native-gesture-handler'
-import type { ComposedGesture } from 'react-native-gesture-handler'
 import { quantizeFontScale } from './mobile-native-chat-message-text'
 
 /** Pinch-to-zoom chat font. `fontScale` is the committed size; `pinchBase`
  *  anchors the live gesture so successive pinches compound rather than reset. */
 export function useMobileNativeChatPinchGesture(): {
   fontScale: number
-  pinchGesture: ComposedGesture
+  pinchGesture: ReturnType<typeof Gesture.Simultaneous>
 } {
   const [fontScale, setFontScale] = useState(1)
   const fontScaleRef = useRef(1)

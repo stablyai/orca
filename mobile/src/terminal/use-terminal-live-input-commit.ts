@@ -1,5 +1,5 @@
+import type { TextInputInstance } from 'react-native'
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
 import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
@@ -39,7 +39,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeSessionTabType: TTabType | null | undefined
   readonly activeSessionTabTypeRef: RefObject<TTabType | null>
   readonly connected: boolean
-  readonly liveInputRef: RefObject<TextInput | null>
+  readonly liveInputRef: RefObject<TextInputInstance | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly liveInputTerminalHandlesRef: RefObject<Set<string>>
   readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>

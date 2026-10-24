@@ -62,9 +62,9 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
       onContentSizeChange={tail.pinToTailAfterContentResize}
       onLayout={tail.pinToTail}
       maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
-      ListHeaderComponent={header}
-      ListFooterComponent={footer}
-      ListEmptyComponent={emptyStateView}
+      ListHeaderComponent={header ?? undefined}
+      ListFooterComponent={footer ?? undefined}
+      ListEmptyComponent={emptyStateView ?? undefined}
     />
   )
 }

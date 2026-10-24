@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised
   },
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.textSecondary,
     transformOrigin: 'left'
   }

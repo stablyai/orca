@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import {
-  InteractionManager,
+  type TextInputInstance,
   Platform,
   Pressable,
   StyleSheet,
@@ -8,9 +7,11 @@ import {
   View,
   type TextInputProps
 } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { scheduleInputFocus } from '../platform/schedule-input-focus'
 
 // Why: toolbar/list chrome paints and settles after the open tap; native
 // autoFocus alone often fails to raise the soft keyboard on iOS/Android.
@@ -53,7 +54,7 @@ export function MobileSearchField({
   editable = true,
   accessibilityLabel
 }: MobileSearchFieldProps) {
-  const inputRef = useRef<TextInput>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   const [focused, setFocused] = useState(false)
   const clearVisible = showClear ?? value.length > 0
 
@@ -62,21 +63,7 @@ export function MobileSearchField({
       return
     }
 
-    let timeout: ReturnType<typeof setTimeout> | undefined
-    // Why: wait for the open-press interaction + layout to finish, then focus
-    // so the soft keyboard actually appears (not just a caret with no IME).
-    const task = InteractionManager.runAfterInteractions(() => {
-      timeout = setTimeout(() => {
-        inputRef.current?.focus()
-      }, SEARCH_AUTO_FOCUS_DELAY_MS)
-    })
-
-    return () => {
-      task.cancel()
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-    }
+    return scheduleInputFocus(() => inputRef.current?.focus(), SEARCH_AUTO_FOCUS_DELAY_MS)
   }, [autoFocus, editable, focusKey])
 
   function handleClear() {
