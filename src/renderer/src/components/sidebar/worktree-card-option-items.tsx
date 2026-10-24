@@ -10,6 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import { isWorktreeCardPropertyVisible } from '../../../../shared/worktree/card-properties'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import { getWorkspaceCardPropertiesValue } from '../../../../shared/workspace-view/workspace-view-options'
 import {
@@ -33,7 +34,8 @@ function useToggleCardProperty(): (property: WorktreeCardProperty, checked: bool
   const setWorktreeCardProperties = useAppStore((s) => s.setWorktreeCardProperties)
   return useCallback(
     (property, checked) => {
-      const next = checked
+      const enabled = property === 'hide-project-name' ? !checked : checked
+      const next = enabled
         ? [...worktreeCardProperties, property]
         : worktreeCardProperties.filter((candidate) => candidate !== property)
       setWorktreeCardProperties(next)
@@ -67,7 +69,7 @@ export function WorktreeCardDisplayMenuItem({
         {options.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}
-            checked={worktreeCardProperties.includes(opt.id)}
+            checked={isWorktreeCardPropertyVisible(worktreeCardProperties, opt.id)}
             onCheckedChange={(checked) => toggleProperty(opt.id, checked === true)}
             onSelect={(e) => e.preventDefault()}
           >
@@ -162,7 +164,7 @@ export function WorktreeCardPropertiesMenuItem({
         {PROPERTY_OPTIONS.map((opt) => (
           <DropdownMenuCheckboxItem
             key={opt.id}
-            checked={worktreeCardProperties.includes(opt.id)}
+            checked={isWorktreeCardPropertyVisible(worktreeCardProperties, opt.id)}
             onCheckedChange={(checked) => toggleProperty(opt.id, checked === true)}
             onSelect={(e) => e.preventDefault()}
           >

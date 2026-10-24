@@ -74,8 +74,11 @@ describe('which Workspace options show', () => {
 describe('the Show properties value', () => {
   it('reads Hover under the compact layout, else how many properties show, else nothing', () => {
     expect(getWorkspaceCardPropertiesValue(['pr', 'host'], true)).toBe('hover')
-    expect(getWorkspaceCardPropertiesValue(['pr', 'host'], false)).toBe(2)
+    expect(getWorkspaceCardPropertiesValue(['pr', 'host'], false)).toBe(3)
     // Ids outside the Show properties list (Card display only) are not counted.
-    expect(getWorkspaceCardPropertiesValue(['cli', 'branch'], false)).toBeNull()
+    expect(getWorkspaceCardPropertiesValue(['cli', 'branch'], false)).toBe(1)
+    expect(
+      getWorkspaceCardPropertiesValue(['cli', 'branch', 'hide-project-name'], false)
+    ).toBeNull()
   })
 })

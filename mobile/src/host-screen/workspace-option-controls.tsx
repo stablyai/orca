@@ -1,3 +1,4 @@
+import { isWorktreeCardPropertyVisible } from '../../../src/shared/worktree/card-properties'
 import { useState, type ComponentType } from 'react'
 import { Text, View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
@@ -203,7 +204,7 @@ function CardPropertyRows(props: {
           <CheckRow
             key={choice.id}
             label={choice.label}
-            checked={state.view.worktreeCardProperties.includes(choice.id)}
+            checked={isWorktreeCardPropertyVisible(state.view.worktreeCardProperties, choice.id)}
             onPress={() => settings.toggleCardProperty(choice.id)}
           />
         ))}

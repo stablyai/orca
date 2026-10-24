@@ -14,6 +14,20 @@ describe('worktree card properties', () => {
     )
   })
 
+  it('preserves an explicit hidden project name without changing existing profiles', () => {
+    for (const compactWorktreeCards of [false, true]) {
+      for (const newCardStyle of [false, true]) {
+        const settings = { compactWorktreeCards, newCardStyle }
+        expect(
+          getWorktreeCardDetails(normalizeWorktreeCardProperties(['pr']), settings).projectName
+        ).toBe(true)
+        const hidden = normalizeWorktreeCardProperties(['pr', 'hide-project-name'])
+        expect(hidden).toContain('hide-project-name')
+        expect(getWorktreeCardDetails(hidden, settings).projectName).toBe(false)
+      }
+    }
+  })
+
   it('returns combined mode update payloads', () => {
     expect(getWorktreeCardModeUpdates('Compact')).toEqual({
       settings: { compactWorktreeCards: true },
