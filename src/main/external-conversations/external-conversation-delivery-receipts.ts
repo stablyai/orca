@@ -20,6 +20,9 @@ const LOST: Delivery = { outcome: 'unknown', reason: 'replayed_after_restart' }
 // Reserve only part of the shared ledger for unsettled connector deliveries.
 export const CONNECTOR_PENDING_RECEIPT_LIMIT = 1_000
 
+// Headroom only cancels may use, so a full backlog can still be cancelled away.
+export const CONNECTOR_CANCEL_RECEIPT_RESERVE = 100
+
 const callerFingerprint = (source: ConnectorSource): string => `connector:${source}`
 const CONNECTOR_FINGERPRINTS = CONNECTOR_SOURCES.map(callerFingerprint)
 
@@ -33,7 +36,7 @@ export class DeliveryReceipts {
   run(
     key: ConversationKey,
     deliveryId: string,
-    method: 'connector.start' | 'connector.send',
+    method: 'connector.start' | 'connector.send' | 'connector.cancel',
     payload: unknown,
     execute: () => Promise<Delivery>
   ): Promise<Delivery> {
@@ -52,7 +55,9 @@ export class DeliveryReceipts {
     }
     if (
       !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
-      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >= CONNECTOR_PENDING_RECEIPT_LIMIT
+      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
+        CONNECTOR_PENDING_RECEIPT_LIMIT +
+          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
     ) {
       return Promise.resolve(refused('delivery_backlog_full'))
     }

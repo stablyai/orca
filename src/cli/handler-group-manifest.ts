@@ -217,6 +217,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'connector send',
       'connector prompt',
       'connector answer',
+      'connector cancel',
       'connector watch'
     ],
     load: async () => (await import('./handlers/connector.js')).CONNECTOR_HANDLERS
@@ -285,5 +286,10 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'search',
     keys: ['search'],
     load: async () => (await import('./handlers/search.js')).SEARCH_HANDLERS
+  },
+  {
+    name: 'ports',
+    keys: ['ports'],
+    load: async () => (await import('./handlers/ports.js')).PORTS_HANDLERS
   }
 ]

@@ -1,6 +1,4 @@
-// Desktop IPC for a delete that failed after Git dropped the registration: the leftover stays in
-// `worktrees:list` with the error; Delete refuses while it is on disk and finishes once it is gone. Git and the disk are mocked;
-// runtime-failed-local-worktree-removal.test.ts runs the real thing.
+// Mocked desktop removal failures; runtime-failed-local-worktree-removal.test.ts covers real Git and filesystem behavior.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   gitExecFileAsyncMock,
@@ -11,7 +9,7 @@ import {
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
-import type { Worktree } from '../../shared/worktree/types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from '../../shared/worktree/types'
 import { finishUnregisteredWorktreeRemoval } from '../git/worktree-removal'
 import { worktreeCheckoutExists } from '../worktree-removal-table'
 import type * as WorktreeRemovalModule from '../git/worktree-removal'
@@ -106,7 +104,6 @@ vi.mock('../git/worktree-removal', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalModule>()),
   finishUnregisteredWorktreeRemoval: vi.fn(async () => ({}))
 }))
-// The leftover is on disk and is the removed checkout's own (no `.git` left).
 vi.mock('../worktree-removal-table', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalTable>()),
   worktreeCheckoutExists: vi.fn(async () => true)
@@ -124,13 +121,15 @@ function remove(args: Record<string, unknown>): Promise<RemoveWorktreeResult> {
   return handlers['worktrees:remove'](null, args) as Promise<RemoveWorktreeResult>
 }
 
-async function listFeature(): Promise<Worktree | undefined> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktrees:list resolves the repo's Worktree rows.
-  const rows = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
-  return rows.find((row) => row.id === featureId)
+async function listFeature(): Promise<DetectedWorktree | undefined> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a repo-scoped worktrees:listDetected resolves a DetectedWorktreeListResult.
+  const result = (await handlers['worktrees:listDetected'](null, {
+    repoId: 'repo-1'
+  })) as DetectedWorktreeListResult
+  return result.worktrees.find((row) => row.id === featureId)
 }
 
-/** Git fails partway and drops the registration, as `git worktree remove --force` does. */
+/** Model Git deregistering a checkout before filesystem removal fails. */
 async function failAfterGitDroppedIt(): Promise<void> {
   const [main, feature] = mockKnownFeatureWorktree()
   const result = startBackgroundWorktreeRemoval({
@@ -252,7 +251,7 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     listWorktreesMock.mockResolvedValue([main])
     const otherClientsRetry = vi.fn(async () => ({}))
     listWorktreesMock.mockImplementationOnce(async () => {
-      // Another client's Delete takes the failed record during this Delete's `git worktree list`.
+      // Another client claims the failed-removal record while this Delete lists Git worktrees.
       void retryFailedWorktreeRemoval(featureId, 'local', () => ({
         run: otherClientsRetry,
         publish: () => {}
@@ -264,14 +263,12 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(otherClientsRetry).toHaveBeenCalledTimes(1)
-    // Neither a second retry nor the delete for leftovers without a record ran.
     expect(finishUnregisteredWorktreeRemoval).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('Delete takes the normal delete once Git registers a checkout at the path again', async () => {
     await failAfterGitDroppedIt()
-    // A new checkout at the same path: the recorded choices were for the leftover, not for it.
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue({})
 

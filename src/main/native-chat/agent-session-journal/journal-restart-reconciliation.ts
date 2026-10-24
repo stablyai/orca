@@ -1,14 +1,5 @@
-// The production caller for `reconcileSubmissions`.
-//
-// Runs once per journal open, after the crash boundary has already settled every
-// survivor to `unknown`. It only ever narrows that answer: `accepted` when the
-// provider's own history holds the message, `rejected` when a boundary we can
-// vouch for proves it never arrived. Anything the reconciler leaves `unknown`
-// is left exactly as the crash boundary wrote it.
-//
-// Nothing here dispatches. A `rejected` submission becomes re-sendable only
-// through the user's Retry, which rotates the client message id; Orca still
-// never puts a message back on the wire on the user's behalf.
+// Provider history may narrow unknown delivery, never trigger automatic redelivery.
+// User retries rotate IDs; unproven outcomes retain their original uncertainty.
 
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -25,18 +16,12 @@ import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-qu
 import type { AgentSessionJournal } from './journal-store'
 import { reconcileSubmissions, type ProviderHistoryWindow } from './journal-submission-reconciler'
 
-/**
- * Only a text-only body can be compared against provider content. A submission
- * carrying an attachment was fingerprinted over an `image-ref` path the
- * transcript does not keep, so its absence from history would be an artefact of
- * the encoding rather than evidence — and `rejected` is the one outcome that
- * costs the user a duplicate if it is wrong. Those stay `unknown`.
- */
+/** Attachment paths are absent from provider history; only text-only sends can prove non-delivery. */
 function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
   return (
     body?.kind === 'message' &&
     body.role === 'user' &&
-    // A conversation command leaves no user item in provider history to find.
+    // Conversation commands leave no provider user-message item to compare.
     body.command === undefined &&
     body.blocks.length === 1 &&
     body.blocks[0]?.type === 'text' &&
@@ -54,13 +39,10 @@ function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmis
   return submissions.filter((submission) => {
     if (
       (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') ||
-      // Never handed over, so provider history cannot hold it.
       isQueuedAgentJournalSubmission(submission) ||
-      // A queued card's hand-off is never judged unsent from what history lacks: its fold reads
-      // it as sent unless Orca proves otherwise.
+      // Missing history cannot prove queued handoffs unsent.
       submission.queuedMessageId !== undefined ||
-      // The provider's copy leads with the stopped history it carried, so its fingerprint cannot
-      // match; like an attachment's, its absence is no evidence and it stays `unknown`.
+      // Carried stopped-history prefixes change fingerprints; absence cannot prove non-delivery.
       journal.stoppedHistoryCarried().has(submission.clientMessageId)
     ) {
       return false
@@ -70,17 +52,14 @@ function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmis
   })
 }
 
-/** Items the journal already committed are not new evidence: leaving them
- *  claimable would let an undelivered message match an older identical one. */
+/** Exclude committed history so uncertain sends cannot match earlier identical messages. */
 function unseenHistory(
   journal: AgentSessionJournal,
   history: ProviderHistoryWindow
 ): ProviderHistoryWindow {
   const snapshot = journal.snapshot()
   const committed = new Set(snapshot.items.map((item) => item.itemId))
-  // Accepted submissions alias their provider item to the optimistic `orca:*`
-  // row, so the rendered item id alone does not identify the provider history
-  // already consumed by the journal.
+  // Accepted echoes render under Orca IDs; also exclude their aliased provider identities.
   for (const submission of snapshot.submissions) {
     if (submission.dispatchState === 'accepted' && submission.providerItemId) {
       committed.add(submission.providerItemId)
@@ -88,18 +67,13 @@ function unseenHistory(
   }
   return {
     ...history,
-    // An item with no identity of its own cannot be one the journal committed under it; the
-    // adapter bounds its window to after the journal's last accepted send instead.
+    // Identity-free items rely on the adapter's after-last-acceptance history window.
     items: history.items.filter(
       (item) => item.identity === undefined || !committed.has(agentJournalItemKey(item.identity))
     )
   }
 }
 
-/**
- * Decide what the crash boundary could only doubt. Returns the client message
- * ids this pass settled, so the attach result stops reporting them unconfirmed.
- */
 export async function reconcileJournalSubmissionsAgainstHistory(input: {
   journal: AgentSessionJournal
   fence: number
@@ -115,7 +89,6 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
     history: unseenHistory(input.journal, input.history)
   })) {
     if (outcome.outcome === 'unknown') {
-      // Narrowing failed: the submission stays unconfirmed, so record why.
       console.warn('[journal-reconcile] submission left unconfirmed:', {
         clientMessageId: outcome.clientMessageId,
         reason: outcome.reason,

@@ -1,4 +1,3 @@
-/** The live collaborators a host conversion needs: the census, the direct session and the server. */
 import { encodePairingOffer } from '../../../shared/pairing'
 import {
   getPreferredPairingOffer,
@@ -24,7 +23,6 @@ import {
   type OrcadServerFolderCatalog
 } from '../../ssh/orcad-server-folder-workspaces'
 
-/** The T6-9 client against this server, pinned to the runtime it paired with. */
 export function orcadMigrationDestinationFor(
   environment: KnownRuntimeEnvironment
 ): OrcadMigrationDestinationCatalog {
@@ -41,7 +39,6 @@ export function orcadMigrationDestinationFor(
   }
 }
 
-/** The projects this server already holds, read through the same pinned pairing. */
 export function orcadServerRepositoriesFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerRepository[]> {
@@ -52,7 +49,6 @@ export function orcadServerRepositoriesFor(
   )
 }
 
-/** The folder workspaces this server already holds, read through the same pinned pairing. */
 export function orcadServerFolderCatalogFor(
   environment: KnownRuntimeEnvironment
 ): Promise<OrcadServerFolderCatalog> {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactElement } from 'react'
+import { act, StrictMode, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -150,23 +150,40 @@ describe('ActivityThreadOptionsMenu', () => {
     }
   })
 
-  it('opens without recursively updating composed Radix trigger refs', async () => {
-    await act(async () => {
-      root.render(<Harness />)
-    })
+  it('keeps the focused menu button described through repeated opens and rerenders', async () => {
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await act(async () => {
+        root.render(
+          <StrictMode>
+            <Harness compactMode={cycle % 2 === 1} />
+          </StrictMode>
+        )
+      })
+      const trigger = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Thread list options"]'
+      )
+      if (!trigger) {
+        throw new Error('Thread list options button missing')
+      }
 
-    const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Thread list options"]'
-    )
-
-    expect(trigger).not.toBeNull()
-    expect(trigger?.parentElement?.tagName).toBe('SPAN')
-
-    await act(async () => {
-      trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
-    })
-
-    expect(document.body.textContent).toContain('Compact mode')
+      await act(async () => trigger.focus())
+      await vi.waitFor(() => {
+        const descriptionId = trigger.getAttribute('aria-describedby')
+        expect(descriptionId).toBeTruthy()
+        expect(document.getElementById(descriptionId ?? '')?.textContent).toBe('Activity options')
+      })
+      await act(async () => {
+        trigger.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+      })
+      expect(document.body.textContent).toContain('Compact mode')
+      await act(async () => {
+        document
+          .querySelector('[role="menu"]')
+          ?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }))
+        trigger.blur()
+      })
+      await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull())
+    }
   })
 
   it.each(['removed host', 'single project', 'stale project'] as const)(

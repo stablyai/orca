@@ -68,7 +68,7 @@ let project: string
 let outside: string
 
 beforeEach(async () => {
-  // The floating folder resolves through the app environment, as the headless runtime does too.
+  // Floating paths use AppEnvironment in desktop and headless runtimes.
   installFakeAppEnvironment({ getPath: () => userData.path })
   invalidateAuthorizedRootsCache()
   base = await mkdtemp(join(await realpath(tmpdir()), 'orca-file-access-'))
@@ -234,7 +234,7 @@ describe('requests with no declared access (roots only)', () => {
   })
 })
 
-// Why: creating a symlink on Windows needs elevation or Developer Mode.
+// Windows symlinks require elevation or Developer Mode.
 describe.skipIf(process.platform === 'win32')('project symlinks under every spelling', () => {
   let real: string
   let alias: string

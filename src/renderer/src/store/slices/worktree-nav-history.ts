@@ -94,7 +94,7 @@ function isSimpleViewEntry(
 }
 
 // Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
-function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
+export function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
   return isSimpleViewEntry(entry) || typeof entry === 'object'
 }
 

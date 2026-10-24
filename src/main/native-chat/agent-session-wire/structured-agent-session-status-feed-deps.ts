@@ -1,5 +1,3 @@
-// What a status feed reads of the host: its held sessions, their records, and where it reports.
-
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionStatusEvent,
@@ -20,7 +18,6 @@ export type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
-  /** What the current-work projection reads of the last child this host saw end. */
   lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
   operationalRevision?: number
   restartResume?: AgentSessionStatusSummary['restartResume']
@@ -29,30 +26,25 @@ export type StatusFeedSession = {
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
-  /** `AgentSessionRecordStore.replacedRuntime`; absent where no runtime was replaced. */
+  /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   now: () => number
-  /** Where a failing sink or observer is reported; neither may cost subscribers their event. */
+  /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger
-  /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
-   *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
+  /** Observe even without subscribers; replay distinguishes restore/projection from fresh journal events. */
   onStatusChanged?: (
     summary: AgentSessionStatusSummary,
     options: StructuredAgentSessionStatusObserverOptions
   ) => void
-  /** Resolved on every call: the host builds this feed in a field initializer, before its own
-   *  deps are assigned. The sink holds the session's child records; the summary reads them there. */
+  /** Resolve after host field initialization; read child records from the sink holding their parent row. */
   statusSink?: () => StructuredAgentSessionStatusSink | undefined
-  /** The session's child records changed, so every other reader of them republishes; `producer`
-   *  is the write path of the child whose report changed them. */
+  /** Republish changed child records; producer identifies their write path. */
   onChildWorkChanged?: (
     sessionId: string,
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
   namingActiveSessionIds?: () => string[]
-  /** The chat's last failed naming run, if any; the summary decides whether it still applies. */
   namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
-  /** The session's agent proved a start: its row's phase became `ready`. */
   onAgentStarted?: (sessionId: string) => void
 }
 
@@ -66,7 +58,7 @@ export type StatusPublication = {
   firstInputSubmissionKey: string | null
 }
 
-/** Naming activity does not depend on any readable journal or retained summary. */
+/** Naming snapshots need neither readable journals nor retained status rows. */
 export function structuredAgentSessionNamingSnapshot(
   deps: StructuredAgentSessionStatusFeedDeps
 ): AgentSessionStatusEvent {

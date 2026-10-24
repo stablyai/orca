@@ -97,6 +97,28 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     expect(existsSync(lockPath)).toBe(false)
   })
 
+  it('reclaims under --expect-nonce only the record the dry run showed', async () => {
+    const root = makeRoot()
+    const lockPath = writeLock(root, holderRecord())
+    const changed = await reclaimStaleOrcadInstanceLock(
+      root,
+      { yes: true, expectNonce: 'approved-earlier', hintRuntime: null },
+      rebootedBox()
+    )
+    expect(changed).toMatchObject({
+      status: 'refused',
+      message: 'The lock changed after you checked it. Check it again.'
+    })
+    expect(existsSync(lockPath)).toBe(true)
+    const pinned = await reclaimStaleOrcadInstanceLock(
+      root,
+      { yes: true, expectNonce: 'stale-holder', hintRuntime: null },
+      rebootedBox()
+    )
+    expect(pinned).toMatchObject({ status: 'reclaimed', evidence: { nonce: 'stale-holder' } })
+    expect(existsSync(lockPath)).toBe(false)
+  })
+
   it('never reports an empty data root as a recovery', async () => {
     const result = await reclaimStaleOrcadInstanceLock(
       makeRoot(),

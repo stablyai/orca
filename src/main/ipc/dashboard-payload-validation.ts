@@ -1,7 +1,6 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardRevealAgentArgs,
-  type DashboardSleepWorkspaceArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
 import { BoundedMap } from '../../shared/bounded-map'
@@ -19,7 +18,6 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
-export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_REPO_ICONS = 500
@@ -83,15 +81,6 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
 
 export function isDashboardPaneKey(value: unknown): value is string {
   return isBoundedString(value, MAX_ID_LENGTH)
-}
-
-export function isDashboardSleepWorkspaceArgs(
-  value: unknown
-): value is DashboardSleepWorkspaceArgs {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-  return isBoundedString((value as Record<string, unknown>).worktreeId, MAX_ID_LENGTH)
 }
 
 export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot {

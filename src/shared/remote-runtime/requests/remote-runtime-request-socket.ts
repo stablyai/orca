@@ -13,7 +13,7 @@ import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions
-} from '../../remote-runtime-connect-bound'
+} from '../remote-runtime-connect-bound'
 import {
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
   serializeRemoteRuntimePayload,

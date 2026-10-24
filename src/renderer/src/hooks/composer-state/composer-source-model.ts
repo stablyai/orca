@@ -62,6 +62,7 @@ export type ComposerSourceModel = {
   onConnectSelectedRepo: () => Promise<void>
   prefetchSshConnectedGeneration: number
   resolvePendingSmartGitHubSubmit: () => Promise<PendingSmartGitHubSubmitResolution>
+  selectAddedProjectGroup: (groupId: string) => boolean
   selectAddedProjectRepo: (nextRepoId: string) => void
   showProjectRequiredError: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null

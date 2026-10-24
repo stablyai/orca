@@ -16,10 +16,7 @@ import type { Delivery } from './external-conversation-types'
 
 export type PromptTerminal = TerminalAgentPromptAnswerRuntime & LaunchedAgentWriteGuardRuntime
 
-/**
- * A linked agent's pending prompt and its answer, through the host's shared prompt answers. Not on
- * the conversation's queue: a follow-up held behind an approval waits for exactly this answer.
- */
+/** Answer outside the conversation queue: a queued follow-up can itself be waiting on this approval. */
 export class ConversationPrompts {
   private readonly answers: TerminalAgentPromptAnswers
 

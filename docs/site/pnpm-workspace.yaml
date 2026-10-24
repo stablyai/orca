@@ -9,11 +9,12 @@ overrides:
   zod@>=3 <4: 3.25.76
   zod@>=4 <4.6.6: 4.6.7
   path-to-regexp@>=4.0.0 <6.3.0: 6.3.0
-  '@vercel/node>undici': 6.28.1
+  # Vercel still pins vulnerable Undici 5, including in its latest release.
+  '@vercel/node>undici': 6.29.1
   '@vercel/python-analysis>js-yaml': 4.3.2
   '@vercel/python-analysis>minimatch': 10.2.6
   'vercel>smol-toml': 1.9.1
-  'vercel>undici': 6.28.1
+  'vercel>undici': 6.29.1
   '@vercel/python-analysis>smol-toml': 1.9.1
   '@vercel/rust>smol-toml': 1.9.1
   '@vercel/static-config>ajv': 8.18.0

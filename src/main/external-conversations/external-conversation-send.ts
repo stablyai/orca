@@ -40,6 +40,10 @@ export function bindPane(
   }
 }
 
+export function sameBinding(a: AgentPromptExpectedBinding, b: AgentPromptExpectedBinding): boolean {
+  return a.ptyId === b.ptyId && a.processIncarnation === b.processIncarnation
+}
+
 /** Failures after a write guard passes may have written bytes, so report unknown instead of allowing retry. */
 export async function deliverFollowUp(
   terminal: FollowUpTerminal,

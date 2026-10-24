@@ -1,7 +1,3 @@
-// An earlier build kept queued cards in their own table. They move into the chat's journal: the
-// queue reads each the same before and after, each action moves only its own card, and the bulk
-// import runs once per open, all-or-nothing, until no readable legacy row is left.
-
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -63,7 +59,6 @@ function journalFor(sessionId: string): AgentSessionJournal {
   })
 }
 
-/** An earlier build's hand-off of `card`, answered `as`. */
 async function handOff(
   journal: AgentSessionJournal,
   attempt: string,
@@ -127,7 +122,6 @@ const legacyIds = (sessionId = SESSION) =>
     .all(sessionId)
     .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
 
-/** Each queue row on disk: its card, op and whether it saved a refusal. */
 function queueRows(sessionId = SESSION): string[] {
   return db()
     .prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
@@ -155,7 +149,7 @@ async function nothingSentTo(...cards: string[]): Promise<void> {
 }
 
 it("moves an earlier build's cards into the journal, each action its own card, the rest once per open", async () => {
-  // An earlier build's chat: its hand-offs are journal rows, its cards rows of their own table.
+  // Legacy handoffs were journaled while cards lived in a separate table.
   await rig.drafts()
   await rig.host.close(SESSION, 'evict')
   const earlier = journalFor(SESSION)
@@ -168,7 +162,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     'refused, never settled',
     'providerRejected'
   )
-  // Stopped after hand-over, which that build sent back to waiting: the agent may have them.
+  // Stopped legacy handoffs returned to waiting even if the provider already received them.
   await handOff(earlier, 'att-stopped', 'stopped-same', 'stopped, unchanged', 'cancelled')
   await handOff(earlier, 'att-edited', 'stopped-edited', 'stopped, then edited', 'cancelled')
   await earlier.close()
@@ -187,7 +181,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   ])
   const all = legacyIds()
 
-  // The first open's import fails: nothing moves, and the view reads every card as it will.
+  // Failed import must leave both storage and the projected card view unchanged.
   db().exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -225,7 +219,6 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   expect(legacyIds()).toEqual(all)
   expect(queueRows()).toEqual([])
 
-  // Delete and Send each move only their own card, in the action's transaction.
   const deletion = hostTestOperationId()
   expect(await rig.deleteQueued('ret-present', deletion)).toMatchObject({
     value: { deleted: true }
@@ -238,11 +231,9 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     'ret-gone:queued+refusal'
   ])
   expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
-  // The returned cards ahead still hold the queue.
   await nothingSentTo('edited', 'held')
 
-  // The next open moves the rest in one transaction: answered cards write nothing, and a refusal
-  // is written only where its hand-off is not in this epoch.
+  // Reopen imports atomically; write refusals only for handoffs absent from this epoch.
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(published.slice(2))
   expect(legacyIds()).toEqual(['broken'])
@@ -255,10 +246,10 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     'edited:queued',
     'held:queued'
   ])
-  // Unchanged, it is spent on that hand-off: drawn as the person's send its Stop took back.
+  // Unedited stopped cards remain spent on their existing handoff.
   expect(await stopped()).toEqual(displayedStopped)
 
-  // The command card's own turn reports its refusal later: it is spent, not left holding the queue.
+  // Refused commands become spent once their own turn reports failure.
   const adopted = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   await adopted.appendItem(
     structuredAgentSessionCommandTurnIdentity('att-cmd'),
@@ -274,13 +265,11 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await eventually(async () => expect(await rig.handoff('edited')).toBeDefined())
   await nothingSentTo('held')
   expect((await rig.handoff('stopped-edited'))?.clientMessageId).toBe('att-edited')
-  // Edited since, it waits for its own Send.
   expect(await rig.sendNow('stopped-edited')).toMatchObject({ ok: true })
   const resent = await rig.handoffId('stopped-edited')
   expect(resent).not.toBe('att-edited')
   await rig.settleAccepted(resent, 'resent')
 
-  // A third open finds nothing to move, and an old Delete still answers from its receipt.
   const rows = queueRows()
   await rig.restartHostProcess()
   await rig.drafts()
@@ -292,7 +281,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     value: { deleted: true }
   })
 
-  // A chat holding only answered legacy rows has nothing to write: they go in a transaction alone.
+  // Answered-only legacy rows retire without writing new journal rows.
   const other = journalFor('session-y')
   await other.open()
   await handOff(other, 'y-att', 'y-sent', 'delivered', 'accepted')
@@ -310,7 +299,6 @@ it("moves an earlier build's cards into the journal, each action its own card, t
 })
 
 it('a rewind while the import has failed moves the legacy cards first: a refused one stays returned', async () => {
-  // Made before the clear, which leaves the chat no provider handle to read.
   const earlier = journalFor(SESSION)
   const clear = { command: 'clear' as const }
   expect(

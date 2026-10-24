@@ -69,8 +69,6 @@ export const runtimeEnvironmentsApi = {
     observeOnly?: true
   }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
-  retryControlConnection: (args: { selector: string }): Promise<void> =>
-    ipcRenderer.invoke('runtimeEnvironments:retryControlConnection', args),
   onSharedControlDiagnostics: (
     callback: (event: {
       environmentId: string

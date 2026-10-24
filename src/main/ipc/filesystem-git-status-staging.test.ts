@@ -87,7 +87,7 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
-  it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
+  it('uses worktree roots seeded by worktree listing without rebuilding the cache', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [] })
 

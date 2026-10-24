@@ -3550,7 +3550,11 @@
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
             "openInThisGroup": "Abrir en este grupo",
-            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
+            "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo",
+            "fileInOtherWorkspace": "Este archivo está en {{value0}}",
+            "fileInAnotherWorkspace": "Este archivo está en otro espacio de trabajo",
+            "openInOwningWorkspace": "Abrir allí",
+            "openedHereReadOnly": "Abierto aquí en modo de solo lectura"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Anfitrión no disponible",
@@ -15941,6 +15945,7 @@
           "6c4f1a8d2e": "Los detalles del check no están disponibles."
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "Solo lectura",
           "fb8331694e": "Abrir vista previa al lado",
           "4157f3cbf3": "Abrir vista previa de Markdown",
           "269ce4842b": "Copiar ruta relativa",

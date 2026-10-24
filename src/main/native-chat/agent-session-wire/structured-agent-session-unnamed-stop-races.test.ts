@@ -60,9 +60,6 @@ vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) =>
   }
 })
 
-// The Stop names no turn: the host stops whatever the chat has in flight, including a send the
-// agent has not echoed yet.
-
 let restRig: RestTestRig | undefined
 let adapter: CodexStructuredSessionAdapter | undefined
 let queuedRig: QueuedMessageTestRig | undefined
@@ -100,7 +97,7 @@ function unnamedStop(clientOperationId = hostTestOperationId()) {
   }
 }
 
-/** A Codex send whose `turn/start` Codex answered, with no `turn/started` or user echo yet. */
+/** turn/start answered, but no turn/started or user echo has arrived. */
 async function admittedCodexSend() {
   const codex = fakeCodex()
   const notify = (method: string, params: unknown) =>
@@ -181,11 +178,9 @@ it('Codex: never answers a quiet success while an admitted turn cannot yet take 
   expect(interrupts().length).toBeGreaterThan(0)
   const child = current.host.collaboratorsForTests().sessions.get(SESSION)?.child
   if (response.ok) {
-    // Success only once the agent's end is proven: the host lets go of a child only then.
     expect(response.value.cancelled).toBe(true)
     expect(child ?? null).toBeNull()
   } else {
-    // While the agent may still run the turn, the Stop says it is unconfirmed.
     expect(response.refusal.code).toBe('agent_session_operation_unknown')
   }
 })
@@ -234,7 +229,6 @@ it('stops the waiting send when a later send reaches the host just before the St
   const later = queuedRig.send('sent just before Stop')
   expect(await later.result).toMatchObject({ ok: true })
   expect(await queuedRig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-  // The waiting send's turn is interrupted, and the later one never reaches the agent.
   expect(queuedRig.cancelTurn).toHaveBeenCalledOnce()
   expect(await queuedRig.submission(later.id)).toMatchObject({ dispatchState: 'rejected' })
 })
@@ -242,7 +236,6 @@ it('stops the waiting send when a later send reaches the host just before the St
 it('a Stop after a Stop that failed still tries to stop the waiting send', async () => {
   queuedRig = await createQueuedMessageTestRig({ restartable: true })
   await queuedRig.workingSend()
-  // The interrupt fails and the child's exit cannot be proven: the send may run on.
   queuedRig.cancelTurn.mockImplementationOnce(async () => {
     throw new Error('interrupt timed out')
   })

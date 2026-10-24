@@ -7,6 +7,7 @@
 import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
 import {
   ConnectorAnswer,
+  ConnectorCancel,
   ConnectorPendingPrompt,
   ConnectorSend,
   ConnectorStart,
@@ -84,6 +85,17 @@ export const CONNECTOR_METHODS = [
         { source, externalId },
         promptId,
         optionId
+      )
+  }),
+  defineMethod({
+    name: 'connector.cancel',
+    permission: 'workspace',
+    params: ConnectorCancel,
+    handler: async ({ source, externalId, deliveryId }, context) =>
+      requireSeam(context.runtime).cancel(
+        runtimeConversationHost(context.runtime),
+        { source, externalId },
+        deliveryId
       )
   }),
   // Development only: the CLI has no stream transport, so a dev watch collects one window.

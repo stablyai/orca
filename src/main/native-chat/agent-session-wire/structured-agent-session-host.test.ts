@@ -173,7 +173,7 @@ describe('attach', () => {
     })
     const params = attachParams()
 
-    // Orca's own store fault: the child is gone, but nothing blames the provider.
+    // Host storage failure must not blame the provider.
     const refused = {
       ok: false,
       refusal: {
@@ -242,7 +242,7 @@ describe('attach', () => {
 })
 
 describe('cancel', () => {
-  /** The provider's turn row: a Stop naming a turn the journal never showed is late, a no-op. */
+  /** A named Stop needs an existing turn; unknown turns are late no-ops. */
   async function runningTurn(): Promise<void> {
     await attach()
     acquire.mock.calls
@@ -360,9 +360,7 @@ describe('cancel', () => {
       ...fields
     }
 
-    // Saved before the interrupt, which then threw: the answer is its receipt, never rewritten, and
-    // the retry is answered from it without reaching the provider again. The card stays pending,
-    // and its turn says the cancellation was not confirmed.
+    // The durable receipt survives interrupt failure; retry must not repeat the provider effect.
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const answered = await host.cancel(CALLER, params)
     expect(answered).toMatchObject({ ok: true })
@@ -395,7 +393,7 @@ describe('respondToPrompt', () => {
   })
 
   it("keeps a subagent's approval the subagent's once the user answers it", async () => {
-    // The answer revises the row without naming a producer, so it keeps the asker's.
+    // Answer revisions omit producer identity and must retain the asker.
     await attach()
     const child = { agentId: 'thread-child', producerKind: 'agent' as const }
     const identity = {
@@ -443,7 +441,7 @@ describe('respondToPrompt', () => {
       kind: 'approval',
       ...fields
     })
-    // Another device, or a re-click after a lost reply: a new operation making the same choice.
+    // A different operation repeats the choice, as another device or lost-reply retry would.
     const second = await host.respondToPrompt(
       { callerKey: 'client-2' },
       {
@@ -500,7 +498,7 @@ describe('respondToPrompt', () => {
       }
     )
 
-    // A refusal records nothing, so the retry is judged afresh: the prompt has moved on.
+    // Refusals record nothing; retry evaluates the now-changed prompt.
     expect(await host.respondToPrompt(CALLER, rejected)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_item_revision_stale' }
@@ -575,9 +573,7 @@ describe('setOption', () => {
 })
 
 describe('restart', () => {
-  /** A restarted process: the same directories, a new store and a new host over
-   *  them. Every lease loads unreconciled, so this is the state that decides
-   *  whether a persisted session is reachable at all. */
+  /** Reopen real directories with a new host/store and unreconciled leases. */
   async function reboot(
     probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
     adapterOverrides: Partial<StructuredAgentSessionAdapter> = {},
@@ -599,8 +595,7 @@ describe('restart', () => {
     replaceHostTestState({ store, host })
   }
 
-  /** The refusal a restarted host owes a client holding the dead generation's
-   *  fence: stale, with the live fence attached so the retry can succeed. */
+  /** Recover the live fence from a dead-generation refusal. */
   async function staleFenceFrom(held: number): Promise<number> {
     const refused = await host.attach(CALLER, ensureParams(held))
     if (refused.ok) {
@@ -630,7 +625,7 @@ describe('restart', () => {
     await reboot(async () => ({ outcome: 'indeterminate', reason: 'read does not need ownership' }))
     acquire.mockClear()
     const listRecords = vi.spyOn(store, 'listRecords')
-    // A list already on the stream hears of a chat restored without a child only from the restore.
+    // Childless restored chats reach live lists only through restore publication.
     const listed: AgentSessionStatusEvent[] = []
     host.subscribeStatus({ id: 'session-list', emit: (event) => listed.push(event) })
 
@@ -657,7 +652,7 @@ describe('restart', () => {
       ...record,
       lease: {
         ...record.lease,
-        // How a terminal owner an older build recorded loads.
+        // Legacy terminal ownership loads conflicted.
         claimStatus: 'conflicted',
         handoffStage: 'recovering'
       }
@@ -666,8 +661,7 @@ describe('restart', () => {
     acquire.mockClear()
 
     await host.restoreReadableSessions()
-    // The recovery stage clears on evidence at startup; the child comes back only once work
-    // starts it — here the explicit attach a send's delivery would make.
+    // Startup recovers the lease; work must still start the child.
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(await host.attach(CALLER, ensureParams(fence))).toMatchObject({ ok: true })
 
@@ -711,7 +705,6 @@ describe('restart', () => {
     release.resolve()
     await start
 
-    // Mid-start the lease is only reserved; ownership does not wait for the agent.
     expect(claimMidStart).toBe('reserved')
     expect(status).toMatchObject({ owner: 'native' })
   })
@@ -738,7 +731,7 @@ describe('restart', () => {
       ok: true
     })
     expect(acquire).toHaveBeenCalledOnce()
-    // An unverifiable pid may already belong to an unrelated process.
+    // Unverified PIDs may belong to unrelated processes.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
   })
 
@@ -833,8 +826,7 @@ describe('subscribe', () => {
     })
 
     expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
-    // The failed transport does not stop the delivery loop either: the handover still lands and
-    // reaches the live subscriber.
+    // Failed subscriber transport must not block provider delivery or healthy subscribers.
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
     await vi.waitFor(() =>
       expect(

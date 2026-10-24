@@ -1,6 +1,3 @@
-// What an operation that needs the agent is told when it cannot have one: a typed refusal in
-// words a person can read, never Orca's own error text.
-
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'

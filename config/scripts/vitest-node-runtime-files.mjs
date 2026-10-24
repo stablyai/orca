@@ -162,7 +162,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime-client.test.ts',
-  'src/shared/remote-runtime-connect-bound.test.ts',
+  'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
   // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
   'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',

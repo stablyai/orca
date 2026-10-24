@@ -21,6 +21,10 @@ import type {
   TerminalPaneRevealRequest
 } from '../../shared/terminal-pane-reveal'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type {
+  ProjectMovePauseRequest,
+  ProjectMovePauseResponse
+} from '../../shared/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -283,6 +287,8 @@ export type UiCommandEventApi = {
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
   /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
+  onProjectMovePause?: (callback: (request: ProjectMovePauseRequest) => void) => () => void
+  respondProjectMovePause?: (response: ProjectMovePauseResponse) => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   onSystemResumed: (callback: () => void) => () => void

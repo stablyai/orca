@@ -39,10 +39,14 @@ function harness() {
       async (
         handle: string,
         action: { text?: string; enter?: boolean },
-        options: { beforeWrite?: (ptyId: string) => void | Promise<void> }
+        options: {
+          beforeWrite?: (ptyId: string) => void | Promise<void>
+          reserveWrite?: (ptyId: string) => void
+        }
       ): Promise<RuntimeTerminalSend> => {
         state.beforeWrite?.()
         await options.beforeWrite?.('pty-1')
+        options.reserveWrite?.('pty-1')
         expect(action.enter).toBe(false)
         if (state.settlement.outcome === 'accepted') {
           keys.push(action.text ?? '')
@@ -84,6 +88,44 @@ describe('TerminalAgentPromptAnswers', () => {
       reason: 'prompt_not_pending'
     })
     expect(h.keys).toEqual(['1'])
+  })
+
+  it('allows only one concurrent answer to claim the prompt', async () => {
+    const h = harness()
+    const { promptId } = h.answers.pending(h.runtime, target)!
+    await expect(Promise.all([h.answer(promptId), h.answer(promptId)])).resolves.toEqual([
+      { outcome: 'accepted' },
+      { outcome: 'refused', reason: 'prompt_not_pending' }
+    ])
+    expect(h.keys).toEqual(['1'])
+  })
+
+  it('does not unclaim another answer when a concurrent fence rejects without an error', async () => {
+    const h = harness()
+    const { promptId } = h.answers.pending(h.runtime, target)!
+    const accepted = h.answer(promptId)
+    const refused = h.answers.answer(h.runtime, target, {
+      promptId,
+      optionId: 'reject_once',
+      signal: new AbortController().signal,
+      beforeWrite: () => Promise.reject()
+    })
+    await expect(accepted).resolves.toEqual({ outcome: 'accepted' })
+    await expect(refused).resolves.toEqual({ outcome: 'refused', reason: 'agent_not_reachable' })
+    expect(h.answers.pending(h.runtime, target)).toBeNull()
+    expect(h.keys).toEqual(['1'])
+  })
+
+  it('keeps the claim when the writer throws after the fence passes', async () => {
+    const h = harness()
+    const { promptId } = h.answers.pending(h.runtime, target)!
+    h.runtime.sendTerminal.mockImplementationOnce(async (_handle, _action, options) => {
+      await options.beforeWrite?.('pty-1')
+      options.reserveWrite?.('pty-1')
+      throw new Error('transport_lost')
+    })
+    await expect(h.answer(promptId)).resolves.toEqual({ outcome: 'unknown' })
+    expect(h.answers.pending(h.runtime, target)).toBeNull()
   })
 
   it('refuses a prompt the agent has moved on from, or a later one', async () => {

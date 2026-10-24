@@ -41,8 +41,7 @@ async function mapWatcherEvent(
     isDirectory = await statWatcherEventPath(event.path, signal)
   } catch {
     signal?.throwIfAborted()
-    // Why: a path can vanish between the native event and metadata lookup.
-    // Treat unknown metadata as a file-like event so parent invalidation still runs.
+    // Vanished paths still need parent invalidation; unknown metadata remains file-like.
   }
   return { type: event.type, path: event.path, isDirectory }
 }

@@ -1,8 +1,3 @@
-// Which turn a person's Stop that named no turn binds: one that ends while the Stop settles, and
-// the turn its interrupt took. A Stop that stopped nothing binds no turn that opens after it, nor
-// does a Stop of a start that never landed; a card it held, which Resume releases, and anything
-// sent after it end as their own. Turn rows name the send that opened them, as Codex writes them.
-
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -72,7 +67,6 @@ async function laterTurn() {
     .find((turn) => turn?.turnId === 'turn-later')
 }
 
-/** Every end row written for the later turn, in order: a relabel would show as two. */
 function laterTurnEndRows() {
   const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
   if (!since.ok) {
@@ -84,7 +78,6 @@ function laterTurnEndRows() {
   })
 }
 
-/** The turn send `clientMessageId` opens, running, named by its row as Codex writes it. */
 async function turnOpenedBy(clientMessageId: string, state: 'running' | 'interrupted' = 'running') {
   await journal().appendItem(
     LATER_TURN,
@@ -107,11 +100,8 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** A person's Stop of a start that never landed, whose send opens no turn. `held`: a card queued
- *  behind the start, which the Stop holds. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-  // Held for a child that never proves its start, so it is never handed over.
   rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
@@ -122,7 +112,6 @@ async function stopOfStart(options: { held?: true } = {}): Promise<string | unde
   return held
 }
 
-/** Orchestration mail after the Stop starts a new child and its turn runs. */
 async function mailTurn(): Promise<void> {
   const handedOver = rig.dispatch.mock.calls.length
   const mail = rig.send('mail for the retry')
@@ -132,9 +121,7 @@ async function mailTurn(): Promise<void> {
   await turnOpenedBy(mail.id)
 }
 
-/** The host evicts the chat; the Stop events as its provider close finds them. */
-/** The person's Stop still pauses the reopened chat. The close hides its row, as every close of a
- *  chat does: nothing runs there until its next turn. */
+/** Close hides the pause row while preserving the derived personal Stop hold. */
 async function stillStopped(): Promise<boolean> {
   expect(await rig.queuePause()).toBeNull()
   return structuredQueuePauses(journal()).some((pause) => pause.reason === 'stopped')
@@ -143,8 +130,7 @@ async function stillStopped(): Promise<boolean> {
 async function evictedAt(): Promise<string[]> {
   let atClose: JournalStopEvent[] = []
   rig.closeSession.mockImplementationOnce(async () => {
-    // The event is issued before the kill, never awaited by it: the journal writes it ahead of
-    // anything the kill makes the child write.
+    // Yield until the pre-kill event lands ahead of child-generated rows.
     await new Promise((resolve) => setImmediate(resolve))
     atClose = stopEvents()
     return true
@@ -229,8 +215,6 @@ describe('a Stop naming no turn binds the turn live as its event is written', ()
     )
   }
 
-  // The turn the Stop read when captured ended while its save waited, and the send handed over
-  // before it opened the next: the Stop's event names that one, and only that one is stopped.
   it('names and binds the turn that opened while its save waited, never the one before', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
@@ -255,7 +239,6 @@ describe('a Stop naming no turn binds the turn live as its event is written', ()
     held.mockRestore()
     expect(stopEvents()).toEqual([expect.objectContaining({ turnId: 'turn-later' })])
     expect(rig.cancelTurn).toHaveBeenCalledOnce()
-    // Its note is keyed by that turn too.
     const note = journal()
       .snapshot()
       .items.find((item) => item.body.kind === 'status')
@@ -278,7 +261,6 @@ describe('a Stop naming no turn binds the turn live as its event is written', ()
 })
 
 describe('a Stop pressed before its send opened a turn binds only the turn it stopped', () => {
-  /** The send the Stop stopped is handed over and unopened; a card waits behind it. */
   async function stopBeforeTheTurnShowed(
     answer: Awaited<ReturnType<QueuedMessageTestRig['cancelTurn']>> = { cancelled: true }
   ): Promise<{ stopped: string; held: string }> {
@@ -300,7 +282,6 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
     expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
   })
 
-  // The interrupt reaches the turn as it opens; its end is written before the Stop answers.
   it('reads a turn that ends while the Stop settles as interrupted from its first end row', async () => {
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()
@@ -353,13 +334,11 @@ describe('a Stop pressed before its send opened a turn binds only the turn it st
 })
 
 describe('a press that writes no Stop event of its own', () => {
-  // A turnless Stop long since settled, then a later turn the person's own send opened.
   async function laterTurnAfterAnEarlierStop(): Promise<string> {
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
-    // Its turn never opened, so the Stop took it back, as the provider's Stop settles one.
     await withdrawnByStop(rig, stopped)
     const sent = await rig.workingSend()
     await rig.settleAccepted(sent, 'sent')
@@ -367,7 +346,6 @@ describe('a press that writes no Stop event of its own', () => {
     return sent
   }
 
-  // A late Stop is an accepted no-op: it never reaches the provider, so it cannot stop a newer turn.
   it('reopens no earlier Stop: a late Stop naming a turn already over interrupts nothing', async () => {
     await laterTurnAfterAnEarlierStop()
     const earlier = journal().stopMarks.latest()
@@ -384,7 +362,6 @@ describe('a press that writes no Stop event of its own', () => {
     expect(await laterTurn()).toMatchObject({ state: 'running' })
   })
 
-  // Saved first: a press whose acceptance failed wrote nothing and reached nothing.
   it('reopens no earlier Stop: a press whose acceptance failed interrupts nothing', async () => {
     await laterTurnAfterAnEarlierStop()
     const earlier = journal().stopMarks.latest()
@@ -450,7 +427,6 @@ describe('a host stop with no turn running after a Stop that named none', () => 
     }
   )
 
-  // Codex could not reach a turn still able to open, and its process could not be ended.
   it('writes nothing after a Stop whose kill failed, and the card stays held', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
@@ -468,7 +444,6 @@ describe('a host stop with no turn running after a Stop that named none', () => 
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
-    // The stopped send's turn opens after that turnless Stop, and ends interrupted, unanswered.
     await openRigTurnFor(rig, stopped)
     await openRigTurnFor(rig, stopped, 'interrupted')
     const mail = rig.send('mail for the lead')
@@ -482,8 +457,6 @@ describe('a host stop with no turn running after a Stop that named none', () => 
 })
 
 describe('a rewind that restates a turnless Stop', () => {
-  // The rewind writes the Stop still in force after the turns it keeps, at a new position; the
-  // mail after the rewind is still its own.
   it('binds no turn opened after the rewind', async () => {
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()

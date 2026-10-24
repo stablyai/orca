@@ -5,17 +5,28 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payloa
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { admitConnectorAgent } from './connector-agents'
+import { cancelConversation, type CancelTerminal } from './external-conversation-cancel'
 import { ConversationChain } from './external-conversation-chain'
-import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
-import { ConversationPrompts, type PromptTerminal } from './external-conversation-prompts'
+import {
+  ConversationEvents,
+  HOST_CLOCK,
+  type ConversationWatchListener
+} from './external-conversation-events'
+import { ConversationPrompts } from './external-conversation-prompts'
 import type { DeliveryReceipts } from './external-conversation-delivery-receipts'
 import {
   findLink,
+  requireLink,
   writeLink,
   type ExternalConversationLinkStore,
   type LinkedConversation
 } from './external-conversation-links'
-import { bindPane, deliverFollowUp, type FollowUpTerminal } from './external-conversation-send'
+import {
+  bindPane,
+  deliverFollowUp,
+  sameBinding,
+  type FollowUpTerminal
+} from './external-conversation-send'
 import { reopenLinkedAgent, type ReopenTerminal } from './external-conversation-reopen'
 import { LinkedSessionCapture, type SessionRows } from './external-conversation-session-capture'
 import type { AgentPromptExpectedBinding } from '../runtime/runtime-terminal-contracts'
@@ -39,7 +50,7 @@ export type ExternalConversationHost = {
   terminal: ConversationTerminal
 }
 
-export type ConversationTerminal = FollowUpTerminal & ReopenTerminal & PromptTerminal
+export type ConversationTerminal = FollowUpTerminal & ReopenTerminal & CancelTerminal
 
 export function runtimeConversationHost(runtime: OrcaRuntimeService): ExternalConversationHost {
   return { launcher: runtimeConversationLauncher(runtime), terminal: runtime }
@@ -84,6 +95,7 @@ export class ExternalConversationSeam {
     this.prompts = new ConversationPrompts(deps.readSettings, deps.readHookRow)
     // Cancel removed-workspace lanes; surviving links distinguish same-path twins on other hosts.
     this.releaseRemovals = deps.onWorkspaceRemoved((worktreeId) => {
+      this.events?.forgetUnlinked()
       for (const [id, { key, worktreeId: linkedTo }] of this.linked) {
         if (linkedTo === worktreeId && !findLink(this.deps.store, key)) {
           this.linked.delete(id)
@@ -110,7 +122,7 @@ export class ExternalConversationSeam {
   }
 
   pendingPrompt(host: ExternalConversationHost, key: ConversationKey): PendingPrompt | null {
-    return this.prompts.pending(host.terminal, this.requireLink(key).link)
+    return this.prompts.pending(host.terminal, requireLink(this.deps.store, key).link)
   }
 
   answer(
@@ -122,11 +134,20 @@ export class ExternalConversationSeam {
     if (this.abort.signal.aborted) {
       return Promise.resolve(refused('connectors_disabled'))
     }
-    return this.prompts.answer(host.terminal, this.requireLink(key).link, {
+    return this.prompts.answer(host.terminal, requireLink(this.deps.store, key).link, {
       promptId,
       optionId,
       signal: this.abort.signal
     })
+  }
+
+  /** Receipted like a send, so a retried delivery never cancels twice. */
+  cancel(host: ExternalConversationHost, key: ConversationKey, id: string): Promise<Delivery> {
+    const { prompts, chain, events } = this
+    const seam = { ...this.deps, prompts, chain, events }
+    return this.deps.receipts.run(key, id, 'connector.cancel', [], () =>
+      cancelConversation(host.terminal, seam, key, this.abort.signal)
+    )
   }
 
   /** A snapshot of every linked conversation first, then its events; returns the release. */
@@ -137,24 +158,12 @@ export class ExternalConversationSeam {
     this.events ??= new ConversationEvents({
       store: this.deps.store,
       readHookRow: this.deps.readHookRow,
+      readBinding: (paneKey) => bindPane(host.terminal, paneKey)?.binding ?? null,
       onAgentPaneChange: this.deps.onAgentPaneChange,
       pendingPrompt: (link) => this.prompts.pending(host.terminal, link),
-      setTimer: (run, delayMs) => {
-        const timer = setTimeout(run, delayMs)
-        timer.unref?.()
-        return { cancel: () => clearTimeout(timer) }
-      },
-      now: Date.now
+      ...HOST_CLOCK
     })
     return this.events.watch(listener)
-  }
-
-  private requireLink(key: ConversationKey): LinkedConversation {
-    const linked = findLink(this.deps.store, key)
-    if (!linked) {
-      throw new Error('external_conversation_not_found')
-    }
-    return linked
   }
 
   async start(
@@ -320,8 +329,4 @@ export class ExternalConversationSeam {
     this.chain.cancel(id, reason, laneSignal)
     return refused(reason)
   }
-}
-
-function sameBinding(a: AgentPromptExpectedBinding, b: AgentPromptExpectedBinding): boolean {
-  return a.ptyId === b.ptyId && a.processIncarnation === b.processIncarnation
 }

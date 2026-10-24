@@ -55,6 +55,12 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
       accumulator.sessionId = sessionId
     }
     updateTimeline(accumulator, extractString(data.startTime))
+    // Folder-trust notices are optional; session.start records the launch directory.
+    const context = asRecord(data.context)
+    if (context) {
+      accumulator.cwd ??= extractString(context.cwd) ?? extractString(context.gitRoot)
+      accumulator.branch ??= extractString(context.branch)
+    }
     return
   }
   if (record.type === 'session.model_change' && data) {
@@ -62,19 +68,15 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
     return
   }
   if (record.type === 'session.info' && data) {
-    accumulator.cwd = extractTrustedFolder(data.message) ?? accumulator.cwd
+    accumulator.cwd ??= extractTrustedFolder(data.message)
     return
   }
   if (record.type === 'user.message' && data) {
     accumulator.messageCount++
-    accumulator.title ??= normalizeTitleText(
-      extractString(data.transformedContent) ?? extractString(data.content) ?? ''
-    )
-    addSessionText(accumulator, {
-      role: 'user',
-      text: extractString(data.transformedContent) ?? extractString(data.content),
-      timestamp: record.timestamp
-    })
+    // Why: transformedContent is the prompt plus context Copilot injects (`<current_datetime>`).
+    const text = extractString(data.content) ?? extractString(data.transformedContent)
+    accumulator.title ??= normalizeTitleText(text ?? '')
+    addSessionText(accumulator, { role: 'user', text, timestamp: record.timestamp })
     return
   }
   if (record.type === 'assistant.message' && data) {

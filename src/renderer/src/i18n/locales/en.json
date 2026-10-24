@@ -3665,7 +3665,11 @@
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
             "openInThisGroup": "Open in this group",
-            "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
+            "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
+            "fileInOtherWorkspace": "This file is in {{value0}}",
+            "fileInAnotherWorkspace": "This file is in another workspace",
+            "openInOwningWorkspace": "Open there",
+            "openedHereReadOnly": "Opened here as read-only"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -9224,6 +9228,8 @@
           "e9609ddca6": "Proxy, jump host, and connection reuse",
           "8c922dffba": "Reuse SSH connection for faster setup",
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
+          "proxyConnectionReuse": "Reuse one proxy connection",
+          "proxyConnectionReuseHelp": "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules.",
           "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
           "allowRemoteCliControlHelp": "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server.",
           "editTitle": "Edit SSH host",
@@ -13363,6 +13369,28 @@
           "attentionSharedNotCurrent": "Needs attention · The shared copy this folder uses is not Orca’s",
           "resultUpdateSkippedPlaces": "{{result}} · Update skipped in {{places}} places: {{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · Update skipped in {{agent}}: {{reason}}"
+        },
+        "recoverServer": {
+          "title": "Recover Orca’s server",
+          "description": "Orca’s server on this host won’t start because a lock from an earlier run is still in place.",
+          "checking": "Checking the lock…",
+          "confirmCheck": "No other machine sharing this home is running Orca",
+          "cancel": "Cancel",
+          "confirm": "Clear lock and restart",
+          "eligible": "Nothing answers on this machine at its old address, but Orca can’t rule out another machine with the same name that shares this home folder.",
+          "host": "Host",
+          "lockBoot": "Written during boot",
+          "currentBoot": "Current boot",
+          "warning": "Only continue if no other machine sharing this home runs Orca for this profile.",
+          "none": "There is no lock to clear any more. Reconnect to start this host’s Orca server.",
+          "manualCommand": "Run this on the host, or delete the lock file shown in Details:",
+          "manualDelete": "Delete the lock file shown in Details once you are sure no other machine uses it.",
+          "action": "Recover server…",
+          "written": "Written",
+          "manualDeleteCommand": "Delete the lock on the host by hand:",
+          "manualDeleteWarning": "Only do this if no other machine sharing this home runs Orca for this profile.",
+          "close": "Close",
+          "reclaimedNotStarted": "The lock was cleared, but Orca’s server did not start."
         }
       },
       "right": {
@@ -16209,6 +16237,7 @@
           "6c4f1a8d2e": "Check details are unavailable."
         },
         "EditorPanelHeader": {
+          "readOnlyBadge": "Read-only",
           "fb8331694e": "Open Preview to the Side",
           "4157f3cbf3": "Open Markdown Preview",
           "269ce4842b": "Copy Relative Path",

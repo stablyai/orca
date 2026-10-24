@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -8,6 +9,10 @@ import {
   installTerminalLinkTestEnvironment
 } from './terminal-link-handlers-test-harness'
 
+const findWorkspaceFileRouteMock = vi.hoisted(() =>
+  vi.fn<() => RuntimeWorkspaceFileRoute | null>(() => null)
+)
+const showHintMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
@@ -28,6 +33,16 @@ vi.mock('@/lib/connection-context', () => ({
 
 vi.mock('./terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: vi.fn()
+}))
+
+// Why: this client's catalog lacks the host's other workspaces unless a spec says otherwise.
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: findWorkspaceFileRouteMock
+}))
+
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: showHintMock
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -81,6 +96,36 @@ describe('a paired-server link outside its own workspace', () => {
       }),
       { forceContentReload: true }
     )
+  })
+
+  it('opens a file in a workspace this client knows there, with no read-only view or hint', async () => {
+    findWorkspaceFileRouteMock.mockReturnValue({
+      worktreeId: 'wt-main',
+      relativePath: 'src/index.ts',
+      executionHostId: 'runtime:env-1'
+    })
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'src/index.ts',
+      absolutePath: '/repo/src/index.ts',
+      exists: true,
+      isDirectory: false
+    })
+
+    openDetectedFilePath('/repo/src/index.ts', 3, null, featureWorktree)
+    await flushDoubleRaf()
+
+    // Why: a server reads only by workspace-relative path, so its file opens in its own workspace.
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-main', {
+      providesInitialSurface: true,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ relativePath: 'src/index.ts', worktreeId: 'wt-main' }),
+      { forceContentReload: true }
+    )
+    expect(openFileMock.mock.calls[0][0]).not.toHaveProperty('readOnly')
+    expect(showHintMock).not.toHaveBeenCalled()
   })
 
   it("opens the host's spelling of the path so the tab stays a workspace file", async () => {

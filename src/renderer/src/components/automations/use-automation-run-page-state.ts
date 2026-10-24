@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
-  getAutomationTargetFromHostId
+  getAutomationListedTargetFromHostId
 } from './automation-host-client'
 import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-filter'
 import { useAppStore } from '@/store'
@@ -37,6 +37,7 @@ export function useAutomationRunPageState({
     worktreeForRow,
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
+    runtimeEnvironments,
     selectedId,
     setSelectedId,
     unifiedTabsByWorktree,
@@ -109,7 +110,7 @@ export function useAutomationRunPageState({
       return
     }
     const pendingTargetKey = getAutomationHostTargetKey(
-      getAutomationTargetFromHostId(pending.hostId)
+      getAutomationListedTargetFromHostId(pending.hostId, { runtimeEnvironments })
     )
     if (automationHostTargetKey !== pendingTargetKey) {
       return
@@ -202,6 +203,7 @@ export function useAutomationRunPageState({
     visibleRows,
     pendingAutomationRunNavigation,
     pageView,
+    runtimeEnvironments,
     selectExternalKey,
     selectedExternalKey,
     selectedId,

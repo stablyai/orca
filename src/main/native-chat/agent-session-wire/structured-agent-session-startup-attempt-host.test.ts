@@ -1,7 +1,3 @@
-// The host's startup attempt and its hold on delivery, against the real host, store and journal
-// with a scripted adapter. A send to a chat whose agent is still starting is accepted at once and
-// handed over only once the start proves itself; every way a start ends settles what was held.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -79,7 +75,6 @@ function acquisition(input: StructuredAgentSessionAcquireInput): AgentSessionAcq
   }
 }
 
-/** A spawn that publishes its child before open proves readiness. */
 const publishFirst: StructuredAgentSessionAdapter['acquire'] = async (input) => acquisition(input)
 
 async function startHost(): Promise<void> {
@@ -118,7 +113,6 @@ async function startHost(): Promise<void> {
   })
 }
 
-/** A fresh host with no child, so the next send starts one through `acquire`. */
 async function restartWith(next: StructuredAgentSessionAdapter['acquire']): Promise<void> {
   await host.close(SESSION, 'evict')
   await host.flushAllStreamedEvents()
@@ -195,7 +189,6 @@ async function submission(id: string): Promise<AgentJournalSubmission | undefine
   )
 }
 
-/** The send's start has published its child, still starting; the host holds the send. */
 async function heldBehindStart(text: string, interval = 0): Promise<string> {
   const id = await accept(text)
   await eventually(
@@ -246,7 +239,6 @@ describe('a send while the agent starts', () => {
     await restartWith(publishFirst)
     const first = await heldBehindStart('first')
     const second = await accept('second')
-    // The same id again is the same message: it is recorded and handed over once.
     await accept('first', first)
 
     await proveOpen()
@@ -300,7 +292,7 @@ describe('a start that ends before it proves itself', () => {
     })
     expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(closeSession).toHaveBeenCalled()
-    // The taken-back send carries the Stop's feedback; a host row would say it twice.
+    // The rejected send already carries Stop feedback; another host row would duplicate it.
     const snapshot = await host.journalSnapshot(SESSION)
     expect(
       projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions)
@@ -440,7 +432,6 @@ describe('what a started child reports', () => {
     await restartWith(publishFirst)
     await heldBehindStart('hello')
     const listing = { models: [], configuredDefault: { modelId: 'opus' } }
-    // Claude's settings readback can land while the host still holds the child as starting.
     const reported = host.handleAdapterEvent({
       type: 'options-reported',
       sessionId: SESSION,

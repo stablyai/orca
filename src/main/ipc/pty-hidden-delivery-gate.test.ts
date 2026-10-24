@@ -53,7 +53,6 @@ describe('pty hidden delivery gate', () => {
     consumeHiddenRendererPtyDropMemory(PTY_ID, drop.hiddenDropEpisode)
     expect(recordHiddenRendererPtyDataDrop(PTY_ID, 10).shouldEmitRestoreMarker).toBe(false)
 
-    // The reveal painted the snapshot: the next episode reports again.
     unmarkHiddenRendererPty(PTY_ID)
     consumeHiddenRendererPtyDropMemory(PTY_ID, drop.hiddenDropEpisode)
     markHiddenRendererPty(PTY_ID)
@@ -64,8 +63,7 @@ describe('pty hidden delivery gate', () => {
     markHiddenRendererPty(PTY_ID)
     const { hiddenDropEpisode } = recordHiddenRendererPtyDataDrop(PTY_ID, 10)
 
-    // A pane retiring while hidden unhides after unregistering its marker
-    // handler; every later unhide must still be able to re-emit.
+    // A retiring pane may unhide after unregistering its handler; later reveals must still request restore.
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
 
@@ -90,7 +88,6 @@ describe('pty hidden delivery gate', () => {
     // That snapshot may predate the new drop, so its ack must not retire the latch.
     consumeHiddenRendererPtyDropMemory(PTY_ID, first)
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
-    // Nor after the second reveal: the older restore still covers only episode one.
     consumeHiddenRendererPtyDropMemory(PTY_ID, first)
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
 
@@ -129,8 +126,7 @@ describe('pty hidden delivery gate', () => {
   })
 
   it('keeps drop memory when an already-dropped PTY is re-marked hidden', () => {
-    // Why: a hidden remount or renderer reload re-marks without an unhide in
-    // between — clearing the latch there would make reveal skip the restore.
+    // Hidden remounts and reloads re-mark without revealing; preserve the unrestored gap.
     markHiddenRendererPty(PTY_ID)
     recordHiddenRendererPtyDataDrop(PTY_ID, 10)
     markHiddenRendererPty(PTY_ID)
@@ -155,16 +151,14 @@ describe('pty hidden delivery gate', () => {
 
     resetRendererScopedHiddenPtyDeliveryState()
 
-    // Hidden marks and interest holds died with the old renderer process.
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(false)
     expect(getHiddenRendererPtyDeliveryDebug()).toMatchObject({
       hiddenDeliveryGatedPtyCount: 0,
       deliveryInterestPtyCount: 0
     })
-    // pty-2's leaked interest is gone: re-marking gates it again.
     markHiddenRendererPty('pty-2')
     expect(shouldDropHiddenRendererPtyData('pty-2', {})).toBe(true)
-    // Drop memory survives so the new renderer's first unhide still restores.
+    // Preserve drop memory so the replacement renderer can still request restore.
     markHiddenRendererPty(PTY_ID)
     expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
   })

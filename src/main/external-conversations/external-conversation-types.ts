@@ -14,7 +14,9 @@ export const CONNECTOR_REFUSALS = [
   // An answer's: the prompt was answered or moved on, only Orca can answer it, or no such option.
   'prompt_not_pending',
   'prompt_unsupported',
-  'option_not_offered'
+  'option_not_offered',
+  // Queued or held work a cancel settled before it was written.
+  'conversation_cancelled'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 

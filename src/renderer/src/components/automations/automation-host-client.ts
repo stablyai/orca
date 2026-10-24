@@ -1,4 +1,5 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import { assertEnvironmentSupportsExtraAgentArgs } from './automation-capability-probe'
 import type {
   Automation,
@@ -49,6 +50,19 @@ export function getAutomationTargetFromHostId(
   return parsed?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsed.environmentId }
     : { kind: 'local' }
+}
+
+/**
+ * The authority a host id is listed under on this client. A paired web client's local and SSH
+ * hosts are its server's, which the catalog lists only as that runtime.
+ */
+export function getAutomationListedTargetFromHostId(
+  hostId: string | null | undefined,
+  state: { runtimeEnvironments?: readonly { id: string }[] }
+): AutomationHostTarget {
+  const target = getAutomationTargetFromHostId(hostId)
+  const environmentId = target.kind === 'local' ? getPairedWebClientEnvironmentId(state) : null
+  return environmentId ? { kind: 'environment', environmentId } : target
 }
 
 export function getAutomationAuthorityTarget(

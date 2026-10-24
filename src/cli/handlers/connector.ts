@@ -135,6 +135,14 @@ export const CONNECTOR_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatDelivery)
   },
+  'connector cancel': async ({ flags, client, json }) => {
+    const result = await callConnector<ConnectorDelivery>(
+      client,
+      'connector.cancel',
+      conversationParams(flags)
+    )
+    printResult(result, json, formatDelivery)
+  },
   'connector watch': async ({ flags, client, json }) => {
     const forMs = getOptionalNonNegativeIntegerFlag(flags, 'for-ms') ?? DEFAULT_WATCH_MS
     const result = await callConnector<{ snapshot: unknown; events: unknown[] }>(

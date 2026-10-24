@@ -113,7 +113,6 @@ export type RuntimeApi = {
       timeoutMs?: number
       observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
-    retryControlConnection?: (args: { selector: string }) => Promise<void>
     onSharedControlDiagnostics?: (
       callback: (event: {
         environmentId: string

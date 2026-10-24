@@ -6,7 +6,7 @@ import {
 import { tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
-/** Use the same grouping rules as terminal launches before the provider filters its owned flags. */
+/** Match terminal argument grouping before filtering provider-owned flags. */
 export function structuredAgentConfiguredArgs(
   agent: string,
   settings: AgentLaunchProfileSettings & Partial<Pick<GlobalSettings, 'terminalWindowsShell'>>,

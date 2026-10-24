@@ -1,7 +1,3 @@
-// Damage SQLite reports in the middle of a session: the write that meets it fails and says the
-// chat cannot be loaded, and nothing is renamed or rebuilt. A Stop is saved before it acts, so one
-// that cannot be saved, or whose receipt cannot be read, interrupts nothing: the agent runs on.
-
 import { readdir } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -32,7 +28,6 @@ beforeEach(() => {
   ;({ root, store, host, cancelTurn, acquire } = hostTestState())
 })
 
-/** The chat with its turn running, which a Stop naming it reaches. */
 async function runningTurn(): Promise<void> {
   await attach()
   acquire.mock.calls
@@ -50,7 +45,7 @@ afterEach(() => vi.restoreAllMocks())
 const sqliteError = (message: string, errcode: number): Error =>
   Object.assign(new Error(message), { code: 'ERR_SQLITE_ERROR', errcode })
 
-/** Every statement on the chat records' tables fails; the history beside them still works. */
+/** Fail chat-record statements while leaving history readable. */
 function failRecordStatements(error: Error): void {
   const connection = openTestJournalHostDatabase(root).db
   const prepare = connection.prepare.bind(connection)
@@ -65,12 +60,10 @@ function failRecordStatements(error: Error): void {
 const stop = (turnEnvelope = envelope('agentSession.cancel', { turnId: 'turn-1' })) =>
   host.cancel(CALLER, { envelope: turnEnvelope, turnId: 'turn-1' })
 
-// T-corrupt-midsession.
 it('refuses a send and a Stop as corrupt when SQLite reports damage, interrupting nothing', async () => {
   await runningTurn()
-  // The attach's restart-offer withdrawal holds a lock file until it ends; snapshot after it.
+  // Drain restart-offer withdrawal before snapshotting its lock files.
   await hostTestRecoveryCapsuleSettled()
-  // Order-free: recursive listing order is the runtime's, and only what exists matters.
   const files = (await readdir(root, { recursive: true })).toSorted()
   const damaged = sqliteError('database disk image is malformed', 11)
   vi.spyOn(openTestJournalHostDatabase(root), 'transaction').mockImplementation(() => {
@@ -89,7 +82,6 @@ it('refuses a send and a Stop as corrupt when SQLite reports damage, interruptin
       details: { reason: 'journalCorrupt' }
     }
   })
-  // Its acceptance meets the same damage, so it says so and the agent keeps running.
   expect(await stop()).toMatchObject({
     ok: false,
     refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
@@ -107,7 +99,7 @@ it.each([
   failRecordStatements(error)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-  // Its receipt cannot be read, so whether this id was already accepted is unknown.
+  // Unreadable receipts leave prior acceptance unknown.
   await expect(stop()).resolves.toMatchObject({
     ok: false,
     refusal: { code: 'agent_session_operation_unknown' }
@@ -120,13 +112,13 @@ it('replays a recorded Stop from its receipt when its ledger cannot be written',
   const stopEnvelope = envelope('agentSession.cancel', { turnId: 'turn-1' })
   await expect(stop(stopEnvelope)).resolves.toMatchObject({ ok: true, replayed: false })
   expect(cancelTurn).toHaveBeenCalledTimes(1)
-  // A replay writes nothing on a healthy store; one that refuses every transaction still throws.
+  // Even receipt replay requires the store transaction to succeed.
   vi.spyOn(store, 'admitMutationOperation').mockRejectedValue(
     sqliteError('database disk image is malformed', 11)
   )
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-  // Interrupting twice would stop a turn the client never asked to stop.
+  // A repeated interrupt could stop a turn this request never targeted.
   await expect(stop(stopEnvelope)).resolves.toMatchObject({
     ok: true,
     replayed: true,

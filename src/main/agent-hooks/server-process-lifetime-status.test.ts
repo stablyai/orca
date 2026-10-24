@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
@@ -16,6 +16,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   server.stop()
+  vi.restoreAllMocks()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -42,10 +43,6 @@ async function openCodeHook(hookEventName: string): Promise<void> {
 
 function paneState(): string {
   return server.getStatusSnapshotForPane(PANE)[0]?.state ?? 'missing'
-}
-
-async function nextMillisecond(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 5))
 }
 
 // Process-lifetime status yields when a hook producer reports the same pane during the command.
@@ -76,8 +73,9 @@ describe('process-lifetime status', () => {
   })
 
   it('does not yield to a hook row from before the command started', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     await openCodeHook('SessionIdle')
-    await nextMillisecond()
+    now.mockReturnValue(1_800_000_000_001)
     const commandStartedAt = Date.now()
     processLifetime('working', commandStartedAt)
     expect(paneState()).toBe('working')

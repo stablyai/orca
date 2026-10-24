@@ -1,6 +1,4 @@
-// A Stop that names no turn stops what the conversation has in flight: it withdraws what is
-// queued, and interrupts a handed-over message even before the provider has opened its turn —
-// the gap no client can name a turn for. Against the real host, store and journal.
+// Unnamed Stop reaches queued sends and handed-over work whose turn has not opened yet.
 
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -54,7 +52,6 @@ let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 let acknowledgeSessionRelease: Mock<
   NonNullable<StructuredAgentSessionAdapter['acknowledgeSessionRelease']>
 >
-/** Codex's answer by default: its Stop keeps the child. */
 let stopEndsSession: boolean
 let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let events: StructuredAgentSessionEventSink | undefined
@@ -67,7 +64,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-conversation-stop-'))
   resetHostTestOperationIds()
   events = undefined
-  // Admitted, not accepted: the message is written and its turn has not opened.
+  // Transport admission precedes provider acknowledgement/turn-open.
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
   closeSession = vi.fn(async () => true)
@@ -123,7 +120,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** The event sink the host handed this test's child at attach. */
 function hostEvents(): StructuredAgentSessionEventSink {
   if (!events) {
     throw new Error('the host attached no event sink')
@@ -211,7 +207,6 @@ describe('a Stop that names no turn', () => {
       fence: 1,
       spawnToken: 'spawn-catalog',
       options: { serviceTier: 'priority' },
-      // Codex's turn events reach the host's journal, as the runtime wires them.
       events: hostEvents()
     })
     dispatch.mockImplementation((input) => adapter.dispatch(input))
@@ -261,8 +256,7 @@ describe('a Stop that names no turn', () => {
     })
   })
 
-  // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
-  // started. That turn ran nothing, so it draws no turn of its own, whichever of the two is read first.
+  // Codex can interrupt before turn start; neither reply/frame ordering should create a visible empty turn.
   it.each([
     ['its end follows the answer', 'after'],
     ['its end is read before the answer', 'before'],
@@ -345,12 +339,10 @@ describe('a Stop that names no turn', () => {
     expect(items.filter((item) => item.body.kind === 'turn').map((item) => item.body)).toEqual([
       expect.objectContaining({ turnId: 'turn-1', state: 'interrupted' })
     ])
-    // Something of it ran, so it is never taken back as unrun. Codex sends no item before a turn's
-    // start, so this order only guards the record; the send's own end is not this test's.
+    // This impossible provider order guards records only; observed work cannot become unrun.
     expect((await submission(first.id))?.dispatchState).not.toBe('rejected')
   })
 
-  // Only an interrupted end ran nothing for certain: a failure keeps its record, which carries why.
   it('keeps the record of a turn Codex failed without starting it', async () => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
@@ -430,8 +422,6 @@ describe('a Stop that names no turn', () => {
     pending.resolve({ data: [], nextCursor: null })
   })
 
-  // The provider took the Stop on the turn it named and never opened it: no turn-ended event will
-  // come, so the Stop's answer settles the send, and its own row says it never started.
   it('delivers a newly accepted message after Stop withdraws the prior send', async () => {
     const first = send('first send')
     await first.result
@@ -451,8 +441,7 @@ describe('a Stop that names no turn', () => {
     expect(dispatch.mock.calls[1]![0].clientMessageId).toBe(replacement.id)
   })
 
-  // Codex can take a Stop as the turn starts, with that turn's start still buffered when the answer
-  // lands. A bound sink hands each event to the journal as it is read, so the note lands after it.
+  // Bound sinks journal turn-start before the following Stop reply, even if startup was buffered.
   it("writes a taken Stop's note after the turn record the provider sent before its answer", async () => {
     const first = send('first send')
     await first.result
@@ -475,8 +464,6 @@ describe('a Stop that names no turn', () => {
     expect(note?.turnScope).toEqual({ kind: 'turn', turnItemId: record?.itemId })
   })
 
-  // Codex's own shape: the turn's start is read before the interrupt's answer, so the turn has a
-  // record, which the Stop ends; the send opened it and stays as it is.
   it('ends the turn the provider opened before answering, and withdraws nothing', async () => {
     const first = send('first send')
     await first.result
@@ -577,7 +564,7 @@ describe('a Stop that names no turn', () => {
   })
 
   it('withdraws what is queued on a ready child and asks the provider for nothing more', async () => {
-    // Held, the send is accepted and the Stop runs next, ahead of the handover the send asks for.
+    // Hold the lane so Stop runs after acceptance but before handover.
     const release = holdLane(host, SESSION)
     const { id, result } = send('hello')
     const stopped = stop()
@@ -622,7 +609,6 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
     expect((await submission(id))?.dispatchState).toBe('rejected')
     expect(await statusRows()).toEqual([])
   })
@@ -649,13 +635,12 @@ describe('a Stop that names no turn', () => {
     const { id, result } = send('hello')
     await result
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
-    // Codex answers an interrupt as the turn ends, so a turn that never ends leaves it unanswered.
+    // Codex answers interrupts with turn end; missing end must time out.
     cancelTurn.mockRejectedValueOnce(new Error('codex app-server turn/interrupt exceeded 30000ms'))
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
     expect((await submission(id))?.dispatchState).toBe('rejected')
     expect(await statusRows()).toEqual([])
   })
@@ -693,7 +678,6 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    // Bookkeeping after the proven exit: reported, never the Stop's failure.
     expect(log.entries).toContainEqual(
       expect.objectContaining({
         fields: expect.objectContaining({ scope: 'exit-wind-down', sessionId: SESSION })
@@ -733,7 +717,7 @@ describe('a Stop that names no turn', () => {
     await result
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
 
-    // Why the client never reuses a no-turn Stop's id: the same id is the same Stop.
+    // Reusing an operation ID must replay the original Stop, not target new work.
     expect(await stop(undefined, operationId)).toMatchObject({
       ok: true,
       replayed: true,
@@ -744,7 +728,7 @@ describe('a Stop that names no turn', () => {
     expect(cancelTurn).toHaveBeenCalledOnce()
   })
 
-  // Claude's echo accepts the send one sink write before the row of the turn it opens.
+  // Claude echo acceptance can precede its own turn row by one sink write.
   async function acceptedWithTurnRowUnlanded(): Promise<void> {
     dispatch.mockResolvedValueOnce({
       state: 'accepted',
@@ -757,7 +741,7 @@ describe('a Stop that names no turn', () => {
 
   it('interrupts a turn whose accepted send is in the journal before its row lands', async () => {
     await acceptedWithTurnRowUnlanded()
-    // Emitted as the Stop arrives: the Stop's read takes its place behind it in the journal.
+    // Stop’s journal read must follow the simultaneously queued turn row.
     events!.appendItem(
       { provider: 'legacy', agent: 'codex', sessionId: SESSION, recordId: 'turn-lifecycle:turn-2' },
       {
@@ -791,7 +775,6 @@ describe('a Stop that names its turn, as an older client sends it', () => {
   })
 
   it('reaches the provider with that turn, and writes no row when it stopped nothing', async () => {
-    // Only a turn the journal shows running: one already over is a late Stop, a no-op.
     events!.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 900 },
       { kind: 'turn', turnId: 'turn-1', state: 'running' },
@@ -807,8 +790,7 @@ describe('a Stop that names its turn, as an older client sends it', () => {
     expect(await statusRows()).toEqual([])
   })
 
-  /** A send queued on the host and not yet handed over: the lane is held until `release`, so a
-   *  step asked for before it runs ahead of the handover. */
+  /** Hold host delivery so intervening operations queue before handover. */
   function queueOnHost(): { id: string; release: () => void } {
     const release = holdLane(host, SESSION)
     return { id: send('hello').id, release }
@@ -826,7 +808,6 @@ describe('a Stop that names its turn, as an older client sends it', () => {
     expect(await statusRows()).toEqual([])
   })
 
-  // Codex refuses an interrupt for a turn that has ended.
   it('reports success with no row when the provider refused a turn that had ended', async () => {
     const queued = queueOnHost()
     cancelTurn.mockResolvedValueOnce({
@@ -850,7 +831,7 @@ describe('a Stop on a provider whose Stop ends its session', () => {
     await eventually(async () => expect((await submission(id))?.handedOverAt).toBeDefined())
   }
 
-  /** The Stop's second step, which ends the child, runs next on the session's lane. */
+  /** Drain through Stop’s queued second step. */
   function laneDrained(): Promise<void> {
     return host['tasks'].serialize(SESSION, async () => {})
   }
@@ -881,7 +862,6 @@ describe('a Stop on a provider whose Stop ends its session', () => {
     await host.flushStreamedEvents(SESSION)
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
-    // Ending the session stops the turn, so this Stop stopped something and writes its one note.
     expect(await stop('turn-1')).toMatchObject({ ok: true, value: { cancelled: true } })
     await laneDrained()
 
@@ -901,7 +881,6 @@ describe('a Stop on a provider whose Stop ends its session', () => {
 
   it('leaves the child alone when the Stop named a turn that is no longer live', async () => {
     stopEndsSession = true
-    // Handed over, with no row yet for the turn it names: the Stop reaches the provider.
     await handedOver()
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
@@ -910,14 +889,12 @@ describe('a Stop on a provider whose Stop ends its session', () => {
 
     expect(cancelTurn).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn-1' }))
     expect(closeSession).not.toHaveBeenCalled()
-    // It stopped nothing, so it writes no row.
     expect(await statusRows()).toEqual([])
   })
 
   it("ends the child when the provider's cancel of a Stop naming a turn no longer live fails", async () => {
     stopEndsSession = true
     await handedOver()
-    // The interrupt went out and its answer was lost: what it stopped is unknown.
     cancelTurn.mockRejectedValueOnce(new Error('control request lost'))
 
     expect(await stop('turn-1')).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -930,7 +907,6 @@ describe('a Stop on a provider whose Stop ends its session', () => {
   it('ends the child when the provider took a Stop naming a turn that is no longer live', async () => {
     stopEndsSession = true
     await handedOver()
-    // The interrupt stopped the follow-up in flight, which has no turn a client could name.
     cancelTurn.mockResolvedValueOnce({ cancelled: true })
 
     expect(await stop('turn-1')).toMatchObject({ ok: true, value: { cancelled: true } })

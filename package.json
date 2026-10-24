@@ -288,7 +288,7 @@
     "emoji-picker-react": "^4.22.3",
     "emojibase-data": "17.0.0",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.14.6",
+    "happy-dom": "^21.0.4",
     "hast-util-to-jsx-runtime": "2.3.6",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",

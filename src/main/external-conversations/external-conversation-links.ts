@@ -121,3 +121,14 @@ export function findLink(
   }
   return null
 }
+
+export function requireLink(
+  store: ExternalConversationLinkStore,
+  key: ConversationKey
+): LinkedConversation {
+  const linked = findLink(store, key)
+  if (!linked) {
+    throw new Error('external_conversation_not_found')
+  }
+  return linked
+}

@@ -1,4 +1,8 @@
 import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
+import {
+  readTerminalPathExistence,
+  type TerminalPathExistsCache
+} from './terminal-path-exists-cache'
 import type { IBufferLine, IBufferRange } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates } from '@/lib/terminal-links'
 import {
@@ -34,7 +38,7 @@ type FileLinkHitTestDeps = {
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   terminalHandle?: string | null
-  pathExistsCache?: Map<string, boolean>
+  pathExistsCache?: TerminalPathExistsCache
   openWithSystemDefault?: boolean
   sourceTabId?: string | null
   /** Tells the user why a click opened nothing; skipped once a later click supersedes it. */
@@ -78,7 +82,9 @@ export function openFilePathLinkAtBufferPosition(
       links.push({
         ...target,
         pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache?.get(target.cacheKey),
+        cachedExists: deps.pathExistsCache
+          ? readTerminalPathExistence(deps.pathExistsCache, target.cacheKey)
+          : undefined,
         hasOscLink: terminalLogicalLinkHasOscLink(
           buffer,
           logicalLine,
@@ -168,7 +174,7 @@ async function probeClickedFileLinks(
   deps: FileLinkHitTestDeps
 ): Promise<ClickedFileLink[]> {
   const pathExists = createTerminalPathExistenceBatch()
-  const cache = deps.pathExistsCache ?? new Map<string, boolean>()
+  const cache: TerminalPathExistsCache = deps.pathExistsCache ?? new Map()
   const exists = await Promise.all(
     links.map((link) =>
       // Why: a guess the host cannot answer must not hide a sibling.

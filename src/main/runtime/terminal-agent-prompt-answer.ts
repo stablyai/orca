@@ -1,9 +1,9 @@
 // Answers are fenced to the prompt and process so late keys cannot reach a replacement shell.
 import { createHash } from 'node:crypto'
 import { readAgentPromptAnswers, type PendingPrompt } from '../../shared/agent-pending-prompt'
-import { readTerminalSendAcknowledgment } from '../../shared/terminal-send-acknowledgment'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
 import type { OrcaRuntimeService } from './orca-runtime'
+import { writeFencedAgentKeys } from './terminal-agent-fenced-keys'
 import type { AgentPromptExpectedBinding } from './runtime-terminal-contracts'
 
 export type TerminalAgentPromptAnswerRuntime = Pick<
@@ -93,51 +93,34 @@ export class TerminalAgentPromptAnswers {
     if (keys === undefined) {
       return { outcome: 'refused', reason: 'option_not_offered' }
     }
-    let claimed = false
-    try {
-      const sent = await runtime.sendTerminal(
-        asked.handle,
-        { text: keys, enter: false },
-        {
-          inputKind: 'driving',
-          signal: answer.signal,
-          requireWriteSettlement: true,
-          beforeWrite: async (ptyId) => {
-            await answer.beforeWrite?.(ptyId)
-            // Last and synchronous, so nothing moves between this read and the write.
-            const now = this.read(runtime, target)
-            if (
-              ptyId !== asked.binding.ptyId ||
-              now?.prompt.promptId !== answer.promptId ||
-              now.binding.processIncarnation !== asked.binding.processIncarnation
-            ) {
-              throw new PromptNoLongerPendingError()
-            }
-            this.answered.set(target.paneKey, answer.promptId)
-            claimed = true
-          }
+    const written = await writeFencedAgentKeys(runtime, asked.handle, keys, {
+      signal: answer.signal,
+      beforeWrite: answer.beforeWrite,
+      fence: (ptyId) => {
+        // Last and synchronous, so nothing moves between this read and the write.
+        const now = this.read(runtime, target)
+        if (
+          ptyId !== asked.binding.ptyId ||
+          now?.prompt.promptId !== answer.promptId ||
+          now.binding.processIncarnation !== asked.binding.processIncarnation
+        ) {
+          throw new PromptNoLongerPendingError()
         }
-      )
-      const settlement = readTerminalSendAcknowledgment({ send: sent })
-      if (settlement === 'accepted') {
-        return { outcome: 'accepted' }
+        this.answered.set(target.paneKey, answer.promptId)
       }
-      if (settlement === 'refused') {
-        if (this.answered.get(target.paneKey) === answer.promptId) {
-          this.answered.delete(target.paneKey)
-        }
-        return { outcome: 'refused', reason: 'agent_not_reachable' }
-      }
-      return { outcome: 'unknown' }
-    } catch (error) {
-      if (claimed) {
-        return { outcome: 'unknown' }
-      }
-      return {
-        outcome: 'refused',
-        reason:
-          error instanceof PromptNoLongerPendingError ? 'prompt_not_pending' : 'agent_not_reachable'
-      }
+    })
+    if (written.outcome !== 'refused') {
+      return written
+    }
+    if (!('error' in written) && this.answered.get(target.paneKey) === answer.promptId) {
+      this.answered.delete(target.paneKey)
+    }
+    return {
+      outcome: 'refused',
+      reason:
+        written.error instanceof PromptNoLongerPendingError
+          ? 'prompt_not_pending'
+          : 'agent_not_reachable'
     }
   }
 

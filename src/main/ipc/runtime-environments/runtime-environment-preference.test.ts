@@ -43,7 +43,7 @@ function saveEnvironment(name = 'server') {
       v: 2,
       endpoint: 'ws://127.0.0.1:59999',
       deviceToken: 'test-token',
-      // Why a key per name: one key is one server, which the store refuses to save twice.
+      // Each saved server needs a distinct key; duplicate keys are rejected.
       publicKeyB64: Buffer.alloc(32, name).toString('base64')
     })
   })

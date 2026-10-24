@@ -22,6 +22,9 @@ export const ConnectorSend = z.object({
   text: z.string().min(1, 'Missing text')
 })
 
+/** Settles the conversation's queued work and stops what its agent is doing. */
+export const ConnectorCancel = z.object(ConnectorDelivery)
+
 const ConnectorConversation = {
   source: ConnectorDelivery.source,
   externalId: ConnectorDelivery.externalId

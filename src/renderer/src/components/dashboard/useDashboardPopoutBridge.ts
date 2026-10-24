@@ -8,11 +8,9 @@ import {
   selectAgentLaunchRouteView
 } from '@/lib/agent-launch-route-input'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { launchDashboardAgent } from './launch-dashboard-agent'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Why: cap snapshot rebuilds during bursts of agent-status pings. The board is a
@@ -127,24 +125,6 @@ export function watchSnapshotInputs(onChanged: () => void): () => void {
  *     the agent's worktree and focus its pane in this (main) window.
  */
 export function useDashboardPopoutBridge(enabled: boolean): void {
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    return window.api.dashboard.onSpawnAgent?.(launchDashboardAgent)
-  }, [enabled])
-
-  // Sleeping from the popout runs the shared teardown here, where the store and
-  // the live terminal panes are — the popout only names the workspace.
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    return window.api.dashboard.onSleepWorkspace?.(({ worktreeId }) => {
-      void runSleepWorktree(worktreeId)
-    })
-  }, [enabled])
-
   useEffect(() => {
     if (!enabled) {
       return

@@ -62,6 +62,17 @@ export const CONNECTOR_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['connector', 'cancel'],
+    hidden: true,
+    summary: 'Cancel what a dev connector conversation is doing',
+    usage: 'orca connector cancel --conversation <id> --delivery-id <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'conversation', 'delivery-id'],
+    notes: [
+      ...CONNECTOR_NOTES,
+      'Drops follow-ups not yet sent, rejects a pending approval, or interrupts a working agent with one Escape. An idle agent is left alone.'
+    ]
+  },
+  {
     path: ['connector', 'watch'],
     hidden: true,
     summary: 'Collect connector conversation events for a while',

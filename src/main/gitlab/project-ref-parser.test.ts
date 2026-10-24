@@ -13,6 +13,27 @@ describe('gitlab project ref parsing', () => {
     })
   })
 
+  it.each([
+    'ssh://git@altssh.gitlab.com:443/team/project.git',
+    'git@altssh.gitlab.com:team/project.git',
+    'ssh://git@ALTSSH.GITLAB.COM:443/team/project.git',
+    'git@ALTSSH.GITLAB.COM:team/project.git',
+    'git+ssh://git@altssh.gitlab.com:443/team/project.git'
+  ])('parses the SSH alias as the canonical GitLab host: %s', (remote) => {
+    expect(parseGitLabProjectRef(remote)).toEqual({
+      host: 'gitlab.com',
+      path: 'team/project'
+    })
+  })
+
+  it.each([
+    'ssh://git@altssh.gitlab.com.example.com:443/team/project.git',
+    'git@altssh.gitlab.com.example.com:team/project.git',
+    'git@notaltssh.gitlab.com:team/project.git'
+  ])('does not trust an SSH alias lookalike: %s', (remote) => {
+    expect(parseGitLabProjectRef(remote)).toBeNull()
+  })
+
   it('preserves nested group paths', () => {
     expect(parseGitLabProjectRef('git@gitlab.com:group/subgroup/project.git')).toEqual({
       host: 'gitlab.com',
@@ -111,6 +132,12 @@ describe('gitlab project ref parsing', () => {
 })
 
 describe('gitlab remote project ref candidates', () => {
+  it('canonicalizes the SSH alias before resolving auth for a candidate', () => {
+    expect(
+      parseRemoteProjectRefCandidate('ssh://git@altssh.gitlab.com:443/team/subgroup/project.git')
+    ).toEqual({ host: 'gitlab.com', path: 'team/subgroup/project' })
+  })
+
   it('extracts self-hosted candidates before the host is trusted', () => {
     expect(parseRemoteProjectRefCandidate('git@gitlab.internal:team/orca.git')).toEqual({
       host: 'gitlab.internal',

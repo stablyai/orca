@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../remote-runtime-client-error-classification'
+import { isRecoverableRemoteRuntimeConnectionError } from '../remote-runtime-client-error-classification'
 import {
   closeSharedControlTestServers,
   createSharedControlTestServer

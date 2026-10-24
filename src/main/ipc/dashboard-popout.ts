@@ -15,9 +15,7 @@ import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRendere
 import {
   admitDashboardSnapshot,
   isDashboardPaneKey,
-  isDashboardRevealAgentArgs,
-  isDashboardSleepWorkspaceArgs,
-  isDashboardSpawnAgentArgs
+  isDashboardRevealAgentArgs
 } from './dashboard-payload-validation'
 
 // Replay immediately on mount; clear on close to avoid showing a previous session.
@@ -37,8 +35,6 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
   ipcMain.removeHandler('dashboardPopout:ackAgent')
-  ipcMain.removeHandler('dashboardPopout:spawnAgent')
-  ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -140,27 +136,5 @@ export function registerDashboardPopoutHandlers(
         // Best-effort; the per-window focus above may still bring it forward.
       }
     }
-  })
-
-  ipcMain.handle('dashboardPopout:spawnAgent', (event, args: unknown): void => {
-    if (
-      !isDashboardPopoutRenderer(event.sender) ||
-      !isDashboardEnabled(store) ||
-      !isDashboardSpawnAgentArgs(args)
-    ) {
-      return
-    }
-    sendToTrustedUIRenderer('ui:spawnDashboardAgent', args)
-  })
-
-  ipcMain.handle('dashboardPopout:sleepWorkspace', (event, args: unknown): void => {
-    if (
-      !isDashboardPopoutRenderer(event.sender) ||
-      !isDashboardEnabled(store) ||
-      !isDashboardSleepWorkspaceArgs(args)
-    ) {
-      return
-    }
-    sendToTrustedUIRenderer('ui:sleepDashboardWorkspace', args)
   })
 }

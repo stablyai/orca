@@ -1,3 +1,5 @@
+import { normalizeGitLabRemoteHost } from '../../shared/git-remote-host-alias'
+
 // Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
 // Keep only the provider parsing and file/commit URL construction needed by source links.
 type HostedRemoteProvider = 'github' | 'gitlab' | 'bitbucket'
@@ -20,7 +22,7 @@ const shorthandHosts: Record<string, { host: string; provider: HostedRemoteProvi
 }
 
 function providerForHost(host: string): HostedRemoteHost | null {
-  const normalized = host.toLowerCase()
+  const normalized = normalizeGitLabRemoteHost(host)
   if (normalized === 'github.com' || normalized === 'ssh.github.com') {
     // SSH-over-HTTPS uses ssh.github.com:443, but browser/account identity remains github.com.
     return { host: 'github.com', provider: 'github' }
@@ -28,7 +30,7 @@ function providerForHost(host: string): HostedRemoteHost | null {
   if (normalized === 'gitlab.com') {
     return { host: 'gitlab.com', provider: 'gitlab' }
   }
-  if (normalized === 'bitbucket.org') {
+  if (normalized === 'bitbucket.org' || normalized === 'ssh.bitbucket.org') {
     return { host: 'bitbucket.org', provider: 'bitbucket' }
   }
   return null

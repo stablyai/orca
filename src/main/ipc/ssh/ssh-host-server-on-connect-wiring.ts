@@ -1,4 +1,3 @@
-/** The live collaborators behind each connect's server decision. */
 import { getAppEnvironment } from '../../../shared/app-environment'
 import {
   getManagedOrcadFenceEnvironmentId,
@@ -47,7 +46,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const isRegistered = (environmentId: string): boolean =>
     listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
   return {
-    // Why registered only: a fence whose server never registered is an unfinished setup, not a server.
+    // A fence alone may be unfinished setup; only registered servers count.
     managedEnvironmentId: (target) => {
       const environmentId = getManagedOrcadFenceEnvironmentId(target)
       return environmentId && isRegistered(environmentId) ? environmentId : null
@@ -110,14 +109,13 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         censusHost: (host) =>
           hostProof ? Promise.resolve(hostProof) : censusHostRelayTerminalsFor(host)(),
         isBridgedPaneLease: isBridgeableLease,
-        // Why no releaseDirectSession: a disconnect here would cancel the connect that asked for it.
+        // Releasing the direct session here would cancel the connect that requested conversion.
         destinationFor: orcadMigrationDestinationFor,
         serverRepositoriesFor: orcadServerRepositoriesFor,
         serverFolderCatalogFor: orcadServerFolderCatalogFor
       })
       if (converted.outcome === 'converted' || converted.outcome === 'refused') {
-        // "Move anyway" covers one attempt; a later move, or a later delta, asks again.
-        // Kept on a throw: verifyFence re-exports with it, so a held fence could never resume.
+        // Move-anyway consent covers one attempt; retain it on failure so held-fence verification can resume.
         registry.updateTarget(target.id, { managedServerLeaveBehind: undefined })
       }
       return converted
@@ -160,7 +158,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         knownOrcadTunnelTransport(target.id)
       ),
     progress: (target, phase) => {
-      // A cancelled connect's decision keeps running; its progress must not revive the status.
+      // Cancelled decisions keep running; their progress must not revive connection status.
       if (!connectInFlight.has(target.id)) {
         return
       }

@@ -12,6 +12,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 
 const worktreeActivation = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
@@ -29,20 +30,20 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.f
 afterEach(() => vi.restoreAllMocks())
 
 const reposAdd = vi.fn()
-const worktreesList = vi.fn()
+const worktreesListDetected = vi.fn()
 const onboardingGet = vi.fn()
 const onboardingUpdate = vi.fn()
 
 beforeEach(() => {
   reposAdd.mockReset()
-  worktreesList.mockReset()
+  worktreesListDetected.mockReset()
   onboardingGet.mockReset()
   onboardingUpdate.mockReset()
   worktreeActivation.activateAndRevealWorktree.mockReset()
   vi.stubGlobal('window', {
     api: {
       repos: { add: reposAdd },
-      worktrees: { list: worktreesList },
+      worktrees: { listDetected: worktreesListDetected },
       onboarding: { get: onboardingGet, update: onboardingUpdate }
     }
   })
@@ -57,9 +58,9 @@ describe('repo slice skipped-onboarding folder startup', () => {
       .mockResolvedValueOnce({
         repo: { id: 'folder-2', path: '/second', displayName: 'Second', addedAt: 2 }
       })
-    worktreesList.mockImplementation(({ repoId }: { repoId: string }) => [
-      makeWorktree({ id: `${repoId}::/folder`, repoId })
-    ])
+    worktreesListDetected.mockImplementation(({ repoId }: { repoId: string }) =>
+      makeDetectedResult(repoId, [makeWorktree({ id: `${repoId}::/folder`, repoId })])
+    )
     let onboarding: OnboardingState = { ...getDefaultOnboardingState(), outcome: 'dismissed' }
     onboardingGet.mockImplementation(async () => onboarding)
     onboardingUpdate.mockImplementation(

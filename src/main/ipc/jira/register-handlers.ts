@@ -32,7 +32,6 @@ const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', '
 const issueSummaryRequests = new JiraCancellableRequests()
 const searchRequests = new JiraCancellableRequests()
 
-/** Registers every `jira:*` IPC handler on the main process. */
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
     if (

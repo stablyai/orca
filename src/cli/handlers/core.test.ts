@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+const { spawnMock, reclaimStaleLockMock, printReclaimResultMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  reclaimStaleLockMock: vi.fn(),
+  printReclaimResultMock: vi.fn()
+}))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('../../main/orcad/orcad-stale-lock-reclaim.js', () => ({
+  reclaimStaleOrcadInstanceLock: reclaimStaleLockMock,
+  printOrcadStaleLockReclaimResult: printReclaimResultMock
+}))
 
 // Exclude the socket runtime graph; this handler needs only errors and serveOrcaApp.
 vi.mock('../runtime-client', () => ({
@@ -56,6 +64,9 @@ describe('orca claude-teams CLI handler', () => {
   }
 
   beforeEach(() => {
+    reclaimStaleLockMock.mockReset()
+    reclaimStaleLockMock.mockRejectedValue(new Error('Unexpected stale-lock reclaim'))
+    printReclaimResultMock.mockReset()
     spawnMock.mockReset()
     spawnMock.mockImplementation(() => mockClaudeChild())
     callMock.mockReset()
@@ -182,6 +193,12 @@ describe('orca claude-teams CLI handler', () => {
       json: true,
       rawArgs: []
     }
-    await expect(CORE_HANDLERS.serve(ctx)).rejects.toMatchObject({ code: 'invalid_argument' })
+    await expect(CORE_HANDLERS.serve(ctx)).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message:
+        '--data-root expects a directory. Usage: orca serve --reclaim-stale-lock [--data-root <dir>] [--yes] [--json]'
+    })
+    expect(reclaimStaleLockMock).not.toHaveBeenCalled()
+    expect(printReclaimResultMock).not.toHaveBeenCalled()
   })
 })

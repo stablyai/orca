@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
@@ -151,12 +152,14 @@ export function fakeTerminal() {
     incarnation: number
     blocked: boolean
     rows: AgentStatusIpcPayload[] | null
+    liveness: PtyLivenessVerdict | null
   } = {
     ptyId: 'pty-1',
     paneKey: PANE,
     incarnation: 1,
     blocked: false,
-    rows: null
+    rows: null,
+    liveness: null
   }
   const current = (): string =>
     `inc-${state.ptyId}${state.incarnation > 1 ? `-${state.incarnation}` : ''}`
@@ -206,12 +209,16 @@ export function fakeTerminal() {
     async (
       handle: string,
       action: { text?: string },
-      options: { beforeWrite?: (ptyId: string) => unknown }
+      options: {
+        beforeWrite?: (ptyId: string) => unknown
+        reserveWrite?: (ptyId: string) => void
+      }
     ): Promise<RuntimeTerminalSend> => {
       if (!state.ptyId) {
         throw new Error('terminal_not_writable')
       }
       await options.beforeWrite?.(state.ptyId)
+      options.reserveWrite?.(state.ptyId)
       keys.push(action.text ?? '')
       return { handle, accepted: true, bytesWritten: 1, writeSettlement: { outcome: 'accepted' } }
     }
@@ -241,6 +248,7 @@ export function fakeTerminal() {
     },
     sendTerminalAgentPrompt,
     sendTerminal,
+    getPtyLivenessVerdict: (_ptyId: string) => state.liveness,
     readLaunchedAgentForeground: vi.fn(
       async (_ptyId: string): Promise<LaunchedAgentForeground> => 'agent'
     ),

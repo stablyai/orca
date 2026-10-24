@@ -1,6 +1,3 @@
-// A Stop writes its one note only when it stopped something, keyed by the turn it stopped: a repeated
-// Stop, however late and from whichever client, rewrites that row or writes nothing.
-
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentJournalTurnLifecycleState } from '../../../shared/agent-session-journal-types'
@@ -39,7 +36,6 @@ function stopTurn(turnId = 'turn-1') {
   return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', { turnId }), turnId })
 }
 
-/** The provider's record of turn-1, as its translator writes it. */
 async function turn(state: AgentJournalTurnLifecycleState): Promise<void> {
   const events = acquire.mock.calls.at(-1)?.[0].events
   if (!events) {
@@ -65,7 +61,6 @@ describe('a Stop pressed again', () => {
     await turn('running')
     expect(await stopTurn()).toMatchObject({ ok: true, value: { cancelled: true } })
     await turn('interrupted')
-    // The provider has no turn left to stop.
     cancelTurn.mockResolvedValueOnce({ cancelled: false })
 
     expect(await stopTurn()).toMatchObject({ ok: true, value: { cancelled: false } })

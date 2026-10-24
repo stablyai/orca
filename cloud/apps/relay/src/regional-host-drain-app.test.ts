@@ -613,6 +613,8 @@ describe('regional rehome director controls', () => {
     })
 
     expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'regional_rehome_trust_probe_source_unavailable' })
+    expect(reserveAwareCellDeploymentStatus).toHaveBeenCalledExactlyOnceWith('production-gce-c27')
     expect(sourceFetch).not.toHaveBeenCalled()
   })
 
@@ -673,8 +675,9 @@ describe('regional rehome director controls', () => {
     })
 
     expect(response.status).toBe(409)
+    expect(reserveAwareCellDeploymentStatus).toHaveBeenCalledExactlyOnceWith('production-gce-c7')
     expect(sourceFetch).toHaveBeenCalledOnce()
-    expect(JSON.stringify(await response.json())).not.toContain('rehome-token')
+    expect(await response.json()).toEqual({ error: 'regional_rehome_trust_probe_source_401' })
   })
 })
 

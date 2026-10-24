@@ -1,4 +1,5 @@
 import type { GitLabProjectRef } from '../../shared/gitlab-types'
+import { normalizeGitLabRemoteHost } from '../../shared/git-remote-host-alias'
 
 export type ProjectRef = GitLabProjectRef
 
@@ -27,7 +28,7 @@ function hostIdentityFromUrl(url: URL): string {
 }
 
 function makeProjectRefForTrustedHost(host: string, path: string): ProjectRef | null {
-  const normalizedHost = normalizeGitLabHost(host)
+  const normalizedHost = normalizeGitLabRemoteHost(host)
   const normalizedPath = stripGitSuffix(path.replace(/^\/+/, '')).trim()
   if (!normalizedPath.includes('/')) {
     return null
@@ -51,7 +52,7 @@ function makeProjectRef(
   path: string,
   knownHosts: readonly string[]
 ): ProjectRef | null {
-  const normalizedHost = normalizeGitLabHost(host)
+  const normalizedHost = normalizeGitLabRemoteHost(host)
   const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
   if (!normalizedKnownHosts.some((knownHost) => knownHostMatches(normalizedHost, knownHost))) {
     return null

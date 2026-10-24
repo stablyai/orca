@@ -23,6 +23,7 @@ export const SSH_EDITABLE_TARGET_FIELDS = [
   'jumpHost',
   'relayGracePeriodSeconds',
   'systemSshConnectionReuse',
+  'systemSshProxyConnectionReuse',
   'remoteRuntime',
   'allowRemoteCliControl'
 ] as const satisfies readonly (keyof SshTarget)[]

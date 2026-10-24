@@ -1,7 +1,3 @@
-// A Stop pressed before its send's turn showed binds the turn that send opens only by stopping it:
-// a Codex turn that did not open in time ends with the child the Stop ends, and a Claude turn that
-// opens before the Stop's child end is proven ends as the Stop's. Nothing reads as running after.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -42,7 +38,6 @@ function journal() {
   return open
 }
 
-/** The turn `clientMessageId` opens, running, as the provider writes it. */
 async function turnOpens(clientMessageId: string): Promise<void> {
   await journal().appendItem(
     OPENED,
@@ -71,13 +66,12 @@ function nothingRuns(): boolean {
   )
 }
 
-/** Drains the Stop's next step on the session's lane: a wind-down it handed the child's end to. */
 async function windDown(): Promise<void> {
   await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
 }
 
 describe('a Codex Stop whose answered turn did not open in time', () => {
-  // Codex admitted the send, answered into a turn it has not opened; the Stop's wait ran out.
+  // Codex answered into a turn that did not open before the Stop wait expired.
   async function stopOfAnsweredSend(): Promise<string> {
     rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
@@ -161,15 +155,12 @@ describe("a person's close pressed before its send's turn showed", () => {
     expect(turn).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
   })
 
-  // A /clear stops the agent as the person's close and keeps the conversation, so the close's
-  // settle must have closed by the time a later turn ends.
   it('binds no turn that ends on its own after a close the conversation outlived', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
     await rig.host['lifetime'].stopAgent(HOST_TEST_SESSION, { cause: 'user-close' })
     expect(journal().stopMarks.latest()?.event).toMatchObject({ reason: 'user-close' })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
-    // The next child's turn, at the fence the stopped one's end moved to.
     const fence = rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
 
     await journal().appendItem(
@@ -197,8 +188,7 @@ describe("a person's close pressed before its send's turn showed", () => {
     expect(later).not.toHaveProperty('outcome')
   })
 
-  // The first close's kill is unproven and its settle closes with it; asking again re-kills, so a
-  // turn that ask's end cuts is the person's again.
+  // Retrying an unproven close must bind the turn that the retry cuts.
   it('binds the turn a repeated close cuts after a first close that came back unproven', async () => {
     rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()

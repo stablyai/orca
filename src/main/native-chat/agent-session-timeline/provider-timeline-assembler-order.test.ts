@@ -14,7 +14,6 @@ import {
 
 afterEach(closeProviderTimelineRigs)
 
-/** A rig whose coalescing window only fires when the test says so. */
 async function heldWindowRig() {
   const runs: (() => void)[] = []
   const rig = await openProviderTimelineRig({

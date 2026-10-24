@@ -11,6 +11,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch-intent-resolution'
 import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch-surfaces'
 import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch-worktree-creation'
+import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
 
 export type ConversationLaunchInput = {
@@ -93,7 +94,7 @@ export async function launchConversation(
   } catch (error) {
     if (!surface.published) {
       if (signal.aborted) {
-        return refused('connectors_disabled')
+        return refused(refusalOf(signal))
       }
       throw error
     }

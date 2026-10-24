@@ -44,6 +44,7 @@ export async function execFileCaptureToTermination(
     options.onChildTerminated?.()
     throw error
   }
+  const captureBytes = options.encoding === 'buffer'
   const pending = runProcess({
     program,
     args,
@@ -51,15 +52,22 @@ export async function execFileCaptureToTermination(
     env: options.env,
     timeoutMs: options.timeout ?? GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS,
     maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
+    captureStdoutAsBytes: captureBytes,
+    captureStderrAsBytes: captureBytes,
     signal: options.signal,
     terminationBarrier: termination ?? true,
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending
-  const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
-  const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
-  const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
+  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
+  const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
+  const stderr = captureBytes
+    ? termination
+      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
+        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
+      : stderrBytes
+    : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
   if (
     result.code === 0 &&
     !result.timedOut &&
@@ -71,6 +79,7 @@ export async function execFileCaptureToTermination(
   if (result.timedOut && !options.signal?.aborted) {
     options.onDeadlineKill?.()
   }
+  const cleanStderr = typeof stderr === 'string' ? stderr : stderr.toString('utf8')
   const error = result.timedOut
     ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
     : new Error(
@@ -242,13 +251,14 @@ export function execFileCapture(
       observeStderr(child, options.onStderr)
     }
 
-    if (options.stdin !== undefined) {
-      if ('id' in child) {
+    // Non-interactive signers must see EOF instead of waiting on an open pipe.
+    if ('id' in child) {
+      if (options.stdin !== undefined) {
         child.stdin.write(options.stdin)
-        child.stdin.end()
-      } else {
-        endSubprocessStdin(child.stdin, options.stdin)
       }
+      child.stdin.end()
+    } else {
+      endSubprocessStdin(child.stdin, options.stdin ?? '')
     }
 
     // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.

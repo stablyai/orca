@@ -102,7 +102,6 @@ src/main/ssh/ssh-proxy-command.ts
 src/main/ssh/system-transport/system-ssh-command.ts
 src/main/ssh/system-transport/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-transport/system-ssh-file-transfer.ts
-src/main/ssh/system-transport/system-ssh-forward-process.ts
 src/main/ssh/system-transport/system-ssh-operation-lifecycle.ts
 src/main/startup/ensure-virtual-display.ts
 src/main/windows-process-tree-kill.ts

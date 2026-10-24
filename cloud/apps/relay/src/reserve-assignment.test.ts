@@ -601,7 +601,7 @@ describe('reserve assignment on a director', () => {
       expect(demoted).toEqual([{ cellId: 'us-r', epoch: 5, joinedAt: 1_000 }])
     })
 
-    it('rehomes a new-session ask too, which then gets no region window', async () => {
+    it('answers a region-correction request on the rehome lane', async () => {
       const { assignment, warm } = setupRehome()
       await warm()
       expect(await assignment.plan(HOST, { ...ask, regionCorrection: true })).toMatchObject({
@@ -682,7 +682,7 @@ describe('reserve assignment on a director', () => {
       expect(gated.reserved).toEqual([])
     })
 
-    it('leaves a new-session ask it does not move to the database lane, window and all', async () => {
+    it('passes a region-correction request to the database lane when rehome has no room', async () => {
       const { assignment, warm } = setupRehome({ asia: asiaFull(0.98) })
       await warm()
       expect(await assignment.plan(HOST, { ...ask, regionCorrection: true })).toEqual({
@@ -692,7 +692,7 @@ describe('reserve assignment on a director', () => {
       })
     })
 
-    it('falls through to the sticky answer on a pace, never a 503', async () => {
+    it('falls through to the sticky answer when the rehome booking is paced', async () => {
       const { assignment, reserved, warm } = setupRehome({
         reserve: (cellId) => (cellId === 'asia-r' ? { outcome: 'intake' } : { outcome: 'ok' })
       })
