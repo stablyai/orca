@@ -8,6 +8,7 @@ import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import {
   isHostAuthoritativeLayout,
+  isPtyBoundInAnotherTab,
   planTerminalLiveLayoutInsertions,
   planTerminalLiveLayoutRemovals,
   selectRetiredPaneIds,
@@ -16,6 +17,8 @@ import {
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import { useAppStore } from '../../store'
+import { detachExternallyMovedPane } from './terminal-pane-external-move-detach'
 
 export function useTerminalPaneReconciliation(controller: TerminalPaneCloseController) {
   const {
@@ -34,7 +37,8 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     persistLayoutSnapshot,
     ptyRecoveryStatesByPaneId,
     restoredLayout,
-    tabId
+    tabId,
+    worktreeId
   } = controller
   // Leaves the last host-authoritative layout named, and the ones it has since
   // dropped whose panes are still mounted; a removal needs the host to have
@@ -106,20 +110,26 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
         appliedInsertion = true
       }
     }
-    // Why: the host retired these leaves (its PTY for them ended), so their panes
-    // would otherwise outlive the layout as blank ghosts and take the tab's next
-    // close for themselves. selectRetiredPaneIds closes only a pane whose PTY has
-    // already cleared, so this never kills a still-live remote terminal; a leaf
-    // whose PTY is still ending is kept retired and removed on the re-run the
-    // transport's recovery-state change (ptyRecoveryStatesByPaneId) triggers.
-    // executeClosePane runs the same cleanup a user close does.
-    const retiredPaneIds = selectRetiredPaneIds(removals, {
+    // Why: a host-retired pane is a ghost once its PTY ended, or another client moved it when another
+    // tab binds its live PTY; one still ending is removed on the ptyRecoveryStatesByPaneId re-run.
+    const { closed, moved } = selectRetiredPaneIds(removals, {
       paneCount: manager.getPanes().length,
       paneIdForLeaf: (leafId) => manager.getNumericIdForLeaf(leafId),
-      ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId()
+      ptyIdForPane: (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
+      isPtyBoundInAnotherTab: (ptyId) =>
+        isPtyBoundInAnotherTab(useAppStore.getState(), worktreeId, tabId, ptyId)
     })
-    for (const paneId of retiredPaneIds) {
+    for (const paneId of closed) {
       executeClosePane(paneId)
+    }
+    for (const paneId of moved) {
+      detachExternallyMovedPane({
+        manager,
+        paneId,
+        tabId,
+        retireAgentPaneAuthority: (paneKey) =>
+          useAppStore.getState().retireAgentPaneAuthority(paneKey)
+      })
     }
     if (appliedInsertion) {
       persistLayoutSnapshot()

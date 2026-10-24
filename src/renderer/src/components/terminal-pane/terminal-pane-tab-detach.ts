@@ -19,6 +19,7 @@ import {
   settleHostPaneMove
 } from '@/runtime/web-runtime-leaf-move'
 import { resolveHostTabDropTarget } from '@/runtime/web-runtime-session-tab-move'
+import { beginPendingHostPaneMove } from '@/runtime/pending-host-pane-moves'
 export {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -175,10 +176,13 @@ async function moveLeafToNewTab(
     // the window moves first. The call is dispatched before the move's layout pushes, so the host
     // sees the move first.
     const hostMove = moveWebRuntimeLeafToNewTab(paneMoveHost, request, placement)
+    // Why: until the host settles, a snapshot taken before its move must not read the new tab's pane as stale.
+    const releasePending = beginPendingHostPaneMove(request.targetTabId, leafId)
     const applied = applyMove(args, request, false, request.ptyId)
     void hostMove
       .then((outcome) => settleHostPaneMove(paneMoveHost, request, outcome, applied !== null))
       .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
+      .finally(releasePending)
     return applied
   }
   // Switch point: main moves the pane and names the new tab.

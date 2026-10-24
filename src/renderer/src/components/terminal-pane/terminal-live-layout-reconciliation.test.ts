@@ -282,32 +282,51 @@ describe('planTerminalLiveLayoutRemovals', () => {
 })
 
 describe('selectRetiredPaneIds', () => {
-  const view = (ptyIdsByPane: Record<number, string | null | undefined>) => ({
+  const view = (
+    ptyIdsByPane: Record<number, string | null | undefined>,
+    drawnElsewhere: readonly string[] = []
+  ) => ({
     paneCount: Object.keys(ptyIdsByPane).length,
     paneIdForLeaf: (leafId: string) => (leafId === 'leaf-b' ? 2 : leafId === 'leaf-c' ? 3 : null),
-    ptyIdForPane: (paneId: number) => ptyIdsByPane[paneId]
+    ptyIdForPane: (paneId: number) => ptyIdsByPane[paneId],
+    isPtyBoundInAnotherTab: (ptyId: string) => drawnElsewhere.includes(ptyId)
   })
+  const closed = (paneIds: number[]) => ({ closed: paneIds, moved: [] })
 
   it('closes the pane whose transport lost its PTY', () => {
     // Why: the host retired the leaf because its PTY ended, so a pane that no
     // longer has one is exactly the blank ghost the layout stopped naming.
-    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: null }))).toEqual([2])
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: null }))).toEqual(closed([2]))
   })
 
   it('keeps a pane still bound to a PTY or not yet attached to a transport', () => {
     // A stale snapshot may simply not name a live pane yet; a pane with no
     // transport is still mounting. Neither is evidence of a retired leaf.
-    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: 'pty-b' }))).toEqual([])
-    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: undefined }))).toEqual([])
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: 'pty-b' }))).toEqual(closed([]))
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: undefined }))).toEqual(closed([]))
+  })
+
+  it('detaches, never closes, a live pane whose PTY another tab now draws', () => {
+    // Why: another client moved the pane to a new tab; closing it here would kill the
+    // terminal that tab shows, and keeping it draws one terminal in two tabs.
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 1: 'pty-a', 2: 'pty-b' }, ['pty-b']))).toEqual({
+      closed: [],
+      moved: [2]
+    })
   })
 
   it('never removes the last pane on the tab', () => {
-    expect(selectRetiredPaneIds(['leaf-b'], view({ 2: null }))).toEqual([])
-    expect(selectRetiredPaneIds(['leaf-b', 'leaf-c'], view({ 2: null, 3: null }))).toEqual([2])
+    expect(selectRetiredPaneIds(['leaf-b'], view({ 2: null }))).toEqual(closed([]))
+    expect(selectRetiredPaneIds(['leaf-b', 'leaf-c'], view({ 2: null, 3: null }))).toEqual(
+      closed([2])
+    )
+    expect(
+      selectRetiredPaneIds(['leaf-b', 'leaf-c'], view({ 2: null, 3: 'pty-c' }, ['pty-c']))
+    ).toEqual(closed([2]))
   })
 
   it('skips a leaf that has no mounted pane', () => {
-    expect(selectRetiredPaneIds(['leaf-x'], view({ 1: 'pty-a', 2: null }))).toEqual([])
+    expect(selectRetiredPaneIds(['leaf-x'], view({ 1: 'pty-a', 2: null }))).toEqual(closed([]))
   })
 })
 
@@ -383,8 +402,9 @@ describe('host retirement that lands before the transport teardown', () => {
       selectRetiredPaneIds(removals, {
         paneCount: 2,
         paneIdForLeaf,
-        ptyIdForPane: (paneId) => (paneId === 2 ? 'pty-b' : 'pty-a')
-      })
+        ptyIdForPane: (paneId) => (paneId === 2 ? 'pty-b' : 'pty-a'),
+        isPtyBoundInAnotherTab: () => false
+      }).closed
     ).toEqual([])
 
     retired = trackRetiredLeafIds({
@@ -398,8 +418,9 @@ describe('host retirement that lands before the transport teardown', () => {
       selectRetiredPaneIds(removals, {
         paneCount: 2,
         paneIdForLeaf,
-        ptyIdForPane: (paneId) => (paneId === 2 ? null : 'pty-a')
-      })
+        ptyIdForPane: (paneId) => (paneId === 2 ? null : 'pty-a'),
+        isPtyBoundInAnotherTab: () => false
+      }).closed
     ).toEqual([2])
   })
 })
