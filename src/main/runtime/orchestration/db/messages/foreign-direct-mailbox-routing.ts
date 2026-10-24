@@ -172,6 +172,59 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
   }
 }
 
+/**
+ * Which of these direct rows a Run still owns, by the same coordinator/Dispatch rules routing uses.
+ * Read-only: a pointer must leave such rows undelivered, since routing only moves undelivered rows.
+ */
+export function listRunOwnedDirectMessageIds(
+  this: OrchestrationDb,
+  directHandle: string,
+  messageIds: readonly string[],
+  paneKey?: string
+): Set<string> {
+  if (messageIds.length === 0) {
+    return new Set()
+  }
+  const paneSuffix = paneKey && parsePaneKey(paneKey) ? paneKeyMatchSuffix(paneKey) : undefined
+  const paneOwner =
+    paneSuffix === undefined
+      ? ''
+      : `OR EXISTS (
+           SELECT 1 FROM (
+             SELECT pane_dispatch.run_id FROM dispatch_contexts AS pane_dispatch
+             WHERE pane_dispatch.assignee_pane_key IS NOT NULL
+               AND instr(pane_dispatch.assignee_pane_key, ':') > 1
+               AND pane_dispatch.status IN ('pending', 'dispatched')
+               AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+           ) AS pane_owner JOIN runs AS owner_run
+             ON owner_run.id = pane_owner.run_id AND owner_run.legacy = 0
+           WHERE pane_owner.run_id = candidate.run_id)`
+  const placeholders = messageIds.map(() => '?').join(',')
+  const rows = this.db
+    .prepare(
+      `SELECT candidate.id FROM messages AS candidate
+       WHERE candidate.to_handle = ? AND candidate.id IN (${placeholders})
+         AND (
+           EXISTS (
+             SELECT 1 FROM run_coordinator_handles AS coordinator JOIN runs AS owner_run
+               ON owner_run.id = coordinator.run_id AND owner_run.legacy = 0
+             WHERE coordinator.run_id = candidate.run_id
+               AND coordinator.terminal_handle = candidate.to_handle)
+           OR EXISTS (
+             SELECT 1 FROM dispatch_contexts AS direct_dispatch JOIN runs AS owner_run
+               ON owner_run.id = direct_dispatch.run_id AND owner_run.legacy = 0
+             WHERE direct_dispatch.run_id = candidate.run_id
+               AND direct_dispatch.assignee_handle = candidate.to_handle
+               AND direct_dispatch.status IN ('pending', 'dispatched'))
+           ${paneOwner}
+         )`
+    )
+    .all(directHandle, ...messageIds, ...(paneSuffix === undefined ? [] : [paneSuffix])) as {
+    id: string
+  }[]
+  return new Set(rows.map((row) => row.id))
+}
+
 export function getUnreadDirectMessageTypes(
   this: OrchestrationDb,
   directHandle: string
@@ -190,6 +243,7 @@ export function getUnreadDirectMessageTypes(
 export type ForeignDirectMailboxRoutingMethods = {
   findActiveDispatchForDirectMessageOwner: typeof findActiveDispatchForDirectMessageOwner
   routeForeignDirectMessagesToOwnedMailboxes: typeof routeForeignDirectMessagesToOwnedMailboxes
+  listRunOwnedDirectMessageIds: typeof listRunOwnedDirectMessageIds
   getUnreadDirectMessageTypes: typeof getUnreadDirectMessageTypes
 }
 
@@ -197,6 +251,7 @@ export function attachForeignDirectMailboxRouting(ctor: { prototype: object }): 
   Object.assign(ctor.prototype, {
     findActiveDispatchForDirectMessageOwner,
     routeForeignDirectMessagesToOwnedMailboxes,
+    listRunOwnedDirectMessageIds,
     getUnreadDirectMessageTypes
   })
 }
