@@ -1,4 +1,6 @@
+import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
+import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
@@ -171,6 +173,10 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
   stoppedAcquisition?(sessionId: string): StructuredAgentSessionAcquisitionReceipt | undefined
+  permissionModeRequiresAcquisition?(
+    sessionId: string,
+    mode: AgentChatPermissionMode
+  ): boolean | undefined
   dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -183,6 +189,9 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
     beforeDispatch?: () => Promise<void>
+    /** Whether the host still owns this exact child after asynchronous preparation. */
+    isCurrent?: () => boolean
+    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
     /** Mark preparation before choices mutate the provider. */
     onInputPreparation?: () => void
     /** Checkpoint between choice application and execution-evidence capture. */

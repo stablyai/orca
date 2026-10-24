@@ -19006,7 +19006,6 @@
         "permissions": "Autorisations",
         "permissionAsk": "Demander l’approbation",
         "permissionAskDescription": "Demande avant les modifications et commandes que vos réglages n'autorisent pas",
-        "permissionAskCodexDescription": "Modifie des fichiers et exécute des commandes dans cet espace de travail ; demande avant toute autre action",
         "permissionAskSharedDescription": "Demande avant les modifications ou commandes qui ne sont pas déjà autorisées",
         "permissionAcceptEdits": "Accepter les modifications",
         "permissionAcceptEditsDescription": "Approuve les modifications et commandes de fichiers ; demande pour le reste",

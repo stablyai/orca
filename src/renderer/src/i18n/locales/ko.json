@@ -18895,7 +18895,6 @@
         "permissions": "권한",
         "permissionAsk": "승인 요청",
         "permissionAskDescription": "설정에서 허용하지 않은 편집과 명령 전에 묻습니다",
-        "permissionAskCodexDescription": "이 작업 공간에서 파일을 편집하고 명령을 실행하며, 그 외 작업 전에는 묻습니다",
         "permissionAskSharedDescription": "아직 허용되지 않은 편집이나 명령 전에 묻습니다",
         "permissionAcceptEdits": "편집 허용",
         "permissionAcceptEditsDescription": "파일 편집과 파일 명령은 승인하고, 나머지는 묻습니다",

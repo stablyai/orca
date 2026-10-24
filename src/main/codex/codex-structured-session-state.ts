@@ -32,6 +32,8 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
@@ -145,6 +147,16 @@ export type CodexSession = {
   acquisitionGeneration: string
   threadId: string
   historyMode?: 'legacy' | 'paginated'
+  /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
+  permissions?: {
+    acquiredMode: AgentChatPermissionMode
+    acquiredSandbox?: CodexSandboxPolicy
+    launchSandboxIntact: boolean
+    cwd: string
+    visualsFolder?: string
+    preparedMode?: AgentChatPermissionMode
+    preparedAuto?: CodexSandboxPolicy
+  }
   /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
   /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */

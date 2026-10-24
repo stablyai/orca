@@ -1,3 +1,7 @@
+import {
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput
+} from './structured-agent-session-handing-over'
 // Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
 // absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
 
@@ -34,6 +38,7 @@ export type StructuredAgentSessionLeftoverSettlementInput = {
   exit?: StructuredAgentSessionExitSettlement
   /** Observed root exit ends the generation even if lease release failed. */
   ended?: StructuredAgentSessionWorkEvidence['ended']
+  finalizingOwner?: () => void
 }
 
 export type StructuredAgentSessionLeftoverSettlement =
@@ -90,7 +95,17 @@ export async function settleStructuredAgentSessionLeftovers(
         const dispatches = [
           ...exited.dispatches,
           ...stale.dispatches.filter((entry) => !settledByExit.has(entry.clientMessageId))
-        ]
+        ].filter(
+          (entry) =>
+            !continuingStructuredAgentSessionInput(journal, entry.clientMessageId) &&
+            // Exit proof can settle a send now; generic doubt waits for its own result.
+            (entry.state === 'rejected' ||
+              !finalizingStructuredAgentSessionInput(
+                journal,
+                entry.clientMessageId,
+                input.finalizingOwner
+              ))
+        )
         planned = mutations.length + dispatches.length
         return { mutations, dispatches }
       }

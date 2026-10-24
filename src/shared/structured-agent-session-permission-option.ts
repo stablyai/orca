@@ -29,14 +29,14 @@ const MODE_COPY: Readonly<Record<AgentChatPermissionMode, { label: string; descr
     }
   }
 
-const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
-  ask: 'Edits files and runs commands in this workspace; asks before anything else',
-  'full-access': 'Never asks; can edit any file and use the network'
-}
-
 // Claude's copy names the person's own settings; other agents decide what they already allow.
 const OTHER_AGENT_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
   ask: "Asks before edits or commands it isn't already allowed to make"
+}
+
+const CODEX_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {
+  ...OTHER_AGENT_DESCRIPTIONS,
+  'full-access': 'Never asks; can edit any file and use the network'
 }
 
 const ANTIGRAVITY_DESCRIPTIONS: Partial<Record<AgentChatPermissionMode, string>> = {

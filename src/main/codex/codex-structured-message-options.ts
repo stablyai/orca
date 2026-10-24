@@ -1,3 +1,8 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { readCodexConfiguredLaunchDefaults } from './codex-configured-launch-defaults'
@@ -102,4 +107,42 @@ export async function resolvedCodexMessageOptions(
     }
   }
   return Object.fromEntries(selected.options)
+}
+
+/** Check the live binding after options settle and again whenever the provider is about to write. */
+export async function prepareCodexMessageDispatch(
+  session: CodexSession,
+  input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0],
+  registered: () => boolean
+) {
+  const checkAbort = () => {
+    if (input.signal?.aborted) {
+      throw new StructuredAgentSessionInputNotAdmitted({
+        state: 'rejected',
+        ...codexDispatchRejection(
+          agentSessionFailureFact(session.ended ? 'providerExited' : 'cancelled')
+        )
+      })
+    }
+  }
+  await input.beforeDispatch?.()
+  checkAbort()
+  input.onInputPreparation?.()
+  const turnOptions = await waitForPromiseWithSignal(
+    resolvedCodexMessageOptions(session, input.executionOptions),
+    input.signal
+  ).catch((error: unknown) => {
+    checkAbort()
+    throw error
+  })
+  checkAbort()
+  return {
+    ...input,
+    turnOptions,
+    isCurrent: () =>
+      registered() &&
+      !session.ended &&
+      session.fence === input.fence &&
+      input.isCurrent?.() !== false
+  }
 }

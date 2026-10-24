@@ -19285,7 +19285,6 @@
         "permissions": "Permissões",
         "permissionAsk": "Pedir aprovação",
         "permissionAskDescription": "Pede aprovação antes de edições e comandos que suas configurações não permitem",
-        "permissionAskCodexDescription": "Edita arquivos e executa comandos neste espaço de trabalho; pede aprovação para outras ações",
         "permissionAskSharedDescription": "Pede aprovação antes de edições ou comandos que ainda não tem permissão para realizar",
         "permissionAcceptEdits": "Aceitar edições",
         "permissionAcceptEditsDescription": "Aprova edições e comandos de arquivo; pede aprovação para o restante",

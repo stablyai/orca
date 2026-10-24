@@ -18861,7 +18861,6 @@
         "permissions": "权限",
         "permissionAsk": "请求批准",
         "permissionAskDescription": "在设置未允许的编辑和命令前询问",
-        "permissionAskCodexDescription": "在此工作区中编辑文件并运行命令；其他操作前会询问",
         "permissionAskSharedDescription": "在执行尚未获准的编辑或命令前询问",
         "permissionAcceptEdits": "接受编辑",
         "permissionAcceptEditsDescription": "批准文件编辑和文件命令；其余操作会询问",

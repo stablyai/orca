@@ -19234,7 +19234,6 @@
         "permissions": "Permissions",
         "permissionAsk": "Ask for approval",
         "permissionAskDescription": "Asks before edits and commands your settings don't allow",
-        "permissionAskCodexDescription": "Edits files and runs commands in this workspace; asks before anything else",
         "permissionAskSharedDescription": "Asks before edits or commands it isn't already allowed to make",
         "permissionAcceptEdits": "Accept edits",
         "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",

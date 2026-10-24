@@ -163,8 +163,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       method: 'thread/start',
       params: {
         cwd: '/work/repo',
-        approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        approvalPolicy: 'untrusted',
+        sandbox: 'read-only',
         approvalsReviewer: 'user',
         // Explicit values survive inherit = core.
         config: {
@@ -473,6 +473,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       {
         threadId: THREAD_ID,
         clientUserMessageId: 'client-1',
+        approvalPolicy: 'untrusted',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },

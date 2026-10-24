@@ -1,3 +1,7 @@
+import {
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput
+} from './structured-agent-session-handing-over'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
@@ -119,9 +123,11 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
     ? submissions.some(
         (submission) =>
           // Unhanded queued messages are not work in progress.
-          (submission.dispatchState === 'pending' &&
+          !continuingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          !finalizingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          ((submission.dispatchState === 'pending' &&
             !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
-          (submission.dispatchState === 'unknown' && submission.recovered !== true)
+            (submission.dispatchState === 'unknown' && submission.recovered !== true))
       )
     : (journal.pendingSubmissions?.().length ?? 0) > 0
 }

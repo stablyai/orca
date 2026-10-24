@@ -18895,7 +18895,6 @@
         "permissions": "権限",
         "permissionAsk": "承認を求める",
         "permissionAskDescription": "設定で許可されていない編集やコマンドの前に確認します",
-        "permissionAskCodexDescription": "このワークスペース内でファイルを編集しコマンドを実行します。それ以外の操作の前に確認します",
         "permissionAskSharedDescription": "まだ許可されていない編集やコマンドの前に確認します",
         "permissionAcceptEdits": "編集を許可",
         "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",

@@ -141,7 +141,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const observedAt = observation?.observedAt ?? exit.observedAt ?? context.now()
   // Host phase classifies startup failure even if adapters omit the flag.
   const exitedDuringStartup = child.phase === 'starting'
-  if (child.phase === 'starting') {
+  if (child.phase === 'starting' || !expected) {
     context.abortOpen?.(sessionId)
   }
   // Personal Stop cancels startup; host Stop fails it; preserve the close initiator.

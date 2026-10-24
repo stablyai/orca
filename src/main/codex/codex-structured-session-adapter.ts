@@ -1,6 +1,5 @@
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -21,7 +20,7 @@ import {
   prepareLiveCodexSessionOptions,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
-import { resolvedCodexMessageOptions } from './codex-structured-message-options'
+import { prepareCodexMessageDispatch } from './codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -89,6 +88,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.sessions.get(sessionId)?.skillReport?.read()
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
+
+  permissionModeRequiresAcquisition = (): boolean => false
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -233,15 +234,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
-      await input.beforeDispatch?.()
-      input.signal?.throwIfAborted()
-      input.onInputPreparation?.()
-      const turnOptions = await waitForPromiseWithSignal(
-        resolvedCodexMessageOptions(session, input.executionOptions),
-        input.signal
+      return await dispatchCodexTurn(
+        session,
+        await prepareCodexMessageDispatch(
+          session,
+          input,
+          () => this.sessions.get(input.sessionId) === session
+        ),
+        this.deps.requestTimeoutMs
       )
-      input.signal?.throwIfAborted()
-      return await dispatchCodexTurn(session, { ...input, turnOptions }, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
       settleCodexRequestEndWaiters(session)

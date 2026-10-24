@@ -18866,7 +18866,6 @@
         "permissions": "Permisos",
         "permissionAsk": "Pedir aprobación",
         "permissionAskDescription": "Pregunta antes de ediciones y comandos que tu configuración no permite",
-        "permissionAskCodexDescription": "Edita archivos y ejecuta comandos en este espacio de trabajo; pregunta antes de cualquier otra cosa",
         "permissionAskSharedDescription": "Pregunta antes de ediciones o comandos que aún no tiene permitidos",
         "permissionAcceptEdits": "Aceptar ediciones",
         "permissionAcceptEditsDescription": "Aprueba ediciones y comandos de archivos; pregunta por lo demás",

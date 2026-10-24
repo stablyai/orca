@@ -1,3 +1,4 @@
+import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 // Only queued work or provider operations start children. Run waits outside serialization;
 // fence each state commit so concurrent sends remain immediately acceptable.
 
@@ -71,7 +72,9 @@ export function claimStructuredAgentSessionAgent(
       .submissions()
       .some(
         (submission) =>
-          submission.clientMessageId === startedFor && isQueuedAgentJournalSubmission(submission)
+          submission.clientMessageId === startedFor &&
+          (isQueuedAgentJournalSubmission(submission) ||
+            continuingStructuredAgentSessionInput(session.journal, startedFor))
       )
   ) {
     return { outcome: Promise.resolve({ ok: false, aborted: true, refusal: startFailedRefusal() }) }

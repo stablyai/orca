@@ -1,4 +1,16 @@
+import type { createStructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
+import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
+import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionRequestFailure } from './structured-agent-session-request-failures'
+import type { StructuredAgentSessionCommandHandoverContext } from './structured-agent-session-command-turn'
+import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
+import type { StructuredAgentSessionRanRecorder } from './structured-agent-session-ran-options'
+import type {
+  StructuredAgentSessionAdmitHostInput,
+  StructuredAgentSessionContinueInput
+} from './structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
@@ -169,3 +181,36 @@ export type StructuredAgentSessionConversationNaming = {
   /** Start or join naming; false if the host has no such chat. */
   regenerate: (sessionId: string) => boolean
 }
+
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext & {
+  admitFreshInput?: StructuredAgentSessionAdmitHostInput
+  continueInput?: StructuredAgentSessionContinueInput
+  acquireAborts?: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
+  deliveryOrder?: StructuredAgentSessionDeliveryOrder
+  workChanged?: () => void
+  holdClosedInput?: (
+    clientMessageId: string,
+    fence: number,
+    cause: UnsentSendHold['cause']
+  ) => Promise<void>
+  settleEndedInput?: (owner: () => void) => Promise<void>
+  /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
+  recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
+}
+
+export type StructuredAgentSessionConversationLifetimeContext = {
+  /** Resolve lazily because host collaborators are assigned after construction. */
+  context: () => StructuredAgentSessionLifetimeContext
+  sessions: StructuredAgentSessionConversations
+  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  /** Caller already holds session serialization. */
+  open: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
+  deliveryActive: (sessionId: string) => boolean
+  /** Retain status rows while a tab still lists the chat. */
+  closeStatus: (sessionId: string, options: { listed: boolean }) => void
+  childWorkOpen: (sessionId: string) => boolean
+}
+
+export type StructuredAgentSessionConversationLifetime = ReturnType<
+  typeof createStructuredAgentSessionConversationLifetime
+>
