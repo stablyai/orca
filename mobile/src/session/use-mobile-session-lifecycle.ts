@@ -18,6 +18,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     hostId,
     connState,
     setCustomKeys,
+    setShortcutLayout,
     setVisibleBuiltInIds,
     setHostEndpoint,
     connStateRef,
@@ -48,31 +49,20 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [hostId])
 
-  useEffect(() => {
-    let active = true
-    void settleSessionPreferenceRead(loadCustomKeys()).then((keys) => {
-      if (active) {
-        if (keys) {
-          setCustomKeys(keys)
-        }
-        setCustomKeysLoaded(true)
-      }
-    })
-    return () => {
-      active = false
-    }
-  }, [])
-
   const layoutReadRevisionRef = useRef(0)
+  const customKeysReadRevisionRef = useRef(0)
+
   const refreshAccessoryLayout = useCallback(() => {
     const revision = ++layoutReadRevisionRef.current
     void settleSessionPreferenceRead(loadTerminalAccessoryLayout()).then((layout) => {
-      if (layoutReadRevisionRef.current === revision) {
-        if (layout) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
-        }
-        setAccessoryLayoutLoaded(true)
+      if (layoutReadRevisionRef.current !== revision) {
+        return
       }
+      if (layout) {
+        setShortcutLayout(layout)
+        setVisibleBuiltInIds(layout.visibleBuiltInIds)
+      }
+      setAccessoryLayoutLoaded(true)
     })
     return () => {
       if (layoutReadRevisionRef.current === revision) {
@@ -81,19 +71,48 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [])
 
-  useFocusEffect(refreshAccessoryLayout)
+  const refreshCustomKeys = useCallback(() => {
+    const revision = ++customKeysReadRevisionRef.current
+    void settleSessionPreferenceRead(loadCustomKeys()).then((keys) => {
+      if (customKeysReadRevisionRef.current !== revision) {
+        return
+      }
+      if (keys) {
+        setCustomKeys(keys)
+      }
+      setCustomKeysLoaded(true)
+    })
+    return () => {
+      if (customKeysReadRevisionRef.current === revision) {
+        customKeysReadRevisionRef.current += 1
+      }
+    }
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      const cancelLayout = refreshAccessoryLayout()
+      const cancelKeys = refreshCustomKeys()
+      return () => {
+        cancelLayout()
+        cancelKeys()
+      }
+    }, [refreshAccessoryLayout, refreshCustomKeys])
+  )
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refreshAccessoryLayout()
+        refreshCustomKeys()
       }
     })
     return () => {
       layoutReadRevisionRef.current += 1
+      customKeysReadRevisionRef.current += 1
       sub.remove()
     }
-  }, [refreshAccessoryLayout])
+  }, [refreshAccessoryLayout, refreshCustomKeys])
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {

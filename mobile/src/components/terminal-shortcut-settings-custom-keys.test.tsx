@@ -49,6 +49,8 @@ vi.mock('expo-router', () => ({
 vi.mock('lucide-react-native', () => ({
   ChevronLeft: hosts.View,
   ChevronRight: hosts.View,
+  Minus: hosts.View,
+  Plus: hosts.View,
   X: hosts.View
 }))
 vi.mock('./BottomDrawer', () => ({ BottomDrawer: hosts.View }))
@@ -88,7 +90,7 @@ function stored(): string[] {
 }
 
 function shown(): string[] {
-  return lists.custom?.items.map((key) => key.id) ?? []
+  return (lists.custom?.items.map((key) => key.id) ?? []).filter((id) => id.startsWith('custom-'))
 }
 
 let renderer: ReactTestRenderer | null = null
@@ -111,7 +113,7 @@ async function mount(): Promise<void> {
 
 function pressRemove(label: string): void {
   const button = renderer?.root.find(
-    (node) => node.type === hosts.Pressable && node.props.accessibilityLabel === `Remove ${label}`
+    (node) => node.type === hosts.Pressable && node.props.accessibilityLabel === `Delete ${label}`
   )
   act(() => button?.props.onPress())
 }

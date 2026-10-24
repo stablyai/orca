@@ -62,6 +62,7 @@ function sessionScope() {
     setAutocompleteEnabled: vi.fn(),
     setTerminalLinkOpenMode: vi.fn(),
     setCustomKeys: vi.fn(),
+    setShortcutLayout: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
     setHostEndpoint: vi.fn(),
     connStateRef: { current: 'connecting' },
