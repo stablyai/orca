@@ -20,6 +20,8 @@ type WorkspaceKanbanSettingsMenuProps = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   syncTaskStatusFromWorkspaceBoard: boolean
   onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
+  syncWorkspaceStatusFromAgentTurns: boolean
+  onSyncWorkspaceStatusFromAgentTurnsChange: (enabled: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -32,6 +34,8 @@ export default function WorkspaceKanbanSettingsMenu({
   workspaceStatuses,
   syncTaskStatusFromWorkspaceBoard,
   onSyncTaskStatusFromWorkspaceBoardChange,
+  syncWorkspaceStatusFromAgentTurns,
+  onSyncWorkspaceStatusFromAgentTurnsChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -104,6 +108,32 @@ export default function WorkspaceKanbanSettingsMenu({
               ariaLabel={translate(
                 'auto.components.sidebar.WorkspaceKanbanSettingsMenu.87d24a0c2f',
                 'Sync board and issue status'
+              )}
+            />
+          </div>
+          <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5 hover:bg-worktree-sidebar-accent/70">
+            <span className="min-w-0 space-y-0.5">
+              <span className="block text-[12px] font-medium leading-4 text-foreground">
+                {translate(
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.06b8804b1d',
+                  'Sync board status with agent turns'
+                )}
+              </span>
+              <span className="block text-[11px] leading-4 text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.cb0f7605af',
+                  'Moves a workspace to In review when its agent finishes a turn and back to In progress when a new turn starts.'
+                )}
+              </span>
+            </span>
+            <SettingsSwitch
+              checked={syncWorkspaceStatusFromAgentTurns}
+              onChange={() =>
+                onSyncWorkspaceStatusFromAgentTurnsChange(!syncWorkspaceStatusFromAgentTurns)
+              }
+              ariaLabel={translate(
+                'auto.components.sidebar.WorkspaceKanbanSettingsMenu.06b8804b1d',
+                'Sync board status with agent turns'
               )}
             />
           </div>

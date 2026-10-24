@@ -236,6 +236,7 @@ export function getDefaultUIState(): PersistedUIState {
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,
     syncTaskStatusFromWorkspaceBoard: false,
+    syncWorkspaceStatusFromAgentTurns: false,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesReorderedDefaultRepaired: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
