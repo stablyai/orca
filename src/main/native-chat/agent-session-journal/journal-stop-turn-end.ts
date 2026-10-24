@@ -1,4 +1,4 @@
-// All turn-end writers apply this rule on the journal lane. Unnamed Stop bindings are memory-only
+// All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
 // and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
 
 import {
@@ -74,15 +74,12 @@ export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
   return true
 }
 
-/** A personal Stop owns its named turn, or turns bound during unnamed settlement. */
+/** A session-ending Stop owns every turn ending while it settles; a targeted Stop owns its turn. */
 function stopIsTurnCancellation(stop: JournalLatestStop, turnId: string): boolean {
   if (!stopIsAPersons(stop.event.reason)) {
     return false
   }
-  if (stop.event.turnId !== undefined) {
-    return stop.event.turnId === turnId
-  }
-  return stop.settle?.settling === true || stop.settle?.turnId === turnId
+  return stop.settle?.settling || stop.settle?.turnId === turnId || stop.event.turnId === turnId
 }
 
 /** Ends observed before Stop keep their meaning even if written later. */
@@ -110,17 +107,19 @@ export function personStopDecidesTurn(
     return false
   }
   if (turnId === null) {
-    return stop.event.turnId === undefined && stop.settle?.settling === true
+    return stop.settle?.settling === true
   }
   return stopEndsTurnAsCancellation(state, turnId, endedAt)
 }
 
-/** An unnamed personal Stop owns ending turns until settlement closes. */
+/** Until its child closes, a session-ending Stop owns all turns; other callers stay unnamed-only. */
 export function beginJournalStopSettle(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>
+  state: Pick<JournalReducerState, 'queuePauseMarks'>,
+  endsSession = false
 ): JournalStopSettle | null {
   const stop = state.queuePauseMarks.latestStop
-  if (stop === null || stop.event.turnId !== undefined || !stopIsAPersons(stop.event.reason)) {
+  const targeted = !endsSession && stop?.event.turnId !== undefined
+  if (stop === null || targeted || !stopIsAPersons(stop.event.reason)) {
     return null
   }
   // Repeated Stop preserves the earlier bound turn.

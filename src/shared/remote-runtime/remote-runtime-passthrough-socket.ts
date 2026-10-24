@@ -7,7 +7,7 @@ import {
 } from '../remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { openRemoteRuntimeWebSocket } from './requests/remote-runtime-request-websocket'
-import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
+import { closeRemoteRuntimeSocket } from './remote-runtime-socket-close'
 import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions

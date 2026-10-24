@@ -31,6 +31,7 @@ export function WorktreeCardReferenceRow({
   url,
   onOpen,
   onManage,
+  origins,
   actions
 }: {
   review: WorktreeCardPrDisplay | null
@@ -43,6 +44,7 @@ export function WorktreeCardReferenceRow({
   url?: string
   onOpen: (url: string, event: MouseEvent) => void
   onManage?: (event: MouseEvent) => void
+  origins?: ReactNode
   actions?: ReactNode
 }): React.JSX.Element {
   return (
@@ -127,6 +129,7 @@ export function WorktreeCardReferenceRow({
             {provider === 'GitHub' ? null : `· ${provider}`}
             {source ? ` · ${source}` : ''}
           </span>
+          {origins}
           {actions}
         </div>
       </div>

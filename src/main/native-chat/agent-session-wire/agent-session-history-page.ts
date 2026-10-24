@@ -1,8 +1,17 @@
-// Backward pages read reduced items; catch-up reads rows so late revisions of early items are not lost.
+import { resolveHistoryLimit } from './agent-session-history-limit'
+export { resolveHistoryLimit } from './agent-session-history-limit'
+// Paged history over one journal.
+//
+// `tail` and `before` read the REDUCED timeline, so backward paging keeps
+// working after compaction — the folded snapshot still holds every live item.
+// `after` is the catch-up direction and must read rows instead: an item created
+// early and revised late orders by its creation sequence, so an item-window
+// read would silently skip that revision. Rows carry the revision, which is why
+// `after` is the only direction that can answer `cursor_compacted`.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
-import { latestStructuredAgentSessionTurn } from '../../../shared/structured-agent-session-live-turn'
+import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 import { isSubagentBlock } from '../../../shared/native-chat-types'
 import type {
   AgentJournalCursor,
@@ -10,13 +19,11 @@ import type {
   AgentJournalSnapshot
 } from '../../../shared/agent-session-journal-types'
 import {
-  AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryDirection,
   type AgentSessionHistoryPage,
   type AgentSessionHistoryRequest,
   type AgentSessionHistoryResult,
-  type AgentSessionLatestTurn,
   type AgentSessionSubagentRosterEntry
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -35,15 +42,9 @@ import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
-/** Clamp oversized requests so clients can keep paging. */
-export function resolveHistoryLimit(limit: number | undefined): number {
-  if (limit === undefined || !Number.isFinite(limit)) {
-    return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
-  }
-  return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
-}
-
-/** Both scopes window on session-owned rows; every-agent also includes interleaved subagent rows. */
+/** Whose rows a backward read serves. Both window over the session's own rows; a
+ *  reader of the session's own agent alone gets only those. In-process only: no wire
+ *  request carries it. */
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
 
 /** Window by own-agent rows, retaining contiguous subagent work and whole sibling groups within byte bounds. */
@@ -74,18 +75,31 @@ export function readAgentSessionHistory(
   journal: AgentSessionJournal,
   request: AgentSessionHistoryRequest,
   {
-    snapshot = journal.snapshot(),
+    view = journal.publicRead(),
+    snapshot = view.snapshot,
     scope = 'every-agent',
-    reader = CLIENT_HISTORY_READER
+    reader = CLIENT_HISTORY_READER,
+    rowReplay = false
   }: {
     /** Reuse a snapshot across synchronous catch-up pages to avoid repeated full reduction. */
     snapshot?: AgentJournalSnapshot
+    view?: ReturnType<AgentSessionJournal['publicRead']>
     scope?: AgentSessionHistoryScope
     reader?: HistoryReader
+    /** Internal catch-up and older item-backed clients keep their existing row replay. */
+    rowReplay?: boolean
   } = {}
 ): AgentSessionHistoryResult {
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
+    if (
+      !rowReplay &&
+      request.cursor?.epoch === snapshot.cursor.epoch &&
+      request.cursor.sequence <= snapshot.cursor.sequence &&
+      view.normalizationKey !== ''
+    ) {
+      return historyReset(snapshot, 'cursor_compacted', reader)
+    }
     return readForward(journal, snapshot, request.cursor, limit, reader)
   }
   const cursor = request.direction === 'before' ? request.cursor : undefined
@@ -128,24 +142,27 @@ export function readAgentSessionHistory(
 /** Reuse reduced state until the journal cursor advances. */
 export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal,
-  reader: HistoryReader = CLIENT_HISTORY_READER
+  reader: HistoryReader = CLIENT_HISTORY_READER,
+  initialView = journal.publicRead()
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
-  let snapshot = journal.snapshot()
+  let view = initialView
   return (request) => {
     const live = journal.cursor()
-    if (live.epoch !== snapshot.cursor.epoch || live.sequence !== snapshot.cursor.sequence) {
-      snapshot = journal.snapshot()
+    const prior = view.snapshot.cursor
+    if (live.epoch !== prior.epoch || live.sequence !== prior.sequence) {
+      view = journal.publicRead()
     }
-    return readAgentSessionHistory(journal, request, { snapshot, reader })
+    return readAgentSessionHistory(journal, request, { view, reader, rowReplay: true })
   }
 }
 
 export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
   fence?: number,
-  reader: HistoryReader = CLIENT_HISTORY_READER
+  reader: HistoryReader = CLIENT_HISTORY_READER,
+  snapshot: AgentJournalSnapshot = journal.snapshot()
 ): AgentSessionHistoryPage {
-  return buildHydrationPage(journal.snapshot(), fence, reader)
+  return buildHydrationPage(snapshot, fence, reader)
 }
 
 function buildHydrationPage(
@@ -313,16 +330,4 @@ function buildPage(input: {
     // Read the whole timeline: long turns can begin below this page.
     latestTurn: snapshotLatestTurn(input.snapshot)
   }
-}
-
-// Cache the turn scan across catch-up pages sharing a snapshot.
-const latestTurnBySnapshot = new WeakMap<AgentJournalSnapshot, AgentSessionLatestTurn | null>()
-
-export function snapshotLatestTurn(snapshot: AgentJournalSnapshot): AgentSessionLatestTurn | null {
-  let latest = latestTurnBySnapshot.get(snapshot)
-  if (latest === undefined) {
-    latest = latestStructuredAgentSessionTurn(snapshot.items)
-    latestTurnBySnapshot.set(snapshot, latest)
-  }
-  return latest
 }

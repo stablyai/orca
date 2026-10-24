@@ -436,14 +436,49 @@ describe('createBrowserSlice annotations', () => {
     const removed = store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     expect(removed).toBe(visited)
     expect(store.getState().browserUrlHistory).toEqual([])
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toEqual([visited])
 
     store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
     const revisited = store.getState().browserUrlHistory
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toBe(revisited)
+  })
+
+  it('clears pages and documents visited since a time, and Undo puts back exactly those', () => {
+    vi.useFakeTimers()
+    try {
+      const store = createTestStore()
+      const doc = { kind: 'workspace-doc' as const, worktreeId: 'wt-1', filePath: '/repo/a.html' }
+      vi.setSystemTime(1_000)
+      store.getState().addBrowserHistoryEntry('https://old.example', 'Old')
+      vi.setSystemTime(5_000)
+      store.getState().addBrowserHistoryEntry('https://new.example', 'New')
+      store.getState().recordWorkspaceDocVisit(doc, 'Doc')
+
+      const removed = store.getState().clearBrowserHistory(5_000)
+      expect(store.getState().browserUrlHistory.map((e) => e.title)).toEqual(['Old'])
+      expect(store.getState().workspaceDocHistory).toEqual([])
+
+      store.getState().restoreBrowserHistory(removed)
+      expect(
+        store
+          .getState()
+          .browserUrlHistory.map((e) => e.title)
+          .sort()
+      ).toEqual(['New', 'Old'])
+      expect(store.getState().workspaceDocHistory.map((e) => e.title)).toEqual(['Doc'])
+
+      store.getState().clearBrowserHistory()
+      expect(store.getState().browserUrlHistory).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', async () => {

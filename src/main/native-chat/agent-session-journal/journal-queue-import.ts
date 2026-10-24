@@ -91,7 +91,12 @@ function unanswered(
 export class LegacyQueuedCards {
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
-  private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
+  private viewed: {
+    owner: JournalReducerState
+    key: string
+    cards: readonly QueuedMessageRow[]
+    display?: JournalReducerState
+  } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
 
@@ -107,15 +112,16 @@ export class LegacyQueuedCards {
   cards(): readonly QueuedMessageRow[] {
     const key = this.key()
     if (key === '') {
+      this.viewed = null
       return []
     }
-    if (this.viewed?.key !== key) {
-      const state = this.deps.state()
+    const state = this.deps.state()
+    if (this.viewed?.key !== key || this.viewed.owner !== state) {
       const cards = this.rows().flatMap((row) => {
         const change = legacyQueuedChange(state, row)
         return change ? [queuedCardFromChange(state, row.messageId, change)] : []
       })
-      this.viewed = { key, cards }
+      this.viewed = { owner: state, key, cards }
     }
     return this.viewed.cards
   }
@@ -123,22 +129,33 @@ export class LegacyQueuedCards {
   // Failed adoption cannot hide spent sends; derive display changes only on copied state.
   displayState(): JournalReducerState {
     const state = this.deps.state()
-    const handedOff = this.cards().flatMap((card) => {
+    const cards = this.cards()
+    if (this.viewed?.display) {
+      return this.viewed.display
+    }
+    const handedOff = cards.flatMap((card) => {
       const submission =
         card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
       return submission && handOffInDoubt(submission) ? [{ ...submission }] : []
     })
     if (handedOff.length === 0) {
+      if (this.viewed) {
+        this.viewed.display = state
+      }
       return state
     }
     const display = {
       ...state,
+      normalizedHandOffs: new Set(state.normalizedHandOffs),
       items: new Map(state.items),
       submissions: new Map(state.submissions)
     }
     for (const submission of handedOff) {
       display.submissions.set(submission.clientMessageId, submission)
       foldQueuedHandOffInDoubt(display, submission)
+    }
+    if (this.viewed) {
+      this.viewed.display = display
     }
     return display
   }

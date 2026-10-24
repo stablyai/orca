@@ -45,6 +45,8 @@ export type RuntimeClientEvent =
       selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
       reason?: 'definition' | 'run' | 'usage'
     }
+  // Why: browser profiles live on the host; old clients drop the unknown type and refetch on their old triggers.
+  | { type: 'browserProfilesChanged' }
   | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string

@@ -45,6 +45,8 @@ export class StructuredAgentSessionHost {
     this
   )
   private readonly sessions = new StructuredAgentSessionConversations({
+    observe: (id, journal, rows) => this.clientDelivery.requestFailures.observe(id, journal, rows),
+    forget: (id) => this.clientDelivery.requestFailures.forget(id),
     deliver: (sessionId, journal) => {
       this.subscribers.publish(sessionId, journal)
       this.conversationDelivery.afterCommit(sessionId, journal)
@@ -315,8 +317,8 @@ export class StructuredAgentSessionHost {
   /** Read the store; idle-released chats have no session-map entry. */
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
-  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request, scope) =>
-    this.backgroundTasks.history(request, scope)
+  history: StructuredAgentSessionBackgroundTaskChannel['history'] = (...args) =>
+    this.backgroundTasks.history(...args)
 
   /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
   journalSnapshot = async (sessionId: string) =>

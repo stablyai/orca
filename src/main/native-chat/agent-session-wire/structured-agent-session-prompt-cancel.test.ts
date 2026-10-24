@@ -448,4 +448,36 @@ describe("a card's own Cancel, as its provider answers it", () => {
     })
     expect(routes.stop).not.toHaveBeenCalled()
   })
+
+  it('leaves no Stop request row when the provider declines a live card Cancel', async () => {
+    const { journal, itemId } = await pendingPrompt(undefined, true)
+    await expect(
+      performCancel(
+        context(journal, async () => ({ cancelled: false })),
+        {
+          clientOperationId: 'cancel-1',
+          turnId: 'turn-1',
+          prompt: { itemId, expectedRevision: 1 }
+        }
+      )
+    ).resolves.toEqual({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
+    expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toEqual([])
+  })
+
+  it('leaves no Stop request row when a live card Cancel throws', async () => {
+    const { journal, itemId } = await pendingPrompt(undefined, true)
+    await expect(
+      performCancel(
+        context(journal, async () => {
+          throw new Error('lost')
+        }),
+        {
+          clientOperationId: 'cancel-1',
+          turnId: 'turn-1',
+          prompt: { itemId, expectedRevision: 1 }
+        }
+      )
+    ).rejects.toThrow('lost')
+    expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toEqual([])
+  })
 })

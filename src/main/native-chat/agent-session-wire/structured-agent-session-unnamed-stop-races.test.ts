@@ -105,6 +105,16 @@ async function admittedCodexSend() {
   const turns = codexTurnLifecycleFake(CODEX_THREAD, () => notify)
   Object.assign(codex.routes, turns.routes)
   const provider = adapterFor(codex, {}, [], {
+    // A Stop ends Codex's app server, so the next send's child resumes the saved thread.
+    resolveLaunch: async () => ({
+      command: 'codex',
+      args: ['app-server'],
+      cwd: '/work/repo',
+      codexHome: null,
+      resumeThreadId: restRig?.store.getRecord(SESSION)?.providerHandleChain.length
+        ? CODEX_THREAD
+        : null
+    }),
     onDispatchSettledLate: (settlement) => void restRig?.host.settleLateDispatch(settlement),
     onEvent: (event) => {
       if (event.type === 'ended' && 'cause' in event) {
@@ -121,8 +131,10 @@ async function admittedCodexSend() {
   await vi.waitFor(() => expect(turns.turnId).toBe('turn-1'))
   const id = send.envelope.clientOperationId
   const interrupts = () =>
-    codex.connections[0]!.calls.filter((call) => call.method === 'turn/interrupt')
-  return { current, turns, id, interrupts }
+    codex.connections.flatMap((connection) =>
+      connection.calls.filter((call) => call.method === 'turn/interrupt')
+    )
+  return { current, turns, id, interrupts, codex, notify }
 }
 
 it('Codex: reaches a turn that started before the user echo', async () => {
@@ -183,6 +195,71 @@ it('Codex: never answers a quiet success while an admitted turn cannot yet take 
   } else {
     expect(response.refusal.code).toBe('agent_session_operation_unknown')
   }
+})
+
+it('Codex: distinct Stops during one running turn interrupt once and allow the next reply', async () => {
+  const { current, turns, id, interrupts, codex, notify } = await admittedCodexSend()
+  turns.start()
+  turns.echo(id)
+  await current.host.flushStreamedEvents(SESSION)
+  const interruptEntered = Promise.withResolvers<void>()
+  const releaseInterrupt = Promise.withResolvers<void>()
+  codex.routes['turn/interrupt'] = async (params) => {
+    interruptEntered.resolve()
+    await releaseInterrupt.promise
+    return turns.routes['turn/interrupt'](params)
+  }
+  const first = unnamedStop()
+  const second = unnamedStop()
+  expect(second.envelope.clientOperationId).not.toBe(first.envelope.clientOperationId)
+  const stopping = current.host.cancel(CALLER, first)
+  let repeated: ReturnType<typeof current.host.cancel> | undefined
+  try {
+    await interruptEntered.promise
+    expect(turns.turnId).toBe('turn-1')
+    await vi.waitFor(() =>
+      expect(current.statusEvents.at(-1)).toMatchObject({
+        type: 'status',
+        session: { status: 'working', stopping: true }
+      })
+    )
+    // Keep the native request pending so this is another press during Stop, not a late replay.
+    repeated = current.host.cancel(CALLER, second)
+  } finally {
+    releaseInterrupt.resolve()
+    await stopping
+    await repeated
+  }
+  expect(await stopping).toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(await repeated).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(turns.turnId).toBeNull())
+
+  const next = restTestSend('reply after Stop')
+  expect(await current.host.send(CALLER, next)).toMatchObject({ ok: true })
+  await vi.waitFor(() => expect(turns.turnId).toBe('turn-2'))
+  turns.start()
+  turns.echo(next.envelope.clientOperationId)
+  notify('item/completed', {
+    threadId: CODEX_THREAD,
+    turnId: 'turn-2',
+    item: { type: 'agentMessage', id: 'reply-2', text: 'Resumed successfully.' }
+  })
+  turns.end('completed')
+  await current.host.flushStreamedEvents(SESSION)
+  const { items } = await current.host.journalSnapshot(SESSION)
+  expect(interrupts()).toMatchObject([{ params: { threadId: CODEX_THREAD, turnId: 'turn-1' } }])
+  expect(items.filter((item) => item.body.kind === 'status').map((item) => item.body)).toEqual([
+    { kind: 'status', text: 'Cancellation requested.' }
+  ])
+  expect(items.filter((item) => item.body.kind === 'turn').map((item) => item.body)).toMatchObject([
+    { kind: 'turn', turnId: 'turn-1', state: 'interrupted' },
+    { kind: 'turn', turnId: 'turn-2', state: 'completed' }
+  ])
+  expect(items.map((item) => item.body)).toContainEqual({
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'Resumed successfully.' }]
+  })
 })
 
 it('Codex: a retried Stop replays and never interrupts a later turn', async () => {

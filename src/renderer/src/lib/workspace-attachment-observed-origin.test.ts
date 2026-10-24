@@ -3,7 +3,10 @@ import type { AppState } from '@/store/types'
 import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
 import { singlePaneLayoutSnapshot } from '../store/slices/terminal-helpers'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { getWorkspaceAttachmentTerminalOrigin } from './workspace-attachment-terminal-origin'
+import {
+  getWorkspaceAttachmentObservedOrigin,
+  getWorkspaceAttachmentTerminalOrigin
+} from './workspace-attachment-observed-origin'
 
 const workspaceId = 'repo::/feature'
 const leaf = '11111111-1111-4111-8111-111111111111'
@@ -89,5 +92,45 @@ describe('reference evidence terminal identity', () => {
         'local'
       )
     ).toBeUndefined()
+  })
+})
+
+describe('reference evidence native chat identity', () => {
+  it('records the chat tab and its session without a terminal pane', () => {
+    const chat = {
+      ...state(),
+      unifiedTabsByWorktree: {
+        [workspaceId]: [
+          {
+            id: 'chat-tab',
+            entityId: 'chat-session',
+            groupId: 'group',
+            worktreeId: workspaceId,
+            contentType: 'agent-session' as const,
+            agentSessionAgent: 'claude' as const,
+            label: 'Plan refactor',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    }
+    expect(
+      getWorkspaceAttachmentObservedOrigin(
+        chat,
+        workspaceId,
+        { kind: 'agent-session', tabId: 'chat-tab' },
+        'local'
+      )
+    ).toEqual({
+      kind: 'observed',
+      tabId: 'chat-tab',
+      hostId: 'local',
+      label: 'Plan refactor',
+      agent: 'claude',
+      sessionId: 'chat-session'
+    })
   })
 })

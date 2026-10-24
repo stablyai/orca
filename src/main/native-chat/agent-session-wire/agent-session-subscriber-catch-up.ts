@@ -37,6 +37,7 @@ export type SubscriberDeliveryPort = {
     options?: {
       withholdQueued?: boolean
       currentWork?: AgentSessionPublishedWork
+      historyView?: string
     }
   ) => void
   isActive: (subscriber: Subscriber) => boolean
@@ -64,6 +65,41 @@ export function deliverToSubscriber(
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
     port.emit(target, event, { ...options, currentWork: work })
   const delivery = { ...port, emit }
+  const view = journal.publicRead()
+  if (
+    subscriber.snapshotCatchUp !== false &&
+    subscriber.readsCurrentRequests &&
+    subscriber.cursor.epoch === journal.epoch &&
+    view.normalizationKey !== '' &&
+    subscriber.historyView !== view.normalizationKey
+  ) {
+    const page = withPublishedWork(
+      readAgentSessionHydrationPage(
+        journal,
+        subscriber.fence,
+        subscriberHistoryReader(subscriber),
+        view.snapshot
+      ),
+      work
+    )
+    emit(
+      subscriber,
+      {
+        type: 'snapshot',
+        sessionId: subscriber.sessionId,
+        page,
+        fence: subscriber.fence,
+        ...shared
+      },
+      { historyView: view.normalizationKey }
+    )
+    if (port.isActive(subscriber)) {
+      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
+    }
+    return
+  }
+  // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
   if (sameJournalCursor(subscriber.cursor, journal.cursor())) {
     emitCaughtUp(delivery, subscriber, emitCheckpoint, shared, {
       journal,
@@ -72,7 +108,7 @@ export function deliverToSubscriber(
     return
   }
   const reader = subscriberHistoryReader(subscriber)
-  const readPage = createAgentSessionCatchUpReader(journal, reader)
+  const readPage = createAgentSessionCatchUpReader(journal, reader, view)
   while (true) {
     const result = withPublishedWorkResult(
       readPage({
@@ -85,14 +121,18 @@ export function deliverToSubscriber(
     )
     if (!result.ok) {
       const page = { ...result.page, fence: subscriber.fence }
-      emit(subscriber, {
-        type: 'reset',
-        sessionId: subscriber.sessionId,
-        reset: result.reset,
-        page,
-        fence: subscriber.fence,
-        ...shared
-      })
+      emit(
+        subscriber,
+        {
+          type: 'reset',
+          sessionId: subscriber.sessionId,
+          reset: result.reset,
+          page,
+          fence: subscriber.fence,
+          ...shared
+        },
+        { historyView: view.normalizationKey }
+      )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
@@ -112,14 +152,18 @@ export function deliverToSubscriber(
         readAgentSessionHydrationPage(journal, subscriber.fence, reader),
         work
       )
-      emit(subscriber, {
-        type: 'snapshot',
-        sessionId: subscriber.sessionId,
-        page: tail,
-        fence: subscriber.fence,
-        hostNow,
-        activity: port.activity(subscriber.sessionId)
-      })
+      emit(
+        subscriber,
+        {
+          type: 'snapshot',
+          sessionId: subscriber.sessionId,
+          page: tail,
+          fence: subscriber.fence,
+          hostNow,
+          activity: port.activity(subscriber.sessionId)
+        },
+        { historyView: view.normalizationKey }
+      )
       subscriber.cursor = tail.liveCursor ?? tail.window.nextCursor
       refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return

@@ -129,7 +129,8 @@ describe('useBrowserPageChromeFocus', () => {
       value: {
         ui: {
           onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) =>
-            focusAddressBarFromIpc.subscribe(callback)
+            focusAddressBarFromIpc.subscribe(callback),
+          onShowBrowserHistory: () => () => {}
         }
       }
     })

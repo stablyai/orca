@@ -1,4 +1,4 @@
-import { closeRemoteRuntimeSocket } from '../../remote-runtime-socket-close'
+import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
 import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'

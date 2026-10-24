@@ -44,6 +44,7 @@ export const SshEditableTargetInput = z
       )
       .optional(),
     systemSshConnectionReuse: z.boolean().optional(),
+    systemSshProxyConnectionReuse: z.boolean().optional(),
     remoteRuntime: z.enum(SSH_REMOTE_RUNTIMES).optional(),
     allowRemoteCliControl: z.boolean().optional()
   })

@@ -260,20 +260,26 @@ describe('source derivation agreement', () => {
     ).toThrow(/disagree on a source file/)
   })
 
-  it('diffs the checkout with pnpm formatting so the two halves stay comparable', () => {
-    expect(CHECKOUT_DIFF_FLAGS.filter((flag) => flag !== '--relative')).toEqual(
-      PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index')
-    )
-    expect(CHECKOUT_DIFF_FLAGS).toContain('--full-index')
-    expect(CHECKOUT_DIFF_FLAGS).not.toContain('--no-index')
-  })
+  it('diffs a nested checkout with package-relative paths and full object IDs', async () => {
+    const root = await createDirectory()
+    const checkout = path.join(root, 'checkout')
+    const packageRoot = path.join(checkout, 'addons', 'widget')
+    const pristine = path.join(root, 'pristine')
+    await writeTree(packageRoot, PRISTINE)
+    await writeTree(pristine, PRISTINE)
+    execFileSync('git', ['init', '--quiet', checkout], { env: pnpmDiffEnvironment() })
+    execFileSync('git', ['add', '.'], { cwd: checkout, env: pnpmDiffEnvironment() })
+    await writeTree(packageRoot, PATCHED)
 
-  it('passes --relative as a flag, not as a pathspec', () => {
-    // After `--` git reads it as a path, silently leaving addon diffs rooted at the
-    // repo instead of the package, which drops every source hunk from the patch.
-    expect(CHECKOUT_DIFF_FLAGS.indexOf('--relative')).toBeLessThan(
-      CHECKOUT_DIFF_FLAGS.indexOf('--')
-    )
+    const patch = execFileSync('git', [...CHECKOUT_DIFF_FLAGS, 'src/'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: pnpmDiffEnvironment()
+    })
+
+    expect(patch).toBe(sourceHunks(diffFolders(pristine, packageRoot)))
+    expect(patch).toContain('diff --git a/src/Widget.ts b/src/Widget.ts')
+    expect(patch).toMatch(/^index [0-9a-f]{40}\.\.[0-9a-f]{40} 100644$/m)
   })
 })
 
@@ -455,7 +461,7 @@ describe('committed xterm patch artifacts', () => {
     }
   })
 
-  it('pins a full upstream commit and a buildable package entry', async () => {
+  it('requires a full upstream commit, a package, and allowed build steps', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     expect(manifest.upstream.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(manifest.packages.length).toBeGreaterThan(0)

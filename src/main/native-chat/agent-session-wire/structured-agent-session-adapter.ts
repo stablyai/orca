@@ -15,7 +15,6 @@ import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalDispatchState,
   AgentJournalTurnItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -31,10 +30,7 @@ import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wir
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
 import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type {
-  AgentSessionCancelOutcome,
-  StructuredAgentSessionAdapterStop
-} from './structured-agent-session-adapter-stop'
+import type { StructuredAgentSessionAdapterStop } from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -179,6 +175,11 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  /** Execution-host observations from a requested provider close, when available. */
+  processExit?: {
+    root: 'live' | 'unverifiable' | 'exited'
+    workload: 'live' | 'unverifiable' | 'exited'
+  }
   fence: number
   acquisitionGeneration: string
   /** Observed child exit supplies interrupted-turn end time. */
@@ -279,16 +280,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
     command: StructuredAgentSessionCommandRun
   }): Promise<AgentSessionCommandAdmission>
-  /** Cancel only the requested turn; absent turnId also covers dispatches whose turns have not opened. */
-  cancelTurn(input: {
-    sessionId: string
-    turnId?: string
-    fence: number
-    prompt?: { itemId: string }
-    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
-    /** Re-read journal turn immediately before interrupt; direct callers may omit this guard. */
-    resolveLiveTurnId?: () => string | null
-  }): Promise<AgentSessionCancelOutcome>
   /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {
     sessionId: string
@@ -309,6 +300,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
+  /** Captures only this input's pending answer/output in the supplied live acquisition. */
+  capturePendingOutput?(input: {
+    sessionId: string
+    clientMessageId: string
+    fence: number
+    generation: string
+  }): (() => boolean) | undefined
   /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */

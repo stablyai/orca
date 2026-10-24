@@ -2,6 +2,7 @@
 
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
+import { createJournalPublicReader } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalCursor,
@@ -32,7 +33,6 @@ import {
 import {
   applyJournalRow,
   createJournalReducerState,
-  renderJournalState,
   resolveJournalItemId,
   type JournalReducerState
 } from './journal-reducer'
@@ -56,7 +56,7 @@ import {
   journalQueueReopenRowBuilder,
   journalStopEventRowBuilder
 } from './journal-stop-and-resume-rows'
-import type { AgentJournalEpochReason, JournalStopEvent } from './journal-row-schema'
+import type { AgentJournalEpochReason, JournalStopEvent, JournalRow } from './journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
@@ -80,9 +80,10 @@ export class AgentSessionJournal {
   private readonly mintEpoch: () => string
 
   private state: JournalReducerState
+  private readonly readPublic = createJournalPublicReader()
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
-  private onCommitted: (() => void) | null = null
+  private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalRowWriter
   private readonly epochController: JournalEpochController
@@ -121,9 +122,9 @@ export class AgentSessionJournal {
         for (const row of rows) {
           applyJournalRow(this.state, row, savedAt)
         }
-        this.onCommitted?.()
+        this.onCommitted?.(rows)
       },
-      notifyCommitted: () => this.onCommitted?.(),
+      notifyCommitted: () => this.onCommitted?.([]),
       journal: () => this,
       enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
     })
@@ -174,8 +175,8 @@ export class AgentSessionJournal {
     return this.queue.drain()
   }
 
-  /** One nonthrowing listener, replaced on each call; includes epoch replacements. */
-  observeCommits(listener: () => void): void {
+  /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
+  observeCommits(listener: (rows?: readonly JournalRow[]) => void): void {
     this.onCommitted = listener
   }
 
@@ -184,7 +185,10 @@ export class AgentSessionJournal {
     sequence: this.state.lastSequence
   })
 
-  snapshot = (): AgentJournalSnapshot => renderJournalState(this.queuedMessages.displayState())
+  snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
+
+  publicRead = () =>
+    this.readPublic(this.state, this.queuedMessages.displayState(), this.queuedMessages.revision())
 
   /** Visit without allocating/sorting a snapshot. */
   visitItems = (

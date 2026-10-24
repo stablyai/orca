@@ -30,7 +30,7 @@ function providerForHost(host: string): HostedRemoteHost | null {
   if (normalized === 'gitlab.com') {
     return { host: 'gitlab.com', provider: 'gitlab' }
   }
-  if (normalized === 'bitbucket.org') {
+  if (normalized === 'bitbucket.org' || normalized === 'ssh.bitbucket.org') {
     return { host: 'bitbucket.org', provider: 'bitbucket' }
   }
   return null

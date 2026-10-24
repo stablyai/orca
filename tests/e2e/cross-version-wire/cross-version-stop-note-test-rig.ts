@@ -52,15 +52,23 @@ export type ScenarioPort = {
   ) => Promise<RpcReply[]>
   runtimeStub: () => unknown
 }
-export const turnIdentity = { provider: 'orca', clientMessageId: 'turn-stop-test' } as const
+export const turnIdentity = {
+  provider: 'orca',
+  clientMessageId: 'turn-stop-test'
+} as const
 export const turnItemId = agentJournalItemKey(turnIdentity)
-export const noteIdentity = { provider: 'orca', clientMessageId: 'stop:turn-stop-test' } as const
+export const noteIdentity = {
+  provider: 'orca',
+  clientMessageId: 'stop:turn-stop-test'
+} as const
 export const noteId = agentJournalItemKey(noteIdentity)
 export const scope = { kind: 'turn', turnItemId } as const
 export const ordinary = { kind: 'status', text: 'Cancellation requested.' }
 export const unconfirmed: AgentJournalItemBody = {
   kind: 'status',
-  ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+  ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), {
+    surface: 'row'
+  })
 }
 
 export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
@@ -190,13 +198,24 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
           settlementId: `end-${state}`,
           fence: 1,
           mutations: [
-            { kind: 'item', identity: turnIdentity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+            {
+              kind: 'item',
+              identity: turnIdentity,
+              body,
+              turnScope: AGENT_JOURNAL_THREAD_SCOPE
+            }
           ]
         })
-      : journal.appendItem(turnIdentity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
+      : journal.appendItem(turnIdentity, body, {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }))
   }
   async function note(body: AgentJournalItemBody = unconfirmed) {
-    await journal.appendItem(noteIdentity, body, { fence: 1, turnScope: scope })
+    await journal.appendItem(noteIdentity, body, {
+      fence: 1,
+      turnScope: scope
+    })
   }
   async function seed() {
     await turn('running')

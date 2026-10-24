@@ -1409,6 +1409,10 @@
           "274af61bc0": "system",
           "d3756cf5bc": "disabled"
         },
+        "OrchestrationPane": {
+          "chatErrorEscalationKeywordChat": "chat",
+          "chatErrorEscalationKeywordError": "error"
+        },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."

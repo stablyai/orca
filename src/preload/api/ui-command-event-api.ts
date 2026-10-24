@@ -143,6 +143,7 @@ export type UiCommandEventApi = {
   }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  onShowBrowserHistory: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onBrowserHistoryNavigate: (

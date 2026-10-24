@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason } from '../../abort-signal-reason'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
-import { scheduleOrphanedRemoteRuntimeSocketClose } from '../../remote-runtime-abort-orphaned-socket'
+import { scheduleOrphanedRemoteRuntimeSocketClose } from '../remote-runtime-abort-orphaned-socket'
 import { serializeRemoteRuntimeRpcRequest } from '../../remote-runtime-memory-limits'
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
 import {

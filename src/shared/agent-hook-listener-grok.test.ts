@@ -289,9 +289,8 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.prompt).toBe('Find recent PR')
   })
 
-  it('strips newline-heavy Grok user_query wrappers without regex matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
-    const promptText = 'Find recent PR\n'.repeat(300)
+  it('preserves both ends of newline-heavy Grok user_query prompts', () => {
+    const promptText = `Find recent PR${'\n'.repeat(300)}Keep the final requirement`
     const event = normalizeHookPayload(
       state,
       'grok',
@@ -305,16 +304,18 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    expect(event?.payload.prompt).toContain('Find recent PR')
-    expect(event?.payload.prompt).not.toContain('<user_query>')
-    expect(event?.payload.prompt).not.toContain('</user_query>')
-    const usedGrokWrapperMatch = matchSpy.mock.calls.some(
-      ([pattern]) =>
-        pattern instanceof RegExp &&
-        pattern.source.startsWith('^<user_query>') &&
-        pattern.source.includes('[\\s\\S]')
+    expect(event?.payload.prompt).toBe('Find recent PR Keep the final requirement')
+
+    const tool = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'pre_tool_use', toolName: 'web_search' }
+      },
+      'production'
     )
-    expect(usedGrokWrapperMatch).toBe(false)
+    expect(tool?.payload.prompt).toBe('Find recent PR Keep the final requirement')
   })
 
   it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {

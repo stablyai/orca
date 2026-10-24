@@ -11784,7 +11784,7 @@
       "src/shared/remote-pairing-address.test.ts": 239,
       "src/shared/remote-pairing-verification.test.ts": 202,
       "src/shared/remote-rpc-content-budget.test.ts": 95,
-      "src/shared/remote-runtime-client-error-classification.test.ts": 42,
+      "src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts": 42,
       "src/shared/remote-runtime-client.test.ts": 5160,
       "src/shared/remote-runtime/remote-runtime-connect-bound.test.ts": 572,
       "src/shared/remote-runtime-memory-limits.test.ts": 120,

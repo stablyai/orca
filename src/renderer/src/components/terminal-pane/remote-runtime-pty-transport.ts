@@ -19,7 +19,7 @@ import {
   isRecoverableRemoteRuntimeConnectionError,
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike
-} from '../../../../shared/remote-runtime-client-error-classification'
+} from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import type {
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult

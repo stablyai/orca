@@ -28,7 +28,7 @@ import {
   isRuntimeRpcQueueOverloadError,
   toRemoteRuntimeClientErrorLike,
   type RemoteRuntimeClientErrorLike
-} from './remote-runtime-client-error-classification'
+} from './remote-runtime/remote-runtime-client-error-classification'
 import {
   WS_HANDSHAKE_TIMEOUT_MESSAGE,
   remoteRuntimeConnectFailureMessage

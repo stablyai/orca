@@ -197,7 +197,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   it('sanity: the exact reported timeout+funnel toast text classifies as recoverable, so flood text must come from unclassified surfaces', async () => {
     const { isRecoverableRemoteRuntimeConnectionError, toRemoteRuntimeClientErrorLike } =
-      await import('../../../../shared/remote-runtime-client-error-classification')
+      await import('../../../../shared/remote-runtime/remote-runtime-client-error-classification')
     const rendererSide = toRemoteRuntimeClientErrorLike(
       electronIpcRejection('RemoteRuntimeClientError', TIMEOUT_WITH_TAILSCALE_HINT)
     )

@@ -36,6 +36,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
   '../browser/browser-manager': { browserManager: { setBrowserGuestStateChangedListener: idle() } },
+  '../browser/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },

@@ -163,9 +163,15 @@ export function cancelStructuredAgentSessionTurn(
   const stoppedPrePrompt =
     !prompt && params.turnId === undefined
       ? abortProviderWaitForStop(context, caller, params.envelope, plan)
-      : false
+      : null
   // Only live-turn prompt Cancel reaches chat Stop; it shares the untargeted Stop path.
-  const stopped = prompt ? { envelope: params.envelope } : { ...params, stoppedPrePrompt }
+  const stopped = prompt
+    ? { envelope: params.envelope }
+    : {
+        ...params,
+        stoppedPrePrompt: stoppedPrePrompt?.reached === true,
+        stoppedSend: stoppedPrePrompt?.handedOver === true
+      }
   return mutateWithChatStop(context, caller, stopped, plan, (ctx, stop) =>
     prompt
       ? cancelStructuredAgentSessionPrompt(
@@ -183,7 +189,7 @@ function abortProviderWaitForStop(
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
   plan: MutationPlan<AgentSessionCancelResult>
-): boolean {
+): { reached: boolean; handedOver: boolean } | null {
   const { store } = context.deps
   if (
     !agentSessionMutationAdmitsNow({
@@ -194,7 +200,7 @@ function abortProviderWaitForStop(
       now: context.now
     })
   ) {
-    return false
+    return null
   }
   return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }

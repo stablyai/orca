@@ -368,6 +368,88 @@ describe('partition permission policy', () => {
     expect(check()).toBe(true)
   })
 
+  it('gives browsing pages File System Access but keeps it from pages another machine can script', async () => {
+    const install = await loadInstaller()
+    const { installBrowserRoutePartitionPolicies } =
+      await import('./browser-session-route-policies')
+    const routed = `persist:orca-browser-v1-${'a'.repeat(64)}`
+    install(profileFor('persist:browsing-5'))
+    void installBrowserRoutePartitionPolicies(profileFor('persist:browsing-5'), routed)
+    const decide = (partition: string) => {
+      const sess = sessionsByPartition.get(partition)
+      if (!sess) {
+        throw new Error(`Expected the session for ${partition}`)
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number; getURL: () => string },
+        permission: string,
+        callback: (allowed: boolean) => void,
+        details: Partial<Electron.FilesystemPermissionRequest>
+      ) => void
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+        webContents: null,
+        permission: string,
+        requestingOrigin: string,
+        details: Partial<Electron.PermissionCheckHandlerHandlerDetails>
+      ) => boolean
+      let requested: boolean | null = null
+      requestHandler(
+        { id: 11, getURL: () => 'https://app.test/' },
+        'fileSystem',
+        (allowed) => (requested = allowed),
+        { filePath: '/Users/me/project', isDirectory: true, fileAccessType: 'writable' }
+      )
+      const checked = checkHandler(null, 'fileSystem', 'https://app.test', {
+        filePath: '/Users/me/notes.txt',
+        isDirectory: false,
+        fileAccessType: 'writable'
+      })
+      return { requested, checked }
+    }
+
+    expect(decide('persist:browsing-5')).toEqual({ requested: true, checked: true })
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+    expect(decide(routed)).toEqual({ requested: false, checked: false })
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith(
+      expect.objectContaining({ guestWebContentsId: 11, permission: 'fileSystem' })
+    )
+  })
+
+  it('refuses a blocklisted system folder at once instead of leaving the page waiting', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-6'))
+    install(profileFor('orca-doc-preview'), { permissions: 'deny' })
+    const answer = (partition: string) => {
+      const sess = sessionsByPartition.get(partition)
+      const listener = sess?.on.mock.calls.find(
+        ([event]) => event === 'file-system-access-restricted'
+      )?.[1]
+      const actions: string[] = []
+      listener?.(
+        {},
+        {
+          origin: 'https://app.test',
+          isDirectory: true,
+          path: '/Users/me',
+          webContents: { id: 12 }
+        },
+        (action: string) => actions.push(action)
+      )
+      return actions
+    }
+
+    expect(answer('orca-doc-preview')).toEqual(['deny'])
+    expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+    expect(answer('persist:browsing-6')).toEqual(['deny'])
+    expect(mocks.notifyPermissionDenied).toHaveBeenCalledWith({
+      guestWebContentsId: 12,
+      permission: 'fileSystem',
+      rawUrl: 'https://app.test'
+    })
+  })
+
   it('hands a link to another app to the open-app prompt instead of denying it', async () => {
     const install = await loadInstaller()
     install(profileFor('persist:browsing-4'))

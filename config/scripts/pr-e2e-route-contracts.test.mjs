@@ -511,7 +511,7 @@ describe('managed-SSH remote sources routing', () => {
       'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
       'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
-      'src/shared/remote-runtime-client-error-classification.ts',
+      'src/shared/remote-runtime/remote-runtime-client-error-classification.ts',
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',

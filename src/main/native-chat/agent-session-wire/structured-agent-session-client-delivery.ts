@@ -1,3 +1,5 @@
+import { StructuredAgentSessionRequestFailures } from './structured-agent-session-request-failures'
+import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
@@ -33,6 +35,7 @@ export class StructuredAgentSessionClientDelivery {
   private stopAtRestCommandUpdates: () => void = () => undefined
   private readonly statusFeed
   private readonly turnCompletionFeed
+  readonly requestFailures
   private readonly sendSettlement
 
   constructor(
@@ -48,6 +51,16 @@ export class StructuredAgentSessionClientDelivery {
     // Current clients interpret an absent opening roster as no tasks.
     readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
   ) {
+    this.requestFailures = new StructuredAgentSessionRequestFailures({
+      sessions,
+      onFailure: (failure) => deps().onRequestFailure?.(failure),
+      capturePendingOutput: (input) => deps().adapter.capturePendingOutput?.(input),
+      wordsContext: (sessionId) =>
+        structuredAgentSessionFailureWordsContext(
+          deps().store.getRecord(sessionId),
+          sessions.get(sessionId)?.journal
+        )
+    })
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
       now,
@@ -155,6 +168,15 @@ export class StructuredAgentSessionClientDelivery {
     if (!session) {
       return
     }
+    try {
+      this.requestFailures.generationEnded(sessionId)
+    } catch (error) {
+      this.deps().logger.warn('observing a request death failed', {
+        scope: 'request-outcomes',
+        sessionId,
+        error
+      })
+    }
     // Invalidate cached work before every reader re-derives.
     session.operationalRevision = (session.operationalRevision ?? 0) + 1
     const { journal } = session
@@ -190,6 +212,7 @@ export class StructuredAgentSessionClientDelivery {
 
   /** Closing handles retains session-list rows; agent-status retains them only while tabs need them. */
   closeSession(sessionId: string, options: { listed: boolean }): void {
+    this.requestFailures.forget(sessionId)
     this.sendSettlement.closeSession(sessionId)
     if (options.listed) {
       this.statusFeed.revokeLive(sessionId)
@@ -201,6 +224,7 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   closeAll(): void {
+    this.requestFailures.clear()
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()
   }

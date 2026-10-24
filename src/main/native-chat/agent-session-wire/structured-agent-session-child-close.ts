@@ -36,7 +36,6 @@ async function endClosedStructuredAgentSessionChild(
   await context.endExitedChild(sessionId, child, {
     expected: true,
     reason: 'closed by Orca',
-    ...(child.close?.failure ? { failure: child.close.failure } : {}),
     ...(unanswered ? { startupUnanswered: true } : {})
   })
   context.restartWitness?.stopped(sessionId)
@@ -88,12 +87,14 @@ function closeProviderRoot(
 ): Promise<boolean> {
   const { adapter, logger } = context.deps
   // Missing close means no owned process; implemented closes must prove exit.
-  const stop = adapter.disposeSession ?? adapter.closeSession
-  if (!stop) {
+  if (!adapter.disposeSession && !adapter.closeSession) {
     return Promise.resolve(true)
   }
   return stopAgentSessionProviderRoot(
-    () => stop.call(adapter, sessionId),
+    async () => {
+      const close = adapter.disposeSession ?? adapter.closeSession
+      return (await close?.call(adapter, sessionId)) === true
+    },
     // Proven exit stands; descendant/follow-up failures are log-only.
     (error) =>
       logger.warn("the agent's process exited, but its close did not finish cleanly", {

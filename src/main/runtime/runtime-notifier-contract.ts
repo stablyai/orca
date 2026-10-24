@@ -45,6 +45,7 @@ export type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  browserProfilesChanged?(): void
   activateWorktree(
     repoId: string,
     worktreeId: string,

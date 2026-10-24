@@ -25,6 +25,7 @@ const dependencyExports: [string, string[]][] = [
   ['../ipc/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
   ['../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
   ['../browser/browser-manager', ['browserManager']],
+  ['../browser/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
   ['../git/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],

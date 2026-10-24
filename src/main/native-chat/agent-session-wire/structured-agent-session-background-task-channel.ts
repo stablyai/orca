@@ -38,7 +38,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   async history(
     request: AgentSessionHistoryRequest,
-    scope?: AgentSessionHistoryScope
+    scope?: AgentSessionHistoryScope,
+    replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const work = hostStructuredAgentSessionCurrentWork(
@@ -50,6 +51,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       record: this.deps.store.getRecord(request.sessionId),
       request,
       scope,
+      replaceNormalizedHistory,
       ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)

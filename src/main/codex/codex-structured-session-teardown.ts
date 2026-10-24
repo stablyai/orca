@@ -33,7 +33,8 @@ export class CodexStructuredSessionTeardown {
         this.deps.sessions,
         this.deps.acquisitions,
         this.deps.onEvent,
-        this.deps.logger
+        this.deps.logger,
+        true
       )
     )
     if (closed && connection?.processTreeUnproven) {

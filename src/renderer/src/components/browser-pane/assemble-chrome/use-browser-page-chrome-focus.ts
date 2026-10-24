@@ -20,6 +20,7 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import type { BrowserAddressBarSelection } from './browser-address-bar-edit-session'
 import type { BrowserPageGuestFocus } from './browser-page-guest-focus'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useBrowserHistoryShortcut } from '../history/use-browser-history-shortcut'
 
 /** Frames an address-bar grab keeps retrying before it lets the guest have focus back. */
 const ADDRESS_BAR_FOCUS_FRAMES = 6
@@ -30,6 +31,7 @@ const GUEST_ATTACH_WAIT_FRAMES = 120
  * Who owns focus in a browser pane's chrome. Every pane — local, client-hosted and streamed —
  * uses this so a new blank tab lands in the address bar with its text selected, the command
  * palette can aim focus at either surface, and Cmd/Ctrl+L reaches the bar from anywhere.
+ * It also carries the history shortcut, so every pane kind opens the history view the same way.
  */
 export function useBrowserPageChromeFocus({
   browserTabId,
@@ -56,6 +58,7 @@ export function useBrowserPageChromeFocus({
   /** Set while a focus grab is in flight, so panes don't hand focus back to the guest mid-retry. */
   keepAddressBarFocusRef: MutableRefObject<boolean>
 } {
+  useBrowserHistoryShortcut({ browserTabId, workspaceId, isActive, chromeShortcutScope })
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const keybindings = useAppStore((s) => s.keybindings)
   const keepAddressBarFocusRef = useRef(false)
