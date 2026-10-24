@@ -1,17 +1,19 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Terminal } from '@xterm/headless'
 import {
   POST_REPLAY_REATTACH_RESET,
   PROCESS_BOUNDARY_GROUND
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
-import { flushAsyncTicks } from './pty-connection-test-async'
+import { createDeferred, flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
   createPane,
   createManager,
+  type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
@@ -141,5 +143,97 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
       expect(mirror?.flags).toBe(0)
       expect(window.api.pty.resetInputModes).toHaveBeenCalledWith('tab-pty')
     })
+
+    it.each([
+      { queuedEntry: false, shellFlags: 0, scrollbackAnsi: undefined },
+      { queuedEntry: true, shellFlags: 0, scrollbackAnsi: undefined },
+      { queuedEntry: true, shellFlags: 1, scrollbackAnsi: undefined },
+      { queuedEntry: true, shellFlags: 0, scrollbackAnsi: 'shell history' }
+    ])(
+      'restores shell kitty flags after hidden replay (queued entry=$queuedEntry, shell flags=$shellFlags, history=$scrollbackAnsi)',
+      async ({ queuedEntry, shellFlags, scrollbackAnsi }) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const rendered = new Terminal({
+          cols: 120,
+          rows: 40,
+          allowProposedApi: true,
+          vtExtensions: { kittyKeyboard: true }
+        })
+        const connected = createDeferred<ConnectCallbacks>()
+        const replayQueued = createDeferred<void>()
+        const restored = createDeferred<void>()
+        let holdWrites = false
+        const heldWrites: { data: string; callback?: () => void }[] = []
+        const transport = createMockTransport('tab-pty')
+        transport.connect.mockImplementation(async ({ callbacks }) => {
+          if (callbacks) {
+            connected.resolve(callbacks)
+          }
+          return 'tab-pty'
+        })
+        transportFactoryQueue.push(transport)
+        const pane = createPane(1)
+        Object.defineProperty(pane.terminal.buffer, 'active', {
+          get: () => rendered.buffer.active
+        })
+        pane.terminal.write.mockImplementation((data, callback) => {
+          if (holdWrites) {
+            heldWrites.push({ data, callback })
+          } else {
+            rendered.write(data, callback)
+          }
+          if (data.includes('\x1b[=7u')) {
+            replayQueued.resolve()
+          }
+        })
+        const deps = createDeps()
+        vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
+          data: '\x1b[Hrestored frame',
+          cols: 120,
+          rows: 40,
+          alternateScreen: true,
+          scrollbackAnsi,
+          kittyKeyboardFlags: 7,
+          seq: 100
+        })
+        vi.mocked(window.api.pty.ackHiddenOutputRestoreApplied).mockImplementation(() => {
+          restored.resolve()
+        })
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: existing pane fixtures supply the connection members; writes and buffer state use real xterm.
+        const connection = connectPanePty(pane as never, createManager(1) as never, deps as never)
+        try {
+          const callbacks = await connected.promise
+          await writeHeadlessTerminal(rendered, '')
+          // Why: hold the write FIFO so restore chooses a screen before the queued entry parses.
+          holdWrites = queuedEntry
+          callbacks.onData?.(`\x1b[=${shellFlags}u\x1b[?1049h\x1b[>7u`)
+          if (!queuedEntry) {
+            await writeHeadlessTerminal(rendered, '')
+          }
+          deps.isVisibleRef.current = false
+          callbacks.onData?.('hidden redraw', { background: true, droppedOutput: true })
+          deps.isVisibleRef.current = true
+          callbacks.onData?.('reveal', { seq: 100 })
+          await replayQueued.promise
+          holdWrites = false
+          for (const { data, callback } of heldWrites) {
+            rendered.write(data, callback)
+          }
+          await restored.promise
+
+          callbacks.onData?.('\x1b[<u\x1b[?1049l')
+          const replies: string[] = []
+          const listener = rendered.onData((data) => replies.push(data))
+          await writeHeadlessTerminal(rendered, '\x1b[?u')
+          listener.dispose()
+
+          expect(rendered.buffer.active.type).toBe('normal')
+          expect(replies).toEqual([`\x1b[?${shellFlags}u`])
+        } finally {
+          connection.dispose()
+          rendered.dispose()
+        }
+      }
+    )
   })
 }
