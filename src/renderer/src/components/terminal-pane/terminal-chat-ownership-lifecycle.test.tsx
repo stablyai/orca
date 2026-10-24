@@ -169,6 +169,27 @@ describe('terminal chat ownership lifecycle', () => {
     expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
   })
 
+  it('returns a chat tab to the terminal when its agent exits back to the shell', () => {
+    mocks.state.runtimePaneTitlesByTabId.tab = { 1: 'grok', 2: 'bash' }
+    mocks.state.setTabLayout('tab', {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEFT },
+        second: { type: 'leaf', leafId: RIGHT }
+      },
+      activeLeafId: LEFT,
+      expandedLeafId: null,
+      chatLeafId: LEFT
+    })
+    const fixture = makeFixture()
+    const hook = renderHook(() => useFixture(fixture, LEFT))
+    act(() => fixture.onAgentExitedRef.current(LEFT))
+    expect(mocks.state.unifiedTabsByWorktree.wt[0].viewMode).toBe('terminal')
+    expect(hook.result.current.chatLeafId).toBeNull()
+    expect(mocks.state.terminalLayoutsByTabId.tab.chatLeafId).toBeUndefined()
+  })
+
   it('keeps a saved legacy chat and its explicit toggle available with Chat UI off', () => {
     const push = vi.fn()
     const fixture = makeFixture(undefined, { push })

@@ -203,6 +203,12 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+      // Why: grok/codex leave their OSC title, so the title tracker never emits
+      // agent-exited and ChatView keeps typing into the shell. A hibernation stop
+      // is ours, not the agent leaving, so that chat surface stays put.
+      if (!isHibernationWakeRecord) {
+        session.deps.onAgentExitedRef.current(session.pane.leafId)
+      }
       // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
       if (reason === 'process-exit') {
         // Why: reopen the one-shot visible sample so the next agent typed here is identified.
