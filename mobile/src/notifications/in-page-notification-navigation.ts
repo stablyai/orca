@@ -5,7 +5,19 @@ import { isHostRouteOf } from '../mobile-web-shell/page-route-policy'
 import { pageRouteWorkspace } from '../mobile-web-shell/page-storage-keys'
 import { readLastVisitedWorktreeOnHost } from '../worktree/last-visited-worktree-by-host'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import {
+  activeInPageHostKeys,
+  bridgeSessionByHostKey,
+  getOrCreateBridgeSessionState,
+  mountedSessionRouteBridgesByKey,
+  normalizeHostKey,
+  noteBridgeHostClientMessage,
+  noteBridgeHostServerPayload,
+  registerBridgeSessionViewingSink
+} from './bridge-session-viewing-tracker'
 import type { NotificationViewingWorkspace } from './notification-viewing-policy'
+
+export { noteBridgeHostClientMessage, noteBridgeHostServerPayload }
 
 type InPageNotificationTarget = {
   worktreeId?: string
@@ -16,18 +28,9 @@ type InPageNotificationTarget = {
 type InPageNotificationHandler = (target: InPageNotificationTarget) => boolean
 
 const handlersByHostId = new Map<string, InPageNotificationHandler>()
-const activeInPageHostKeys = new Set<string>()
 const mountedHostBridgesByKey = new Map<string, number>()
 const ENCODED_TARGET_PREFIX = 'orca-nav:'
 let nextNavigationSeq = 0
-
-function normalizeHostKey(hostId: string): string {
-  try {
-    return decodeURIComponent(hostId)
-  } catch {
-    return hostId
-  }
-}
 
 export function registerInPageNotificationNavigation(
   hostId: string,
@@ -93,23 +96,51 @@ export function noteInPageStorageWrite(
   writeStorage: (key: string, value: string | null) => void,
   setViewingWorkspace: (value: NotificationViewingWorkspace | null) => void
 ): void {
-  writeStorage(key, value)
+  registerBridgeSessionViewingSink(setViewingWorkspace)
+  try {
+    writeStorage(key, value)
+  } catch {
+    // Keep viewing-state tracking active even if a mirrored-storage listener throws.
+  }
   if (key === LAST_VISITED_WORKTREE_STORAGE_KEY && value !== null) {
     const visited = readLastVisitedWorktreeOnHost(value, hostId)
-    if (visited) {
-      if (visited.inSession === false) {
-        activeInPageHostKeys.delete(normalizeHostKey(hostId))
-        setViewingWorkspace(null)
-        return
+    if (!visited) {
+      return
+    }
+    const hostKey = normalizeHostKey(hostId)
+    if (visited.inSession === false) {
+      const state = bridgeSessionByHostKey.get(hostKey)
+      if (state) {
+        state.worktreeId = undefined
+        state.paneKey = undefined
       }
-      activeInPageHostKeys.add(normalizeHostKey(hostId))
-      setViewingWorkspace({
-        hostId,
-        worktreeId: visited.worktreeId,
-        ...(visited.executionHost ? { executionHost: visited.executionHost } : {}),
-        ...(visited.paneKey ? { paneKey: visited.paneKey } : {})
+      activeInPageHostKeys.delete(hostKey)
+      setViewingWorkspace(null)
+      return
+    }
+    activeInPageHostKeys.add(hostKey)
+    const state = getOrCreateBridgeSessionState(hostKey)
+    const preservedPaneKey =
+      visited.paneKey ??
+      (state.worktreeId === visited.worktreeId ? state.paneKey : undefined) ??
+      state.selectedByWorktree.get(visited.worktreeId)?.paneKey
+    state.worktreeId = visited.worktreeId
+    state.executionHost = visited.executionHost
+    if (visited.paneKey) {
+      state.selectedByWorktree.set(visited.worktreeId, {
+        ...state.selectedByWorktree.get(visited.worktreeId),
+        paneKey: visited.paneKey
       })
     }
+    if (preservedPaneKey) {
+      state.paneKey = preservedPaneKey
+    }
+    setViewingWorkspace({
+      hostId,
+      worktreeId: visited.worktreeId,
+      ...(visited.executionHost ? { executionHost: visited.executionHost } : {}),
+      ...(preservedPaneKey ? { paneKey: preservedPaneKey } : {})
+    })
   }
 }
 
@@ -156,11 +187,10 @@ export function useInPageNotificationBridge(params: {
     route,
     setViewingWorkspace
   } = params
+  const sessionWorkspace = !overlay ? pageRouteWorkspace(route.pathname) : null
   const handlesHostNavigation =
     !overlay &&
-    (pageRouteWorkspace(route.pathname) !== null ||
-      ownsHostArea ||
-      isHostRouteOf(route.pathname, hostId))
+    (sessionWorkspace !== null || ownsHostArea || isHostRouteOf(route.pathname, hostId))
   const enabled = pageReady && handlesHostNavigation
   useEffect(() => {
     if (!handlesHostNavigation) {
@@ -168,17 +198,52 @@ export function useInPageNotificationBridge(params: {
     }
     const key = normalizeHostKey(hostId)
     mountedHostBridgesByKey.set(key, (mountedHostBridgesByKey.get(key) ?? 0) + 1)
+    if (sessionWorkspace) {
+      mountedSessionRouteBridgesByKey.set(
+        key,
+        (mountedSessionRouteBridgesByKey.get(key) ?? 0) + 1
+      )
+      const state = getOrCreateBridgeSessionState(key)
+      state.worktreeId = sessionWorkspace.worktreeId
+      if (route.params?.executionHost) {
+        state.executionHost = route.params.executionHost
+      }
+      const existingPaneKey =
+        state.selectedByWorktree.get(sessionWorkspace.worktreeId)?.paneKey ?? state.paneKey
+      activeInPageHostKeys.add(key)
+      setViewingWorkspace({
+        hostId,
+        worktreeId: sessionWorkspace.worktreeId,
+        ...(route.params?.executionHost ? { executionHost: route.params.executionHost } : {}),
+        ...(existingPaneKey ? { paneKey: existingPaneKey } : {})
+      })
+    }
     return () => {
+      if (sessionWorkspace) {
+        const nextCount = (mountedSessionRouteBridgesByKey.get(key) ?? 1) - 1
+        if (nextCount <= 0) {
+          mountedSessionRouteBridgesByKey.delete(key)
+        } else {
+          mountedSessionRouteBridgesByKey.set(key, nextCount)
+        }
+      }
       const remaining = (mountedHostBridgesByKey.get(key) ?? 1) - 1
       if (remaining <= 0) {
         mountedHostBridgesByKey.delete(key)
         activeInPageHostKeys.delete(key)
+        bridgeSessionByHostKey.delete(key)
         setViewingWorkspace(null)
       } else {
         mountedHostBridgesByKey.set(key, remaining)
       }
     }
-  }, [handlesHostNavigation, hostId, setViewingWorkspace])
+  }, [
+    handlesHostNavigation,
+    hostId,
+    route.params?.executionHost,
+    sessionWorkspace?.worktreeId,
+    setViewingWorkspace
+  ])
   useEffect(() => {
     if (!enabled) {
       return
@@ -194,12 +259,11 @@ export function useInPageNotificationBridge(params: {
       ) {
         return false
       }
-      const encoded = encodeInPageNotificationTarget(target)
       publishRoute({
         pathname: route.pathname,
         params: {
           ...route.params,
-          paneKey: encoded
+          paneKey: encodeInPageNotificationTarget(target)
         }
       })
       return true

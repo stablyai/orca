@@ -4,7 +4,12 @@ import {
   setInPageNotificationViewingWorkspace,
   setNotificationViewingWorkspace
 } from './notification-viewing-policy'
-import { noteInPageBackClaim, noteInPageStorageWrite } from './in-page-notification-navigation'
+import {
+  noteBridgeHostClientMessage,
+  noteBridgeHostServerPayload,
+  noteInPageBackClaim,
+  noteInPageStorageWrite
+} from './in-page-notification-navigation'
 import { withLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
 import { sessionTabPaneKey } from '../session/notification-pane-tab'
@@ -463,4 +468,240 @@ it('suppresses notifications when the active session is on a duplicate host entr
       ...payload
     })
   ).resolves.toBe(true)
+})
+
+it('tracks active session tab and suppression via BridgeHost RPC even when WebView bundle omits paneKey in storage', async () => {
+  AppState.currentState = 'active'
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-sub-1',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-sub-1', {
+    worktree: 'repo::/work',
+    tabs: [
+      {
+        id: 'tab-a::leaf-1',
+        parentTabId: 'tab-a',
+        leafId: 'leaf-1',
+        type: 'terminal',
+        title: 'Claude',
+        isActive: true,
+        terminal: 'term-1',
+        agentStatus: { paneKey: 'tab-a:leaf-1', state: 'working' }
+      },
+      {
+        id: 'tab-b::leaf-2',
+        parentTabId: 'tab-b',
+        leafId: 'leaf-2',
+        type: 'terminal',
+        title: 'Codex',
+        isActive: false,
+        terminal: 'term-2',
+        agentStatus: { paneKey: 'tab-b:leaf-2', state: 'working' }
+      }
+    ]
+  })
+
+  const legacyStored = withLastVisitedWorktree(null, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work'
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    legacyStored,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'bridge-tab-a',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(true)
+
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'term-sub-2',
+      method: 'terminal.subscribe',
+      params: { handle: 'term-2' }
+    },
+    () => true
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-tab-b-after-switch',
+      notificationEpoch: 'epoch',
+      notificationSeq: 3
+    })
+  ).resolves.toBe(false)
+
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'cancel',
+      target: 'subscription',
+      id: 'tabs-sub-1'
+    },
+    () => true
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:leaf-2',
+      notificationId: 'bridge-after-leave',
+      notificationEpoch: 'epoch',
+      notificationSeq: 4
+    })
+  ).resolves.toBe(true)
+})
+
+it('decodes session.tabs.subscribe tabsDelta updates, tracks agentSession RPCs, and tolerates writeStorage errors', async () => {
+  AppState.currentState = 'active'
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'subscribe',
+      id: 'tabs-delta-sub',
+      method: 'session.tabs.subscribe',
+      params: { worktree: 'id:repo::/work' }
+    },
+    () => true
+  )
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'snapshot',
+    worktree: 'repo::/work',
+    tabsRevision: 1,
+    activeTabId: 'tab-a',
+    tabs: [
+      {
+        id: 'tab-a',
+        parentTabId: 'tab-a',
+        leafId: 'pane:1',
+        type: 'terminal',
+        title: 'Shell 1',
+        isActive: true,
+        terminal: 'term-1'
+      }
+    ]
+  })
+
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    withLastVisitedWorktree(null, { hostId: 'host-1', worktreeId: 'repo::/work' }),
+    () => {
+      throw new TypeError('publishStorage is not a function')
+    },
+    setInPageNotificationViewingWorkspace
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:11111111-1111-4111-8111-111111111111',
+      notificationId: 'legacy-leaf-match',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  noteBridgeHostServerPayload('host-1', 'tabs-delta-sub', {
+    type: 'updated',
+    worktree: 'repo::/work',
+    tabsRevision: 2,
+    activeTabId: 'tab-b',
+    tabsDelta: {
+      baseRevision: 1,
+      tabs: [
+        {
+          id: 'tab-a',
+          parentTabId: 'tab-a',
+          leafId: 'pane:1',
+          type: 'terminal',
+          title: 'Shell 1',
+          isActive: false,
+          terminal: 'term-1'
+        },
+        {
+          id: 'tab-b',
+          parentTabId: 'tab-b',
+          leafId: '22222222-2222-4222-8222-222222222222',
+          type: 'terminal',
+          title: 'Claude',
+          isActive: true,
+          terminal: 'term-2'
+        }
+      ]
+    }
+  })
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-b:22222222-2222-4222-8222-222222222222',
+      notificationId: 'delta-tab-b',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(false)
+
+  noteBridgeHostClientMessage(
+    'host-1',
+    {
+      v: 1,
+      type: 'request',
+      id: 'agent-send-1',
+      method: 'agentSession.send',
+      params: { sessionId: 'sess-structured-1', text: 'hello' }
+    },
+    () => true
+  )
+
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'structured-agent-session-sess-structured-1:sess-structured-1',
+      notificationId: 'structured-send-1',
+      notificationEpoch: 'epoch',
+      notificationSeq: 3
+    })
+  ).resolves.toBe(false)
 })

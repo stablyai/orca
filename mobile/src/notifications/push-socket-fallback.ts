@@ -31,6 +31,18 @@ import {
 
 const URGENT_TEXT_PATTERN = /\b(waiting for input|needs input|permission|approval|blocked)\b/i
 
+function tryDecodeSegment(raw: string | undefined): string | undefined {
+  if (!raw) {
+    return undefined
+  }
+  try {
+    const decoded = decodeURIComponent(raw).trim()
+    return decoded.length > 0 ? decoded : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function classifyNotificationTone(
   event: Pick<DesktopNotificationDispatchEvent, 'source' | 'agentState' | 'title' | 'body'>
 ): NotificationTone {
@@ -61,34 +73,15 @@ export function resolveEventPaneKey(
     )
   }
   if (typeof event.notificationId === 'string') {
-    if (event.notificationId.startsWith('agent:')) {
-      const parts = event.notificationId.split(':')
-      if (parts.length >= 4 && parts[2]) {
-        try {
-          const decoded = decodeURIComponent(parts[2]).trim()
-          if (decoded.length > 0) {
-            return decoded
-          }
-        } catch {
-          return undefined
-        }
-      }
+    const parts = event.notificationId.split(':')
+    if (event.notificationId.startsWith('agent:') && parts.length >= 4) {
+      return tryDecodeSegment(parts[2])
     }
-    if (event.notificationId.startsWith('agent-attention:')) {
-      const parts = event.notificationId.split(':')
-      if (parts.length >= 3 && parts[2]) {
-        try {
-          const sessionId = decodeURIComponent(parts[2]).trim()
-          if (sessionId.length > 0) {
-            return structuredAgentSessionPaneKey(
-              structuredAgentSessionTabId(sessionId),
-              sessionId
-            )
-          }
-        } catch {
-          return undefined
-        }
-      }
+    if (event.notificationId.startsWith('agent-attention:') && parts.length >= 3) {
+      const sessionId = tryDecodeSegment(parts[2])
+      return sessionId
+        ? structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+        : undefined
     }
   }
   return undefined
@@ -106,15 +99,8 @@ export function resolveEventWorktreeId(
       event.notificationId.startsWith('agent-attention:'))
   ) {
     const parts = event.notificationId.split(':')
-    if (parts.length >= 3 && parts[1]) {
-      try {
-        const decoded = decodeURIComponent(parts[1]).trim()
-        if (decoded.length > 0) {
-          return decoded
-        }
-      } catch {
-        return undefined
-      }
+    if (parts.length >= 3) {
+      return tryDecodeSegment(parts[1])
     }
   }
   return undefined
@@ -125,24 +111,23 @@ export async function presentSocketNotificationFallback(
   hostId: string,
   isDisposed?: () => boolean
 ): Promise<void> {
-  if (event.desktopAllowed === false || event.legacySocketAllowed === false) {
-    return
-  }
-  if (event.agentState === 'working') {
+  if (
+    event.desktopAllowed === false ||
+    event.legacySocketAllowed === false ||
+    event.agentState === 'working'
+  ) {
     return
   }
   const title = event.title?.trim() ?? ''
   const body = event.body?.trim() ?? ''
-  if (title.length === 0 && body.length === 0) {
+  if (
+    (title.length === 0 && body.length === 0) ||
+    event.source === 'terminal-bell' ||
+    title.startsWith('Bell in ')
+  ) {
     return
   }
-  if (event.source === 'terminal-bell' || title.startsWith('Bell in ')) {
-    return
-  }
-  if (await isHostPushRegistered(hostId)) {
-    return
-  }
-  if (!(await loadPushNotificationsEnabled())) {
+  if ((await isHostPushRegistered(hostId)) || !(await loadPushNotificationsEnabled())) {
     return
   }
   const preferences = await loadNotificationDeliveryPreferences()
@@ -151,11 +136,8 @@ export async function presentSocketNotificationFallback(
   }
   const hosts = await loadHostCatalog().catch(() => [])
   const host = hosts.find((item) => item.id === hostId)
-  if (!host) {
-    return
-  }
-  const hostFingerprint = deriveHostFingerprint(host.publicKeyB64)
-  if (!hostFingerprint) {
+  const hostFingerprint = host ? deriveHostFingerprint(host.publicKeyB64) : undefined
+  if (!host || !hostFingerprint) {
     return
   }
   const paneKey = resolveEventPaneKey(event)
@@ -216,20 +198,16 @@ export async function presentSocketNotificationFallback(
   if (
     isDisposed?.() ||
     shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing) ||
-    isNotificationTargetConsumed({
-      osNotificationIdentifier,
-      notificationId: payload.notificationId
-    })
+    isNotificationTargetConsumed({ osNotificationIdentifier, notificationId: payload.notificationId })
   ) {
     return
   }
   const Notifications = await import('expo-notifications')
   const channelId = notificationChannelId(preferences.sound, tone)
-  const vibrationPattern = tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN
   const subtitleLabel =
     tone === 'urgent'
       ? 'Needs input'
-      : event.source === 'terminal-bell'
+      : (event.source as string | undefined) === 'terminal-bell'
         ? 'Terminal bell'
         : 'Task complete'
   await Notifications.scheduleNotificationAsync({
@@ -239,43 +217,29 @@ export async function presentSocketNotificationFallback(
       subtitle: `${hostName} · ${subtitleLabel}`,
       body,
       color: tone === 'urgent' ? '#f59e0b' : '#10b981',
-      vibrate: vibrationPattern,
+      vibrate: tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN,
       priority: 'max',
-      data: {
-        hostId,
-        ...payload
-      },
+      data: { hostId, ...payload },
       sound: preferences.sound ? 'default' : false
     },
     trigger: Platform.OS === 'android' ? { channelId } : null
   })
-  if (
-    isNotificationTargetConsumed({
+  const targetMeta = {
+    hostId,
+    hostFingerprint,
+    worktreeId: payload.worktreeId,
+    paneKey: payload.paneKey,
+    executionHost: payload.executionHost
+  }
+  if (isNotificationTargetConsumed({ osNotificationIdentifier, notificationId: payload.notificationId })) {
+    await dismissConsumedTrayNotifications({
+      ...targetMeta,
       osNotificationIdentifier,
       notificationId: payload.notificationId
     })
-  ) {
-    await dismissConsumedTrayNotifications({
-      osNotificationIdentifier,
-      notificationId: payload.notificationId,
-      hostId,
-      hostFingerprint,
-      worktreeId: payload.worktreeId,
-      paneKey: payload.paneKey,
-      executionHost: payload.executionHost
-    })
     return
   }
-  await dismissSupersededPaneTrayNotifications(
-    {
-      hostId,
-      hostFingerprint,
-      worktreeId: payload.worktreeId,
-      paneKey: payload.paneKey,
-      executionHost: payload.executionHost
-    },
-    osNotificationIdentifier
-  )
+  await dismissSupersededPaneTrayNotifications(targetMeta, osNotificationIdentifier)
 }
 
 export async function sendLocalNotificationDisplayTest(): Promise<void> {
@@ -285,8 +249,7 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
     loadHostCatalog().catch(() => []),
     import('expo-notifications')
   ])
-  const primaryHost = hosts[0]
-  const hostName = primaryHost?.name?.trim() || 'Orca Desktop'
+  const hostName = hosts[0]?.name?.trim() || 'Orca Desktop'
   const channelId = notificationChannelId(preferences.sound, 'complete')
   const scheduledId = await Notifications.scheduleNotificationAsync({
     content: {
@@ -301,9 +264,7 @@ export async function sendLocalNotificationDisplayTest(): Promise<void> {
     trigger: Platform.OS === 'android' ? { channelId } : null
   })
   const osNotificationIdentifier =
-    typeof scheduledId === 'string' && scheduledId.length > 0
-      ? scheduledId
-      : `test:${Date.now()}`
+    typeof scheduledId === 'string' && scheduledId.length > 0 ? scheduledId : `test:${Date.now()}`
   if (AppState.currentState === 'active') {
     publishInAppNotificationBanner({
       id: osNotificationIdentifier,

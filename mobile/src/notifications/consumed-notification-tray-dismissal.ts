@@ -210,8 +210,9 @@ export async function dismissConsumedTrayNotifications(
   const followUpTimer = setTimeout(() => {
     void sweepPresentedNotifications(target)
   }, 400)
-  if (typeof (followUpTimer as { unref?: () => void }).unref === 'function') {
-    ;(followUpTimer as { unref: () => void }).unref()
+  const maybeTimer = followUpTimer as unknown as { unref?: () => void }
+  if (typeof maybeTimer.unref === 'function') {
+    maybeTimer.unref()
   }
 }
 

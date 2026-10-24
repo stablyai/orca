@@ -1,4 +1,6 @@
 import { AppState } from 'react-native'
+import { isTerminalLeafId } from '../../../src/shared/stable-pane-id'
+import { registerBridgeSessionViewingSink } from './bridge-session-viewing-tracker'
 import { dismissConsumedTrayNotifications } from './consumed-notification-tray-dismissal'
 import {
   dismissInAppNotificationBanner,
@@ -84,6 +86,8 @@ export function setInPageNotificationViewingWorkspace(
   }
 }
 
+registerBridgeSessionViewingSink(setInPageNotificationViewingWorkspace)
+
 export function getNotificationViewingWorkspace(): NotificationViewingWorkspace | null {
   return inPageViewing ?? routeViewing
 }
@@ -124,6 +128,20 @@ function paneKeyMatches(actual: string | undefined, expected: string | undefined
     const other = actual.startsWith('terminal:') ? expected : actual
     const otherColon = other.indexOf(':')
     if (otherColon > 0 && paramMatches(terminalId, other.slice(0, otherColon))) {
+      return true
+    }
+  }
+  const actualFirstColon = actual.indexOf(':')
+  const expectedFirstColon = expected.indexOf(':')
+  if (actualFirstColon > 0 && expectedFirstColon > 0) {
+    const actualTabId = actual.slice(0, actualFirstColon)
+    const expectedTabId = expected.slice(0, expectedFirstColon)
+    const actualSuffix = actual.slice(actualFirstColon + 1)
+    const expectedSuffix = expected.slice(expectedFirstColon + 1)
+    if (
+      paramMatches(actualTabId, expectedTabId) &&
+      (!isTerminalLeafId(actualSuffix) || !isTerminalLeafId(expectedSuffix))
+    ) {
       return true
     }
   }

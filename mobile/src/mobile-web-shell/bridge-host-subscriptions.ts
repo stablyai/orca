@@ -86,6 +86,8 @@ export class BridgeHostSubscriptions {
       onBinaryFrameDropped: (dropped: BridgeDroppedBinaryFrame) => void
       /** One call per retired terminal stream that ever held anything. */
       onTerminalBacklog?: (report: BridgeTerminalBacklogReport) => void
+      /** One call per incoming subscription payload before serialization. */
+      onPayload?: (id: string, payload: unknown) => void
       /** Injected so a test drives the silence clock rather than waiting twenty seconds on it. */
       terminalTimers?: TerminalBacklogTimers
     }
@@ -216,6 +218,7 @@ export class BridgeHostSubscriptions {
     if (record === undefined) {
       return
     }
+    this.options.onPayload?.(id, payload)
     const backlog = record.backlog
     // Held before it is serialized, because the reason to hold it is that there is nowhere to put
     // it: a terminal stream behind its window or behind its own queue takes this path, and the
