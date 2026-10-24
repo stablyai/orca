@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginManifest } from './plugin-manifest'
+import { parsePluginManifest } from './manifest/plugin-manifest'
 import { isSafePluginRelativePath, PLUGIN_RELATIVE_PATH_RE } from './plugin-path-safety'
 
 describe('plugin path portability', () => {

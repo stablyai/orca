@@ -1,5 +1,5 @@
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
-import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
+import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import {
   PLUGIN_VM_RECIPE_MAX_BYTES,
   readContainedPluginArtifactText

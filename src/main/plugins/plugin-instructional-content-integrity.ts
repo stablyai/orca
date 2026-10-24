@@ -1,4 +1,4 @@
-import { hasInstructionalPluginContributions } from '../../shared/plugins/plugin-consent-fingerprint'
+import { hasInstructionalPluginContributions } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { hashPluginTree } from './plugin-content-hash'
 import { pluginTreeHashMatches } from './plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'

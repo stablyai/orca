@@ -7,7 +7,7 @@ import {
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
-import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 
 // Why: the renderer now lazy-loads non-English catalogs through an i18next
 // backend instead of bundling all five into the startup chunk. This guards the

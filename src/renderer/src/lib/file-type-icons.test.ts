@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { File } from 'lucide-react'
-import { parsePluginIconThemeArtifact } from '../../../shared/plugins/plugin-icon-theme-artifact'
+import { parsePluginIconThemeArtifact } from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
 import { getFileTypeIcon, getPluginFileTypeIconIndex } from './file-type-icons'
 
 describe('getFileTypeIcon', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
-import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
-import { parsePluginManifest } from './plugin-manifest'
+import { PLUGIN_MANIFEST_V2_SINCE } from './manifest/plugin-schema-field-docs'
+import { pluginCatalogReleaseSchema } from './catalog/plugin-catalog-release'
+import { parsePluginManifest } from './manifest/plugin-manifest'
 
 const release = {
   version: '1.2.0',

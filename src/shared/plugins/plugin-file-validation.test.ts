@@ -3,7 +3,7 @@ import {
   catalogEntryFixture,
   catalogFixture,
   v2ManifestFixture
-} from './plugin-json-schema.test-fixture'
+} from './manifest/plugin-json-schema.test-fixture'
 import { validatePluginFile } from './plugin-file-validation'
 
 const VALID_RELEASE = {

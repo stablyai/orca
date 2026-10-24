@@ -6,7 +6,7 @@ import { getKeybindingConflictIdentity, type KeybindingOverrides } from '../../s
 import type {
   PluginCommandContribution,
   PluginManifest
-} from '../../shared/plugins/plugin-manifest'
+} from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginKeybindingContribution } from '../../shared/plugins/plugin-content-pack-contributions'
 import {
   isInvalidDiscoveredPlugin,

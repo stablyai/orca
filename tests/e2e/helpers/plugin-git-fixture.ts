@@ -9,6 +9,7 @@ const SSH_SHIM = join(
   'src',
   'main',
   'plugins',
+  'catalog',
   'plugin-private-marketplace-ssh-shim.cjs'
 )
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import {
   PANEL_PING_TYPE,
   PLUGIN_PANEL_FRAME_NAME_PREFIX

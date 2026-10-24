@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
-import { PLUGIN_MANIFEST_V2_SINCE } from '../../shared/plugins/plugin-schema-field-docs'
+import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
+import { PLUGIN_MANIFEST_V2_SINCE } from '../../shared/plugins/manifest/plugin-schema-field-docs'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { enableIfDataPlugin } from './plugin-one-click-enable'
 

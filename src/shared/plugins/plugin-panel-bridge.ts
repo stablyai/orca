@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isPluginPanelAction } from './plugin-host-api'
+import { isPluginPanelAction } from './workers/plugin-host-api'
 
 /**
  * postMessage protocol between a sandboxed plugin panel iframe and the host

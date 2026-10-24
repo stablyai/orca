@@ -16,7 +16,7 @@ Each entry is `{ "id", "label", "path" }` pointing at a JSON file of at most 16 
   from `--foreground`, sidebar accents from `--accent`, rings from `--primary`, and so on), so a
   two-token theme still colors the whole app.
 - The public tokens are `PLUGIN_APP_THEME_TOKENS` in
-  `src/shared/plugins/plugin-theme-artifact.ts`. Other variables cannot be set.
+  `src/shared/plugins/artifacts/plugin-theme-artifact.ts`. Other variables cannot be set.
 - Values must be colors: hex, a color function (`rgb`, `hsl`, `oklch`, …) or a color name.
   `transparent`, `currentColor`, CSS-wide keywords, lengths, `calc()`, `var()` and `url()` are
   refused.

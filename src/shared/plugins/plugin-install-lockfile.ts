@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isQualifiedPluginKey } from './plugin-manifest'
+import { isQualifiedPluginKey } from './manifest/plugin-manifest'
 
 /**
  * Install lockfile: records where each installed plugin came from, the exact

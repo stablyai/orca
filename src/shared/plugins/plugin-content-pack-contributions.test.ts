@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginManifest, pluginManifestSchema } from './plugin-manifest'
+import { parsePluginManifest, pluginManifestSchema } from './manifest/plugin-manifest'
 
 function manifest(contributes: Record<string, unknown>): Record<string, unknown> {
   return {

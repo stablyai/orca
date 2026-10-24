@@ -5,8 +5,8 @@ import {
   isPluginIconThemeRegistration,
   type PluginIconThemeMetadata,
   type PluginIconThemeRegistration
-} from '../../../shared/plugins/plugin-icon-theme-artifact'
-import { sanitizePluginIconSvg } from '../lib/plugin-icon-svg'
+} from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
+import { sanitizePluginIconSvg } from '../lib/plugin-icons/plugin-icon-svg'
 import { createPluginContentListStore } from './plugin-content-list-store'
 
 const iconThemes = createPluginContentListStore<PluginIconThemeMetadata>({

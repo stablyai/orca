@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from './manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CHANGELOG_MAX_LENGTH = 2_000
 

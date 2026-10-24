@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   isPluginLanguagePackRegistration,
   type PluginLanguagePackRegistration
-} from '../../../shared/plugins/plugin-language-pack-artifact'
+} from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { isUsablePluginLanguagePack } from '../../../shared/plugins/plugin-language-pack-coverage'
 import { createPluginContentListStore } from './plugin-content-list-store'
 

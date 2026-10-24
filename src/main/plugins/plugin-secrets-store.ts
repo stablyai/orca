@@ -5,7 +5,7 @@ import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES
-} from '../../shared/plugins/plugin-host-api'
+} from '../../shared/plugins/workers/plugin-host-api'
 import { pluginDataDir } from './plugin-storage-store'
 
 /**

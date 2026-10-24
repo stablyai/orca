@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { pluginRelativePathSchema } from './plugin-manifest-fields'
+import { pluginRelativePathSchema } from './manifest/plugin-manifest-fields'
 import type { PluginImageFormat, PluginImageInfo } from './plugin-image-format'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE
-} from './plugin-schema-field-docs'
+} from './manifest/plugin-schema-field-docs'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 

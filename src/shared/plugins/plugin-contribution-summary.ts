@@ -3,8 +3,8 @@ import {
   PLUGIN_CONTRIBUTION_POINTS,
   type PluginContributionPoint
 } from './plugin-contribution-points'
-import type { PluginManifest } from './plugin-manifest'
-import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import type { PluginManifest } from './manifest/plugin-manifest'
+import { pluginFieldDoc, PLUGIN_MANIFEST_V2_SINCE } from './manifest/plugin-schema-field-docs'
 
 export const PLUGIN_CONTRIBUTION_SUMMARY_LIMIT = 64
 

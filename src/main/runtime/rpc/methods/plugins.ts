@@ -6,7 +6,7 @@ import type { PluginService } from '../../../plugins/plugin-service'
 import {
   pluginConsentRequestSchema,
   type PluginConsentRequest
-} from '../../../../shared/plugins/plugin-consent-request'
+} from '../../../../shared/plugins/approval/plugin-consent-request'
 import {
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,

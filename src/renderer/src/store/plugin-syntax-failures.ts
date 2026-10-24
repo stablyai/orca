@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PluginSyntaxMetadata } from '../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginSyntaxMetadata } from '../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginGrammarFailure } from '@/lib/monaco-languages/plugin-grammar-worker-client'
 
 type PluginSyntaxFailureState = {

@@ -2,20 +2,20 @@ import {
   PLUGIN_CAPABILITY_DESCRIPTIONS,
   type PluginCapabilityKind
 } from '../../shared/plugins/plugin-capabilities'
-import { needsReconsent } from '../../shared/plugins/plugin-consent-state'
-import { pluginPanelTabKey } from '../../shared/plugins/plugin-manifest'
+import { needsReconsent } from '../../shared/plugins/approval/plugin-consent-state'
+import { pluginPanelTabKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
 import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
 import type { PluginHostImages } from '../../shared/plugins/plugin-image-url'
 import { pluginInstalledHostImages } from './plugin-manifest-images'
 import type { PluginService } from './plugin-service'
-import { listPluginVmRecipeCommands } from '../../shared/plugins/plugin-vm-recipe-artifact'
+import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import type { PluginCommandAliasActionId } from '../../shared/plugins/plugin-command-actions'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity
-} from '../../shared/plugins/plugin-marketplace'
+} from '../../shared/plugins/catalog/plugin-marketplace'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   pluginExecutionProfile,

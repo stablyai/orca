@@ -1,11 +1,11 @@
-import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import type { PluginEventBus } from './plugin-event-bus'
-import type { PluginWorkerController } from './plugin-worker-controller'
+import type { PluginWorkerController } from './workers/plugin-worker-controller'
 
 export function deliverPluginEvent(options: {
   event: PluginEventName

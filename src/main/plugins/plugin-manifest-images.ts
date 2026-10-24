@@ -1,4 +1,4 @@
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   pluginInstalledImageUrl,
   type PluginHostImage,

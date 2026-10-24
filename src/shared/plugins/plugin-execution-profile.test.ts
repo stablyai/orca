@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import { PLUGIN_MANIFEST_V2_SINCE } from './manifest/plugin-schema-field-docs'
 import { derivePluginExecutionProfile } from './plugin-execution-profile'
-import { parsePluginManifest } from './plugin-manifest'
+import { parsePluginManifest } from './manifest/plugin-manifest'
 
 function manifestInput(): Record<string, unknown> {
   return {

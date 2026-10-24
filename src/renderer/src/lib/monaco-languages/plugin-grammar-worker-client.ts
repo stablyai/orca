@@ -1,4 +1,4 @@
-import type { PluginGrammarArtifact } from '../../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginGrammarArtifact } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import {
   PLUGIN_GRAMMAR_DOCUMENT_DEADLINE_MS,
   PLUGIN_GRAMMAR_INIT_DEADLINE_MS,

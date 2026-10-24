@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PLUGIN_STORAGE_VALUE_MAX_BYTES } from '../../shared/plugins/plugin-host-api'
+import { PLUGIN_STORAGE_VALUE_MAX_BYTES } from '../../shared/plugins/workers/plugin-host-api'
 import { PluginKvStore } from './plugin-storage-store'
 
 const roots: string[] = []

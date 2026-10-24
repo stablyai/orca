@@ -1,4 +1,4 @@
-import { isProtectedPluginTranslationPath } from './plugin-language-pack-artifact'
+import { isProtectedPluginTranslationPath } from './artifacts/plugin-language-pack-artifact'
 
 /** Packs below this share of translated strings stay installed but can't be chosen as the UI
  *  language, since switching to one would leave most of Orca in English. */

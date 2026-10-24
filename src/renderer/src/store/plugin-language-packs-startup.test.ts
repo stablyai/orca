@@ -7,7 +7,7 @@ import type { PluginChangeEvent } from '../../../shared/plugins/plugin-change-ev
 import {
   pluginLanguageResourceId,
   type PluginLanguagePackRegistration
-} from '../../../shared/plugins/plugin-language-pack-artifact'
+} from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type * as LanguagePackModule from './plugin-language-packs'
 
 let languagePacks: typeof LanguagePackModule

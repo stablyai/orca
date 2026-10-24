@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
-import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/plugin-manifest'
+import { PLUGIN_MANIFEST_FILENAME } from '../../shared/plugins/manifest/plugin-manifest'
 
 /** A manifest is startup metadata, not an artifact payload. Bounding it keeps
  * discovery and install preview from allocating an attacker-sized JSON file. */

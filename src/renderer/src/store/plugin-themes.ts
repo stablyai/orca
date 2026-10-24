@@ -1,11 +1,11 @@
 import {
   isPluginThemeRegistration,
   type PluginThemeRegistration
-} from '../../../shared/plugins/plugin-theme-artifact'
+} from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   isPluginTerminalThemeRegistration,
   type PluginTerminalThemeRegistration
-} from '../../../shared/plugins/plugin-terminal-theme-artifact'
+} from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { useEffect } from 'react'
 import { createPluginContentListStore } from './plugin-content-list-store'
 import { refreshedTerminalPluginPalettes } from '../lib/terminal-plugin-palettes'

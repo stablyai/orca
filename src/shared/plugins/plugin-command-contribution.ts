@@ -3,9 +3,9 @@ import {
   PLUGIN_COMMAND_ACTION_SINCE,
   PLUGIN_COMMAND_ALIAS_ACTION_IDS
 } from './plugin-command-actions'
-import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
-import { pluginCommandIdSchema } from './plugin-manifest-fields'
-import { pluginFieldDoc, PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
+import { PLUGIN_ENUM_SINCE_KEY } from './manifest/plugin-engine-floor-keys'
+import { pluginCommandIdSchema } from './manifest/plugin-manifest-fields'
+import { pluginFieldDoc, PLUGIN_SCHEMA_SINCE_V1 } from './manifest/plugin-schema-field-docs'
 
 export const PLUGIN_COMMAND_LIMIT = 256
 

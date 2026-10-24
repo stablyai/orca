@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { PluginSyntaxMetadata } from '../../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginSyntaxMetadata } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginGrammarWorkerMessage } from './plugin-grammar-protocol'
 
 type TokensProvider = {

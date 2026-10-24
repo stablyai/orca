@@ -23,7 +23,7 @@ import {
   setMainUiLanguage,
   translateMain
 } from './main-i18n'
-import { pluginLanguageResourceId } from '../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 
 describe('main-i18n lazy locale loading', () => {
   afterEach(() => vi.restoreAllMocks())

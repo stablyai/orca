@@ -1,5 +1,5 @@
 import { INITIAL, Registry, type IGrammar, type IOnigLib, type IRawGrammar } from 'shiki/textmate'
-import type { PluginGrammarArtifact } from '../../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginGrammarArtifact } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { Oniguruma } from '../syntax-highlighting/oniguruma'
 import { tokenizeLineWithinLimits } from '../syntax-highlighting/textmate-core'
 import {

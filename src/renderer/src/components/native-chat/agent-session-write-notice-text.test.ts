@@ -5,7 +5,7 @@ import fr from '@/i18n/locales/fr.json'
 import ja from '@/i18n/locales/ja.json'
 import ko from '@/i18n/locales/ko.json'
 import zh from '@/i18n/locales/zh.json'
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
 import {
   AGENT_SESSION_WRITE_NOTICE_COPY,

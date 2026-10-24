@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { PluginSyntaxMetadata } from '../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginSyntaxMetadata } from '../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import { matchPluginSyntax } from './plugin-syntax-packs'
 
 function syntax(id: string, extensions: string[], filenames: string[] = []): PluginSyntaxMetadata {

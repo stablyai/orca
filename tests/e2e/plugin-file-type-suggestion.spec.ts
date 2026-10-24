@@ -3,7 +3,7 @@
  * its extension; View plugin opens the plugin's page and never installs.
  */
 
-import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/plugin-schema-field-docs'
+import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/manifest/plugin-schema-field-docs'
 import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

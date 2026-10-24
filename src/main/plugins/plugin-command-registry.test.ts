@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { PluginCommandRegistry } from './plugin-command-registry'
 

@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/plugin-terminal-theme-artifact'
+import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import {
   makeCustomTerminalThemeSelection,
   normalizeTerminalCustomThemes,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginAppThemeArtifact } from '../../../shared/plugins/plugin-theme-artifact'
+import { parsePluginAppThemeArtifact } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,

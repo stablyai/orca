@@ -1,4 +1,4 @@
-import type { PluginWorkerFactory } from './plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { PluginKillListEntry } from '../../shared/plugins/plugin-kill-list'
 

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getPluginsDataDir, getUserPluginsDir } from './plugin-discovery'
-import { readPluginLockfile } from './plugin-install'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { readPluginLockfile } from './installation/plugin-install'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   createUninstallFixture,
   latestPluginLog,

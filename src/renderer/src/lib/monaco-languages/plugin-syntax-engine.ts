@@ -1,5 +1,5 @@
 import type * as Monaco from 'monaco-editor'
-import type { PluginSyntaxPayload } from '../../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginSyntaxPayload } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import {
   PLUGIN_GRAMMAR_MODEL_CHARACTER_LIMIT,
   PLUGIN_GRAMMAR_MODEL_LINE_LIMIT

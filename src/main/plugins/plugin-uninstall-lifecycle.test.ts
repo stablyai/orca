@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { getUserPluginsDir } from './plugin-discovery'
-import { installPluginFromLocalPath } from './plugin-install'
+import { installPluginFromLocalPath } from './installation/plugin-install'
 import {
   createUninstallFixture,
   holdNextUninstallRefresh,

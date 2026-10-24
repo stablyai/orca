@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { disposeWatcherProcess } from '../ipc/parcel-watcher-process'
-import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
-import { pluginManifestSchema, type PluginManifest } from '../../shared/plugins/plugin-manifest'
+import { fingerprintPluginConsent } from '../../shared/plugins/approval/plugin-consent-fingerprint'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_PANEL_ENTRY_MAX_BYTES,
   validateDeclaredPluginArtifacts,

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isQualifiedPluginKey } from './plugin-manifest'
+import { isQualifiedPluginKey } from './manifest/plugin-manifest'
 
 export const PLUGIN_KILL_LIST_ENTRY_LIMIT = 4_096
 /** Publisher clocks and client clocks disagree by minutes, never by days. */

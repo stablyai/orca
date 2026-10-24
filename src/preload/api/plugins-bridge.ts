@@ -3,7 +3,7 @@ import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
 } from '../../shared/plugins/plugin-panel-bridge'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type {
   PluginHostInstallResult,

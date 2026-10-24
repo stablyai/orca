@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parsePluginGrammarArtifact,
   type PluginGrammarArtifact
-} from '../../../../shared/plugins/plugin-syntax-artifact'
+} from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
 import { isValidPluginGrammarTokens, type PluginGrammarTokens } from './plugin-grammar-protocol'
 import {

@@ -3,7 +3,7 @@ import {
   pluginCommandIdSchema,
   pluginIdSchema,
   pluginRelativePathSchema
-} from './plugin-manifest-fields'
+} from './manifest/plugin-manifest-fields'
 import { normalizeKeybinding } from '../keybindings'
 import { pluginCommandContextSchema } from './plugin-command-contribution'
 import {
@@ -11,7 +11,7 @@ import {
   pluginPathFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
-} from './plugin-schema-field-docs'
+} from './manifest/plugin-schema-field-docs'
 
 export const PLUGIN_LANGUAGE_PACK_LIMIT = 16
 export const PLUGIN_KEYBINDING_LIMIT = 256

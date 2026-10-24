@@ -1,6 +1,6 @@
 import i18next from 'i18next'
 import { expect, it } from 'vitest'
-import { parsePluginLanguagePackArtifact } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { parsePluginLanguagePackArtifact } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import en from './locales/en.json'
 import es from './locales/es.json'
 import fr from './locales/fr.json'

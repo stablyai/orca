@@ -1,12 +1,12 @@
 import { createReadStream } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES,
   PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
-} from '../../shared/plugins/plugin-syntax-artifact'
-import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
+} from '../../shared/plugins/artifacts/plugin-syntax-artifact'
+import { parsePluginVmRecipeArtifact } from '../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import { PLUGIN_IMAGE_RULES } from '../../shared/plugins/plugin-image-fields'
 import { validatePluginImageArtifacts } from './plugin-image-artifact-validation'
 

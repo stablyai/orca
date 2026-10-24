@@ -3,16 +3,16 @@ import {
   pluginCatalogEntrySchema,
   pluginCatalogSchema,
   pluginCatalogVersionError
-} from './plugin-catalog'
-import { PLUGIN_MANIFEST_FILENAME, parsePluginManifest } from './plugin-manifest'
-import { PLUGIN_MARKETPLACE_ENTRY_LIMIT } from './plugin-marketplace'
+} from './catalog/plugin-catalog'
+import { PLUGIN_MANIFEST_FILENAME, parsePluginManifest } from './manifest/plugin-manifest'
+import { PLUGIN_MARKETPLACE_ENTRY_LIMIT } from './catalog/plugin-marketplace'
 import { readPluginImageHeader } from './plugin-image-format'
 import {
   pluginImageRuleError,
   type PluginCatalogImages,
   type PluginImageKind
 } from './plugin-image-fields'
-import { formatPluginSchemaIssues } from './plugin-schema-issues'
+import { formatPluginSchemaIssues } from './manifest/plugin-schema-issues'
 
 /**
  * Strict checks for authors and catalog CI. The runtime reads catalogs tolerantly (skipping,

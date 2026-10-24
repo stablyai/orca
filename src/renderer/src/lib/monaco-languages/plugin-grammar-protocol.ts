@@ -1,4 +1,4 @@
-import type { PluginGrammarArtifact } from '../../../../shared/plugins/plugin-syntax-artifact'
+import type { PluginGrammarArtifact } from '../../../../shared/plugins/artifacts/plugin-syntax-artifact'
 
 // Why these bounds: every edit re-tokenizes the whole document, so big files stay plain.
 export const PLUGIN_GRAMMAR_MODEL_CHARACTER_LIMIT = 500_000

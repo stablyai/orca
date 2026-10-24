@@ -1,12 +1,12 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
-import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
+import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES,
   PLUGIN_STORAGE_VALUE_MAX_BYTES
-} from '../../shared/plugins/plugin-host-api'
+} from '../../shared/plugins/workers/plugin-host-api'
 
 /**
  * Per-plugin JSON key-value persistence backing both `storage.*` (plugin

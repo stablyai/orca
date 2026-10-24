@@ -3,23 +3,23 @@ import type { PluginExecutionProfile } from '../../shared/plugins/plugin-executi
 import type {
   PluginIconThemeMetadata,
   PluginIconThemeRegistration
-} from '../../shared/plugins/plugin-icon-theme-artifact'
-import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
+} from '../../shared/plugins/artifacts/plugin-icon-theme-artifact'
+import type { PluginThemeRegistration } from '../../shared/plugins/artifacts/plugin-theme-artifact'
 import type {
   PluginSyntaxMetadata,
   PluginSyntaxPayload
-} from '../../shared/plugins/plugin-syntax-artifact'
-import type { PluginTerminalThemeRegistration } from '../../shared/plugins/plugin-terminal-theme-artifact'
+} from '../../shared/plugins/artifacts/plugin-syntax-artifact'
+import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type {
   PluginPanelActionOutcome,
   PluginPanelEntry
 } from '../../shared/plugins/plugin-panel-bridge'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
-import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
+import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
-import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
-import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
-import type { PluginCatalogRelease } from '../../shared/plugins/plugin-catalog-release'
+import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginMarketplaceGitSource } from '../../shared/plugins/catalog/plugin-marketplace'
+import type { PluginCatalogRelease } from '../../shared/plugins/catalog/plugin-catalog-release'
 
 export type PluginHostPanel = {
   id: string

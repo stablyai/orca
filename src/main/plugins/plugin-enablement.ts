@@ -1,10 +1,10 @@
 import {
   normalizePluginConsents,
   normalizePluginIdList
-} from '../../shared/plugins/plugin-consent-state'
+} from '../../shared/plugins/approval/plugin-consent-state'
 import type { Store } from '../persistence'
 import type { PluginService } from './plugin-service'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
 
 /**

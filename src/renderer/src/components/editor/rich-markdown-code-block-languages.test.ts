@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n, setRendererPluginLanguagePacks } from '@/i18n/i18n'
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,

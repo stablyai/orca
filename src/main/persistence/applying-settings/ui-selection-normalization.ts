@@ -1,6 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultUIState } from '../../../shared/constants'
-import { isPluginPanelTabKey } from '../../../shared/plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../shared/plugins/manifest/plugin-manifest'
 
 export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (

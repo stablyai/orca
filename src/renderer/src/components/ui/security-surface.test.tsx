@@ -10,11 +10,11 @@ import { SecuritySurface } from './security-surface'
 const TRUST_DIALOGS = [
   'sidebar/OrcaYamlTrustDialog.tsx',
   'editor/IpynbViewer.tsx',
-  'settings/PluginInstallDialog.tsx',
-  'settings/PluginUpdateAllDialog.tsx',
-  'settings/PluginMarketplaceSourceDialog.tsx',
-  'settings/PluginRemoveDialog.tsx',
-  'settings/PluginRollbackDialog.tsx'
+  'plugins/dialogs/PluginInstallDialog.tsx',
+  'plugins/dialogs/PluginUpdateAllDialog.tsx',
+  'plugins/dialogs/PluginMarketplaceSourceDialog.tsx',
+  'plugins/dialogs/PluginRemoveDialog.tsx',
+  'plugins/dialogs/PluginRollbackDialog.tsx'
 ]
 
 // Trust decisions made outside a dialog: agent command approvals and certificate overrides.
@@ -22,7 +22,7 @@ const INLINE_TRUST_SURFACES = [
   'native-chat/NativeChatApprovalCard.tsx',
   'browser-pane/navigate/browser-load-failure-overlay.tsx',
   // Plugin install and review consent, inline on the plugin's page.
-  'settings/PluginInstallConsent.tsx'
+  'plugins/review/PluginInstallConsent.tsx'
 ]
 
 afterEach(cleanup)

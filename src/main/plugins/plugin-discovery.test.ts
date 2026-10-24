@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { discoverPlugins, isInvalidDiscoveredPlugin } from './plugin-discovery'
-import { PLUGIN_CURRENT_POINTER_MAX_BYTES } from './plugin-current-pointer'
+import { PLUGIN_CURRENT_POINTER_MAX_BYTES } from './installation/plugin-current-pointer'
 
 const roots: string[] = []
 

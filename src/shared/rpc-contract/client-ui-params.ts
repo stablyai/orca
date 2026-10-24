@@ -4,7 +4,7 @@ import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../worktree/card-properties'
-import { isPluginPanelTabKey } from '../plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../plugins/manifest/plugin-manifest'
 import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
 import { ACTIVITY_GROUP_BY_VALUES, THREAD_READ_FILTER_VALUES } from '../agents-view-thread-filters'

@@ -1,4 +1,4 @@
-import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
+import { getPluginHostMethodSpec, isPluginPanelAction } from './workers/plugin-host-api'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
 /**

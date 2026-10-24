@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { PLUGIN_ENUM_SINCE_KEY } from './plugin-engine-floor-keys'
-import { pluginFieldDoc, PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
+import { PLUGIN_ENUM_SINCE_KEY } from './manifest/plugin-engine-floor-keys'
+import { pluginFieldDoc, PLUGIN_SCHEMA_SINCE_V1 } from './manifest/plugin-schema-field-docs'
 
 /**
  * Plugin capability model v0. The manifest declares capabilities, the user

@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { pluginIdSchema, pluginRelativePathSchema } from './plugin-manifest-fields'
+import { pluginIdSchema, pluginRelativePathSchema } from './manifest/plugin-manifest-fields'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
   PLUGIN_SCHEMA_SINCE_V1
-} from './plugin-schema-field-docs'
+} from './manifest/plugin-schema-field-docs'
 
 export const PLUGIN_PANEL_LIMIT = 64
 

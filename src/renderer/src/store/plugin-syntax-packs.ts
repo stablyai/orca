@@ -1,7 +1,7 @@
 import {
   isPluginSyntaxMetadata,
   type PluginSyntaxMetadata
-} from '../../../shared/plugins/plugin-syntax-artifact'
+} from '../../../shared/plugins/artifacts/plugin-syntax-artifact'
 import { createPluginContentListStore } from './plugin-content-list-store'
 import { prunePluginSyntaxFailures } from './plugin-syntax-failures'
 

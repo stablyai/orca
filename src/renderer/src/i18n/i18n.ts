@@ -18,7 +18,7 @@ import { advanceTranslationResourceVersion } from './translation-resource-versio
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
-import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export const i18n: I18nInstance = i18next.createInstance()

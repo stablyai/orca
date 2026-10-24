@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import ProjectRoadmap from './ProjectRoadmap'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from '@/i18n/i18n'
 import { DEFAULT_LOCALE } from '@/i18n/supported-languages'
-import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type {
   GitHubProjectField,
   GitHubProjectFieldValue,

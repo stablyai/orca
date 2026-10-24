@@ -1,5 +1,5 @@
 import type { KeybindingActionId, PluginKeybindingActionId } from '../keybindings'
-import { PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
+import { PLUGIN_SCHEMA_SINCE_V1 } from './manifest/plugin-schema-field-docs'
 
 /** Built-in actions with a renderer-owned command handler. Keep this closed so
  * declarative aliases cannot target component-private shortcut implementations. */

@@ -38,7 +38,7 @@ import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rp
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
-import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
+import { pluginConsentRequestSchema } from '../plugins/approval/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,

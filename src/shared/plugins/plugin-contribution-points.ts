@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { PluginCatalogType } from './plugin-catalog-release'
+import type { PluginCatalogType } from './catalog/plugin-catalog-release'
 import {
   PLUGIN_COMMAND_LIMIT,
   pluginCommandContributionSchema
@@ -30,7 +30,7 @@ import {
   pluginFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
-} from './plugin-schema-field-docs'
+} from './manifest/plugin-schema-field-docs'
 
 /** Every `contributes` key, in manifest order. Adding a point starts here. */
 export const PLUGIN_CONTRIBUTION_POINTS = [

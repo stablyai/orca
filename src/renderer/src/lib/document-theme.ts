@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   PLUGIN_APP_THEME_TOKENS,
   type PluginThemeRegistration
-} from '../../../shared/plugins/plugin-theme-artifact'
+} from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { browserColorProbe, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
 
 export type DocumentThemePreference = GlobalSettings['theme']

@@ -1,5 +1,5 @@
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../shared/plugins/plugin-events'
-import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
 
 /**
  * Server-side event filtering: plugins receive only events they subscribed

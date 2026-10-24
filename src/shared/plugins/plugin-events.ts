@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { PluginEventName } from './plugin-manifest'
+import type { PluginEventName } from './manifest/plugin-manifest'
 
 /**
  * Payload contracts for the v0 plugin event set (worktree lifecycle + agent

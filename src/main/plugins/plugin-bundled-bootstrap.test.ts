@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hashPluginTree } from './plugin-content-hash'
-import { readPluginLockfile } from './plugin-install'
+import { readPluginLockfile } from './installation/plugin-install'
 import { bootstrapBundledPlugins, resolveBundledPluginRoot } from './plugin-bundled-bootstrap'
 
 const roots: string[] = []

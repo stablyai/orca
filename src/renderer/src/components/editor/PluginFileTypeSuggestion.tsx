@@ -5,7 +5,7 @@ import { fileTypeOfPath } from '../../../../shared/plugins/plugin-file-type'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { requestPluginPreview } from '@/store/plugin-preview-request'
-import { pluginDisplayNameFromKey } from '../plugin-catalog/plugin-display-name'
+import { pluginDisplayNameFromKey } from '../plugins/list/plugin-display-name'
 import { Button } from '../ui/button'
 
 // Why module scope: "Not now" lasts for the session, across tabs and remounts.

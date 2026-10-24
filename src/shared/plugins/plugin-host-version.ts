@@ -1,5 +1,8 @@
-import { satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
-import { PLUGIN_MANIFEST_V2_SINCE, PLUGIN_SCHEMA_SINCE_V1 } from './plugin-schema-field-docs'
+import { satisfiesOrcaEngineRange } from './manifest/plugin-manifest-engine-range'
+import {
+  PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_SCHEMA_SINCE_V1
+} from './manifest/plugin-schema-field-docs'
 
 /** The newest "since" this build's schemas cite: everything up to it is readable here. */
 export const PLUGIN_SCHEMA_NEWEST_SINCE = [PLUGIN_SCHEMA_SINCE_V1, PLUGIN_MANIFEST_V2_SINCE].reduce(

@@ -13,13 +13,13 @@ import {
   installPluginFromLocalPath,
   readPluginLockfile,
   removeInstalledPlugin
-} from '../plugins/plugin-install'
+} from '../plugins/installation/plugin-install'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
 import type { PluginService } from '../plugins/plugin-service'
-import { bindPluginPanelOwnerLifecycle } from '../plugins/plugin-panel-owner-lifecycle'
-import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
-import { pluginConsentRequestSchema } from '../../shared/plugins/plugin-consent-request'
-import { normalizePluginIdList } from '../../shared/plugins/plugin-consent-state'
+import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
+import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin-consent-request'
+import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import {
   isAllowedPluginGitUrl,
   type PluginLockfile

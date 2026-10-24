@@ -9,7 +9,7 @@ import i18next, {
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
 import { UI_LANGUAGE_SYSTEM, type UiLanguage } from '../../shared/ui-language'
-import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin-language-pack-artifact'
+import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 
 export const mainI18n: I18nInstance = i18next.createInstance()
 
