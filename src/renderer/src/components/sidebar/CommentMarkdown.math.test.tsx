@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { unified, type Processor } from 'unified'
 import type { Construct, Effects } from 'micromark-util-types'
 import remarkParsePlugin from 'remark-parse'
@@ -80,6 +80,12 @@ function annotations(node: HTMLElement): string[] {
 }
 
 describe('native chat math', () => {
+  beforeAll(async () => {
+    const view = render(<CommentMarkdown content="$x$" math />)
+    await waitFor(() => expect(view.container.querySelector('.katex')).not.toBeNull())
+    view.unmount()
+  })
+
   it('centers standalone raw double dollars while keeping prose and converted variables inline', () => {
     const source = String.raw`The proxy is:
 $$V\approx\frac{a}{b}$$

@@ -7,7 +7,7 @@ import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { remarkChatMath } from './chat-markdown-math'
-import { rehypeChatMath } from './chat-markdown-math-rendering'
+import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { copyChatMathSelection } from './chat-markdown-math-selection'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
@@ -262,7 +262,22 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
 }
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
-const MemoizedMarkdown = React.memo(Markdown)
+const MemoizedMarkdown = React.memo(function DeferredMarkdown({
+  math,
+  fadeWords,
+  ...props
+}: React.ComponentProps<typeof Markdown> & { math: boolean; fadeWords: boolean }) {
+  const renderMath = useChatMathRendering(math)
+  const plugins = React.useMemo(
+    () => [
+      ...(props.rehypePlugins ?? []),
+      ...(math ? [renderMath] : []),
+      ...(fadeWords ? [rehypeWordFade] : [])
+    ],
+    [props.rehypePlugins, math, renderMath, fadeWords]
+  )
+  return <Markdown {...props} rehypePlugins={plugins} />
+})
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
  *  from then on, so the stream ending does not redraw what is already there. */
@@ -333,10 +348,10 @@ const CommentMarkdown = React.memo(
       () => ({ ...components, span: CommentMarkdownWords }),
       [components]
     )
-    const activeRehypePlugins = React.useMemo<MarkdownPlugins>(() => {
-      const plugins = extension ? extensionRehypePlugins(extension) : rehypePlugins
-      return math ? [...plugins, rehypeChatMath] : plugins
-    }, [extension, math])
+    const activeRehypePlugins = React.useMemo<MarkdownPlugins>(
+      () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
+      [extension]
+    )
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = fileLinkExists
         ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
@@ -351,10 +366,6 @@ const CommentMarkdown = React.memo(
       setHadWordFade(true)
     }
     const wrapsWords = fadeWords || hadWordFade
-    const fadingRehypePlugins = React.useMemo(
-      () => [...activeRehypePlugins, rehypeWordFade],
-      [activeRehypePlugins]
-    )
 
     return (
       <CommentMarkdownMermaidContext.Provider value={renderMermaid}>
@@ -381,7 +392,9 @@ const CommentMarkdown = React.memo(
               <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                 <MemoizedMarkdown
                   remarkPlugins={activeRemarkPlugins}
-                  rehypePlugins={wrapsWords ? fadingRehypePlugins : activeRehypePlugins}
+                  rehypePlugins={activeRehypePlugins}
+                  math={math}
+                  fadeWords={wrapsWords}
                   components={wrapsWords ? fadingComponents : components}
                   urlTransform={
                     allowFileUriLinks

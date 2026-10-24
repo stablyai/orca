@@ -1,12 +1,46 @@
 import type { Element, Root, RootContent } from 'hast'
-import rehypeKatex from 'rehype-katex'
+import { useEffect, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import { visit, SKIP } from 'unist-util-visit'
 import type { VFile } from 'vfile'
+import type { typesetChatMath } from './chat-markdown-math-typeset'
 
-const typeset = rehypeKatex({ trust: false, maxSize: 20, maxExpand: 1000, strict: 'ignore' })
+type Typeset = typeof typesetChatMath
+let loaded: Typeset | undefined
+let pending: Promise<Typeset | undefined> | undefined
+
+export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof rehypeChatMath> {
+  const parsed = { complete: false }
+  const [typeset, setTypeset] = useState(() => loaded)
+  // Only a committed parse may request the shared optional typesetter.
+  useEffect(() => {
+    if (!enabled || !parsed.complete || typeset) {
+      return
+    }
+    let active = true
+    pending ??= import('./chat-markdown-math-typeset').then(
+      (module) => (loaded = module.typesetChatMath),
+      () => {
+        pending = undefined
+      }
+    )
+    void pending.then((render) => {
+      if (active && render) {
+        setTypeset(() => render)
+      }
+    })
+    return () => {
+      active = false
+    }
+  })
+  return () => rehypeChatMath(typeset, parsed)
+}
 
 /** Sanitized input enters KaTeX; invalid formulas keep readable source without error UI. */
-export function rehypeChatMath(): (tree: Root, file: VFile) => void {
+function rehypeChatMath(
+  typeset: Typeset | undefined,
+  parsed: { complete: boolean }
+): (tree: Root, file: VFile) => void {
   return (tree, file) => {
     visit(tree, 'element', (element, index, parent) => {
       const mathElement =
@@ -33,12 +67,16 @@ export function rehypeChatMath(): (tree: Root, file: VFile) => void {
           .filter((child) => child.type === 'text')
           .map((child) => child.value)
           .join('')
+      if (authored?.complete) {
+        parsed.complete = true
+      }
       const fragment: Root = { type: 'root', children: [element] }
       const messagesBefore = file.messages.length
-      if (authored?.complete !== false) {
+      if (typeset && authored?.complete !== false) {
         typeset(fragment, file)
       }
-      const invalid = authored?.complete === false || file.messages.length > messagesBefore
+      const invalid =
+        !typeset || authored?.complete === false || file.messages.length > messagesBefore
       const children = invalid ? [{ type: 'text' as const, value: source }] : fragment.children
       const display = classes.includes('math-display') || element.tagName === 'pre'
       const content = children.filter(
@@ -55,7 +93,11 @@ export function rehypeChatMath(): (tree: Root, file: VFile) => void {
               ? {
                   className: ['block', 'max-w-full', 'overflow-x-auto', 'overflow-y-hidden'],
                   tabIndex: 0,
-                  ariaLabel: 'Scroll display equation'
+                  role: 'group',
+                  ariaLabel: translate(
+                    'nativeChat.math.scrollDisplayEquation',
+                    'Scroll display equation'
+                  )
                 }
               : {})
         },
