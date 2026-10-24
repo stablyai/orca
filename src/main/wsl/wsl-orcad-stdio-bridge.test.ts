@@ -27,7 +27,7 @@ afterAll(() => {
   echo.server.close()
 })
 
-async function startBridge(remotePort = echo.port) {
+async function startBridge(remotePort = echo.port, spares?: { spares: number; windowMs: number }) {
   const children = fakeWslBridgeChildren()
   const transport = createWslOrcadHostTransport({
     target: { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' },
@@ -35,7 +35,7 @@ async function startBridge(remotePort = echo.port) {
   })
   const forward = await listenWslOrcadStdioBridge(
     transport,
-    { environmentId: 'wsl:ubuntu', remotePort, localPort: 0, label: 'Ubuntu' },
+    { environmentId: 'wsl:ubuntu', remotePort, localPort: 0, label: 'Ubuntu', spares },
     {
       resolveBridge: async (_conn, port) => posixOrcadStdioBridge(port),
       checkBridge: checkOrcadStdioBridge,
@@ -121,6 +121,34 @@ describe('listenWslOrcadStdioBridge (real listener, fake wsl.exe echo children)'
     const { forward, children } = await startBridge(1)
     const socket = await dial(forward.entry.localPort)
     await new Promise((resolve) => socket.once('close', resolve))
+    await until(() => children.live() === 0)
+  })
+
+  it('hands a socket a bridge child opened ahead of it, then refills the spare', async () => {
+    const { forward, children } = await startBridge(echo.port, { spares: 1, windowMs: 60_000 })
+    // The check, then one spare that stays up waiting for a socket.
+    await until(() => children.commands.length === 2 && children.live() === 1)
+
+    const socket = await dial(forward.entry.localPort)
+    expect(await echoOf(socket, 'spare')).toBe('spare')
+    // The socket took the spare and a new one was opened behind it.
+    await until(() => children.commands.length === 3 && children.live() === 2)
+  })
+
+  it('closes unused spares when the window ends, and opens one child per socket after', async () => {
+    const { forward, children } = await startBridge(echo.port, { spares: 2, windowMs: 50 })
+    await until(() => children.commands.length === 3)
+    await until(() => children.live() === 0)
+
+    const socket = await dial(forward.entry.localPort)
+    expect(await echoOf(socket, 'late')).toBe('late')
+    expect(children.commands).toHaveLength(4)
+  })
+
+  it('kills unused spares on close', async () => {
+    const { forward, children } = await startBridge(echo.port, { spares: 2, windowMs: 60_000 })
+    await until(() => children.live() === 2)
+    await forward.close()
     await until(() => children.live() === 0)
   })
 

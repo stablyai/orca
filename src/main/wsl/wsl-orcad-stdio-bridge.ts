@@ -11,6 +11,11 @@ import {
   type OrcadStdioBridgeDependencies
 } from '../managed-server/lifecycle/orcad-stdio-bridge-provider'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
+import type { OrcadStdioBridgeSparePolicy } from '../managed-server/lifecycle/orcad-stdio-bridge-spares'
+
+// Each bridge child costs a wsl.exe start (~0.2-0.3 s on a slow PC); a connect's first calls dial
+// four sockets in a row, so two spares cover that burst. No steady-state children past the window.
+const WSL_BRIDGE_SPARES: OrcadStdioBridgeSparePolicy = { spares: 2, windowMs: 20_000 }
 
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string
@@ -19,6 +24,8 @@ export type WslOrcadStdioBridgeOptions = {
   /** 0 picks a free one. */
   localPort: number
   label: string
+  /** Bridge children opened ahead of the connect's first dials; absent opens one per socket. */
+  spares?: OrcadStdioBridgeSparePolicy
 }
 
 export function listenWslOrcadStdioBridge(
@@ -37,7 +44,8 @@ export function listenWslOrcadStdioBridge(
       remotePort: options.remotePort,
       label: options.label
     },
-    dependencies
+    dependencies,
+    options.spares
   )
 }
 
@@ -52,6 +60,7 @@ export async function listenWslOrcadStdioBridgeOnPreferredPort(
   options: WslOrcadStdioBridgeOptions,
   listen: WslOrcadStdioBridgeListen = listenWslOrcadStdioBridge
 ): Promise<StartedPortForward> {
+  options = { spares: WSL_BRIDGE_SPARES, ...options }
   try {
     return await listen(transport, options)
   } catch (error) {

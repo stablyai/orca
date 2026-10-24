@@ -97,7 +97,8 @@ function setup(overrides: Partial<WslOrcadConnectionDependencies> = {}) {
   const manager = new WslOrcadConnectionManager({
     deployAndLaunch,
     createTransport: (target) => createWslOrcadHostTransport({ target, spawn: children.spawn }),
-    listen: (transport, options) =>
+    // Spares off: these tests count one bridge child per socket; spares have their own test.
+    listen: (transport, { spares: _spares, ...options }) =>
       listenWslOrcadStdioBridge(transport, options, {
         resolveBridge: async (_conn, port) => posixOrcadStdioBridge(port),
         checkBridge: checkOrcadStdioBridge,

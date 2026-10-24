@@ -11,25 +11,31 @@ import type {
   StartedPortForward
 } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { listenForPortForward } from '../../ssh/port-forwarding/ssh2-port-forward-provider'
+import {
+  createOrcadStdioBridgeSpares,
+  type OrcadStdioBridgeOpenedChannel,
+  type OrcadStdioBridgeSparePolicy,
+  type OrcadStdioBridgeSpares
+} from './orcad-stdio-bridge-spares'
 
 // OpenSSH defaults to 10 sessions; cap bridges at 8 to leave capacity for exec work.
 export const ORCAD_STDIO_BRIDGE_MAX_CHANNELS = 8
 const ORCAD_STDIO_BRIDGE_QUEUE_TIMEOUT_MS = 30_000
 
-type OrcadStdioBridgeChannelFactory = () => Promise<{
-  channel: RemoteCommandChannel
-  mode: OrcadStdioBridgeMode
-}>
+type OrcadStdioBridgeChannelFactory = () => Promise<OrcadStdioBridgeOpenedChannel>
 
 export async function listenOrcadStdioBridge(
   options: PortForwardStartOptions,
-  openChannel: OrcadStdioBridgeChannelFactory
+  openChannel: OrcadStdioBridgeChannelFactory,
+  sparePolicy?: OrcadStdioBridgeSparePolicy
 ): Promise<StartedPortForward> {
   const sockets = new Set<Socket>()
   const channels = new Set<RemoteCommandChannel>()
   const waiting: { socket: Socket; timer: ReturnType<typeof setTimeout> }[] = []
   let open = 0
   let closed = false
+  // Started once listening succeeds, so a failed bind leaves no children behind.
+  let spares: OrcadStdioBridgeSpares | null = null
 
   const admitNext = (): void => {
     while (open < ORCAD_STDIO_BRIDGE_MAX_CHANNELS) {
@@ -51,9 +57,9 @@ export async function listenOrcadStdioBridge(
       return
     }
     open += 1
-    let opened: Awaited<ReturnType<OrcadStdioBridgeChannelFactory>>
+    let opened: OrcadStdioBridgeOpenedChannel
     try {
-      opened = await openChannel()
+      opened = spares?.take() ?? (await openChannel())
     } catch {
       socket.destroy()
       release()
@@ -92,6 +98,7 @@ export async function listenOrcadStdioBridge(
   await listenForPortForward(server, options.localHost, options.localPort)
   const address = server.address()
   const localPort = typeof address === 'object' && address ? address.port : options.localPort
+  spares = sparePolicy ? createOrcadStdioBridgeSpares(openChannel, sparePolicy, closeChannel) : null
   const entry = {
     id: options.id,
     connectionId: options.connectionId,
@@ -106,6 +113,7 @@ export async function listenOrcadStdioBridge(
       return Promise.resolve()
     }
     closed = true
+    spares?.stop()
     for (const { timer } of waiting.splice(0)) {
       clearTimeout(timer)
     }
