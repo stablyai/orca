@@ -53,6 +53,10 @@ it('keeps the model and effort a chat with none saved first ran, after its confi
   await rig.dispose()
   const agent = { restartable: true as const, reportsModel: 'gpt-ran', reportsEffort: 'xhigh' }
   rig = await createQueuedMessageTestRig(agent)
+  rig.dispatch.mockResolvedValueOnce({
+    state: 'admitted',
+    ranOptions: { model: 'gpt-ran', effort: 'xhigh' }
+  })
   const first = rig.send('first')
   expect(await first.result).toMatchObject({ ok: true })
   await eventually(() =>
@@ -72,6 +76,7 @@ it('keeps the model and effort a chat with none saved first ran, after its confi
 
 it('records what a later readback reports when the start named only a filled-in default', async () => {
   // Model Claude’s delayed settings readback after startup without a model.
+  rig.dispatch.mockResolvedValueOnce({ state: 'admitted', ranOptions: {} })
   const first = rig.send('first')
   expect(await first.result).toMatchObject({ ok: true })
   await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
@@ -90,8 +95,30 @@ it('records what a later readback reports when the start named only a filled-in 
   })
   preparation.reject(new Error('content preparation failed'))
   await eventually(() =>
-    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]', effort: 'high' })
+    expect(rig.store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]' })
   )
+})
+
+it('saves no model for an agent that reports options but gives no evidence of what ran', async () => {
+  // As OpenCode: its session/new names one model and a config update moments later the one it runs.
+  await rig.dispose()
+  rig = await createQueuedMessageTestRig({ restartable: true, reportsModel: 'startup-model' })
+  const first = rig.send('first')
+  expect(await first.result).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+  await rig.host.handleAdapterEvent({
+    type: 'options-reported',
+    sessionId: SESSION,
+    fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+    acquisitionGeneration: 'generation-1',
+    reportedOptions: { model: 'live-model' }
+  })
+  await rig.settleAccepted(first.id, 'a')
+  const second = rig.send('second')
+  expect(await second.result).toMatchObject({ ok: true })
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual({})
+  expect(rig.store.getRecord(SESSION)?.options).toBeUndefined()
 })
 
 it('rejects a refused choice before prompt input and leaves the next pick saved', async () => {

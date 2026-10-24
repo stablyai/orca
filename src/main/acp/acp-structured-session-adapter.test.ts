@@ -8,6 +8,7 @@ import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/age
 import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 import {
   GROK,
+  GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
   PID,
   PROVIDER_SESSION,
@@ -235,6 +236,58 @@ describe('ACP structured session adapter: turns', () => {
       { configId: 'model', value: 'grok-4.6' }
     ])
   })
+
+  it.each([
+    ['no choice', {}],
+    ['an effort choice', { effort: 'low' }]
+  ])(
+    'runs a message with %s on the model the agent moved to before Orca wrote one',
+    async (_name, executionOptions: { effort?: string }) => {
+      // As OpenCode 2: session/new answers before its catalog loads, then reports the configured model.
+      const rig = await openAcpAdapterRig()
+      await rig.acquire()
+      if (executionOptions.effort) {
+        await rig.adapter.setOption({
+          sessionId: SESSION,
+          key: 'effort',
+          value: executionOptions.effort,
+          fence: 1
+        })
+      }
+      rig.child().agent.notify('session/update', {
+        sessionId: PROVIDER_SESSION,
+        update: {
+          sessionUpdate: 'config_option_update',
+          configOptions: GROK_CONFIG_OPTIONS.map((option) =>
+            option.id === 'model'
+              ? { ...option, currentValue: 'grok-4.6' }
+              : { ...option, currentValue: executionOptions.effort ?? option.currentValue }
+          )
+        }
+      })
+      await waitFor(() =>
+        expect(rig.lifecycle).toContainEqual(
+          expect.objectContaining({
+            type: 'options-reported',
+            reportedOptions: expect.objectContaining({ model: 'grok-4.6' })
+          })
+        )
+      )
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: 'unchosen-send',
+        body: hello,
+        executionOptions
+      })
+      await rig.frame('session/prompt')
+      expect(rig.sent('session/set_config_option').map((frame) => frame.params)).toEqual(
+        executionOptions.effort
+          ? [{ sessionId: PROVIDER_SESSION, configId: 'reasoning_effort', value: 'low' }]
+          : []
+      )
+    }
+  )
 
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
     const rig = await openAcpAdapterRig({
