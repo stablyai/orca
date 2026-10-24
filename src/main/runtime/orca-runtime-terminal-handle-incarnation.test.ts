@@ -31,7 +31,7 @@ function makeRuntime(opts: { paneLayout?: boolean } = {}): {
 }
 
 /** Attach a window and publish a one-tab, one-leaf terminal graph. */
-function syncGraph(runtime: OrcaRuntimeService): void {
+function syncGraph(runtime: OrcaRuntimeService, ptyId: string | null = PTY_ID): void {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -49,7 +49,7 @@ function syncGraph(runtime: OrcaRuntimeService): void {
         worktreeId: WORKTREE_ID,
         leafId: LEAF_ID,
         paneRuntimeId: 1,
-        ptyId: PTY_ID
+        ptyId
       }
     ]
   })
@@ -101,6 +101,48 @@ describe('runtime terminal handle incarnation fencing', () => {
       handle,
       status: 'running'
     })
+  })
+
+  it('keeps a direct handle waiter while a revealed pane reattaches its PTY', async () => {
+    // A background agent's leaf is published before its pane mounts; the mounted pane names no
+    // PTY until its reattach returns, which is not the agent going away (#24354).
+    const { runtime } = makeRuntime()
+    const handle = runtime.preAllocateHandleForPty(PTY_ID)
+    register(runtime, 'incarnation-1')
+    syncGraph(runtime)
+    const abort = new AbortController()
+    const settled = vi.fn()
+    void runtime
+      .waitForTerminal(handle, {
+        condition: 'tui-idle',
+        timeoutMs: 30_000,
+        launchReadiness: true,
+        signal: abort.signal
+      })
+      .then(settled, settled)
+
+    syncGraph(runtime, null)
+    syncGraph(runtime)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(settled).not.toHaveBeenCalled()
+    await expect(runtime.readTerminal(handle)).resolves.toMatchObject({ handle, status: 'running' })
+    abort.abort()
+  })
+
+  it('still stales a pane-minted handle waiter when its pane drops the PTY', async () => {
+    const { runtime } = makeRuntime()
+    register(runtime, 'incarnation-1')
+    syncGraph(runtime)
+    const [listed] = (await runtime.listTerminals()).terminals
+    const waiting = runtime.waitForTerminal(listed.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 30_000
+    })
+
+    syncGraph(runtime, null)
+
+    await expect(waiting).rejects.toThrow('terminal_handle_stale')
   })
 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test fixture crosses a private/runtime boundary with a verified shape.
