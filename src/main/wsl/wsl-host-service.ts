@@ -60,6 +60,8 @@ export type WslHostServiceDependencies = {
   /** A connection came up: verify the server now rather than on the status owner's backoff. */
   ready: (environmentId: string) => void
   removed: (environmentId: string) => Promise<void> | void
+  /** Of these hosts, the ones the saved session reopens with open work. */
+  reopenedWork?: (environmentIds: readonly string[]) => string[]
 }
 
 export class WslHostService {
@@ -270,12 +272,21 @@ export class WslHostService {
     return id ? this.canRun() && this.visible.has(id) && !this.removing.has(id) : false
   }
 
-  /** Startup: keep the holders a previous run left, without booting anything. */
+  /**
+   * Startup: keep the holders a previous run left, then connect the hosts the saved session
+   * reopens with open work, as the renderer would once it hydrates. Nothing else boots.
+   */
   async start(): Promise<void> {
-    if (!this.connector || !this.canRun() || this.records().length === 0) {
+    const records = this.records()
+    if (!this.connector || !this.canRun() || records.length === 0) {
       return
     }
     await this.connector.adoptHolders()
+    const reopened = this.deps.reopenedWork?.(records.map((record) => record.environmentId)) ?? []
+    // The renderer may already have reported its own set; that one wins.
+    if (reopened.length > 0 && this.visible.size === 0) {
+      this.setVisibleWork(reopened)
+    }
   }
 
   /** What the UI shows before offering any WSL host action. */

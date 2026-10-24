@@ -13,6 +13,7 @@ import {
 } from '../wsl/wsl-host-e2e-fake-connector'
 import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
 import { WslHostService } from '../wsl/wsl-host-service'
+import { wslHostsWithReopenedWork } from '../wsl/wsl-host-reopened-work'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-instance'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
@@ -125,7 +126,8 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
       }
     },
     removed: (environmentId) =>
-      retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store)
+      retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store),
+    reopenedWork: (environmentIds) => wslHostsWithReopenedWork(args.store, environmentIds)
   })
   const onChange = created.handleConnectionChange.bind(created)
   const isKnownDistro = (distro: string): boolean => created.isKnownDistro(distro)

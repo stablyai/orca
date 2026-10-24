@@ -81,7 +81,10 @@ describe('WslHostService', () => {
   const ready = vi.fn()
   const removed = vi.fn()
 
-  function makeService(connector: WslHostConnector): WslHostService {
+  function makeService(
+    connector: WslHostConnector,
+    reopenedWork?: (environmentIds: readonly string[]) => string[]
+  ): WslHostService {
     const service = new WslHostService({
       userDataPath: () => userDataPath,
       isEnabled: () => enabled,
@@ -89,7 +92,8 @@ describe('WslHostService', () => {
       publish: (status) => published.push(status),
       pairingChanged,
       ready,
-      removed
+      removed,
+      reopenedWork
     })
     service.attach(connector)
     return service
@@ -530,6 +534,50 @@ describe('WslHostService', () => {
     await service.add({ distro: 'Ubuntu' })
     await service.start()
     expect(connector.adoptHolders).toHaveBeenCalledTimes(1)
+  })
+
+  it('connects the hosts the saved session reopens at startup, after adopting holders', async () => {
+    const connector = makeConnector([UBUNTU])
+    const reopened = vi.fn((ids: readonly string[]) => [...ids])
+    const service = makeService(connector, reopened)
+    await service.add({ distro: 'Ubuntu' })
+    await connector.disconnect('Ubuntu')
+    connector.connect.mockClear()
+    const order: string[] = []
+    connector.adoptHolders.mockImplementationOnce(async () => {
+      order.push('adopt')
+    })
+    connector.connect.mockImplementationOnce(async (distro: string) => {
+      order.push('connect')
+      return connection(distro)
+    })
+
+    await service.start()
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledWith('Ubuntu'))
+    expect(reopened).toHaveBeenCalledWith(['wsl:ubuntu'])
+    expect(order).toEqual(['adopt', 'connect'])
+    expect(service.hasUserVisibleWork('Ubuntu')).toBe(true)
+  })
+
+  it('boots nothing at startup the saved session does not reopen', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector, () => [])
+    await service.add({ distro: 'Ubuntu' })
+    connector.connect.mockClear()
+    await service.start()
+    expect(connector.connect).not.toHaveBeenCalled()
+    expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
+  })
+
+  it('keeps the open work the renderer already reported over the saved session', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector, (ids) => [...ids])
+    await service.add({ distro: 'Ubuntu' })
+    service.setVisibleWork(['wsl:other'])
+    connector.connect.mockClear()
+    await service.start()
+    expect(connector.connect).not.toHaveBeenCalled()
+    expect(service.hasUserVisibleWork('Ubuntu')).toBe(false)
   })
 
   it.each([
