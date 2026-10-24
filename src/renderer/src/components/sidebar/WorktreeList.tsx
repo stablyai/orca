@@ -149,7 +149,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
-    pinnedDisplayPolicy
+    pinnedDisplayPolicy,
+    sidebarWorktrees: visibleWorktrees
   })
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,

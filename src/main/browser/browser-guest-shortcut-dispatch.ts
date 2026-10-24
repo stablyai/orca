@@ -47,7 +47,8 @@ export function forwardGuestShortcutInput(
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
-      action?.type === 'deleteCurrentWorkspace'
+      action?.type === 'deleteCurrentWorkspace' ||
+      action?.type === 'jumpToNextAttention'
     ) {
       event.preventDefault()
       return true
@@ -189,6 +190,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:openTasks')
   } else if (action?.type === 'toggleAgentDashboard') {
     renderer.send('ui:toggleAgentDashboard')
+  } else if (action?.type === 'jumpToNextAttention') {
+    renderer.send('ui:jumpToNextAttention')
   } else if (action?.type === 'openSettings') {
     renderer.send('ui:openSettings')
   } else if (action?.type === 'forceReload') {

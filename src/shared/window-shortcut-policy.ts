@@ -6,47 +6,12 @@ import {
   matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides,
-  type PhysicalModifierToken
+  type KeybindingOverrides
 } from './keybindings'
 
-export type WindowShortcutInput = {
-  type?: string
-  key?: string
-  code?: string
-  alt?: boolean
-  meta?: boolean
-  control?: boolean
-  shift?: boolean
-  altKey?: boolean
-  metaKey?: boolean
-  ctrlKey?: boolean
-  shiftKey?: boolean
-  // Set only by the double-tap detector; threads the synthetic input through
-  // the main-process resolver so allowlisted actions can fire on double-tap.
-  doubleTapModifier?: PhysicalModifierToken
-}
+import type { WindowShortcutAction, WindowShortcutInput } from './window-shortcut-types'
 
-export type WindowShortcutAction =
-  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
-  | { type: 'openSettings' }
-  | { type: 'forceReload' }
-  | { type: 'toggleWorktreePalette' }
-  | { type: 'toggleFloatingTerminal' }
-  | { type: 'toggleLeftSidebar' }
-  | { type: 'toggleRightSidebar' }
-  | { type: 'openQuickOpen' }
-  | { type: 'toggleQuickCommandsMenu' }
-  | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
-  | { type: 'openWorkspaceBoard' }
-  | { type: 'openTasks' }
-  | { type: 'toggleAgentDashboard' }
-  | { type: 'switchRecentTab' }
-  | { type: 'jumpToWorktreeIndex'; index: number }
-  | { type: 'jumpToTabIndex'; index: number }
-  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
-  | { type: 'dictationKeyDown' }
+export type { WindowShortcutAction, WindowShortcutInput } from './window-shortcut-types'
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -256,6 +221,10 @@ export function resolveWindowShortcutAction(
     return { type: 'toggleAgentDashboard' }
   }
 
+  if (actionMatches('workspace.nextAttention', input, platform, keybindings, options)) {
+    return { type: 'jumpToNextAttention' }
+  }
+
   if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
     return { type: 'switchRecentTab' }
   }
@@ -331,6 +300,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'view.tasks'
     case 'toggleAgentDashboard':
       return 'dashboard.toggle'
+    case 'jumpToNextAttention':
+      return 'workspace.nextAttention'
     case 'switchRecentTab':
       return 'tab.previousRecent'
     case 'worktreeHistoryNavigate':

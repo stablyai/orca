@@ -15,6 +15,18 @@ type FocusTerminalPaneEventDeps = {
   acknowledgeAgents: (paneKeys: string[]) => void
   surfaceStaleAgentRow: (tabId: string, leafId: string) => void
   scrollToBottomIfOutputSinceLastView?: (paneId: number) => void
+  revealPane?: (paneId: number) => void
+}
+
+/** Collapses a sibling expanded over the target: it keeps the target display:none even once active. */
+export function collapseExpandedSibling(
+  targetPaneId: number,
+  expandedPaneId: number | null,
+  toggleExpandPane: (paneId: number) => void
+): void {
+  if (expandedPaneId !== null && expandedPaneId !== targetPaneId) {
+    toggleExpandPane(expandedPaneId)
+  }
 }
 
 export function handleFocusTerminalPaneDetail(
@@ -24,7 +36,8 @@ export function handleFocusTerminalPaneDetail(
     manager,
     acknowledgeAgents,
     surfaceStaleAgentRow,
-    scrollToBottomIfOutputSinceLastView
+    scrollToBottomIfOutputSinceLastView,
+    revealPane
   }: FocusTerminalPaneEventDeps
 ): void {
   if (!detail?.tabId || detail.tabId !== tabId) {
@@ -46,6 +59,7 @@ export function handleFocusTerminalPaneDetail(
     }
     return
   }
+  revealPane?.(resolution.numericPaneId)
   manager.setActivePane(resolution.numericPaneId, { focus: true })
   if (detail.scrollToBottomIfOutputSinceLastView) {
     scrollToBottomIfOutputSinceLastView?.(resolution.numericPaneId)
