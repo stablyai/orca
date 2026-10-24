@@ -15,6 +15,7 @@ import {
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
+import { markdownBlockDirection } from './markdown-text-direction'
 
 export type CommentMarkdownLinkClickHandler = (
   event: React.MouseEvent<HTMLElement>,
@@ -255,7 +256,11 @@ export function createDocumentCommentMarkdownComponents(
   renderCodeBlock?: DocumentCodeBlockRenderer
 ): Components {
   return {
-    p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+    p: ({ node, children }) => (
+      <p dir={markdownBlockDirection(node)} className="my-2 first:mt-0 last:mb-0">
+        {children}
+      </p>
+    ),
     a: ({ href, children }) =>
       isGitHubUserAttachmentVideoLink(href, children) ? (
         // Why: GitHub's API returns uploaded videos as bare attachment links;
@@ -282,27 +287,62 @@ export function createDocumentCommentMarkdownComponents(
         {children}
       </CommentMarkdownDocumentPre>
     ),
-    ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
-    ol: ({ children, start }) => (
-      <ol start={start} className="my-2 ml-5 list-decimal space-y-1">
+    ul: ({ node, children }) => (
+      <ul dir={markdownBlockDirection(node)} className="my-2 ms-5 list-disc space-y-1">
+        {children}
+      </ul>
+    ),
+    ol: ({ node, children, start }) => (
+      <ol
+        dir={markdownBlockDirection(node)}
+        start={start}
+        className="my-2 ms-5 list-decimal space-y-1"
+      >
         {children}
       </ol>
     ),
     li: ({ children }) => (
       <li className="leading-relaxed [&>input]:pointer-events-none">{children}</li>
     ),
-    h1: ({ children }) => (
-      <h1 className="mb-2 mt-4 text-[18px] font-semibold leading-tight first:mt-0">{children}</h1>
+    h1: ({ node, children }) => (
+      <h1
+        dir={markdownBlockDirection(node)}
+        className="mb-2 mt-4 text-[18px] font-semibold leading-tight first:mt-0"
+      >
+        {children}
+      </h1>
     ),
-    h2: ({ children }) => (
-      <h2 className="mb-2 mt-4 text-[16px] font-semibold leading-tight first:mt-0">{children}</h2>
+    h2: ({ node, children }) => (
+      <h2
+        dir={markdownBlockDirection(node)}
+        className="mb-2 mt-4 text-[16px] font-semibold leading-tight first:mt-0"
+      >
+        {children}
+      </h2>
     ),
-    h3: ({ children }) => (
-      <h3 className="mb-2 mt-3 text-[15px] font-semibold leading-tight first:mt-0">{children}</h3>
+    h3: ({ node, children }) => (
+      <h3
+        dir={markdownBlockDirection(node)}
+        className="mb-2 mt-3 text-[15px] font-semibold leading-tight first:mt-0"
+      >
+        {children}
+      </h3>
     ),
-    h4: ({ children }) => <h4 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h4>,
-    h5: ({ children }) => <h5 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h5>,
-    h6: ({ children }) => <h6 className="mb-1 mt-3 font-semibold first:mt-0">{children}</h6>,
+    h4: ({ node, children }) => (
+      <h4 dir={markdownBlockDirection(node)} className="mb-1 mt-3 font-semibold first:mt-0">
+        {children}
+      </h4>
+    ),
+    h5: ({ node, children }) => (
+      <h5 dir={markdownBlockDirection(node)} className="mb-1 mt-3 font-semibold first:mt-0">
+        {children}
+      </h5>
+    ),
+    h6: ({ node, children }) => (
+      <h6 dir={markdownBlockDirection(node)} className="mb-1 mt-3 font-semibold first:mt-0">
+        {children}
+      </h6>
+    ),
     hr: () => <hr className="my-4 border-border/60" />,
     blockquote: ({ node, children }) => {
       const calloutKind = readGitHubCalloutKind(node?.properties.dataCallout)
@@ -311,7 +351,10 @@ export function createDocumentCommentMarkdownComponents(
           {children}
         </MarkdownGitHubCallout>
       ) : (
-        <blockquote className="my-3 border-l-2 border-border/70 pl-3 text-muted-foreground">
+        <blockquote
+          dir={markdownBlockDirection(node)}
+          className="my-3 border-s-2 border-border/70 ps-3 text-muted-foreground"
+        >
           {children}
         </blockquote>
       )
@@ -353,9 +396,12 @@ export function createDocumentCommentMarkdownComponents(
     },
     // Why: GitHub issue/PR bodies commonly contain GFM tables. The dashboard
     // dialog is wide enough to show them, but still needs overflow containment.
-    table: ({ children }) => (
+    table: ({ node, children }) => (
       <div className="my-3 max-w-full overflow-x-auto rounded-md border border-border/60">
-        <table className="min-w-full border-collapse text-[13px] [&_td]:border [&_td]:border-border/50 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-border/50 [&_th]:bg-muted/60 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold">
+        <table
+          dir={markdownBlockDirection(node)}
+          className="min-w-full border-collapse text-[13px] [&_td]:border [&_td]:border-border/50 [&_td]:px-2 [&_td]:py-1.5 [&_th]:border [&_th]:border-border/50 [&_th]:bg-muted/60 [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-start [&_th]:font-semibold [&_:is(td,th)]:[unicode-bidi:plaintext]"
+        >
           {children}
         </table>
       </div>
