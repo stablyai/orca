@@ -92,4 +92,18 @@ describe('the WSL move gate with the stub agent hook events', () => {
     await hook('Stop', 'hello p4')
     expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
   })
+
+  it('passes an agent resumed in its pane until its next prompt starts a turn', async () => {
+    await hook('SessionStart')
+    await hook('UserPromptSubmit', 'hello p4')
+    await hook('Stop', 'hello p4')
+    // Resumed after a move or a wake: Codex posts SessionStart only with the first prompt, so an
+    // idle resumed agent posts nothing and passes. (The awin stub posts it at launch instead.)
+    expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
+    await hook('SessionStart')
+    await hook('UserPromptSubmit', 'next')
+    expect(await gate()).toMatchObject({ verdict: 'blocked' })
+    await hook('Stop', 'next')
+    expect(await gate()).toEqual({ verdict: 'ready', paneKeys: [PANE] })
+  })
 })

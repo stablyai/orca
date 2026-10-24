@@ -114,7 +114,7 @@ describe('WSL move IPC', () => {
 
   it('brings a moved project back, validating the renderer input', async () => {
     for (const bad of [undefined, null, { kind: 'repo' }, { kind: 'x', id: 'repo-1' }]) {
-      expect(invoke('wslMove:useProjectHereAgain', bad)).toEqual({
+      expect(await invoke('wslMove:useProjectHereAgain', bad)).toEqual({
         released: false,
         reason: 'not-moved'
       })
@@ -133,7 +133,7 @@ describe('WSL move IPC', () => {
       }
     }
     setWslMoveReloadableWindow(() => mainWindow)
-    const result = handlers.get('wslMove:useProjectHereAgain')?.(
+    const result = await handlers.get('wslMove:useProjectHereAgain')?.(
       { sender: mainWindow },
       { kind: 'repo', id: 'repo-1' }
     )
@@ -148,18 +148,42 @@ describe('WSL move IPC', () => {
     setWslMoveReloadableWindow(() => null)
   })
 
-  it('brings a project back only for the main window, and only with the gate open', () => {
-    expect(invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'repo-1' }, 8)).toEqual({
+  it('brings a project back only for the main window, and only with the gate open', async () => {
+    expect(await invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'repo-1' }, 8)).toEqual({
       released: false,
       reason: 'failed',
       detail: 'not-main-window'
     })
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     // Gate first: even malformed input from a non-main window gets the gated answer.
-    expect(handlers.get('wslMove:useProjectHereAgain')?.({}, null)).toEqual({
+    expect(await handlers.get('wslMove:useProjectHereAgain')?.({}, null)).toEqual({
       released: false,
       reason: 'gated-off'
     })
     expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
   })
+
+  // awin verify-7, 6c: the host's copy of the agent kept running beside the one resumed here.
+  it.each([
+    ['unreachable', 'host-unreachable'],
+    ['still-running', 'host-still-running']
+  ] as const)(
+    'keeps the move when the host copies are %s, so no agent resumes here beside them',
+    async (stop, reason) => {
+      const stopHostCopies = vi.fn(async () => stop)
+      registerWslMoveHandlers(
+        () => userDataPath,
+        (senderId) => senderId === MAIN_WINDOW_ID,
+        undefined,
+        () => ({ stopHostCopies })
+      )
+      expect(await invoke('wslMove:useProjectHereAgain', { kind: 'repo', id: 'repo-1' })).toEqual({
+        released: false,
+        reason
+      })
+      expect(stopHostCopies).toHaveBeenCalledOnce()
+      expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
+      expect(isWslMoveWindowWriteHeld()).toBe(false)
+    }
+  )
 })

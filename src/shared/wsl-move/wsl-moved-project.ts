@@ -19,7 +19,16 @@ export type WslMoveUseLocallyResult =
   | { released: true; distro: string; repoIds: string[]; folderWorkspaceIds: string[] }
   | {
       released: false
-      reason: 'gated-off' | 'not-moved' | 'superseded' | 'move-running' | 'failed'
+      reason:
+        | 'gated-off'
+        | 'not-moved'
+        | 'superseded'
+        | 'move-running'
+        | 'failed'
+        /** The host's copies of the project's terminals did not stop; its agents may still run. */
+        | 'host-still-running'
+        /** The host is not answering, so its copies of the project's agents may still run. */
+        | 'host-unreachable'
       detail?: string
       /** `superseded`: the newest move of the distro, which has to come back first. */
       newerMove?: { repoIds: string[]; folderWorkspaceIds: string[] }

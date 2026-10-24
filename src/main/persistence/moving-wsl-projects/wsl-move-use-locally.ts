@@ -27,10 +27,11 @@ function inScope(cutover: WslMoveCutover, ref: WslMoveProjectRef): boolean {
     : scopeFolderWorkspaceIds.includes(ref.folderWorkspaceId)
 }
 
-export function bringWslMovedProjectBack(
+/** The committed move that holds the project, newest in its distro's chain, or why there is none. */
+export function findWslMovedProjectMove(
   userDataPath: string,
   ref: WslMoveProjectRef
-): WslMoveUseLocallyResult {
+): { move: WslMoveCutover } | Extract<WslMoveUseLocallyResult, { released: false }> {
   if (!wslHostsGateOpen()) {
     return { released: false, reason: 'gated-off' }
   }
@@ -56,6 +57,17 @@ export function bringWslMovedProjectBack(
   if (isWslMoveRunning(move.manifest.source.distro)) {
     return { released: false, reason: 'move-running' }
   }
+  return { move }
+}
+
+/** Drops the committed move so its retained source rows list here again. */
+export function releaseWslMove(
+  userDataPath: string,
+  move: WslMoveCutover
+): WslMoveUseLocallyResult {
+  if (isWslMoveRunning(move.manifest.source.distro)) {
+    return { released: false, reason: 'move-running' }
+  }
   try {
     removeCommittedWslMoveCutover(userDataPath, move.migrationId)
   } catch (error) {
@@ -71,6 +83,14 @@ export function bringWslMovedProjectBack(
     repoIds: [...scopeRepoIds],
     folderWorkspaceIds: [...scopeFolderWorkspaceIds]
   }
+}
+
+export function bringWslMovedProjectBack(
+  userDataPath: string,
+  ref: WslMoveProjectRef
+): WslMoveUseLocallyResult {
+  const found = findWslMovedProjectMove(userDataPath, ref)
+  return 'move' in found ? releaseWslMove(userDataPath, found.move) : found
 }
 
 /** The move that has to come back first, so the refusal can name its projects. */
