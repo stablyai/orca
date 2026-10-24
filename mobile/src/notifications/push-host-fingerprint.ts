@@ -42,17 +42,25 @@ export function deriveHostFingerprint(publicKeyB64: string): string | null {
   return encodeBase64Url(sha256(publicKey)).slice(0, HOST_FINGERPRINT_LENGTH)
 }
 
+export function resolveHostIdsForFingerprint(
+  fingerprint: string,
+  hosts: readonly { readonly id: string; readonly publicKeyB64: string }[]
+): string[] {
+  if (fingerprint.length !== HOST_FINGERPRINT_LENGTH) {
+    return []
+  }
+  const matched: string[] = []
+  for (const host of hosts) {
+    if (deriveHostFingerprint(host.publicKeyB64) === fingerprint) {
+      matched.push(host.id)
+    }
+  }
+  return matched
+}
+
 export function resolveHostIdForFingerprint(
   fingerprint: string,
   hosts: readonly { readonly id: string; readonly publicKeyB64: string }[]
 ): string | null {
-  if (fingerprint.length !== HOST_FINGERPRINT_LENGTH) {
-    return null
-  }
-  for (const host of hosts) {
-    if (deriveHostFingerprint(host.publicKeyB64) === fingerprint) {
-      return host.id
-    }
-  }
-  return null
+  return resolveHostIdsForFingerprint(fingerprint, hosts)[0] ?? null
 }

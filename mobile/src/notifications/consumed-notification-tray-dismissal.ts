@@ -23,18 +23,19 @@ function pruneExpiredConsumed(now = Date.now()): void {
   }
 }
 
+function normalizeParam(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 function paramMatches(actual: string | undefined, expected: string | undefined): boolean {
   if (!actual || !expected) {
     return false
   }
-  if (actual === expected) {
-    return true
-  }
-  try {
-    return decodeURIComponent(actual) === expected
-  } catch {
-    return false
-  }
+  return actual === expected || normalizeParam(actual) === normalizeParam(expected)
 }
 
 function paneKeyMatches(actual: string | undefined, expected: string | undefined): boolean {

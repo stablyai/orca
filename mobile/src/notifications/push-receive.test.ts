@@ -435,3 +435,32 @@ it('keeps suppressing the active in-page tab across ready/drawer back-claim drop
     })
   ).resolves.toBe(true)
 })
+
+it('suppresses notifications when the active session is on a duplicate host entry sharing the same desktop fingerprint', async () => {
+  AppState.currentState = 'active'
+  vi.mocked(loadHostCatalog).mockResolvedValue([
+    { id: 'host-stale', publicKeyB64 },
+    { id: 'host-active', publicKeyB64 }
+  ] as unknown as HostCatalogEntry[])
+  setInPageNotificationViewingWorkspace({
+    hostId: 'host-active',
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:leaf-1'
+  })
+  const payload = {
+    hostFingerprint,
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:leaf-1',
+    notificationId: 'dup-host-1',
+    notificationEpoch: 'epoch',
+    notificationSeq: 1
+  }
+  await expect(canPresentForegroundPush(payload, 'host-active')).resolves.toBe(false)
+  await expect(canPresentForegroundPush(payload)).resolves.toBe(false)
+  await expect(
+    shouldSuppressForegroundPush({
+      hostId: 'host-active',
+      ...payload
+    })
+  ).resolves.toBe(true)
+})

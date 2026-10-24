@@ -20,6 +20,7 @@ import {
   type NotificationTone
 } from './in-app-notification-banner-store'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
+import { shouldSuppressNotificationWhileViewing } from './notification-viewing-policy'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import type { OrcaPushPayload } from './push-payload'
 import { isHostPushRegistered } from './push-registration'
@@ -93,6 +94,32 @@ export function resolveEventPaneKey(
   return undefined
 }
 
+export function resolveEventWorktreeId(
+  event: Pick<DesktopNotificationDispatchEvent, 'worktreeId' | 'notificationId'>
+): string | undefined {
+  if (typeof event.worktreeId === 'string' && event.worktreeId.trim().length > 0) {
+    return event.worktreeId.trim()
+  }
+  if (
+    typeof event.notificationId === 'string' &&
+    (event.notificationId.startsWith('agent:') ||
+      event.notificationId.startsWith('agent-attention:'))
+  ) {
+    const parts = event.notificationId.split(':')
+    if (parts.length >= 3 && parts[1]) {
+      try {
+        const decoded = decodeURIComponent(parts[1]).trim()
+        if (decoded.length > 0) {
+          return decoded
+        }
+      } catch {
+        return undefined
+      }
+    }
+  }
+  return undefined
+}
+
 export async function presentSocketNotificationFallback(
   event: DesktopNotificationDispatchEvent,
   hostId: string,
@@ -132,6 +159,7 @@ export async function presentSocketNotificationFallback(
     return
   }
   const paneKey = resolveEventPaneKey(event)
+  const worktreeId = resolveEventWorktreeId(event)
   const payload: OrcaPushPayload = {
     kind: 'alert',
     hostFingerprint,
@@ -145,15 +173,17 @@ export async function presentSocketNotificationFallback(
       ? { notificationEpoch: event.notificationEpoch }
       : {}),
     ...(paneKey ? { paneKey } : {}),
-    ...(typeof event.worktreeId === 'string' && event.worktreeId.length > 0
-      ? { worktreeId: event.worktreeId }
-      : {}),
+    ...(worktreeId ? { worktreeId } : {}),
     ...(typeof event.executionHost === 'string' && event.executionHost.length > 0
       ? { executionHost: event.executionHost }
       : {})
   }
   const { canPresentForegroundPush } = await import('./push-receive')
-  if (!(await canPresentForegroundPush(payload)) || isDisposed?.()) {
+  if (
+    !(await canPresentForegroundPush(payload, hostId)) ||
+    shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing) ||
+    isDisposed?.()
+  ) {
     return
   }
   const tone = classifyNotificationTone(event)
@@ -163,7 +193,10 @@ export async function presentSocketNotificationFallback(
     : payload.worktreeId && payload.paneKey
       ? `${hostFingerprint}:pane:${payload.worktreeId}:${payload.paneKey}`
       : `${hostId}:${Date.now()}`
-  if (AppState.currentState === 'active') {
+  if (
+    AppState.currentState === 'active' &&
+    !shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing)
+  ) {
     publishInAppNotificationBanner({
       id: osNotificationIdentifier,
       tone,
@@ -182,6 +215,7 @@ export async function presentSocketNotificationFallback(
   await ensureDesktopNotificationChannel()
   if (
     isDisposed?.() ||
+    shouldSuppressNotificationWhileViewing(payload, hostId, preferences.suppressWhileViewing) ||
     isNotificationTargetConsumed({
       osNotificationIdentifier,
       notificationId: payload.notificationId

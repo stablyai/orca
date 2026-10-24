@@ -16,18 +16,19 @@ export type NotificationViewingWorkspace = Readonly<{
 let routeViewing: NotificationViewingWorkspace | null = null
 let inPageViewing: NotificationViewingWorkspace | null = null
 
+function normalizeParam(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 function paramMatches(actual: string | undefined, expected: string | undefined): boolean {
   if (!actual || !expected) {
     return false
   }
-  if (actual === expected) {
-    return true
-  }
-  try {
-    return decodeURIComponent(actual) === expected
-  } catch {
-    return false
-  }
+  return actual === expected || normalizeParam(actual) === normalizeParam(expected)
 }
 
 function dismissBannerMatchingViewingWorkspace(): void {
@@ -50,9 +51,11 @@ export function setNotificationViewingWorkspace(
   value: NotificationViewingWorkspace | null,
   options?: { preserveInPageForHostId?: string }
 ): void {
+  const wasRouteViewing = routeViewing
   routeViewing = value
   if (value === null) {
     if (
+      wasRouteViewing !== null ||
       !options?.preserveInPageForHostId ||
       !paramMatches(inPageViewing?.hostId, options.preserveInPageForHostId)
     ) {
@@ -60,7 +63,11 @@ export function setNotificationViewingWorkspace(
     }
     return
   }
-  if (inPageViewing && !paramMatches(inPageViewing.hostId, value.hostId)) {
+  if (
+    inPageViewing &&
+    (!paramMatches(inPageViewing.hostId, value.hostId) ||
+      !paramMatches(inPageViewing.worktreeId, value.worktreeId))
+  ) {
     inPageViewing = null
   }
   dismissBannerMatchingViewingWorkspace()

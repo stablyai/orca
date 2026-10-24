@@ -231,6 +231,7 @@ describe('presentSocketNotificationFallback', () => {
   it('suppresses both the OS notification and in-app capsule when viewing the target workspace', async () => {
     mocks.eligible.mockResolvedValue(false)
     await presentSocketNotificationFallback(alert({ agentState: 'waiting' }), 'host-1')
+    expect(mocks.eligible).toHaveBeenCalledWith(expect.any(Object), 'host-1')
     expect(mocks.schedule).not.toHaveBeenCalled()
     expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
