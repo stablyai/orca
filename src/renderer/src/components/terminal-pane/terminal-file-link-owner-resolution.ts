@@ -1,5 +1,6 @@
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import type { TerminalFileContext } from './terminal-file-path-mapping'
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-types'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   resolveHostWorkspaceFile,
@@ -29,6 +30,8 @@ export async function resolveTerminalLinkFileOwner(args: {
   worktreePath: string
   filePath: string
   terminalHandle?: string | null
+  nativeChatContext?: RuntimeNativeChatFileContext
+  allowClientLocalFallback?: boolean
 }): Promise<TerminalLinkFileOwner> {
   const { fileContext, filePath } = args
   const resolved: TerminalLinkFileOwner = {
@@ -41,7 +44,13 @@ export async function resolveTerminalLinkFileOwner(args: {
     hostGrantId: null,
     clientLocal: false
   }
-  const linkOwner = await resolveHostWorkspaceFile(fileContext, filePath, args.terminalHandle)
+  const linkOwner = await resolveHostWorkspaceFile(
+    fileContext,
+    filePath,
+    args.terminalHandle,
+    args.nativeChatContext,
+    args.allowClientLocalFallback
+  )
   if (linkOwner?.kind === 'grant') {
     return {
       ...resolved,

@@ -28,6 +28,8 @@ export type RuntimeFileReadArgs = {
 }
 
 export type RuntimeFileOperationArgs = {
+  /** Exact host-issued authority for an artifact outside its workspace. */
+  terminalArtifactGrantId?: string
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
   worktreeId: string | null | undefined

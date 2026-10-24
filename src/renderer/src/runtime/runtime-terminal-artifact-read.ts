@@ -7,11 +7,14 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 /** Reads a host file outside every workspace through the grant its host issued for it. */
 export async function readRuntimeTerminalArtifactContent(args: {
-  target: RuntimeClientTarget & { kind: 'environment' }
-  worktreeId: string
+  target: RuntimeClientTarget
+  worktreeId: string | undefined
   absolutePath: string
   grantId: string
 }): Promise<RuntimeReadableFileContent> {
+  if (!args.worktreeId) {
+    throw new Error('The file grant has no owning workspace')
+  }
   const params = {
     worktree: toRuntimeWorktreeSelector(args.worktreeId),
     grantId: args.grantId,

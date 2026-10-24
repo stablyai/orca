@@ -3,7 +3,13 @@ import { fileUriToFilesystemPath } from './file-uri-path'
 
 export type NativeChatHrefRoute =
   | { kind: 'web'; url: string }
-  | { kind: 'file'; pathText: string; line: number | null; pathKind?: 'literal' }
+  | {
+      kind: 'file'
+      pathText: string
+      line: number | null
+      pathKind?: 'literal'
+      source?: 'sandbox'
+    }
   | { kind: 'none' }
 
 const WEB_SCHEME_PATTERN = /^(?:https?|mailto):/i
@@ -12,15 +18,20 @@ const SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const BARE_FILE_LOCATION_PATTERN = /^[^\s:/\\?#]+\.[\p{L}\p{N}_+-]+:\d+(?::\d+)?$/u
 export const NATIVE_CHAT_FILE_HREF_PREFIX = '#orca-native-chat-file='
 const NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX = '#orca-native-chat-file-path='
+const NATIVE_CHAT_SANDBOX_FILE_HREF_PREFIX = '#orca-native-chat-sandbox-file='
 const MAX_NATIVE_CHAT_FILE_HREF_DECODES = 4
 
 /** Location text keeps reply parsing; known tool paths retain every filename character. */
 export function createNativeChatFileHref(
   pathText: string,
-  pathKind: 'location' | 'literal' = 'location'
+  pathKind: 'location' | 'literal' | 'sandbox' = 'location'
 ): string {
   const prefix =
-    pathKind === 'literal' ? NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX : NATIVE_CHAT_FILE_HREF_PREFIX
+    pathKind === 'sandbox'
+      ? NATIVE_CHAT_SANDBOX_FILE_HREF_PREFIX
+      : pathKind === 'literal'
+        ? NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX
+        : NATIVE_CHAT_FILE_HREF_PREFIX
   return `${prefix}${encodeURIComponent(pathText)}`
 }
 
@@ -82,6 +93,12 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
   if (!trimmed) {
     return { kind: 'none' }
   }
+  if (trimmed.startsWith(NATIVE_CHAT_SANDBOX_FILE_HREF_PREFIX)) {
+    const pathText = decodeNativeChatFileHref(trimmed, NATIVE_CHAT_SANDBOX_FILE_HREF_PREFIX)
+    return pathText
+      ? { kind: 'file', pathText, line: null, pathKind: 'literal', source: 'sandbox' }
+      : { kind: 'none' }
+  }
   if (trimmed.startsWith(NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)) {
     const pathText = decodeNativeChatFileHref(trimmed, NATIVE_CHAT_LITERAL_FILE_HREF_PREFIX)
     return pathText ? { kind: 'file', pathText, line: null, pathKind: 'literal' } : { kind: 'none' }
@@ -107,6 +124,26 @@ export function routeNativeChatHref(href: string | null | undefined): NativeChat
   }
   if (WEB_SCHEME_PATTERN.test(trimmed)) {
     return { kind: 'web', url: trimmed }
+  }
+  if (/^sandbox:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed)
+      const pathText = decodeURIComponent(url.pathname)
+      if (
+        url.host ||
+        !pathText.startsWith('/') ||
+        pathText.startsWith('//') ||
+        pathText.length < 2 ||
+        pathText.includes('\\') ||
+        Array.from(pathText).some((character) => character.charCodeAt(0) < 32)
+      ) {
+        return { kind: 'none' }
+      }
+      // Sandbox is a host file reference, never a browser protocol or a line location.
+      return { kind: 'file', pathText, line: null, pathKind: 'literal', source: 'sandbox' }
+    } catch {
+      return { kind: 'none' }
+    }
   }
   if (/^file:/i.test(trimmed)) {
     let url: URL

@@ -53,6 +53,22 @@ vi.mock('@/lib/file-preview', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
+  it('keeps plain local terminal links on the local stat and editor path', async () => {
+    openDetectedFilePath('/tmp/src/main.ts', 7, null, {
+      ...deps,
+      runtimeEnvironmentId: null,
+      terminalHandle: 'local-terminal'
+    })
+    await flushAsyncWork()
+
+    expect(statMock).toHaveBeenCalledWith({ filePath: '/tmp/src/main.ts', connectionId: undefined })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/main.ts', relativePath: 'src/main.ts' }),
+      { forceContentReload: true }
+    )
+  })
+
   it("stats remote-runtime file links through the workspace owner's runtime, not the focused one", async () => {
     setPlatform('Macintosh')
     // Before: the focused server (env-2) answered for a link the workspace owner (env-1) holds.
@@ -128,7 +144,8 @@ describe('handleOscLink', () => {
 
     openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
       worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo'
+      worktreePath: '/home/me/repo',
+      terminalHandle: 'ssh-terminal'
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -136,6 +153,7 @@ describe('handleOscLink', () => {
       filePath: '/home/me/repo/src/main.ts',
       connectionId: 'ssh-1'
     })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/me/repo/src/main.ts',

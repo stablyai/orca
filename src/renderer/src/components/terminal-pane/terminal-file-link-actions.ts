@@ -21,8 +21,11 @@ import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-i
 import { useAppStore } from '@/store'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-types'
 
 export type TerminalFileLinkActionDeps = {
+  nativeChatContext?: RuntimeNativeChatFileContext
+  allowClientLocalFallback?: boolean
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null

@@ -2,6 +2,37 @@ import { describe, expect, it } from 'vitest'
 import { createNativeChatFileHref, routeNativeChatHref } from './native-chat-href-routing'
 
 describe('routeNativeChatHref', () => {
+  it.each(['png', 'pdf', 'svg', 'csv'])('retains an absolute sandbox %s path', (extension) => {
+    const pathText = `/mnt/data/jewel-optimization/jewel-optimization.${extension}`
+    expect(routeNativeChatHref(`sandbox:${pathText}`)).toEqual({
+      kind: 'file',
+      pathText,
+      line: null,
+      pathKind: 'literal',
+      source: 'sandbox'
+    })
+  })
+
+  it.each([
+    'sandbox:relative.png',
+    'sandbox://other-host/image.png',
+    'sandbox:/',
+    'sandbox:/tmp/%ZZ.png',
+    'sandbox:/tmp/%00.png'
+  ])('rejects an invalid sandbox reference %s', (href) => {
+    expect(routeNativeChatHref(href)).toEqual({ kind: 'none' })
+  })
+
+  it('decodes sandbox paths once without interpreting filename punctuation as a location', () => {
+    expect(routeNativeChatHref('sandbox:/mnt/data/plot%20%231%3F%2520%3A12.png')).toEqual({
+      kind: 'file',
+      pathText: '/mnt/data/plot #1?%20:12.png',
+      line: null,
+      pathKind: 'literal',
+      source: 'sandbox'
+    })
+  })
+
   it('classifies web and mail links', () => {
     expect(routeNativeChatHref('https://example.com/docs')).toEqual({
       kind: 'web',

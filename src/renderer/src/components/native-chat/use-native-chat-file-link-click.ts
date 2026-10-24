@@ -3,11 +3,15 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/Comme
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 import { isTerminalLinkActionActivation } from '@/components/terminal-pane/terminal-link-activation'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import { resolveNativeChatFileLink, type NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
-import { showFileLinkUnresolvedToast } from './native-chat-file-link-toasts'
+import {
+  showFileLinkUnresolvedToast,
+  showFileLinkUnverifiableToast
+} from './native-chat-file-link-toasts'
 import {
   nativeChatFileLinkActions,
   nativeChatFileOpenDeps
@@ -22,11 +26,8 @@ export function useNativeChatFileLinkClick(
 ): CommentMarkdownLinkClickHandler | undefined {
   const openFileLink = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) => {
-      if (!context) {
-        return
-      }
       const route = routeNativeChatHref(href)
-      if (route.kind !== 'file') {
+      if (route.kind !== 'file' || (!context && route.source !== 'sandbox')) {
         return
       }
       event.preventDefault()
@@ -36,6 +37,21 @@ export function useNativeChatFileLinkClick(
         ? nativeChatPlainLinkClickBehavior(state.settings)
         : 'open'
       if (behavior === 'none') {
+        return
+      }
+      if (route.source === 'sandbox' && !context?.nativeChatContext) {
+        showFileLinkUnverifiableToast(
+          route.pathText,
+          new Error(
+            translate(
+              'components.native-chat.fileLinks.imageHostUnavailable',
+              'The session host is unavailable'
+            )
+          )
+        )
+        return
+      }
+      if (!context) {
         return
       }
       const target = resolveNativeChatFileLink(href, context)
@@ -63,5 +79,5 @@ export function useNativeChatFileLinkClick(
     },
     [context, request, rootRef]
   )
-  return context ? openFileLink : undefined
+  return openFileLink
 }

@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
+import { NativeChatMarkdown } from './NativeChatMarkdown'
 
 const mocks = vi.hoisted(() => {
   const noSettings: Record<string, unknown> = {}
@@ -44,17 +47,20 @@ vi.mock('@/store', () => ({
 const context: NativeChatFileLinkContext = {
   worktreeId: 'wt-1',
   worktreePath: '/repo',
-  runtimeEnvironmentId: null
+  runtimeEnvironmentId: null,
+  nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
 }
 
 function Transcript(props: {
   markdown: string
   linkContext?: NativeChatFileLinkContext
   request?: (request: LinkActionRequest) => void
+  resources?: boolean
 }): React.JSX.Element {
   const onLinkClick = useNativeChatFileLinkClick(props.linkContext ?? context, props.request)
+  const Markdown = props.resources ? NativeChatMarkdown : CommentMarkdown
   return (
-    <CommentMarkdown
+    <Markdown
       content={props.markdown}
       variant="document"
       onLinkClick={onLinkClick}
@@ -62,6 +68,24 @@ function Transcript(props: {
       // The click path is under test; which paths get underlined is covered elsewhere.
       fileLinkExists={() => true}
     />
+  )
+}
+
+function OwnerlessTranscript({ markdown }: { markdown: string }): React.JSX.Element {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const { onLinkClick } = useNativeChatLinkActions(null, rootRef, {
+    sessionId: null,
+    isVisible: true
+  })
+  return (
+    <div ref={rootRef}>
+      <NativeChatMarkdown
+        content={markdown}
+        variant="document"
+        onLinkClick={onLinkClick}
+        allowFileUriLinks={onLinkClick !== undefined}
+      />
+    </div>
   )
 }
 
@@ -116,6 +140,47 @@ afterEach(() => {
 })
 
 describe('tool and edit-card file activation', () => {
+  it.each(['file:///repo/report.csv', '/repo/report.csv'])(
+    'keeps ordinary %s links working while the session is not reported',
+    (href) => {
+      render(
+        <Transcript
+          markdown={`[Report](${href})`}
+          linkContext={{
+            worktreeId: 'wt-1',
+            worktreePath: '/repo',
+            runtimeEnvironmentId: null
+          }}
+        />
+      )
+      clickLink('Report')
+      expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+        '/repo/report.csv',
+        null,
+        null,
+        expect.anything()
+      )
+      expect(mocks.showUnverifiable).not.toHaveBeenCalled()
+    }
+  )
+
+  it('refuses a rendered sandbox link when its session ownership is unavailable', () => {
+    render(
+      <Transcript
+        resources
+        markdown="[Report](sandbox:/mnt/data/report.csv)"
+        linkContext={{
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          runtimeEnvironmentId: null
+        }}
+      />
+    )
+    clickLink('Report')
+    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    expect(mocks.showUnverifiable).toHaveBeenCalledWith('/mnt/data/report.csv', expect.any(Error))
+  })
+
   it.each([
     ['Mac', { metaKey: true }, 'none', 'Enter', 'tool'],
     ['Linux', { ctrlKey: true }, 'actions', ' ', 'tool'],
@@ -264,6 +329,39 @@ describe('tool and edit-card file activation', () => {
 })
 
 describe('useNativeChatFileLinkClick', () => {
+  it('explains an unavailable sandbox host when the entire file context is absent', () => {
+    render(<OwnerlessTranscript markdown="[Report](sandbox:/mnt/data/report.csv)" />)
+
+    clickLink('Report')
+
+    expect(mocks.showUnverifiable).toHaveBeenCalledExactlyOnceWith(
+      '/mnt/data/report.csv',
+      expect.any(Error)
+    )
+    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    expect(mocks.buildFileLinkActions).not.toHaveBeenCalled()
+  })
+
+  it.each(['file:///repo/report.csv', '/repo/report.csv', 'https://example.com'])(
+    'leaves ordinary %s links alone without a file context',
+    (href) => {
+      const { container } = render(<OwnerlessTranscript markdown={`[Report](${href})`} />)
+      const anchorDefault = vi.fn((event: Event) => {
+        const prevented = event.defaultPrevented
+        event.preventDefault()
+        expect(prevented).toBe(href.startsWith('file:'))
+      })
+      container.addEventListener('click', anchorDefault)
+
+      clickLink('Report')
+
+      expect(anchorDefault).toHaveBeenCalledOnce()
+      expect(mocks.showUnverifiable).not.toHaveBeenCalled()
+      expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+      expect(mocks.buildFileLinkActions).not.toHaveBeenCalled()
+    }
+  )
+
   it('opens whole-code bare names from the chat folder', () => {
     render(<Transcript markdown="Done. `decision-explainer.html` and `Makefile:7`." />)
 
@@ -290,7 +388,11 @@ describe('useNativeChatFileLinkClick', () => {
       '/repo/docs/deck.md',
       null,
       null,
-      expect.objectContaining({ worktreeId: 'wt-1', onOpenFailure: expect.any(Function) })
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        nativeChatContext: context.nativeChatContext,
+        onOpenFailure: expect.any(Function)
+      })
     )
     failLastOpen('missing')
     expect(mocks.showNotFound).toHaveBeenCalledWith('/repo/docs/deck.md')

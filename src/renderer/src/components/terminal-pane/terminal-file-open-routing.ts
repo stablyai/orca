@@ -41,6 +41,7 @@ export {
   type TerminalFileContext
 } from './terminal-file-path-mapping'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-types'
 import {
   httpLinkDirectClickDestination,
   type HttpLinkDestination
@@ -54,6 +55,8 @@ export type FileOpenFailure = {
 }
 
 type TerminalFileOpenDeps = {
+  nativeChatContext?: RuntimeNativeChatFileContext
+  allowClientLocalFallback?: boolean
   worktreeId: string
   worktreePath: string
   runtimeEnvironmentId?: string | null
@@ -152,7 +155,9 @@ export function openDetectedFilePath(
         worktreeId,
         worktreePath,
         filePath: mappedFilePath,
-        terminalHandle: deps.terminalHandle
+        terminalHandle: deps.terminalHandle,
+        nativeChatContext: deps.nativeChatContext,
+        allowClientLocalFallback: deps.allowClientLocalFallback
       })
     } catch (error) {
       if (isCurrentOpen() && deps.onOpenFailure) {

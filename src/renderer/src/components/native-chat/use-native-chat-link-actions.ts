@@ -43,12 +43,12 @@ export function useNativeChatLinkActions(
 
   const onLinkClick = useCallback<CommentMarkdownLinkClickHandler>(
     (event, href) => {
-      if (!context) {
-        return
-      }
       const route = routeNativeChatHref(href)
       if (route.kind === 'file') {
         openFileLink?.(event, href)
+        return
+      }
+      if (!context) {
         return
       }
       // mailto: and other schemes keep the anchor's default handling.
@@ -73,7 +73,7 @@ export function useNativeChatLinkActions(
   )
 
   return {
-    onLinkClick: context ? onLinkClick : undefined,
+    onLinkClick,
     linkActionRequest,
     closeLinkActions
   }

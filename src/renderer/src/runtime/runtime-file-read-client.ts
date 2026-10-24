@@ -56,20 +56,20 @@ export async function readRuntimeFileContent({
   pageOversizedBinary
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   assertExternalSshReadOwnership(target, connectionId, expectedExternalSshTargetId)
-  if (target.kind !== 'environment' || !worktreeId) {
-    return window.api.fs.readFile({
-      filePath,
-      connectionId,
-      includeLocalLogMetadata,
-      ...localAccess(connectionId, access)
-    })
-  }
   if (terminalArtifactGrantId) {
     return readRuntimeTerminalArtifactContent({
       target,
       worktreeId,
       absolutePath: filePath,
       grantId: terminalArtifactGrantId
+    })
+  }
+  if (target.kind !== 'environment' || !worktreeId) {
+    return window.api.fs.readFile({
+      filePath,
+      connectionId,
+      includeLocalLogMetadata,
+      ...localAccess(connectionId, access)
     })
   }
   // A workspace path first; a chat's scratch file is the absolute path no workspace contains.
@@ -131,6 +131,18 @@ export async function readRuntimeFilePreview(
     context.connectionId,
     context.expectedExternalSshTargetId
   )
+  if (context.terminalArtifactGrantId && context.worktreeId) {
+    return callRuntimeRpc<RuntimeFilePreviewResult>(
+      context.target,
+      'files.readTerminalArtifactPreview',
+      {
+        worktree: toRuntimeWorktreeSelector(context.worktreeId),
+        grantId: context.terminalArtifactGrantId,
+        absolutePath: filePath
+      },
+      { timeoutMs: 15_000 }
+    )
+  }
   const remoteArgs = getRemoteFileArgs(context, filePath)
   const runtimeTarget = context.target
   // A chat attachment lives in the paired server's store, outside every worktree; that server

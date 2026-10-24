@@ -3,10 +3,20 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { createNativeChatFileLinkContextSelector } from './native-chat-file-link'
 
-export function useNativeChatFileLinkContext(terminalTabId: string) {
+export function useNativeChatFileLinkContext(terminalTabId: string, sessionId?: string | null) {
   const selectContext = useMemo(
     () => createNativeChatFileLinkContextSelector(terminalTabId),
     [terminalTabId]
   )
-  return useAppStore(useShallow(selectContext))
+  const context = useAppStore(useShallow(selectContext))
+  return useMemo(
+    () =>
+      context && sessionId
+        ? {
+            ...context,
+            nativeChatContext: { tabId: terminalTabId, sessionId }
+          }
+        : context,
+    [context, sessionId, terminalTabId]
+  )
 }

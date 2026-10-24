@@ -19540,8 +19540,15 @@
       },
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
+        "imageUnavailable": "Couldn't preview image: {{value0}}",
+        "imageLoading": "Loading image…",
         "unverifiable": "Couldn't check {{value0}}: {{value1}}",
-        "unresolved": "Couldn't resolve {{value0}} in this workspace"
+        "unresolved": "Couldn't resolve {{value0}} in this workspace",
+        "imageFileUnavailable": "The file is not available on its session host",
+        "imagePreviewUnavailable": "The host could not provide an image preview",
+        "imageServerUpdateRequired": "Update the Orca server to preview this chat file",
+        "imageHostUnavailable": "The session host is unavailable",
+        "imageDisplayFailed": "The image could not be displayed"
       },
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { filesystemPathToFileUri } from '../../shared/file-uri-path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeMobileSessionClientTab } from '../../shared/runtime-types'
 import { nativeChatTranscriptIncludesPath } from './native-chat-file-provenance'
@@ -42,6 +43,121 @@ function message(role: NativeChatMessage['role'], text: string): NativeChatMessa
 }
 
 describe('nativeChatTranscriptIncludesPath', () => {
+  it('refuses provenance when a structured journal becomes unreadable', async () => {
+    await expect(
+      nativeChatTranscriptIncludesPath({
+        tabs: [
+          {
+            type: 'agent-session',
+            id: 'chat-tab',
+            sessionId: 'session-1',
+            title: 'Chat',
+            agent: 'codex',
+            isActive: true
+          }
+        ],
+        context: { tabId: 'chat-tab', sessionId: 'session-1' },
+        pathText: '/mnt/data/chart.png',
+        absolutePath: '/mnt/data/chart.png',
+        readStructuredMessages: async () => {
+          throw new Error('Journal unavailable')
+        }
+      })
+    ).resolves.toBe(false)
+  })
+  it.each(
+    ['png', 'pdf', 'svg', 'csv'].flatMap((extension) => [
+      { path: `/mnt/data/chart.${extension}`, reference: `sandbox:/mnt/data/chart.${extension}` },
+      ...[
+        `C:/Users/Agent/Generated reports/chart.${extension}`,
+        `//server/reports/chart.${extension}`
+      ].map((path) => ({ path, reference: filesystemPathToFileUri(path) }))
+    ])
+  )(
+    'accepts $reference only from the matching structured conversation',
+    async ({ path, reference }) => {
+      const readStructuredMessages = vi.fn(async () => [
+        message('assistant', `![Chart](${reference})`)
+      ])
+      const tabs: RuntimeMobileSessionClientTab[] = [
+        {
+          type: 'agent-session',
+          id: 'chat-tab',
+          sessionId: 'session-1',
+          title: 'Chat',
+          agent: 'codex',
+          isActive: false
+        }
+      ]
+      const args = {
+        tabs,
+        context: { tabId: 'chat-tab', sessionId: 'session-1' },
+        pathText: path,
+        absolutePath: path,
+        readStructuredMessages
+      }
+      await expect(nativeChatTranscriptIncludesPath(args)).resolves.toBe(true)
+      expect(readStructuredMessages).toHaveBeenCalledWith('session-1')
+      readStructuredMessages.mockClear()
+      await expect(
+        nativeChatTranscriptIncludesPath({
+          ...args,
+          context: { tabId: 'chat-tab', sessionId: 'another-session' }
+        })
+      ).resolves.toBe(false)
+      expect(readStructuredMessages).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not authorize a structured user message or a longer sandbox filename', async () => {
+    const tabs: RuntimeMobileSessionClientTab[] = [
+      {
+        type: 'agent-session',
+        id: 'chat-tab',
+        sessionId: 'session-1',
+        title: 'Chat',
+        agent: 'codex',
+        isActive: false
+      }
+    ]
+    const args = {
+      tabs,
+      context: { tabId: 'chat-tab', sessionId: 'session-1' },
+      pathText: '/mnt/data/chart.png',
+      absolutePath: '/mnt/data/chart.png'
+    }
+    await expect(
+      nativeChatTranscriptIncludesPath({
+        ...args,
+        readStructuredMessages: async () => [
+          message('user', '![Chart](sandbox:/mnt/data/chart.png)')
+        ]
+      })
+    ).resolves.toBe(false)
+    await expect(
+      nativeChatTranscriptIncludesPath({
+        ...args,
+        readStructuredMessages: async () => [
+          message('assistant', '[Download](sandbox:/mnt/data/chart.png.backup)')
+        ]
+      })
+    ).resolves.toBe(false)
+  })
+
+  it('recognizes sandbox image provenance in a terminal-backed conversation', async () => {
+    await expect(
+      nativeChatTranscriptIncludesPath({
+        tabs: [terminalTab()],
+        context: { tabId: 'tab-1', sessionId: 'session-1' },
+        pathText: '/mnt/data/chart.png',
+        absolutePath: '/mnt/data/chart.png',
+        readTranscript: async () => ({
+          messages: [message('assistant', '![Chart](sandbox:/mnt/data/chart.png)')]
+        })
+      })
+    ).resolves.toBe(true)
+  })
+
   it('accepts a path in recent assistant output from the host-bound session', async () => {
     const readTranscript = vi.fn(async () => ({
       messages: [message('assistant', 'Open ~/orca-plans/result.html to review it.')]

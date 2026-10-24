@@ -19257,7 +19257,14 @@
       "fileLinks": {
         "notFound": "ファイルが見つかりません: {{value0}}",
         "unverifiable": "{{value0}} を確認できませんでした: {{value1}}",
-        "unresolved": "このワークスペースで {{value0}} を解決できませんでした"
+        "unresolved": "このワークスペースで {{value0}} を解決できませんでした",
+        "imageFileUnavailable": "セッションのホストでファイルを利用できません",
+        "imagePreviewUnavailable": "ホストから画像プレビューを取得できませんでした",
+        "imageServerUpdateRequired": "このチャットのファイルをプレビューするには Orca サーバーを更新してください",
+        "imageHostUnavailable": "セッションのホストを利用できません",
+        "imageDisplayFailed": "画像を表示できませんでした",
+        "imageLoading": "画像を読み込み中…",
+        "imageUnavailable": "画像をプレビューできません：{{value0}}"
       },
       "contextUsage": {
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",

@@ -130,7 +130,7 @@ export function NativeChatResolvedView({
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
-  const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
+  const fileLinkContext = useNativeChatFileLinkContext(terminalTabId, sessionId)
   const onPaste = useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef })
 
   // Optimistic "queued" sends (mobile parity): a composer send is echoed
@@ -391,7 +391,7 @@ export function NativeChatResolvedView({
             {...turnTiming}
             awaitingInput={awaitingInput}
             onLinkClick={onLinkClick}
-            allowFileUriLinks={fileLinkContext !== null}
+            allowFileUriLinks={onLinkClick !== undefined}
             deliveryNotices={deliveryNotices}
           />
         )}

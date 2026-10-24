@@ -19367,7 +19367,14 @@
       "fileLinks": {
         "notFound": "Fichier introuvable : {{value0}}",
         "unverifiable": "Impossible de vérifier {{value0}} : {{value1}}",
-        "unresolved": "Impossible de résoudre {{value0}} dans cet espace de travail"
+        "unresolved": "Impossible de résoudre {{value0}} dans cet espace de travail",
+        "imageFileUnavailable": "Le fichier n’est pas disponible sur l’hôte de la session",
+        "imagePreviewUnavailable": "L’hôte n’a pas pu fournir d’aperçu de l’image",
+        "imageServerUpdateRequired": "Mettez à jour le serveur Orca pour prévisualiser ce fichier de discussion",
+        "imageHostUnavailable": "L’hôte de la session est indisponible",
+        "imageDisplayFailed": "L’image n’a pas pu être affichée",
+        "imageLoading": "Chargement de l’image…",
+        "imageUnavailable": "Impossible de prévisualiser l’image : {{value0}}"
       },
       "contextUsage": {
         "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",

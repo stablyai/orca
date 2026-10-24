@@ -19226,7 +19226,14 @@
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
         "unverifiable": "无法检查 {{value0}}：{{value1}}",
-        "unresolved": "无法在此工作区中解析 {{value0}}"
+        "unresolved": "无法在此工作区中解析 {{value0}}",
+        "imageFileUnavailable": "会话主机无法提供此文件",
+        "imagePreviewUnavailable": "主机无法提供图片预览",
+        "imageServerUpdateRequired": "请更新 Orca 服务端以预览此会话文件",
+        "imageHostUnavailable": "会话主机不可用",
+        "imageDisplayFailed": "无法显示此图片",
+        "imageLoading": "正在加载图片…",
+        "imageUnavailable": "无法预览图片：{{value0}}"
       },
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",

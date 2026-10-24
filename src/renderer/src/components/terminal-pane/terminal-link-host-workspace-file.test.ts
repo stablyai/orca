@@ -63,6 +63,54 @@ function hostAnswers(result: unknown): void {
 }
 
 describe('a paired-server link outside its own workspace', () => {
+  it.each(['terminal', 'chat'] as const)(
+    'keeps a paired SSH %s grant on its owning environment and source',
+    async (source) => {
+      const nativeChatContext = { tabId: 'chat-tab', sessionId: 'chat-session' }
+      storeState.settings = { activeRuntimeEnvironmentId: 'another-host' }
+      hostAnswers({
+        worktree: 'wt-feat',
+        relativePath: null,
+        absolutePath: '/mnt/data/report.csv',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: '/mnt/data/report.csv',
+          grantId: 'terminal-grant'
+        }
+      })
+      openDetectedFilePath('/mnt/data/report.csv', null, null, {
+        ...featureWorktree,
+        ...(source === 'terminal' ? { terminalHandle: 'host-terminal' } : { nativeChatContext })
+      })
+      await flushDoubleRaf()
+
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'env-1',
+          method: 'files.resolveTerminalPath',
+          params: {
+            worktree: 'id:wt-feat',
+            pathText: '/mnt/data/report.csv',
+            crossWorkspace: true,
+            ...(source === 'terminal' ? { terminal: 'host-terminal' } : { nativeChatContext })
+          }
+        })
+      )
+      expect(statMock).not.toHaveBeenCalled()
+      expect(openFileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/mnt/data/report.csv',
+          runtimeEnvironmentId: 'env-1',
+          terminalArtifactGrantId: 'terminal-grant'
+        }),
+        { forceContentReload: true }
+      )
+    }
+  )
+
   it('opens a main-repo file in the workspace the host says holds it', async () => {
     hostAnswers({
       worktree: 'wt-main',

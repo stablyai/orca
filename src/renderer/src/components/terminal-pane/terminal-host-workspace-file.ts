@@ -1,5 +1,5 @@
 import { callHostRoute } from '@/runtime/host-route-call'
-import { hostRouteForAuthority, runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
@@ -13,6 +13,7 @@ import {
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-types'
 
 export type HostWorkspaceFile = {
   kind: 'host'
@@ -89,23 +90,26 @@ async function statClientLocalFile(
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  terminalHandle?: string | null
+  terminalHandle?: string | null,
+  nativeChatContext?: RuntimeNativeChatFileContext,
+  allowClientLocalFallback = false
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
-    !environmentId ||
+    (!environmentId && !nativeChatContext) ||
     !context.worktreeId ||
     isRemoteRuntimeFileOperation(context, absolutePath)
   ) {
     return null
   }
   const resolved = await callHostRoute<RuntimeTerminalPathResolution>(
-    hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
+    { target: context.target, at: context.expectedExecutionHostId ?? 'local' },
     'files.resolveTerminalPath',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       pathText: absolutePath,
       crossWorkspace: true,
+      ...(nativeChatContext ? { nativeChatContext } : {}),
       // Why: the host grants a file outside its workspaces only to the terminal that printed it.
       ...(terminalHandle ? { terminal: terminalHandle } : {})
     },
@@ -129,7 +133,11 @@ export async function resolveHostWorkspaceFile(
       // Why: an ungranted host path (a directory, or one no terminal printed) is still the host's.
       throw refusal
     }
-    return statClientLocalFile(environmentId, absolutePath, refusal)
+    // Sandbox references and transcript images never fall back to a same-named client file.
+    if (nativeChatContext && !allowClientLocalFallback) {
+      throw new HostFileRefusal(`File unavailable on its session host: ${absolutePath}`)
+    }
+    return statClientLocalFile(environmentId ?? '', absolutePath, refusal)
   }
   if (!resolved.exists) {
     throw new HostFileRefusal(`File not found on its host: ${absolutePath}`)
@@ -143,7 +151,7 @@ export async function resolveHostWorkspaceFile(
     absolutePath: resolved.absolutePath,
     worktreeId: resolved.worktree,
     worktreePath,
-    executionHostId: toRuntimeExecutionHostId(environmentId),
+    executionHostId: environmentId ? toRuntimeExecutionHostId(environmentId) : 'local',
     isDirectory: resolved.isDirectory
   }
 }

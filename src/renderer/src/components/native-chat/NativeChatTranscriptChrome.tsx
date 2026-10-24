@@ -21,40 +21,11 @@ import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
 
-type VisibilityListener = (isVisible: boolean) => void
-
-const visibilityListeners = new Map<Element, VisibilityListener>()
-let visibilityObserver: IntersectionObserver | null = null
-
-export function observeTranscriptVisibility(
-  element: Element,
-  listener: VisibilityListener
-): () => void {
-  if (typeof IntersectionObserver === 'undefined') {
-    listener(true)
-    return () => {}
-  }
-
-  visibilityObserver ??= new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        visibilityListeners.get(entry.target)?.(entry.isIntersecting)
-      }
-    },
-    { rootMargin: '128px' }
-  )
-  visibilityListeners.set(element, listener)
-  visibilityObserver.observe(element)
-
-  return () => {
-    visibilityListeners.delete(element)
-    visibilityObserver?.unobserve(element)
-    if (visibilityListeners.size === 0) {
-      visibilityObserver?.disconnect()
-      visibilityObserver = null
-    }
-  }
-}
+import { observeTranscriptVisibility } from './native-chat-transcript-visibility'
+export { observeTranscriptVisibility } from './native-chat-transcript-visibility'
+import { NativeChatMarkdownResourceImage } from './NativeChatMarkdownResourceImage'
+import { useNativeChatResourceOwner } from './NativeChatResourceOwner'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 
 function renderableImageSource(source: string | undefined): boolean {
   return Boolean(source && /^(?:https?|data|blob):/i.test(source))
@@ -102,6 +73,31 @@ function transcriptImageReleaseKey(
 }
 
 function TranscriptImagePreview({
+  block,
+  runtimeContext,
+  onLinkClick,
+  allowHostResources
+}: {
+  block: Extract<NativeChatBlock, { type: 'image-ref' }>
+  runtimeContext: RuntimeFileOperationArgs | null | undefined
+  onLinkClick?: CommentMarkdownLinkClickHandler
+  allowHostResources: boolean
+}): React.JSX.Element {
+  const owner = useNativeChatResourceOwner()
+  const source = block.url?.trim() || block.path
+  return allowHostResources && owner && source && !renderableImageSource(source) ? (
+    <NativeChatMarkdownResourceImage
+      path={source}
+      alt={nativeChatImageLabel(block)}
+      compact
+      onLinkClick={onLinkClick}
+    />
+  ) : (
+    <TranscriptImageThumbnail block={block} runtimeContext={runtimeContext} />
+  )
+}
+
+function TranscriptImageThumbnail({
   block,
   runtimeContext
 }: {
@@ -200,12 +196,17 @@ function TranscriptImagePreview({
 export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
-  enablePreview = runtimeContext !== undefined
+  enablePreview = runtimeContext !== undefined,
+  allowHostResources = false,
+  onLinkClick
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
   /** Keep legacy terminal chips unchanged until that lane opts into previews. */
   enablePreview?: boolean
+  /** Transcript grants authorize assistant output, not user attachments. */
+  allowHostResources?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
@@ -253,6 +254,8 @@ export function NativeChatImageAttachments({
             key={`${imageKeyBase}-${identity}-${occurrence}`}
             block={image}
             runtimeContext={runtimeContext}
+            onLinkClick={onLinkClick}
+            allowHostResources={allowHostResources}
           />
         )
       })}

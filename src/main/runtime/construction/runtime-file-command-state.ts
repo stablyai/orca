@@ -6,6 +6,7 @@ import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-termina
 import { OrcaRuntimeWithPreservedBranchCleanup } from './runtime-host-services'
 import { RuntimeFileCommands } from '../orca-runtime-files'
 import { nativeChatTranscriptIncludesPath } from '../../native-chat/native-chat-file-provenance'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { createRuntimeFileWatcherRemoval } from '../runtime-file-watcher-removal'
 import { RuntimeGitCommands } from '../orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../runtime-hosted-review-commands'
@@ -132,7 +133,16 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         tabs: this.getMobileSessionTabsForWorktree(worktreeId).tabs,
         context,
         pathText,
-        absolutePath
+        absolutePath,
+        readStructuredMessages: async (sessionId) => {
+          const host = getStructuredAgentSessionHost()
+          if (host?.deps.store.getRecord(sessionId)?.location.workspaceId !== worktreeId) {
+            return []
+          }
+          return (await host.journalSnapshot(sessionId)).items
+            .slice(-2000)
+            .flatMap((item) => (item.body.kind === 'message' ? [item.body] : []))
+        }
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
     openFile: createRuntimeEditorFileOpener({

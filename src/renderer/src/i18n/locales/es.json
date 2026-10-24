@@ -19060,7 +19060,14 @@
       "fileLinks": {
         "notFound": "No se encontró el archivo: {{value0}}",
         "unverifiable": "No se pudo comprobar {{value0}}: {{value1}}",
-        "unresolved": "No se pudo resolver {{value0}} en este espacio de trabajo"
+        "unresolved": "No se pudo resolver {{value0}} en este espacio de trabajo",
+        "imageFileUnavailable": "El archivo no está disponible en el host de la sesión",
+        "imagePreviewUnavailable": "El host no pudo proporcionar una vista previa de la imagen",
+        "imageServerUpdateRequired": "Actualiza el servidor de Orca para previsualizar este archivo del chat",
+        "imageHostUnavailable": "El host de la sesión no está disponible",
+        "imageDisplayFailed": "No se pudo mostrar la imagen",
+        "imageLoading": "Cargando imagen…",
+        "imageUnavailable": "No se pudo previsualizar la imagen: {{value0}}"
       },
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",

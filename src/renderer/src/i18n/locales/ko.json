@@ -19257,7 +19257,14 @@
       "fileLinks": {
         "notFound": "파일을 찾을 수 없습니다: {{value0}}",
         "unverifiable": "{{value0}}을(를) 확인하지 못했습니다: {{value1}}",
-        "unresolved": "이 워크스페이스에서 {{value0}}을(를) 찾을 수 없습니다"
+        "unresolved": "이 워크스페이스에서 {{value0}}을(를) 찾을 수 없습니다",
+        "imageFileUnavailable": "세션 호스트에서 파일을 사용할 수 없습니다",
+        "imagePreviewUnavailable": "호스트에서 이미지 미리보기를 제공하지 못했습니다",
+        "imageServerUpdateRequired": "이 채팅 파일을 미리 보려면 Orca 서버를 업데이트하세요",
+        "imageHostUnavailable": "세션 호스트를 사용할 수 없습니다",
+        "imageDisplayFailed": "이미지를 표시할 수 없습니다",
+        "imageLoading": "이미지 로딩 중…",
+        "imageUnavailable": "이미지를 미리 볼 수 없습니다: {{value0}}"
       },
       "contextUsage": {
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",

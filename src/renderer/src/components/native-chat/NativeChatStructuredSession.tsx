@@ -71,7 +71,7 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
-  const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
+  const fileLinkContext = useNativeChatFileLinkContext(props.tabId, props.sessionId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
