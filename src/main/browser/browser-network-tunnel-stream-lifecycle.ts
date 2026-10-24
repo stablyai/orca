@@ -21,6 +21,7 @@ export function createBrowserNetworkTunnelStream(options: {
     sendCredit: 0,
     pendingToClient: [],
     pendingToClientBytes: 0,
+    flushingToClient: false,
     pendingDestinationWriteReleases: new Set(),
     clientEnded: false,
     destinationEnded: false,
