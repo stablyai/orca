@@ -8,6 +8,7 @@ import {
   supportsTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import { prepareTerminalQuickCommandForRun } from '@/lib/terminal-quick-command-placeholder-run'
 
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
@@ -101,10 +102,14 @@ export function runQuickCommandInNewTab({
   if (!command.command.trim()) {
     return null
   }
+  const prepared = prepareTerminalQuickCommandForRun(command, worktreeId)
+  if (!prepared) {
+    return null
+  }
   const store = useAppStore.getState()
   const tab = store.createTab(worktreeId, targetGroupId, undefined, {
-    quickCommandLabel: command.label,
-    pendingStartup: { command: flattenTerminalQuickCommand(command).command }
+    quickCommandLabel: prepared.label,
+    pendingStartup: { command: flattenTerminalQuickCommand(prepared).command }
   })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree

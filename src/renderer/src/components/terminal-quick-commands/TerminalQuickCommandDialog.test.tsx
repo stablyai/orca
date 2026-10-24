@@ -133,6 +133,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
 
     expect(document.body.textContent).toContain('Append Enter — run immediately')
     expect(document.body.textContent).not.toContain('Supports /goal, skills, paths')
+    expect(document.body.textContent).toContain('Supports ${file} and other editor path tokens')
   })
 
   it('hides append enter and shows agent toolbar hint in agent mode', async () => {
@@ -147,6 +148,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
 
     expect(document.body.textContent).toContain('Supports /goal, skills, paths')
     expect(document.body.textContent).not.toContain('Append Enter — run immediately')
+    expect(document.body.textContent).not.toContain('Supports ${file} and other editor path tokens')
   })
 
   it('shows scope summary on the collapsed advanced toggle', async () => {
@@ -160,6 +162,40 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     })
 
     expect(document.body.textContent).toMatch(/Advanced\s*·\s*Global/)
+  })
+
+  it('lists editor path tokens in Advanced for terminal commands', async () => {
+    await renderDialog(
+      {
+        id: 'qc-file-tokens',
+        label: 'Run file',
+        action: 'terminal-command',
+        command: 'python "${file}"',
+        appendEnter: true,
+        scope: { type: 'global' }
+      },
+      { defaultAdvancedOpen: true }
+    )
+
+    expect(document.body.textContent).toContain('${fileBasename}')
+    expect(document.body.textContent).toContain('${workspaceFolder}')
+  })
+
+  it('does not list editor path tokens in Advanced for agent prompts', async () => {
+    await renderDialog(
+      {
+        id: 'qc-agent-tokens',
+        label: 'Investigate',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'Look into the build',
+        scope: { type: 'global' }
+      },
+      { defaultAdvancedOpen: true }
+    )
+
+    expect(document.body.textContent).not.toContain('${fileBasename}')
+    expect(document.body.textContent).not.toContain('${workspaceFolder}')
   })
 
   it('opens the advanced section when defaultAdvancedOpen is true', async () => {

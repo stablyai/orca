@@ -196,7 +196,14 @@ export function TerminalQuickCommandContentSection({
                 'Supports /goal, skills, paths'
               )}
             </span>
-          ) : null}
+          ) : (
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+              {translate(
+                'components.terminal.quickCommands.filePlaceholderToolbarHint',
+                'Supports ${file} and other editor path tokens'
+              )}
+            </span>
+          )}
         </div>
 
         <textarea

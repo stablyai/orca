@@ -20143,6 +20143,14 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "terminal": {
+      "quickCommands": {
+        "filePlaceholderHelp": "Editor path tokens: ${file}, ${relativeFile}, ${fileBasename}, ${fileDirname}, ${workspaceFolder}. Quote paths that may contain spaces, for example python \"${file}\". If a file token is used and no editor file is open, the command is not sent.",
+        "filePlaceholderToolbarHint": "Supports ${file} and other editor path tokens",
+        "missingEditorFile": "This command needs an editor file. Open a file in this workspace and try again.",
+        "missingWorkspaceFolder": "This command needs the workspace folder, which is not available here."
+      }
     }
   },
   "dashboardPopout": {

@@ -254,6 +254,7 @@ export function useTerminalPaneContextMenu({
       command,
       pane,
       tabId,
+      worktreeId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }
