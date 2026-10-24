@@ -68,6 +68,7 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('Good catch, checking.')
     expect(prompt).toContain('- For outdated comments, inspect the current file')
     expect(prompt).toContain('- Run git diff --check before finishing.')
+    expect(prompt).toContain('Orca acknowledges this feedback')
   })
 
   it('includes standalone PR comments in the selected AI payload', () => {
@@ -117,6 +118,22 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('"hostResolvableThreads"')
     expect(prompt).toContain('"threadId": "discussion-1"')
     expect(prompt).toContain('"path": null')
+  })
+
+  it('omits launch acknowledgement for feedback copied to an existing agent', () => {
+    const prompt = buildPRCommentsResolutionPrompt({
+      reviewKind: 'PR',
+      reviewNumber: 42,
+      reviewTitle: 'Fix parser',
+      reviewUrl: 'https://github.com/acme/widgets/pull/42',
+      groups: [],
+      acknowledgeOnLaunch: false
+    })
+
+    expect(prompt).toContain(
+      '- Do not resolve or unresolve threads on the host, reply on the host, edit host comments'
+    )
+    expect(prompt).not.toContain('Orca acknowledges this feedback')
   })
 
   it('quotes untrusted review metadata in the instruction header', () => {
