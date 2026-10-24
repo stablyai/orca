@@ -60,7 +60,10 @@ describe('worker transcript reads', () => {
       throw new Error('Expected the initial transcript page')
     }
 
-    await appendFile(transcriptPath, `{malformed}\n${codexMessage('four', 'fourth')}\n`)
+    await appendFile(
+      transcriptPath,
+      `{malformed}\n${codexMessage('four', 'fourth')}\n${codexMessage('five', 'fifth')}\n${codexMessage('six', 'sixth')}\n`
+    )
     const appended = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'session-exact',
@@ -73,9 +76,29 @@ describe('worker transcript reads', () => {
 
     expect(appended).toMatchObject({
       ok: true,
-      messages: [{ id: 'four', blocks: [{ type: 'text', text: 'fourth' }] }],
-      limited: false,
-      warnings: ['1 malformed transcript record(s) were skipped.']
+      messages: [
+        { id: 'four', blocks: [{ type: 'text', text: 'fourth' }] },
+        { id: 'five', blocks: [{ type: 'text', text: 'fifth' }] }
+      ],
+      limited: true
+    })
+    if (!appended.ok) {
+      throw new Error('Expected the message-limited transcript page')
+    }
+
+    const continued = await readWorkerTranscript({
+      agent: 'codex',
+      sessionId: 'session-exact',
+      transcriptPath,
+      offset: appended.nextOffset,
+      expectedSourceFingerprint: appended.sourceFingerprint,
+      expectedBoundaryCheckpoint: appended.boundaryCheckpoint,
+      limit: 2
+    })
+    expect(continued).toMatchObject({
+      ok: true,
+      messages: [{ id: 'six', blocks: [{ type: 'text', text: 'sixth' }] }],
+      limited: false
     })
   })
 
