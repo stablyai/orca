@@ -71,16 +71,44 @@ export function getOrCreateMailboxDelivery(
         return undefined
       }
     }
-    const messages = exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages
-           WHERE run_id = ? AND to_handle = ? AND read = 0
-             AND delivery_contract = 'current_delivery'
-           ORDER BY sequence ASC LIMIT ?`
-        )
-        .all(params.runId, params.mailboxHandle, limit) as MessageRow[]
+    const previous = this.db
+      .prepare(
+        `SELECT sweep_end_sequence,
+           (SELECT MAX(sequence) FROM messages
+            JOIN json_each(previous.message_ids) AS member ON messages.id = member.value
+           ) AS after_sequence
+         FROM (
+           SELECT message_ids, sweep_end_sequence FROM deliveries
+           WHERE run_id = ? AND mailbox_handle = ? AND consumer_generation = ?
+             AND status = 'acknowledged'
+           ORDER BY rowid DESC LIMIT 1
+         ) AS previous`
+      )
+      .get(params.runId, params.mailboxHandle, params.consumerGeneration)
+    const afterSequence = typeof previous?.after_sequence === 'number' ? previous.after_sequence : 0
+    let sweepEnd =
+      typeof previous?.sweep_end_sequence === 'number' ? previous.sweep_end_sequence : 0
+    const page = this.db.prepare(
+      `SELECT * FROM messages
+       WHERE run_id = ? AND to_handle = ? AND read = 0
+         AND delivery_contract = 'current_delivery' AND sequence > ? AND sequence <= ?
+       ORDER BY sequence ASC LIMIT ?`
     )
+    let rows = page.all(params.runId, params.mailboxHandle, afterSequence, sweepEnd, limit)
+    if (rows.length === 0) {
+      // Freeze each sweep so continuous new mail cannot postpone unanswered questions forever.
+      const newest = this.db
+        .prepare(
+          `SELECT MAX(sequence) AS sequence FROM messages
+           WHERE run_id = ? AND to_handle = ? AND read = 0
+             AND delivery_contract = 'current_delivery'`
+        )
+        .get(params.runId, params.mailboxHandle)
+      sweepEnd = typeof newest?.sequence === 'number' ? newest.sequence : 0
+      rows = page.all(params.runId, params.mailboxHandle, 0, sweepEnd, limit)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Both queries select complete messages rows.
+    const messages = exposeMessageListTimestamps(rows as MessageRow[])
     if (messages.length === 0) {
       this.db.exec('COMMIT')
       return undefined
@@ -89,15 +117,16 @@ export function getOrCreateMailboxDelivery(
     this.db
       .prepare(
         `INSERT INTO deliveries (
-           id, run_id, mailbox_handle, consumer_generation, message_ids
-         ) VALUES (?, ?, ?, ?, ?)`
+           id, run_id, mailbox_handle, consumer_generation, message_ids, sweep_end_sequence
+         ) VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(
         deliveryId,
         params.runId,
         params.mailboxHandle,
         params.consumerGeneration,
-        JSON.stringify(messages.map((message) => message.id))
+        JSON.stringify(messages.map((message) => message.id)),
+        sweepEnd
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
     this.db.exec('COMMIT')
@@ -155,7 +184,11 @@ export function acknowledgeMailboxDelivery(
           `UPDATE messages
            SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
                pointer_process_incarnation = NULL
-           WHERE id IN (${placeholders})`
+           WHERE id IN (${placeholders})
+             AND NOT EXISTS (
+               SELECT 1 FROM question_threads
+               WHERE message_id = messages.id AND status = 'pending'
+             )`
         )
         .run(...messageIds)
     }

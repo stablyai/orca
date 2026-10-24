@@ -26,6 +26,50 @@ describe('OrchestrationDb Run state', () => {
   }
 
   describe('Run deliveries', () => {
+    it.each(['answered', 'closed'] as const)(
+      'keeps questions unread until %s despite batch acknowledgement',
+      (resolution) => {
+        const d = createDb()
+        const run = createBoundRun(d)
+        const task = d.createTask({ spec: 'ask', runId: run.id })
+        const dispatch = createRootDispatch(d, task.id, 'term_worker')
+        const question = d.createQuestion({
+          runId: run.id,
+          dispatchId: dispatch.id,
+          askerHandle: 'term_worker',
+          question: 'Which format?'
+        })
+        const status = d.insertMessage({
+          from: 'term_worker',
+          to: `run:${run.id}`,
+          subject: 'status',
+          runId: run.id
+        })
+        const consumer = { runId: run.id, consumerGeneration: run.consumer_generation }
+        const first = d.getOrCreateRunDelivery(consumer)!
+        expect(first.messages.map((message) => message.id)).toEqual([
+          question.message.id,
+          status.id
+        ])
+        const ack = { ...consumer, deliveryId: first.delivery.id }
+        d.acknowledgeRunDelivery(ack)
+        expect(d.acknowledgeRunDelivery(ack).duplicate).toBe(true)
+        expect(d.getMessageById(question.message.id)?.read).toBe(0)
+        expect(d.getMessageById(status.id)?.read).toBe(1)
+        const next = d.getOrCreateRunDelivery(consumer)!
+        expect(next.delivery.id).not.toBe(first.delivery.id)
+        expect(next.messages.map((message) => message.id)).toEqual([question.message.id])
+        if (resolution === 'answered') {
+          d.answerQuestion({ ...consumer, messageId: question.message.id, body: 'new' })
+        } else {
+          d.closeQuestionsForDispatch(dispatch.id)
+        }
+        d.acknowledgeRunDelivery({ ...consumer, deliveryId: next.delivery.id })
+        expect(d.getMessageById(question.message.id)?.read).toBe(1)
+        expect(d.getOrCreateRunDelivery(consumer)).toBeUndefined()
+      }
+    )
+
     it('returns one bounded FIFO batch and replays it until acknowledgment', () => {
       const d = createDb()
       const run = createBoundRun(d)

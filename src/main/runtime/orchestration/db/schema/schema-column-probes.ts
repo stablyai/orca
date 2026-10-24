@@ -9,6 +9,10 @@ export function hasColumn(this: OrchestrationDb, table: string, column: string):
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
   if (this.hasColumn('deliveries', 'mailbox_handle')) {
     this.db.exec(OUTSTANDING_MAILBOX_INDEX_SQL)
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_deliveries_acknowledged_mailbox
+        ON deliveries(mailbox_handle, consumer_generation) WHERE status = 'acknowledged';
+    `)
   }
   const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
   if (hasDeliveredAt) {
