@@ -67,6 +67,15 @@ export const WorktreeCreate = z
     // Why: the client's Keep Local Main Up to Date choice; absent (older clients) keeps the host's.
     refreshLocalBaseRefOnWorktreeCreate: z.boolean().optional(),
     localBaseRefSuggestionDismissed: z.boolean().optional(),
+    // Why: the client's Branch Prefix choice; absent (older clients) keeps the host's. An unknown
+    // strategy from a newer client also falls back instead of failing the create.
+    branchPrefix: z
+      .unknown()
+      .transform((value) =>
+        value === 'git-username' || value === 'custom' || value === 'none' ? value : undefined
+      )
+      .optional(),
+    branchPrefixCustom: z.string().optional(),
     sparseCheckout: z
       .object({
         directories: z.array(z.string()),

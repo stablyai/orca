@@ -64,6 +64,10 @@ export function buildManagedWorktreeCreateArgs(
     ...(params.localBaseRefSuggestionDismissed !== undefined
       ? { localBaseRefSuggestionDismissed: params.localBaseRefSuggestionDismissed }
       : {}),
+    ...(params.branchPrefix !== undefined ? { branchPrefix: params.branchPrefix } : {}),
+    ...(params.branchPrefixCustom !== undefined
+      ? { branchPrefixCustom: params.branchPrefixCustom }
+      : {}),
     sparseCheckout: params.sparseCheckout,
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,

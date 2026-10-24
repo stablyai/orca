@@ -225,6 +225,20 @@ describe('runtime nested-workspaces layout', () => {
   })
 })
 
+describe('runtime branch prefix choice', () => {
+  const branchSettings = (): unknown => mocks.branchName.mock.calls[0]?.[3]
+
+  it('honors the client prefix over the host default', async () => {
+    await createWorktree({ branchPrefix: 'custom', branchPrefixCustom: 'devel' })
+    expect(branchSettings()).toMatchObject({ branchPrefix: 'custom', branchPrefixCustom: 'devel' })
+  })
+
+  it('falls back to the host prefix when the client sends none', async () => {
+    await createWorktree({})
+    expect(branchSettings()).toMatchObject({ branchPrefix: '' })
+  })
+})
+
 describe('runtime keep-local-main-up-to-date choice', () => {
   const addRefreshArg = (): unknown => mocks.add.mock.calls[0]?.[4]
   const addOptions = (): AddWorktreeOptions | undefined => mocks.add.mock.calls[0]?.[6]
