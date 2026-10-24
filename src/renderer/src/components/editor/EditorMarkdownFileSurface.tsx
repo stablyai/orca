@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
+import { WithMarkdownBacklinks } from './MarkdownBacklinksPanel'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown-rich-size-limit'
 import type { MarkdownRenderState } from './markdown-render-mode'
@@ -99,42 +100,40 @@ export function EditorMarkdownFileSurface({
       : markdownDocuments.mdSave
 
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="min-h-0 flex-1">
-          {/* Why: keyed for remount like MonacoEditor; boundary contains a TipTap render crash (issue #826) to this pane. */}
-          <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
-            <RichMarkdownEditor
-              fileId={activeFile.id}
-              viewStateId={viewStateScopeId}
-              content={editorContent}
-              filePath={activeFile.filePath}
-              worktreeId={activeFile.worktreeId}
-              externalSshTargetId={activeFile.externalSshTargetId}
-              runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
-              scrollCacheKey={`${editorViewStateKey}:rich`}
-              onContentChange={onContentChange}
-              onDirtyStateHint={handleDirtyStateHint}
-              onSave={onSave}
-              onOpenDocLink={markdownDocuments.onOpenDocLink}
-              markdownDocuments={markdownDocuments.markdownDocuments}
-              showTableOfContents={showMarkdownTableOfContents}
-              onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-              markdownAnnotationFilePath={activeFile.relativePath}
-              markdownSourceLineOffset={
-                frontMatter ? getMarkdownSourceLineOffset(frontMatter.raw) : 0
-              }
-              markdownReviewContent={currentContent}
-              // Why: banner goes below the toolbar (inside the editor shell) so formatting controls stay at the top of the pane.
-              headerSlot={
-                frontMatter && showMarkdownFrontmatter ? (
-                  <FrontMatterBanner raw={frontMatter.raw} />
-                ) : null
-              }
-            />
-          </RichMarkdownErrorBoundary>
-        </div>
-      </div>
+      <WithMarkdownBacklinks activeFile={activeFile} documents={markdownDocuments}>
+        {/* Why: keyed for remount like MonacoEditor; boundary contains a TipTap render crash (issue #826) to this pane. */}
+        <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
+          <RichMarkdownEditor
+            fileId={activeFile.id}
+            viewStateId={viewStateScopeId}
+            content={editorContent}
+            filePath={activeFile.filePath}
+            worktreeId={activeFile.worktreeId}
+            externalSshTargetId={activeFile.externalSshTargetId}
+            runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+            scrollCacheKey={`${editorViewStateKey}:rich`}
+            onContentChange={onContentChange}
+            onDirtyStateHint={handleDirtyStateHint}
+            onSave={onSave}
+            onOpenDocLink={markdownDocuments.onOpenDocLink}
+            markdownDocuments={markdownDocuments.markdownDocuments}
+            showTableOfContents={showMarkdownTableOfContents}
+            onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+            markdownAnnotationFilePath={activeFile.relativePath}
+            markdownSourceLineOffset={
+              frontMatter ? getMarkdownSourceLineOffset(frontMatter.raw) : 0
+            }
+            markdownReviewContent={currentContent}
+            // Why: banner goes below the toolbar (inside the editor shell) so formatting controls stay at the top of the pane.
+            headerSlot={
+              frontMatter && showMarkdownFrontmatter ? (
+                <FrontMatterBanner raw={frontMatter.raw} />
+              ) : null
+            }
+          />
+        </RichMarkdownErrorBoundary>
+      </WithMarkdownBacklinks>
     )
   }
   if (renderMode === 'preview') {
@@ -147,7 +146,7 @@ export function EditorMarkdownFileSurface({
           </div>
         ) : null}
         {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
-        <div className="min-h-0 flex-1">
+        <WithMarkdownBacklinks activeFile={activeFile} documents={markdownDocuments}>
           <MarkdownPreview
             key={`${viewStateScopeId}:${editorViewStateKey}`}
             content={currentContent}
@@ -161,7 +160,7 @@ export function EditorMarkdownFileSurface({
             markdownAnnotationsEnabled={markdownAnnotationsEnabled}
             {...markdownDocuments.previewProps}
           />
-        </div>
+        </WithMarkdownBacklinks>
       </div>
     )
   }
