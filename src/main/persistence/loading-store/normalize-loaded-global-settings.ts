@@ -6,7 +6,7 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
-import { normalizePluginThemeSettings } from '../../../shared/plugin-theme-settings'
+import { normalizePluginOwnedSettings } from '../../../shared/plugins/plugin-owned-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
@@ -127,7 +127,7 @@ export function normalizeLoadedGlobalSettings(
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
-    ...normalizePluginThemeSettings(parsed.settings ?? {}),
+    ...normalizePluginOwnedSettings(parsed.settings ?? {}),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,

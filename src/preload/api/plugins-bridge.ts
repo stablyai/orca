@@ -44,6 +44,7 @@ export const pluginsApi = {
   removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
   refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
   listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
+  suggestForFileType: (fileType) => ipcRenderer.invoke('plugins:suggestForFileType', fileType),
   previewMarketplacePlugin: (args) => ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
   installMarketplacePlugin: (preview) =>
     ipcRenderer.invoke('plugins:installMarketplacePlugin', preview),

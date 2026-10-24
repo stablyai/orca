@@ -7,6 +7,9 @@ import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-i
 import type { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../plugins/plugin-marketplace-store'
 import type { PluginService } from '../plugins/plugin-service'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { pluginFileTypeSchema } from '../../shared/plugins/plugin-file-type'
+import { findPluginFileTypeSuggestion } from '../plugins/plugin-file-type-suggestion'
 
 export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
@@ -30,8 +33,22 @@ const installedPluginSchema = z.strictObject({
 
 export function registerPluginMarketplaceHandlers(
   pluginService: PluginService,
-  services: PluginMarketplaceHandlerServices
+  services: PluginMarketplaceHandlerServices,
+  getSettings: () => GlobalSettings
 ): void {
+  // Why cached only: this runs on every file open, which must never wait on a catalog fetch.
+  ipcMain.handle('plugins:suggestForFileType', async (_event, fileType: unknown) => {
+    const parsed = pluginFileTypeSchema.safeParse(fileType)
+    if (!parsed.success) {
+      return null
+    }
+    return findPluginFileTypeSuggestion({
+      fileType: parsed.data,
+      settings: getSettings(),
+      listings: await services.marketplace.listCachedPlugins(),
+      installed: pluginService.getDiscovered()
+    })
+  })
   ipcMain.handle('plugins:listMarketplaces', () => services.marketplace.listSources())
   ipcMain.handle('plugins:addMarketplace', async (_event, args: unknown) => {
     const source = pluginMarketplaceGitSourceSchema.parse(args)

@@ -19,6 +19,7 @@ import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import type { FileContent } from './editor-panel-content-types'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
@@ -152,11 +153,14 @@ export function EditorEditFileSurface({
       )
     }
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        {translate(
-          'auto.components.editor.EditorContent.b9de81ba52',
-          'Binary file — cannot display'
-        )}
+      <div className="flex h-full flex-col">
+        <PluginFileTypeSuggestion filePath={activeFile.filePath} />
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          {translate(
+            'auto.components.editor.EditorContent.b9de81ba52',
+            'Binary file — cannot display'
+          )}
+        </div>
       </div>
     )
   }
@@ -305,6 +309,9 @@ export function EditorEditFileSurface({
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {externalChangeBanner}
+      {monacoLanguage === 'plaintext' ? (
+        <PluginFileTypeSuggestion filePath={activeFile.filePath} />
+      ) : null}
       {activeFile.conflict && (
         <ConflictBanner
           file={activeFile}

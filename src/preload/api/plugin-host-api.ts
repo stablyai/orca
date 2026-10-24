@@ -130,6 +130,13 @@ export type PluginMarketplaceHostListing = {
   blockedByKillList?: { reason: string; advisoryUrl?: string }
 }
 
+export type PluginFileTypeHostSuggestion = {
+  marketplaceSourceId: string
+  pluginKey: string
+  fileType: string
+  name?: string
+}
+
 export type PluginMarketplaceHostInstallPreview = {
   marketplaceSourceId: string
   marketplaceName: string
@@ -179,6 +186,8 @@ export type PluginsApi = {
   removeMarketplace: (args: { sourceId: string }) => Promise<PluginMarketplaceHostSourceState[]>
   refreshMarketplaces: (args?: { sourceId?: string }) => Promise<PluginMarketplaceHostSourceState[]>
   listMarketplacePlugins: () => Promise<PluginMarketplaceHostListing[]>
+  /** A catalog plugin that opens this file type, from cached catalogs only; never installs. */
+  suggestForFileType: (fileType: string) => Promise<PluginFileTypeHostSuggestion | null>
   previewMarketplacePlugin: (args: {
     marketplaceSourceId: string
     pluginKey: string

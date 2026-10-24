@@ -12111,7 +12111,9 @@
           "experimental": "实验性",
           "description": "主题、语言、命令等。插件在这台电脑上运行。",
           "logsFailed": "无法加载插件日志。",
-          "rollbackFailed": "无法回滚此插件。"
+          "rollbackFailed": "无法回滚此插件。",
+          "fileTypeSuggestionsLabel": "为未知文件推荐插件",
+          "fileTypeSuggestionsDescription": "当 Orca 无法打开或高亮文件时，推荐插件市场中的插件。"
         },
         "PluginSettingsRow": {
           "blocked": "已阻止",
@@ -16588,6 +16590,12 @@
         },
         "EditorPanelActionsMenu": {
           "fileActions": "文件操作"
+        },
+        "PluginFileTypeSuggestion": {
+          "message": "有插件可以打开 .{{value0}} 文件：{{value1}}",
+          "view": "查看插件",
+          "notNow": "暂不",
+          "never": "不再为 .{{value0}} 建议"
         }
       },
       "diff": {

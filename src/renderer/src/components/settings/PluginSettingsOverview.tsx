@@ -6,6 +6,7 @@ import { PluginDevelopmentSection } from './PluginDevelopmentSection'
 import { PluginMarketplaceBrowser } from './PluginMarketplaceBrowser'
 import { PluginSettingsRow, type PluginLogsState } from './PluginSettingsRow'
 import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
+import { PluginFileTypeSuggestionSetting } from './PluginFileTypeSuggestionSetting'
 
 type PluginSettingsOverviewProps = {
   featureEnabled: boolean
@@ -84,6 +85,7 @@ export function PluginSettingsOverview({
           />
         }
       />
+      {featureEnabled ? <PluginFileTypeSuggestionSetting /> : null}
       {settingsError ? <p className="text-xs text-destructive">{settingsError}</p> : null}
       {featureEnabled ? <div className="my-4 border-t border-border/60" /> : null}
       {!featureEnabled ? null : loading ? (

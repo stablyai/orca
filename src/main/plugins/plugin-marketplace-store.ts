@@ -66,6 +66,7 @@ export class PluginMarketplaceStore {
   private readonly snapshotDirectory: string
   private sources: PluginMarketplaceRegisteredSource[] | null = null
   private writeChain: Promise<void> = Promise.resolve()
+  private readonly snapshots = new Map<string, Promise<PluginMarketplaceCachedSnapshot | null>>()
 
   constructor(pluginsDataDir: string) {
     const root = join(pluginsDataDir, 'marketplaces')
@@ -109,6 +110,7 @@ export class PluginMarketplaceStore {
       return next
     })
     if (removed) {
+      this.snapshots.delete(parsedId)
       await rm(this.snapshotPath(parsedId), { force: true })
       await rm(this.legacySnapshotPath(parsedId), { force: true })
     }
@@ -130,16 +132,31 @@ export class PluginMarketplaceStore {
       marketplace: input.marketplace
     })
     await writeAtomicJson(this.snapshotPath(input.source.id), snapshot)
+    this.snapshots.set(input.source.id, Promise.resolve(snapshot))
     return snapshot
   }
 
+  /** Parsed once per process; every write goes through this store, which keeps it current. */
   async readSnapshot(sourceId: string): Promise<PluginMarketplaceCachedSnapshot | null> {
     const parsedId = sourceIdSchema.parse(sourceId)
+    let snapshot = this.snapshots.get(parsedId)
+    if (!snapshot) {
+      snapshot = this.readSnapshotFromDisk(parsedId)
+      this.snapshots.set(parsedId, snapshot)
+      // Why: a failed read must be retried, not cached.
+      void snapshot.catch(() => this.snapshots.delete(parsedId))
+    }
+    return snapshot
+  }
+
+  private async readSnapshotFromDisk(
+    sourceId: string
+  ): Promise<PluginMarketplaceCachedSnapshot | null> {
     return (
-      (await this.readSnapshotFile(this.snapshotPath(parsedId), parsedId, cachedSnapshotSchema)) ??
+      (await this.readSnapshotFile(this.snapshotPath(sourceId), sourceId, cachedSnapshotSchema)) ??
       (await this.readSnapshotFile(
-        this.legacySnapshotPath(parsedId),
-        parsedId,
+        this.legacySnapshotPath(sourceId),
+        sourceId,
         legacySnapshotSchema
       ))
     )

@@ -12111,7 +12111,9 @@
           "experimental": "実験的機能",
           "description": "テーマ、言語、コマンドなど。プラグインはこのコンピューターで実行されます。",
           "logsFailed": "プラグインログをロードできませんでした。",
-          "rollbackFailed": "このプラグインを以前のバージョンに戻せませんでした。"
+          "rollbackFailed": "このプラグインを以前のバージョンに戻せませんでした。",
+          "fileTypeSuggestionsLabel": "不明なファイルにプラグインを提案",
+          "fileTypeSuggestionsDescription": "Orca で開けない、またはハイライトできないファイルにカタログのプラグインを提案します。"
         },
         "PluginSettingsRow": {
           "blocked": "ブロック中",
@@ -16588,6 +16590,12 @@
         },
         "EditorPanelActionsMenu": {
           "fileActions": "ファイル操作"
+        },
+        "PluginFileTypeSuggestion": {
+          "message": ".{{value0}} ファイルを開けるプラグインがあります: {{value1}}",
+          "view": "プラグインを表示",
+          "notNow": "今はしない",
+          "never": ".{{value0}} では提案しない"
         }
       },
       "diff": {

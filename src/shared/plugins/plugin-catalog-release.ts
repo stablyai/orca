@@ -4,6 +4,7 @@ import {
   pluginExecutionProfileSchema,
   type PluginExecutionProfile
 } from './plugin-execution-profile'
+import { pluginFileTypeSchema } from './plugin-file-type'
 import type { PluginManifest } from './plugin-manifest'
 
 // Why only installable types: a catalog entry naming any other type fails to parse, so the
@@ -41,7 +42,19 @@ export const pluginCatalogReleaseSchema = z
       .array(z.enum(PLUGIN_CATALOG_TYPES))
       .min(1)
       .max(PLUGIN_CATALOG_TYPES.length)
-      .refine((types) => new Set(types).size === types.length, 'duplicate contribution type')
+      .refine((types) => new Set(types).size === types.length, 'duplicate contribution type'),
+    /** The plugin's name, so a suggestion can show it before anything is downloaded. */
+    name: z.string().min(1).max(128).optional(),
+    /** Extensions this release can open, for suggesting it when such a file has no viewer. Invalid
+     *  entries are dropped, not fatal, so a newer catalog never hides the plugin. */
+    fileTypes: z
+      .array(z.unknown())
+      .transform((entries) =>
+        [...new Set(entries)]
+          .filter((entry): entry is string => pluginFileTypeSchema.safeParse(entry).success)
+          .slice(0, 32)
+      )
+      .optional()
   })
   .superRefine((release, ctx) => {
     for (const [index, type] of release.types.entries()) {
@@ -117,6 +130,18 @@ export function pluginCatalogReleaseError(input: {
   const declared = [...release.types].sort().join()
   if (pluginCatalogTypes(manifest).sort().join() !== declared) {
     return 'contributions do not match the catalog release'
+  }
+  // Why: a suggestion must lead to a plugin that really handles the file.
+  const handled = new Set(
+    manifest.contributes.syntaxes.flatMap((syntax) =>
+      syntax.extensions.map((extension) => extension.slice(1).toLowerCase())
+    )
+  )
+  if (release.name !== undefined && release.name !== manifest.name) {
+    return 'plugin name does not match the catalog release'
+  }
+  if (release.fileTypes?.some((fileType) => !handled.has(fileType))) {
+    return 'file types do not match the catalog release'
   }
   return null
 }

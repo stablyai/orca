@@ -12415,7 +12415,9 @@
           "experimental": "Experimental",
           "description": "Themes, languages, commands, and more. Plugins run on this computer.",
           "logsFailed": "Could not load plugin logs.",
-          "rollbackFailed": "Couldn't roll back this plugin."
+          "rollbackFailed": "Couldn't roll back this plugin.",
+          "fileTypeSuggestionsLabel": "Suggest plugins for unknown files",
+          "fileTypeSuggestionsDescription": "Offer a catalog plugin when Orca can’t open or highlight a file."
         },
         "PluginSettingsRow": {
           "blocked": "Blocked",
@@ -16918,6 +16920,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "PluginFileTypeSuggestion": {
+          "message": "A plugin can open .{{value0}} files: {{value1}}",
+          "view": "View plugin",
+          "notNow": "Not now",
+          "never": "Don't suggest for .{{value0}}"
         }
       },
       "diff": {

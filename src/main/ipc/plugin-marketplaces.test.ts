@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../shared/constants'
 import type { PluginMarketplaceInstaller } from '../plugins/plugin-marketplace-installer'
 import type { PluginMarketplaceService } from '../plugins/plugin-marketplace-service'
 import type { PluginService } from '../plugins/plugin-service'
@@ -64,7 +65,9 @@ beforeEach(() => {
 
 describe('plugin marketplace IPC authority', () => {
   it('validates every mutating or plugin-selecting request strictly', async () => {
-    registerPluginMarketplaceHandlers(createPluginService(), createServices())
+    registerPluginMarketplaceHandlers(createPluginService(), createServices(), () =>
+      getDefaultSettings('/tmp')
+    )
 
     await expect(
       invoke('plugins:addMarketplace', {
@@ -107,7 +110,9 @@ describe('plugin marketplace IPC authority', () => {
 
   it('dispatches source listing, add, removal, and refresh operations', async () => {
     const services = createServices()
-    registerPluginMarketplaceHandlers(createPluginService(), services)
+    registerPluginMarketplaceHandlers(createPluginService(), services, () =>
+      getDefaultSettings('/tmp')
+    )
     const source = {
       kind: 'git' as const,
       url: 'https://example.com/marketplace.git',
@@ -132,7 +137,7 @@ describe('plugin marketplace IPC authority', () => {
   it('refreshes discovery only after a successful install', async () => {
     const services = createServices()
     const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(pluginService, services)
+    registerPluginMarketplaceHandlers(pluginService, services, () => getDefaultSettings('/tmp'))
     const preview = {
       marketplaceSourceId: SOURCE_ID,
       marketplaceCommit: MARKETPLACE_COMMIT,
@@ -153,7 +158,7 @@ describe('plugin marketplace IPC authority', () => {
   it('deactivates before rollback and refreshes discovery only on success', async () => {
     const services = createServices()
     const pluginService = createPluginService()
-    registerPluginMarketplaceHandlers(pluginService, services)
+    registerPluginMarketplaceHandlers(pluginService, services, () => getDefaultSettings('/tmp'))
 
     await invoke('plugins:rollbackMarketplacePlugin', { pluginKey: PLUGIN_KEY })
 

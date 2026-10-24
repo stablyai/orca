@@ -109,6 +109,36 @@ describe('catalog releases', () => {
     expect(check(record, manifest({ execution: 'instructional' }))).toContain('contributions')
   })
 
+  it('accepts file types only when a syntax in the release handles them', () => {
+    const syntaxManifest = manifest({
+      contributes: {
+        syntaxes: [
+          {
+            id: 'typ',
+            label: 'Typst',
+            scopeName: 'source.typst',
+            path: 't.json',
+            extensions: ['.Typ']
+          }
+        ]
+      }
+    })
+    expect(check(release({ types: ['syntax'], fileTypes: ['typ'] }), syntaxManifest)).toBeNull()
+    expect(check(release({ types: ['syntax'], fileTypes: ['typ', 'gleam'] }), syntaxManifest)).toBe(
+      'file types do not match the catalog release'
+    )
+    // A newer catalog's odd entries are dropped instead of hiding the whole release.
+    expect(
+      pluginCatalogReleaseSchema.parse({
+        ...release(),
+        fileTypes: ['.typ', 'typ', 7, 'typ', ...Array.from({ length: 40 }, (_, i) => `t${i}`)]
+      }).fileTypes
+    ).toEqual(['typ', ...Array.from({ length: 31 }, (_, i) => `t${i}`)])
+    expect(check(release({ types: ['syntax'], name: 'Other' }), syntaxManifest)).toBe(
+      'plugin name does not match the catalog release'
+    )
+  })
+
   it('requires a v2 manifest', () => {
     const v1 = parsePluginManifest({ ...manifestInput(), manifestVersion: 1, execution: undefined })
     if (!v1.ok) {

@@ -12262,7 +12262,9 @@
           "experimental": "Expérimental",
           "description": "Thèmes, langues, commandes et plus encore. Les plugins s'exécutent sur cet ordinateur.",
           "logsFailed": "Impossible de charger les logs du plugin.",
-          "rollbackFailed": "Impossible de restaurer la version précédente de ce plugin."
+          "rollbackFailed": "Impossible de restaurer la version précédente de ce plugin.",
+          "fileTypeSuggestionsLabel": "Suggérer des plugins pour les fichiers inconnus",
+          "fileTypeSuggestionsDescription": "Propose un plugin du catalogue quand Orca ne peut pas ouvrir ou colorer un fichier."
         },
         "PluginSettingsRow": {
           "blocked": "Bloquée",
@@ -16748,6 +16750,12 @@
         },
         "EditorPanelActionsMenu": {
           "fileActions": "Actions sur le fichier"
+        },
+        "PluginFileTypeSuggestion": {
+          "message": "Un plugin peut ouvrir les fichiers .{{value0}} : {{value1}}",
+          "view": "Voir le plugin",
+          "notNow": "Pas maintenant",
+          "never": "Ne plus suggérer pour .{{value0}}"
         }
       },
       "diff": {

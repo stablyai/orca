@@ -12111,7 +12111,9 @@
           "experimental": "실험적",
           "description": "테마, 언어, 명령 등. 플러그인은 이 컴퓨터에서 실행됩니다.",
           "logsFailed": "플러그인 로그를 로드할 수 없습니다.",
-          "rollbackFailed": "이 플러그인을 롤백할 수 없습니다."
+          "rollbackFailed": "이 플러그인을 롤백할 수 없습니다.",
+          "fileTypeSuggestionsLabel": "알 수 없는 파일에 플러그인 제안",
+          "fileTypeSuggestionsDescription": "Orca가 열거나 강조할 수 없는 파일에 카탈로그 플러그인을 제안합니다."
         },
         "PluginSettingsRow": {
           "blocked": "차단됨",
@@ -16588,6 +16590,12 @@
         },
         "EditorPanelActionsMenu": {
           "fileActions": "파일 작업"
+        },
+        "PluginFileTypeSuggestion": {
+          "message": ".{{value0}} 파일을 열 수 있는 플러그인: {{value1}}",
+          "view": "플러그인 보기",
+          "notNow": "나중에",
+          "never": ".{{value0}}에 대해 제안하지 않기"
         }
       },
       "diff": {

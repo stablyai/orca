@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Blocks, Loader2, RefreshCw, SearchX, Settings2, Store } from 'lucide-react'
 import type {
   PluginHostListEntry,
@@ -19,6 +19,7 @@ import {
   type PluginMarketplacePreviewMode
 } from './PluginMarketplacePreviewDialog'
 import { PluginMarketplaceSourceDialog } from './PluginMarketplaceSourceDialog'
+import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
 
 type PluginMarketplaceBrowserProps = {
   installedPlugins: readonly PluginHostListEntry[]
@@ -178,6 +179,27 @@ export function PluginMarketplaceBrowser({
       }
     }
   }
+
+  const previewRequest = usePluginPreviewRequestStore((state) => state.request)
+  const openPreviewRef = useRef(openPreview)
+  useLayoutEffect(() => {
+    openPreviewRef.current = openPreview
+  })
+  useEffect(() => {
+    if (!previewRequest || loading) {
+      return
+    }
+    // Why clear even without a match: a request that can't be served must not pop open later.
+    usePluginPreviewRequestStore.setState({ request: null })
+    const listing = listings.find(
+      (candidate) =>
+        candidate.marketplaceSourceId === previewRequest.marketplaceSourceId &&
+        candidate.pluginKey === previewRequest.pluginKey
+    )
+    if (listing) {
+      void openPreviewRef.current(listing, false)
+    }
+  }, [previewRequest, listings, loading])
 
   const installPreview = async (): Promise<void> => {
     if (!preview || installBusy) {
