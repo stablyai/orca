@@ -33,6 +33,11 @@ export function hostedReviewOptionArgs(
     ...(candidate.localGitOptions?.wslDistro
       ? { wslDistro: candidate.localGitOptions.wslDistro }
       : {}),
+    // Why: dropping the binding here silently runs every background sidebar PR
+    // lookup as the ambient gh login instead of the repo's bound account (#27287).
+    ...(candidate.localGitOptions?.ghAccount
+      ? { ghAccount: candidate.localGitOptions.ghAccount }
+      : {}),
     admissionTier: admissionTierForRefreshReason(reason)
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
