@@ -96,7 +96,7 @@ export function touchSlopExceeded(scope: TerminalDocumentScope, t: Touch) {
 // Why: existing surface handlers stay attached to surface but we wrap
 // their entry to no-op when the dispatcher latches into select-drag.
 export function dispatcherShouldBlockSurface(scope: TerminalDocumentScope) {
-  return scope.touchDispatch.mode === 'select-drag'
+  return !scope.interactionActive || scope.touchDispatch.mode === 'select-drag'
 }
 
 /**
@@ -113,7 +113,7 @@ const CAPTURE_PASSIVE = { capture: true, passive: true }
  * touch, so a select-drag that travels outside the host still answers yes on move and end.
  */
 function touchIsThisDocuments(scope: TerminalDocumentScope, e: { target: EventTarget | null }) {
-  return eventTargetInRoot(scope.root, e.target)
+  return scope.interactionActive && eventTargetInRoot(scope.root, e.target)
 }
 
 function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {

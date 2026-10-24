@@ -155,6 +155,7 @@ export type TerminalDocumentState = {
   /** `selection-overlay`: where the pending long press started. */
   longPressOrigin: TerminalDocumentTouchOrigin | null
   /** `selection-overlay`: the touch that may still resolve as a tap. */
+  interactionActive: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
   /** `bottom-row-backdrop`: the fill last painted under the grid, so an unchanged one is not rewritten. */
   bottomRowBackdrop: string
@@ -306,6 +307,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     sel: null,
     longPressTimer: null,
     longPressOrigin: null,
+    interactionActive: true,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',

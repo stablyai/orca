@@ -53,6 +53,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    interactionActive = true,
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -139,10 +140,12 @@ export function useTerminalWebViewController(
       }
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
+      interactionActive,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,
@@ -151,6 +154,12 @@ export function useTerminalWebViewController(
       terminalTheme
     ]
   )
+
+  useEffect(() => {
+    if (isWebReadyRef.current) {
+      sendToDocument({ type: 'set-interaction-active', active: interactionActive })
+    }
+  }, [sendToDocument, interactionActive])
 
   /** One notify from the document, already parsed. */
   const receive = useCallback(
@@ -194,16 +203,17 @@ export function useTerminalWebViewController(
           onModesChanged,
           onKeyboardAvoidanceMetrics,
           onHaptic,
-          onTerminalInput,
-          onTerminalTap,
-          onFileTap,
-          onOpenUrl,
+          onTerminalInput: interactionActive ? onTerminalInput : undefined,
+          onTerminalTap: interactionActive ? onTerminalTap : undefined,
+          onFileTap: interactionActive ? onFileTap : undefined,
+          onOpenUrl: interactionActive ? onOpenUrl : undefined,
           onTextScaleChange
         })
       }
     },
     [
       confirmWebReady,
+      interactionActive,
       promises,
       reportEngineError,
       onSelectionMode,
