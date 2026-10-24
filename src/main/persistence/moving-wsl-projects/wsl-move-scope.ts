@@ -39,7 +39,7 @@ type WslMoveScopeState = {
 export function collectWslMoveScope(state: WslMoveScopeState, distro: string): WslMoveScope {
   const scope: WslMoveScope = { repoIds: [], folderWorkspaceIds: [], refused: [] }
   for (const repo of state.repos) {
-    const paths = repoPaths(repo)
+    const paths = wslMoveRepoPaths(repo)
     // A repo outside the distro that keeps any path inside it is refused, not skipped.
     if (!paths.some((path) => wslUncPathToLinux(path, distro) !== null)) {
       continue
@@ -74,7 +74,7 @@ export function collectWslMoveScope(state: WslMoveScopeState, distro: string): W
 }
 
 /** Every absolute path a repo row keeps; each must stay in the distro after the move. */
-function repoPaths(repo: Repo): string[] {
+export function wslMoveRepoPaths(repo: Repo): string[] {
   const base = repo.worktreeBasePath
     ? resolveWslRepoWorktreeBasePath(repo.path, repo.worktreeBasePath)
     : undefined
