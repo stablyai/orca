@@ -39,7 +39,7 @@ describe('installTerminalNativeCopyGutterTrim', () => {
   })
 
   // Why: xterm's own `copy` listener writes raw screen cells, so a native copy
-  // Orca does not bind (Ctrl+Insert on Windows/Linux) would carry the gutter.
+  // Orca does not bind (a chord the user removed) would carry the gutter.
   it('writes the un-guttered text for a native copy event', () => {
     const terminal = makeTerminal(GUTTERED)
     installTerminalNativeCopyGutterTrim(terminal)

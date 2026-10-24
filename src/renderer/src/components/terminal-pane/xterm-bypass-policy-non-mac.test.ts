@@ -87,6 +87,12 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
     ).toBe(true)
   })
 
+  it('bubbles Ctrl+Insert only when there is a selection (otherwise the program gets it)', () => {
+    const ctrlInsert = event({ key: 'Insert', code: 'Insert', ctrlKey: true })
+    expect(shouldBypassXtermKeyboardEvent(ctrlInsert, withSel)).toBe(true)
+    expect(shouldBypassXtermKeyboardEvent(ctrlInsert, noSel)).toBe(false)
+  })
+
   it('does not bubble plain Ctrl letter chords — shell shortcuts must reach PTY', () => {
     // Ctrl+A, Ctrl+E, Ctrl+U, Ctrl+R, Ctrl+L — all readline-critical.
     for (const keyCode of ['a', 'e', 'u', 'r', 'l']) {
