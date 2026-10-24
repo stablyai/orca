@@ -120,6 +120,11 @@ declare module 'monaco-editor/esm/vs/editor/browser/widget/diffEditor/utils/edit
   }
 }
 
+// Only the diff-editor hover factory patch test calls this (config/patches/monaco-editor@0.55.1.patch).
+declare module 'monaco-editor/esm/vs/base/browser/ui/hover/hoverDelegateFactory.js' {
+  export function createInstantHoverDelegate(): { dispose(): void }
+}
+
 declare global {
   /** Full commit the build was made from, stamped by the renderer build. */
   const ORCA_BUILD_COMMIT: string
