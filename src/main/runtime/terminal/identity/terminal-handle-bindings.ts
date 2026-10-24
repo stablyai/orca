@@ -179,6 +179,14 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
+    // Why: a live PTY's own handle outlives the pane showing it; its exit settles the waiters.
+    if (
+      record?.ptyId &&
+      this.handleByPtyId.get(record.ptyId) === handle &&
+      this.ptysById.get(record.ptyId)?.connected
+    ) {
+      return
+    }
     this.syntheticTerminalHandles.delete(handle)
     this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
   }
