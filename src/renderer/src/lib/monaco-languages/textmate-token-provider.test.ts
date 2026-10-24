@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
+import { loadGroovyTextMateGrammar } from './register-groovy'
 import { loadNimTextMateGrammar } from './register-nim'
 import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
@@ -19,6 +20,50 @@ describe('createTextMateTokensProvider', () => {
     const commentLine = provider.tokenize('# hello', provider.getInitialState())
     expect(commentLine.tokens.map((token) => token.scopes)).toContain(
       'comment.line.number-sign.nim'
+    )
+  })
+
+  it('tokenizes Groovy and Jenkinsfile code through the lazy grammar loader', async () => {
+    const provider = await createTextMateTokensProvider({
+      loadGrammar: loadGroovyTextMateGrammar
+    })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('def greeting = "Hello ${name}"')).toEqual(
+      expect.arrayContaining([
+        'storage.type.def.groovy',
+        'string.quoted.double.groovy',
+        'source.groovy.embedded.source'
+      ])
+    )
+    expect(scopesOf("@Library('shared') _")).toEqual(
+      expect.arrayContaining(['storage.type.annotation.groovy', 'string.quoted.single.groovy'])
+    )
+    expect(scopesOf('def pattern = /hello\\d+/')).toContain('string.regexp.groovy')
+    expect(scopesOf('#!/usr/bin/env groovy')).toContain('comment.line.hashbang.groovy')
+    expect(scopesOf("stage('Build') {")).toContain('string.quoted.single.groovy')
+
+    const commentStart = provider.tokenize('/* build step', provider.getInitialState())
+    const commentBody = provider.tokenize('class Build { def value = 42 }', commentStart.endState)
+    expect(commentBody.tokens.map((token) => token.scopes)).toEqual(['comment.block.groovy'])
+    const commentEnd = provider.tokenize('*/ def value = 42', commentBody.endState)
+    expect(commentEnd.tokens.map((token) => token.scopes)).toContain('constant.numeric.groovy')
+
+    const stringStart = provider.tokenize('def script = """hello', provider.getInitialState())
+    const stringBody = provider.tokenize('class Build ${name}', stringStart.endState)
+    expect(stringBody.tokens.map((token) => token.scopes)).toContain(
+      'string.quoted.double.multiline.groovy'
+    )
+    expect(stringBody.tokens.map((token) => token.scopes)).toContain(
+      'source.groovy.embedded.source'
+    )
+    const stringEnd = provider.tokenize('"""; int value = 42', stringBody.endState)
+    expect(stringEnd.tokens.map((token) => token.scopes)).toContain('constant.numeric.groovy')
+
+    expect(scopesOf('// build step')).toContain('comment.line.double-slash.groovy')
+    expect(scopesOf('/* block */ int x = 42')).toEqual(
+      expect.arrayContaining(['comment.block.groovy', 'constant.numeric.groovy'])
     )
   })
 
@@ -114,6 +159,7 @@ describe('createTextMateTokensProvider', () => {
   })
 
   it.each([
+    ['Groovy', loadGroovyTextMateGrammar, '/*'.repeat(40000), 'def value = 42'],
     ['Nim', loadNimTextMateGrammar, 'abcdefghij'.repeat(8000), 'proc greet() = discard'],
     ['Typst', loadTypstTextMateGrammar, '#let x = 12pt; *b* $x^2$ '.repeat(2000), '#let y = 2']
   ])(

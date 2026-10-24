@@ -1,0 +1,20 @@
+textmate/groovy.tmbundle (as converted in microsoft/vscode extensions/groovy)
+
+Source: https://github.com/microsoft/vscode/blob/1.105.0/extensions/groovy/syntaxes/groovy.tmLanguage.json
+Upstream grammar: https://github.com/textmate/groovy.tmbundle/commit/85d8f7c97ae473ccb9473f6c8d27e4ec957f4be1
+License: https://github.com/microsoft/vscode/blob/1.105.0/ThirdPartyNotices.txt
+Modifications by Orca: JSON formatting only.
+
+Copyright (c) textmate-groovy.tmbundle project authors
+
+If not otherwise specified (see below), files in this repository fall under the following license:
+
+Permission to copy, use, modify, sell and distribute this
+software is granted. This software is provided "as is" without
+express or implied warranty, and with no claim as to its
+suitability for any purpose.
+
+An exception is made for files in readable text which contain their own license information,
+or files where an accompanying file exists (in the same directory) with a "-license" suffix added
+to the base-name name of the original file, and an extension of txt, html, or similar. For example
+"tidy" is accompanied by "tidy-license.txt".

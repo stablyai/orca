@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
+import { detectLanguage } from '@/lib/language-detect'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -37,7 +38,7 @@ export default function DiffViewer({
   modifiedModelKey,
   originalContent,
   modifiedContent,
-  language,
+  language: filenameLanguage,
   filePath,
   relativePath,
   sideBySide,
@@ -52,6 +53,10 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
+  const language =
+    filenameLanguage === 'plaintext'
+      ? detectLanguage(relativePath, modifiedContent || originalContent)
+      : filenameLanguage
   const settings = useAppStore((s) => s.settings)
   const isDark = useDocumentDarkTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)

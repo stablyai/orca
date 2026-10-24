@@ -93,6 +93,12 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.lua': 'lua',
   '.r': 'r',
   '.scala': 'scala',
+  '.groovy': 'groovy',
+  '.gvy': 'groovy',
+  '.gy': 'groovy',
+  '.gsh': 'groovy',
+  '.gradle': 'groovy',
+  '.jenkinsfile': 'groovy',
   '.dart': 'dart',
   '.ex': 'elixir',
   '.exs': 'elixir',
@@ -123,6 +129,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
 
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
+  Jenkinsfile: 'groovy',
   Makefile: 'makefile',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
@@ -149,7 +156,20 @@ const FILENAME_LOWER_TO_LANGUAGE: Record<string, string> = Object.fromEntries(
   Object.entries(FILENAME_TO_LANGUAGE).map(([name, language]) => [name.toLowerCase(), language])
 )
 
-export function detectLanguage(filePath: string): string {
+function detectGroovyShebang(content: string): string | undefined {
+  if (!content.startsWith('#!')) {
+    return undefined
+  }
+  // Limit inspection to a short first line, including for malformed files with no newline.
+  const firstLine = content.slice(0, 512).split(/[\r\n]/, 1)[0]
+  if (firstLine.length === 512) {
+    return undefined
+  }
+  const interpreter = /^#![ \t]*\/(?:[^\s/]+\/)*(?:groovy|env[ \t]+(?:-S[ \t]+)?groovy)(?:[ \t]|$)/
+  return interpreter.test(firstLine) ? 'groovy' : undefined
+}
+
+export function detectLanguage(filePath: string, content?: string): string {
   // Check exact filename first
   const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!
@@ -168,6 +188,9 @@ export function detectLanguage(filePath: string): string {
   return (
     EXT_TO_LANGUAGE[ext] ??
     detectMonacoFilenameLanguage(filename) ??
-    (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : 'plaintext')
+    (lowerName.startsWith('jenkinsfile.') ? 'groovy' : undefined) ??
+    (lowerName === '.env' || lowerName.startsWith('.env.') ? 'ini' : undefined) ??
+    (content === undefined ? undefined : detectGroovyShebang(content)) ??
+    'plaintext'
   )
 }
