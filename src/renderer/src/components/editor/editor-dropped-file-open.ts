@@ -13,6 +13,7 @@ import { translate } from '@/i18n/i18n'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -213,7 +214,7 @@ async function openEditorFileDropPaths(
     try {
       // Why: OS file drops provide client-local paths. Remote runtime and
       // SSH editors must upload into the server worktree before opening.
-      const destinationDir = joinPath(worktreePath, '.orca/drops')
+      const destinationDir = joinPath(worktreePath, DROP_STAGING_RELATIVE_DIR)
       const { results } = await importExternalPathsToRuntime(
         fileContext,
         [...paths],
