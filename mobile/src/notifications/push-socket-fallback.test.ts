@@ -241,6 +241,19 @@ describe('presentSocketNotificationFallback', () => {
     expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
 
+  it('ignores terminal-bell notifications so phone alerts stay scoped to agent events', async () => {
+    await presentSocketNotificationFallback(
+      alert({ source: 'terminal-bell', title: 'Bell in orca', body: 'Attention requested' }),
+      'host-1'
+    )
+    await presentSocketNotificationFallback(
+      alert({ title: 'Bell in orca', body: 'Attention requested' }),
+      'host-1'
+    )
+    expect(mocks.schedule).not.toHaveBeenCalled()
+    expect(getCurrentInAppNotificationBanner()).toBeNull()
+  })
+
   it('does not schedule or show in-app banner when eligibility flips the subscription to disposed', async () => {
     let disposed = false
     mocks.eligible.mockImplementation(async () => {

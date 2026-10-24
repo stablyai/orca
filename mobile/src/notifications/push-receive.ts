@@ -48,6 +48,10 @@ export function resetForegroundPushClaimsForTests(): void {
 export async function foregroundNotificationBehavior(
   notification: Pick<Notification, 'request'>
 ): Promise<NotificationBehavior> {
+  const rawTitle = (notification.request as { readonly content?: { readonly title?: unknown } })
+    ?.content?.title
+  const isTerminalBellTitle =
+    typeof rawTitle === 'string' && rawTitle.trim().startsWith('Bell in ')
   const data = readNativeNotificationData(notification.request)
   const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
@@ -57,7 +61,8 @@ export async function foregroundNotificationBehavior(
     payload,
     preferences.suppressWhileViewing
   ).catch(() => payload !== null)
-  const suppressed = ineligible || (payload !== null && !claimForegroundPush(payload))
+  const suppressed =
+    isTerminalBellTitle || ineligible || (payload !== null && !claimForegroundPush(payload))
   return {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,

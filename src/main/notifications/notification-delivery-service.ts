@@ -98,7 +98,8 @@ export function createNotificationDeliveryService(
       if (
         !request.mobileDeliveredByHost &&
         deps.dispatchMobileNotification &&
-        request.source !== 'test'
+        request.source !== 'test' &&
+        request.source !== 'terminal-bell'
       ) {
         if (
           reserveNotificationCooldown(

@@ -104,6 +104,9 @@ export async function presentSocketNotificationFallback(
   if (title.length === 0 && body.length === 0) {
     return
   }
+  if (event.source === 'terminal-bell' || title.startsWith('Bell in ')) {
+    return
+  }
   if (await isHostPushRegistered(hostId)) {
     return
   }
