@@ -9,7 +9,7 @@ import {
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { buildAttentionQueue, type AttentionTarget } from '@/lib/next-attention-queue'
 import { pickNextAttentionTarget, type AttentionPosition } from '@/lib/next-attention-target'
-import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
