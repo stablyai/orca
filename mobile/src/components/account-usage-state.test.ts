@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getActiveAdditionalProviders,
+  getAdditionalProviderUsageRows,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasAnyRenderableUsage,
   hasRenderableUsage,
   type AccountsSnapshot,
   type InactiveAccountUsage,
@@ -32,6 +35,7 @@ function makeSnapshot(
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
     inactiveCodexAccounts?: InactiveAccountUsage[]
+    extraRateLimits?: Partial<AccountsSnapshot['rateLimits']>
   } = {}
 ): AccountsSnapshot {
   return {
@@ -51,7 +55,8 @@ function makeSnapshot(
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
-      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? []
+      inactiveCodexAccounts: overrides.inactiveCodexAccounts ?? [],
+      ...overrides.extraRateLimits
     }
   }
 }
@@ -207,5 +212,225 @@ describe('getUsageBarState', () => {
       unavailable: false,
       loading: true
     })
+  })
+})
+
+function windowOf(
+  usedPercent: number,
+  windowMinutes: number,
+  resetsAt: number | null = null
+): NonNullable<ProviderRateLimits['session']> {
+  return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
+}
+
+describe('getActiveAdditionalProviders', () => {
+  it('returns active providers in roster order and drops unavailable or idle empties', () => {
+    const grok = makeLimits({
+      provider: 'grok',
+      status: 'ok',
+      weekly: windowOf(12, 10080)
+    })
+    const antigravity = makeLimits({
+      provider: 'antigravity',
+      status: 'error',
+      error: 'agy unavailable'
+    })
+    const snapshot = makeSnapshot({
+      extraRateLimits: {
+        zcode: makeLimits({ provider: 'zcode', status: 'unavailable' }),
+        gemini: makeLimits({ provider: 'gemini', status: 'idle' }),
+        grok,
+        antigravity,
+        cursor: null
+      }
+    })
+
+    expect(getActiveAdditionalProviders(snapshot).map((entry) => entry.key)).toEqual([
+      'antigravity',
+      'grok'
+    ])
+    expect(getActiveAdditionalProviders(snapshot)[0]?.limits).toBe(antigravity)
+  })
+})
+
+describe('getAdditionalProviderUsageRows', () => {
+  const now = 1_700_000_000_000
+  const hour = 60 * 60_000
+
+  it('groups Antigravity pools and sorts each pool by window length', () => {
+    const rows = getAdditionalProviderUsageRows(
+      makeLimits({
+        provider: 'antigravity',
+        status: 'ok',
+        buckets: [
+          {
+            name: 'Gemini Models',
+            group: 'Gemini Models',
+            ...windowOf(4, 10080, now + 6 * hour)
+          },
+          {
+            name: 'Gemini Models',
+            group: 'Gemini Models',
+            ...windowOf(10, 300, now + 2 * hour)
+          },
+          {
+            name: 'Claude and GPT models',
+            group: 'Claude and GPT models',
+            windowName: 'Weekly Limit Remaining',
+            ...windowOf(20, 10080)
+          }
+        ]
+      }),
+      now
+    )
+
+    expect(rows).toEqual([
+      {
+        title: 'Gemini Models',
+        bars: [
+          {
+            label: '5h',
+            usedPercent: 10,
+            unavailable: false,
+            loading: false,
+            resetText: 'Resets in 2h'
+          },
+          {
+            label: '7d',
+            usedPercent: 4,
+            unavailable: false,
+            loading: false,
+            resetText: 'Resets in 6h'
+          }
+        ]
+      },
+      {
+        title: 'Claude and GPT models',
+        bars: [
+          {
+            label: '7d',
+            usedPercent: 20,
+            unavailable: false,
+            loading: false,
+            resetText: null
+          }
+        ]
+      }
+    ])
+  })
+
+  it('puts a Cursor plan meter ahead of named buckets', () => {
+    const rows = getAdditionalProviderUsageRows(
+      makeLimits({
+        provider: 'cursor',
+        status: 'ok',
+        planType: 'pro',
+        monthly: windowOf(12, 43200),
+        buckets: [
+          { name: 'Cursor Models', ...windowOf(40, 43200) },
+          { name: 'Other Models', ...windowOf(7, 1440) }
+        ]
+      }),
+      now
+    )
+
+    expect(rows.map((row) => [row.title, row.bars.map((bar) => bar.label)])).toEqual([
+      ['Plan', ['30d']],
+      ['Cursor Models', ['30d']],
+      ['Other Models', ['24h']]
+    ])
+    expect(rows[0]?.bars[0]?.usedPercent).toBe(12)
+    expect(rows[1]?.bars[0]?.usedPercent).toBe(40)
+  })
+
+  it('labels a monthly window without a plan as Monthly', () => {
+    const rows = getAdditionalProviderUsageRows(
+      makeLimits({
+        provider: 'cursor',
+        status: 'ok',
+        monthly: windowOf(3, 43200),
+        buckets: [{ name: 'Cursor Models', ...windowOf(1, 43200) }]
+      }),
+      now
+    )
+
+    expect(rows[0]?.title).toBe('Monthly')
+  })
+
+  it('uses Grok email provenance as the row title', () => {
+    const rows = getAdditionalProviderUsageRows(
+      makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        weekly: windowOf(15, 10080, now + 3 * hour),
+        usageMetadata: { authProvenance: 'dev@example.com (SuperGrok)' }
+      }),
+      now
+    )
+
+    expect(rows).toEqual([
+      {
+        title: 'dev@example.com (SuperGrok)',
+        bars: [
+          {
+            label: '7d',
+            usedPercent: 15,
+            unavailable: false,
+            loading: false,
+            resetText: 'Resets in 3h'
+          }
+        ]
+      }
+    ])
+  })
+
+  it('labels Z.ai monthly quota as MCP and falls back when provenance has no email', () => {
+    const rows = getAdditionalProviderUsageRows(
+      makeLimits({
+        provider: 'zcode',
+        status: 'ok',
+        session: windowOf(12, 300),
+        weekly: windowOf(44, 10080),
+        monthly: windowOf(3, 43200),
+        usageMetadata: { authProvenance: 'a'.repeat(64) }
+      }),
+      now
+    )
+
+    expect(rows).toEqual([
+      {
+        title: 'System default',
+        bars: [
+          { label: '5h', usedPercent: 12, unavailable: false, loading: false, resetText: null },
+          { label: '7d', usedPercent: 44, unavailable: false, loading: false, resetText: null },
+          { label: 'MCP', usedPercent: 3, unavailable: false, loading: false, resetText: null }
+        ]
+      }
+    ])
+  })
+})
+
+describe('hasAnyRenderableUsage', () => {
+  it('is false when every provider is empty', () => {
+    expect(hasAnyRenderableUsage(makeSnapshot())).toBe(false)
+  })
+
+  it('is true for a managed Claude account or an active additional provider', () => {
+    expect(
+      hasAnyRenderableUsage(makeSnapshot({ claudeAccounts: [{ id: 'a', email: 'x@y.z' }] }))
+    ).toBe(true)
+    expect(
+      hasAnyRenderableUsage(
+        makeSnapshot({
+          extraRateLimits: {
+            gemini: makeLimits({
+              provider: 'gemini',
+              status: 'ok',
+              buckets: [{ name: 'Flash', ...windowOf(8, 60) }]
+            })
+          }
+        })
+      )
+    ).toBe(true)
   })
 })

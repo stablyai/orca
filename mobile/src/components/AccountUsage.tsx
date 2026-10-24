@@ -1,5 +1,11 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  getActiveAdditionalProviders,
+  getAdditionalProviderUsageRows,
+  type AccountsSnapshot,
+  type AdditionalUsageProviderKey
+} from './account-usage-state'
 
 // Pure types and selectors live in account-usage-state.ts (no RN imports) so
 // they are unit-testable; re-exported here so existing import sites are stable.
@@ -11,7 +17,11 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
-  UsageBarState
+  UsageBarState,
+  AdditionalUsageProviderKey,
+  AdditionalProviderUsageBar,
+  AdditionalProviderUsageRow,
+  ActiveAdditionalProvider
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
@@ -20,7 +30,10 @@ export {
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
-  hasRenderableUsage
+  hasRenderableUsage,
+  getActiveAdditionalProviders,
+  getAdditionalProviderUsageRows,
+  hasAnyRenderableUsage
 } from './account-usage-state'
 
 // Why: matches desktop StatusBar — bars show percent used (consumption), same
@@ -31,13 +44,15 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth = 22
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  labelWidth?: number
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
@@ -53,7 +68,7 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text style={[styles.usageLabel, { width: labelWidth }]}>{label}</Text>
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -76,11 +91,91 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
+        <Text
+          style={[styles.usageResetText, { marginLeft: labelWidth + spacing.xs }]}
+          numberOfLines={1}
+        >
           {resetText}
         </Text>
       ) : null}
     </View>
+  )
+}
+
+const ADDITIONAL_PROVIDER_TITLES: Record<AdditionalUsageProviderKey, string> = {
+  antigravity: 'Antigravity',
+  gemini: 'Gemini',
+  cursor: 'Cursor',
+  grok: 'Grok',
+  opencodeGo: 'OpenCode Go',
+  kimi: 'Kimi',
+  minimax: 'MiniMax',
+  zcode: 'Z.ai'
+}
+
+function usageLabelWidth(label: string): number {
+  return Math.max(22, label.length * 8)
+}
+
+export function AdditionalProvidersUsageSections({
+  snapshot,
+  now
+}: {
+  snapshot: AccountsSnapshot
+  now: number
+}) {
+  const providers = getActiveAdditionalProviders(snapshot)
+  if (providers.length === 0) {
+    return null
+  }
+  return (
+    <>
+      {providers.map((entry) => {
+        const rows = getAdditionalProviderUsageRows(entry.limits, now)
+        return (
+          <View key={entry.key} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeading}>{ADDITIONAL_PROVIDER_TITLES[entry.key]}</Text>
+            </View>
+            <View style={styles.card}>
+              {rows.map((row, index) => (
+                <View key={`${entry.key}:${row.title}:${index}`}>
+                  {index > 0 ? <View style={styles.separator} /> : null}
+                  <View style={styles.row}>
+                    <View style={styles.rowMain}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>
+                        {row.title}
+                      </Text>
+                      {row.bars.length > 0 ? (
+                        <View style={styles.usageRow}>
+                          {row.bars.map((bar, barIndex) => (
+                            <UsageBar
+                              key={`${bar.label}:${barIndex}`}
+                              label={bar.label}
+                              usedPercent={bar.usedPercent}
+                              unavailable={bar.unavailable}
+                              loading={bar.loading}
+                              resetText={bar.resetText}
+                              labelWidth={usageLabelWidth(bar.label)}
+                            />
+                          ))}
+                        </View>
+                      ) : null}
+                      {index === rows.length - 1 && entry.limits.error ? (
+                        <Text style={styles.errorText} numberOfLines={2}>
+                          {entry.limits.error}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.rowTrailing} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )
+      })}
+    </>
   )
 }
 
@@ -125,5 +220,60 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     color: colors.textMuted,
     marginLeft: 22 + spacing.xs
+  },
+  section: {
+    marginBottom: spacing.xl
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm
+  },
+  sectionHeading: {
+    fontSize: typography.metaSize,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
+  },
+  card: {
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.card,
+    overflow: 'hidden'
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md + 2
+  },
+  rowMain: {
+    flex: 1,
+    gap: 4
+  },
+  rowTrailing: {
+    width: 24,
+    marginLeft: spacing.sm
+  },
+  rowTitle: {
+    fontSize: typography.bodySize,
+    fontWeight: '500',
+    color: colors.textPrimary
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginHorizontal: spacing.md
+  },
+  usageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: 4
+  },
+  errorText: {
+    fontSize: typography.metaSize,
+    color: colors.statusRed
   }
 })

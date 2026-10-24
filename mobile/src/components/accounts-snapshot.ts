@@ -40,16 +40,33 @@ export const ProviderRateLimitsSchema = z
       'minimax',
       'grok',
       'antigravity',
-      'cursor'
+      'cursor',
+      'zcode'
     ]),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
     fableWeekly: RateLimitWindowSchema.nullable().optional(),
     monthly: RateLimitWindowSchema.nullable().optional(),
     buckets: z
-      .array(RateLimitWindowSchema.extend({ name: z.string().min(1) }).passthrough())
+      .array(
+        RateLimitWindowSchema.extend({
+          name: z.string().min(1),
+          group: z.string().optional(),
+          windowName: z.string().optional()
+        }).passthrough()
+      )
       .optional(),
     rateLimitResetCredits: RateLimitResetCreditsSchema.nullable().optional(),
+    planType: z.string().nullable().optional(),
+    usageMetadata: z
+      .object({
+        authProvenance: z.string().optional(),
+        credentialSource: z.string().optional(),
+        source: z.string().optional(),
+        failureKind: z.string().optional()
+      })
+      .passthrough()
+      .optional(),
     updatedAt: TimestampSchema,
     error: z.string().nullable(),
     status: z.enum(['idle', 'fetching', 'ok', 'error', 'unavailable'])
@@ -175,6 +192,15 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        // Why: hosts that predate these providers omit the fields; null means no reading.
+        gemini: ProviderRateLimitsSchema.nullable().optional(),
+        opencodeGo: ProviderRateLimitsSchema.nullable().optional(),
+        kimi: ProviderRateLimitsSchema.nullable().optional(),
+        antigravity: ProviderRateLimitsSchema.nullable().optional(),
+        minimax: ProviderRateLimitsSchema.nullable().optional(),
+        grok: ProviderRateLimitsSchema.nullable().optional(),
+        cursor: ProviderRateLimitsSchema.nullable().optional(),
+        zcode: ProviderRateLimitsSchema.nullable().optional(),
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),
