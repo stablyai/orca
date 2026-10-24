@@ -271,6 +271,7 @@ describe('OrchestrationDb version-skew migration', () => {
     dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
+      DROP INDEX idx_deliveries_acknowledged_mailbox;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
       ALTER TABLE deliveries ADD COLUMN mailbox_handle TEXT;
       CREATE UNIQUE INDEX idx_deliveries_one_outstanding
@@ -308,6 +309,7 @@ describe('OrchestrationDb version-skew migration', () => {
     dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
+      DROP INDEX idx_deliveries_acknowledged_mailbox;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
       UPDATE deliveries
       SET status = 'acknowledged',
