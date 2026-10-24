@@ -57,3 +57,49 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     expect(() => safeFind(find, 'q')).toThrow('something genuinely broken')
   })
 })
+
+/**
+ * Regression for STA-6256 (reproduced live on main 573537ecd4, crash report
+ * 812e673e-3a47-438f-9755-9e9e36279205, boundary_id terminal.workbench):
+ * typing an invalid pattern with the Regex toggle on crashed the whole
+ * workspace workbench with "SyntaxError: Invalid regular expression: /[/gi:
+ * Unterminated character class".
+ *
+ * The addon compiles the raw query as `RegExp(term, caseSensitive ? 'g' : 'gi')`
+ * with no guard, so these tests throw the real compile error rather than a
+ * hand-written lookalike — a message-only fixture would still pass if the addon
+ * changed which error it raises.
+ */
+describe('safeFind (invalid regex crash guard)', () => {
+  // Exactly how @xterm/addon-search builds the matcher in regex mode.
+  const compileLikeAddon = (term: string, caseSensitive = false): boolean =>
+    RegExp(term, caseSensitive ? 'g' : 'gi').test('haystack')
+
+  // Every one of these is a prefix of a pattern a user is part-way through typing.
+  it.each(['[', '(', '*', '\\', '[a-', '(?<'])(
+    'contains the real SyntaxError from partially-typed pattern %j instead of crashing the surface',
+    (term) => {
+      const find = vi.fn((t: string) => compileLikeAddon(t))
+      // Guard the premise: this pattern really is uncompilable, so the test is
+      // exercising the throw path rather than passing vacuously.
+      expect(() => RegExp(term, 'gi')).toThrow(SyntaxError)
+      expect(() => safeFind(find, term)).not.toThrow()
+      expect(safeFind(find, term)).toBe(false)
+      expect(find).toHaveBeenCalledWith(term, undefined)
+    }
+  )
+
+  it('still finds matches once the pattern becomes valid', () => {
+    const find = vi.fn((t: string) => compileLikeAddon(t))
+    expect(safeFind(find, '[')).toBe(false)
+    // The completed pattern must search normally - the guard must not latch.
+    expect(safeFind(find, '[abc]')).toBe(true)
+  })
+
+  it('re-throws a SyntaxError that is not a regex compile failure', () => {
+    const find = vi.fn(() => {
+      throw new SyntaxError('Unexpected token } in JSON at position 4')
+    })
+    expect(() => safeFind(find, 'q')).toThrow('Unexpected token }')
+  })
+})
