@@ -25,7 +25,7 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
-  it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
+  it.each([false, true])('reveals without focus (resume=%s)', async (resume) => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const createTerminal = vi.fn()
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
@@ -54,6 +54,9 @@ describe('OrcaRuntimeService', () => {
 
     const result = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
+      ...(resume
+        ? { resumeProviderSession: { key: 'session_id' as const, id: 'saved-session' } }
+        : {}),
       launchConfig: {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'captured' }
@@ -94,6 +97,7 @@ describe('OrcaRuntimeService', () => {
     }
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
+      ...(!resume ? { freshAgentLaunch: true } : {}),
       title: 'worker',
       launchConfig: {
         agentArgs: '--model gpt-5',

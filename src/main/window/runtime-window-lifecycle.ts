@@ -123,6 +123,7 @@ export function registerRuntimeWindowLifecycle(
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
           ...(opts.cwd ? { cwd: opts.cwd } : {}),
+          ...(opts.freshAgentLaunch ? { freshAgentLaunch: true } : {}),
           ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
