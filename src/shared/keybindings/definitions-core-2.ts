@@ -31,7 +31,14 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'zoom', 'in', 'scale'],
-    defaultBindings: platformBindings(['Mod+Equal', 'Mod+Shift+Plus', 'Mod+NumpadAdd'])
+    // Why: '+' is an unshifted key on most non-US layouts and needs Shift on others, so both spellings must be bound.
+    defaultBindings: platformBindings([
+      'Mod+Equal',
+      'Mod+Plus',
+      'Mod+Shift+Plus',
+      'Mod+Shift+Equal',
+      'Mod+NumpadAdd'
+    ])
   },
   {
     id: 'zoom.out',
