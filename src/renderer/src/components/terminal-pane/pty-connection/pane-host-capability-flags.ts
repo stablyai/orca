@@ -30,6 +30,7 @@ import {
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
+import { isAgentTaskCompleteNotificationEnabled } from './agent-task-complete-settings'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import {
   createTerminalInputEchoDelay,
@@ -183,8 +184,12 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     if (payload.state === 'working') {
       // Why: resuming work cancels a provisional milestone completion; a BEL emitted
       // during that milestone burst is intermediate agent output, not a shell bell.
-      session.pendingTerminalBellNotification = false
-      session.clearTerminalBellNotificationTimer()
+      if (isAgentTaskCompleteNotificationEnabled()) {
+        session.pendingTerminalBellNotification = false
+        session.clearTerminalBellNotificationTimer()
+      } else if (session.pendingTerminalBellNotification) {
+        session.scheduleTerminalBellNotification()
+      }
     }
   }
   // Why: when main holds side-effect authority for this PTY's bytes, the

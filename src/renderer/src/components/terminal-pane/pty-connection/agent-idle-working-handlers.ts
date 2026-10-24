@@ -10,6 +10,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 
 import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
+import { isAgentTaskCompleteNotificationEnabled } from './agent-task-complete-settings'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession): void {
@@ -24,8 +25,12 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     // countdown. The timer will restart when the agent becomes idle again.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearPendingAgentTaskCompleteNotification()
-    session.pendingTerminalBellNotification = false
-    session.clearTerminalBellNotificationTimer()
+    if (isAgentTaskCompleteNotificationEnabled()) {
+      session.pendingTerminalBellNotification = false
+      session.clearTerminalBellNotificationTimer()
+    } else if (session.pendingTerminalBellNotification) {
+      session.scheduleTerminalBellNotification()
+    }
   }
   session.onAgentExited = (): void => {
     // Why: eligibility can disappear transiently during reconnect, but a

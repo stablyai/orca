@@ -157,6 +157,45 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
     })
 
+    it('preserves a pending terminal bell across working transitions when agent-complete notifications are disabled', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      vi.useFakeTimers()
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        notifications: {
+          enabled: true,
+          agentTaskComplete: false,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: null
+        }
+      }
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+
+      const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+      const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
+        | (() => void)
+        | undefined
+      if (!bellHandler || !workingHandler) {
+        throw new Error('Expected bell and working handlers to be registered')
+      }
+
+      bellHandler()
+      workingHandler()
+      vi.advanceTimersByTime(250)
+
+      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'terminal-bell' })
+      )
+    })
+
     it('raises terminal attention for agent completion when OS completion notifications are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
