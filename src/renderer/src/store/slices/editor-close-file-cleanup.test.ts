@@ -3,7 +3,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   createEditorStore,
   createEditorTabsStore,
-  flushAsyncRemoteRefresh
+  flushAsyncRemoteRefresh,
+  ownedEditorFileId
 } from './editor-slice-test-harness'
 import type { AppState } from '../types'
 import {
@@ -596,6 +597,230 @@ describe('closeFile host mirroring', () => {
       fileId
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+
+  it('removes clean same-owner duplicate editor siblings and every linked tab', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const duplicateFileId = 'owner-duplicate-a.ts'
+    store.setState({
+      openFiles: [localFile, { ...localFile, id: duplicateFileId }],
+      activeFileId: localFile.id,
+      activeFileIdByWorktree: { 'wt-1': localFile.id },
+      tabBarOrderByWorktree: { 'wt-1': [localFile.id, duplicateFileId] }
+    })
+    store.getState().createUnifiedTab('wt-1', 'editor', {
+      id: 'local-editor-tab',
+      entityId: localFile.id,
+      label: 'a.ts',
+      activate: false
+    })
+    store.getState().createUnifiedTab('wt-1', 'editor', {
+      id: 'duplicate-editor-tab',
+      entityId: duplicateFileId,
+      label: 'a.ts',
+      activate: false
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([])
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']).toHaveLength(1)
+  })
+
+  it('keeps a same-owner duplicate sibling with an unsaved draft', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const duplicateFileId = 'owner-duplicate-a.ts'
+    store.setState({
+      openFiles: [
+        localFile,
+        { ...localFile, id: duplicateFileId, isDirty: true }
+      ],
+      editorDrafts: { [duplicateFileId]: 'unsaved draft' }
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({ id: duplicateFileId, isDirty: true })
+    ])
+    expect(store.getState().editorDrafts).toEqual({ [duplicateFileId]: 'unsaved draft' })
+  })
+
+  it('keeps a same-owner duplicate sibling with an empty unsaved draft', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const duplicateFileId = 'owner-duplicate-a.ts'
+    store.setState({
+      openFiles: [
+        localFile,
+        { ...localFile, id: duplicateFileId, isDirty: false }
+      ],
+      editorDrafts: { [duplicateFileId]: '' }
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({ id: duplicateFileId, isDirty: false })
+    ])
+    expect(store.getState().editorDrafts).toEqual({ [duplicateFileId]: '' })
+  })
+
+  it('repairs an inactive worktree selection swept with duplicate siblings', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const duplicateFileId = 'owner-duplicate-a.ts'
+    const remainingFile = {
+      ...localFile,
+      id: 'wt-1-remaining',
+      filePath: '/repo/b.ts',
+      relativePath: 'b.ts'
+    }
+    const activeElsewhere = {
+      ...localFile,
+      id: 'wt-2-active',
+      filePath: '/other/c.ts',
+      relativePath: 'c.ts',
+      worktreeId: 'wt-2'
+    }
+    store.setState({
+      openFiles: [
+        localFile,
+        { ...localFile, id: duplicateFileId },
+        remainingFile,
+        activeElsewhere
+      ],
+      activeFileId: activeElsewhere.id,
+      activeWorktreeId: 'wt-2',
+      activeFileIdByWorktree: { 'wt-1': duplicateFileId, 'wt-2': activeElsewhere.id }
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().activeFileId).toBe(activeElsewhere.id)
+    expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(remainingFile.id)
+  })
+
+  it('selects the immediate surviving neighbor after sweeping duplicate siblings', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const duplicateBefore = {
+      ...localFile,
+      id: 'duplicate-before'
+    }
+    const duplicateAfter = { ...localFile, id: 'duplicate-after' }
+    const leftFile = {
+      ...localFile,
+      id: 'left-file',
+      filePath: '/repo/left.ts',
+      relativePath: 'left.ts'
+    }
+    const nextFile = {
+      ...localFile,
+      id: 'next-file',
+      filePath: '/repo/next.ts',
+      relativePath: 'next.ts'
+    }
+    const laterFile = {
+      ...localFile,
+      id: 'later-file',
+      filePath: '/repo/later.ts',
+      relativePath: 'later.ts'
+    }
+    store.setState({
+      openFiles: [leftFile, duplicateBefore, localFile, duplicateAfter, nextFile, laterFile],
+      activeFileId: localFile.id,
+      activeFileIdByWorktree: { 'wt-1': localFile.id }
+    })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().activeFileId).toBe(nextFile.id)
+    expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(nextFile.id)
+  })
+
+  it('does not collapse similarly named files owned by external SSH targets', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/tmp/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      externalSshTargetId: 'ssh-a',
+      mode: 'edit'
+    })
+    const sshAFile = store.getState().openFiles[0]!
+    const sshBFile = {
+      ...sshAFile,
+      id: 'ssh-b-file',
+      externalSshTargetId: 'ssh-b'
+    }
+    store.setState({ openFiles: [sshAFile, sshBFile] })
+
+    store.getState().closeFile(sshAFile.id)
+
+    expect(store.getState().openFiles).toEqual([sshBFile])
+  })
+
+  it('retains a clean duplicate sibling owned by another runtime environment', () => {
+    const store = createEditorTabsStore()
+    store.getState().openFile({
+      filePath: '/repo/a.ts',
+      relativePath: 'a.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const localFile = store.getState().openFiles[0]!
+    const remoteOwnedFile = {
+      ...localFile,
+      id: ownedEditorFileId('/repo/a.ts', 'wt-1', 'remote-1'),
+      runtimeEnvironmentId: 'remote-1'
+    }
+    store.setState({ openFiles: [localFile, remoteOwnedFile] })
+
+    store.getState().closeFile(localFile.id)
+
+    expect(store.getState().openFiles).toEqual([remoteOwnedFile])
   })
 
   it('notifies the host for mirrored editors removed by close all in the active worktree', () => {
