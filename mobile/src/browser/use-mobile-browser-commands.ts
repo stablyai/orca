@@ -1,4 +1,4 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
@@ -74,6 +74,16 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
 
   const pendingWheelCommandRef = useRef<PendingWheelCommand | null>(null)
   const dialogAnswerTokenRef = useRef(0)
+  const keyboardOwnerRef = useRef({ client, pageParams, sending: false })
+  useLayoutEffect(() => {
+    const owner = { client, pageParams, sending: false }
+    keyboardOwnerRef.current = owner
+    return () => {
+      if (keyboardOwnerRef.current === owner) {
+        keyboardOwnerRef.current = { client: null, pageParams, sending: false }
+      }
+    }
+  }, [client, pageParams])
 
   const wheelCommandInFlightRef = useRef(false)
 
@@ -217,23 +227,35 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
 
   const sendKeyboardText = useCallback(async () => {
     const text = keyboardValue
-    if (!text) {
+    const owner = keyboardOwnerRef.current
+    if (!text || owner.sending || owner.client !== client || owner.pageParams !== pageParams) {
       return
     }
+    owner.sending = true
     setKeyboardValue('')
-    const result = await sendBrowserRequest(
-      async (rpc, page, options) =>
-        browserInsertText.interpret(
-          await browserInsertText.request(rpc, { ...page, text }, options)
-        ),
-      { suppressError: true }
-    )
-    if (result !== null) {
-      onToast('Sent')
-    } else {
-      setKeyboardValue(text)
+    try {
+      const result = await sendBrowserRequest(
+        async (rpc, page, options) => {
+          browserInsertText.interpret(
+            await browserInsertText.request(rpc, { ...page, text }, options)
+          )
+          return true
+        },
+        { suppressError: true }
+      )
+      if (keyboardOwnerRef.current !== owner) {
+        return
+      }
+      if (result !== null) {
+        onToast('Sent')
+      } else {
+        setKeyboardValue((current) => text + current)
+        onToast('Could not confirm delivery. Check the page before retrying.')
+      }
+    } finally {
+      owner.sending = false
     }
-  }, [keyboardValue, onToast, sendBrowserRequest])
+  }, [client, keyboardValue, onToast, pageParams, sendBrowserRequest])
 
   const sendKeypress = useCallback(
     async (key: string) => {
