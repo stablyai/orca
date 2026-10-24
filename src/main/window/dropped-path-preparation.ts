@@ -1,4 +1,3 @@
-import { basename } from 'node:path'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../shared/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
@@ -8,13 +7,19 @@ import type {
 } from '../../shared/native-file-drop-preparation'
 import {
   DragTempCopyBatch,
-  stageCapturedDragTempBytes,
+  closeDragTempSource,
   materializeDragTempPaths,
-  removeCreatedDragTempCopies,
+  releaseDragTempBatch,
   type DragTempCopyItemResult,
-  mayNeedDragTempCopy,
   type DragTempCopyEnvironment
 } from './dragged-temp-file-copy'
+import {
+  copyCheckedDragTempSource,
+  isDragTempSourceChanged,
+  writeCheckedDragTempSource,
+  type CheckedDragTempSource
+} from './checked-drag-temp-source'
+import { mayNeedDragTempCopy } from './drag-temp-path'
 
 const DRAG_TEMP_COPY_TIMEOUT_MS = 2 * 60 * 1000
 export const MAX_PENDING_DRAG_TEMP_COPIES = 8
@@ -24,10 +29,7 @@ export type DroppedPathPreparationDeps = {
   platform: NodeJS.Platform
   getCopyEnvironment: () => Promise<DragTempCopyEnvironment>
   watchRenderer: () => RendererDropLifetime
-  localChatAttachmentStore?: () => Promise<Pick<
-    AgentSessionAttachmentStore,
-    'storeFile' | 'importFreshFile'
-  > | null>
+  localChatAttachmentStore?: () => Promise<Pick<AgentSessionAttachmentStore, 'storeWith'> | null>
   copyTimeoutMs?: number
 }
 
@@ -75,6 +77,7 @@ export async function prepareDroppedPaths(
   signal?: AbortSignal,
   localChatAttachmentStore?: DroppedPathPreparationDeps['localChatAttachmentStore']
 ): Promise<PreparedDroppedPaths> {
+  // Why: a local chat's drag-temp files stay open, unread, and are written once into its store.
   const batch = new DragTempCopyBatch(
     request.consumer === 'local-chat' ? AGENT_SESSION_ATTACHMENT_MAX_BYTES : -1
   )
@@ -82,9 +85,8 @@ export async function prepareDroppedPaths(
   try {
     const capture = materializeDragTempPaths(request.paths, env, signal, batch)
     prepared = await (signal ? rejectOnDropAbort(capture, signal) : capture)
-    if (request.consumer === 'local-chat') {
-      prepared = []
-      const handoff = storeCreatedCopies(batch, env, localChatAttachmentStore, signal)
+    if (batch.opened.size > 0) {
+      const handoff = storeOpenedSources(batch, env, localChatAttachmentStore, signal)
       await (signal ? rejectOnDropAbort(handoff, signal) : handoff)
       prepared = request.paths.map((path) => batch.completed.get(path)!)
     }
@@ -92,7 +94,7 @@ export async function prepareDroppedPaths(
     batch.completed.clear()
   } catch (error) {
     batch.completed.clear()
-    await removeCreatedDragTempCopies(batch.directories)
+    await releaseDragTempBatch(batch)
     throw error
   }
   const acceptsOriginal = request.consumer === 'main-reader'
@@ -104,7 +106,7 @@ export async function prepareDroppedPaths(
         : []
   )
   const unprepared = prepared.flatMap((result) =>
-    result.status === 'buffered' ||
+    result.status === 'opened' ||
     result.status === 'imported' ||
     (result.status === 'uncopied' && acceptsOriginal)
       ? []
@@ -119,53 +121,49 @@ export async function prepareDroppedPaths(
   }
 }
 
-async function storeCreatedCopies(
+async function storeOpenedSources(
   batch: DragTempCopyBatch,
   env: DragTempCopyEnvironment,
   getStore: DroppedPathPreparationDeps['localChatAttachmentStore'],
   signal?: AbortSignal
 ): Promise<void> {
-  let storePromise:
-    | ReturnType<NonNullable<DroppedPathPreparationDeps['localChatAttachmentStore']>>
-    | undefined
-  for (const [sourcePath, result] of batch.completed) {
+  const pending = getStore?.().catch(() => null) ?? Promise.resolve(null)
+  // Why abortable: a chat host that never finishes starting must not hold the open sources
+  // past the drop's deadline; its late answer is simply ignored.
+  const store = await (signal ? rejectOnDropAbort(pending, signal) : pending)
+  for (const source of batch.opened) {
     signal?.throwIfAborted()
-    const buffered = result.status === 'buffered'
-    const file =
-      result.status === 'imported' &&
-      result.directory &&
-      result.byteLength !== undefined &&
-      result.byteLength <= AGENT_SESSION_ATTACHMENT_MAX_BYTES
-    if (!buffered && !file) {
-      continue
-    }
-    let stored: string | undefined
+    batch.completed.set(
+      source.sourcePath,
+      await storeOpenedSource(source, store, env, batch, signal)
+    )
+    await closeDragTempSource(batch, source)
+  }
+}
+
+async function storeOpenedSource(
+  source: CheckedDragTempSource,
+  store: Awaited<ReturnType<NonNullable<DroppedPathPreparationDeps['localChatAttachmentStore']>>>,
+  env: DragTempCopyEnvironment,
+  batch: DragTempCopyBatch,
+  signal?: AbortSignal
+): Promise<DragTempCopyItemResult> {
+  if (store) {
     try {
-      const store = await (storePromise ??= getStore?.().catch(() => null) ?? Promise.resolve(null))
-      signal?.throwIfAborted()
-      if (store) {
-        stored = buffered
-          ? await store.storeFile(basename(sourcePath), result.bytes)
-          : result.status === 'imported' && result.byteLength !== undefined
-            ? await store.importFreshFile(basename(sourcePath), result.destPath, result.byteLength)
-            : undefined
-      }
-    } catch {
-      signal?.throwIfAborted()
-    }
-    signal?.throwIfAborted()
-    if (stored) {
-      batch.completed.set(sourcePath, { sourcePath, status: 'imported', destPath: stored })
-      if (result.status === 'imported' && result.directory) {
-        await removeCreatedDragTempCopies([result.directory])
-      }
-    } else if (buffered) {
-      batch.completed.set(
-        sourcePath,
-        await stageCapturedDragTempBytes(sourcePath, result.bytes, env, batch, signal)
+      const destPath = await store.storeWith(source.name, (partPath) =>
+        writeCheckedDragTempSource(source, partPath, signal)
       )
+      return { sourcePath: source.sourcePath, status: 'imported', destPath }
+    } catch (error) {
+      signal?.throwIfAborted()
+      if (isDragTempSourceChanged(error)) {
+        // Why: the dropped bytes changed since the drop; a fallback copy would carry new ones.
+        return { sourcePath: source.sourcePath, status: 'failed', reason: 'changed' }
+      }
     }
   }
+  // Store unavailable or its write failed: the same checked bytes as a private copy by path.
+  return copyCheckedDragTempSource(source, env, batch, signal)
 }
 
 function failDroppedPathPreparation(
