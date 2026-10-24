@@ -81,6 +81,9 @@ export const glApi = {
 
   todos: (args: GitLabRepoSelectorArgs) => ipcRenderer.invoke('gitlab:todos', args),
 
+  knownHosts: (args: GitLabRepoSelectorArgs): Promise<string[]> =>
+    ipcRenderer.invoke('gitlab:knownHosts', args),
+
   workItemDetails: (
     args: GitLabRepoSelectorArgs & {
       iid: number

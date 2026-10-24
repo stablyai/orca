@@ -10,7 +10,7 @@ import {
 } from '@/components/task-page-new-issue-draft'
 import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
 export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconciliationModel) {
-  const { settings, repos, selectedRepos } = model
+  const { settings, repos, githubTaskRepos } = model
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -24,8 +24,8 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
 
   // Why: fall back to the first selected repo if the chosen id drops from the selection mid-dialog, so submit always has a valid target.
   const newIssueTargetRepo = useMemo(
-    () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
-    [selectedRepos, newIssueRepoId]
+    () => githubTaskRepos.find((r) => r.id === newIssueRepoId) ?? githubTaskRepos[0] ?? null,
+    [githubTaskRepos, newIssueRepoId]
   )
   const newIssueSourceContext = useMemo(
     () => getTaskPageRepoSourceContext(newIssueTargetRepo, 'github'),
@@ -60,7 +60,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
   useEffect(() => {
     const reset = resolveVanishedNewIssueRepoReset(
       newIssueRepoId,
-      selectedRepos.map((r) => r.id)
+      githubTaskRepos.map((r) => r.id)
     )
     if (!reset) {
       return
@@ -68,7 +68,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     setNewIssueLabels([])
     setNewIssueAssignees([])
     setNewIssueRepoId(reset.repoId)
-  }, [newIssueRepoId, selectedRepos])
+  }, [newIssueRepoId, githubTaskRepos])
 
   // Why: content-gated mirror of live fields into the session draft while the modal is open, so dismissal doesn't lose input.
   useEffect(() => {

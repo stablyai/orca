@@ -2,12 +2,10 @@ import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider
 import { useEffect } from 'react'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
-import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
 import {
-  getTaskPageRepoSourceContext,
+  gitLabTaskRepoSelector,
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from '../../task-page-source-context'
@@ -16,20 +14,11 @@ import {
 // foreground concurrency (8) leaves headroom for other callers on the same selector, such as the sidebar.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
 
-function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
-  return {
-    repoPath: repo.path,
-    repoId: repo.id,
-    sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
-    repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
-  }
-}
-
 type GitLabLoadingInput = Pick<
   TaskPageProviderMetadataModel,
-  | 'selectedRepos'
-  | 'selectedReposKey'
-  | 'primaryRepo'
+  | 'gitlabTaskRepos'
+  | 'gitlabTaskReposKey'
+  | 'gitlabPrimaryRepo'
   | 'taskSource'
   | 'setGitlabItems'
   | 'setGitlabLoading'
@@ -43,9 +32,9 @@ type GitLabLoadingInput = Pick<
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
   const {
-    selectedRepos,
-    selectedReposKey,
-    primaryRepo,
+    gitlabTaskRepos,
+    gitlabTaskReposKey,
+    gitlabPrimaryRepo,
     taskSource,
     setGitlabItems,
     setGitlabLoading,
@@ -74,8 +63,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; each repo is read on the machine holding its GitLab sign-in.
-    const eligibleRepos = selectedRepos
+    // Why: repos whose origin is on GitHub are left out before glab ever sees them (#15784); each repo is read on the machine holding its GitLab sign-in.
+    const eligibleRepos = gitlabTaskRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -182,22 +171,22 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     return () => {
       stale = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gitlabTaskReposKey covers every gitlabTaskRepos field read above (see selectedReposKey's GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
+  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, gitlabTaskReposKey])
 
   // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return
     }
-    if (!primaryRepo?.path) {
+    if (!gitlabPrimaryRepo?.path) {
       setGitlabTodos([])
       setGitlabTodosLoading(false)
       return
     }
     let stale = false
     setGitlabTodosLoading(true)
-    const selector = gitLabTaskRepoSelector(primaryRepo)
+    const selector = gitLabTaskRepoSelector(gitlabPrimaryRepo)
     void gitLabApiFor(selector)
       .todos(selector)
       .then((todos) => {
@@ -222,7 +211,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     taskSource,
     gitlabView,
     gitlabRefreshNonce,
-    primaryRepo,
+    gitlabPrimaryRepo,
     setGitlabTodosLoading,
     setGitlabTodos
   ])

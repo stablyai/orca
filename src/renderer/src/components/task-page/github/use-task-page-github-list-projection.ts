@@ -20,6 +20,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     githubMode,
     tasksLoading,
     tasksFiltering,
+    githubTaskReposPending,
     githubPageSize,
     pages,
     currentPage,
@@ -60,7 +61,9 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
-  const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+  // Why: a repo waiting on glab's hosts has not been queried yet, so an empty list is not a result.
+  const showGitHubTaskSkeletons =
+    tasksFiltering || ((tasksLoading || githubTaskReposPending) && filteredWorkItems.length === 0)
   const loadedGitHubAuthorLogins = useMemo(() => {
     const seen = new Set<string>()
     const logins: string[] = []

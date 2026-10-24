@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ExternalLink } from 'lucide-react'
+import { TaskPageSkippedReposNotice } from '../SkippedReposNotice'
 export function TaskPageGitLabItemList({
   model
 }: {
@@ -14,6 +15,7 @@ export function TaskPageGitLabItemList({
     gitlabLoading,
     gitlabError,
     gitlabEmptyState,
+    gitlabExcludedRepos,
     displayedGitLabItems,
     openGitLabDetailPage,
     handleUseGitLabItem
@@ -38,6 +40,7 @@ export function TaskPageGitLabItemList({
             {gitlabError}
           </div>
         ) : null}
+        <TaskPageSkippedReposNotice provider="gitlab" repos={gitlabExcludedRepos} />
         {gitlabLoading && gitlabItems.length === 0 ? (
           // Why: shimmer rows fill the viewport so the card never flashes empty and the table doesn't jump when real rows land.
           <div className="divide-y divide-border/50">

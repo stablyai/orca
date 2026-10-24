@@ -19,6 +19,7 @@ import {
   type TaskSourceHostAvailability
 } from './task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { GitLabDialogRepoSelector } from './gitlab-item-dialog/gitlab-item-dialog-types'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 export function isGitLabMRFilter(
@@ -96,6 +97,14 @@ export function getTaskPageRepoSourceContext(
     repoId: repo.id,
     providerIdentity
   })
+}
+export function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
+  return {
+    repoPath: repo.path,
+    repoId: repo.id,
+    sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
+    repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
+  }
 }
 export function buildGitLabProviderIdentity(projectRef: GitLabProjectRef) {
   const pathParts = projectRef.path

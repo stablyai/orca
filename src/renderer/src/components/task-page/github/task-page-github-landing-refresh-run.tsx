@@ -27,7 +27,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,
     workItemsInvalidationNonce,
-    selectedRepos,
+    githubTaskRepos,
     taskSource,
     taskResumeApplied,
     githubMode,
@@ -75,12 +75,24 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     setTasksFiltering(false)
     return
   }
-  if (selectedRepos.length === 0) {
+  if (githubTaskRepos.length === 0) {
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
     setTasksFiltering(false)
+    // Why: every selected repo can live off GitHub (#15784); drop the last selection's rows so the empty state names that instead.
+    pagesRef.current = [[]]
+    currentPageRef.current = 0
+    setPages([[]])
+    setCurrentPage(0)
+    setCountedTotalPages(null)
+    countedTotalPagesRef.current = null
+    setProvenPageLimit(null)
+    setTasksLoading(false)
+    setTasksError(null)
+    setFailedCount(0)
+    setGithubUnavailable(false)
     return
-  } // unreachable — multi-combobox forbids empty
+  }
 
   // Why: strip repo:owner/name qualifiers before fan-out — cross-repo they'd pin every fetch to one repo. See stripRepoQualifiers.
   const q = stripRepoQualifiers(appliedTaskSearch.trim())
@@ -117,7 +129,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   const preMerged: GitHubWorkItem[] = []
   let anyUncached = false
   let anyRepoCached = false
-  for (const r of selectedRepos) {
+  for (const r of githubTaskRepos) {
     const cached = getCachedWorkItems(
       r.id,
       githubPerRepoPageLimit,
@@ -177,7 +189,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   const forcedFetchAuthorityGeneration = forcedFetch
     ? getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey).dirtyGeneration
     : null
-  const repoArgs = selectedRepos.map((r) => ({
+  const repoArgs = githubTaskRepos.map((r) => ({
     repoId: r.id,
     path: r.path,
     executionHostId: r.executionHostId,
@@ -372,7 +384,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
 
   // Why: fire-and-forget count query alongside the items fetch; the search API is cached 120s server-side so it adds little cost.
   void countWorkItemsAcrossRepos(
-    selectedRepos.map((r) => ({
+    githubTaskRepos.map((r) => ({
       repoId: r.id,
       path: r.path,
       executionHostId: r.executionHostId,

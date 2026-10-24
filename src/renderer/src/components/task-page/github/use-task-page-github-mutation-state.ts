@@ -15,7 +15,7 @@ import { buildGitHubRepoUrl } from '../../../../../shared/github/links'
 import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
 export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStateModel) {
   const {
-    selectedRepos,
+    githubTaskRepos,
     taskSource,
     githubMode,
     appliedTaskSearch,
@@ -34,15 +34,15 @@ export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStat
   const githubWorkItemMutationQueryKey = useMemo(() => {
     const hostOrSetupIds = [
       ...new Set(
-        selectedRepos.map((repo) => {
+        githubTaskRepos.map((repo) => {
           const ctx = getTaskPageRepoSourceContext(repo, 'github')
           return ctx?.projectHostSetupId || ctx?.hostId || 'local'
         })
       )
     ].sort()
-    const repoIds = selectedRepos.map((repo) => repo.id).sort()
+    const repoIds = githubTaskRepos.map((repo) => repo.id).sort()
     return `${githubMode}::${hostOrSetupIds.join(',')}::${repoIds.join(',')}::${appliedTaskSearch}`
-  }, [appliedTaskSearch, githubMode, selectedRepos])
+  }, [appliedTaskSearch, githubMode, githubTaskRepos])
   useLayoutEffect(() => {
     setTaskPageGitHubMutationQueryKey(githubWorkItemMutationQueryKey)
   }, [githubWorkItemMutationQueryKey])
@@ -130,10 +130,10 @@ export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStat
     taskSource
   ])
   const selectedGitHubRepoExternalLink = useMemo(() => {
-    if (selectedRepos.length !== 1) {
+    if (githubTaskRepos.length !== 1) {
       return null
     }
-    const [repo] = selectedRepos
+    const [repo] = githubTaskRepos
     const sourceState = perRepoSourceState.find((state) => state.repoId === repo.id)
     const sources = sourceState?.sources
     const slug =
@@ -147,7 +147,7 @@ export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStat
           label: slug ? `${slug.owner}/${slug.repo}` : repo.displayName
         }
       : null
-  }, [activeGithubTaskKind, perRepoSourceState, selectedRepos])
+  }, [activeGithubTaskKind, perRepoSourceState, githubTaskRepos])
   const nextModel = model as typeof model & {
     activeGithubTaskKind: typeof activeGithubTaskKind
     appliedTaskQuery: typeof appliedTaskQuery

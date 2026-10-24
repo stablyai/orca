@@ -10,6 +10,8 @@ export type RepoBackedTaskEmptyState = {
 export function getRepoBackedTaskEmptyState(args: {
   provider: RepoBackedTaskEmptyStateProvider
   selectedRepoCount: number
+  /** Selected repos this source queries; fewer when some live on the other forge. */
+  sourceRepoCount?: number
   gitlabView?: 'issues' | 'mrs' | 'todos'
 }): RepoBackedTaskEmptyState {
   if (args.selectedRepoCount === 0) {
@@ -23,6 +25,29 @@ export function getRepoBackedTaskEmptyState(args: {
         'Select at least one project source so Orca knows which host/account to fetch tasks from.'
       )
     }
+  }
+  if (args.sourceRepoCount === 0) {
+    return args.provider === 'github'
+      ? {
+          title: translate(
+            'auto.components.taskPageEmptyState.noGitHubProjectsTitle',
+            'No GitHub projects selected'
+          ),
+          description: translate(
+            'auto.components.taskPageEmptyState.noGitHubProjectsDescription',
+            'The selected projects are hosted on GitLab. Select a project hosted on GitHub.'
+          )
+        }
+      : {
+          title: translate(
+            'auto.components.taskPageEmptyState.noGitLabProjectsTitle',
+            'No GitLab projects selected'
+          ),
+          description: translate(
+            'auto.components.taskPageEmptyState.noGitLabProjectsDescription',
+            'The selected projects are hosted on GitHub. Select a project hosted on GitLab.'
+          )
+        }
   }
   if (args.provider === 'github') {
     return {

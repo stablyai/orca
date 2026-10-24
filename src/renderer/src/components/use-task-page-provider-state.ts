@@ -10,6 +10,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     settings,
     pageData,
     selectedRepos,
+    gitlabTaskRepos,
     visibleTaskProviders,
     preferredTaskSource,
     taskSource,
@@ -75,9 +76,10 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
       getRepoBackedTaskEmptyState({
         provider: 'gitlab',
         selectedRepoCount: selectedRepos.length,
+        sourceRepoCount: gitlabTaskRepos.length,
         gitlabView
       }),
-    [gitlabView, selectedRepos.length]
+    [gitlabTaskRepos.length, gitlabView, selectedRepos.length]
   )
   const gitlabFilterIsValid =
     gitlabView === 'issues'

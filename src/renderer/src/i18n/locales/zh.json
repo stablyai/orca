@@ -2462,7 +2462,9 @@
         "jiraColumnStoryPoints": "点数",
         "jiraColumnOriginalEstimate": "预估",
         "jiraColumnRemainingEstimate": "剩余",
-        "jiraBoardEmptyColumn": "没有议题"
+        "jiraBoardEmptyColumn": "没有议题",
+        "skippedReposHostedOnGitLab": "已跳过 — 托管在 GitLab 上（{{value0}}）",
+        "skippedReposHostedOnGitHub": "已跳过 — 托管在 GitHub 上（{{value0}}）"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -17972,7 +17974,11 @@
         "noGitLabMrsTitle": "没有 GitLab 合并请求",
         "noGitLabMrsDescription": "没有 GitLab MR 匹配此筛选器。",
         "noGitLabWorkTitle": "没有 GitLab 工作",
-        "noGitLabWorkDescription": "没有 GitLab 工作匹配此筛选器。"
+        "noGitLabWorkDescription": "没有 GitLab 工作匹配此筛选器。",
+        "noGitHubProjectsTitle": "未选择 GitHub 项目",
+        "noGitHubProjectsDescription": "所选项目托管在 GitLab 上。请选择托管在 GitHub 上的项目。",
+        "noGitLabProjectsTitle": "未选择 GitLab 项目",
+        "noGitLabProjectsDescription": "所选项目托管在 GitHub 上。请选择托管在 GitLab 上的项目。"
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} 来源不可用：{{value1}}",
