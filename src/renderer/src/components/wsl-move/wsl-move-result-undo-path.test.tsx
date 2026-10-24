@@ -78,7 +78,11 @@ describe('the moved result\'s "Use on this computer again"', () => {
     fireEvent.click(screen.getByRole('button', { name: actionLabel }))
 
     await waitFor(() =>
-      expect(useProjectHereAgain).toHaveBeenCalledWith({ kind: 'folder', id: 'notes' })
+      expect(useProjectHereAgain).toHaveBeenCalledWith({
+        kind: 'folder',
+        id: 'notes',
+        unsavedWorkspaceIds: []
+      })
     )
   })
 })

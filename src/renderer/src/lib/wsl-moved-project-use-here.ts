@@ -14,26 +14,6 @@ export async function bringWslMovedProjectBack(
   project: WslMovedProject,
   confirm: ConfirmationDialogContextValue
 ): Promise<void> {
-  // The release reloads this window, and an unsaved file vetoes that reload silently: the window
-  // would keep the moved layout, its panes bound to terminals that no longer run (awin verify-5).
-  const unsaved = useAppStore
-    .getState()
-    .openFiles.filter((file) => file.isDirty)
-    .map((file) => file.relativePath)
-  if (unsaved.length > 0) {
-    await confirm({
-      title: translate('sidebar.wslMoved.useHereUnsavedTitle', 'Save your files first'),
-      description: translate(
-        'sidebar.wslMoved.useHereUnsavedDescription',
-        'Bringing {{name}} back reloads this window. Save or close these files first: {{files}}',
-        { name: project.displayName, files: unsaved.join(', ') }
-      ),
-      confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
-      acknowledgeOnly: true,
-      initialFocus: 'confirm'
-    })
-    return
-  }
   const confirmed = await confirm({
     title: translate('sidebar.wslMoved.useHereTitle', 'Use {{name}} on this computer again?', {
       name: project.displayName
@@ -48,10 +28,32 @@ export async function bringWslMovedProjectBack(
   if (!confirmed) {
     return
   }
+  // The reload brings the move's workspaces back as they were before it, dropping their unsaved
+  // files; main knows which workspaces the move holds (awin verify-5, verify-8).
+  const unsaved = useAppStore.getState().openFiles.filter((file) => file.isDirty)
   const result = await window.api.wslMove.useProjectHereAgain({
     kind: project.kind,
-    id: project.id
+    id: project.id,
+    unsavedWorkspaceIds: [...new Set(unsaved.map((file) => file.worktreeId))]
   })
+  if (!result.released && result.reason === 'unsaved-files') {
+    const inScope = new Set(result.unsavedWorkspaceIds)
+    const files = unsaved
+      .filter((file) => inScope.has(file.worktreeId))
+      .map((file) => file.relativePath)
+    await confirm({
+      title: translate('sidebar.wslMoved.useHereUnsavedTitle', 'Save your files first'),
+      description: translate(
+        'sidebar.wslMoved.useHereUnsavedDescription',
+        'Bringing {{name}} back reloads this window. Save or close these files first: {{files}}',
+        { name: project.displayName, files: files.join(', ') }
+      ),
+      confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
+    return
+  }
   // On success main reloads the window, which hydrates the whole pre-move session from disk.
   if (!result.released) {
     // A dialog, not a toast: a toast sat behind the update notice on awin and read as nothing.

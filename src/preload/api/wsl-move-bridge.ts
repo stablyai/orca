@@ -36,6 +36,8 @@ export type WslMoveApi = {
   useProjectHereAgain: (project: {
     kind: WslMovedProjectKind
     id: string
+    /** Workspaces with unsaved files; main refuses if the move brings any of them back. */
+    unsavedWorkspaceIds?: string[]
   }) => Promise<WslMoveUseLocallyResult>
 }
 
