@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useNavigation, useRouter } from 'expo-router'
+import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
   coordinateHostStackNavigation,
+  landOnWorkspace,
   type HostStackRootNavigation,
   type HostStackRouteTarget,
   type PendingHostStackNavigation
@@ -41,5 +42,32 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
       armedRef.current = pendingNavigation
     },
     [navigation, router]
+  )
+}
+
+// Why: a cold tap's root-layout navigation sees the root stack as a stale partial state and is
+// never told when it commits; the container reads the hydrated tree and hears every commit.
+function containerNavigation(
+  container: ReturnType<typeof useNavigationContainerRef>
+): HostStackRootNavigation {
+  return {
+    addListener: (event, listener) => container.addListener(event, listener),
+    dispatch: (action) => container.dispatch(action),
+    getState: () => (container.isReady() ? container.getRootState() : undefined)
+  }
+}
+
+/** Opens a push-tapped workspace, taking over whatever transition was pending. */
+export function useLandOnWorkspace(): (hostId: string, target: HostStackRouteTarget) => void {
+  const container = useNavigationContainerRef()
+  return useCallback(
+    (hostId, target) => {
+      pendingNavigation?.controller.cancel()
+      pendingNavigation = {
+        hostId,
+        controller: landOnWorkspace(containerNavigation(container), hostId, target)
+      }
+    },
+    [container]
   )
 }
