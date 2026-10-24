@@ -57,9 +57,13 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
     await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(true)
 
     expect(mocks.resolveEnvironment).toHaveBeenCalledWith('/profile', 'winpc')
-    expect(serverCall).toHaveBeenCalledWith('terminal.show', { terminal: HANDLE })
-    // null bypasses ambient remote selection so reveal reaches the local desktop.
-    expect(mocks.desktopClient).toHaveBeenCalledWith('/profile', undefined, null, null)
+    expect(serverCall).toHaveBeenCalledWith(
+      'terminal.show',
+      { terminal: HANDLE },
+      { timeoutMs: 12_000 }
+    )
+    // null bypasses ambient remote selection so reveal reaches the local desktop; 12 s bounds a stalled one.
+    expect(mocks.desktopClient).toHaveBeenCalledWith('/profile', 12_000, null, null)
     expect(mocks.desktopCall).toHaveBeenCalledWith('terminal.reveal', {
       worktreeId: shownTerminal.worktreeId,
       tabId: shownTerminal.tabId,
@@ -77,9 +81,12 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
     expect(mocks.desktopClient).not.toHaveBeenCalled()
   })
 
-  it('asks no desktop when the server no longer knows the terminal', async () => {
+  it.each([
+    ['no longer knows the terminal', 'terminal_handle_stale'],
+    ['is too slow to show it', 'request_timeout']
+  ])('asks no desktop when the server %s', async (_case, code) => {
     const { client, serverCall } = pairedClient('winpc')
-    serverCall.mockRejectedValue(new Error('terminal_handle_stale'))
+    serverCall.mockRejectedValue(new Error(code))
 
     await expect(revealPairedTerminalOnLocalDesktop(client, HANDLE)).resolves.toBe(false)
 
