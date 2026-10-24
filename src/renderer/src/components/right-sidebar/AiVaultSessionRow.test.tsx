@@ -68,6 +68,7 @@ function renderRow(
     worktreeInfo?: AiVaultSessionWorktreeInfo | null
     onToggleDetails?: () => void
     onJumpToOriginalPane?: () => void
+    onCloseOriginalPane?: () => void
     onResume?: () => void
     resumeHidden?: boolean
     onRequestDelete?: () => void
@@ -90,6 +91,7 @@ function renderRow(
         resumeHidden={overrides.resumeHidden}
         onToggleDetails={overrides.onToggleDetails ?? vi.fn()}
         onJumpToOriginalPane={overrides.onJumpToOriginalPane}
+        onCloseOriginalPane={overrides.onCloseOriginalPane}
         showJumpToWorktree={false}
         onResume={overrides.onResume ?? vi.fn()}
         resumeLabel="Resume in New Tab"
@@ -194,21 +196,30 @@ describe('VaultSessionRow in the /resume picker', () => {
 })
 
 describe('VaultSessionRow native session actions', () => {
-  it('shows the jump action instead of Resume for an open structured session', async () => {
+  it('shows jump and close instead of Resume for an open session', async () => {
     const onJumpToOriginalPane = vi.fn()
+    const onCloseOriginalPane = vi.fn()
     const onResume = vi.fn()
-    renderRow({ resumeHidden: true, onJumpToOriginalPane, onResume })
+    renderRow({ resumeHidden: true, onJumpToOriginalPane, onCloseOriginalPane, onResume })
 
     expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
     fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+    fireEvent.click(screen.getByTestId('ai-vault-session-close-original-pane'))
 
     expect(onJumpToOriginalPane).toHaveBeenCalledOnce()
+    expect(onCloseOriginalPane).toHaveBeenCalledOnce()
     expect(onResume).not.toHaveBeenCalled()
 
     const user = userEvent.setup()
     await user.click(screen.getByTestId('ai-vault-session-more-actions'))
     expect(await screen.findByRole('menuitem', { name: 'Jump to Original Pane' })).toBeTruthy()
+    await user.click(screen.getByRole('menuitem', { name: 'Close Open Session' }))
     expect(screen.queryByRole('menuitem', { name: 'Resume in New Tab' })).toBeNull()
+    expect(onCloseOriginalPane).toHaveBeenCalledTimes(2)
+
+    fireEvent.contextMenu(screen.getAllByText('A session')[0])
+    await user.click(await screen.findByRole('menuitem', { name: 'Close Open Session' }))
+    expect(onCloseOriginalPane).toHaveBeenCalledTimes(3)
   })
 
   it('hides Delete for structured native sessions', async () => {

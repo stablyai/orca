@@ -354,6 +354,9 @@ export default function AiVaultPanel({
                 }
               })
             }
+            onCloseOriginalPane={(session) => {
+              paneActions.closeOriginalPane(session)
+            }}
             onJumpToWorktree={paneActions.jumpToWorktree}
             onResume={launchActions.handleResume}
             getSessionResumeInChat={getSessionResumeInChat}

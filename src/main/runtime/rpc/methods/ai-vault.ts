@@ -118,6 +118,22 @@ export const AI_VAULT_METHODS = [
       const projected = projectStructuredAiVaultSessions(result, (agent) =>
         clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
       )
+      projected.sessions = projected.sessions.map((session) => {
+        const agentSessionId = `${session.agent}:${session.sessionId}`
+        const bareSessionId = session.sessionId.includes(':')
+          ? session.sessionId.split(':').pop()!
+          : session.sessionId
+        const openTab =
+          runtime.resolveOpenTabForSession?.(session.sessionId) ??
+          runtime.resolveOpenTabForSession?.(session.id) ??
+          runtime.resolveOpenTabForSession?.(agentSessionId) ??
+          runtime.resolveOpenTabForSession?.(bareSessionId) ??
+          (session.structuredSession
+            ? runtime.resolveOpenTabForSession?.(session.structuredSession.sessionId)
+            : null) ??
+          undefined
+        return openTab ? { ...session, openTab } : session
+      })
       return conditionalAiVaultListResult(
         params.executionHostId
           ? restampAiVaultListResult(projected, params.executionHostId)
