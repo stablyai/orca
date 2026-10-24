@@ -27,6 +27,7 @@ export type MobileAiVaultSessionResumeTarget =
       status: 'ready'
       worktreeId: string
       targetStatus: 'local' | 'ssh'
+      targetExecutionHostId: ExecutionHostId | null
       workspacePath: string | null
       terminalPlatform: NodeJS.Platform | null
     }
@@ -113,6 +114,7 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
       status: 'ready',
       worktreeId: candidateWorktreeId,
       targetStatus: candidate.targetStatus,
+      targetExecutionHostId: candidate.targetExecutionHostId,
       workspacePath:
         args.worktrees.find((worktree) => worktree.worktreeId === candidateWorktreeId)?.path ??
         null,

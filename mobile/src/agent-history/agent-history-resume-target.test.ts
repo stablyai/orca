@@ -88,6 +88,7 @@ describe('mobile AI Vault resume target guards', () => {
       status: 'ready',
       worktreeId: 'ssh-session-wt',
       targetStatus: 'ssh',
+      targetExecutionHostId: 'ssh:builder',
       workspacePath: '/home/ada/ssh-repo/feature',
       terminalPlatform: null
     })
@@ -169,6 +170,7 @@ describe('mobile AI Vault resume target guards', () => {
       status: 'ready',
       worktreeId: 'session-wt',
       targetStatus: 'local',
+      targetExecutionHostId: null,
       workspacePath: '/Users/ada/repo/feature',
       terminalPlatform: null
     })
@@ -192,6 +194,7 @@ describe('mobile AI Vault resume target guards', () => {
       status: 'ready',
       worktreeId: 'route-wt',
       targetStatus: 'local',
+      targetExecutionHostId: null,
       workspacePath: '/Users/ada/repo/main',
       terminalPlatform: null
     })
@@ -248,6 +251,7 @@ describe('mobile AI Vault resume target guards', () => {
       status: 'ready',
       worktreeId: 'route-wt',
       targetStatus: 'local',
+      targetExecutionHostId: null,
       workspacePath: '/Users/ada/repo/main',
       terminalPlatform: null
     })

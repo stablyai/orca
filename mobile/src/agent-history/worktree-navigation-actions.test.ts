@@ -5,8 +5,25 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('lucide-react-native', () => ({ GitBranch: vi.fn() }))
 vi.mock('react-native-svg', () => ({ default: vi.fn(), Path: vi.fn() }))
 
+import type { RouteHandoff } from '../navigation/route-handoff'
+import { workspaceHref } from '../navigation/workspace-execution-host'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
-import { buildWorktreeNavigationActions } from './worktree-navigation-actions'
+import { buildWorktreeNavigationActions, openHistorySession } from './worktree-navigation-actions'
+
+function historyRouter(): {
+  replace: ReturnType<typeof vi.fn>
+  back: ReturnType<typeof vi.fn>
+  handoff: RouteHandoff
+} {
+  const replace = vi.fn()
+  const back = vi.fn()
+  return {
+    replace,
+    back,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openHistorySession only calls replace and back.
+    handoff: { replace, back } as RouteHandoff
+  }
+}
 
 /** Every target these actions build, in the order they offer them. */
 function targetsFor(hostId: string, worktreeId = 'wt-1'): string[] {
@@ -87,5 +104,78 @@ describe('the worktree row action sheet', () => {
       '/h/host-a/source-control/wt%2F1?name=my+worktree&origin=host',
       '/h/host-a/agent-history/wt%2F1?name=my+worktree'
     ])
+  })
+})
+
+describe('openHistorySession', () => {
+  it('keeps the resolved execution host on the replacement session route', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(
+      handoff,
+      'host',
+      'host a?b',
+      'from/wt',
+      'to/wt',
+      'resumed name',
+      'ssh:builder'
+    )
+    expect(replace).toHaveBeenCalledWith(
+      '/h/host%20a%3Fb/session/to%2Fwt?name=resumed%20name&executionHost=ssh%3Abuilder'
+    )
+  })
+
+  it('adds the execution host as the only query when the session has no name', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(handoff, undefined, 'host-a', 'from-wt', 'to-wt', undefined, 'runtime:vm')
+    expect(replace).toHaveBeenCalledWith('/h/host-a/session/to-wt?executionHost=runtime%3Avm')
+  })
+
+  it('pins a local resume so the history route’s server is not copied onto it', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(handoff, 'host', 'host-a', 'from-wt', 'to-wt', 'resumed', null)
+    const href = '/h/host-a/session/to-wt?name=resumed&executionHost='
+    expect(replace).toHaveBeenCalledWith(href)
+    expect(workspaceHref(href, 'ssh:builder')).toBe('/h/host-a/session/to-wt?name=resumed')
+  })
+
+  it('goes back when a session-origin resume stays on the same worktree and host', () => {
+    const { replace, back, handoff } = historyRouter()
+    openHistorySession(
+      handoff,
+      'session',
+      'host-a',
+      'wt',
+      'wt',
+      'name',
+      'ssh:builder',
+      'ssh:builder'
+    )
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('treats a missing host and an explicit local host as the same machine', () => {
+    const { replace, back, handoff } = historyRouter()
+    openHistorySession(handoff, 'session', 'host-a', 'wt', 'wt', 'name', null, undefined)
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('replaces when a session-origin resume keeps the worktree but changes host', () => {
+    const { replace, back, handoff } = historyRouter()
+    openHistorySession(handoff, 'session', 'host-a', 'wt', 'wt', 'name', null, 'ssh:builder')
+    expect(back).not.toHaveBeenCalled()
+    const href = '/h/host-a/session/wt?name=name&executionHost='
+    expect(replace).toHaveBeenCalledWith(href)
+    expect(workspaceHref(href, 'ssh:builder')).toBe('/h/host-a/session/wt?name=name')
+  })
+
+  it('keeps the target host when it differs from the history route', () => {
+    const { replace, back, handoff } = historyRouter()
+    openHistorySession(handoff, 'session', 'host-a', 'wt', 'wt', 'name', 'ssh:other', 'ssh:builder')
+    expect(back).not.toHaveBeenCalled()
+    const href = '/h/host-a/session/wt?name=name&executionHost=ssh%3Aother'
+    expect(replace).toHaveBeenCalledWith(href)
+    expect(workspaceHref(href, 'ssh:builder')).toBe(href)
   })
 })

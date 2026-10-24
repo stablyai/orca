@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
@@ -24,6 +25,7 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import { openHistorySession } from './worktree-navigation-actions'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
@@ -34,6 +36,7 @@ export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
+  origin?: string
 }
 
 const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
@@ -49,11 +52,13 @@ export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryP
 function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
-  name = ''
+  name = '',
+  origin
 }: MobileAgentSessionHistoryPanelProps) {
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useWorkspaceRouteHandoff()
+  const currentExecutionHost = useWorkspaceExecutionHost()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
     hostId,
@@ -182,13 +187,14 @@ function MobileAgentSessionHistoryPanelContent({
           worktrees: freshWorktrees
         } = await loadMobileResumeMetadata(client)
         assertCurrentOwner()
+        const resumeWorktrees = freshWorktrees ?? worktrees
         const target = resolveMobileAiVaultSessionResumeTarget({
           session,
           activeWorktreeId: worktreeId,
           // Why: resolve against live worktrees so a workspace deleted or
           // archived since panel mount can't be picked; the mount-time list is
           // only a fallback when the fresh fetch fails.
-          worktrees: freshWorktrees ?? worktrees,
+          worktrees: resumeWorktrees,
           repos,
           folderWorkspaces,
           projectGroups
@@ -238,10 +244,19 @@ function MobileAgentSessionHistoryPanelContent({
           return
         }
         setResumeMessage('Agent session queued.')
-        router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
-            typeof router.push
-          >[0]
+        const resumedName = getWorktreeLabel(
+          resumeWorktrees.find((item) => item.worktreeId === target.worktreeId)?.displayName,
+          target.worktreeId
+        )
+        openHistorySession(
+          router,
+          origin,
+          hostId,
+          worktreeId,
+          target.worktreeId,
+          resumedName,
+          target.targetExecutionHostId,
+          currentExecutionHost
         )
       } catch (err) {
         triggerError()
@@ -255,6 +270,8 @@ function MobileAgentSessionHistoryPanelContent({
       client,
       connState,
       hostId,
+      currentExecutionHost,
+      origin,
       resumeHost,
       hostTerminalWindowsShell,
       router,
