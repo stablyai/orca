@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isTerminalImeInputContextRefreshing,
+  isTextEntryElement,
   refreshTerminalImeInputContext
 } from './terminal-ime-input-context-refresh'
 
@@ -134,5 +135,44 @@ describe('refreshTerminalImeInputContext', () => {
 
     expect(refreshed).toBe(false)
     expect(blur).not.toHaveBeenCalled()
+  })
+
+  it('runs one refresh per frame when two handoffs ask for it together', () => {
+    const helper = appendHelper()
+    const blur = vi.spyOn(helper, 'blur')
+    helper.focus()
+    const scheduled: (() => void)[] = []
+    const scheduleRefocus = (callback: () => void) => scheduled.push(callback)
+
+    refreshTerminalImeInputContext(helper, { isMac: true, scheduleRefocus })
+    refreshTerminalImeInputContext(helper, { isMac: true, scheduleRefocus })
+    expect(blur).toHaveBeenCalledOnce()
+    expect(scheduled).toHaveLength(1)
+
+    scheduled[0]()
+    refreshTerminalImeInputContext(helper, { isMac: true, scheduleRefocus })
+    expect(blur).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('isTextEntryElement', () => {
+  it('counts the fields an input method composes into', () => {
+    const editable = document.createElement('div')
+    editable.contentEditable = 'true'
+    document.body.appendChild(editable)
+    const search = document.createElement('input')
+    search.type = 'search'
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    const date = document.createElement('input')
+    date.type = 'date'
+    expect(isTextEntryElement(document.createElement('textarea'))).toBe(true)
+    expect(isTextEntryElement(document.createElement('input'))).toBe(true)
+    expect(isTextEntryElement(search)).toBe(true)
+    expect(isTextEntryElement(editable)).toBe(true)
+    expect(isTextEntryElement(checkbox)).toBe(false)
+    expect(isTextEntryElement(date)).toBe(false)
+    expect(isTextEntryElement(document.createElement('button'))).toBe(false)
+    expect(isTextEntryElement(null)).toBe(false)
   })
 })
