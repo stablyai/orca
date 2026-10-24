@@ -13,7 +13,7 @@ export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000
 
 // New tabs may prompt before registration; a null target means no local window.
 export type BrowserPagePromptTarget =
-  | { browserPageId: string; renderer: Electron.WebContents }
+  | { browserPageId: string; renderer: Electron.WebContents; rootGuestWebContentsId?: number }
   | 'awaiting-registration'
 
 type SettlePrompt<A> = (answer: A | null) => void | 'failed' | Promise<void | 'failed'>
@@ -25,6 +25,7 @@ type PendingPrompt = {
   /** Null until the tab registers its window. */
   browserPageId: string | null
   renderer: Electron.WebContents | null
+  rootGuestWebContentsId?: number
   details: () => unknown
   parseAnswer: (value: unknown) => unknown
   settles: ((value: unknown) => ReturnType<SettlePrompt<unknown>>)[]
@@ -126,10 +127,11 @@ function closeWhenGone(
 function showPrompt(
   requestId: string,
   pending: PendingPrompt,
-  context: { browserPageId: string; renderer: Electron.WebContents }
+  context: Exclude<BrowserPagePromptTarget, 'awaiting-registration'>
 ): boolean {
   pending.browserPageId = context.browserPageId
   pending.renderer = context.renderer
+  pending.rootGuestWebContentsId = context.rootGuestWebContentsId
   pending.unwatch.push(closeWhenGone(requestId, context.renderer, { orNavigates: false }))
   try {
     context.renderer.send('browser:page-prompt-requested', {
@@ -167,7 +169,9 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
   for (const pending of pendingPrompts.values()) {
     const samePage =
       pending.requester.id === requester.id ||
-      (context !== null && pending.browserPageId === context.browserPageId)
+      (context !== null &&
+        pending.browserPageId === context.browserPageId &&
+        pending.rootGuestWebContentsId === context.rootGuestWebContentsId)
     if (!samePage) {
       continue
     }
@@ -205,7 +209,7 @@ export function openBrowserPagePrompt<K extends BrowserPagePromptKind>(args: {
 
 export function showBrowserPagePromptsAwaitingRegistration(
   guestWebContentsId: number,
-  context: { browserPageId: string; renderer: Electron.WebContents } | null
+  context: Exclude<BrowserPagePromptTarget, 'awaiting-registration'> | null
 ): void {
   for (const [requestId, pending] of pendingPrompts) {
     if (pending.renderer || pending.requester.id !== guestWebContentsId) {
@@ -239,9 +243,16 @@ export async function respondToBrowserPagePrompt(
   return runSettles(pending, response.answer)
 }
 
-export function cancelBrowserPagePrompts(browserPageId: string): void {
+export function cancelBrowserPagePrompts(
+  browserPageId: string,
+  rootGuestWebContentsId?: number
+): void {
   for (const [requestId, pending] of pendingPrompts) {
-    if (pending.browserPageId === browserPageId) {
+    if (
+      pending.browserPageId === browserPageId &&
+      (rootGuestWebContentsId === undefined ||
+        (pending.rootGuestWebContentsId ?? pending.requester.id) === rootGuestWebContentsId)
+    ) {
       closePrompt(requestId, false)
     }
   }

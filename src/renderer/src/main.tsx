@@ -28,6 +28,10 @@ import { installBrowserClientPageRenderer } from './components/browser-pane/brow
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import {
+  activateLaunchWorktreeWhenReady,
+  consumeLaunchWorktreeTarget
+} from './web/web-launch-worktree-target'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -85,6 +89,10 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   </StrictMode>
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
+const launchWorktreeId = consumeLaunchWorktreeTarget()
+if (launchWorktreeId) {
+  void activateLaunchWorktreeWhenReady(launchWorktreeId)
+}
 
 // Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a
 // terminal attaches (many frames away), and is needed by nothing during boot.

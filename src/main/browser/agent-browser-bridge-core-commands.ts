@@ -15,6 +15,7 @@ import {
   waitForAbortedNavigationReplacement
 } from './agent-browser-bridge-process'
 import { AgentBrowserBridgeQueue } from './agent-browser-bridge-queue'
+import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQueue {
   async snapshot(worktreeId?: string, browserPageId?: string): Promise<BrowserSnapshotResult> {
@@ -122,6 +123,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
 
         // Process swaps can replace the guest while retaining the page ID.
         const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+        assertRemoteCliBrowserAccess(navigatedTarget.webContentsId)
         const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
         const loadError = navigationAborted
           ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
@@ -134,7 +136,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         }
         return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
       },
-      { ensureSession: false }
+      { ensureSession: false, retargetNavigation: true }
     )
   }
 

@@ -9,6 +9,11 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import {
+  isTrustedDesktopRenderer,
+  preferredDesktopRenderer
+} from '../window/desktop-renderer-registry'
+import { desktopWindowUI, updateDesktopWindowUI } from '../persistence/desktop-window-state'
 
 let trustedUIRendererWebContentsId: number | null = null
 
@@ -27,13 +32,16 @@ export function sendToTrustedUIRenderer(
   payload: unknown,
   excludedWebContentsId?: number
 ): void {
-  const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
-  renderer?.send(channel, payload)
+  getTrustedUIRendererWebContents(excludedWebContentsId)?.send(channel, payload)
 }
 
 export function getTrustedUIRendererWebContents(
   excludedWebContentsId?: number
 ): WebContents | null {
+  const registered = preferredDesktopRenderer(excludedWebContentsId)
+  if (registered) {
+    return registered
+  }
   // Target only trusted app UI; retained browser/utility windows cannot consume these events.
   const rendererId = trustedUIRendererWebContentsId
   if (rendererId == null || rendererId === excludedWebContentsId) {
@@ -59,7 +67,7 @@ export function registerUIHandlers(
   store.onUIChanged((ui) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
+        window.webContents.send('ui:stateChanged', desktopWindowUI(ui, window.webContents))
       }
     }
   })
@@ -81,12 +89,12 @@ export function registerUIHandlers(
     store.updateUI({ jiraSavedFilterState: state })
     return state
   })
-  ipcMain.handle('ui:get', () => {
-    return store.getUI()
+  ipcMain.handle('ui:get', (event) => {
+    return desktopWindowUI(store.getUI(), event?.sender)
   })
 
-  ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
-    store.updateUI(args)
+  ipcMain.handle('ui:set', (event, args: Partial<PersistedUIState>) => {
+    updateDesktopWindowUI(store, event?.sender, args)
   })
 
   ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
@@ -128,22 +136,5 @@ export function registerUIHandlers(
 }
 
 export function isTrustedUIRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Packaged fallback requires the registered main-window ID, not arbitrary file documents.
-  return false
+  return isTrustedDesktopRenderer(sender, trustedUIRendererWebContentsId, false)
 }

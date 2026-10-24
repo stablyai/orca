@@ -15,6 +15,10 @@ import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-
 import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { desktopWindowId } from './desktop-renderer-registry'
+import { registerNativeDesktopNotifier } from './native-desktop-notifiers'
+import { nativeDesktopWindowGraphs } from '../runtime/native-desktop-window-graphs'
+import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -25,15 +29,27 @@ export function registerRuntimeWindowLifecycle(
 ): void {
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
-  runtime.attachWindow(mainWindow.id)
   const mainWebContents = mainWindow.webContents
+  const windowId = mainWindow.id
+  const native = Boolean(desktopWindowId(mainWebContents))
+  let rendererAvailable = true
+  if (!native) {
+    runtime.attachWindow(windowId)
+  }
   const rendererNotifications = createRuntimeRendererNotificationSender({
     isWindowDestroyed: () => mainWindow.isDestroyed(),
     webContents: mainWebContents,
-    onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
+    onFailure: (reason) => {
+      if (native) {
+        rendererAvailable = false
+        nativeDesktopWindowGraphs(runtime).remove(windowId)
+      } else {
+        runtime.markGraphReloadFailed(windowId, reason)
+      }
+    }
   })
   const send = rendererNotifications.send
-  runtime.setNotifier({
+  const notifier: RuntimeNotifier = {
     worktreesChanged: (repoId, renamed, options) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       if (options?.invalidateGitScans !== false) {
@@ -218,7 +234,13 @@ export function registerRuntimeWindowLifecycle(
     browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
-  })
+  }
+  const unregisterNative = native
+    ? registerNativeDesktopNotifier(runtime, mainWindow, notifier, () => rendererAvailable)
+    : null
+  if (!native) {
+    runtime.setNotifier(notifier)
+  }
   // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
   const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? runtime.onClientEvent(
@@ -231,25 +253,36 @@ export function registerRuntimeWindowLifecycle(
       )
     : null
   registerRendererDocumentNavigation(mainWebContents, () => {
+    rendererAvailable = false
     rendererNotifications.onMainFrameReloadStarted()
-    const fence = runtime.markRendererReloading(mainWindow.id)
+    const resumeNativeGraph = native ? nativeDesktopWindowGraphs(runtime).suspend(windowId) : null
+    const fence = native ? null : runtime.markRendererReloading(windowId)
     return () => {
-      if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
+      if (native || (fence && runtime.markRendererReloadCancelled(windowId, fence))) {
+        resumeNativeGraph?.()
+        rendererAvailable = true
         rendererNotifications.onMainFrameReloadCancelled()
       }
     }
   })
   mainWebContents.on('did-finish-load', () => {
+    rendererAvailable = true
     rendererNotifications.onMainFrameLoadFinished()
   })
   mainWebContents.on('render-process-gone', () => {
+    rendererAvailable = false
     rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
     detachSidebarInputsNotices?.()
     rendererNotifications.close()
-    runtime.markGraphUnavailable(mainWindow.id)
-    if (activeRuntimeNotifierToken === notifierToken) {
+    if (native) {
+      unregisterNative?.()
+      nativeDesktopWindowGraphs(runtime).remove(windowId)
+    } else {
+      runtime.markGraphUnavailable(windowId)
+    }
+    if (!native && activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
       runtime.setNotifier(null)
       activeRuntimeNotifierToken = null

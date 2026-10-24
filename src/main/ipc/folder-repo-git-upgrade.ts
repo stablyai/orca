@@ -206,6 +206,11 @@ export function startFolderRepoGitUpgradeWatch(
   if (activeWatch) {
     activeWatch.store = store
     activeWatch.mainWindow = mainWindow
+    if (activeWatch.parkedWhileHidden && activeWatch.visibility.isWindowVisible()) {
+      activeWatch.parkedWhileHidden = false
+      void runTick(activeWatch)
+      return
+    }
     wakeWatch(activeWatch)
     return
   }

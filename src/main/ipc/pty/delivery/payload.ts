@@ -3,6 +3,7 @@ import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
+import { tryGetProviderForPty } from '../provider/registry'
 
 export function makePtyDataPayload(
   id: string,
@@ -62,6 +63,13 @@ export function sendPtyDataToRenderer(
   id: string,
   payload: PtyDataPayload
 ): boolean {
+  if (session.options?.nativeWindowDelivery) {
+    const accepted = session.options.nativeWindowDelivery.acceptData(payload)
+    if (accepted) {
+      tryGetProviderForPty(id)?.acknowledgeDataEvent(id, getPtyPayloadCharCount(payload))
+    }
+    return accepted
+  }
   if (!session.mainWindow) {
     return false
   }
@@ -112,7 +120,7 @@ export function sendPtyDataToRenderer(
       session,
       id,
       'delivery-heal',
-      session.runtime?.getPtyOutputSequence(id)
+      session.runtime?.getPtyOutputSequence(id) ?? session.options?.outputSequenceOf?.(id)
     )
   ) {
     // Failed sends must leave restore pending.

@@ -1,4 +1,5 @@
 import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { webContents } from 'electron'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent,
@@ -14,7 +15,10 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       return
     }
     download.browserTabId = browserTabId
-    download.rendererWebContentsId = this.rendererWebContentsIdByTabId.get(browserTabId) ?? null
+    download.rendererWebContentsId =
+      this.getRendererContextForGuest(download.guestWebContentsId)?.renderer.id ??
+      this.rendererWebContentsIdByTabId.get(browserTabId) ??
+      null
   }
 
   protected flushPendingDownloadRequests(browserTabId: string, guestWebContentsId: number): void {
@@ -65,8 +69,11 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (download.startedSent) {
       return
     }
-    const renderer = this.resolveRendererForBrowserTab(download.browserTabId)
-    if (!renderer) {
+    const renderer =
+      download.rendererWebContentsId === null
+        ? this.resolveRendererForBrowserTab(download.browserTabId)
+        : webContents.fromId(download.rendererWebContentsId)
+    if (!renderer || renderer.isDestroyed()) {
       return
     }
     renderer.send('browser:download-requested', {
@@ -89,8 +96,10 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!browserTabId) {
       return
     }
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
+    const owner = this.downloadsById.get(payload.downloadId)?.rendererWebContentsId
+    const renderer =
+      owner == null ? this.resolveRendererForBrowserTab(browserTabId) : webContents.fromId(owner)
+    if (!renderer || renderer.isDestroyed()) {
       return
     }
     renderer.send('browser:download-progress', payload)
@@ -103,8 +112,10 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!browserTabId) {
       return
     }
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    if (!renderer) {
+    const owner = this.downloadsById.get(payload.downloadId)?.rendererWebContentsId
+    const renderer =
+      owner == null ? this.resolveRendererForBrowserTab(browserTabId) : webContents.fromId(owner)
+    if (!renderer || renderer.isDestroyed()) {
       return
     }
     renderer.send('browser:download-finished', payload)

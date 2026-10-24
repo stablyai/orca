@@ -8,7 +8,7 @@ import {
   type BrowserClientPageMetadataPublishOutcome
 } from '../../shared/browser-client-page-metadata-protocol'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
-import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { selectTrustedBrowserRenderer as isTrustedBrowserRenderer } from './browser-renderer-selection'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import {
   isBrowserSiteColorScheme,

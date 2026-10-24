@@ -3,8 +3,22 @@ import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 
 export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding {
-  protected openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate?: boolean): boolean {
-    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+  protected openLinkInOrcaTab(
+    browserTabId: string,
+    rawUrl: string,
+    activate?: boolean,
+    rootGuestWebContentsId?: number
+  ): boolean {
+    const owner =
+      rootGuestWebContentsId === undefined
+        ? null
+        : this.getRendererContextForGuest(rootGuestWebContentsId)
+    const renderer =
+      rootGuestWebContentsId === undefined
+        ? this.resolveRendererForBrowserTab(browserTabId)
+        : owner?.browserPageId === browserTabId
+          ? owner.renderer
+          : null
     if (!renderer) {
       return false
     }

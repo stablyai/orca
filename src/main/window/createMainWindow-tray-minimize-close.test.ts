@@ -304,7 +304,7 @@ describe('createMainWindow', () => {
       const store = makeStore(true, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
-      ipcHandlers['window:request-close']?.()
+      ipcHandlers['window:request-close']?.({ sender: webContents })
 
       expect(instance.hide).toHaveBeenCalledTimes(1)
       expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
@@ -317,7 +317,7 @@ describe('createMainWindow', () => {
       const store = makeStore(false, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
-      ipcHandlers['window:request-close']?.()
+      ipcHandlers['window:request-close']?.({ sender: webContents })
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {

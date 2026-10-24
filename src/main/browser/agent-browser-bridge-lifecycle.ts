@@ -26,7 +26,14 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.onPageClosed(browserPageId)
+      const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+      const owner =
+        this.navigationCommandsBySession.get(sessionName)?.webContentsId ??
+        this.sessions.get(sessionName)?.webContentsId ??
+        this.commandGuestBySession.get(sessionName)
+      if (owner === undefined || owner === webContentsId) {
+        await this.onPageClosed(browserPageId)
+      }
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -34,6 +41,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
   /** Offscreen backends unregister guests before cleanup, so close by page ID. */
   async onPageClosed(browserPageId: string): Promise<void> {
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    this.rejectQueuedCommandsForClosedSession(sessionName)
     await this.destroySession(sessionName)
     this.pendingInterceptRestore.delete(sessionName)
   }
@@ -45,13 +53,42 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
   ): Promise<void> {
     // Process swaps preserve page IDs but replace the guest and its session.
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
-    const session = this.sessions.get(sessionName)
-    const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
-    const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
-    if (session && session.activeInterceptPatterns.length > 0) {
-      this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+    const oldWebContentsId =
+      previousWebContentsId ??
+      this.sessions.get(sessionName)?.webContentsId ??
+      this.commandGuestBySession.get(sessionName)
+    if (
+      oldWebContentsId !== undefined &&
+      this.browserManager.getTabIdForWebContentsId(oldWebContentsId) === browserPageId
+    ) {
+      return
     }
-    await this.destroySession(sessionName)
+    const session = this.sessions.get(sessionName)
+    const navigation = this.navigationCommandsBySession.get(sessionName)
+    const owner =
+      navigation?.webContentsId ??
+      session?.webContentsId ??
+      this.commandGuestBySession.get(sessionName)
+    const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
+    if (owner === undefined || oldWebContentsId === undefined || owner === oldWebContentsId) {
+      const retargetNavigation =
+        navigation !== undefined &&
+        navigation.webContentsId === oldWebContentsId &&
+        this.resolveTabIdSafe(newWebContentsId) === browserPageId &&
+        !this.shutdownStarted
+      if (retargetNavigation) {
+        navigation.webContentsId = newWebContentsId
+        this.commandGuestBySession.set(sessionName, newWebContentsId)
+        this.rejectWaitingCommands(sessionName)
+      }
+      if (session && session.activeInterceptPatterns.length > 0) {
+        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+      }
+      await this.destroySession(sessionName, {
+        closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
+        keepQueuedCommands: retargetNavigation
+      })
+    }
     if (oldWebContentsId != null && this.activeWebContentsId === oldWebContentsId) {
       this.activeWebContentsId = newWebContentsId
     }
@@ -69,11 +106,24 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     browserPageId: string,
     webContentsId: number
   ): Promise<void> {
+    const queue = this.commandQueues.get(sessionName)
+    const assertAdmitted = (): void => {
+      this.assertCommandAdmission()
+      if (this.commandQueues.get(sessionName) !== queue) {
+        throw new BrowserError('browser_tab_closed', 'Tab was closed while command was running')
+      }
+      if (this.resolveTabIdSafe(webContentsId) !== browserPageId) {
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${browserPageId} is no longer available`
+        )
+      }
+    }
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
       await pendingDestruction
     }
-    this.assertCommandAdmission()
+    assertAdmitted()
 
     if (this.sessions.has(sessionName)) {
       return
@@ -83,7 +133,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const pending = this.pendingSessionCreation.get(sessionName)
     if (pending) {
       await pending
-      this.assertCommandAdmission()
+      assertAdmitted()
       return
     }
 
@@ -98,13 +148,21 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
       // Reset daemon sessions that may retain a CDP port from an earlier Orca process.
       await this.closeStaleAgentBrowserSession(sessionName)
+      assertAdmitted()
 
       const proxy = new CdpWsProxy(
         wc,
         () => this.browserManager.holdPaintForCapture(webContentsId),
         () => this.browserManager.guardUserFocusForAgentInput(webContentsId)
       )
-      const cdpEndpoint = await proxy.start()
+      let cdpEndpoint: string
+      try {
+        cdpEndpoint = await proxy.start()
+        assertAdmitted()
+      } catch (error) {
+        await proxy.stop()
+        throw error
+      }
 
       this.sessions.set(sessionName, {
         proxy,
@@ -133,12 +191,30 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     sessionName: string,
     options: AgentBrowserCleanupOptions = { closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS }
   ): Promise<void> {
+    if (!options.keepQueuedCommands) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
+    }
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
       await pendingDestruction
       return
     }
 
+    const destroy = this.retireSessionResources(sessionName, options)
+    this.pendingSessionDestruction.set(sessionName, destroy)
+    try {
+      await destroy
+    } finally {
+      if (this.pendingSessionDestruction.get(sessionName) === destroy) {
+        this.pendingSessionDestruction.delete(sessionName)
+      }
+    }
+  }
+
+  private async retireSessionResources(
+    sessionName: string,
+    options: AgentBrowserCleanupOptions
+  ): Promise<void> {
     const pendingCreation = this.pendingSessionCreation.get(sessionName)
     if (pendingCreation) {
       // Wait for creation so a late proxy cannot survive teardown.
@@ -151,9 +227,6 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
     const session = this.sessions.get(sessionName)
     if (!session) {
-      if (!options.keepQueuedCommands) {
-        this.rejectQueuedCommandsForClosedSession(sessionName)
-      }
       return
     }
 
@@ -162,10 +235,6 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     // Retirement preserves the live page's routes for its replacement session.
     if (options.keepQueuedCommands && session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
-    }
-
-    if (!options.keepQueuedCommands) {
-      this.rejectQueuedCommandsForClosedSession(sessionName)
     }
 
     if (session.activeProcess) {
@@ -177,39 +246,35 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
       session.activeProcess = null
     }
 
-    const destroy = (async (): Promise<void> => {
-      try {
-        // Close the named daemon within the quit barrier's budget.
-        await this.runAgentBrowserRaw(
-          sessionName,
-          ['--session', sessionName, 'close'],
-          options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
-        )
-      } catch {}
-
-      await session.proxy.stop()
-    })()
-    this.pendingSessionDestruction.set(sessionName, destroy)
     try {
-      await destroy
-    } finally {
-      this.pendingSessionDestruction.delete(sessionName)
-    }
+      // Close the named daemon within the quit barrier's budget.
+      await this.runAgentBrowserRaw(
+        sessionName,
+        ['--session', sessionName, 'close'],
+        options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
+      )
+    } catch {}
+    await session.proxy.stop()
   }
 
   protected rejectQueuedCommandsForClosedSession(sessionName: string): void {
-    const queue = this.commandQueues.get(sessionName)
+    this.rejectWaitingCommands(sessionName)
     this.commandQueues.delete(sessionName)
+    this.commandGuestBySession.delete(sessionName)
+    this.navigationCommandsBySession.delete(sessionName)
     this.processingQueues.delete(sessionName)
+  }
+
+  private rejectWaitingCommands(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
     if (queue) {
       const err = new BrowserError(
         'browser_tab_closed',
         'Tab was closed while commands were queued'
       )
-      for (const cmd of queue) {
+      for (const cmd of queue.splice(0)) {
         cmd.reject(err)
       }
-      queue.length = 0
     }
   }
 }

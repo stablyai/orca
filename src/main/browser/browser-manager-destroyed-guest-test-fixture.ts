@@ -26,6 +26,7 @@ export class DestroyedGuestTestManager extends BrowserManager {
 }
 
 export class DestroyedGuestTestContents extends EventEmitter {
+  windowOpenHandler: Parameters<WebContents['setWindowOpenHandler']>[0] | undefined
   readonly debugger = Object.assign(new EventEmitter(), {
     isAttached: () => false,
     sendCommand: async () => undefined
@@ -59,7 +60,9 @@ export class DestroyedGuestTestContents extends EventEmitter {
   }
 
   setUserAgent(): void {}
-  setWindowOpenHandler(): void {}
+  setWindowOpenHandler(handler: Parameters<WebContents['setWindowOpenHandler']>[0]): void {
+    this.windowOpenHandler = handler
+  }
   setBackgroundThrottling(): void {}
 
   destroy(): void {

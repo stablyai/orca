@@ -5,6 +5,7 @@ import {
 import { normalizePairingBase64 } from '../../../shared/mobile-pairing-base64'
 import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/mobile-pairing-protocol-limits'
 import type { DeviceScope } from '../../../shared/runtime-types'
+import { withoutLaunchWorktreeParam } from './web-launch-worktree-target'
 
 const PAIRING_OFFER_VERSION = 2
 
@@ -57,7 +58,8 @@ export function readPairingInputFromLocation(
     }
   }
 
-  const hash = location.hash.replace(/^#/, '').trim()
+  // Why: a desktop extra window appends its launch workspace, which is never a pairing code.
+  const hash = withoutLaunchWorktreeParam(location.hash.replace(/^#/, '')).trim()
   if (!hash) {
     return null
   }

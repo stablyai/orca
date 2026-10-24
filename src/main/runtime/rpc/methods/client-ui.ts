@@ -27,12 +27,13 @@ import {
 import { TerminalQuickCommandsUpdate } from '../../../../shared/rpc-contract/terminal-quick-command-params'
 import { AgentLaunchSettingsMutation } from '../../../../shared/rpc-contract/agent-launch-settings-params'
 import { projectTerminalQuickCommandsForClient } from './terminal-quick-command-long-prompt-capability'
+import { omitStoredFields } from '../../../../shared/workspace-layout/stored-record-fields'
 
 function uiForCaller(
   state: PersistedUIState,
   context: Pick<RpcContext, 'clientKind' | 'pairedDeviceParentId'>
 ): PairedUiState & Pick<PersistedUIState, 'hideWorkspacesFromOtherDevices'> {
-  const ui = omitPairingLocalUiFields(state)
+  const ui = omitPairingLocalUiFields(omitStoredFields(state, ['desktopWindows']))
   // Why always sent: its presence tells the phone this host shares the filter; an older host omits
   // it, and the phone then keeps its local value.
   return isHostOwnPhone(context)

@@ -50,15 +50,15 @@ const mobile = { width: 375, height: 667, deviceScaleFactor: 2, mobile: true }
 const desktop = { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }
 const guests = new Map<number, Record<string, unknown>>()
 const registeredGuests = readViewportStateMap('webContentsIdByTabId')
-const presetIntents = readViewportStateMap('viewportPresetByTabId')
-const pendingOperations = readViewportStateMap('viewportOpsByTabId')
+const presetIntents = readViewportStateMap('viewportPresetsByGuestId')
+const pendingOperations = readViewportStateMap('viewportOpsByGuestId')
 const cdpUserAgentOverrides = readViewportStateMap('cdpUserAgentOverrideStateByGuestId')
 
 function readViewportStateMap(
   name:
     | 'webContentsIdByTabId'
-    | 'viewportPresetByTabId'
-    | 'viewportOpsByTabId'
+    | 'viewportPresetsByGuestId'
+    | 'viewportOpsByGuestId'
     | 'cdpUserAgentOverrideStateByGuestId'
 ): Map<unknown, unknown> {
   const value: unknown = browserManager[name]
@@ -143,7 +143,7 @@ describe('browser viewport operation ownership', () => {
     }
     gate.reject(new Error('Target closed'))
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('clear-close')).toBeUndefined()
+    expect(presetIntents.get(101)).toBeUndefined()
     expect(cdpUserAgentOverrides.size).toBe(0)
   })
 
@@ -159,7 +159,7 @@ describe('browser viewport operation ownership', () => {
     gate.reject(new Error('Old target closed'))
     await expect(result).resolves.toBe(false)
     expect(registeredGuests.get('replacement')).toBe(103)
-    expect(presetIntents.get('replacement')).toEqual({
+    expect(presetIntents.get(103)).toEqual({
       guestWebContentsId: 103,
       requested: desktop,
       applied: desktop
@@ -177,7 +177,7 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-delete', mobile)
     gate.resolve()
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('late-delete')).toEqual({
+    expect(presetIntents.get(105)).toEqual({
       guestWebContentsId: 105,
       requested: mobile,
       applied: mobile
@@ -194,7 +194,7 @@ describe('browser viewport operation ownership', () => {
     await gate.entered
     gate.reject(new Error('Protocol error'))
     await expect(result).resolves.toBe(false)
-    expect(presetIntents.get('same-owner')).toEqual({
+    expect(presetIntents.get(106)).toEqual({
       guestWebContentsId: 106,
       requested: null,
       applied: null
@@ -213,7 +213,7 @@ describe('browser viewport operation ownership', () => {
     await browserManager.setViewportOverride('late-apply', desktop)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('late-apply')).toEqual({
+    expect(presetIntents.get(111)).toEqual({
       guestWebContentsId: 111,
       requested: desktop,
       applied: desktop
@@ -235,7 +235,7 @@ describe('browser viewport operation ownership', () => {
     register('native-replacement', 113)
     gate.resolve()
     await expect(pending).resolves.toBe(false)
-    expect(presetIntents.get('native-replacement')).toBeUndefined()
+    expect(presetIntents.get(113)).toBeUndefined()
     expect(old.debuggerSendCommand).not.toHaveBeenCalledWith(
       'Emulation.setUserAgentOverride',
       expect.anything()
@@ -254,16 +254,16 @@ describe('browser viewport operation ownership', () => {
     const replacementFirst = browserManager.setViewportOverride('queued-replacement', desktop)
     const replacementSecond = browserManager.setViewportOverride('queued-replacement', mobile)
     await newGate.entered
-    const tail = pendingOperations.get('queued-replacement')
+    const tail = pendingOperations.get(115)
     oldGate.resolve()
     await expect(first).resolves.toBe(false)
     await expect(second).resolves.toBe(false)
-    expect(pendingOperations.get('queued-replacement')).toBe(tail)
+    expect(pendingOperations.get(115)).toBe(tail)
     newGate.resolve()
     await expect(replacementFirst).resolves.toBe(true)
     await expect(replacementSecond).resolves.toBe(true)
     expect(pendingOperations.size).toBe(0)
-    expect(presetIntents.get('queued-replacement')).toEqual({
+    expect(presetIntents.get(115)).toEqual({
       guestWebContentsId: 115,
       requested: mobile,
       applied: mobile
@@ -293,7 +293,7 @@ describe('browser viewport operation ownership', () => {
     ])
     expect(handle.presentedUserAgent()).toBe(GUEST_CLEAN_UA)
     expect(pendingOperations.size).toBe(0)
-    expect(presetIntents.get('serialized')).toEqual({
+    expect(presetIntents.get(116)).toEqual({
       guestWebContentsId: 116,
       requested: null,
       applied: null

@@ -13,6 +13,7 @@ import {
 } from '@/store/workspace-layout-frame-store-patch'
 import { terminalLayoutsWithFrameBindings } from './workspace-layout-frame-bindings'
 import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
+import type { LayoutFrameStoreState } from '@/store/workspace-layout-frame-store-patch'
 import { layoutViewAndFactsOfStore } from '@/store/workspace-layout-frame-store-view'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace-session-host-split'
@@ -30,6 +31,11 @@ export type LayoutFrameBuildHolds = {
   keepsTerminalLayout: (tabId: string) => boolean
   newRowFields: (tabId: string) => Partial<TerminalTab> | null
   held: HeldDrawnTabs
+  localEdits?: (
+    state: LayoutFrameStoreState,
+    built: ReturnType<typeof buildLayoutFrameSlices>,
+    keys: readonly string[]
+  ) => ReturnType<typeof buildLayoutFrameSlices>
 }
 
 export type LayoutFrameBuildPatch = Partial<AppState>
@@ -44,12 +50,13 @@ function patchFromSlices(
   { view, facts }: { view: DesktopLayoutView; facts: LayoutContentFacts },
   holds: LayoutFrameBuildHolds
 ): LayoutFrameBuildPatch {
-  const built = buildLayoutFrameSlices({
+  const frame = buildLayoutFrameSlices({
     layouts: Object.fromEntries(keys.map((key) => [key, cache[key]!])),
     // A tab this window asked main to open draws with the window's facts for it.
     facts: withPendingTabFacts(facts, keys),
     view
   })
+  const built = holds.localEdits?.(state, frame, keys) ?? frame
   return buildLayoutFrameStorePatch(
     state,
     built,

@@ -21,6 +21,10 @@ import {
 } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
+import { desktopWindowId } from '../window/desktop-renderer-registry'
+import { attachNativeDesktopAutomations } from '../window/native-desktop-automations'
+
+const registeredNativeCoreRuntimes = new WeakSet<NonNullable<typeof state.runtime>>()
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
@@ -61,59 +65,70 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
-  registerCoreHandlers(
-    store,
-    runtime,
-    stats,
-    claudeUsage,
-    codexUsage,
-    openCodeUsage,
-    museUsage,
-    codexAccounts,
-    claudeAccounts,
-    rateLimits,
-    window.webContents.id,
-    automations,
-    {
-      prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
-      resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
-    },
-    state.agentAwakeService ?? undefined,
-    state.crashReports ?? undefined,
-    keybindings,
-    {
-      getAdditionalAiVaultCodexHomePaths: () =>
-        codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
-      prepareAiVaultSessionResume: (args) =>
-        prepareCodexAiVaultSessionResume(args, {
-          runtimeHome: codexRuntimeHome,
-          systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
-          preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
-        }),
-      onBeforeRelaunch: async () => {
-        state.isQuitting = true
-        state.desktopRelayService?.fenceAndCloseNow()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+  const native = Boolean(desktopWindowId(window.webContents))
+  if (!native || !registeredNativeCoreRuntimes.has(runtime)) {
+    registerCoreHandlers(
+      store,
+      runtime,
+      stats,
+      claudeUsage,
+      codexUsage,
+      openCodeUsage,
+      museUsage,
+      codexAccounts,
+      claudeAccounts,
+      rateLimits,
+      window.webContents.id,
+      automations,
+      {
+        prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
+        prepareForClaudeLaunch: (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
+        resolveBaseEnvironment: () => resolveHostAgentBaseEnvironment(store.getSettings())
       },
-      onOrcaProfileAuthMutation: () => {
-        // Why: a provider whose launch-time install failed is installed by the next auth change.
-        void state.desktopRelayInstaller?.authChanged()
-        state.desktopRelayService?.authMutated()
+      state.agentAwakeService ?? undefined,
+      state.crashReports ?? undefined,
+      keybindings,
+      {
+        getAdditionalAiVaultCodexHomePaths: () =>
+          codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
+        prepareAiVaultSessionResume: (args) =>
+          prepareCodexAiVaultSessionResume(args, {
+            runtimeHome: codexRuntimeHome,
+            systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
+            preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
+          }),
+        onBeforeRelaunch: async () => {
+          state.isQuitting = true
+          state.desktopRelayService?.fenceAndCloseNow()
+          await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+        },
+        onOrcaProfileAuthMutation: () => {
+          // Why: a provider whose launch-time install failed is installed by the next auth change.
+          void state.desktopRelayInstaller?.authChanged()
+          state.desktopRelayService?.authMutated()
+        },
+        // Sign-out is the one fence a paired phone can be told about; quit and
+        // relaunch above stay reasonless so a restart never reads as signed out.
+        onBeforeOrcaProfileSignOut: () => {
+          state.desktopRelayInstaller?.suspend()
+          state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+        }
       },
-      // Sign-out is the one fence a paired phone can be told about; quit and
-      // relaunch above stay reasonless so a restart never reads as signed out.
-      onBeforeOrcaProfileSignOut: () => {
-        state.desktopRelayInstaller?.suspend()
-        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-      }
-    },
-    state.pluginService ?? undefined,
-    state.pluginMarketplaceService && state.pluginMarketplaceInstaller
-      ? { marketplace: state.pluginMarketplaceService, installer: state.pluginMarketplaceInstaller }
-      : undefined
-  )
-  automations.setWebContents(window.webContents)
+      state.pluginService ?? undefined,
+      state.pluginMarketplaceService && state.pluginMarketplaceInstaller
+        ? {
+            marketplace: state.pluginMarketplaceService,
+            installer: state.pluginMarketplaceInstaller
+          }
+        : undefined
+    )
+    if (native) {
+      registeredNativeCoreRuntimes.add(runtime)
+    }
+  }
+  if (!attachNativeDesktopAutomations(automations, window)) {
+    automations.setWebContents(window.webContents)
+  }
   automations.start()
   attachMainWindowServices(
     window,
@@ -126,7 +141,7 @@ export function attachMainWindowCoreServices(
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
-        if (window.webContents.id === webContentsId) {
+        if (native || window.webContents.id === webContentsId) {
           deps.markExpectedRendererReload(webContentsId)
         }
         deps.recordRendererReload(ignoreCache)

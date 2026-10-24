@@ -31,16 +31,16 @@ import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-regis
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
-import {
-  scheduleWorktreeBaseDirectoryWatcherSync,
-  setWorktreeBaseDirectoryWatcherSyncContext
-} from '../ipc/worktree-base-directory-watcher'
-import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
+import { attachMainWindowWorktreeWatchers } from './main-window-worktree-watchers'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
+import { desktopWindowId, listDesktopRenderers } from './desktop-renderer-registry'
+import { registerNativeWindowServiceHandlers } from './native-window-service-handlers'
+import { NativeDesktopPtyDelivery } from '../ipc/pty/delivery/native-desktop-delivery'
+import { preferredNativeDesktopWindow } from './native-desktop-windows'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -48,6 +48,8 @@ let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
 let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
+const attachedNativeRuntimes = new WeakSet<OrcaRuntimeService>()
+const nativeDeliveries = new WeakMap<OrcaRuntimeService, NativeDesktopPtyDelivery>()
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -72,69 +74,95 @@ export function attachMainWindowServices(
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): void {
-  registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
-  registerRepoHandlers(mainWindow, store, runtime)
-  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
-  setRepoRemoteClientNotifier(runtime)
-  setWorktreeCatalogRemoteClientNotifier(runtime)
-  registerWorktreeHandlers(mainWindow, store, runtime, {
-    onWorktreeLifecycle: options?.onWorktreeLifecycle
-  })
-  // Why: repo/settings mutations resync watchers through this attached main-window context.
-  setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
-  scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
-  // Why: folder projects get no watch target, so an external `git init` needs its own
-  // marker poll to upgrade them without a restart (#11477).
-  startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store)
-  registerPtyHandlers(
-    mainWindow,
-    runtime,
-    getSelectedCodexHomePath,
-    () => store.getSettings(),
-    prepareClaudeAuth,
-    store,
-    {
-      prepareCodexSessionResume: options?.prepareCodexSessionResume,
-      awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
-      awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
-      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
-      onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
-      onPtyExit: options?.onPtyExit,
-      systemPrefersDark: () => nativeTheme.shouldUseDarkColors
-    }
-  )
-  // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
-  registerDaemonManagementHandlers()
-  // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
-  scheduleHistoryGc(async () => {
-    return getKnownWorktreeIdsForHistoryGc(store)
-  })
-  openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
-  openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
-  const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
-  if (localPtyProviderStartupReady) {
-    void localPtyProviderStartupReady
-      .then(() => hydrateLocalPtyRegistryAtBoot(store))
-      .catch((error) => {
-        console.warn(
-          '[memory] Deferred pty-registry hydration skipped:',
-          error instanceof Error ? error.message : String(error)
-        )
-      })
+  const native = Boolean(desktopWindowId(mainWindow.webContents))
+  let delivery = nativeDeliveries.get(runtime)
+  if (native) {
+    delivery ??= new NativeDesktopPtyDelivery(runtime, () => store.getSettings())
+    nativeDeliveries.set(runtime, delivery)
+    delivery.add(mainWindow)
+    registerNativeWindowServiceHandlers(mainWindow, options?.onBeforeRendererReload)
   } else {
-    void hydrateLocalPtyRegistryAtBoot(store)
+    registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
+  attachMainWindowWorktreeWatchers(store, mainWindow)
+  if (!native || !attachedNativeRuntimes.has(runtime)) {
+    registerRepoHandlers(mainWindow, store, runtime)
+    // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
+    setRepoRemoteClientNotifier(runtime)
+    setWorktreeCatalogRemoteClientNotifier(runtime)
+    registerWorktreeHandlers(mainWindow, store, runtime, {
+      onWorktreeLifecycle: options?.onWorktreeLifecycle
+    })
+    registerWorkspaceCleanupHandlers(store)
+    registerPtyHandlers(
+      delivery?.source ?? mainWindow,
+      runtime,
+      getSelectedCodexHomePath,
+      () => store.getSettings(),
+      prepareClaudeAuth,
+      store,
+      {
+        prepareCodexSessionResume: options?.prepareCodexSessionResume,
+        awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+        awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
+        isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
+        onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
+        onPtyExit: options?.onPtyExit,
+        systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+        nativeWindowDelivery: delivery
+          ? {
+              sessionFor: (renderer) => delivery.sessionFor(renderer),
+              acceptData: (payload) => delivery.acceptData(payload),
+              attachSource: (session) => delivery.attachSource(session),
+              claim: (renderer, id) => delivery.claim(renderer, id),
+              canResize: (renderer, id) => delivery.canResize(renderer, id),
+              canReply: (renderer, id) => delivery.canReply(renderer, id),
+              updateHint: (renderer, id, hint, value) =>
+                delivery.updateHint(renderer, id, hint, value)
+            }
+          : undefined
+      }
+    )
+    // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
+    registerDaemonManagementHandlers()
+    // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
+    scheduleHistoryGc(async () => {
+      return getKnownWorktreeIdsForHistoryGc(store)
+    })
+    openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
+    openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
+    const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
+    if (localPtyProviderStartupReady) {
+      void localPtyProviderStartupReady
+        .then(() => hydrateLocalPtyRegistryAtBoot(store))
+        .catch((error) => {
+          console.warn(
+            '[memory] Deferred pty-registry hydration skipped:',
+            error instanceof Error ? error.message : String(error)
+          )
+        })
+    } else {
+      void hydrateLocalPtyRegistryAtBoot(store)
+    }
+    registerSshHandlers(store, () => preferredNativeDesktopWindow() ?? mainWindow, runtime)
+    scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
+    if (native) {
+      attachedNativeRuntimes.add(runtime)
+    }
+  }
   registerDroppedPathPreparation(mainWindow, async () => {
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       runtime.ensureStructuredAgentSessionHost()
     )
     return getAgentSessionAttachmentStore()
   })
-  registerTccPromptNoticeHandlers(mainWindow)
-  scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
+  if (!native) {
+    registerTccPromptNoticeHandlers(mainWindow)
+  }
   registerRuntimeWindowLifecycle(mainWindow, runtime)
+  if (native) {
+    mainWindow.on('focus', () => browserManager.selectNativeRenderer(mainWindow.webContents.id))
+  }
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -160,7 +188,9 @@ export function attachMainWindowServices(
 
   mainWindow.on('closed', () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
-    browserManager.unregisterAll()
+    if (!native || listDesktopRenderers().length === 0) {
+      browserManager.unregisterAll()
+    }
   })
 }
 

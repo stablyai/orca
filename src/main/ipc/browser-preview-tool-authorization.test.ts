@@ -41,6 +41,7 @@ vi.mock('electron', () => ({
 vi.mock('../browser/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn(() => ({ ok: true })) },
   browserManager: {
+    selectNativeRenderer: vi.fn(),
     registerGuest: vi.fn(() => true),
     attachGuestPolicies: vi.fn(),
     unregisterGuest: vi.fn(),

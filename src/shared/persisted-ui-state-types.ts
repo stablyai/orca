@@ -27,8 +27,23 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { PersistedDesktopWindowState } from './desktop-window-state-types'
+
+/** One extra desktop window that runs the bundled web client against this computer's runtime. */
+export type PersistedRuntimeClientWindow = {
+  slot: number
+  /** Pairing grant minted for this slot's browser profile; reused while it stays authorized. */
+  deviceId?: string
+  /** Origin the slot's pairing is stored under; a different runtime port needs a fresh pairing. */
+  webClientOrigin?: string
+  /** Reopened on the next launch; cleared only when the user closes this window. */
+  open?: boolean
+  bounds?: { x: number; y: number; width: number; height: number }
+  isMaximized?: boolean
+}
 
 export type PersistedUIState = {
+  desktopWindows?: Record<string, PersistedDesktopWindowState>
   jiraSavedFilterState?: JiraSavedFilterState
   jiraQuickFilterState?: JiraQuickFilterState
   lastActiveRepoId: string | null
@@ -203,6 +218,8 @@ export type PersistedUIState = {
   /** Saved bounds for the pop-out dashboard window so it restores to its last
    *  position/size. Independent of the main window's bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
+  /** Extra runtime client windows by slot: pairing reuse, bounds, and whether to reopen at launch. */
+  runtimeClientWindows?: PersistedRuntimeClientWindow[]
   /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
   _sortBySmartMigrated?: boolean
   /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */

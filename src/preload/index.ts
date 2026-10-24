@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { readNativeDesktopWindowArgument } from '../shared/native-desktop-window-argument'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './preload-runtime-support'
 import { appApi } from './api/app-bridge'
@@ -87,6 +88,10 @@ import { agentStatusApi } from './api/agent-status-bridge'
 import { speechApi } from './api/speech-bridge'
 
 installBrowserFindListener()
+const nativeDesktopWindowId = readNativeDesktopWindowArgument(process.argv)
+if (nativeDesktopWindowId) {
+  contextBridge.exposeInMainWorld('__ORCA_NATIVE_WINDOW_ID__', nativeDesktopWindowId)
+}
 
 const telemetryTrackApi: PreloadApi['telemetryTrack'] = (name, props) =>
   ipcRenderer.invoke('telemetry:track', name, props)

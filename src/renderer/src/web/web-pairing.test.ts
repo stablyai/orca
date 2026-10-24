@@ -44,6 +44,19 @@ describe('web pairing input', () => {
     expect(readPairingInputFromLocation(location)).toBeNull()
   })
 
+  it('never reads a desktop launch-workspace fragment as a pairing code', () => {
+    const code = encodeOffer({ scope: 'runtime' })
+    const reopened = readPairingInputFromLocation({ search: '', hash: '#worktree=repo%2Fwt' })
+
+    expect(reopened).toBeNull()
+    expect(
+      decideWebPairingStartup({ initialPairingInput: reopened, hasStoredEnvironment: true })
+    ).toEqual({ kind: 'use-stored-environment' })
+    expect(
+      readPairingInputFromLocation({ search: '', hash: `#pairing=${code}&worktree=repo%2Fwt` })
+    ).toBe(code)
+  })
+
   it('preserves legacy padding and aliases with the same decoded offer', () => {
     const paddedOffer = { ...offer, endpoint: `${offer.endpoint}/` }
     const code = encodeOffer(paddedOffer)

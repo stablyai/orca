@@ -1,10 +1,12 @@
 export function createAppWindowMenu(
   label: string,
-  isMac: boolean
+  isMac: boolean,
+  leadingItems: Electron.MenuItemConstructorOptions[] = []
 ): Electron.MenuItemConstructorOptions {
   return {
     label,
     submenu: [
+      ...leadingItems,
       {
         // Electron's minimize role would steal Ctrl+M from terminal apps.
         role: 'minimize',

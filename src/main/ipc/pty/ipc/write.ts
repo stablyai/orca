@@ -1,4 +1,4 @@
-import type { PtyRendererDelivery } from '../session'
+import type { PtyRendererDelivery, PtyIpcSessionOptions } from '../session'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
@@ -6,6 +6,7 @@ import { createPtyWriteInput } from './write-input'
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
   runtime?: OrcaRuntimeService
+  nativeWindowDelivery?: PtyIpcSessionOptions['nativeWindowDelivery']
 }): void {
   const ipcMain = getPtyIpc()
   const { runtime } = deps
@@ -23,6 +24,16 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return
     }
+    if (
+      args.inputKind === 'query-reply' &&
+      deps.nativeWindowDelivery &&
+      !deps.nativeWindowDelivery.canReply(event.sender, args.id)
+    ) {
+      return
+    }
+    if (args.inputKind === 'driving') {
+      deps.nativeWindowDelivery?.claim(event.sender, args.id)
+    }
     const claimTail = hostViewportClaimTails.get(args.id)
     if (claimTail) {
       void claimTail.then((claimed) => (claimed ? writePtyInput(args) : false))
@@ -33,6 +44,16 @@ export function installPtyWriteIpcHandlers(deps: {
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {
       return false
+    }
+    if (
+      args.inputKind === 'query-reply' &&
+      deps.nativeWindowDelivery &&
+      !deps.nativeWindowDelivery.canReply(event.sender, args.id)
+    ) {
+      return false
+    }
+    if (args.inputKind === 'driving') {
+      deps.nativeWindowDelivery?.claim(event.sender, args.id)
     }
     const claimTail = hostViewportClaimTails.get(args.id)
     return claimTail
@@ -45,6 +66,7 @@ export function installPtyWriteIpcHandlers(deps: {
     if (!isPtyWriteEventFromMainWindow(event) || !runtime || !isPtyViewportClaimPayload(args)) {
       return
     }
+    deps.nativeWindowDelivery?.claim(event.sender, args.id)
     const prior = hostViewportClaimTails.get(args.id)
     // A second mirrored pane must join the in-flight resize claim before input, never replace it with a no-op.
     const claim = (

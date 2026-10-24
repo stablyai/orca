@@ -23,6 +23,8 @@ import {
   WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND
 } from '../restoring-sessions/session-worktree-ownership'
 import { migrateWorktreeIdentity } from './worktree-identity-migration'
+import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 
 const REPO = 'repo'
 const OLD = `${REPO}::/old/path`
@@ -216,6 +218,31 @@ const referencingFields = Object.keys(WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND)
   .sort()
 
 describe('migrateWorktreeIdentity worktree-reference coverage', () => {
+  it('rekeys each native window selection and view without changing its identity', () => {
+    const session = { ...getDefaultWorkspaceSession(), activeWorktreeId: OLD }
+    const view = loadWorkspaceLayoutWithoutReport(
+      'local',
+      session,
+      nameBasedLoadContext()
+    ).desktopView
+    view.groups[OLD] = { group: { activeTabId: 'tab', recentTabIds: ['tab'] } }
+    view.editorDrafts[OLD] = { file: { dirtyDraftContent: 'unsaved' } }
+    const state = persistedState(session)
+    state.ui.desktopWindows = {
+      first: {
+        open: true,
+        ui: { lastActiveWorktreeId: `local|${OLD}` },
+        viewsByHostId: { local: view }
+      }
+    }
+    expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
+    const window = state.ui.desktopWindows.first
+    expect(window.ui?.lastActiveWorktreeId).toBe(`local|${NEW}`)
+    expect(window.viewsByHostId?.local.activeWorktreeId).toBe(NEW)
+    expect(window.viewsByHostId?.local.groups[NEW]?.group.activeTabId).toBe('tab')
+    expect(window.viewsByHostId?.local.editorDrafts[NEW]?.file.dirtyDraftContent).toBe('unsaved')
+    expect(window.viewsByHostId?.local.groups).not.toHaveProperty(OLD)
+  })
   it('has a fixture for every field the ownership census says can name a worktree', () => {
     const missing = referencingFields.filter((field) => !REFERENCE_FIXTURES[field])
     expect(missing).toEqual([])

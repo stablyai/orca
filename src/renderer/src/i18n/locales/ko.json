@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "새 창",
+    "openInNewWindow": "새 창에서 열기",
+    "openFailed": "새 창을 열 수 없습니다",
+    "openFailedDetail": "이유: {{reason}}"
+  },
   "app": {
     "saving": {
       "delayedTitle": "프로필 저장소 작업에 평소보다 오래 걸리고 있습니다",

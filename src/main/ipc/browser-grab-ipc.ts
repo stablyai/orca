@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { browserManager } from '../browser/browser-manager'
 import { onDocPreviewGrantRevoked } from '../browser/doc-preview-grant-registry'
-import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { selectTrustedBrowserRenderer as isTrustedBrowserRenderer } from './browser-renderer-selection'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
 import type {
   BrowserSetGrabModeArgs,

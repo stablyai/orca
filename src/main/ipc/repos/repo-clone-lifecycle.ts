@@ -27,6 +27,7 @@ import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
 import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
+import { broadcastDesktopRendererEvent } from '../../window/desktop-renderer-registry'
 
 type ActiveCloneMetadata = {
   path: string
@@ -49,11 +50,17 @@ const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 function emitCloneProgressFromText(mainWindow: BrowserWindow, text: string): void {
   for (const line of text.split(/[\r\n]+/)) {
     const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-    if (match && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('repos:clone-progress', {
+    if (match) {
+      const progress = {
         phase: match[1].trim(),
         percent: Number.parseInt(match[2], 10)
-      })
+      }
+      if (
+        broadcastDesktopRendererEvent('repos:clone-progress', progress) === 0 &&
+        !mainWindow.isDestroyed()
+      ) {
+        mainWindow.webContents.send('repos:clone-progress', progress)
+      }
     }
   }
 }

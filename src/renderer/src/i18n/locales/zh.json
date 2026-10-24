@@ -1,4 +1,10 @@
 {
+  "multiWindow": {
+    "newWindow": "新建窗口",
+    "openInNewWindow": "在新窗口打开",
+    "openFailed": "无法打开新窗口",
+    "openFailedDetail": "原因：{{reason}}"
+  },
   "app": {
     "saving": {
       "delayedTitle": "配置存储操作耗时比平时更长",

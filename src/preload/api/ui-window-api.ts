@@ -1,6 +1,7 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
+import type { RuntimeClientWindowOpenResult } from '../../shared/runtime-client-window-open-result'
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
@@ -70,4 +71,8 @@ export type UiWindowApi = {
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void
+  /** Opens an extra desktop window on this computer's runtime, optionally on one workspace. */
+  openRuntimeClientWindow: (options?: {
+    worktreeId?: string
+  }) => Promise<RuntimeClientWindowOpenResult>
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { join } from 'node:path'
 
 const {
   execFileMock,
@@ -114,7 +115,7 @@ describe('AgentBrowserBridge', () => {
 
     expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
     expect(closeCallCount()).toBe(0)
-    expect(lstatSyncMock).toHaveBeenCalledWith('/tmp/orca-ab-test/orca-tab-tab-1.sock')
+    expect(lstatSyncMock).toHaveBeenCalledWith(join('/tmp/orca-ab-test', 'orca-tab-tab-1.sock'))
   })
 
   it('fails closed when stale agent-browser session ownership cannot be reset', async () => {
@@ -333,6 +334,114 @@ describe('AgentBrowserBridge', () => {
     })
     await destroyPromise
   })
+
+  it.each(
+    (['peer-close', 'peer-replace', 'owner-close'] as const).flatMap((change) =>
+      (['evaluate', 'goto'] as const).map((operation) => ({ change, operation }))
+    )
+  )(
+    'keeps sessionless $operation queue ownership during $change',
+    async ({ change, operation }) => {
+      const tabs = new Map([['tab-1', 100]])
+      const registered = new Set([100, 200])
+      const b = new AgentBrowserBridge(
+        mockBrowserManager(tabs, new Map(), {
+          getTabIdForWebContentsId: (id) => (registered.has(id) ? 'tab-1' : null)
+        })
+      )
+      b.setActiveTab(100)
+      const wc = mockWebContents(100)
+      const entered = Promise.withResolvers<void>()
+      const gate = Promise.withResolvers<{ result: { value: string } }>()
+      succeedWith({ snapshot: 'queued B' })
+      wc.loadURL.mockImplementation(() => {
+        entered.resolve()
+        return gate.promise.then(() => {})
+      })
+      wc.debugger.sendCommand.mockImplementation((method) => {
+        if (method === 'Runtime.evaluate') {
+          entered.resolve()
+          return gate.promise
+        }
+        return Promise.resolve({})
+      })
+      webContentsFromIdMock.mockImplementation((id) => (id === 100 ? wc : mockWebContents(id)))
+      const running =
+        operation === 'goto'
+          ? b.goto('https://next.example.test', undefined, 'tab-1')
+          : b.evaluate('document.title', undefined, 'tab-1')
+      await entered.promise
+      const queued = b.snapshot(undefined, 'tab-1')
+      const settled = Promise.allSettled([running, queued])
+      expect(execFileMock).not.toHaveBeenCalled()
+      if (change === 'peer-replace') {
+        registered.delete(200)
+        registered.add(300)
+        tabs.set('tab-1', 300)
+        await b.onProcessSwap('tab-1', 300, 200)
+      } else {
+        const closedId = change === 'owner-close' ? 100 : 200
+        await b.onTabClosed(closedId)
+        registered.delete(closedId)
+        tabs.set('tab-1', 200)
+      }
+      gate.resolve({ result: { value: 'B' } })
+      const results = await settled
+      if (change === 'owner-close') {
+        expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected'])
+      } else {
+        expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+      }
+      await b.destroyAllSessions()
+    }
+  )
+
+  it.each(['register', 'replace-peer', 'close'] as const)(
+    'keeps B running and queued commands when peer A %s happens',
+    async (change) => {
+      const tabs = new Map([['tab-1', 100]])
+      const b = new AgentBrowserBridge(
+        mockBrowserManager(tabs, new Map(), {
+          getTabIdForWebContentsId: (id) =>
+            [100, 300].includes(id) || (change === 'close' && id === 200) ? 'tab-1' : null
+        })
+      )
+      b.setActiveTab(100)
+      const entered = Promise.withResolvers<void>()
+      let complete: (() => void) | undefined
+      const kill = vi.fn(() => complete?.())
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+          if (args.includes('snapshot')) {
+            complete = () =>
+              cb(null, JSON.stringify({ success: true, data: { snapshot: 'B' } }), '')
+            entered.resolve()
+            return createFakeAgentBrowserChild({ kill })
+          }
+          cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+          return createFakeAgentBrowserChild({ kill: vi.fn() })
+        }
+      )
+      const running = b.snapshot(undefined, 'tab-1')
+      await entered.promise
+      const queued = b.exec('get title', undefined, 'tab-1')
+      const settled = Promise.allSettled([running, queued])
+      if (change !== 'close') {
+        tabs.set('tab-1', 300)
+        await b.onProcessSwap('tab-1', 300, change === 'register' ? 100 : 200)
+      } else {
+        await b.onTabClosed(200)
+      }
+      expect(kill).not.toHaveBeenCalled()
+      expect(b.getActiveWebContentsId()).toBe(100)
+      expect(b.getPageInfo(undefined, 'tab-1')).toMatchObject({ browserPageId: 'tab-1' })
+      expect(b.getPageInfo()).toMatchObject({ browserPageId: 'tab-1' })
+      expect(b.getActiveWebContentsId()).toBe(100)
+      complete?.()
+      expect((await settled).map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+      await b.destroyAllSessions()
+    }
+  )
 
   it('destroys session on process swap and re-inits with --cdp', async () => {
     const tabs = new Map([['tab-1', 100]])
@@ -632,8 +741,9 @@ describe('AgentBrowserBridge', () => {
     expect((closeCall![2] as { timeout: number }).timeout).toBeLessThanOrEqual(5_000)
   })
 
-  it('closes a session still being created when everything is torn down', async () => {
+  it('stops a starting proxy without creating its helper after shutdown', async () => {
     let releaseProxyStart: (() => void) | undefined
+    const stopProxy = vi.fn(async () => {})
     CdpWsProxyMock.mockImplementationOnce(function (this: Record<string, unknown>) {
       this.start = vi.fn(
         () =>
@@ -641,7 +751,7 @@ describe('AgentBrowserBridge', () => {
             releaseProxyStart = () => resolve('ws://127.0.0.1:9222')
           })
       )
-      this.stop = vi.fn(async () => {})
+      this.stop = stopProxy
       this.getPort = vi.fn(() => 9222)
     })
 
@@ -652,8 +762,10 @@ describe('AgentBrowserBridge', () => {
     const closesBeforeTeardown = closeCallCount()
     const teardown = bridge.destroyAllSessions()
     releaseProxyStart!()
-    await Promise.allSettled([inFlight, teardown])
-
-    expect(closeCallCount()).toBeGreaterThan(closesBeforeTeardown)
+    const results = await Promise.allSettled([inFlight, teardown])
+    expect(results[0]?.status).toBe('rejected')
+    expect(stopProxy).toHaveBeenCalledExactlyOnceWith()
+    expect(closeCallCount()).toBe(closesBeforeTeardown)
+    expect(execFileMock.mock.calls.some((call) => call[1].includes('snapshot'))).toBe(false)
   })
 })

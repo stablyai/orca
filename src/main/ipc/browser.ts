@@ -2,7 +2,8 @@ import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../browser/doc-preview-guest-policy'
-import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { selectTrustedBrowserRenderer as isTrustedBrowserRenderer } from './browser-renderer-selection'
+import { desktopWindowId } from '../window/desktop-renderer-registry'
 import {
   isLiveBrowserWebContentsId,
   resolveTabRegistrationWaiters
@@ -26,7 +27,11 @@ import type {
 } from '../../shared/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../browser/browser-page-prompts'
 
-let agentBrowserBridgeRef: AgentBrowserBridge | null = null
+type BrowserAgentLifecycle = Pick<
+  AgentBrowserBridge,
+  'onProcessSwap' | 'onTabClosed' | 'onTabChanged'
+>
+let agentBrowserBridgeRef: BrowserAgentLifecycle | null = null
 
 export type BrowserGuestArgs = {
   browserPageId: string
@@ -36,7 +41,7 @@ export type BrowserGuestArgs = {
   webContentsId: number
 }
 
-export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): void {
+export function setAgentBrowserBridgeRef(bridge: BrowserAgentLifecycle | null): void {
   agentBrowserBridgeRef = bridge
 }
 
@@ -89,7 +94,12 @@ export function registerBrowserHandlers(): void {
     if (!registered) {
       return false
     }
-    if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
+    if (
+      agentBrowserBridgeRef &&
+      previousWcId !== null &&
+      previousWcId !== args.webContentsId &&
+      browserManager.getTabIdForWebContentsId(previousWcId) !== args.browserPageId
+    ) {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
     resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
@@ -169,12 +179,23 @@ export function registerBrowserHandlers(): void {
     if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
       return false
     }
+    if (
+      desktopWindowId(event.sender) &&
+      !browserManager.ownsNativeGuest(args.browserPageId, event.sender.id)
+    ) {
+      return false
+    }
     // Destroy bridge sessions before unregistering clears the guest mapping.
     const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
     if (wcId !== null && agentBrowserBridgeRef) {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
-    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
+    if (wcId !== null || !desktopWindowId(event.sender)) {
+      cancelBrowserWebAuthnAccountRequests(
+        args.browserPageId,
+        desktopWindowId(event.sender) ? (wcId ?? undefined) : undefined
+      )
+    }
     browserManager.unregisterGuest(args.browserPageId)
     disposeGrabModeStateForPage(args.browserPageId)
     return true

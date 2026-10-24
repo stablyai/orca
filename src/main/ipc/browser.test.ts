@@ -7,6 +7,7 @@ const {
   attachGuestPoliciesMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
+  getTabIdForWebContentsIdMock,
   getWebContentsIdByTabIdMock,
   getWorktreeIdForTabMock,
   getAuthorizedGuestMock,
@@ -24,6 +25,7 @@ const {
   attachGuestPoliciesMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
+  getTabIdForWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
   getWorktreeIdForTabMock: vi.fn(),
   getAuthorizedGuestMock: vi.fn(),
@@ -54,10 +56,12 @@ vi.mock('../browser/browser-manager', () => ({
     proceed: proceedCertificateMock
   },
   browserManager: {
+    selectNativeRenderer: vi.fn(),
     registerGuest: registerGuestMock,
     attachGuestPolicies: attachGuestPoliciesMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
+    getTabIdForWebContentsId: getTabIdForWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
     getWorktreeIdForTab: getWorktreeIdForTabMock,
     getAuthorizedGuest: getAuthorizedGuestMock,
@@ -69,6 +73,7 @@ vi.mock('../browser/browser-manager', () => ({
 }))
 
 import { registerBrowserHandlers, setAgentBrowserBridgeRef, type BrowserGuestArgs } from './browser'
+import { nativeRegistrationRegressions } from './browser-native-registration.test-fixture'
 import {
   waitForAnyTabRegistration,
   waitForTabRegistration,
@@ -76,6 +81,13 @@ import {
 } from './browser-tab-registration-wait'
 
 describe('registerBrowserHandlers', () => {
+  nativeRegistrationRegressions({
+    handleMock,
+    getGuestWebContentsIdMock,
+    getTabIdForWebContentsIdMock,
+    getWorktreeIdForTabMock
+  })
+
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     removeHandlerMock.mockReset()
@@ -85,6 +97,7 @@ describe('registerBrowserHandlers', () => {
     attachGuestPoliciesMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
+    getTabIdForWebContentsIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReturnValue(new Map())
     getWorktreeIdForTabMock.mockReset()
@@ -352,33 +365,6 @@ describe('registerBrowserHandlers', () => {
       expect(proceedHandler({ sender }, args)).toEqual({ ok: false, reason: 'missing' })
     }
     expect(proceedCertificateMock).not.toHaveBeenCalled()
-  })
-
-  it('updates the bridge active tab for the owning worktree', async () => {
-    const onTabChangedMock = vi.fn()
-    getGuestWebContentsIdMock.mockReturnValue(4242)
-    getWorktreeIdForTabMock.mockReturnValue('wt-browser')
-
-    setAgentBrowserBridgeRef({ onTabChanged: onTabChangedMock } as never)
-    registerBrowserHandlers()
-
-    const activeTabChangedHandler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'browser:activeTabChanged'
-    )?.[1] as (event: { sender: Electron.WebContents }, args: { browserPageId: string }) => boolean
-
-    const result = activeTabChangedHandler(
-      {
-        sender: {
-          isDestroyed: () => false,
-          getType: () => 'window',
-          getURL: () => 'file:///renderer/index.html'
-        } as Electron.WebContents
-      },
-      { browserPageId: 'page-1' }
-    )
-
-    expect(result).toBe(true)
-    expect(onTabChangedMock).toHaveBeenCalledWith(4242, 'wt-browser')
   })
 
   it('resolves concurrent tab registration waiters for the same page', async () => {

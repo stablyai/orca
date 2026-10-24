@@ -69,6 +69,19 @@ describe('terminal layout parity', () => {
     expect(isParityClean(report)).toBe(true)
   })
 
+  it('normalizes stored Windows slash paths using the native path label from the fixture', () => {
+    const firstPath = String.raw`C:\Temp\orca-e2e-repo-AAAA`
+    const secondPath = String.raw`C:\Temp\orca-e2e-repo-BBBB`
+    const first = capture({ ...ids.a, path: firstPath.replaceAll('\\', '/') })
+    const second = capture({ ...ids.b, path: secondPath.replaceAll('\\', '/') })
+    first.pathLabels = { [firstPath]: '<repo>' }
+    second.pathLabels = { [secondPath]: '<repo>' }
+    expect(compareParityCaptures(one(first), one(second), []).undeclared).toEqual([])
+    const changed = capture({ ...ids.b, path: secondPath.replaceAll('\\', '/') }, 0.6)
+    changed.pathLabels = second.pathLabels
+    expect(compareParityCaptures(one(first), one(changed), []).undeclared).toHaveLength(2)
+  })
+
   it('detects an injected layout difference and names where it is', () => {
     const report = compareParityCaptures(one(capture(ids.a)), one(capture(ids.b, 0.6)), [])
     expect(isParityClean(report)).toBe(false)

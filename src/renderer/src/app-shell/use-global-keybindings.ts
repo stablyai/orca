@@ -41,6 +41,8 @@ import {
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { openRuntimeClientWindowFromRenderer } from '@/lib/open-runtime-client-window'
 
 /**
  * Registers the window-level shortcut listeners and the app command dispatcher.
@@ -234,6 +236,14 @@ export function useGlobalKeybindings(args: {
           })
           return
         }
+      }
+
+      // Why: a web client (including an extra desktop window) has no main process to open one.
+      if (matchShortcut('window.new') && !isWebClientLocation()) {
+        input.preventDefault()
+        notifyTerminalCapture('window.new')
+        void openRuntimeClientWindowFromRenderer()
+        return
       }
 
       const handlers = createAppCommandHandlers(state, input, context)

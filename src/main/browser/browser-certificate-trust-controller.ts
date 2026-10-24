@@ -144,14 +144,13 @@ export class BrowserCertificateTrustController {
     this.requestGuard.revokeForCommittedNavigation(webContentsId, url)
   }
 
-  getFailure(browserPageId: string): BrowserCertificateFailure | null {
+  getFailure(
+    browserPageId: string,
+    webContentsId = this.dependencies.resolveWebContentsIdForPage(browserPageId)
+  ): BrowserCertificateFailure | null {
     this.pruneExpired()
-    for (const pending of this.pendingByGuestId.values()) {
-      if (pending.browserPageId === browserPageId) {
-        return toBrowserCertificateFailure(pending)
-      }
-    }
-    return null
+    const pending = webContentsId === null ? undefined : this.pendingByGuestId.get(webContentsId)
+    return pending?.browserPageId === browserPageId ? toBrowserCertificateFailure(pending) : null
   }
 
   proceed(browserPageId: string, challengeId: string): BrowserCertificateProceedResult {

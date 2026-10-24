@@ -231,6 +231,27 @@ describe('BrowserCertificateTrustController', () => {
     expect(otherCertificate.preventDefault).not.toHaveBeenCalled()
   })
 
+  it('keeps certificate challenges with their own guest when native peers share a page', () => {
+    pageByGuestId.set(otherGuest.id, 'page-1')
+    certificateEvent({ controller, guest })
+    guestByPageId.set('page-1', otherGuest.id)
+    expect(controller.getFailure('page-1')).toBeNull()
+
+    certificateEvent({ controller, guest: otherGuest, url: 'https://localhost:3444/peer' })
+    expect(controller.getFailure('page-1')).toMatchObject({
+      challengeId: 'challenge-2',
+      origin: 'https://localhost:3444'
+    })
+    expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: false, reason: 'changed' })
+    expect(otherGuest.loadURL).not.toHaveBeenCalled()
+
+    guestByPageId.set('page-1', guest.id)
+    expect(controller.getFailure('page-1')).toMatchObject({
+      challengeId: 'challenge-1',
+      origin: 'https://localhost:3443'
+    })
+  })
+
   it('blocks a session-cached certificate for sibling requests until that guest approves it', () => {
     certificateEvent({ controller, guest })
     expect(controller.proceed('page-1', 'challenge-1')).toEqual({ ok: true })

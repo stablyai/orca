@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/browser-manager', () => ({ browserManager: { selectNativeRenderer: vi.fn() } }))
 
 vi.mock('./browser-renderer-trust', () => ({
   isTrustedBrowserRenderer: (sender: unknown) => mocks.isTrusted(sender)

@@ -51,7 +51,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           this.openLinkInOrcaTab(
             ownerContext.browserTabId,
             externalUrl,
-            disposition !== 'background-tab'
+            disposition !== 'background-tab',
+            ownerContext.rootGuestWebContentsId
           )
         ) {
           this.forwardOrQueuePopupEvent(guest.id, {
@@ -156,7 +157,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     const opened =
       owner !== null &&
       (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
-      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate)
+      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate, owner.rootGuestWebContentsId)
     this.forwardOrQueuePopupEvent(opener.id, {
       origin: safeOrigin(url),
       action: opened ? 'opened-in-orca' : 'blocked'

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL } from '../../shared/browser-client-page-renderer-protocol'
 import type { BrowserClientPageRenderer } from './browser-client-page-cleanup'
+import { preferredDesktopRenderer } from '../window/desktop-renderer-registry'
 import {
   BrowserClientPageRendererBridgeRegistry,
   type BrowserClientPageRendererEndpoint
@@ -19,7 +20,7 @@ export function retireBrowserClientPageRenderer(
 }
 
 export function selectBrowserClientPageRenderer(): BrowserClientPageRenderer {
-  return getRendererBridges().selectRenderer()
+  return getRendererBridges().selectRenderer(preferredDesktopRenderer()?.id)
 }
 
 function getRendererBridges(): BrowserClientPageRendererBridgeRegistry {

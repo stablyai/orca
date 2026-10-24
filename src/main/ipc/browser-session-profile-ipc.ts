@@ -3,7 +3,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { importCookiesIntoClientRoutePartition } from '../browser/browser-client-route-cookie-import'
 import { clientRouteCookieImportSources } from '../browser/client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../browser/paired-runtime-browser-client-host-runtime'
-import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { selectTrustedBrowserRenderer as isTrustedBrowserRenderer } from './browser-renderer-selection'
 import {
   pickCookieFile,
   importCookiesFromFile,

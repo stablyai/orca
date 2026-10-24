@@ -30,6 +30,7 @@ vi.mock('electron', () => ({
 vi.mock('../browser/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn() },
   browserManager: {
+    selectNativeRenderer: vi.fn(),
     getWebContentsIdByTabId: vi.fn(() => new Map())
   }
 }))

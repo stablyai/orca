@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { broadcastDesktopRendererEvent } from '../../window/desktop-renderer-registry'
 import type {
   InactiveAccountUsage,
   ProviderRateLimits,
@@ -176,7 +177,11 @@ export abstract class RateLimitServiceState {
         // ignore — one bad listener must not break the others
       }
     }
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+    if (
+      broadcastDesktopRendererEvent('rateLimits:update', state) > 0 ||
+      !this.mainWindow ||
+      this.mainWindow.isDestroyed()
+    ) {
       return
     }
     this.mainWindow.webContents.send('rateLimits:update', state)

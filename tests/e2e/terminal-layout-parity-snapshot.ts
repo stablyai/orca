@@ -161,7 +161,16 @@ function normalizeValue(
 /** One labeler per capture so a tab keeps its label from renderer to disk to restart. */
 export function normalizeParityCapture(capture: RawParityCapture): Json {
   const labeler = new IdLabeler()
-  const pathLabels = Object.entries(capture.pathLabels).sort((a, b) => b[0].length - a[0].length)
+  const pathLabels: [string, string][] = Object.entries(capture.pathLabels).flatMap(
+    ([path, label]) =>
+      /^[A-Za-z]:[\\/]|^\\\\/.test(path)
+        ? [
+            [path, label],
+            [path.replace(/\\/g, '/'), label]
+          ]
+        : [[path, label]]
+  )
+  pathLabels.sort((a, b) => b[0].length - a[0].length)
   for (const checkpoint of capture.checkpoints) {
     labeler.visit(checkpoint.renderer)
     labeler.visit(checkpoint.persisted)

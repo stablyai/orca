@@ -40,6 +40,7 @@ function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
+    onNewWindow: vi.fn(),
     onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
@@ -462,7 +463,7 @@ describe('registerAppMenu', () => {
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
-    expect(fileLabels[0]).toBe('Settings')
+    expect(fileLabels[0]).toBe('New Window\tCtrl+Alt+N')
     expect(fileLabels).toEqual(expect.arrayContaining(['Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
