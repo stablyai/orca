@@ -8,6 +8,7 @@ import {
 import {
   containsAgentSpinnerGlyph,
   isCursorAgentTitle,
+  isGeminiTerminalTitle,
   isDshTerminalTitle
 } from './agent-title-core'
 import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
@@ -41,39 +42,7 @@ export function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-export function isGeminiTerminalTitle(title: string): boolean {
-  // Why: DSH-TUI's idle prefix is `✦`, Gemini's working glyph. The whale is decisive
-  // and is checked first so a resting DSH pane never reads as a working Gemini.
-  if (isQoderTerminalTitle(title)) {
-    return false
-  }
-  if (isDshTerminalTitle(title) || isDeepSeekBuildTerminalTitle(title)) {
-    return false
-  }
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  ) {
-    return true
-  }
-  // Why: Pi/OMP titles include cwd/session text; substring matching made
-  // paths like "gemini-project" masquerade as Gemini CLI.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
-  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
-  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
-  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
-  // emits none of them.
-  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
-}
+export { isGeminiTerminalTitle } from './agent-title-core'
 
 // Why: Grok Build's working OSC titles use a fixed frame shape —
 // "spinner - <rotating phrase> - grok" — so every frame is a distinct title
