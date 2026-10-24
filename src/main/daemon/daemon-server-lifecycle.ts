@@ -170,7 +170,9 @@ export class DaemonServerLifecycle {
     this.shutdownPromise ??= this.finishRpcShutdown(serverClose)
   }
 
+  /** Commits idle retirement while preserving the final RPC reply. */
   retireAfterIdleReply(clientId: string, requestId: string, socket: Socket): void {
+    this.options.onShutdownRequested()
     this.state = 'shutting-down'
     this.initialAdoptionDeadlineMs = null
     this.retirementRequested = false
@@ -199,6 +201,7 @@ export class DaemonServerLifecycle {
     this.initialAdoptionTimer = null
   }
 
+  /** Rechecks idleness before committing retirement and starting its exit deadline. */
   private beginIdleShutdown(): void {
     this.initialAdoptionTimer = null
     if (this.state !== 'running') {
@@ -210,6 +213,7 @@ export class DaemonServerLifecycle {
       this.reevaluateIdleShutdown()
       return
     }
+    this.options.onShutdownRequested()
     this.state = 'shutting-down'
     const serverClose = this.beginServerClose()
     this.shutdownPromise = this.finishIdleShutdown(serverClose)
