@@ -15,6 +15,7 @@ import { showDictationStartErrorToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
+import { useDictationAutoSend } from './use-dictation-auto-send'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -48,6 +49,7 @@ export function DictationController() {
   // not once per press, while the selected mic stays gone.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
+  const { trackInsertion, watchStopping: watchAutoSend } = useDictationAutoSend()
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -57,6 +59,8 @@ export function DictationController() {
     async (sessionId: string) => {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
+      // Why: a user who takes over while the final transcript is still coming keeps their draft.
+      const reportAutoSendOutcome = watchAutoSend(insertionTargetRef.current)
       stopCapture()
       try {
         await window.api.speech.stopDictation(sessionId)
@@ -68,6 +72,10 @@ export function DictationController() {
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
+      reportAutoSendOutcome({
+        finalTranscriptReceived: finalTranscriptReceivedRef.current,
+        sessionErrored
+      })
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
         toast.message(
           translate(
@@ -88,7 +96,7 @@ export function DictationController() {
       setDictationState('idle')
       setPartialTranscript('')
     },
-    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount]
+    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount, watchAutoSend]
   )
 
   const startDictation = useCallback(async () => {
@@ -259,6 +267,8 @@ export function DictationController() {
       stopRequestedDuringStartRef.current = true
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
+      // Why: startup can take a while to finish; takeover during it must count too.
+      watchAutoSend(insertionTargetRef.current)
       stopCapture({ preserveBufferedAudio: true })
       return
     }
@@ -272,7 +282,7 @@ export function DictationController() {
       return
     }
     await finishDictationSession(sessionId)
-  }, [finishDictationSession, setDictationState, stopCapture])
+  }, [finishDictationSession, setDictationState, stopCapture, watchAutoSend])
 
   // Why: capture-loss fires from a stream opened before stopDictation exists;
   // route through a ref so the two callbacks do not depend on each other.
@@ -371,7 +381,7 @@ export function DictationController() {
           data.text,
           insertedFinalTranscriptRef.current
         )
-        insertText(textToInsert, target)
+        trackInsertion(insertText(textToInsert, target))
         insertedFinalTranscriptRef.current += textToInsert
       } else if (!intentionalTargetCancellationRef.current) {
         toast.message(
@@ -426,7 +436,7 @@ export function DictationController() {
       cleanupStopped()
       cleanupError()
     }
-  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio])
+  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio, trackInsertion])
 
   return <DictationIndicator />
 }

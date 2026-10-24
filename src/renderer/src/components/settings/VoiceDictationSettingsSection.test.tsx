@@ -37,7 +37,9 @@ describe('dictation shortcut explanations', () => {
       )
     })
     try {
-      const descriptions = Array.from(container.querySelectorAll('p'), (p) => p.textContent)
+      const descriptions = Array.from(container.querySelectorAll('p'), (p) => p.textContent).filter(
+        (text) => text?.includes(shortcut)
+      )
       if (language === 'ko') {
         expect(descriptions).toEqual([
           `${shortcut} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요.`,

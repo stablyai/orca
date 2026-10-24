@@ -20037,6 +20037,27 @@
         "shellEnvSearchVariables": "environment variables",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy"
+      },
+      "VoiceAutoSendSetting": {
+        "delay1s": "1 second",
+        "delay2s": "2 seconds",
+        "delay3s": "3 seconds",
+        "delay5s": "5 seconds",
+        "title": "Send when dictation ends",
+        "delayAriaLabel": "Delay before sending",
+        "description": "After dictating into a chat message box, send the message after a short delay. Type, click away, or press Cancel to keep it as a draft."
+      },
+      "voice": {
+        "pane": {
+          "search": {
+            "autoSendTitle": "Send when dictation ends",
+            "autoSendDescription": "Send a dictated chat message automatically after a short, cancelable delay.",
+            "autoSendSend": "send",
+            "autoSendSubmit": "submit",
+            "autoSendAuto": "auto send",
+            "autoSendEnter": "enter"
+          }
+        }
       }
     },
     "agentChildRow": {
@@ -20141,6 +20162,13 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "dictation": {
+      "DictationIndicator": {
+        "autoSendCountdown": "Sending in {{seconds}}s",
+        "autoSendAnnouncement": "Sending message in {{seconds}} seconds",
+        "autoSendCancel": "Cancel"
+      }
     }
   },
   "dashboardPopout": {

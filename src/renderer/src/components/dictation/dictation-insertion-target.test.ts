@@ -129,10 +129,27 @@ describe('dictation insertion target', () => {
     })
     const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 1)
 
-    insertText(text, { kind: 'contentEditable', element: editor })
+    const delivered = insertText(text, { kind: 'contentEditable', element: editor })
     await vi.runAllTimersAsync()
 
     expect(execCommand).toHaveBeenCalledTimes(1)
+    await expect(delivered).resolves.toBe(false)
+  })
+
+  it('reports contenteditable dictation as delivered only when the editor still has focus', async () => {
+    const execCommand = installExecCommandMock(() => true)
+    const editor = appendContentEditable()
+
+    await expect(insertText('hello', { kind: 'contentEditable', element: editor })).resolves.toBe(
+      true
+    )
+
+    editor.blur()
+    execCommand.mockClear()
+    await expect(insertText('again', { kind: 'contentEditable', element: editor })).resolves.toBe(
+      false
+    )
+    expect(execCommand).not.toHaveBeenCalled()
   })
 
   it('rejects oversized multibyte contenteditable dictation before inserting', async () => {

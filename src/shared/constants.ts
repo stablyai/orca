@@ -121,6 +121,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   })
 }
 
+export const DICTATION_AUTO_SEND_DELAYS_MS = [1000, 2000, 3000, 5000] as const
+export const DEFAULT_DICTATION_AUTO_SEND_DELAY_MS = 2000
+
 export function getDefaultVoiceSettings(): VoiceSettings {
   return {
     enabled: false,
@@ -129,6 +132,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     language: 'en',
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
+    autoSendAfterDictation: false,
+    autoSendDelayMs: DEFAULT_DICTATION_AUTO_SEND_DELAY_MS,
     userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,

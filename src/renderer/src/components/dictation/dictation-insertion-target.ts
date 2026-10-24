@@ -53,32 +53,36 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
   return null
 }
 
-export function insertText(text: string, target: DictationInsertionTarget): void {
+/**
+ * Resolves true once all of the text is in the field. False means it was skipped or cut short,
+ * and for terminals, whose paste completes elsewhere, that delivery is unconfirmed.
+ */
+export function insertText(text: string, target: DictationInsertionTarget): Promise<boolean> {
   if (target.kind === 'terminal') {
     document.dispatchEvent(
       new CustomEvent('dictation:insertText', {
         detail: { text, tabId: target.tabId, paneId: target.paneId }
       })
     )
-    return
+    return Promise.resolve(false)
   }
 
   if (target.kind === 'text') {
     const element = target.element
     if (!element.isConnected) {
-      return
+      return Promise.resolve(false)
     }
-    void pasteTextIntoTextControl(element, text, {
+    return pasteTextIntoTextControl(element, text, {
       source: 'programmatic',
       inputType: 'insertText',
       canContinue: (candidate) => candidate.ownerDocument.activeElement === candidate
-    }).catch(() => {})
-    return
+    }).then(
+      (result) => result.status === 'pasted',
+      () => false
+    )
   }
 
-  if (target.kind === 'contentEditable') {
-    void insertTextIntoContentEditableTarget(target.element, text).catch(() => {})
-  }
+  return insertTextIntoContentEditableTarget(target.element, text).catch(() => false)
 }
 
 function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
@@ -88,27 +92,26 @@ function findClosestEditorElement(element: HTMLElement): HTMLElement | null {
 async function insertTextIntoContentEditableTarget(
   element: HTMLElement,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const directByteLength = measureTextControlPasteByteLength(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   })
   if (directByteLength.byteLength === 0) {
-    return
+    return false
   }
   if (!isContentEditableDictationTargetCurrent(element)) {
-    return
+    return false
   }
   const editorElement = findClosestEditorElement(element) ?? element
   if (!directByteLength.exceededLimit) {
-    insertContentEditableDictationChunk(element, editorElement, text)
-    return
+    return insertContentEditableDictationChunk(element, editorElement, text)
   }
 
   const maxByteLength = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: TEXT_CONTROL_PASTE_MAX_BYTES
   })
   if (maxByteLength.exceededLimit) {
-    return
+    return false
   }
 
   let textIndex = 0
@@ -116,19 +119,20 @@ async function insertTextIntoContentEditableTarget(
   // execCommand while keeping editor beforeinput/input semantics.
   while (textIndex < text.length) {
     if (!isContentEditableDictationTargetCurrent(element)) {
-      return
+      return false
     }
     const nextIndex = getUtf8ChunkEndIndex(text, textIndex, TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES)
     if (
       !insertContentEditableDictationChunk(element, editorElement, text.slice(textIndex, nextIndex))
     ) {
-      return
+      return false
     }
     textIndex = nextIndex
     if (textIndex < text.length) {
       await yieldToEventLoop()
     }
   }
+  return true
 }
 
 function insertContentEditableDictationChunk(

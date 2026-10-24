@@ -28,12 +28,16 @@ export function useNativeChatDictation(
   const focusForDictation = useCallback(() => textareaRef.current?.focus(), [textareaRef])
   const toggleDictation = useCallback(() => {
     if (isDictating) {
+      // Why: clicking this button takes focus, and the last words and auto-send need the composer focused.
+      if (!disabled) {
+        focusForDictation()
+      }
       dispatchDictationControl('stop')
     } else if (!dictationDisabled) {
       focusForDictation()
       dispatchDictationControl('toggle')
     }
-  }, [dictationDisabled, focusForDictation, isDictating])
+  }, [dictationDisabled, disabled, focusForDictation, isDictating])
   const startHoldDictation = useCallback(() => {
     if (disabled || dictationDisabled || isDictating) {
       return

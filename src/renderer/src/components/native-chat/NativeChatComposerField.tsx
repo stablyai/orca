@@ -25,6 +25,7 @@ import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPre
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useNativeChatDictationSubmit } from './use-native-chat-dictation-submit'
 
 export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
@@ -170,6 +171,7 @@ export function NativeChatComposerField({
   agent
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
+  useNativeChatDictationSubmit(textareaRef, onSend)
   const optionCount =
     autocomplete.mode === 'slash'
       ? autocomplete.items.length
@@ -289,6 +291,7 @@ export function NativeChatComposerField({
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
+              dictationAutoSend
               onChange={(input) => {
                 const value = input.value
                 editorDraftRef.current = value
