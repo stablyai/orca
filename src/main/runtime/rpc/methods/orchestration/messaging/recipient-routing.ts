@@ -192,7 +192,18 @@ export function resolveBareOrchestrationRecipient(params: {
         : undefined
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
+    return (
+      mismatch ?? {
+        ok: true,
+        to: `run:${boundRun.id}`,
+        runId: boundRun.id,
+        warning: {
+          code: 'recipient_run_bound_redirect',
+          recipient: handle,
+          message: `${handle} coordinates Run ${boundRun.id}; queued for run:${boundRun.id}, the mailbox its orchestration check reads.`
+        }
+      }
+    )
   }
 
   const dispatches = db.getActiveDispatchMailboxOwners(handle, paneKey)
