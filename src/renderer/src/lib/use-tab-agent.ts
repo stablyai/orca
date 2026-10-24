@@ -1,3 +1,4 @@
+import { titlePresentsAgent } from '../../../shared/terminal-title-identity-claim'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
@@ -270,7 +271,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(tab.title)
     // Why: only a title naming the launched agent arms its exit clearing — sibling/other-agent evidence must not.
     const fallbackAgentSignal = tab.launchAgent
-      ? explicitTitleAgent === tab.launchAgent
+      ? explicitTitleAgent === tab.launchAgent && titlePresentsAgent(tab.title, tab.launchAgent)
       : Boolean(explicitTitleAgent || siblingHookAgent)
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
     // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an

@@ -308,6 +308,43 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('claude')
   })
 
+  it('keeps a Claude-owned pane Claude when its task title mentions another agent', () => {
+    for (const title of [
+      '⠋ Fix the codex plugin launcher',
+      '⠙ add grok support to the tab bar',
+      '⠹ port the gemini status parser'
+    ]) {
+      for (const signals of [
+        { hasObservedAgentSignal: true, isRemote: false },
+        {
+          hasObservedAgentSignal: true,
+          isRemote: false,
+          focusedCompletedHookAgent: 'claude' as const
+        },
+        { hasObservedAgentSignal: true, isRemote: true }
+      ]) {
+        expect(
+          resolveTabAgentFromSignals({
+            ...signals,
+            title,
+            hookAgent: null,
+            launchAgent: 'claude'
+          })
+        ).toBe('claude')
+      }
+    }
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Codex: fix cursor offsets',
+        hookAgent: null,
+        launchAgent: 'claude'
+      })
+    ).toBe('codex')
+  })
+
   it('does not let an explicit title override launch identity before any activity is observed', () => {
     expect(
       resolveTabAgentFromSignals({
@@ -659,6 +696,16 @@ describe('useTabAgent', () => {
     await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
 
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('does not clear launch identity from a task title that only mentions its own agent name', async () => {
+    // Why: no hook/process evidence anywhere else, so a mere name mention must not arm exit-clearing.
+    const root = await renderHookProbe(baseTab)
+    await rerenderHookProbe(root, { ...baseTab, title: '⠋ Fix the codex plugin launcher' })
+    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
+
+    expect(latestHookAgent).toBe('codex')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
 
   it('uses completed local hook status as launch lifecycle evidence after remount', async () => {
