@@ -166,9 +166,7 @@ test('a moved pane shows its own history once, in its folder, across three reloa
   const marker = `MOVED-${randomUUID().slice(0, 8)}`
   const host = await launchHeadlessPairedRuntimeHost({
     pinnedServePort: true,
-    withoutBrowser: true,
-    // The distro's agent: a stub "codex" that prints how it was started, then waits.
-    extraEnv: { PATH: [stubAgentDir, process.env.PATH ?? ''].join(path.delimiter) }
+    withoutBrowser: true
   })
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
@@ -262,7 +260,13 @@ test('a moved pane shows its own history once, in its folder, across three reloa
               capturedAt: 1,
               updatedAt: 1,
               origin: 'worktree-sleep',
-              restoreOnTabOpenOnly: true
+              restoreOnTabOpenOnly: true,
+              // The command a launch recorded; absolute, since a login shell may reset PATH.
+              launchConfig: {
+                agentCommand: path.join(stubAgentDir, 'codex'),
+                agentArgs: '',
+                agentEnv: {}
+              }
             }
           })
           withMovedRows(
