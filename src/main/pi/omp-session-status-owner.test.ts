@@ -11,7 +11,12 @@ describe('OMP session status ownership', () => {
   it.each(['omp', 'pi'] as const)(
     'fences child callbacks before they change %s pane metadata',
     async (kind) => {
-      const harness = createAgentStatusExtensionHarness({ kind, argv: ['bun', '/opt/omp/bin/omp'] })
+      // Why: approval handlers are opt-in; the child fence must hold for them too.
+      const harness = createAgentStatusExtensionHarness({
+        kind,
+        argv: ['bun', '/opt/omp/bin/omp'],
+        env: { ORCA_OMP_APPROVAL_STATUS: '1' }
+      })
       const root = {
         sessionManager: { getSessionId: () => 'root', getSessionFile: () => '/root.jsonl' }
       }
