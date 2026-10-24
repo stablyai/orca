@@ -167,6 +167,17 @@ export function answerQuestion(
   }
 }
 
+export function getPendingQuestionIdForDispatch(
+  this: OrchestrationDb,
+  dispatchId: string
+): string | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: better-sqlite3 rows are untyped; this SELECT only projects message_id.
+  const row = this.db
+    .prepare("SELECT message_id FROM question_threads WHERE dispatch_id = ? AND status = 'pending'")
+    .get(dispatchId) as { message_id: string } | undefined
+  return row?.message_id
+}
+
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {
   // Every settlement path calls this, so it is also where helper mail moves to the Run.
   handHelperMailToRun(this, dispatchId)
@@ -188,6 +199,7 @@ export type QuestionThreadsMethods = {
   createQuestion: typeof createQuestion
   getQuestion: typeof getQuestion
   getQuestionRaw: typeof getQuestionRaw
+  getPendingQuestionIdForDispatch: typeof getPendingQuestionIdForDispatch
   answerQuestion: typeof answerQuestion
   closeQuestionsForDispatch: typeof closeQuestionsForDispatch
 }
@@ -197,6 +209,7 @@ export function attachQuestionThreads(ctor: { prototype: object }): void {
     createQuestion,
     getQuestion,
     getQuestionRaw,
+    getPendingQuestionIdForDispatch,
     answerQuestion,
     closeQuestionsForDispatch
   })
