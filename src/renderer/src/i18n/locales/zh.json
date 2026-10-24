@@ -18687,7 +18687,6 @@
         "notDoneAnswer": "您的回答未发送。",
         "notDoneOption": "设置未更改。",
         "notDoneCommand": "命令未运行。",
-        "notDoneGoal": "目标未更改。",
         "notDoneQueuedEdit": "你的编辑未保存。",
         "restartFailed": "智能体无法重新启动。",
         "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",

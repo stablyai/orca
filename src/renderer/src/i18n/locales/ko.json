@@ -18722,7 +18722,6 @@
         "notDoneAnswer": "답변이 전송되지 않았습니다.",
         "notDoneOption": "설정이 변경되지 않았습니다.",
         "notDoneCommand": "명령이 실행되지 않았습니다.",
-        "notDoneGoal": "목표가 변경되지 않았습니다.",
         "notDoneQueuedEdit": "편집한 내용은 저장되지 않았습니다.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
         "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",

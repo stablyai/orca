@@ -10,11 +10,7 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import {
-  journalRecordsThreadGoalChange,
-  performThreadGoalChange,
-  threadGoalPlan
-} from './structured-agent-session-thread-goal'
+import { performThreadGoalChange, threadGoalPlan } from './structured-agent-session-thread-goal'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -141,7 +137,7 @@ describe('performThreadGoalChange', () => {
     expect(journal.snapshot().items).toEqual([])
   })
 
-  it('removes the objective when the provider request fails outright', async () => {
+  it('retains the objective when a lost reply leaves application unknown', async () => {
     const journal = await openJournal()
     const ctx = context(journal, {
       changeThreadGoal: async () => {
@@ -155,39 +151,8 @@ describe('performThreadGoalChange', () => {
         change: { kind: 'set', objective: 'Ship the parser' }
       })
     ).rejects.toThrow('connection closed')
-    expect(journal.snapshot().items).toEqual([])
-  })
-
-  it('puts the objective back, once, when a withdrawn set runs again', async () => {
-    const journal = await openJournal()
-    const attempts: (() => Promise<{ ok: true }>)[] = [
-      async () => {
-        throw new Error('request timed out')
-      },
-      async () => ({ ok: true as const })
-    ]
-    const ctx = context(journal, {
-      changeThreadGoal: () => attempts.shift()!()
-    })
-    const input = {
-      clientOperationId: 'op-9',
-      change: { kind: 'set' as const, objective: 'Ship the parser' }
-    }
-
-    await expect(performThreadGoalChange(ctx, input)).rejects.toThrow('request timed out')
-    expect(journal.snapshot().items).toEqual([])
-
-    await expect(performThreadGoalChange(ctx, input)).resolves.toEqual({
-      ok: true,
-      value: { change: 'set' }
-    })
     expect(journal.snapshot().items.map((item) => item.body)).toEqual([
-      {
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'Ship the parser' }],
-        sentAs: 'goal'
-      }
+      expect.objectContaining({ sentAs: 'goal' })
     ])
   })
 
@@ -292,51 +257,18 @@ describe('threadGoalPlan replay', () => {
     payloadFingerprint: 'fp'
   }
 
-  it('answers a lost response from the goal the journal records, and runs again otherwise', async () => {
+  it('replays only recorded success, never rerunning an unknown operation over a later decision', async () => {
     const journal = await openJournal()
     const ctx = context(journal, {})
-    const paused = threadGoalPlan({ envelope, change: { kind: 'status', status: 'paused' } })
-    const set = threadGoalPlan({ envelope, change: { kind: 'set', objective: 'Ship the parser' } })
-    const clear = threadGoalPlan({ envelope, change: { kind: 'clear' } })
-    const unknown = { status: 'unknown' as const }
-
-    expect(paused.recoverUnknownFromDurableState).toBe(true)
-    expect(paused.rerunWhenReplayMissing?.(ctx)).toBe(true)
-    expect(paused.replay(ctx, unknown)).toBeNull()
-    expect(set.replay(ctx, unknown)).toBeNull()
-    expect(clear.replay(ctx, unknown)).toEqual({ change: 'clear' })
-
+    const plan = threadGoalPlan({ envelope, change: { kind: 'set', objective: GOAL.objective } })
+    await appendGoalRow(journal, {})
+    expect(plan.replay(ctx, { status: 'unknown' })).toBeNull()
     await appendGoalRow(journal, { status: 'paused' })
-    expect(paused.replay(ctx, unknown)).toEqual({ change: 'status' })
-    expect(set.replay(ctx, unknown)).toBeNull()
-    expect(clear.replay(ctx, unknown)).toBeNull()
-
-    expect(set.replay(ctx, { status: 'succeeded', sessionId: 'session-1' })).toEqual({
+    expect(plan.replay(ctx, { status: 'unknown' })).toBeNull()
+    expect(plan.rerunWhenReplayMissing?.(ctx)).not.toBe(true)
+    expect(plan.recoverUnknownFromDurableState).not.toBe(true)
+    expect(plan.replay(ctx, { status: 'succeeded', sessionId: 'session-1' })).toEqual({
       change: 'set'
     })
-    expect(
-      set.replay(ctx, { status: 'failed', code: 'agent_session_operation_invalid' })
-    ).toBeNull()
-  })
-
-  it('reads a set as applied only when the recorded goal is that objective, active', () => {
-    const change = { kind: 'set' as const, objective: 'Ship the parser' }
-    expect(journalRecordsThreadGoalChange(GOAL, change)).toBe(true)
-    expect(journalRecordsThreadGoalChange({ ...GOAL, status: 'paused' }, change)).toBe(false)
-    expect(journalRecordsThreadGoalChange({ ...GOAL, objective: 'Ship it' }, change)).toBe(false)
-    expect(journalRecordsThreadGoalChange(null, change)).toBe(false)
-  })
-
-  it('reads a status change as applied only when the recorded goal is in that status', () => {
-    const pause = { kind: 'status' as const, status: 'paused' as const }
-    expect(journalRecordsThreadGoalChange({ ...GOAL, status: 'paused' }, pause)).toBe(true)
-    expect(journalRecordsThreadGoalChange(GOAL, pause)).toBe(false)
-    expect(
-      journalRecordsThreadGoalChange(
-        { ...GOAL, status: 'paused' },
-        { kind: 'status', status: 'active' }
-      )
-    ).toBe(false)
-    expect(journalRecordsThreadGoalChange(null, pause)).toBe(false)
   })
 })

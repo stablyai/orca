@@ -18722,7 +18722,6 @@
         "notDoneAnswer": "回答は送信されませんでした。",
         "notDoneOption": "設定は変更されませんでした。",
         "notDoneCommand": "コマンドは実行されませんでした。",
-        "notDoneGoal": "目標は変更されませんでした。",
         "notDoneQueuedEdit": "編集内容は保存されていません。",
         "restartFailed": "Agent を再起動できませんでした。",
         "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",

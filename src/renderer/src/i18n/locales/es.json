@@ -18692,7 +18692,6 @@
         "notDoneAnswer": "Su respuesta no se envió.",
         "notDoneOption": "La configuración no se cambió.",
         "notDoneCommand": "El comando no se ejecutó.",
-        "notDoneGoal": "El objetivo no se cambió.",
         "notDoneQueuedEdit": "Tu edición no se guardó.",
         "restartFailed": "El agente no pudo reiniciarse.",
         "capacity": "Orca en el equipo que ejecuta este chat alcanzó un límite de solicitudes. Actualice Orca en ese equipo y vuelva a intentarlo.",

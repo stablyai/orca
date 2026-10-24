@@ -18832,7 +18832,6 @@
         "notDoneAnswer": "Votre réponse n'a pas été envoyée.",
         "notDoneOption": "Le paramètre n'a pas été modifié.",
         "notDoneCommand": "La commande n'a pas été exécutée.",
-        "notDoneGoal": "L'objectif n'a pas été modifié.",
         "notDoneQueuedEdit": "Votre modification n'a pas été enregistrée.",
         "restartFailed": "L'agent n'a pas pu redémarrer.",
         "capacity": "Orca sur l'ordinateur qui exécute ce chat a atteint une limite de requêtes. Mettez à jour Orca sur cet ordinateur, puis réessayez.",

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
@@ -34,8 +34,7 @@ export function useStructuredAgentSessionThreadGoal(args: {
   send: (text: string) => boolean | 'queued'
 }): StructuredAgentSessionThreadGoal | null {
   const { journalItems, mutate, support, reported, journalEpoch, send } = args
-  const [pending, setPending] = useState(false)
-  const pendingRef = useRef(false)
+  const [pendingCount, setPendingCount] = useState(0)
   const report = support ?? reported
   // The loaded window reaches the live head, so a goal row in it is newer than the host's
   // whole-journal answer; that answer covers only rows older than the window.
@@ -54,11 +53,7 @@ export function useStructuredAgentSessionThreadGoal(args: {
       if (!hostChanges) {
         return next.kind === 'clear' && send(CLEAR_GOAL_COMMAND) !== false
       }
-      if (pendingRef.current) {
-        return false
-      }
-      pendingRef.current = true
-      setPending(true)
+      setPendingCount((count) => count + 1)
       try {
         const result = await mutate<AgentSessionThreadGoalResult>(
           'agentSession.threadGoal',
@@ -67,8 +62,7 @@ export function useStructuredAgentSessionThreadGoal(args: {
         )
         return result !== null
       } finally {
-        pendingRef.current = false
-        setPending(false)
+        setPendingCount((count) => count - 1)
       }
     },
     [hostChanges, mutate, send]
@@ -76,5 +70,5 @@ export function useStructuredAgentSessionThreadGoal(args: {
   if (report === undefined || (!hostChanges && goal === null)) {
     return null
   }
-  return { goal, pending, hostChanges, change }
+  return { goal, pending: pendingCount > 0, hostChanges, change }
 }
