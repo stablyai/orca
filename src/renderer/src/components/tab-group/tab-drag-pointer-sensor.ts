@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { recordTabDragPointer } from './tab-drag-pointer'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -151,10 +152,14 @@ export class TabDragPointerSensor implements SensorInstance {
   private overThresholdSampleCount = 0
   private timeoutId: number | null = null
 
+  /** Starts tracking one pointer gesture from its pointerdown. */
   constructor(props: SensorProps<PointerSensorOptions>) {
     this.props = props
     this.document = getOwnerDocument(props.event.target)
-    this.initialCoordinates = getPointerCoordinates(props.event) ?? DEFAULT_COORDINATES
+    const pointerDownCoordinates = getPointerCoordinates(props.event)
+    this.initialCoordinates = pointerDownCoordinates ?? DEFAULT_COORDINATES
+    // Why: also drops the previous gesture's pointer, which outlives it for the drop commit.
+    recordTabDragPointer(pointerDownCoordinates)
     this.handleStart = this.handleStart.bind(this)
     this.handleMove = this.handleMove.bind(this)
     this.handleEnd = this.handleEnd.bind(this)
@@ -230,6 +235,7 @@ export class TabDragPointerSensor implements SensorInstance {
     this.props.onStart(this.initialCoordinates)
   }
 
+  /** Records the cursor, then activates the drag or reports the move to dnd-kit. */
   private handleMove(event: PointerEvent): void {
     if (this.ended) {
       return
@@ -239,6 +245,7 @@ export class TabDragPointerSensor implements SensorInstance {
     if (!coordinates) {
       return
     }
+    recordTabDragPointer(coordinates)
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {
@@ -282,9 +289,15 @@ export class TabDragPointerSensor implements SensorInstance {
     this.props.onMove(coordinates)
   }
 
-  private handleEnd(): void {
+  /** Ends the gesture on pointerup; an activated drag records where it was released. */
+  private handleEnd(event?: Event): void {
     if (this.ended) {
       return
+    }
+    const releaseCoordinates = event ? getPointerCoordinates(event) : null
+    if (this.activated && releaseCoordinates) {
+      // Why: the drop commit reads the pointer, and pointerup can land past the last pointermove.
+      recordTabDragPointer(releaseCoordinates)
     }
     this.detach()
     if (!this.activated) {

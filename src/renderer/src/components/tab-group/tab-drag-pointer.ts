@@ -5,10 +5,24 @@ type DragPointerEvent = Pick<
   'activatorEvent' | 'delta' | 'active'
 >
 
+type DragPointer = { x: number; y: number }
+
+let recordedPointer: DragPointer | null = null
+
+/** Why: dnd-kit's `delta` adds a scroll adjustment, so a scrolled source tab strip
+ *  shifts any pointer derived from it; the sensor reports the real cursor here. */
+export function recordTabDragPointer(point: DragPointer | null): void {
+  recordedPointer = point
+}
+
 /** Pointer position during a tab drag. Why: sortable tabs stay visually anchored
  *  (no transform) while DragOverlay follows the cursor, so active.rect.translated
  *  never tracks the pointer and panel-edge split targets would stay wrong. */
-export function getDragPointer(event: DragPointerEvent): { x: number; y: number } | null {
+export function getDragPointer(event: DragPointerEvent): DragPointer | null {
+  if (recordedPointer) {
+    return recordedPointer
+  }
+
   const activator = event.activatorEvent
   if (
     activator &&
