@@ -1,4 +1,5 @@
 import { titleShowsNoAgent } from '../../../shared/agent-detection'
+import { collectAgentTitleEvidence } from '../../../shared/agent-title-evidence'
 import {
   isClaudeIdentityFrameTitle,
   resolveExplicitTerminalTitleAgentType
@@ -56,6 +57,12 @@ export function resolveLaunchedAgentExitEvidence(args: {
     return false
   }
   return args.hasCompletedHook || (!args.isRemote && args.hasObservedAgentSignal)
+}
+
+// Why: a name only in free text (task wording) is a mention, not identity, so it can't displace a known owner (#26513).
+function titleEvidenceIsStrong(title: string): boolean {
+  const { reason } = collectAgentTitleEvidence(title)
+  return reason === 'anchored' || reason === 'vendor-marker'
 }
 
 /**
@@ -128,7 +135,8 @@ export function resolveTabAgentFromSignals(args: {
     explicitTitleAgent !== priorIdentity &&
     !shareCompatibleTitleIdentityGroup(rawTitleAgent, priorIdentity) &&
     titleClaimsIdentity &&
-    (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
+    (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle) &&
+    titleEvidenceIsStrong(args.title)
   // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
   const titleAgent =
     processProvesShell ||
