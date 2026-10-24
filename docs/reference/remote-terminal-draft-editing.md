@@ -59,6 +59,7 @@ Orca installs this extension next to the existing Pi managed extensions. On `ses
 mode it writes `hello.json` (protocol, token, pid, session id, capabilities) and polls
 `request.json` every 40 ms. It rewrites `hello.json` every 2 s as a heartbeat.
 
+- A parked copy whose text already equals the terminal is treated as clean, not as a conflict.
 - `capture` returns the exact editor text and an opaque `sourceToken` =
   `pi:v2:<process instance>:<revision>:<sha256(text)>`. The revision advances on raw terminal
   input as well as observed text changes, so a change-and-undo between polls still invalidates the
@@ -92,7 +93,10 @@ disposal advances a generation fence captured when work is queued; queued work f
 disposal is rejected, and capture, replace, and Enter completions are rechecked before they may
 install a lease or cache a result for the replacement process.
 
-`terminal.draft.save` writes the whole text and does not press Enter.
+`terminal.draft.save` writes the whole text and does not press Enter. Both save and submit
+recheck the existing terminal input lock immediately before the editor write, and submit checks it
+again at the actual Enter write. A locked client gets `status: "locked"` and nothing is written;
+a lock that arrives after the draft write yields `saved_not_submitted` rather than an Enter.
 
 `terminal.draft.submit` writes the whole text, then asks the existing runtime send path for a
 single Enter write with a write settlement. The answer distinguishes:
@@ -110,7 +114,10 @@ obvious retry duplication, but it is not a cross-crash exactly-once promise for 
   Save/Reload/Send are explicit. Closing or navigating away with unsaved text parks a recovery
   copy, and reopening against changed terminal text surfaces a conflict instead of overwriting.
   A conflict adopts the terminal's current token so "Use terminal version" and "Keep my text" both
-  produce a save that can proceed. Each editor instance has its own lease identity.
+  produce a save that can proceed. Reload persists dirty text first, so it is restored or shown as
+  a conflict instead of being silently discarded. A clean unmount clears a recovery record only
+  when this mount had opened the draft; a parked record it never touched is left alone. Each
+  editor instance has its own lease identity.
 - Mobile: the buffered command bar gets a download action that pulls the terminal draft, a save
   action that writes without Enter, and an Exit action that releases the lease while leaving the
   local text in place. While a draft session is active the field becomes multiline and Return

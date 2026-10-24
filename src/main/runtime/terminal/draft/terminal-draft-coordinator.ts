@@ -160,6 +160,7 @@ export class TerminalDraftCoordinator {
     baseToken: string
     text: string
     operationId: string
+    canWrite?: () => boolean
   }): Promise<TerminalDraftSaveResult> {
     return this.gate.runExclusive(input.ptyId, (generation) =>
       generation === this.gate.generation(input.ptyId)
@@ -176,6 +177,7 @@ export class TerminalDraftCoordinator {
     text: string
     operationId: string
     submitInput: TerminalDraftSubmitInput
+    canWrite?: () => boolean
   }): Promise<TerminalDraftSubmitResult> {
     return this.gate.runExclusive(input.ptyId, (generation) =>
       generation === this.gate.generation(input.ptyId)
@@ -204,6 +206,7 @@ export class TerminalDraftCoordinator {
       baseToken: string
       text: string
       operationId: string
+      canWrite?: () => boolean
     },
     generation: number
   ): Promise<TerminalDraftSaveResult> {
@@ -224,6 +227,9 @@ export class TerminalDraftCoordinator {
       this.operations.rememberSave(input.ptyId, input.operationId, prepared.result)
       return prepared.result
     }
+    if (input.canWrite && !input.canWrite()) {
+      return { ok: false, status: 'locked', reason: 'terminal_input_locked' }
+    }
     const response = await this.deps.replace(prepared.paths, input.text, input.baseToken)
     if (generation !== this.gate.generation(input.ptyId)) {
       return { ok: false, status: 'unknown', reason: 'disposed' }
@@ -242,6 +248,7 @@ export class TerminalDraftCoordinator {
       text: string
       operationId: string
       submitInput: TerminalDraftSubmitInput
+      canWrite?: () => boolean
     },
     generation: number
   ): Promise<TerminalDraftSubmitResult> {
@@ -259,16 +266,12 @@ export class TerminalDraftCoordinator {
       return { ok: false, status: 'unknown', reason: 'disposed' }
     }
     if ('result' in prepared) {
-      const failure =
-        prepared.result.status === 'conflict'
-          ? ({ ok: false, status: 'conflict', conflict: prepared.result.conflict } as const)
-          : prepared.result.status === 'stale_lease'
-            ? ({ ok: false, status: 'stale_lease', epoch: prepared.result.epoch } as const)
-            : prepared.result.status === 'unknown'
-              ? ({ ok: false, status: 'unknown', reason: prepared.result.reason } as const)
-              : ({ ok: false, status: 'unsupported', reason: prepared.result.reason } as const)
+      const failure = prepared.result
       this.operations.rememberSubmit(input.ptyId, input.operationId, failure)
       return failure
+    }
+    if (input.canWrite && !input.canWrite()) {
+      return { ok: false, status: 'locked', reason: 'terminal_input_locked' }
     }
     const response = await this.deps.replace(prepared.paths, input.text, input.baseToken)
     if (generation !== this.gate.generation(input.ptyId)) {

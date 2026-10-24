@@ -125,6 +125,10 @@ export function useMobileRemoteDraftSubmit({
         showToast('Terminal draft changed elsewhere', 2200)
         return { applied: false }
       }
+      if (result.status === 'locked') {
+        showToast('Another device is using terminal input. Nothing was written.', 2400)
+        return { applied: false }
+      }
       showToast(
         result.status === 'unknown'
           ? 'Result unknown — check the terminal before retrying'

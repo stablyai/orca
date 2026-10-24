@@ -70,6 +70,9 @@ export function TerminalDraftEditor({
     mountedRef.current = false
     if (dirtyRef.current) {
       writeRecoveredDraft(recoveryKey, { text: textRef.current, remoteText: remoteTextRef.current })
+    } else if (epochRef.current > 0) {
+      // Why: this mount owned a lease, so its old record is stale; an unopened parked copy is not ours to erase.
+      clearRecoveredDraft(recoveryKey)
     }
     releaseLease()
   }
@@ -185,6 +188,10 @@ export function TerminalDraftEditor({
       setConflictText(result.conflict.text)
       setPhase('conflict')
       setStatus('The terminal draft changed. Choose which version to keep.')
+      return false
+    }
+    if (result.status === 'locked') {
+      setStatus('Another device is using terminal input. Nothing was written.')
       return false
     }
     if (result.status === 'stale_lease') {
@@ -319,7 +326,12 @@ export function TerminalDraftEditor({
       holder={holder}
       reason={reason}
       onTextChange={updateText}
-      onReload={() => void open()}
+      onReload={() => {
+        if (dirty) {
+          writeRecoveredDraft(recoveryKey, { text, remoteText: remoteTextRef.current })
+        }
+        void open()
+      }}
       onSave={() => void save()}
       onSubmit={() => void submit()}
       onClose={close}

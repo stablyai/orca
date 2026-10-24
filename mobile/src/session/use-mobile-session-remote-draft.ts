@@ -30,6 +30,7 @@ export type MobileRemoteDraftSubmitOutcome =
 export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewModel) {
   const {
     client,
+    clientRef,
     connState,
     activeHandle,
     activeHandleRef,
@@ -77,24 +78,27 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
   }, [])
   sessionRef.current = session
 
-  const release = useCallback((target: MobileRemoteDraftSession | null) => {
-    const rpc = client
-    const deviceToken = deviceTokenRef.current
-    if (!target || !rpc || !deviceToken) {
-      return
-    }
-    void terminalDraftRelease
-      .request(
-        rpc,
-        {
-          terminal: target.handle,
-          client: { id: deviceToken, type: 'mobile' },
-          epoch: target.epoch
-        },
-        { failWhenDisconnected: true }
-      )
-      .catch(() => {})
-  }, [])
+  const release = useCallback(
+    (target: MobileRemoteDraftSession | null) => {
+      const rpc = clientRef.current
+      const deviceToken = deviceTokenRef.current
+      if (!target || !rpc || !deviceToken) {
+        return
+      }
+      void terminalDraftRelease
+        .request(
+          rpc,
+          {
+            terminal: target.handle,
+            client: { id: deviceToken, type: 'mobile' },
+            epoch: target.epoch
+          },
+          { failWhenDisconnected: true }
+        )
+        .catch(() => {})
+    },
+    [clientRef]
+  )
 
   useEffect(() => {
     const previous = sessionRef.current

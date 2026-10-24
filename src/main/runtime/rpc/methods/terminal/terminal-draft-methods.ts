@@ -5,7 +5,11 @@ import {
   TerminalDraftSave,
   TerminalDraftSubmit
 } from '../../../../../shared/rpc-contract/terminal-draft-params'
-import { assertTerminalSendTextWithinLimit } from './terminal-input-delivery'
+import {
+  assertTerminalSendTextWithinLimit,
+  isTerminalInputLockedForClient
+} from './terminal-input-delivery'
+import { writeRefused } from '../../../../../shared/pty-write-settlement'
 import { getTerminalDraftCoordinator } from '../../../terminal/draft/terminal-draft-service'
 
 /**
@@ -45,7 +49,8 @@ export const TERMINAL_DRAFT_METHODS = [
         epoch: params.epoch,
         baseToken: params.baseToken,
         text: params.text,
-        operationId: params.operationId
+        operationId: params.operationId,
+        canWrite: () => !isTerminalInputLockedForClient(runtime, ptyId, params.client)
       })
     }
   }),
@@ -66,12 +71,21 @@ export const TERMINAL_DRAFT_METHODS = [
         baseToken: params.baseToken,
         text: params.text,
         operationId: params.operationId,
-        submitInput: () =>
-          runtime.sendTerminal(
+        canWrite: () => !isTerminalInputLockedForClient(runtime, ptyId, params.client),
+        submitInput: async () => {
+          // Why: the lock can move while the draft replacement is in flight; recheck at the Enter.
+          if (
+            runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId !== ptyId ||
+            isTerminalInputLockedForClient(runtime, ptyId, params.client)
+          ) {
+            return { accepted: false, writeSettlement: writeRefused('provider_refused_write') }
+          }
+          return runtime.sendTerminal(
             params.terminal,
             { enter: true },
             { inputKind: 'driving', signal, requireWriteSettlement: true }
           )
+        }
       })
     }
   }),

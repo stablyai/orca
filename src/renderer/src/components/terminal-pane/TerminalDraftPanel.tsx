@@ -115,7 +115,13 @@ export function TerminalDraftPanel({
               : (reason ?? 'Draft editing is unavailable for this terminal.')}
           </p>
           {locked && (
-            <Button type="button" size="sm" onClick={onTakeOver} disabled={busy}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onTakeOver}
+              disabled={busy}
+              aria-label="Take over editing"
+            >
               Take over editing
             </Button>
           )}

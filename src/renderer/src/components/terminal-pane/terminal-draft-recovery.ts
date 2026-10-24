@@ -22,6 +22,10 @@ export function resolveDraftRecovery(input: {
   if (!local) {
     return { text: remoteText, baseToken: remoteToken, dirty: false, conflict: false }
   }
+  // Why: a stale record can outlive the save that made its text current; there is nothing to recover.
+  if (local.text === remoteText) {
+    return { text: remoteText, baseToken: remoteToken, dirty: false, conflict: false }
+  }
   // Why: the terminal changed after this copy was parked, so neither version is authoritative.
   if (local.remoteText !== remoteText) {
     return { text: local.text, baseToken: remoteToken, dirty: true, conflict: true }

@@ -169,6 +169,30 @@ describe('TerminalDraftCoordinator', () => {
     expect(harness.replace).toHaveBeenCalledTimes(1)
   })
 
+  it('refuses a draft write when another client holds terminal input', async () => {
+    const harness = createHarness()
+    const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    if (!begun.ok) {
+      throw new Error('expected begin')
+    }
+    const saved = await harness.coordinator.save({
+      ptyId: 'pty-1',
+      client: desktop,
+      epoch: begun.epoch,
+      baseToken: begun.sourceToken,
+      text: 'must not reach the editor',
+      operationId: 'op-input-locked',
+      canWrite: () => false
+    })
+    expect(saved).toMatchObject({
+      ok: false,
+      status: 'locked',
+      reason: 'terminal_input_locked'
+    })
+    expect(harness.replace).not.toHaveBeenCalled()
+    expect(harness.remoteText()).toBe('first\nsecond\nthird\nfourth')
+  })
+
   it('submits the draft and reports Enter acceptance separately from the save', async () => {
     const harness = createHarness()
     const begun = await harness.coordinator.begin({ ptyId: 'pty-1', client: desktop })

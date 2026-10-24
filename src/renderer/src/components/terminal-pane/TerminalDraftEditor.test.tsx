@@ -22,7 +22,7 @@ let root: Root
 let container: HTMLDivElement
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   window.localStorage.clear()
   releaseDesktopTerminalDraft.mockResolvedValue({ ok: true })
   container = document.createElement('div')
@@ -191,16 +191,61 @@ describe('TerminalDraftEditor', () => {
     )
   })
 
-  it('offers an explicit takeover instead of writing over another device lease', async () => {
-    beginDesktopTerminalDraft.mockResolvedValueOnce({
-      ok: false,
-      supported: true,
-      reason: 'locked',
-      holder: { clientId: 'phone', clientType: 'mobile' }
-    })
+  it('offers an explicit takeover and requests it with force', async () => {
+    beginDesktopTerminalDraft
+      .mockResolvedValueOnce({
+        ok: false,
+        supported: true,
+        reason: 'locked',
+        holder: { clientId: 'phone', clientType: 'mobile' }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        supported: true,
+        adapter: 'pi-editor',
+        epoch: 6,
+        text: 'remote after takeover',
+        sourceToken: 'token-takeover'
+      })
     renderEditor()
     await openEditor()
     expect(container.textContent).toContain('Another device is editing')
     expect(container.textContent).toContain('phone')
+    container.querySelector<HTMLButtonElement>('button[aria-label="Take over editing"]')?.click()
+    for (let index = 0; index < 5; index += 1) {
+      await tick()
+    }
+    expect(beginDesktopTerminalDraft).toHaveBeenLastCalledWith(
+      'pty-remote',
+      expect.any(String),
+      true
+    )
+    expect(textarea()?.value).toBe('remote after takeover')
+  })
+
+  it('keeps dirty local text when Reload is used', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 7,
+      text: 'remote',
+      sourceToken: 'token-reload'
+    })
+    renderEditor()
+    await openEditor()
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'local edit')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Reload the terminal draft"]')
+      ?.click()
+    for (let index = 0; index < 6; index += 1) {
+      await tick()
+    }
+    expect(textarea()?.value).toBe('local edit')
+    expect(container.textContent).toContain('Restored your unsaved local copy')
   })
 })

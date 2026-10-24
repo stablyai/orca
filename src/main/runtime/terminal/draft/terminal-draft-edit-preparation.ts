@@ -1,6 +1,6 @@
 import type {
-  TerminalDraftSaveResult,
-  TerminalDraftClient
+  TerminalDraftClient,
+  TerminalDraftUnavailableReason
 } from '../../../../shared/terminal-draft-contract'
 import type { TerminalDraftBridgeDeps } from './terminal-draft-bridge-deps'
 import type { PiDraftBridgePaths } from '../../../pi/draft-bridge-directory'
@@ -18,7 +18,12 @@ export async function prepareDraftEdit(input: {
   leaseTtlMs: number
   edit: { ptyId: string; client: TerminalDraftClient; epoch: number }
 }): Promise<
-  { paths: PiDraftBridgePaths } | { result: Exclude<TerminalDraftSaveResult, { ok: true }> }
+  | { paths: PiDraftBridgePaths }
+  | {
+      result:
+        | { ok: false; status: 'stale_lease'; epoch: number }
+        | { ok: false; status: 'unsupported'; reason: TerminalDraftUnavailableReason }
+    }
 > {
   const { deps, leases, leaseTtlMs, edit } = input
   const lease = leases.get(edit.ptyId)

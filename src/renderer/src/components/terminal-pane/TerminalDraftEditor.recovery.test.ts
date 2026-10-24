@@ -18,6 +18,21 @@ describe('resolveDraftRecovery', () => {
     ).toEqual({ text: 'local edit', baseToken: 'token-1', dirty: true, conflict: false })
   })
 
+  it('treats a parked copy whose text already matches the terminal as clean', () => {
+    expect(
+      resolveDraftRecovery({
+        local: { text: 'already saved', remoteText: 'remote before close' },
+        remoteText: 'already saved',
+        remoteToken: 'token-2'
+      })
+    ).toEqual({
+      text: 'already saved',
+      baseToken: 'token-2',
+      dirty: false,
+      conflict: false
+    })
+  })
+
   it('surfaces a conflict when the terminal changed while the editor was closed', () => {
     expect(
       resolveDraftRecovery({
