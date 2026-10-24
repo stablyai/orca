@@ -1,5 +1,5 @@
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
-import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import { OrcaRuntimeWithPreparePiTerminalPrompt } from './pi-terminal-prompt-framing'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -23,7 +23,7 @@ import { exitedChatDispatchesForSession } from './chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../terminal-identity-probe'
 
-export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
+export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPreparePiTerminalPrompt {
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
     const parsed = parsePaneKey(paneKey)
     let leafPty: RuntimePtyWorktreeRecord | null = null
