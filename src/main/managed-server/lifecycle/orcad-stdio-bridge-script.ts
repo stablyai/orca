@@ -1,12 +1,6 @@
 // Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
-import {
-  ORCAD_NODE_RUNTIME_DIR_PREFIX,
-  ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE,
-  ORCAD_RUNTIMES_DIRNAME
-} from '../../../shared/orcad-artifacts'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
-import { ORCAD_MACHINE_HOMES_DIRNAME } from '../host-state/orcad-machine-home'
+import { orcadPosixNodeRuntimeGlobs } from '../install/orcad-node-runtime-globs'
 
 export type OrcadStdioBridgeMode = 'raw' | 'base64'
 
@@ -68,12 +62,10 @@ export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode
 /** Shared machine homes may contain other architectures' runtimes; self-test before exec. */
 export function orcadPosixStdioBridgeCommand(port: number): string {
   const script = `${ORCAD_STDIO_BRIDGE_FUNCTION}\norcadStdioBridge(Number(process.argv[1]), 'raw')`
-  const store = `${RELAY_REMOTE_DIR}/${ORCAD_RUNTIMES_DIRNAME}/${ORCAD_NODE_RUNTIME_DIR_PREFIX}`
-  const executable = `/${ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE}`
-  const machineStores = `${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}/`
+  const [runtimeStore, machineRuntimeStores] = orcadPosixNodeRuntimeGlobs()
   return [
-    `for runtime in "$HOME"/${quotePosixShell(store)}*${quotePosixShell(executable)}`,
-    `"$HOME"/${quotePosixShell(machineStores)}*/${quotePosixShell(store)}*${quotePosixShell(executable)}; do`,
+    `for runtime in ${runtimeStore}`,
+    `${machineRuntimeStores}; do`,
     `if [ -x "$runtime" ] && "$runtime" -e 0 >/dev/null 2>&1; then`,
     `exec "$runtime" -e ${quotePosixShell(script)} ${String(port)}; fi;`,
     `done; echo ${quotePosixShell(ORCAD_STDIO_BRIDGE_NO_NODE)}; exit 127`
