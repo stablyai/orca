@@ -226,7 +226,18 @@ describe('runWslDriveUncConversionsAtStartup', () => {
       },
       { record_json: '{not json' }
     ])
-    expect(listWslDriveUncConversions(root)).toEqual([])
+    // The window's stores record themselves once it opens.
+    expect(listWslDriveUncConversions(root)).toEqual([
+      expect.objectContaining({
+        phase: 'profile-rewritten',
+        rewrittenStores: [
+          'terminal-history',
+          'shell-history',
+          'orchestration-history',
+          'chat-journal'
+        ]
+      })
+    ])
   })
 
   it('rolls back, changing nothing, when the profile cannot be re-keyed', () => {

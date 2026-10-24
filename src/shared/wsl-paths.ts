@@ -217,3 +217,15 @@ export function uncRouteKey(cwd: string): string | null {
   const server = cwd.slice(2).split(/[\\/]/, 1)[0]
   return `unc:${server.toLowerCase()}`
 }
+
+/** `\\wsl.localhost\<distro>\mnt\c\x` → `C:\x`; null for any other path. */
+export function wslUncDrivePathToWindows(path: string, distro: string): string | null {
+  const linux = wslUncPathToLinux(path, distro)?.replace(/\\/g, '/')
+  // Windows folds the `/mnt/<drive>` part of a UNC path case-insensitively.
+  const match = linux?.match(/^\/mnt\/([a-z])(\/.*)?$/i)
+  if (!match) {
+    return null
+  }
+  const tail = (match[2] ?? '').replace(/\/+$/, '').replace(/\//g, '\\')
+  return `${match[1].toUpperCase()}:${tail || '\\'}`
+}

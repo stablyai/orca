@@ -10,7 +10,9 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { rewriteWorktreeIdPath } from '../../shared/worktree/id'
-import { wslUncPathToLinux } from '../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../shared/wsl-paths'
+
+export { wslUncDrivePathToWindows }
 import { wslMoveRepoPaths } from '../persistence/moving-wsl-projects/wsl-move-scope'
 
 export type WslDriveUncRefusal =
@@ -33,18 +35,6 @@ type WslDriveUncScopeState = {
   repos: readonly Repo[]
   folderWorkspaces: readonly FolderWorkspace[]
   projectGroups: readonly ProjectGroup[]
-}
-
-/** `\\wsl.localhost\<distro>\mnt\c\x` → `C:\x`; null for any other path. */
-export function wslUncDrivePathToWindows(path: string, distro: string): string | null {
-  const linux = wslUncPathToLinux(path, distro)?.replace(/\\/g, '/')
-  // Windows folds the `/mnt/<drive>` part of a UNC path case-insensitively.
-  const match = linux?.match(/^\/mnt\/([a-z])(\/.*)?$/i)
-  if (!match) {
-    return null
-  }
-  const tail = (match[2] ?? '').replace(/\/+$/, '').replace(/\//g, '\\')
-  return `${match[1].toUpperCase()}:${tail || '\\'}`
 }
 
 export function collectWslDriveUncScope(
