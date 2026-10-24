@@ -158,7 +158,8 @@ describe('terminal file links carry their source tab', () => {
     expect(openFileForLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/media/clip.mp4' }),
       expect.anything(),
-      expect.objectContaining({ targetGroupId: 'group-a' })
+      expect.objectContaining({ targetGroupId: 'group-a' }),
+      expect.any(Function)
     )
   })
 
