@@ -6,6 +6,7 @@ import {
   type NativeChatPickerItem
 } from '../../../src/shared/native-chat-picker-items'
 import { sessionReportedSkills } from '../../../src/shared/native-chat-slash-commands'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { structuredSessionSlashCommands } from '../../../src/shared/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
 
@@ -22,31 +23,44 @@ export type MobileComposerStructuredCatalog = {
 type SlashMenuInput = {
   agent: string | null
   structured: MobileComposerStructuredCatalog | undefined
+  /** What the worktree's host scanned, already filtered to the agent; the session's report,
+   *  when one exists and lists skills, stays the authority on what is offered. */
+  discoveredSkills?: readonly DiscoveredSkill[]
   query: string
 }
 
 /**
  * The `/` menu, built by the same rules as desktop's. A structured chat offers the host's commands,
  * then the session's own commands and skills once it reported them; a terminal-backed chat keeps its
- * curated commands and no skills.
+ * curated commands. Both lanes offer the worktree's scanned skills, namespaced and gated by
+ * the same report-authority rule as desktop.
  */
 function slashItems(
-  { agent, structured, query }: SlashMenuInput,
+  { agent, structured, discoveredSkills, query }: SlashMenuInput,
   limit: number
 ): NativeChatPickerItem[] {
   if (!agent) {
     return []
   }
   const reported = structured?.reported
+  const profile = getNativeChatAgentProfile(agent)
   const commands = structured
     ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
     : getMobileNativeChatCommands(agent)
+  // Every agent with a known grammar offers skills; only the token a pick inserts differs.
+  const skillsEnabled = profile !== null
+  // Why: mirrors desktop's catalog — a session that reports its skills is the authority on
+  // what exists, unless its agent's report never lists skills (OpenCode 2.x).
+  const sessionSkills =
+    reported !== undefined && profile?.keepsScannedSkills !== true
+      ? sessionReportedSkills(reported)
+      : undefined
   return buildNativeChatPickerItems(
     commands,
-    [],
+    skillsEnabled ? (discoveredSkills ?? []) : [],
     query,
-    getNativeChatAgentProfile(agent)?.skillPrefix ?? '/',
-    reported ? sessionReportedSkills(reported) : [],
+    profile?.skillPrefix ?? '/',
+    skillsEnabled ? sessionSkills : [],
     limit
   )
 }

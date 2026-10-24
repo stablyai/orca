@@ -13,6 +13,7 @@ import {
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
 import { composerMenuInsertText, type ComposerMenuRow } from './MobileNativeChatComposerMenu'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 
 type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -30,13 +31,15 @@ export function useMobileNativeChatComposerMenu(input: {
   agent: string | null
   /** Undefined on a terminal-backed chat. */
   structuredCatalog: MobileComposerStructuredCatalog | undefined
+  /** What the worktree's host scanned for this agent, offered alongside the catalog. */
+  discoveredSkills?: readonly DiscoveredSkill[]
   filePaths: readonly string[]
   onNeedFiles?: (query: string) => void
   /** The `/` menu opened; the session's list may have changed since it was read. */
   onSlashMenuOpen?: () => void
   focusField: () => void
 }) {
-  const { value, onChangeText, agent, structuredCatalog, filePaths } = input
+  const { value, onChangeText, agent, structuredCatalog, discoveredSkills, filePaths } = input
   const [cursor, setCursor] = useState(0)
   // Drives the caret only right after an insert; a permanently controlled `selection` breaks
   // manual caret placement in React Native.
@@ -44,8 +47,8 @@ export function useMobileNativeChatComposerMenu(input: {
   const [menuKind, setMenuKind] = useState<MenuKind | null>(null)
 
   const skillTokens = useMemo(
-    () => mobileComposerSkillTokens({ agent, structured: structuredCatalog }),
-    [agent, structuredCatalog]
+    () => mobileComposerSkillTokens({ agent, structured: structuredCatalog, discoveredSkills }),
+    [agent, discoveredSkills, structuredCatalog]
   )
   const skillToken = leadingSkillToken(value, skillTokens)
   const setDraft = (next: string): void => {
@@ -81,10 +84,11 @@ export function useMobileNativeChatComposerMenu(input: {
     const items = mobileComposerSlashItems({
       agent,
       structured: structuredCatalog,
+      discoveredSkills,
       query: menuQuery
     })
     return narrowedMenuItems(items, menuKind)
-  }, [agent, filePaths, menuKind, menuMode, menuQuery, structuredCatalog])
+  }, [agent, discoveredSkills, filePaths, menuKind, menuMode, menuQuery, structuredCatalog])
 
   const { onNeedFiles, onSlashMenuOpen } = input
   useEffect(() => {

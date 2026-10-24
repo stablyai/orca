@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 import {
   draftAfterSkillEdit,
   narrowedMenuItems,
@@ -12,6 +13,26 @@ const reported = [
   { name: 'review-pr', kind: 'skill' as const, description: 'Review a pull request' },
   { name: 'research', kind: 'skill' as const }
 ]
+
+function scannedSkill(fields: Partial<DiscoveredSkill> = {}): DiscoveredSkill {
+  return { ...scannedSkillRow(), ...fields }
+}
+
+function scannedSkillRow() {
+  return {
+    id: 'claude:deploy-check',
+    name: 'deploy-check',
+    description: 'Verify the deploy',
+    providers: ['claude' as const],
+    sourceKind: 'repo' as const,
+    sourceLabel: 'Project',
+    rootPath: '/repo/.claude/skills',
+    directoryPath: '/repo/.claude/skills/deploy-check',
+    skillFilePath: '/repo/.claude/skills/deploy-check/SKILL.md',
+    installed: true,
+    updatedAt: null
+  }
+}
 
 describe('mobileComposerSlashItems', () => {
   it("offers the host's commands, then the session's own and its skills with their descriptions", () => {
@@ -49,20 +70,68 @@ describe('mobileComposerSlashItems', () => {
     expect(items.map((item) => item.token)).toEqual(['$review-pr'])
   })
 
-  it('falls back to the host commands, with no skills, before the session reports', () => {
+  it('falls back to the host commands, with the scanned skills, before the session reports', () => {
     const items = mobileComposerSlashItems({
       agent: 'claude',
       structured: { reported: undefined, conversationCommands: ['compact'] },
+      discoveredSkills: [scannedSkill()],
       query: ''
     })
     expect(items.some((item) => item.token === '/compact')).toBe(true)
+    expect(items.some((item) => item.token === '/deploy-check')).toBe(true)
+  })
+
+  it('keeps a terminal-backed chat on its curated commands plus the same scanned skills', () => {
+    const items = mobileComposerSlashItems({
+      agent: 'claude',
+      structured: undefined,
+      discoveredSkills: [scannedSkill()],
+      query: ''
+    })
+    expect(items.some((item) => item.kind === 'command')).toBe(true)
+    expect(items.some((item) => item.token === '/deploy-check')).toBe(true)
+  })
+
+  it('offers a scanned plugin skill under its plugin:skill name', () => {
+    const items = mobileComposerSlashItems({
+      agent: 'claude',
+      structured: { reported: undefined, conversationCommands: [] },
+      discoveredSkills: [
+        scannedSkill({
+          name: 'catchup',
+          sourceKind: 'plugin',
+          sourceLabel: 'Claude plugin quiver'
+        })
+      ],
+      query: ''
+    })
+    expect(items.some((item) => item.token === '/quiver:catchup')).toBe(true)
+  })
+
+  it('lets a report that lists no skills hide the scanned ones', () => {
+    const items = mobileComposerSlashItems({
+      agent: 'claude',
+      structured: {
+        reported: [{ name: 'compact', kind: 'command', description: 'Compact the chat' }],
+        conversationCommands: []
+      },
+      discoveredSkills: [scannedSkill()],
+      query: ''
+    })
     expect(items.some((item) => item.kind === 'skill')).toBe(false)
   })
 
-  it('keeps a terminal-backed chat on its curated commands', () => {
-    const items = mobileComposerSlashItems({ agent: 'claude', structured: undefined, query: '' })
-    expect(items.length).toBeGreaterThan(0)
-    expect(items.every((item) => item.kind === 'command')).toBe(true)
+  it('keeps the scanned skills for an agent whose report never lists them', () => {
+    const items = mobileComposerSlashItems({
+      agent: 'opencode',
+      structured: {
+        reported: [{ name: 'compact', kind: 'command', description: 'Compact the chat' }],
+        conversationCommands: []
+      },
+      discoveredSkills: [scannedSkill()],
+      query: ''
+    })
+    expect(items.some((item) => item.token === '/deploy-check')).toBe(true)
   })
 })
 

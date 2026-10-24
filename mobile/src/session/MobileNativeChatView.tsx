@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
@@ -71,6 +72,8 @@ type Props = ComposerTrayProps & {
   readFailedFinally?: boolean
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
+  /** What the worktree's host scanned for this agent, offered in the `/` menu on every lane. */
+  discoveredSkills?: readonly DiscoveredSkill[]
   agentWorking?: boolean
   canStop?: boolean
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
@@ -172,6 +175,7 @@ export function MobileNativeChatView({
   error,
   readFailedFinally = false,
   agent,
+  discoveredSkills,
   agentWorking,
   canStop = agentWorking,
   structuredActivityUi = false,
@@ -425,6 +429,7 @@ export function MobileNativeChatView({
         sendSurfaceId={sendSurfaceId}
         {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
         agent={agent}
+        discoveredSkills={discoveredSkills}
         sessionOptions={sessionOptions}
         onAttachImage={onAttachImage}
         attachments={attachments}

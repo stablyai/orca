@@ -6,6 +6,7 @@ import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-structured-composer'
+import { useMobileNativeChatDiscoveredSkills } from './use-mobile-native-chat-discovered-skills'
 import {
   isMobileNativeChatAgentConfirmed,
   resolveMobileNativeChatSessionId
@@ -120,6 +121,12 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
     files: nativeChatFiles
   })
+  // Both lanes offer scanned skills, so this sits beside the structured tray, not inside it.
+  const { discoveredSkills: nativeChatDiscoveredSkills } = useMobileNativeChatDiscoveredSkills({
+    client,
+    worktreeId,
+    agent
+  })
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
@@ -161,7 +168,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     attachImage,
     isAttaching,
     nativeChatImages,
-    nativeChatStructuredComposer
+    nativeChatStructuredComposer,
+    nativeChatDiscoveredSkills
   }
 }
 

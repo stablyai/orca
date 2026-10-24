@@ -176,6 +176,8 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',
   ...MOBILE_AGENT_SESSION_RPC_METHODS,
+  // The slash menu's skill scan reads the disk of the host that owns the worktree.
+  'skills.discover',
   'terminal.adoptOrphans',
   'terminal.agentStatus',
   'terminal.clearBuffer',

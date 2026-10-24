@@ -15,6 +15,7 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
@@ -56,6 +57,8 @@ type Props = {
   getComposerEditGeneration: () => number
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
+  /** What the worktree's host scanned for this agent, offered in the `/` menu on every lane. */
+  discoveredSkills?: readonly DiscoveredSkill[]
   /** The model pill and its sheet; null when the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
@@ -89,6 +92,7 @@ export function MobileNativeChatComposer({
   getSendCompletionGeneration,
   getComposerEditGeneration,
   agent = null,
+  discoveredSkills,
   structured = null,
   sessionOptions,
   onAttachImage,
@@ -123,6 +127,7 @@ export function MobileNativeChatComposer({
     value,
     onChangeText,
     agent,
+    discoveredSkills,
     structuredCatalog: structured?.catalog,
     filePaths,
     onNeedFiles,
