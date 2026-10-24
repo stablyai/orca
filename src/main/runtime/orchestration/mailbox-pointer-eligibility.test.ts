@@ -14,6 +14,11 @@ const MAILBOX = 'dispatch:d1'
 
 function seeded(): OrchestrationDb {
   const db = new OrchestrationDb(':memory:')
+  // More heartbeats than one batch, ahead of real mail: none may be pointed or crowd it out.
+  const heartbeat = { runId: 'run_legacy_local', from: 'w', to: MAILBOX, subject: 'hb' } as const
+  db.insertMessages(
+    Array.from({ length: 60 }, () => ({ ...heartbeat, type: 'heartbeat' as const }))
+  )
   db.insertMessages([
     { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'a', type: 'status' },
     { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'b', type: 'question' },
@@ -37,6 +42,7 @@ describe('selectOrchestrationPointerBatch', () => {
         reservedTypes: undefined
       })
       expect(batch.map((m) => m.type)).toEqual(['status', 'status'])
+      expect(db.getUnreadMessages(MAILBOX, ['heartbeat'])).toHaveLength(60)
     } finally {
       db.close()
     }
