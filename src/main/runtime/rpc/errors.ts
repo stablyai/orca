@@ -159,7 +159,6 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'question_not_found',
   'answer_conflict',
   'stale_delivery',
-  'waiter_exists',
   'invalid_argument',
   // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
   // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.
