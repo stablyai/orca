@@ -36,7 +36,7 @@ export type OwnedMobileTerminalCreateOptions = {
   supportsSplitGroupPlacement?: boolean
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
-  resumeOrigin?: 'saved'
+  resumeOrigin?: 'saved' | 'switch'
   spawnIntent?: SpawnIntent
   launchRuntime?: AgentLaunchRuntime
   signal?: AbortSignal
@@ -81,6 +81,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumeOrigin?: 'switch'
       launchAgent?: TuiAgent
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'

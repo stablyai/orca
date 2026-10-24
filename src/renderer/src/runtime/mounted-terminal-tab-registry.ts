@@ -5,7 +5,10 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 
+import type { TerminalSurfaceCloseIdentity } from '../../../shared/terminal-tab-close'
+
 export type RegisteredTerminalTab = {
+  retirePresentation?: (original: TerminalSurfaceCloseIdentity) => void
   tabId: string
   worktreeId: string
   getManager: () => PaneManager | null

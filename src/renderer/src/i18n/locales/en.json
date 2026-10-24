@@ -19691,8 +19691,22 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Continue with Terminal Agent",
-          "switchToChatView": "Continue in Chat UI"
+          "switchToTerminalView": "Show as terminal",
+          "switchToChatView": "Show as chat",
+          "closeTabsToLeft": "Close All Tabs To The Left"
+        },
+        "switch": {
+          "toCli": "Switch to CLI",
+          "toNativeChat": "Switch to native chat",
+          "toCliTooltip": "Switch to CLI: stops {{agent}} in native chat and continues the same conversation in a terminal.",
+          "openedInWorkspace": "Opened chat in {{workspace}}.",
+          "toNativeChatTooltip": "Switch to native chat: continues the same conversation in a chat, in this tab.",
+          "exitAgentFirst": "Exit {{agent}} in this terminal to switch.",
+          "waitForReply": "Wait for the reply to finish or stop it, then switch.",
+          "stopUnconfirmed": "Couldn't confirm {{agent}} stopped. Try again.",
+          "failed": "Couldn't switch this conversation to the CLI.",
+          "noConversation": "No saved conversation is available in this terminal yet.",
+          "unavailable": "Switching {{agent}} is not available yet."
         },
         "BrowserTab": {
           "closeOthers": "Close Others"

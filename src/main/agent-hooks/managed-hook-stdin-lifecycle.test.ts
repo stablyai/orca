@@ -201,9 +201,40 @@ function runHookProcess(
     let stderr = ''
     let stdout = ''
     const timeout = setTimeout(() => {
+      const diagnostic = JSON.stringify({
+        executable,
+        args,
+        spawnfile: child.spawnfile,
+        spawnargs: child.spawnargs,
+        inPane: Boolean(env.ORCA_PANE_KEY),
+        pid: child.pid ?? null,
+        exitCode: child.exitCode,
+        signalCode: child.signalCode,
+        killed: child.killed,
+        stdout,
+        stderr,
+        stdinErrors: stdinErrors.map(({ code, message }) => ({ code, message })),
+        stdin: {
+          destroyed: child.stdin.destroyed,
+          writableEnded: child.stdin.writableEnded,
+          writableFinished: child.stdin.writableFinished,
+          writableLength: child.stdin.writableLength,
+          writableNeedDrain: child.stdin.writableNeedDrain
+        },
+        stdoutPipe: {
+          destroyed: child.stdout.destroyed,
+          readableEnded: child.stdout.readableEnded,
+          readableLength: child.stdout.readableLength
+        },
+        stderrPipe: {
+          destroyed: child.stderr.destroyed,
+          readableEnded: child.stderr.readableEnded,
+          readableLength: child.stderr.readableLength
+        }
+      })
       child.stdin.destroy()
       child.kill('SIGKILL')
-      reject(new Error(`hook did not finish with stdin ${stdin}d`))
+      reject(new Error(`hook did not finish with stdin ${stdin}d\n${diagnostic}`))
     }, 10_000)
     child.on('error', (error) => {
       clearTimeout(timeout)

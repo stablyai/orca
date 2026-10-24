@@ -58,16 +58,16 @@ function renderHeader() {
 it('offers the terminal header action order and targets Resume and Close at the displayed chat', () => {
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-    'Continue with Terminal Agent',
+    'Show as terminal',
     'Split Chat Right',
     'Close tab'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
-  expect(screen.queryByRole('button', { name: 'Continue with Terminal Agent' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Show as terminal' })).toBeNull()
   act(() => useAppStore.setState({ folderWorkspaces: [folder] }))
   expect(fullRequest).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Continue with Terminal Agent' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Show as terminal' }))
   expect(fullRequest).toHaveBeenCalledTimes(1)
   expect(mocks.resume).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({

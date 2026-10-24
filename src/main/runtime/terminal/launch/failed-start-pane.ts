@@ -1,3 +1,5 @@
+import { rekeyMovedPaneOwners } from '../../moved-pane-owner-rekey'
+import { applyWindowLayoutCommand } from '../../runtime-layout-apply'
 // Layout-owner build: main's starts publish their status on the pane, and a start main could not
 // make leaves its pane showing why, whether it failed before the pane was written or after.
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -43,7 +45,31 @@ export async function startKeepingFailedPane<T>(
 
 export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCreateTerminal {
   protected abstract markPaneLiveTitlesDirty(): void
+  protected abstract inResumeRecordOrder<T>(write: () => Promise<T>): Promise<T>
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  protected async applyOwnedWindowLayoutCommand(
+    command: WindowLayoutCommand,
+    options?: LayoutCommandRunOptions
+  ): Promise<LayoutApplyReply> {
+    // A workspace's first surface comes after the live terminals main is placing.
+    const placing = this.livePlacementSettledFor(command)
+    const apply = (): Promise<LayoutApplyReply> =>
+      applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        command,
+        (move) => rekeyMovedPaneOwners(this, move),
+        options ? { ...this.layoutCommandRun(command), ...options } : this.layoutCommandRun(command)
+      )
+    // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
+    return await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
+      ? this.inResumeRecordOrder(apply)
+      : (placing?.then(apply) ?? apply()))
+  }
 
   /** Switch point: main's starts into panes it already holds, published until each binds. */
   protected readonly paneStartStatuses = ORCA_LAYOUT_OWNER_IS_MAIN

@@ -32,6 +32,7 @@ export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'setAgentStatus' | 'setAgentStatuses' | 'transactAgentStatuses'> {
   const {
+    projectConversation,
     get,
     set,
     applyGeneratedTabTitleUpdate,
@@ -105,7 +106,7 @@ export function createAgentStatusLiveActions(
         return state
       }
       const previousEntries = state.agentStatusByPaneKey
-      const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt)
+      const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt, projectConversation)
       liveEntryDelta = {
         previousEntries,
         nextEntries: reduction.patch.agentStatusByPaneKey ?? previousEntries,

@@ -1,5 +1,7 @@
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
+import { agentLabel } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 
 /** Shared by the row menus and the details button, which offer the same fork. Two block lines, not
  *  one wrapped string: the tooltip balances wrapped text inside a box sized before balancing, which
@@ -19,6 +21,18 @@ export function ResumeInNewCliTooltipText(): React.JSX.Element {
           'This chat stays unchanged.'
         )}
       </span>
+    </>
+  )
+}
+
+export function SwitchToCliTooltipText({ agent }: { agent: AiVaultAgent }): React.JSX.Element {
+  return (
+    <>
+      {translate(
+        'components.tab.bar.switch.toCliTooltip',
+        'Switch to CLI: stops {{agent}} in native chat and continues the same conversation in a terminal.',
+        { agent: agentLabel(agent) }
+      )}
     </>
   )
 }

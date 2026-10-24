@@ -1,15 +1,13 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type {
-  RuntimeMobileSessionTerminalTab,
-  RuntimeSessionTabCloseReason
-} from '../../../../shared/runtime-types'
-import type { RuntimePtyTabCloseAuthority } from '../../runtime-terminal-state-records'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
 import {
   adjudicateAbsentMobileSessionTabClose,
-  resolveMobileSessionLifecycleCloseContext,
-  type MobileSessionLifecycleCloseHost
+  resolveMobileSessionLifecycleCloseContext
 } from '../../mobile-session-lifecycle-close-adjudication'
-import type { MobileSessionTabCloseOutcome } from '../../mobile-session-tab-close-outcome'
+import type {
+  MobileSessionTabCloseOptions,
+  MobileSessionTabCloseOutcome
+} from '../../mobile-session-tab-close-outcome'
 import {
   committedMobileSessionTabClose,
   delegatedMobileSessionTabClose,
@@ -29,20 +27,32 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
   async closeMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
-    options: {
-      reason?: RuntimeSessionTabCloseReason
-      expectedPublicationEpoch?: string
-      expectedTerminalHandle?: string
-      clientNavigationId?: string
-      localPtyTeardownOwnedExternally?: boolean
-      expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
-      force?: boolean
-    } = {}
+    options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    if (options.originalPresentation) {
+      const source = options.originalPresentation.identity
+      if (
+        source.worktreeId !== worktreeId ||
+        source.tabId !== tabId ||
+        !options.localPtyTeardownOwnedExternally
+      ) {
+        throw new Error('terminal_pane_owner_changed')
+      }
+      const closedTab = await this.closeTerminalPane(
+        worktreeId,
+        { kind: 'pane', tabId, leafId: source.leafId },
+        options
+      )
+      return committedMobileSessionTabClose(
+        this.clientSessionTabSelections,
+        worktreeId,
+        closedTab ? [tabId] : []
+      )
+    }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
     if (graphEpoch !== null) {
@@ -324,16 +334,5 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
       await this.notifier.closeSessionTab(tab.id, worktreeId)
     }
     return finishCommittedClose()
-  }
-
-  protected getMobileSessionLifecycleCloseHost(): MobileSessionLifecycleCloseHost {
-    return {
-      tabs: this.tabs,
-      leaves: this.leaves,
-      ptysById: this.ptysById,
-      findPtyForMobileTerminalTab: (worktreeId, tab) =>
-        this.findPtyForMobileTerminalTab(worktreeId, tab),
-      republishSnapshot: (worktreeId) => this.republishMobileSessionTabsSnapshot(worktreeId)
-    }
   }
 }

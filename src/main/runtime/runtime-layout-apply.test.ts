@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import {
+  applyWindowLayoutCommand,
+  type WindowLayoutCommand,
+  type LayoutCommandRunOptions
+} from './runtime-layout-apply'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
@@ -50,6 +54,40 @@ describe('applyWindowLayoutCommand', () => {
       tabId: 'tab-1',
       leafId: 'leaf-1'
     })
+  })
+
+  it('forwards present close options intact to the owning Store', async () => {
+    const { store, applyLayoutCommand } = storeWith()
+    const run: LayoutCommandRunOptions = {
+      originalPresentation: {
+        identity: {
+          ...CLOSE,
+          worktreeId: CLOSE.workspace,
+          createdAt: 1,
+          generation: 0,
+          hasLeaf: true,
+          ptyId: 'pty-1',
+          incarnationId: 'i1'
+        },
+        holders: []
+      },
+      admit: () => true,
+      live: { isBindingLive: () => true },
+      stopBeforeWrite: () => true,
+      onEffects: vi.fn()
+    }
+    const tabClose: WindowLayoutCommand = {
+      type: 'closeTabs',
+      workspace: CLOSE.workspace,
+      tabIds: [CLOSE.tabId]
+    }
+    await applyWindowLayoutCommand(store, () => ['local'], CLOSE, undefined, run)
+    await applyWindowLayoutCommand(store, () => ['local'], tabClose, undefined, run)
+    expect(applyLayoutCommand.mock.calls).toEqual([
+      [{ ...CLOSE, userPaneClose: true }, ['local'], run],
+      [{ ...tabClose, force: true }, ['local'], run]
+    ])
+    expect(mocks.markAgentLaunchesClosedByUser).not.toHaveBeenCalled()
   })
 
   it('applies other commands to the routed partition only', async () => {

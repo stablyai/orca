@@ -1,3 +1,4 @@
+vi.mock('@/lib/in-place-switch-support', () => ({ useInPlaceSwitchCapability: () => false }))
 // @vitest-environment happy-dom
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -39,7 +40,8 @@ vi.mock('./native-chat-cli-fork-run', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({ settings: { experimentalNativeChat: true } }),
     { getState: () => ({}) }
   )
 }))
@@ -49,7 +51,10 @@ vi.mock('./tab-session-history-switch', async (importOriginal) => ({
   resolveTabSessionHistorySubject: () => mocks.subject
 }))
 
-vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.cliSource }))
+vi.mock('./cli-chat-resume-source', () => ({
+  useCliChatResumeCapability: (_worktreeId: string, agent: string) => agent === 'codex',
+  resolveCliChatResumeSource: () => mocks.cliSource
+}))
 vi.mock('./cli-chat-resume-run', () => ({
   runCliChatResume: mocks.runCliChatResume,
   useCliChatResumePending: () => false
@@ -115,7 +120,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     mocks.subject = CHAT_SUBJECT
     renderItemsNow('orca-chat-1')
     expect(mocks.listSessions).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New Terminal' }))
     expect(mocks.runNativeChatCliFork).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: CHAT_SUBJECT,
@@ -136,7 +141,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     }
     mocks.cliSource = source
     renderItemsNow()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Continue in Chat UI' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New Chat' }))
     await act(async () => {})
     expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
     expect(mocks.listSessions).not.toHaveBeenCalled()
@@ -150,8 +155,8 @@ it('keeps an accepted native action visible with shared disabled spinner feedbac
     mocks.pendingListeners.forEach((listener) => listener())
   })
   await renderItems('orca-chat-1')
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' }))
-  const item = screen.getByRole('menuitem', { name: 'Continue with Terminal Agent' })
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New Terminal' }))
+  const item = screen.getByRole('menuitem', { name: 'Resume in New Terminal' })
   expect(item.getAttribute('aria-busy')).toBe('true')
   expect(item.getAttribute('data-disabled')).not.toBeNull()
   expect(item.querySelector('.animate-spin')).not.toBeNull()

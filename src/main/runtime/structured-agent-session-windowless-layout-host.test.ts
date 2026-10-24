@@ -1,9 +1,19 @@
+import { isAgentSessionProviderHandleChain } from '../../shared/agent-session-provider-handle'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { publishCommittedPtySpawn } from '../ipc/pty/spawn-commit-publication'
+import type { PtySpawnCommitInput } from '../ipc/pty/spawn-commit-assembly'
+import { createRuntimePtySpawnState } from '../ipc/pty/runtime/spawn-state'
+import { createPtySpawnCommitDependencies } from '../persistence/loading-store/pty-spawn-commit-dependencies-fixture'
+import { unregisterPty } from '../memory/pty-registry'
+import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
+import * as storeDraft from './agent-session-store-draft'
+import * as storeRows from './agent-session-record-rows'
 // A windowless host's saved chat tab against a real chat host: the index hiding a chat reaches the
 // runtime and takes the tab out of the layout, and a chat whose record is gone loses its tab.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -12,7 +22,10 @@ import { structuredAgentSessionTabId } from '../../shared/structured-agent-sessi
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session-tab-layout'
 import {
@@ -106,7 +119,7 @@ async function runtimeWithSavedChats(
     })
   }
   await settled()
-  return { runtime, state }
+  return { runtime, state, store }
 }
 
 function installHost(runtime: OrcaRuntimeService) {
@@ -283,4 +296,149 @@ describe('a windowless chat tab against the chat host', () => {
 
     expect(savedChatIds(state)).toEqual([CHAT_GONE, CHAT_B])
   })
+})
+
+it.each([
+  [8, 1],
+  [80, 1],
+  [256, 1],
+  [8, 10]
+])('measures retirement at %i links/%i sessions', async (k, sessions) => {
+  const record = released(CHAT_A)
+  record.provider = 'codex'
+  const handle = codexProviderHandle('88888888-8888-4888-8888-888888888888')
+  record.providerHandleChain = Array.from({ length: k }, (_, index) => ({
+    linkId: `link-${index}`,
+    origin: index === 0 ? 'created' : 'resumed',
+    mintedAtFence: index + 1,
+    observedAt: index + 1,
+    handle
+  }))
+  record.lease = { ...record.lease, runtimeFence: k, provenHandleLinkId: `link-${k - 1}` }
+  expect(isAgentSessionProviderHandleChain(record.providerHandleChain)).toBe(true)
+  const ids = Array.from({ length: sessions }, (_, i) => (i ? `chat-matching-${i}` : CHAT_A))
+  const records = ids.map((sessionId) => ({
+    ...record,
+    sessionId,
+    lease: { ...record.lease, sessionId }
+  }))
+  await seedTestAgentSessionRecordStore(root, {
+    records: [...records, released(CHAT_B)],
+    sessionTabs: shown(...ids, CHAT_B)
+  })
+  const { runtime, state, store } = await runtimeWithSavedChats([...ids, CHAT_B])
+  for (let index = 0; index < 3; index += 1) {
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: `other-${index}`,
+      sessionId: CHAT_B,
+      agent: 'codex',
+      activate: false
+    })
+  }
+  const host = await installHost(runtime)
+  const probes = {
+    visibility: vi.spyOn(host, 'setSessionTabVisibility'),
+    transactions: vi.spyOn(AgentSessionStoreTransactions.prototype, 'transact'),
+    drafts: vi.spyOn(storeDraft, 'draftAgentSessionStoreState'),
+    differences: vi.spyOn(storeDraft, 'agentSessionStoreDraftRowWrites'),
+    changedRowCommits: vi.spyOn(storeRows, 'writeAgentSessionStoreRows'),
+    hidden: vi.spyOn(runtime, 'onStructuredSessionTabHidden'),
+    savedWrites: vi.spyOn(store, 'setWorkspaceSession'),
+    layoutCommands: vi.spyOn(store, 'applyLayoutCommand'),
+    retirement: vi.spyOn(runtime, 'retireStructuredAgentSessionTabFromSnapshot')
+  }
+  const publications = vi.fn()
+  const unsubscribe = runtime.onMobileSessionTabsChanged(publications)
+  const dismissals = vi.spyOn(host.restartResume, 'dismiss')
+  const visits = { recordVisits: 0, snapshotVisits: 0, findVisits: 0 }
+  for (const method of [Symbol.iterator, 'values'] as const) {
+    const original = Map.prototype[method]
+    vi.spyOn(Map.prototype, method).mockImplementation(function* (this: Map<unknown, unknown>) {
+      for (const item of original.call(this)) {
+        const value = method === 'values' ? item : item[1]
+        if (typeof value === 'object' && value !== null) {
+          if ('providerHandleChain' in value) {
+            visits.recordVisits += 1
+          }
+          if ('snapshotVersion' in value && 'tabs' in value) {
+            visits.snapshotVisits += 1
+          }
+        }
+        yield item
+      }
+      return undefined
+    })
+  }
+  const find = Array.prototype.find
+  vi.spyOn(Array.prototype, 'find').mockImplementation(function (
+    this: ArrayLike<unknown>,
+    predicate,
+    thisArg
+  ) {
+    return find.call(this, (value, index, array) => {
+      visits.findVisits += 1
+      return predicate.call(thisArg, value, index, array)
+    })
+  })
+  const reply = {
+    id: `perf-retirement-${k}`,
+    savedResumeDecision: {
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: handle.nativeId },
+      verdict: 'admitted' as const
+    }
+  }
+  const ports = createPtySpawnCommitDependencies(runtime)
+  const spawnState = createRuntimePtySpawnState(ports, {
+    cols: 80,
+    rows: 24,
+    resumeOrigin: 'switch',
+    worktreeId: WT
+  })
+  spawnState.result = reply
+  const commit: PtySpawnCommitInput<typeof reply> = {
+    state: spawnState,
+    nativeWindowsConptySpawn: false,
+    seedPaneKey: null,
+    registration: {
+      store: undefined,
+      worktreeId: WT,
+      shellOverride: undefined,
+      rendererLaunchAuthority: null
+    },
+    preAllocatedHandle: null,
+    paneKey: null,
+    memorySessionId: null,
+    resumeArgvDropped: false,
+    codexLaunchEnv: undefined,
+    initiallyHidden: false,
+    hiddenDelivery: 'runtime-owned',
+    earlyExit: 'throw',
+    joinPayload: { reservation: reply, reply }
+  }
+  const counts = () => ({
+    ...Object.fromEntries(Object.entries(probes).map(([key, spy]) => [key, spy.mock.calls.length])),
+    dismissals: dismissals.mock.calls.length,
+    publications: publications.mock.calls.length,
+    ...visits
+  })
+  try {
+    expect(await publishCommittedPtySpawn(commit)).toBe(reply)
+    const beforeDrain = counts()
+    await Promise.all(dismissals.mock.results.map(({ value }) => value))
+    await settled()
+    const afterDrain = counts()
+    console.info('RETIREMENT_WORK', JSON.stringify({ k, sessions, beforeDrain, afterDrain }))
+    expect(
+      afterDrain.recordVisits + afterDrain.snapshotVisits + afterDrain.findVisits
+    ).toBeLessThanOrEqual(128 * k * sessions * sessions)
+    expect(host.deps.store.getVisibleSessionTabIndex().sessionIds).toEqual([CHAT_B])
+    expect(savedChatIds(state)).toEqual([CHAT_B])
+    expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toEqual(shown(CHAT_B))
+    expect(host.collaboratorsForTests().sessions.size).toBe(0)
+  } finally {
+    unsubscribe()
+    unregisterPty(reply.id)
+    vi.restoreAllMocks()
+  }
 })

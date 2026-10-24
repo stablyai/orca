@@ -1,3 +1,4 @@
+import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { AgentStatusBatchTransaction, AgentStatusBatchUpdate } from './agent-status-contract'
@@ -11,6 +12,7 @@ export type AgentStatusStateUpdate =
   | ((state: AppState) => AppState | Partial<AppState>)
 
 export type AgentStatusRuntime = {
+  projectConversation: typeof projectAgentPaneConversation
   get: () => AppState
   set: (update: AgentStatusStateUpdate) => void
   runAfterCommit: (effect: () => void) => void
@@ -40,6 +42,19 @@ export function createAgentStatusRuntime(
   let batchedGeneratedTabTitleUpdates: GeneratedTabTitleUpdate[] | null = null
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
+  let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
+  const projectConversation: typeof projectAgentPaneConversation = (state, entry) =>
+    projectAgentPaneConversation(state, entry, (entries) => {
+      if (!batchedAgentStatusState) {
+        return { ...entries }
+      }
+      const next =
+        entries === conversationDraft
+          ? entries
+          : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
+      conversationDraft = next
+      return next
+    })
 
   // Deliberately narrower than zustand's `set`: no `replace` parameter, so no call site in
   // this slice can compile into a REPLACE the batch commit is unable to express.
@@ -148,6 +163,7 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
@@ -167,6 +183,7 @@ export function createAgentStatusRuntime(
       }
       return result
     } finally {
+      conversationDraft = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
@@ -223,6 +240,7 @@ export function createAgentStatusRuntime(
   }
 
   return {
+    projectConversation,
     get,
     set,
     runAfterCommit,

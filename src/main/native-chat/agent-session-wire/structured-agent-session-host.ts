@@ -28,10 +28,7 @@ import { StructuredAgentSessionEventRecovery } from './structured-agent-session-
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
-import {
-  createStructuredAgentSessionRestartResume,
-  type StructuredAgentSessionRestartResume
-} from './structured-agent-session-restart-resume-host'
+import * as restart from './structured-agent-session-restart-resume-host'
 import { structuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-wiring'
 import * as conversation from './structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages } from './structured-agent-session-queued-wiring'
@@ -78,7 +75,7 @@ export class StructuredAgentSessionHost {
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
-  readonly restartResume: StructuredAgentSessionRestartResume
+  readonly restartResume: restart.StructuredAgentSessionRestartResume
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
@@ -144,7 +141,7 @@ export class StructuredAgentSessionHost {
       failStartingChild: (...args) => this.lifetime.failStartingChild(...args),
       trackOpen: (open) => this.tasks.trackAttach(open)
     })
-    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
+    this.restartResume = restart.createStructuredAgentSessionRestartResume(deps, this.sessions, {
       ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
       readChildWork: this.clientDelivery.readChildWork,
       childWorkOpen: this.clientDelivery.childWorkOpen,
@@ -204,6 +201,7 @@ export class StructuredAgentSessionHost {
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
   close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
     this.lifetime.close(sessionId, cause)
+  switchToTerminal = (id: string) => this.lifetime.switchToTerminal(id)
 
   /** Stop hidden children too, using one bounded host snapshot. */
   sleepWorkspace = (workspaceId: string, markAsleep?: boolean) =>
@@ -304,6 +302,8 @@ export class StructuredAgentSessionHost {
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
+  /** A terminal's conversation moves into this chat: its agent starts and is ready, or why not. */
+  switchToChat = this.mutations.switchToChat
 
   rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)

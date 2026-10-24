@@ -1,3 +1,4 @@
+import { inPlaceSwitchCapabilityNow } from '@/lib/in-place-switch-support'
 import { resolveHostCapabilities, workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
   structuredAgentSessionLaunchFeasible,
@@ -30,9 +31,11 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   targetState: AiVaultSessionResumeTargetState
   settings: AgentSessionStructuredFeasibilityRequest['settings']
 }): AiVaultResumeInChatEligibility {
-  const targetWorkspaceId = args.resumeState.usesSessionWorktree
-    ? args.resumeState.worktreeId
-    : (args.resumeState.worktreeId ?? args.activeWorkspaceId)
+  const targetWorkspaceId =
+    args.session.structuredSession?.workspaceId ??
+    (args.resumeState.usesSessionWorktree
+      ? args.resumeState.worktreeId
+      : (args.resumeState.worktreeId ?? args.activeWorkspaceId))
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
@@ -46,6 +49,10 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     session: args.session,
     targetWorkspaceId,
     targetWorkspacePath,
+    inPlaceSwitchAvailable:
+      targetOwner !== null &&
+      targetOwner === normalizeExecutionHostId(args.session.executionHostId) &&
+      inPlaceSwitchCapabilityNow(targetOwner, args.session.agent) !== false,
     structuredRouteAvailable:
       adoptsCliConversations(args.session.agent) &&
       targetWorkspaceId !== null &&

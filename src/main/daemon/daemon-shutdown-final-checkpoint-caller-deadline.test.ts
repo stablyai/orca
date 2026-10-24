@@ -113,6 +113,24 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it('checks the execution-host inventory before an ordinary daemon kill', async () => {
+    const { id, incarnationId } = await adapter.spawn({
+      cols: 80,
+      rows: 24,
+      sessionId: 'fenced-shell',
+      cwd: '/tmp'
+    })
+    const child = subprocesses.at(-1)!
+    await expect(
+      adapter.shutdown(id, { immediate: true, expectedIncarnationId: 'earlier' })
+    ).rejects.toThrow('terminal_handle_stale')
+    expect(child.forceKill).not.toHaveBeenCalled()
+    expect(child.kill).not.toHaveBeenCalled()
+    await adapter.shutdown(id, { immediate: true, expectedIncarnationId: incarnationId })
+    expect((await adapter.listProcesses()).some((row) => row.id === id)).toBe(false)
+  })
+
+  /** Wedges one session's checkpoint at the history-write layer until explicitly released. */
   function stallCheckpointFor(stalledSessionId: string): { release: () => void } {
     const manager = adapter.getHistoryManager()
     expect(manager).not.toBeNull()

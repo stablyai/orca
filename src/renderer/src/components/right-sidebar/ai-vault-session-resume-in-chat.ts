@@ -78,18 +78,20 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
    *  not apply. Reused rather than re-derived: it already encodes host capability, platform refusals
    *  and the WSL/repair refusal, and a second copy of those conditions would drift from it. */
   structuredRouteAvailable: boolean
+  /** Unknown switch capability keeps an eligible disabled action on its existing surface. */
+  inPlaceSwitchAvailable?: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
   if (isAntigravityReferenceSession(session) || !adoptsCliConversations(session.agent)) {
     return { available: false, reason: 'agent' }
   }
-  // An already-adopted row reopens its own chat instead; offering a second resume of it would ask
-  // for a conflict the host would rightly refuse.
-  if (session.structuredSession) {
+  const canSwitch =
+    args.inPlaceSwitchAvailable === true && !isWslStoredAiVaultSessionFile(session.filePath)
+  if (session.structuredSession && !canSwitch) {
     return { available: false, reason: 'already-structured' }
   }
   if (
-    session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    (session.executionHostId !== LOCAL_EXECUTION_HOST_ID && !canSwitch) ||
     isWslStoredAiVaultSessionFile(session.filePath)
   ) {
     return { available: false, reason: 'remote' }

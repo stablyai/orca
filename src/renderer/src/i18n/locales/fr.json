@@ -19504,8 +19504,22 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Continuer avec l’agent de terminal",
-          "switchToChatView": "Continuer dans l’interface de chat"
+          "switchToTerminalView": "Afficher en terminal",
+          "switchToChatView": "Afficher en chat",
+          "closeTabsToLeft": "Fermer tous les onglets à gauche"
+        },
+        "switch": {
+          "toCli": "Passer à la CLI",
+          "toNativeChat": "Passer au chat natif",
+          "toCliTooltip": "Passer à la CLI : arrête {{agent}} dans le chat natif et poursuit la même conversation dans un terminal.",
+          "openedInWorkspace": "Chat ouvert dans {{workspace}}.",
+          "toNativeChatTooltip": "Passer au chat natif : poursuit la même conversation dans un chat, dans cet onglet.",
+          "exitAgentFirst": "Quittez {{agent}} dans ce terminal pour basculer.",
+          "waitForReply": "Attendez la fin de la réponse ou arrêtez-la, puis basculez.",
+          "stopUnconfirmed": "Impossible de confirmer l'arrêt de {{agent}}. Réessayez.",
+          "failed": "Impossible de basculer cette conversation vers la CLI.",
+          "noConversation": "Aucune conversation enregistrée n’est encore disponible dans ce terminal.",
+          "unavailable": "Le changement de {{agent}} n’est pas encore disponible."
         },
         "BrowserTab": {
           "closeOthers": "Fermer les autres"

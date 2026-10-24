@@ -37,6 +37,8 @@ export {
   ITEM_DETAIL_METHOD,
   STATUS_FEED_METHOD,
   TURN_COMPLETION_FEED_METHOD,
+  SWITCH_TO_TERMINAL_METHOD,
+  SWITCH_TO_CHAT_METHOD,
   STRUCTURED_CALLS
 } from './structured-agent-session-surface-calls'
 

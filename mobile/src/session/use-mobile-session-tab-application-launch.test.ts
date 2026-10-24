@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -211,4 +211,37 @@ describe('landing on a launched tab', () => {
     expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_new')
     expect(state.creatingTerminalRef.current).toBeNull()
   })
+})
+
+it('applies desktop retirement and replacement in host order without a phone activation', () => {
+  const { state, sendRequest } = scope(null)
+  let published: MobileSessionTab[] = []
+  state.setSessionTabs.mockImplementation((next: SetStateAction<MobileSessionTab[]>) => {
+    published = typeof next === 'function' ? next(published) : next
+  })
+  state.selectedSessionTabIdRef.current = 'C'
+  state.activeSessionTabIdRef.current = 'C'
+  state.activeHandleRef.current = null
+  const apply = mount(state)
+  const a = terminalTab('A', 'term_A')
+  const b = terminalTab('B', 'term_B')
+  const c = { ...chatTab('C', 'conversation'), agent: 'codex' as const, isActive: true }
+  const t = terminalTab('T', 'term_T', true)
+  apply(snapshot([a, c, b]))
+  expect(published.map((tab) => tab.id)).toEqual(['A', 'C', 'B'])
+  expect(state.activeSessionTabIdRef.current).toBe('C')
+  apply(snapshot([{ ...a, isActive: true }, b]))
+  expect(published.map((tab) => tab.id)).toEqual(['A', 'B'])
+  expect(state.activeSessionTabIdRef.current).toBe('A')
+  apply(snapshot([a, t, b]))
+  expect(published.map((tab) => tab.id)).toEqual(['A', 'T', 'B'])
+  expect(published.find((tab) => tab.id === state.activeSessionTabIdRef.current)).toEqual(t)
+  expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('T')
+  expect(state.activeSessionTabTypeRef.current).toBe('terminal')
+  expect(state.setActiveHandle).toHaveBeenLastCalledWith('term_T')
+  expect(state.activeHandleRef.current).toBe('term_T')
+  expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_T')
+  expect(state.unsubscribeTerminal).toHaveBeenCalledWith('term_A')
+  expect(state.selectedSessionTabIdRef.current).toBe('C')
+  expect(activations(sendRequest)).toEqual([])
 })

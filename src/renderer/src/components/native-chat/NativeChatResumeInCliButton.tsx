@@ -3,6 +3,8 @@ import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { useInPlaceSwitchCapability } from '@/lib/in-place-switch-support'
+import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { translate } from '@/i18n/i18n'
@@ -73,11 +75,13 @@ export function NativeChatResumeInCliButton({
   )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
+  const inPlace = useInPlaceSwitchCapability(executionHostScope, agent)
+  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
   const label = translate(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
     'Continue with Terminal Agent'
   )
-  if (!executionHostScope || !agent) {
+  if (!executionHostScope || !agent || (enabled && (inPlace !== false || agent === 'omp'))) {
     return null
   }
   return (

@@ -1,4 +1,7 @@
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import { windowListsTab } from '../../terminal/surface/main-terminal-surfaces'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { matchesTerminalSurfaceCapture } from '../../../../shared/terminal-tab-close'
+import { OrcaRuntimeWithTerminalSurfaceCloseCommit } from '../../session-tabs/terminal-surface-close-commit'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsResult,
@@ -9,25 +12,21 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
-import {
-  captureTerminalCloseRequest,
-  resolveTerminalCloseTarget,
-  type PaneCloseResolution,
-  type RendererTerminalClose,
-  type TerminalSurfaceCloseOptions
-} from '../../terminal-surface-close'
-import type {
-  TerminalPaneCloseTarget,
-  TerminalSurfaceCloseTarget
-} from '../../../../shared/terminal-surface-close-target'
+import type { RendererTerminalClose } from '../../terminal-surface-close'
+import type { TerminalPaneCloseTarget } from '../../../../shared/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { captureAcknowledgedTerminalTabRetirement } from '../../workspace-session-terminal-tab-retirement-identity'
-import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
-export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+import type { MobileSessionTabCloseOptions } from '../../mobile-session-tab-close-outcome'
+
+type TerminalPaneRetirementOptions = Pick<
+  MobileSessionTabCloseOptions,
+  'originalPresentation' | 'rendererOwnsPresentation' | 'retirementProofs'
+>
+
+export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithTerminalSurfaceCloseCommit {
   // Why: headless serve backs browser panes with offscreen WebContents that live
   // only in the BrowserManager, never in a renderer graph. Without surfacing them
   // as session tabs, a session.tabs snapshot (e.g. on terminal open) prunes the
@@ -99,105 +98,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
-  protected captureTerminalTabRetirement(worktreeId: string, tabId: string) {
-    const originalHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
-    return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
-      const resolvedHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
-      const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
-      // Emptying the last tab may reroute the worktree to its catalog host.
-      const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
-        ? resolvedHostId
-        : originalHostId
-      return {
-        hostId,
-        session: this.store?.getWorkspaceSession?.(hostId) ?? null,
-        snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
-        incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
-      }
-    })
-  }
-
-  /**
-   * The one close transaction every explicit terminal close reaches: durably commits the membership
-   * removal in the owning host's partition. Callers publish and kill afterwards.
-   */
-  protected async closeTerminalSurface(
-    worktreeId: string,
-    target: TerminalSurfaceCloseTarget,
-    options: TerminalSurfaceCloseOptions = {}
-  ): Promise<string[]> {
-    const store = this.store
-    if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
-      throw new Error('workspace_session_unavailable')
-    }
-    // Why: a tab its layout owner already removed has no newer owner; refusing would only strand it.
-    const acknowledgeTabRetirement =
-      target.kind === 'tab' && !options.closedByLayoutOwner
-        ? this.captureTerminalTabRetirement(worktreeId, target.tabId)
-        : null
-    let ptyIdsToKill: string[] = []
-    let refusal: Error | undefined
-    const hostIds = () => this.getWorkspaceSessionHostIdsForTab(worktreeId, target.tabId)
-    const fenced = acknowledgeTabRetirement !== null
-    try {
-      refusal = await store.runDurableMutation(
-        closeLeafOrTab({
-          worktreeId,
-          target,
-          options,
-          ...captureTerminalCloseRequest(
-            worktreeId,
-            target,
-            hostIds(),
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The existing guard requires this getter; preserve late-bound store access.
-            store as Parameters<typeof captureTerminalCloseRequest>[3],
-            fenced
-          ),
-          ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
-          hostIds,
-          getSession: (hostId) => store.getWorkspaceSession!(hostId),
-          setSession: (session, hostId) => store.setWorkspaceSession!(session, hostId),
-          onClosed: (closedPtyIds) => {
-            ptyIdsToKill = closedPtyIds
-          }
-        })
-      )
-    } catch (error) {
-      console.error('[runtime] failed to persist terminal close:', error)
-    }
-    if (refusal) {
-      throw refusal
-    }
-    return ptyIdsToKill
-  }
-
   /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
   async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
     const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
     await this.closeTerminalSurface(worktreeId, target, options)
-  }
-
-  /** Resolves a close main started against the copy of the tab's panes its layout owner holds. */
-  protected resolveTerminalCloseTarget(
-    worktreeId: string,
-    target: TerminalSurfaceCloseTarget
-  ): PaneCloseResolution | 'tab' {
-    const graphLeafIds: string[] = []
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === target.tabId) {
-        graphLeafIds.push(leaf.leafId)
-      }
-    }
-    return resolveTerminalCloseTarget(target, {
-      rendererListsTab: this.tabs.has(target.tabId),
-      snapshotRows: (this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs ?? []).filter(
-        (row): row is RuntimeMobileSessionTerminalTab =>
-          row.type === 'terminal' && row.parentTabId === target.tabId
-      ),
-      graphLeafIds,
-      sessionLayout:
-        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
-    })
   }
 
   /**
@@ -206,21 +110,81 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
    */
   protected async closeTerminalPane(
     worktreeId: string,
-    target: TerminalPaneCloseTarget
-  ): Promise<void> {
+    target: TerminalPaneCloseTarget,
+    options: TerminalPaneRetirementOptions = {}
+  ): Promise<boolean> {
+    let closedTab = false
+    if (
+      options.originalPresentation &&
+      !this.originalTerminalExecutionMatches(options.originalPresentation.identity)
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    if (
+      options.originalPresentation &&
+      (options.rendererOwnsPresentation || windowListsTab(this, this.tabs, target.tabId))
+    ) {
+      if (!this.notifier?.closeTerminalTab) {
+        throw new Error('runtime_unavailable')
+      }
+      await this.notifier.closeTerminalTab(target.tabId, {
+        localPtyTeardownOwnedExternally: true,
+        originalSurface: options.originalPresentation.identity
+      })
+    }
     // An explicit close (a phone's, the CLI's): a launch still starting or delivering there stops.
-    markAgentLaunchesClosedByUser(worktreeId, target)
+    if (!options.originalPresentation) {
+      markAgentLaunchesClosedByUser(worktreeId, target)
+    }
     try {
-      await this.closeTerminalSurface(worktreeId, target, { allowMissing: true })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && options.originalPresentation) {
+        const reply = await this.applyLayoutCommand(
+          {
+            type: 'closePane',
+            workspace: worktreeId,
+            tabId: target.tabId,
+            leafId: target.leafId
+          },
+          {
+            originalPresentation: options.originalPresentation,
+            admit: () =>
+              this.originalTerminalExecutionMatches(options.originalPresentation!.identity)
+          }
+        )
+        if (!reply.ok) {
+          throw new Error(reply.code)
+        }
+        closedTab = reply.result.closed?.includes(target.tabId) === true
+      } else {
+        await this.closeTerminalSurface(worktreeId, target, {
+          allowMissing: true,
+          ...options,
+          onClosed: (tab) => {
+            closedTab = tab
+          }
+        })
+      }
     } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+      if (
+        options.originalPresentation ||
+        !(error instanceof Error) ||
+        error.message !== 'workspace_session_unavailable'
+      ) {
         throw error
       }
     }
     // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
     // renderer's exit handling are each a no-op after the other.
-    this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, target.tabId, target.leafId)
-    this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
+    this.retireClosedTerminalLeafFromMobileSnapshot(
+      worktreeId,
+      target.tabId,
+      target.leafId,
+      options
+    )
+    if (!options.originalPresentation) {
+      this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
+    }
+    return closedTab
   }
 
   /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */
@@ -246,7 +210,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
   private retireClosedTerminalLeafFromMobileSnapshot(
     worktreeId: string,
     tabId: string,
-    leafId: string
+    leafId: string,
+    options: TerminalPaneRetirementOptions = {}
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
@@ -255,17 +220,47 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         candidate.parentTabId === tabId &&
         candidate.leafId === leafId
     )
-    // Why: a renderer that lists the tab republishes its own snapshot once it drops the pane.
-    if (!snapshot || !tab || this.tabs.has(tabId)) {
+    if (
+      options.originalPresentation &&
+      (!this.originalTerminalExecutionMatches(options.originalPresentation.identity) ||
+        !matchesTerminalSurfaceCapture(
+          options.originalPresentation,
+          this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId),
+          (hostId) => this.store?.getWorkspaceSession?.(hostId)
+        ))
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    const original = options.originalPresentation?.identity
+    const bound = tab?.ptyId ?? tab?.parentLayout?.ptyIdsByLeafId?.[leafId]
+    if (
+      original &&
+      ((bound && bound !== original.ptyId) ||
+        (tab?.incarnationId && tab.incarnationId !== original.incarnationId))
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    if (original?.ptyId) {
+      const pty = this.ptysById.get(original.ptyId)
+      if (pty) {
+        pty.runtimeSessionOwned = false
+      }
+      this.setPairedRendererSessionOwnership(original.ptyId, false)
+    }
+    // A renderer can publish removal while its required durable close is awaiting completion.
+    if (!snapshot || !tab || (!original && this.tabs.has(tabId))) {
+      if (original) {
+        this.publishRetiredTerminalSurfaceProofs(worktreeId, options.retirementProofs ?? [])
+      }
       return
     }
-    const proof = this.getMobileSessionTerminalRetirementProof(worktreeId, tab)
+    const proof = !original && this.getMobileSessionTerminalRetirementProof(worktreeId, tab)
     const retired = retireTerminalSurfacesFromSnapshot({
       snapshot,
-      ptyId: tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[leafId] ?? '',
+      ptyId: original?.ptyId ?? tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[leafId] ?? '',
       exactSurfaces: [{ parentTabId: tabId, leafId }],
       exactOnly: true,
-      ...(proof ? { retirementProofs: [proof] } : {})
+      retirementProofs: options.retirementProofs ?? (proof ? [proof] : [])
     })
     if (retired) {
       this.storeMobileSessionSnapshot(worktreeId, retired.snapshot)

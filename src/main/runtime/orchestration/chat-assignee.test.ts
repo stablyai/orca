@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { sessionRecord } from '../rpc/orchestration-session-caller-test-fixture'
-import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
+import { chatAssigneeSessionId, observeChatAssignee, chatAssigneeOwesWork } from './chat-assignee'
+import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import type { AgentSessionRecordReader } from './structured-session-lineage'
 
 const CHAT = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -63,4 +65,42 @@ describe('a chat assignee', () => {
       status: 'unverifiable'
     })
   })
+})
+
+it('derives direct debt through legacy clear lineage and stops pinning once that assignment settles', () => {
+  const db = new OrchestrationDb(':memory:')
+  try {
+    const successor = testOrcaSessionId('3f9a1c7e-6b2d-4e85-a0c4-9d1e7b3f5a26')
+    const root: AgentSessionRecord = {
+      ...sessionRecord(CHAT),
+      conversationCommand: {
+        command: 'clear',
+        state: 'completed',
+        replacementSessionId: successor,
+        operationId: 'clear',
+        callerKey: 'caller',
+        phase: 'committed'
+      }
+    }
+    const records = [root, sessionRecord(successor, { lease: { claimStatus: 'released' } })]
+    const reader = {
+      getRecord: (id: string) => records.find((record) => record.sessionId === id) ?? null,
+      listRecords: () => records
+    }
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'original work' })
+    const dispatch = createRootDispatch(db, task.id, `orca_session_id:${CHAT}`)
+    for (const status of ['pending', 'dispatched']) {
+      db.db.prepare('UPDATE dispatch_contexts SET status = ? WHERE id = ?').run(status, dispatch.id)
+      expect(chatAssigneeOwesWork(db, successor, reader)).toBe(true)
+      expect(chatAssigneeOwesWork(db, CHAT, reader)).toBe(false)
+      expect(chatAssigneeOwesWork(db, 'unrelated', reader)).toBe(false)
+    }
+    db.db
+      .prepare('UPDATE dispatch_contexts SET status = ? WHERE id = ?')
+      .run('completed', dispatch.id)
+    expect(chatAssigneeOwesWork(db, successor, reader)).toBe(false)
+    expect(chatAssigneeOwesWork(null, successor, reader)).toBe(false)
+  } finally {
+    db.close()
+  }
 })

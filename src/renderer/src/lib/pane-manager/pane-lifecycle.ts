@@ -184,7 +184,8 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
 
 export function disposePane(
   pane: ManagedPaneInternal,
-  panes: Map<number, ManagedPaneInternal>
+  panes: Map<number, ManagedPaneInternal>,
+  failures?: unknown[]
 ): void {
   cancelPendingTerminalViewportPresents(pane.terminal)
   if (pane.pendingInitialFitRafId != null) {
@@ -220,8 +221,8 @@ export function disposePane(
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   pane.arabicShapingJoinerCleanup = null
   if (pane.compositionHandler) {
@@ -231,60 +232,60 @@ export function disposePane(
   }
   try {
     clearPendingSplitScrollRestore(pane)
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     // Why: fit retries own xterm markers and frame callbacks independently of
     // split restoration; both must be released before terminal disposal.
     cancelDeferredScrollRestore(pane.terminal)
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.ligaturesAddon?.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   // Detach removes the pane from the deferred-attach set and disposes the addon
   // (canvas layers + parser handlers) before the terminal surface goes away.
-  detachInlineImages(pane)
-  disposeWebgl(pane)
+  detachInlineImages(pane, failures)
+  disposeWebgl(pane, { failures })
   try {
     pane.searchAddon.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.serializeAddon.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.unicode11Addon.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.webLinksAddon.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.fitAddon.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     // Drop renderer selection state before a recovery remount replaces the surface.
     pane.terminal.clearSelection()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   try {
     pane.terminal.dispose()
-  } catch {
-    /* ignore */
+  } catch (error) {
+    failures?.push(error)
   }
   panes.delete(pane.id)
 }

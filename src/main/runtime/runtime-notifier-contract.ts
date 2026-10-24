@@ -1,3 +1,4 @@
+import type { TerminalSurfaceCloseIdentity } from '../../shared/terminal-tab-close'
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
@@ -158,7 +159,11 @@ export type RuntimeNotifier = {
   closeTerminalPane?(tabId: string, leafId: string): void
   closeTerminalTab?(
     tabId: string,
-    options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
+    options?: {
+      localPtyTeardownOwnedExternally?: boolean
+      force?: boolean
+      originalSurface?: TerminalSurfaceCloseIdentity
+    }
   ): Promise<void>
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void

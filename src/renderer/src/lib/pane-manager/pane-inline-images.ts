@@ -87,7 +87,7 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
   }
 }
 
-export function detachInlineImages(pane: ManagedPaneInternal): void {
+export function detachInlineImages(pane: ManagedPaneInternal, failures?: unknown[]): void {
   panesAwaitingImageAddon.delete(pane)
   pane.imageAttachmentDeferred = false
   terminalsRenderingInlineImages.delete(pane.terminal)
@@ -96,8 +96,8 @@ export function detachInlineImages(pane: ManagedPaneInternal): void {
   if (pane.imageAddon) {
     try {
       pane.imageAddon.dispose()
-    } catch {
-      /* ignore */
+    } catch (error) {
+      failures?.push(error)
     }
     pane.imageAddon = null
   }

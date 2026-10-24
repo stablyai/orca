@@ -1,16 +1,7 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import type React from 'react'
-import {
-  FileJson,
-  Folder,
-  FolderGit2,
-  MessageSquare,
-  MessageSquarePlus,
-  MessagesSquare,
-  Play,
-  SquareTerminal
-} from 'lucide-react'
+import { FileJson, Folder, FolderGit2, MessageSquare, MessageSquarePlus, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -21,7 +12,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
-import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
+import { AiVaultSessionDetailsSwitchButtons } from './AiVaultSessionDetailsSwitchButtons'
 import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
@@ -141,51 +132,11 @@ export function SessionInlineDetails({
                   )}
             </Button>
           ) : null}
-          {onResumeInNewChat ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              draggable={false}
-              onClick={(event) => {
-                event.stopPropagation()
-                onResumeInNewChat()
-              }}
-              className="h-7 shrink-0 px-2.5 text-[11px]"
-            >
-              <MessagesSquare className="size-3.5" />
-              {translate(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Resume in New Chat'
-              )}
-            </Button>
-          ) : null}
-          {onResumeInNewCli ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="xs"
-                  draggable={false}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onResumeInNewCli()
-                  }}
-                  className="h-7 shrink-0 px-2.5 text-[11px]"
-                >
-                  <SquareTerminal className="size-3.5" />
-                  {translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
-                    'Resume in New Terminal'
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                <ResumeInNewCliTooltipText />
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          <AiVaultSessionDetailsSwitchButtons
+            session={session}
+            onResumeInNewChat={onResumeInNewChat}
+            onResumeInNewCli={onResumeInNewCli}
+          />
           {onContinueInNewSession ? (
             <Button
               type="button"

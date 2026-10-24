@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
   makeTab,
@@ -619,4 +619,126 @@ describe('useIpcEvents agent status snapshot integration', () => {
       vi.useRealTimers()
     }
   })
+
+  it.each([16, 160])(
+    'copies startup association entries linearly at %i events with immutable reentry',
+    async (n) => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const pane = (i: number) => `rootless:00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+      store.setState({
+        workspaceSessionReady: true,
+        repos: [TEST_REPO],
+        worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt', repoId: TEST_REPO.id })] },
+        tabsByWorktree: { wt: [makeTab({ id: 'rootless', worktreeId: 'wt' })] },
+        terminalLayoutsByTabId: {
+          rootless: { root: null, activeLeafId: null, expandedLeafId: null }
+        }
+      })
+      const record = store.getState().recordAgentProviderSession
+      for (let i = 0; i < n; i++) {
+        record(pane(i), 'codex', { key: 'session_id', id: `seed-${i}` }, undefined, {
+          worktreeId: 'wt'
+        })
+      }
+      const initial = Object.freeze(store.getState().agentConversationsByPaneKey)
+      const entries: AgentStatusSetData[] = Array.from({ length: n }, (_, i) => ({
+        paneKey: pane(n + i),
+        state: 'working',
+        prompt: '',
+        agentType: 'codex',
+        providerSessionOnly: i % 2 === 0,
+        worktreeId: 'wt',
+        terminalHandle: `term-${i}`,
+        providerSession: { key: 'session_id', id: `startup-${i}` },
+        receivedAt: 1000,
+        stateStartedAt: 1000
+      }))
+      let copied = 0,
+        enumerated = 0
+      const assign = Object.assign
+      const association = (source: unknown): source is Record<PropertyKey, unknown> =>
+        typeof source === 'object' && source !== null && Object.hasOwn(source, pane(0))
+      vi.spyOn(Object, 'assign').mockImplementation((target, ...sources) =>
+        assign(
+          target,
+          ...sources.map((source) =>
+            association(source)
+              ? new Proxy(source, {
+                  ownKeys(value) {
+                    const found = Reflect.ownKeys(value)
+                    enumerated += found.length
+                    return found
+                  },
+                  get(value, key) {
+                    copied += 1
+                    return value[key]
+                  }
+                })
+              : source
+          )
+        )
+      )
+      const snapshots: (typeof initial)[] = [],
+        order: string[] = []
+      cleanup.push(
+        store.subscribe((state, previous) => {
+          if (state.agentConversationsByPaneKey === previous.agentConversationsByPaneKey) {
+            return
+          }
+          snapshots.push(Object.freeze(state.agentConversationsByPaneKey))
+          order.push('published')
+          if (snapshots.length === 1) {
+            store.getState().transactAgentStatuses((outer) => {
+              store.getState().transactAgentStatuses((inner) => {
+                inner.apply({
+                  kind: 'providerSession',
+                  paneKey: pane(2 * n - 1),
+                  agent: 'codex',
+                  providerSession: { key: 'session_id', id: 'reentered' },
+                  timing: { updatedAt: 2000 },
+                  routing: { worktreeId: 'wt' }
+                })
+                inner.afterCommit(() => order.push('inner'))
+              })
+              outer.afterCommit(() => order.push('outer'))
+            })
+          }
+        })
+      )
+      const snapshot = vi.fn(async () => entries)
+      vi.doMock('../store', () => ({
+        useAppStore: { getState: store.getState, subscribe: store.subscribe }
+      }))
+      stubAuxiliaryModules()
+      vi.stubGlobal('window', buildWindowApi({ onSet: () => () => {}, getSnapshot: snapshot }))
+      const { registerAgentStatusIpcBridge } = await import('./ipc-events/agent-status-ipc-bridge')
+      const unsubs: (() => void)[] = []
+      const bridge = registerAgentStatusIpcBridge(unsubs)
+      cleanup.push(bridge.disposeAsyncState, bridge.unsubscribeStore, ...unsubs)
+      await vi.advanceTimersByTimeAsync(0)
+      console.info('STARTUP_ASSOCIATION_WORK', { n, copied, enumerated })
+      expect(snapshot).toHaveBeenCalledOnce()
+      expect(snapshots).toHaveLength(2)
+      expect(order).toEqual(['published', 'published', 'inner', 'outer'])
+      expect(Object.keys(initial)).toEqual(Array.from({ length: n }, (_, i) => pane(i)))
+      expect(Object.keys(snapshots[0])).toEqual(Array.from({ length: 2 * n }, (_, i) => pane(i)))
+      expect(snapshots[0][pane(2 * n - 1)].providerSession.id).toBe(`startup-${n - 1}`)
+      expect(snapshots[1][pane(2 * n - 1)].providerSession.id).toBe('reentered')
+      expect(snapshots[0]).not.toBe(snapshots[1])
+      expect(Object.keys(snapshots[1])).toEqual(Object.keys(snapshots[0]))
+      expect(copied).toBe(3 * n)
+      expect(enumerated).toBe(3 * n)
+    }
+  )
+})
+
+const cleanup: (() => void)[] = []
+afterEach(() => {
+  for (const close of cleanup.splice(0).toReversed()) {
+    close()
+  }
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
 })

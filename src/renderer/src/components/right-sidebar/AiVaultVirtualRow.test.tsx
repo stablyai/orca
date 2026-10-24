@@ -7,6 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { AiVaultVirtualRow } from './AiVaultVirtualRow'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const cliSession: AiVaultSession = {
   id: 'local:codex:session-1:/tmp/session-1.jsonl',
@@ -33,6 +34,7 @@ const cliSession: AiVaultSession = {
 
 afterEach(() => {
   cleanup()
+  setLocalRuntimeCapabilitiesForTests(null)
 })
 
 function renderSession(
@@ -196,8 +198,9 @@ describe('AiVaultVirtualRow Resume in New Terminal', () => {
   const owner = { sessionId: 'chat-1', workspaceId: 'worktree-1' }
 
   it.each(['claude', 'codex'] as const)(
-    'offers the fork on a chat-owned %s row from both menus',
+    'offers the fork on an unsupported host for a chat-owned %s row from both menus',
     async (agent) => {
+      setLocalRuntimeCapabilitiesForTests([])
       const session: AiVaultSession = { ...cliSession, agent, structuredSession: owner }
       const { onResumeInNewCli, onResume } = renderSession(session)
       const user = userEvent.setup()

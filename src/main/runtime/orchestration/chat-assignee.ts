@@ -109,3 +109,28 @@ export function exitedChatDispatchesForSession(
     }
   )
 }
+
+/** Direct assignments outlive a provider child; /clear keeps their original assignee address. */
+export function chatAssigneeOwesWork(
+  db: OrchestrationDb | null,
+  sessionId: string,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+): boolean {
+  if (!db || !store) {
+    return false
+  }
+  const rows = db.db
+    .prepare(`SELECT DISTINCT assignee_handle FROM dispatch_contexts
+    WHERE status IN ('pending', 'dispatched') AND substr(assignee_handle, 1, ?) = ?`)
+    .all(ORCA_SESSION_ADDRESS_PREFIX.length, ORCA_SESSION_ADDRESS_PREFIX)
+  return rows.some((row) => {
+    const assignee =
+      typeof row === 'object' &&
+      row !== null &&
+      'assignee_handle' in row &&
+      typeof row.assignee_handle === 'string'
+        ? chatAssigneeSessionId(row.assignee_handle)
+        : null
+    return assignee !== null && lineageLiveSession(store, assignee)?.sessionId === sessionId
+  })
+}

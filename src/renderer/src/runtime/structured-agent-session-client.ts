@@ -22,6 +22,10 @@ import {
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
+import {
+  inPlaceSwitchCapability,
+  inPlaceSwitchEnabled
+} from '../../../shared/structured-agent-cli-conversation-adoption'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
@@ -67,6 +71,16 @@ export function supportsStructuredAgentSessionCliSource(
     target,
     STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY
   )
+}
+
+/** Whether the destination host switches this agent's conversations in place; unknown is no. */
+export function supportsInPlaceSwitch(
+  target: RuntimeClientTarget,
+  agent: string
+): Promise<boolean> {
+  return inPlaceSwitchEnabled(agent)
+    ? structuredAgentSessionHostSupports(target, inPlaceSwitchCapability(agent))
+    : Promise.resolve(false)
 }
 
 /** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */

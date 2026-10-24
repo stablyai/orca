@@ -207,7 +207,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
         const adoptedFirstPty =
           existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
         if (!adoptedFirstPty) {
-          this.invalidateLeafHandle(leafKey)
+          this.invalidateLeafHandle(leafKey, ptyId === null)
         }
       }
     }

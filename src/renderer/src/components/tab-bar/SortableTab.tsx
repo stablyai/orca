@@ -6,6 +6,7 @@ import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
+import { TabSessionSwitchHoverAction } from './TabSessionSwitchHoverAction'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -27,10 +28,7 @@ import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
-import {
-  isTerminalTabActivityLive,
-  terminalTabHasUnreadActivity
-} from './terminal-tab-activity-status'
+import * as tabActivity from './terminal-tab-activity-status'
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
@@ -116,7 +114,7 @@ export default function SortableTab({
   const naming = useNativeChatNamingFailure(namingFailure)
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
-    terminalTabHasUnreadActivity({
+    tabActivity.terminalTabHasUnreadActivity({
       terminalTabId: tab.id,
       unreadTerminalTabs: s.unreadTerminalTabs,
       unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
@@ -170,7 +168,7 @@ export default function SortableTab({
   })
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
-    hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
+    hasUnreadActivity && !isEditing && !tabActivity.isTerminalTabActivityLive(activityStatus)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -376,6 +374,7 @@ export default function SortableTab({
           tabRoot
         ) : (
           <TabHoverCard
+            action={<TabSessionSwitchHoverAction tab={tab} nativeChat={nativeChat} />}
             title={displayTitle}
             programName={
               tabAgent

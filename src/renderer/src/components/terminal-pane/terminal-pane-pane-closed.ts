@@ -17,7 +17,10 @@ import {
 import type { PaneClosedHandlerContext } from './terminal-pane-mount-context'
 
 export function createTerminalPaneClosedHandler(
-  context: Omit<PaneClosedHandlerContext, 'paneId' | 'closedPane'>
+  context: Pick<
+    PaneClosedHandlerContext,
+    'deps' | 'refs' | 'deferredSplitHandoffs' | 'getOwnedManager'
+  >
 ): (paneId: number, closedPane?: PaneClosedHandlerContext['closedPane']) => void {
   return (paneId, closedPane) => {
     const { deps, refs } = context
@@ -47,7 +50,8 @@ export function createTerminalPaneClosedHandler(
     } = deps
     onPtyRecoveryStateRef?.current?.(paneId, null)
     const isDetachedToTab = closedPane?.reason === 'detach'
-    const isRetiredSurface = closedPane?.reason === 'retire'
+    const permanent = closedPane?.reason === 'remove'
+    const isRetiredSurface = closedPane?.reason === 'retire' || permanent
     disposeMapEntry(refs.linkProviderDisposablesRef.current, paneId)
     disposeMapEntry(refs.terminalHandleLinkDisposablesRef.current, paneId)
     disposeMapEntry(refs.linkifierClickPrimingDisposablesRef.current, paneId)
@@ -108,6 +112,7 @@ export function createTerminalPaneClosedHandler(
         syncPanePtyLayoutBindingForLeaf,
         clearExitedPanePtyLayoutBindingForLeaf,
         clearTabPtyId,
+        permanent,
         ...(transport ? { transport } : {})
       })
     } else if (leafId && !isDetachedToTab) {
@@ -133,6 +138,8 @@ export function createTerminalPaneClosedHandler(
         }
         transport.destroy?.()
       }
+    }
+    if (!isRetiredSurface || permanent) {
       paneTransportsRef.current.delete(paneId)
     }
     clearRuntimePaneTitle(tabId, paneId)
@@ -153,8 +160,9 @@ export function createTerminalPaneClosedHandler(
       paneTitlesRef.current = next
     }
     setRenamingPaneId((current) => (current === paneId ? null : current))
-    setPaneCount(managerRef.current?.getPanes().length ?? 0)
-    const activePane = managerRef.current?.getActivePane()
+    const manager = context.getOwnedManager?.() ?? managerRef.current
+    setPaneCount(manager?.getPanes().length ?? 0)
+    const activePane = manager?.getActivePane()
     if (activePane) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}

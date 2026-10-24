@@ -20,6 +20,8 @@ import {
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
+import { createCodexStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 let rig: RestTestRig
@@ -65,6 +67,40 @@ function anotherSession(params: AgentSessionAttachParams): AgentSessionAttachPar
 
 it('imports adoption at rest and resumes its original provider identity after its source disappears', async () => {
   const params = await adoptedParams()
+  const history = vi.fn(async () => ({ data: [], nextCursor: null }))
+  const codex = fakeCodex({
+    // Codex 0.162 answers excludeTurns resumes with metadata, not historical turns.
+    'thread/turns/list': history,
+    'thread/resume': () => ({
+      thread: { id: THREAD, turns: [] },
+      model: 'gpt-5.4',
+      reasoningEffort: 'medium'
+    }),
+    'turn/start': () => ({ turn: { id: 'new-turn' } }),
+    'model/list': () => ({
+      data: [
+        {
+          model: 'gpt-5.4',
+          supportedReasoningEfforts: [{ reasoningEffort: 'medium' }],
+          defaultReasoningEffort: 'medium',
+          isDefault: true
+        }
+      ],
+      nextCursor: null
+    })
+  })
+  const adapter = adapterFor(codex, {}, [], {
+    resolveLaunch: createCodexStructuredLaunchResolver({
+      store: {
+        getRecord: (id) => rig.store.getRecord(id),
+        pinLaunchDirectory: (...args) => rig.store.pinLaunchDirectory(...args)
+      },
+      resolveWorkspacePath: async () => rig.root,
+      resolveCommand: () => 'codex',
+      resolveLaunchArgs: () => []
+    })
+  })
+  await rig.restart({ adapter })
   expect(await rig.host.create(CALLER, params)).toMatchObject({
     ok: true,
     value: {
@@ -89,15 +125,39 @@ it('imports adoption at rest and resumes its original provider identity after it
       adopt: { providerHandle: codexProviderHandle(THREAD) }
     })
   ).toMatchObject({ ok: true, replayed: true })
-  expect(await rig.host.send(CALLER, restTestSend('new work'))).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
-  expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({
-      identity: expect.objectContaining({
-        providerHandle: expect.objectContaining({ nativeId: THREAD })
-      })
-    })
+  expect(await rig.host.switchToChat(SESSION)).toEqual({ ok: true })
+  const caughtUp = await rig.host.journalSnapshot(SESSION)
+  expect(
+    caughtUp.items.filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+  ).toHaveLength(1)
+  expect(codex.connections[0].calls.some((call) => call.method === 'turn/start')).toBe(false)
+  expect(await rig.host.switchToChat(SESSION)).toEqual({ ok: true })
+  expect(codex.connections).toHaveLength(1)
+  expect(codex.connections[0].calls.filter((call) => call.method === 'thread/resume')).toEqual([
+    {
+      method: 'thread/resume',
+      params: expect.objectContaining({ threadId: THREAD, excludeTurns: true })
+    }
+  ])
+  expect(
+    (await rig.host.journalSnapshot(SESSION)).items.filter(
+      (item) => item.body.kind === 'message' && item.body.role === 'user'
+    )
+  ).toHaveLength(1)
+  expect(history).toHaveBeenCalledOnce()
+  expect(
+    await rig.host.send(
+      CALLER,
+      restTestSend('new work', rig.store.getRecord(SESSION)?.lease.runtimeFence)
+    )
+  ).toMatchObject({ ok: true })
+  await vi.waitFor(() =>
+    expect(codex.connections[0].calls.filter((call) => call.method === 'turn/start')).toHaveLength(
+      1
+    )
   )
+  expect(history).toHaveBeenCalledOnce()
+  await adapter.closeAll()
   expect(rig.store.getRecord(SESSION)?.accountHome).toEqual(params.accountHome)
 })
 

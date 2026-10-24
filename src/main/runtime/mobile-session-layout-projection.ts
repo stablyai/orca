@@ -1,3 +1,7 @@
+import {
+  placeUnpinnedSessionTabAtCapture,
+  type CapturedSessionTabPlacement
+} from '../../shared/session-tab-placement'
 import { createHash, randomUUID } from 'node:crypto'
 import { isTerminalLeafId } from '../../shared/stable-pane-id'
 import type {
@@ -299,5 +303,26 @@ export function buildMaterializedHeadlessParentLayout(
       ...existingLayout.ptyIdsByLeafId,
       [leafId]: ptyId
     }
+  }
+}
+
+/** Captured neighbors settle into the current group through ordinary pin-aware insertion. */
+export function placeHeadlessSessionTabAtCapture(
+  groups: RuntimeMobileSessionTabGroup[],
+  tabs: readonly RuntimeMobileSessionSnapshotTab[],
+  tabId: string,
+  captured: CapturedSessionTabPlacement
+): void {
+  const group = groups.find((candidate) => candidate.tabOrder.includes(tabId))
+  if (group) {
+    group.tabOrder = placeUnpinnedSessionTabAtCapture(
+      group.tabOrder,
+      tabs.map((tab) => ({
+        id: tab.type === 'terminal' ? tab.parentTabId : tab.id,
+        isPinned: tab.isPinned === true
+      })),
+      tabId,
+      captured
+    )
   }
 }

@@ -7,14 +7,18 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
+export type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
-import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-order'
+import {
+  placeCreatedSessionTab,
+  captureSessionTabPlacement
+} from '../../../../shared/session-tab-placement'
 import {
   buildHeadlessMobileSessionTabGroups,
+  placeHeadlessSessionTabAtCapture,
   buildMaterializedHeadlessParentLayout,
   getHeadlessMobileSessionGroupId
 } from '../../mobile-session-layout-projection'
@@ -121,6 +125,19 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
         ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
       })
+    const beforeCreate = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const anchor = beforeCreate?.tabs.find((tab) => tab.id === afterTabId)
+    const anchorParentId =
+      opts.afterDesktopTabId ?? (anchor?.type === 'terminal' ? anchor.parentTabId : anchor?.id)
+    const sourceGroup = beforeCreate?.tabGroups?.find((group) =>
+      group.tabOrder.includes(anchorParentId ?? '')
+    )
+    const targetGroupId = opts.targetGroupId ?? sourceGroup?.id
+    const capturedOrder = captureSessionTabPlacement(sourceGroup?.tabOrder ?? [], anchorParentId)
+    const capturedTabs = captureSessionTabPlacement(
+      beforeCreate?.tabs.map((tab) => tab.id) ?? [],
+      afterTabId
+    )
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
           opts.createMutation.clientIdentity,
@@ -218,30 +235,17 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       })),
       tab,
       afterTabId,
-      { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
+      { afterParentGroup: opts.supportsSplitGroupPlacement !== false, captured: capturedTabs }
     )
     const tabGroups = buildHeadlessMobileSessionTabGroups(
       worktreeId,
       tabs,
       activate ? tab : null,
       existing?.tabGroups,
-      opts.targetGroupId ? { tabId: parentTabId, groupId: opts.targetGroupId } : undefined
+      targetGroupId ? { tabId: parentTabId, groupId: targetGroupId } : undefined
     )
-    if (opts.afterDesktopTabId) {
-      const group = tabGroups.find((candidate) => candidate.tabOrder.includes(parentTabId))
-      if (group?.tabOrder.includes(opts.afterDesktopTabId)) {
-        const topLevelTabs = tabs.map((candidate) => ({
-          id: candidate.type === 'terminal' ? candidate.parentTabId : candidate.id,
-          isPinned: candidate.isPinned === true
-        }))
-        group.tabOrder = insertTabIdIntoOrder(
-          group.tabOrder,
-          topLevelTabs,
-          parentTabId,
-          tab.isPinned === true,
-          opts.afterDesktopTabId
-        )
-      }
+    if (capturedOrder && (!opts.targetGroupId || opts.targetGroupId === sourceGroup?.id)) {
+      placeHeadlessSessionTabAtCapture(tabGroups, tabs, parentTabId, capturedOrder)
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
@@ -250,8 +254,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
-        activate && opts.targetGroupId
-          ? opts.targetGroupId
+        activate && targetGroupId && tabGroups.some((group) => group.id === targetGroupId)
+          ? targetGroupId
           : (existing?.activeGroupId ?? getHeadlessMobileSessionGroupId(worktreeId)),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),

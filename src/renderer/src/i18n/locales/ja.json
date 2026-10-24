@@ -19398,8 +19398,22 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "ターミナル Agent で続ける",
-          "switchToChatView": "チャット UI で続ける"
+          "switchToTerminalView": "ターミナルとして表示",
+          "switchToChatView": "チャットとして表示",
+          "closeTabsToLeft": "左側のすべてのタブを閉じる"
+        },
+        "switch": {
+          "toCli": "CLI に切り替える",
+          "toNativeChat": "ネイティブチャットに切り替える",
+          "toCliTooltip": "CLI に切り替え: ネイティブチャットで {{agent}} を停止し、ターミナルで同じ会話を続けます。",
+          "openedInWorkspace": "{{workspace}} でチャットを開きました。",
+          "toNativeChatTooltip": "ネイティブチャットに切り替え: このタブのチャットで同じ会話を続けます。",
+          "exitAgentFirst": "切り替えるには、このターミナルで {{agent}} を終了してください。",
+          "waitForReply": "応答が終わるまで待つか停止してから、切り替えてください。",
+          "stopUnconfirmed": "{{agent}} が停止したことを確認できませんでした。もう一度お試しください。",
+          "failed": "この会話を CLI に切り替えられませんでした。",
+          "noConversation": "このターミナルには、保存された会話がまだありません。",
+          "unavailable": "{{agent}} の切り替えはまだ利用できません。"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる"

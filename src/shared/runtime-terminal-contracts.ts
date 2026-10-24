@@ -1,3 +1,4 @@
+import type { TerminalSurfaceCloseCapture } from './terminal-tab-close'
 import type { TerminalLaunchResult } from './agent-session-resume'
 import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
@@ -256,6 +257,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   envToDelete?: string[]
   launchConfig?: AgentSessionResume.SleepingAgentLaunchConfig
   resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
+  /** A chat's switch: the pane's spawn admission claims the conversation. */
+  resumeOrigin?: 'switch'
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'
@@ -270,10 +273,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
 
 export type RuntimeTerminalCreateRequestPayload =
   | (RuntimeTerminalCreateBaseRequestPayload & { source?: undefined })
-  | (RuntimeTerminalCreateBaseRequestPayload & {
-      worktreeId: string
-      source: 'runtime-session'
-    })
+  | (RuntimeTerminalCreateBaseRequestPayload & { worktreeId: string; source: 'runtime-session' })
 
 export type { RuntimeTerminalCreate } from './runtime-terminal-create-contract'
 
@@ -286,6 +286,8 @@ export type RuntimeTerminalSplit = {
 }
 
 export type RuntimeTerminalResolvePane = TerminalLaunchResult & {
+  presentation?: TerminalSurfaceCloseCapture
+
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null

@@ -71,6 +71,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
               ...(data.resumeProviderSession
                 ? { resumeProviderSession: data.resumeProviderSession }
                 : {}),
+              ...(data.resumeOrigin ? { resumeOrigin: data.resumeOrigin } : {}),
               ...(data.launchToken ? { launchToken: data.launchToken } : {}),
               ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
               ...(data.startupCommandDelivery

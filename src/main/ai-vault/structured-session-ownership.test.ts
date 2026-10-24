@@ -4,12 +4,12 @@ import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import {
   assertLegacyAiVaultResumeAllowed,
   assertLegacyAiVaultResumeCommandAllowed,
-  findResumeOwnership,
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSearchResponse,
   projectStructuredAiVaultSessions
 } from './structured-session-ownership'
 import type { AiVaultSearchHit, AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
+import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
 import {
   codexChatHolding,
   installChats,
@@ -110,37 +110,43 @@ describe('structured AI Vault ownership', () => {
     }
   )
 
-  it('names the chat continuing a conversation first, while every link still refuses a terminal', async () => {
+  it('lets a terminal resume a Codex conversation once no chat may be writing it', async () => {
     const movedOn = codexChatHolding('session-moved', [PROVIDER_SESSION, OTHER_SESSION])
     const owned = (records: ReturnType<typeof codexChatHolding>[]) => {
       installChats(records)
       return projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
         ?.structuredSession?.sessionId
     }
+    const resume: AiVaultPrepareSessionResumeArgs = {
+      agent: 'codex',
+      filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
+      codexHome: null,
+      executionHostId: 'local'
+    }
     expect(owned([movedOn, codexChatHolding('session-now', [PROVIDER_SESSION])])).toBe(
       'session-now'
     )
-    expect(owned([movedOn])).toBe('session-moved')
-    expect(
-      findResumeOwnership({ agent: 'codex', sessionId: PROVIDER_SESSION, filePath: '' })
-    ).toMatchObject({
-      sessionId: 'session-moved',
-      role: 'earlier'
-    })
-    expect(() =>
-      assertLegacyAiVaultResumeAllowed({
-        agent: 'codex',
-        filePath: `/sessions/rollout-${PROVIDER_SESSION}.jsonl`,
-        codexHome: null,
-        executionHostId: 'local'
-      })
-    ).toThrow('agent_session_conflict')
+    // A link the chat moved on from is the terminal's: no owner row, and the resume is admitted.
+    expect(owned([movedOn])).toBeUndefined()
+    expect(() => assertLegacyAiVaultResumeAllowed(resume)).not.toThrow()
+    // The head refuses while its lease may admit a writer, and admits once its agent provably exited.
+    installChats([codexChatHolding('session-now', [PROVIDER_SESSION])])
+    expect(() => assertLegacyAiVaultResumeAllowed(resume)).toThrow('agent_session_conflict')
+    const exited = codexChatHolding('session-now', [PROVIDER_SESSION])
+    exited.lease = {
+      ...exited.lease,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      deathEvidence: { kind: 'exit-observed', detail: 'switched to a terminal', observedAt: 1 }
+    }
+    installChats([exited])
     await expect(
       assertLegacyAiVaultResumeCommandAllowed(
         `codex resume ${PROVIDER_SESSION}`,
         async () => undefined
       )
-    ).rejects.toThrow('agent_session_conflict')
+    ).resolves.toBeUndefined()
   })
 
   it('derives typed refusals from the single writer predicate for live and proving leases', async () => {

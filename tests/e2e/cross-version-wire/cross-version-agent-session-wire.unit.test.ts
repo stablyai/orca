@@ -39,7 +39,7 @@ import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   callBuild,
   expectDeclaredSurfaceExecutes,
-  expectItemDetailNegotiation,
+  expectItemDetailAndSwitchNegotiation,
   runtimeStub
 } from './structured-agent-session-surface-execution'
 import {
@@ -301,7 +301,7 @@ describe('cross-version structured agent sessions', () => {
           build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
         ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
-      expectItemDetailNegotiation([current, baseline])
+      expectItemDetailAndSwitchNegotiation([current, baseline])
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)

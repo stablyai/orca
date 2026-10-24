@@ -14,6 +14,8 @@ export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
 export const ITEM_DETAIL_METHOD = 'agentSession.item'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
+export const SWITCH_TO_TERMINAL_METHOD = 'agentSession.switchToTerminal'
+export const SWITCH_TO_CHAT_METHOD = 'agentSession.switchToChat'
 
 /** Every method the structured surface publishes: the host method it must reach,
  *  and the result it must hand back. A gate that hides one method and leaks
@@ -235,5 +237,15 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.subscribeAvailability',
     hostMethod: null,
     result: { type: 'availability', agents: [] }
+  },
+  {
+    method: SWITCH_TO_TERMINAL_METHOD,
+    hostMethod: 'switchToTerminal',
+    result: { source: { agent: 'codex', sourceAgent: 'codex', sessionId: THREAD } }
+  },
+  {
+    method: SWITCH_TO_CHAT_METHOD,
+    hostMethod: 'switchToChat',
+    result: { ok: true, sessionId: SESSION }
   }
 ]

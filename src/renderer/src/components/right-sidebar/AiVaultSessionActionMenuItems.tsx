@@ -13,7 +13,10 @@ import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-m
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { AiVaultSessionSurfaceSwitchMenuItems } from './AiVaultSessionSurfaceSwitchMenuItems'
+import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 import { isAiVaultFolderWorkspaceId } from './ai-vault-session-worktree-affordances'
+import { useAppStore } from '@/store'
+import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 
 export function SessionActionMenuItems({
   menuKind = 'dropdown',
@@ -35,7 +38,9 @@ export function SessionActionMenuItems({
   onRevealLog,
   onOpenCwd,
   deleteBlockedReason,
-  onDelete
+  onDelete,
+  inPlaceAgent,
+  switchLoading
 }: {
   menuKind?: 'dropdown' | 'context'
   resumeDisabled: boolean
@@ -61,7 +66,11 @@ export function SessionActionMenuItems({
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onDelete?: () => void
+  switchLoading?: boolean
+  inPlaceAgent?: AiVaultAgent
 }) {
+  const enabled = useAppStore((state) => isNativeChatEnabled(state.settings))
+  const showSurfaceActions = enabled || (inPlaceAgent === undefined && !switchLoading)
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
@@ -70,8 +79,7 @@ export function SessionActionMenuItems({
     onJumpToOriginalPane ||
     showJumpToWorktree ||
     !resumeHidden ||
-    onResumeInNewChat ||
-    onResumeInNewCli ||
+    (showSurfaceActions && (onResumeInNewChat || onResumeInNewCli)) ||
     onCopyResume
   )
   const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
@@ -120,13 +128,17 @@ export function SessionActionMenuItems({
           {resumeLabel}
         </Item>
       ) : null}
-      <AiVaultSessionSurfaceSwitchMenuItems
-        action="resume"
-        menuKind={menuKind}
-        tooltipSide={menuKind === 'context' ? 'right' : 'left'}
-        onResumeInNewChat={onResumeInNewChat}
-        onResumeInNewCli={onResumeInNewCli}
-      />
+      {showSurfaceActions ? (
+        <AiVaultSessionSurfaceSwitchMenuItems
+          action="resume"
+          menuKind={menuKind}
+          tooltipSide={menuKind === 'context' ? 'right' : 'left'}
+          onResumeInNewChat={onResumeInNewChat}
+          onResumeInNewCli={onResumeInNewCli}
+          inPlaceAgent={inPlaceAgent}
+          switchLoading={switchLoading}
+        />
+      ) : null}
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />

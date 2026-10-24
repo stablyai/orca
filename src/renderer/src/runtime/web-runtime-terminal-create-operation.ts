@@ -43,7 +43,10 @@ import {
   createdTerminalLeafId,
   readCreatedAgentTerminalIdentity
 } from './web-runtime-terminal-identity'
-import { settleWebRuntimeTerminalPlacement } from './web-runtime-terminal-placement-settlement'
+import {
+  captureWebRuntimeTerminalPlacement,
+  settleWebRuntimeTerminalPlacement
+} from './web-runtime-terminal-placement-settlement'
 import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-create-params'
 
 export async function createWebRuntimeSessionTerminalResult(
@@ -79,6 +82,7 @@ export async function createWebRuntimeSessionTerminalResult(
       }
     }
   }
+  const { captured, placementGroupId } = captureWebRuntimeTerminalPlacement(args)
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
@@ -94,7 +98,9 @@ export async function createWebRuntimeSessionTerminalResult(
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
       // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
       // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
-      const mustUseLegacyAgentCreate = args.preparedAgentCommand || args.afterTabId
+      // A switch uses the ordinary prepared command and admission.
+      const mustUseLegacyAgentCreate =
+        args.preparedAgentCommand || args.afterTabId || args.resumeOrigin === 'switch'
       const hostAuthority = mustUseLegacyAgentCreate
         ? undefined
         : args.agentSessionKind === 'resume'
@@ -182,6 +188,9 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+              ...(args.resumeOrigin && args.providerSession
+                ? { resumeOrigin: args.resumeOrigin, resumeProviderSession: args.providerSession }
+                : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,
@@ -232,14 +241,14 @@ export async function createWebRuntimeSessionTerminalResult(
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
     }
-    if (args.targetGroupId && createdTabId) {
+    if (placementGroupId && createdTabId) {
       // Why: the host drops client-minted group ids, so this client's own record is what
       // lands the mirrored tab in the requested pane under client-owned placement.
       recordWebSessionTerminalPlacement({
         environmentId,
         worktreeId: args.worktreeId,
         hostTabId: webTerminalPlacementParentTabId(createdTabId),
-        groupId: args.targetGroupId
+        groupId: placementGroupId
       })
     }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
@@ -263,8 +272,9 @@ export async function createWebRuntimeSessionTerminalResult(
         args.worktreeId,
         webTerminalPlacementParentTabId(placementTabId),
         {
-          groupId: args.targetGroupId,
+          groupId: placementGroupId,
           afterTabId: args.afterTabId,
+          captured,
           activate: args.activate !== false
         }
       )

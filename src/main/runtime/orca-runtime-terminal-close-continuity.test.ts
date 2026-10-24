@@ -403,6 +403,38 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(canary.ptyId).toBe(survivor.ptyId)
   })
 
+  it('forwards the captured incarnation to the stop and never falls back after a refused stop', async () => {
+    const harness = createHarness({ registerPtyBacked: true })
+    const terminal = harness.runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_ID}`, WORKTREE_ID)
+    const presentation = terminal.presentation
+    if (!presentation) {
+      throw new Error('Missing original source')
+    }
+    const close = () => harness.runtime.closeTerminal(terminal.handle, INCARNATION_ID, presentation)
+    harness.setVerifiedStopResult(false)
+    await expect(close()).rejects.toThrow('terminal_close_unverifiable')
+    expect(harness.stopAndWait).toHaveBeenCalledWith(
+      PTY_ID,
+      expect.objectContaining({ expectedIncarnationId: INCARNATION_ID })
+    )
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+    expect(harness.closeTerminalPane).not.toHaveBeenCalled()
+    harness.setVerifiedStopResult(true)
+    harness.acknowledged.resolve()
+    await expect(close()).resolves.toMatchObject({ ptyKilled: true })
+  })
+
+  it('closes nothing when its handle now runs a later incarnation than the caller expected', async () => {
+    const harness = createHarness()
+    const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    await expect(harness.runtime.closeTerminal(handle, 'earlier-incarnation')).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+  })
+
   it('does not kill the final PTY when durable tab retirement is rejected', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

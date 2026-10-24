@@ -5,7 +5,10 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
@@ -35,6 +38,9 @@ export type MobileTerminalCreateOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  /** A switch's start: its ordinary spawn admission checks the conversation. */
+  resumeProviderSession?: AgentProviderSessionMetadata
+  resumeOrigin?: 'switch'
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
@@ -145,9 +151,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const win = this.getAvailableAuthoritativeWindow()
-    if (!win) {
-      return await this.createRuntimeOwnedMobileSessionTerminal(
+    const switchStart =
+      opts.resumeOrigin === 'switch'
+        ? { resumeProviderSession: opts.resumeProviderSession, resumeOrigin: opts.resumeOrigin }
+        : {}
+    const createOwned = (identity?: { tabId: string; leafId: string }) =>
+      this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
         afterTabId,
@@ -158,6 +167,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
+          ...(identity ? { identity } : {}),
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
@@ -168,9 +178,13 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
           launchRuntime: startupCommand.launchRuntime,
+          ...switchStart,
           signal: opts.signal
         }
       )
+    const win = this.getAvailableAuthoritativeWindow()
+    if (!win) {
+      return await createOwned()
     }
     if (win.webContents.isDestroyed?.()) {
       throw new Error('runtime_unavailable')
@@ -224,6 +238,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...switchStart,
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -279,27 +294,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           throw new Error('Timed out waiting for terminal surface after creation')
         }
         // Why: a hidden renderer can publish the tab shell before the PTY spawns; reuse the same identity so later focus adopts instead of creating another tab.
-        return await this.createRuntimeOwnedMobileSessionTerminal(
-          worktreeId,
-          opts.activate !== false,
-          afterTabId,
-          {
-            command: startupCommand.command,
-            ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
-            cwd,
-            env: startupCommand.env,
-            envToDelete: startupCommand.envToDelete,
-            startupCommandDelivery: startupCommand.startupCommandDelivery,
-            identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
-            launchAgent: startupCommand.launchAgent,
-            viewMode: opts.viewMode,
-            targetGroupId: opts.targetGroupId,
-            supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
-            launchConfig: startupCommand.launchConfig,
-            launchRuntime: startupCommand.launchRuntime,
-            signal: opts.signal
-          }
-        )
+        return await createOwned({
+          tabId: pendingSurface.tab.parentTabId,
+          leafId: pendingSurface.tab.leafId
+        })
       } catch (error) {
         // Why: publication latency (hidden renderer) can trip the surface timeout; rescue only when a live PTY backs the tab, else a ghost tab skips rollback (#7587).
         if (this.findLiveRegisteredPtyForRendererTab(worktreeId, reply.tabId)) {

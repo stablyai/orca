@@ -194,6 +194,8 @@ export function stubTerminalCreateEnvironment(mocks: WebRuntimeSessionMocks): vo
     },
     activeWorktreeId: WORKTREE_ID,
     tabsByWorktree: {},
+    groupsByWorktree: {},
+    unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {},
     activeTabIdByWorktree: {},
     activeGroupIdByWorktree: {},

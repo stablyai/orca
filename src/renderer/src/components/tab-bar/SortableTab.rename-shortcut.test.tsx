@@ -66,6 +66,7 @@ vi.mock('react', async () => {
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: () => null
 }))
+vi.mock('./TabSessionSwitchHoverAction', () => ({ TabSessionSwitchHoverAction: () => null }))
 
 vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })

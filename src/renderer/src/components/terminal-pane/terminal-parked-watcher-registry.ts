@@ -236,3 +236,52 @@ export function pruneParkedTerminalWatchers(liveWorktreeIds: ReadonlySet<string>
     }
   }
 }
+
+/** Permanent removal consumes one leaf's sidecars, including ended watcher slots. */
+export function retireParkedTerminalLeaf(
+  original: { worktreeId: string; tabId: string; leafId: string; ptyId: string | null },
+  retainedPtyIds: ReadonlySet<string> = new Set()
+): number[] {
+  const { worktreeId, tabId, leafId, ptyId } = original
+  const capture = capturedPanesByTabId.get(tabId)
+  const entry = parkedWatchersByTabId.get(tabId)
+  if (
+    (capture && capture.worktreeId !== worktreeId) ||
+    (entry && entry.worktreeId !== worktreeId)
+  ) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  const panes = capture?.panes.filter((pane) => pane.leafId === leafId) ?? []
+  if (panes.some((pane) => pane.ptyId !== null && pane.ptyId !== ptyId)) {
+    throw new Error('terminal_pane_owner_changed')
+  }
+  const ids = new Set(panes.flatMap((pane) => (pane.ptyId ? [pane.ptyId] : [])))
+  if (ptyId) {
+    ids.add(ptyId)
+  }
+  const paneIds = new Set(panes.map((pane) => pane.paneId))
+  for (const id of ids) {
+    if (retainedPtyIds.has(id)) {
+      continue
+    }
+    const paneId = entry?.paneIdByPtyId.get(id)
+    if (paneId !== undefined) {
+      paneIds.add(paneId)
+    }
+    entry?.disposersByPtyId.get(id)?.()
+    entry?.disposersByPtyId.delete(id)
+    entry?.paneIdByPtyId.delete(id)
+    discardPreHandlerPtyState(id)
+  }
+  if (entry && entry.disposersByPtyId.size === 0 && entry.paneIdByPtyId.size === 0) {
+    parkedWatchersByTabId.delete(tabId)
+  }
+  if (capture) {
+    capture.panes = capture.panes.filter((pane) => pane.leafId !== leafId)
+    if (capture.panes.length === 0) {
+      capturedPanesByTabId.delete(tabId)
+    }
+  }
+  releaseTerminalScrollIntentKey(leafId)
+  return [...paneIds]
+}

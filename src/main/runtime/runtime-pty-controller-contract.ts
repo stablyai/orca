@@ -74,7 +74,7 @@ export type RuntimePtyController = {
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
-    resumeOrigin?: 'saved'
+    resumeOrigin?: 'saved' | 'switch'
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
@@ -143,7 +143,7 @@ export type RuntimePtyController = {
   retireRejectedPty?(ptyId: string, stopConfirmed: boolean, incarnationId: string | undefined): void
   stopAndWait?(
     ptyId: string,
-    opts?: { keepHistory?: boolean; deadlineMs?: number }
+    opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
   ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>

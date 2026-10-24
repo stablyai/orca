@@ -3,10 +3,10 @@ import type { RuntimePtySpawnState } from './spawn-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 
-type RuntimeResumeOutcomeState = Pick<
-  RuntimePtySpawnState,
-  'args' | 'result' | 'codexResumeArgvDropped'
-> & { codexResumeUnavailable?: boolean }
+type RuntimeResumeOutcomeState = Pick<RuntimePtySpawnState, 'result' | 'codexResumeArgvDropped'> & {
+  args: Pick<RuntimePtySpawnState['args'], 'resumeProviderSession' | 'onResumeOutcome'>
+  codexResumeUnavailable?: boolean
+}
 
 /** Whether a fresh start resumed the agent it was asked to; a reattach ran no launch command. */
 export function resumeOutcomeOf(ctx: RuntimeResumeOutcomeState): PaneResumeOutcome | null {

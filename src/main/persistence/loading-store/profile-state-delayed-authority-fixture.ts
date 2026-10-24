@@ -146,7 +146,7 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
       reader.close()
     }
   }
-  return { store, authority, readState }
+  return { store, authority, readState, directory, path }
 }
 
 /** The runtime writes a pane before it spawns; a runtime spawn commit binds only that pane. */

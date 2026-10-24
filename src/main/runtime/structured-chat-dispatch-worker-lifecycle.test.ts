@@ -14,6 +14,7 @@ import {
   WAIT,
   call,
   clearChat,
+  connectionFor,
   coordinatorRunAndTask,
   db,
   dispatcher,
@@ -234,3 +235,44 @@ describe("a chat assignee's liveness, stop and close", () => {
     expect(JSON.stringify(read.transcript)).toContain('working on it')
   })
 })
+
+// An idle reply does not settle an assignment; the same chat/caller must still finish it.
+it.each(['pending', 'dispatched'] as const)(
+  'keeps %s direct work at rest through switch refusal and original completion',
+  async (status) => {
+    const { taskId, dispatchId } = await dispatchToChat()
+    await clearChat(PEER_CHAT)
+    await host.close(PEER_CHAT, 'evict')
+    db.db.prepare('UPDATE dispatch_contexts SET status = ? WHERE id = ?').run(status, dispatchId)
+    const before = db.getDispatchContextById(dispatchId)
+    const close = vi.spyOn(host.deps.adapter, 'closeSession')
+    const acquire = vi.spyOn(host.deps.adapter, 'acquire')
+    await expect(host.switchToTerminal(PEER_CHAT)).rejects.toMatchObject({
+      refusal: { details: { reason: 'turnActive' } }
+    })
+    expect(close).not.toHaveBeenCalled()
+    expect(acquire).not.toHaveBeenCalled()
+    expect(db.getDispatchContextById(dispatchId)).toEqual(before)
+    expect(host.deps.store.getVisibleSessionTabIndex().sessionIds).toContain(PEER_CHAT)
+    db.db
+      .prepare('UPDATE dispatch_contexts SET status = ? WHERE id = ?')
+      .run('dispatched', dispatchId)
+    await startClearedContext(PEER_CHAT)
+    await call(
+      'orchestration.send',
+      { to: WORKER, subject: 'follow up', body: 'finish original work' },
+      { sessionId: COORDINATOR }
+    )
+    const mail = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
+    expect(JSON.stringify(mail)).toContain('follow up')
+    await vi.waitFor(() => expect(connectionFor(PEER_CHAT).turns).toHaveLength(2), WAIT)
+    await settleTurn(PEER_CHAT, 1)
+    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: PEER_CHAT })
+    expect(db.getTask(taskId)?.status).toBe('completed')
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
+    await vi.waitFor(async () => {
+      await host.switchToTerminal(PEER_CHAT)
+    }, WAIT)
+    expect(host.deps.store.getRecord(PEER_CHAT)?.lease.claimStatus).toBe('released')
+  }
+)

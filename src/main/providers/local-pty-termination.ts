@@ -11,6 +11,7 @@ import {
   ptyAgentSessionIds,
   ptyForceKillTimers,
   ptyPhysicalExits,
+  ptyIncarnations,
   ptyProcesses,
   ptyShutdownOperations,
   ptyTerminationMode,
@@ -189,8 +190,11 @@ async function shutdownTrackedPty(
 
 export async function shutdownLocalPty(
   id: string,
-  opts: { immediate?: boolean; keepHistory?: boolean }
+  opts: { immediate?: boolean; keepHistory?: boolean; expectedIncarnationId?: string }
 ): Promise<void> {
+  if (opts.expectedIncarnationId && ptyIncarnations.get(id) !== opts.expectedIncarnationId) {
+    throw new Error('terminal_handle_stale')
+  }
   cancelPendingLocalPtySpawns(id)
   const pending = ptyShutdownOperations.get(id)
   if (pending) {

@@ -13,6 +13,7 @@ import type { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-so
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 
 export type TerminalPaneMountContext = {
+  getOwnedManager?: () => PaneManager | null
   deps: UseTerminalPaneLifecycleDeps
   refs: TerminalPaneLifecycleRefs
   ptyDeps: PtyConnectionDeps
@@ -54,5 +55,5 @@ export type PaneCreatedHandlerContext = TerminalPaneManagerOptionsContext
 
 export type PaneClosedHandlerContext = TerminalPaneMountContext & {
   paneId: number
-  closedPane?: { leafId: string; reason?: 'close' | 'detach' | 'retire' }
+  closedPane?: { leafId: string; reason?: 'close' | 'detach' | 'retire' | 'remove' }
 }

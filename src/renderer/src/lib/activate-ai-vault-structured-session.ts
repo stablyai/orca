@@ -95,9 +95,19 @@ export async function activateAiVaultStructuredSession(
   deps: StructuredSessionActivationDeps = defaultDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
+  return (await activateAiVaultStructuredSessionVerified(session, deps, target)) !== 'none'
+}
+
+/** `activated` only when the chat's tab is really active; `reported` means the click's toast said why
+ *  not, which a caller retiring something on success must not read as success. */
+export async function activateAiVaultStructuredSessionVerified(
+  session: Pick<AiVaultSession, 'structuredSession'>,
+  deps: StructuredSessionActivationDeps = defaultDeps,
+  target?: RuntimeClientTarget
+): Promise<'activated' | 'reported' | 'none'> {
   const structured = session.structuredSession
   if (!structured) {
-    return false
+    return 'none'
   }
   // Why: the click can chain a refresh, a capability probe, a reveal and a second refresh, each
   // with its own timeout, and nothing on the row says it is working. Without this, an impatient
@@ -122,13 +132,13 @@ export async function activateAiVaultStructuredSession(
   }
 }
 
-const activationsInFlight = new Map<string, Promise<boolean>>()
+const activationsInFlight = new Map<string, Promise<'activated' | 'reported'>>()
 
 async function activateStructuredSession(
   structured: NonNullable<AiVaultSession['structuredSession']>,
   deps: StructuredSessionActivationDeps,
   host?: RuntimeClientTarget
-): Promise<boolean> {
+): Promise<'activated' | 'reported'> {
   const target = {
     worktreeId: structured.workspaceId,
     sessionId: structured.sessionId,
@@ -152,19 +162,19 @@ async function activateStructuredSession(
           // Unreachable: we never got an answer, so this is the one case waiting can still fix.
           deps.unavailable()
         }
-        return true
+        return 'reported'
       }
       await refreshedWithoutThrowing(deps, structured.workspaceId, host)
       if (!deps.activate(target)) {
         deps.unavailable()
-        return true
+        return 'reported'
       }
     }
   }
   if (useAppStore.getState().activeWorktreeId !== structured.workspaceId) {
     activateAndRevealWorktree(structured.workspaceId)
   }
-  return true
+  return 'activated'
 }
 
 /** The inventory refresh is advisory at every call site here, so its failure is a `false`, never a

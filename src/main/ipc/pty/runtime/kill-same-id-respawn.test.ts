@@ -75,6 +75,23 @@ describe('a stop whose shutdown lands after a same-id respawn', () => {
     expect(ports.sendPtyExitToRenderer).not.toHaveBeenCalled()
   }
 
+  it('refuses a captured stop after provider startup replaced the same id', async () => {
+    const h = start()
+    const shutdown = vi.fn(async () => false)
+    const ports = {
+      ...h.ports,
+      shutdownProviderAndDetectExit: shutdown,
+      getLocalPtyProviderStartupPromise: () => Promise.resolve().then(respawn)
+    }
+    await expect(
+      stopAndWaitPtyFromRuntimeController(asControllerDeps(ports), PTY_ID, {
+        expectedIncarnationId: 'inc-stopped'
+      })
+    ).resolves.toBe(false)
+    expect(shutdown).not.toHaveBeenCalled()
+    expectRespawnUntouched(h)
+  })
+
   it('leaves the respawn alone after a runtime kill', async () => {
     const h = start()
     killPtyFromRuntimeController(asControllerDeps(h.ports), PTY_ID)

@@ -4,7 +4,10 @@ import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-termi
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
 import { useTerminalParkMountIntent } from './use-terminal-park-mount-intent'
-import { prepareTerminalPaneMount } from './terminal-pane-mount-preparation'
+import {
+  prepareTerminalPaneMount,
+  type TerminalPaneMountPreparation
+} from './terminal-pane-mount-preparation'
 import { createTerminalPaneManagerOptions } from './terminal-pane-manager-options'
 import { restoreTerminalPaneLayout } from './terminal-pane-layout-restore'
 import { runTerminalPaneBootstrapSplits } from './terminal-pane-mount-bootstrap'
@@ -24,7 +27,31 @@ export function useTerminalPaneMountLifecycle(
   configureTerminalOutputBacklogCap(deps.settings?.terminalScrollbackRows)
 
   useEffect(() => {
-    const preparation = prepareTerminalPaneMount(deps, refs, mountFollowsTerminalPark)
+    let removeMountEvents = (): void => {}
+    const releaseWebviewDragPassthrough: { current: (() => void) | null } = { current: null }
+    const preparation: TerminalPaneMountPreparation | null = prepareTerminalPaneMount(
+      deps,
+      refs,
+      mountFollowsTerminalPark,
+      (manager) => {
+        if (!preparation) {
+          throw new Error('terminal_pane_owner_unavailable')
+        }
+        removeMountEvents()
+        cleanupTerminalPaneMount({
+          manager,
+          deps,
+          refs,
+          deferredSplitHandoffs: preparation.deferredSplitHandoffs,
+          expandedStyleSnapshots: preparation.expandedStyleSnapshots,
+          unregisterRuntimeTab: preparation.unregisterRuntimeTab,
+          cancelResize: preparation.cancelResizeAll,
+          permanent: true
+        })
+        releaseWebviewDragPassthrough.current?.()
+        releaseWebviewDragPassthrough.current = null
+      }
+    )
     if (!preparation) {
       return
     }
@@ -36,11 +63,9 @@ export function useTerminalPaneMountLifecycle(
       unregisterRuntimeTab
     } = preparation
     let shouldPersistLayout = false
-    const releaseWebviewDragPassthrough: { current: (() => void) | null } = {
-      current: null
-    }
     const queueResizeAll = preparation.queueResizeAll
     const managerContext = {
+      getOwnedManager: preparation.getOwnedManager,
       deps,
       refs,
       ptyDeps,
@@ -74,6 +99,7 @@ export function useTerminalPaneMountLifecycle(
     }
     const manager = new PaneManager(container, createTerminalPaneManagerOptions(managerContext))
     deps.managerRef.current = manager
+    preparation.setOwnedManager(manager)
     if (e2eConfig.exposeStore) {
       window.__paneManagers = window.__paneManagers ?? new Map()
       window.__paneManagers.set(deps.tabId, manager)
@@ -110,7 +136,7 @@ export function useTerminalPaneMountLifecycle(
     queueResizeAll(deps.isActive)
     deps.persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
-    const removeMountEvents = installTerminalPaneMountEvents({
+    removeMountEvents = installTerminalPaneMountEvents({
       manager,
       deps: {
         tabId: deps.tabId,
@@ -126,15 +152,17 @@ export function useTerminalPaneMountLifecycle(
     })
     return () => {
       removeMountEvents()
-      cleanupTerminalPaneMount({
-        manager,
-        deps,
-        refs,
-        deferredSplitHandoffs,
-        expandedStyleSnapshots,
-        unregisterRuntimeTab,
-        cancelResize: preparation.cancelResizeAll
-      })
+      if (preparation.getOwnedManager() === manager) {
+        cleanupTerminalPaneMount({
+          manager,
+          deps,
+          refs,
+          deferredSplitHandoffs,
+          expandedStyleSnapshots,
+          unregisterRuntimeTab,
+          cancelResize: preparation.cancelResizeAll
+        })
+      }
       releaseWebviewDragPassthrough.current?.()
       releaseWebviewDragPassthrough.current = null
     }

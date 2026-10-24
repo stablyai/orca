@@ -3,7 +3,7 @@ import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
-import { OrcaRuntimeService } from '../orca-runtime'
+import * as terminalClose from './terminal-close-runtime.test-fixture'
 import { withMainLayout } from './main-layout-close-fixture'
 import {
   CANARY_INCARNATION_ID,
@@ -49,7 +49,7 @@ export {
 } from './orca-runtime-terminal-close-continuity-state-fixture'
 
 export type CloseContinuityHarness = {
-  runtime: OrcaRuntimeService
+  runtime: terminalClose.TerminalCloseRuntime
   acknowledged: ReturnType<typeof makeDeferred>
   closeTerminal: Mock<(...args: unknown[]) => unknown>
   closeTerminalPane: Mock<(...args: unknown[]) => unknown>
@@ -99,13 +99,13 @@ function createHarness(
     addedAt: 1
   }
   const store = withDurableRuntimeStore({
+    ...terminalClose.terminalCloseStoreDefaults(),
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined,
-    getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
     getProjects: () => [],
-    getWorkspaceSession: () => (sessionAvailable ? session : undefined),
+    get getWorkspaceSession() {
+      return sessionAvailable ? () => session : undefined
+    },
     setWorkspaceSession: (next: WorkspaceSessionState) => {
       session = next
     },
@@ -160,7 +160,7 @@ function createHarness(
       : []),
     ...(options.includeCanary ? [canaryProcess] : [])
   ])
-  const runtime = new OrcaRuntimeService(store as never)
+  const runtime = new terminalClose.TerminalCloseRuntime(store)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these close paths call only the listed notifier methods.
   runtime.setNotifier({ closeTerminal, closeTerminalPane, closeTerminalTab } as never)
   runtime.setPtyController({

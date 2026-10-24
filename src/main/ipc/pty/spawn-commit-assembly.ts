@@ -52,7 +52,7 @@ export type PtySpawnCommitState = {
     | 'resumeProviderSession'
     | 'onResumeOutcome'
     | 'telemetry'
-  >
+  > & { resumeOrigin?: unknown }
   result: PtySpawnResult
   provider: IPtyProvider
   cwd: string | undefined

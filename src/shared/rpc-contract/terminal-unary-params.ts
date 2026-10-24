@@ -22,10 +22,36 @@ export const WindowsShellOverrideParam = z
   // spawn path exact-matches `.exe` spellings and must never see `cmd` or `Git-Bash`.
   .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
 
+const TerminalSurfaceCloseIdentity = z.object({
+  worktreeId: requiredString('Missing worktree id'),
+  tabId: requiredString('Missing tab id'),
+  leafId: requiredString('Missing leaf id'),
+  createdAt: z.number().finite().nullable(),
+  generation: z.number().int().nonnegative(),
+  hasLeaf: z.boolean(),
+  ptyId: z.string().nullable(),
+  incarnationId: z.string().nullable()
+})
+const TerminalSurfaceCloseCapture = z.object({
+  identity: TerminalSurfaceCloseIdentity,
+  holders: z
+    .array(
+      z.object({
+        hostId: OptionalExecutionHostId.unwrap(),
+        identity: TerminalSurfaceCloseIdentity.nullable()
+      })
+    )
+    .max(64)
+})
+
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
   // Additive fence understood by newer hosts; legacy hosts safely ignore it.
   expectedIncarnationId: requiredString('Missing PTY incarnation').optional()
+})
+
+export const TerminalClose = TerminalHandle.extend({
+  originalPresentation: TerminalSurfaceCloseCapture.optional()
 })
 
 export const TerminalReadKittyFile = TerminalHandle.extend({
