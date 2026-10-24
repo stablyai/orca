@@ -13,6 +13,7 @@ type MockStoreState = {
       enabled: boolean
       agentTaskComplete: boolean
     }
+    agentDefaultArgs?: Record<string, string>
   }
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, boolean>
@@ -31,6 +32,7 @@ type MockStoreState = {
     {
       launchConfig: { agentArgs: string; agentEnv: Record<string, string> }
       launchToken?: string
+      identity?: { agentType?: string }
     }
   >
   agentStatusByPaneKey: Record<
@@ -688,5 +690,148 @@ describe('agent hook completion notifications', () => {
     syncAgentHookCompletionNotificationSettings()
 
     expect(tabEnumerationCount).toBe(2)
+  })
+
+  async function observeAntigravityAttention(
+    toolName: 'ask_permission' | 'ask_question'
+  ): Promise<void> {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'review the diff',
+        agentType: 'antigravity'
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'waiting',
+        prompt: 'review the diff',
+        agentType: 'antigravity',
+        toolName,
+        toolInput: 'git status'
+      }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+  }
+
+  it('does not banner Antigravity ask_permission while permissions are auto-approved', async () => {
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: {
+        agentArgs: '--model gemini --dangerously-skip-permissions',
+        agentEnv: {}
+      },
+      identity: { agentType: 'antigravity' }
+    }
+    mockStoreState.settings.agentDefaultArgs = { antigravity: '' }
+
+    await observeAntigravityAttention('ask_permission')
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+  })
+
+  it('still banners Antigravity ask_permission when the pane has no registered launch', async () => {
+    mockStoreState.settings.agentDefaultArgs = {
+      antigravity: '--dangerously-skip-permissions'
+    }
+
+    await observeAntigravityAttention('ask_permission')
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'antigravity',
+          toolName: 'ask_permission'
+        })
+      })
+    )
+  })
+
+  it.each([
+    '--prompt "explain --dangerously-skip-permissions"',
+    '-- --dangerously-skip-permissions'
+  ])(
+    'still banners Antigravity ask_permission when the bypass text is not a launch option (%j)',
+    async (agentArgs) => {
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: {
+          agentArgs,
+          agentEnv: {}
+        },
+        identity: { agentType: 'antigravity' }
+      }
+
+      await observeAntigravityAttention('ask_permission')
+
+      expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+      expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          paneKey,
+          agentStatusSnapshot: expect.objectContaining({
+            state: 'waiting',
+            agentType: 'antigravity',
+            toolName: 'ask_permission'
+          })
+        })
+      )
+    }
+  )
+
+  it('still banners Antigravity ask_question while permissions are auto-approved', async () => {
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: {
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: {}
+      },
+      identity: { agentType: 'antigravity' }
+    }
+
+    await observeAntigravityAttention('ask_question')
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'antigravity',
+          toolName: 'ask_question'
+        })
+      })
+    )
+  })
+
+  it('still banners Antigravity ask_permission in manual mode', async () => {
+    mockStoreState.settings.agentDefaultArgs = { antigravity: '' }
+
+    await observeAntigravityAttention('ask_permission')
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'antigravity',
+          toolName: 'ask_permission'
+        })
+      })
+    )
   })
 })

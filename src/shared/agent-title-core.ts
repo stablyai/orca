@@ -62,6 +62,11 @@ export const STRONG_WORKING_KEYWORDS_RE = new RegExp(
 
 export const STRONG_WORKING_KEYWORDS_RE_GLOBAL = new RegExp(STRONG_WORKING_KEYWORDS_RE.source, 'gi')
 
+// Why: plain `\b` matches inside hyphenated tokens and cwd paths such as
+// "~/codex/permission" or "codex permission/notes"; both sides block path separators.
+export const STRONG_PERMISSION_KEYWORDS_RE =
+  /(?<![\w./\\-])(action required|permission|waiting)(?![\w./\\-])/i
+
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
 export function hasGeminiStatusGlyph(title: string): boolean {

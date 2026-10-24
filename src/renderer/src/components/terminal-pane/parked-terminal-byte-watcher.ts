@@ -6,6 +6,8 @@ import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
+import { isFreshNonDoneAgentStatus } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
@@ -82,7 +84,6 @@ export function startParkedTerminalByteWatcher(
   parkedWatcherDisposersByPtyId.get(ptyId)?.()
 
   let disposed = false
-  let pendingBellNotification = false
   // Why: a watcher-written title has no pane to overwrite it after reveal (stale 'working' pins status); track writes so dispose clears the exact slot.
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
@@ -119,13 +120,11 @@ export function startParkedTerminalByteWatcher(
     bellNotificationTimer = setTimeout(() => {
       bellNotificationTimer = null
       if (disposed) {
-        pendingBellNotification = false
         return
       }
       if (hasPendingAgentTaskCompleteNotification()) {
         return
       }
-      pendingBellNotification = false
       // Why: the hook lane's pending Done announces this burst's turn end, superseding the BEL as a pane completion does.
       if (
         hasPendingHookLaneCompletion(paneKey, ptyId) &&
@@ -153,9 +152,17 @@ export function startParkedTerminalByteWatcher(
       }
     },
     onBell: (): void => {
-      useAppStore.getState().markTerminalBell({ worktreeId, tabId, paneKey })
+      const state = useAppStore.getState()
+      state.markTerminalBell({ worktreeId, tabId, paneKey })
+      const runtimePaneTitle = state.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
+      if (
+        isAgentTaskCompleteOsNotificationEnabled(state) &&
+        (isFreshNonDoneAgentStatus(state.agentStatusByPaneKey[paneKey]) ||
+          detectAgentStatusFromTitle(runtimePaneTitle) === 'working')
+      ) {
+        return
+      }
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
-      pendingBellNotification = true
       if (!hasPendingAgentTaskCompleteNotification()) {
         scheduleTerminalBellNotification()
       }
@@ -184,7 +191,6 @@ export function startParkedTerminalByteWatcher(
           return
         }
         // Why: completion supersedes a concurrent BEL so each burst yields exactly one OS notification (live-path parity).
-        pendingBellNotification = false
         clearBellNotificationTimer()
         const evidence = (): 'identified' | 'ambiguous' | null => {
           const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[paneKey]?.agent
@@ -216,9 +222,7 @@ export function startParkedTerminalByteWatcher(
       // Why: a new API call refreshes the prompt-cache TTL, so clear the running countdown; it restarts when the agent next becomes idle.
       useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
       clearAgentTaskCompleteTimer()
-      if (pendingBellNotification) {
-        scheduleTerminalBellNotification()
-      }
+      clearBellNotificationTimer()
     },
     onAgentExited: (): void => {
       // Why: title reverting to a plain shell means the agent session ended; clear the countdown so it doesn't survive in the sidebar while parked.
@@ -343,7 +347,6 @@ export function startParkedTerminalByteWatcher(
     commandStatusPolicy.dispose()
     clearBellNotificationTimer()
     clearAgentTaskCompleteTimer()
-    pendingBellNotification = false
     // Why: store merge never deletes title slots, so a watcher-written entry would strand after reveal and pin worktree status 'working'.
     if (wroteRuntimeTitleSlot) {
       wroteRuntimeTitleSlot = false

@@ -24,9 +24,8 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     // countdown. The timer will restart when the agent becomes idle again.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
     session.clearPendingAgentTaskCompleteNotification()
-    if (session.pendingTerminalBellNotification) {
-      session.scheduleTerminalBellNotification()
-    }
+    session.pendingTerminalBellNotification = false
+    session.clearTerminalBellNotificationTimer()
   }
   session.onAgentExited = (): void => {
     // Why: eligibility can disappear transiently during reconnect, but a

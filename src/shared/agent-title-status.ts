@@ -13,18 +13,19 @@ import {
   HERMES_AGENT_NAME_RE,
   QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
+  STRONG_PERMISSION_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
   containsAgentName,
   containsAgentSpinnerGlyph,
-  containsAny,
   containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isDshTerminalTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
-  isPiTerminalTitle
+  isPiTerminalTitle,
+  titleHasAgentName
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
@@ -223,6 +224,19 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
   return canonical
 }
 
+function titleHasNonAntigravityPermissionSegment(title: string): boolean {
+  return getWrapperTitleSegments(title).some((segment) => {
+    if (AGY_AGENT_NAME_RE.test(segment) || titleHasAgentName(segment, 'antigravity')) {
+      return false
+    }
+    const namesAnotherAgent =
+      containsLegacyAgentName(segment) ||
+      DROID_AGENT_NAME_RE.test(segment) ||
+      HERMES_AGENT_NAME_RE.test(segment)
+    return namesAnotherAgent && STRONG_PERMISSION_KEYWORDS_RE.test(segment)
+  })
+}
+
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   const buildStatus = getDeepSeekBuildTitleStatus(title)
   if (buildStatus) {
@@ -295,7 +309,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
     return null
   }
-  if (containsAny(title, ['action required', 'permission', 'waiting'])) {
+  // Why: Antigravity writes conversation/task summaries into the OSC title and reports
+  // waiting states exclusively through hooks, so status words in an agy or Antigravity
+  // segment are subject matter (like OpenCode's session summary above), never a permission prompt.
+  if (titleHasNonAntigravityPermissionSegment(title)) {
     return 'permission'
   }
   // Why: boundary-aware regexes avoid cwd/path and substring false positives.

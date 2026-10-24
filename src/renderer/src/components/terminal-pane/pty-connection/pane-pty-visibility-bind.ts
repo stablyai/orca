@@ -1,5 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
+import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
@@ -210,6 +212,16 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       tabId: session.deps.tabId,
       paneKey: session.cacheKey
     })
+    const currentState = useAppStore.getState()
+    const runtimePaneTitle =
+      currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id] ?? ''
+    if (
+      isAgentTaskCompleteNotificationEnabled() &&
+      (isFreshNonDoneAgentStatus(currentState.agentStatusByPaneKey[session.cacheKey]) ||
+        detectAgentStatusFromTitle(runtimePaneTitle) === 'working')
+    ) {
+      return
+    }
     // Why: agent CLIs often emit BEL in the same completion burst as their
     // working->idle title change. Delay only the OS notification so the richer
     // agent-complete notification can win the main-process worktree cooldown.

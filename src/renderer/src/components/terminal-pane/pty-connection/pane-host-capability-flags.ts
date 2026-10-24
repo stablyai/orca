@@ -180,8 +180,11 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
         : statusPayload
     // Why: hook lifecycle owns deferred side effects even when alerts are disabled.
     session.agentCompletionCoordinator.observeHookStatus(notificationPayload)
-    if (payload.state === 'working' && session.pendingTerminalBellNotification) {
-      session.scheduleTerminalBellNotification()
+    if (payload.state === 'working') {
+      // Why: resuming work cancels a provisional milestone completion; a BEL emitted
+      // during that milestone burst is intermediate agent output, not a shell bell.
+      session.pendingTerminalBellNotification = false
+      session.clearTerminalBellNotificationTimer()
     }
   }
   // Why: when main holds side-effect authority for this PTY's bytes, the

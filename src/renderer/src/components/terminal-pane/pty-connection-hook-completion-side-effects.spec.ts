@@ -600,5 +600,63 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         expect.any(Function)
       )
     })
+
+    it.each(['working', 'removed'])(
+      'cancels a scheduled waiting notification when agent status becomes %s during the grace window',
+      async (nextStatus) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('tab-pty')
+        transportFactoryQueue.push(transport)
+        enableActiveRuntimeEnvironment()
+        vi.useFakeTimers()
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        const pane = createPane(1)
+        const manager = createManager(1)
+        const deps = createDeps()
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        const statusHandler = createdTransportOptions[0]?.onAgentStatus
+        const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+        if (typeof statusHandler !== 'function' || !bellHandler) {
+          throw new Error('Expected hook status and bell handlers to be registered')
+        }
+
+        statusHandler({
+          state: 'working',
+          prompt: 'approve the tool call',
+          agentType: 'claude'
+        })
+        bellHandler()
+        statusHandler({
+          state: 'waiting',
+          prompt: 'approve the tool call',
+          agentType: 'claude',
+          toolName: 'Shell',
+          toolInput: 'git status'
+        })
+        bellHandler()
+
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
+
+        if (nextStatus === 'removed') {
+          delete mockStoreState.agentStatusByPaneKey[paneKey]
+        } else {
+          statusHandler({
+            state: 'working',
+            prompt: 'approve the tool call',
+            agentType: 'claude',
+            toolName: 'Shell',
+            toolInput: 'git status'
+          })
+        }
+        notifyStoreSubscribers()
+        vi.advanceTimersByTime(1)
+        vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      }
+    )
   })
 }

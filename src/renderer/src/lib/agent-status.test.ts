@@ -234,6 +234,28 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('android permission check')).toBeNull()
   })
 
+  it.each(['Antigravity - fix permission bug', 'agy waiting for CI', 'agy action required'])(
+    'keeps Antigravity conversation status words inert in %j',
+    (title) => {
+      expect(detectAgentStatusFromTitle(title)).not.toBe('permission')
+    }
+  )
+
+  it.each(['~/codex/permission', 'codex permission-check', 'claude awaiting'])(
+    'does not treat a path or hyphenated permission substring as permission in %j',
+    (title) => {
+      expect(detectAgentStatusFromTitle(title)).not.toBe('permission')
+    }
+  )
+
+  it('keeps a Claude mention inside an Antigravity summary idle', () => {
+    expect(detectAgentStatusFromTitle('Antigravity - Fix Claude permission bug')).toBe('idle')
+  })
+
+  it('does not treat a permission path segment after the keyword as permission', () => {
+    expect(detectAgentStatusFromTitle('codex permission/notes')).toBe('idle')
+  })
+
   it('does not treat path fragments containing Hermes as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/hermes/working')).not.toBe('working')
     expect(detectAgentStatusFromTitle('C:\\hermes\\ready')).toBeNull()

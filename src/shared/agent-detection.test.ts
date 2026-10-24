@@ -268,6 +268,36 @@ describe('Pi-compatible title detection', () => {
   )
 })
 
+describe('permission keyword boundaries', () => {
+  it.each(['Antigravity - fix permission bug', 'agy waiting for CI', 'agy action required'])(
+    'keeps Antigravity conversation status words inert in %j',
+    (title) => {
+      expect(detectAgentStatusFromTitle(title)).not.toBe('permission')
+    }
+  )
+
+  it.each([
+    '~/codex/permission',
+    'C:\\codex\\permission',
+    'codex permission-check',
+    'claude awaiting'
+  ])('does not treat a path or hyphenated permission substring as permission in %j', (title) => {
+    expect(detectAgentStatusFromTitle(title)).not.toBe('permission')
+  })
+
+  it('still classifies a real permission prompt when another agent shares an agy title', () => {
+    expect(detectAgentStatusFromTitle('agy | claude - action required')).toBe('permission')
+  })
+
+  it('keeps a Claude mention inside an Antigravity summary idle', () => {
+    expect(detectAgentStatusFromTitle('Antigravity - Fix Claude permission bug')).toBe('idle')
+  })
+
+  it('does not treat a permission path segment after the keyword as permission', () => {
+    expect(detectAgentStatusFromTitle('codex permission/notes')).toBe('idle')
+  })
+})
+
 describe('Cursor agent title identity', () => {
   // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
   // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
