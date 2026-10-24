@@ -119,7 +119,12 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
 /** The turn text the structured lane sends a chat for one message on `mailbox`. */
 async function renderChatPointer(mailbox: string): Promise<string> {
   const texts: string[] = []
-  const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
+  const message = db.insertMessage({
+    from: 'term_peer',
+    to: mailbox,
+    subject: 'hi',
+    priority: 'high'
+  })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
     getDb: () => db,
     getMessageWaiters: () => undefined,

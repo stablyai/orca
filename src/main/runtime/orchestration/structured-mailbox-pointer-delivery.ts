@@ -20,63 +20,28 @@ import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import {
-  resolveStructuredPointerOperation,
-  type StructuredPointerSubmission
-} from './structured-pointer-operation-id'
+import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
 import { structuredMailSource } from './structured-mail-source'
 import type { SenderNameResolver } from './agent-message-sender'
+import { CoordinatorMailBatcher } from './coordinator-mail-batcher'
 import {
   retainReasonForDispatch,
   structuredDispatchDelivered,
-  type StructuredDispatchState,
   type StructuredPointerRetainReason
 } from './structured-session-pointer-delivery'
 
-export type StructuredPointerTarget = {
-  sessionId: string
-  /**
-   * The dispatch whose mailbox this is, or null for direct peer mail addressed to the worker's own
-   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only names
-   * the caller on the operation row and the mail's source — so a worker between dispatches is
-   * nudged, not dropped.
-   */
-  dispatchId: string | null
-}
-
-type ParkedPointerDelivery = {
-  sessionId: string
-  reservedTypes: ReadonlySet<string> | undefined
-}
-
-export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
-  | { kind: 'held' }
-  /** The chat's queue took it, as it takes a person's message. */
-  | { kind: 'queued' }
-  | { kind: 'unattached' }
-
-export type StructuredPointerSessionFacts = {
-  /** Current-context sends, oldest first: what the lane's own sends settled as. */
-  submissions: readonly StructuredPointerSubmission[]
-}
-
-export type StructuredMailboxPointerHost = {
-  /** `null` when the session cannot be read. */
-  readSessionFacts: (sessionId: string) => Promise<StructuredPointerSessionFacts | null>
-  hasActionablePromptNow: (sessionId: string) => boolean | null
-  send: (input: {
-    sessionId: string
-    dispatchId: string | null
-    operationId: string
-    expectedRuntimeFence: number
-    /** Names its senders as `from`. */
-    body: AgentJournalMessageItem
-  }) => Promise<StructuredPointerSendOutcome>
-  /** Current lease fence; `null` when no record backs the session any more. */
-  currentFence: (sessionId: string) => number | null
-  currentContextClearOperationId: (sessionId: string) => string | undefined
-}
+import type {
+  ParkedPointerDelivery,
+  StructuredPointerTarget,
+  StructuredPointerSessionFacts,
+  StructuredMailboxPointerHost
+} from './structured-mailbox-pointer-host-types'
+export type {
+  StructuredPointerTarget,
+  StructuredPointerSendOutcome,
+  StructuredPointerSessionFacts,
+  StructuredMailboxPointerHost
+} from './structured-mailbox-pointer-host-types'
 
 type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   getDb: () => OrchestrationDb | null
@@ -117,6 +82,13 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   /** The operation id this lane last sent per mailbox: a row holding any other id outlived the
    *  process that minted it. A fact, not a clock reading, so no clock step can fake it. */
   private readonly sentOperationIds = new Map<string, string>()
+  private readonly coordinatorBatches = new CoordinatorMailBatcher((mailboxHandle, sessionId) => {
+    const target = this.deps.resolveStructuredTarget(mailboxHandle)
+    if (!target || target.sessionId !== sessionId) {
+      return
+    }
+    void this.deliver(mailboxHandle, target, undefined, new Set(), true).catch(() => undefined)
+  })
 
   constructor(private readonly deps: StructuredPointerDeliveryDependencies<TWaiter>) {}
 
@@ -157,6 +129,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
    * prune — and null for every sibling the runtime momentarily cannot resolve either.
    */
   forgetSession(sessionId: string): void {
+    this.coordinatorBatches.forgetSession(sessionId)
     for (const [mailboxHandle, parked] of Array.from(this.parkedUntilJournalEdge)) {
       if (parked.sessionId === sessionId) {
         this.parkedUntilJournalEdge.delete(mailboxHandle)
@@ -164,11 +137,16 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
   }
 
+  clearPendingBatches(): void {
+    this.coordinatorBatches.clear()
+  }
+
   private async deliver(
     mailboxHandle: string,
     target: StructuredPointerTarget,
     reservedTypes?: ReadonlySet<string>,
-    attemptedContexts = new Set<string>()
+    attemptedContexts = new Set<string>(),
+    flushCoordinatorBatch = false
   ): Promise<void> {
     if (this.inFlight.has(mailboxHandle)) {
       return
@@ -194,6 +172,13 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         if (unread.length === 0) {
           return
         }
+        if (
+          !flushCoordinatorBatch &&
+          this.coordinatorBatches.defer(mailboxHandle, current.sessionId, unread)
+        ) {
+          return
+        }
+        flushCoordinatorBatch = false
         this.parkedUntilJournalEdge.set(mailboxHandle, {
           sessionId: current.sessionId,
           reservedTypes: currentReservedTypes
