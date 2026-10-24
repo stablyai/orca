@@ -218,6 +218,7 @@ export function GeneralWorkspaceSettingsSection({
             'launcher',
             'cursor',
             'zed',
+            'antigravity',
             'command',
             'vscode',
             'finder',
