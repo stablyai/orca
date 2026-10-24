@@ -1,4 +1,5 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import { commitLeafMoveAndRekey } from '../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod } from '../core'
 import {
@@ -8,6 +9,7 @@ import {
 import { projectSessionTabsForClient } from './session-tabs-inventory'
 import {
   ActivateTab,
+  MovePaneToNewTab,
   MoveTab,
   SetTabProps,
   UpdatePaneLayout
@@ -103,6 +105,30 @@ export const SESSION_TAB_MUTATION_METHODS = [
         titlesByLeafId: params.titlesByLeafId,
         renamedLeafIds: params.renamedLeafIds
       })
+    }
+  }),
+  defineMethod({
+    name: 'session.tabs.movePaneToNewTab',
+    permission: 'workspace',
+    params: MovePaneToNewTab,
+    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+      await assertVisibleMutationTab(
+        runtime,
+        params.worktree,
+        params.sourceTabId,
+        pairedDeviceId,
+        clientKind,
+        clientCapabilities
+      )
+      return runtime.moveMobileSessionLeafToNewTab(
+        params.worktree,
+        {
+          sourceTabId: params.sourceTabId,
+          targetTabId: params.targetTabId,
+          leafId: params.leafId
+        },
+        (move) => commitLeafMoveAndRekey({ store: runtime.requireStore(), runtime }, move)
+      )
     }
   }),
   defineMethod({

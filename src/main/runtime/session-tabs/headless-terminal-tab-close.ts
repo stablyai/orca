@@ -11,6 +11,11 @@ import type {
 } from '../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from '../mobile-session-layout-projection'
+import {
+  isTerminalLeafMoveRequest,
+  type TerminalLeafMoveRequest,
+  type TerminalLeafMoveResult
+} from '../../../shared/terminal-leaf-move'
 import { paneTitlesForDesktopWindow } from './desktop-pane-title-forwarding'
 import { appendRetiredTerminalSurfaceProofs } from '../../../shared/terminal-retirement-proof-ledger'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
@@ -266,5 +271,32 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       })
     }
     return { updated: true }
+  }
+
+  // Why: a client's pane-to-new-tab move must reach the host session or the next snapshot rebuilds
+  // the old tab. A window-owned host keeps its layout in the renderer, so only headless hosts commit.
+  async moveMobileSessionLeafToNewTab(
+    worktreeSelector: string,
+    args: { sourceTabId: string; targetTabId: string; leafId: string },
+    commit: (move: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
+  ): Promise<TerminalLeafMoveResult> {
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    if (this.getAvailableAuthoritativeWindow()) {
+      return { status: 'not_held' }
+    }
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    // Why: the client's pty id mirrors a host handle; the host names its own bound pty.
+    const move = { ...args, worktreeId, ptyId: null }
+    if (!isTerminalLeafMoveRequest(move)) {
+      return { status: 'refused', reason: 'invalid_request' }
+    }
+    const result = await commit(move)
+    if (result.status === 'moved') {
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
+      this.notifyMobileSessionTabsChanged(worktreeId)
+    }
+    return result
   }
 }
