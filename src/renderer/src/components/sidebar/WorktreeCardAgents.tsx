@@ -189,9 +189,24 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
-  }, [])
+  const handleActivateRetainedAgent = useCallback(
+    (tabId: string, paneKey: string) => {
+      const parsed = parsePaneKey(paneKey)
+      if (!parsed || parsed.tabId !== tabId) {
+        return
+      }
+      const state = useAppStore.getState()
+      // Why: retained status can outlive live status while its terminal still exists; only reveal an existing pane, never resume a sleeping session.
+      if (
+        !state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) ||
+        !state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[parsed.leafId]
+      ) {
+        return
+      }
+      handleActivateAgentTab(tabId, paneKey)
+    },
+    [handleActivateAgentTab, worktreeId]
+  )
 
   // Why: one 30s tick per non-empty inline list; zero-agent cards never mount this (see WorktreeCardAgents), so idle worktrees pay no timer cost.
   const now = useNow(30_000)
