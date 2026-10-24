@@ -79,7 +79,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent',
-    chat
+    chat,
+    coordinatorHandle: params.coordinatorHandle,
+    taskId: params.taskId
   })
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
@@ -197,17 +199,42 @@ work under the new Dispatch; ignore stale follow-ups from the settled task.`
 function buildPostWorkerDoneInstructions({
   cli,
   workerKind,
-  chat
+  chat,
+  coordinatorHandle,
+  taskId
 }: {
   cli: string
   workerKind: NonNullable<PreambleParams['workerKind']>
   chat: boolean
+  coordinatorHandle: string
+  taskId: string
 }): string {
+  // Why: worker_done only persists to the coordinator inbox; idle coordinators
+  // are not auto-woken (#8698). Without one terminal-send wake, compliant
+  // workers leave the coordinator asleep indefinitely (#9968).
+  // A session address is not a terminal handle, so terminal send would miss it.
+  const wakeLine = isSessionHandle(coordinatorHandle)
+    ? null
+    : `${cli} terminal send --terminal ${coordinatorHandle} --text "[wake] task ${taskId} done — check inbox" --enter`
+
   // Why: re-dispatch reaches idle agents as new input; inbox polling
   // after completion cannot receive that new TASK block and looks hung.
   // Why chat first: a chat has no shell to exit, whatever workerKind says.
   if (workerKind === 'bare-shell' && !chat) {
-    return `=== AFTER YOU SEND worker_done ===
+    return wakeLine
+      ? `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete.
+First, send exactly one wake line so the coordinator sees the completion:
+\`${wakeLine}\`
+Then stop and take no further actions — do NOT start new or unrelated work,
+do NOT run a sleep/poll loop, do NOT send additional wake messages, and
+do NOT keep calling \`${cli} orchestration check\`.
+
+Exit the shell after that single wake. Bare-shell workers have no idle agent
+prompt for Orca to reuse; if the coordinator has more for you it will
+dispatch or prompt another worker with a fresh TASK block.`
+      : `=== AFTER YOU SEND worker_done ===
 
 worker_done ends your turn for this task. Your dispatched work is complete:
 stop and take no further actions — do NOT start new or unrelated work,
@@ -220,7 +247,25 @@ prompt for Orca to reuse; if the coordinator has more for you it will
 dispatch or prompt another worker with a fresh TASK block.`
   }
 
-  return `=== AFTER YOU SEND worker_done ===
+  const redispatch = chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH
+  return wakeLine
+    ? `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete.
+First, send exactly one wake line so the coordinator sees the completion:
+\`${wakeLine}\`
+Then stop, return to an idle prompt, and take no further actions — do NOT
+start new or unrelated work, do NOT run a sleep/poll loop, do NOT send
+additional wake messages, and do NOT keep calling
+\`${cli} orchestration check\`.
+
+A direct instruction from the user takes precedence over this idle rule.
+Treat it as new user-owned work: follow it without coordinator approval or a
+fresh Dispatch, and do not send lifecycle messages using the settled task or
+Dispatch IDs. Never refuse a direct user request because you were a worker.
+
+${redispatch}`
+    : `=== AFTER YOU SEND worker_done ===
 
 worker_done ends your turn for this task. Your dispatched work is complete:
 stop, return to an idle prompt, and take no further actions — do NOT start
@@ -233,7 +278,7 @@ Treat it as new user-owned work: follow it without coordinator approval or a
 fresh Dispatch, and do not send lifecycle messages using the settled task or
 Dispatch IDs. Never refuse a direct user request because you were a worker.
 
-${chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH}`
+${redispatch}`
 }
 
 // Why the whole section is omitted rather than softened when nesting is off: a
