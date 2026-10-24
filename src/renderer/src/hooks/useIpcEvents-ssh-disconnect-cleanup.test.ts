@@ -182,6 +182,7 @@ describe('useIpcEvents updater integration', () => {
           onSwitchTabAcrossAllTypes: () => () => {},
           onSwitchRecentTab: () => () => {},
           onSwitchTerminalTab: () => () => {},
+          onFocusTabGroup: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},

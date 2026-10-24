@@ -255,6 +255,7 @@ export async function useIpcEventsForCloseRouting({
         onSwitchTabAcrossAllTypes: () => () => {},
         onSwitchRecentTab: () => () => {},
         onSwitchTerminalTab: () => () => {},
+        onFocusTabGroup: () => () => {},
         onToggleStatusBar: () => () => {},
         onFullscreenChanged: () => () => {},
         onTerminalZoom: () => () => {},

@@ -4,6 +4,7 @@ import {
 } from '../../shared/window-shortcut-policy'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { matchTabGroupFocusDirection } from '../../shared/workspace-layout/tab-group-neighbor'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
 import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
@@ -117,6 +118,11 @@ export function forwardGuestShortcutInput(
   }
   // Route floating guests to their own workspace for close/index shortcuts.
   const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
+  const tabGroupFocusDirection = isFloatingGuest
+    ? null
+    : matchTabGroupFocusDirection((actionId) =>
+        keybindingMatchesAction(actionId, input, process.platform, keybindings)
+      )
   if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
     renderer.send('ui:newBrowserTab')
   } else if (
@@ -167,6 +173,9 @@ export function forwardGuestShortcutInput(
       // Guest focus may leave active-tab state stale in splits; close by source ID.
       renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
     }
+  } else if (tabGroupFocusDirection) {
+    // Why: a focused guest swallows the chord before the renderer's window keydown can move group focus.
+    renderer.send('ui:focusTabGroup', tabGroupFocusDirection)
   } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
     renderer.send('ui:switchTab', 1)
   } else if (
