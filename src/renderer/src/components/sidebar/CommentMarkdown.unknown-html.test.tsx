@@ -119,6 +119,28 @@ describe('CommentMarkdown unknown HTML as text', () => {
     expect(markup).not.toContain('<script')
   })
 
+  it('escapes only the unknown tags in an HTML block that mixes allowed and unknown tags', () => {
+    const markup = renderChat(
+      '<details>\n<summary>More</summary>\n<se-tabs>x</se-tabs> <!-- <Button /> --> <kbd>K</kbd>\n</details>'
+    )
+
+    expect(markup).toContain('<details>')
+    expect(markup).toContain('<summary>More</summary>')
+    expect(markup).toContain('&lt;se-tabs&gt;x&lt;/se-tabs&gt;')
+    expect(markup).toContain('<kbd>K</kbd>')
+    expect(markup).not.toContain('Button')
+  })
+
+  it('keeps an unknown tag inert inside a mixed HTML block', () => {
+    const markup = renderChat('<div>\n<iframe srcdoc="<script>alert(1)</script>"></iframe>\n</div>')
+
+    expect(markup).toContain(
+      '&lt;iframe srcdoc=&quot;&lt;script&gt;alert(1)&lt;/script&gt;&quot;&gt;'
+    )
+    expect(markup).not.toContain('<iframe')
+    expect(markup).not.toContain('<script')
+  })
+
   it('still renders an allowed disclosure', () => {
     const markup = renderChat('<details><summary>More</summary>\n\nbody\n\n</details>')
 
