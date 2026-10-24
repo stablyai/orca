@@ -203,8 +203,10 @@ ORCA terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
 ORCA terminal create --json
 ORCA terminal create --title "Worker" --json
 ORCA terminal create --worktree active --command "pnpm dev" --json
+ORCA terminal create --worktree active --env APP_MODE=test --env LABEL="two words" --command "pnpm dev" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
+ORCA terminal split --terminal <handle> --env APP_MODE=test --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
 ORCA terminal set-pane-title --terminal <handle> --title "REVIEWER" --json
 ORCA terminal switch --terminal <handle> --json
