@@ -12,7 +12,7 @@ import {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Kitty virtual placement lifecycle', () => {
-  it('keeps alternate-buffer prototypes across ordinary image placement and releases them on exit', async () => {
+  it('keeps alternate-buffer prototypes across ordinary image placement and releases their pixels on exit', async () => {
     const h = createPlaceholderTerminal()
     try {
       await write(h.terminal, '\x1b[?1049h')
@@ -23,7 +23,7 @@ describe('Kitty virtual placement lifecycle', () => {
       expect(render(h).filter((call) => call[0] === virtual)).toHaveLength(2)
       await write(h.terminal, '\x1b[?1049l')
       expect(h.storage._images.size).toBe(0)
-      expect(h.kitty._virtualPlacements.size).toBe(0)
+      expect(h.kitty._virtualPlacements.size).toBe(1)
       expect(virtual.close).toHaveBeenCalledOnce()
     } finally {
       h.terminal.dispose()

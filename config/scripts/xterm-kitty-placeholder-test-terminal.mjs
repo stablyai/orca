@@ -20,7 +20,7 @@ export class TrackedBitmap {
   }
 }
 
-export function createPlaceholderTerminal() {
+export function createPlaceholderTerminal(options = {}) {
   const bitmaps = []
   const decode = vi.fn(async () => {
     const bitmap = new TrackedBitmap()
@@ -36,7 +36,8 @@ export function createPlaceholderTerminal() {
   const addon = new ImageAddon({
     enableSizeReports: false,
     storageLimit: 32,
-    kittySizeLimit: 8 * 1024 * 1024
+    kittySizeLimit: 8 * 1024 * 1024,
+    ...options
   })
   terminal.loadAddon(addon)
   const renderer = addon._renderer

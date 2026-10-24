@@ -1,3 +1,9 @@
+import {
+  bindTerminalKittyReplayReset,
+  readTerminalKittyImage,
+  saveTerminalKittyImage,
+  type KittyImageSnapshot
+} from './terminal-kitty-replay-cache'
 import type { ImageAddon } from '@xterm/addon-image'
 import type { Terminal } from '@xterm/xterm'
 import type { KittyFileRequest } from './terminal-kitty-file-reader'
@@ -20,6 +26,7 @@ const panesAwaitingImageAddon = new Set<ManagedPaneInternal>()
 // Keyed on the terminal, not the pane: PTY connections hold a toPublicPane()
 // wrapper, which does not carry imageAddon.
 const terminalsRenderingInlineImages = new WeakSet<Terminal>()
+const replayCleanup = new WeakMap<ManagedPaneInternal, () => void>()
 const imageRepaintByPane = new WeakMap<ManagedPaneInternal, { dispose(): void }>()
 
 /** True only once the addon is really attached — not while its chunk loads or after it fails. */
@@ -63,11 +70,20 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
   try {
     const options = {
       ...buildInlineImageAddonOptions(),
-      readKittyFile: (request: KittyFileRequest) => readTerminalKittyFile(pane.terminal, request)
+      readKittyFile: (request: KittyFileRequest) => readTerminalKittyFile(pane.terminal, request),
+      readKittyImage: (id: number) => readTerminalKittyImage(pane.terminal, id),
+      onKittyImageChanged: (id: number, snapshot?: KittyImageSnapshot) =>
+        saveTerminalKittyImage(pane.terminal, id, snapshot)
     }
     imageAddon = new ImageAddonConstructor(options)
     pane.terminal.loadAddon(imageAddon)
     pane.imageAddon = imageAddon
+    replayCleanup.set(
+      pane,
+      bindTerminalKittyReplayReset(pane.terminal, () => {
+        pane.imageAddon?.reset()
+      })
+    )
     const repaint = repaintTerminalAfterImageAdded(pane.terminal, imageAddon)
     if (repaint) {
       imageRepaintByPane.set(pane, repaint)
@@ -91,6 +107,8 @@ export function detachInlineImages(pane: ManagedPaneInternal): void {
   panesAwaitingImageAddon.delete(pane)
   pane.imageAttachmentDeferred = false
   terminalsRenderingInlineImages.delete(pane.terminal)
+  replayCleanup.get(pane)?.()
+  replayCleanup.delete(pane)
   imageRepaintByPane.get(pane)?.dispose()
   imageRepaintByPane.delete(pane)
   if (pane.imageAddon) {
