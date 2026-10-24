@@ -18,7 +18,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function visitOf(
   worktreeId: string,
   executionHost: string | undefined,
-  paneKey?: string
+  paneKey?: string,
+  inSession?: boolean
 ): LastVisitedWorktreeOnHost {
   const server = routeExecutionHostOf(executionHost)
   const normalizedPaneKey =
@@ -26,7 +27,8 @@ function visitOf(
   return {
     worktreeId,
     ...(server ? { executionHost: server } : {}),
-    ...(normalizedPaneKey ? { paneKey: normalizedPaneKey } : {})
+    ...(normalizedPaneKey ? { paneKey: normalizedPaneKey } : {}),
+    ...(typeof inSession === 'boolean' ? { inSession } : {})
   }
 }
 
@@ -37,7 +39,8 @@ function readEntry(value: unknown): LastVisitedWorktreeOnHost | null {
   return visitOf(
     value.worktreeId,
     typeof value.executionHost === 'string' ? value.executionHost : undefined,
-    typeof value.paneKey === 'string' ? value.paneKey : undefined
+    typeof value.paneKey === 'string' ? value.paneKey : undefined,
+    typeof value.inSession === 'boolean' ? value.inSession : undefined
   )
 }
 
@@ -79,7 +82,11 @@ export function readLastVisitedWorktreeOnHost(
 /** The stored value with `record` as the latest visit and its host's entry. */
 export function withLastVisitedWorktree(
   raw: string | null,
-  record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId; paneKey?: string }
+  record: LastVisitedWorktreeRecord & {
+    executionHost?: ExecutionHostId
+    paneKey?: string
+    inSession?: boolean
+  }
 ): string {
   const byHost = readByHost(raw)
   const previous = readLastVisitedWorktreeRecord(raw)
@@ -88,7 +95,10 @@ export function withLastVisitedWorktree(
   }
   // Re-inserted so the map's order is oldest visit first, which is what the cap drops.
   byHost.delete(record.hostId)
-  byHost.set(record.hostId, visitOf(record.worktreeId, record.executionHost, record.paneKey))
+  byHost.set(
+    record.hostId,
+    visitOf(record.worktreeId, record.executionHost, record.paneKey, record.inSession)
+  )
   const serialize = () =>
     JSON.stringify({
       hostId: record.hostId,
@@ -127,9 +137,13 @@ export function subscribeLastVisitedWorktree(listener: Listener): () => void {
  * load-time copy of the key could overwrite newer visits to other hosts.
  */
 export function noteLastVisitedWorktree(
-  record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId; paneKey?: string }
+  record: LastVisitedWorktreeRecord & {
+    executionHost?: ExecutionHostId
+    paneKey?: string
+    inSession?: boolean
+  }
 ): void {
-  const visited = visitOf(record.worktreeId, record.executionHost, record.paneKey)
+  const visited = visitOf(record.worktreeId, record.executionHost, record.paneKey, record.inSession)
   for (const listener of listeners) {
     listener(record.hostId, visited)
   }
@@ -144,7 +158,11 @@ let writeChain: Promise<void> = Promise.resolve()
  * straight to the store would reach the page one `init` later.
  */
 export function writeLastVisitedWorktree(
-  record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId; paneKey?: string }
+  record: LastVisitedWorktreeRecord & {
+    executionHost?: ExecutionHostId
+    paneKey?: string
+    inSession?: boolean
+  }
 ): Promise<void> {
   noteLastVisitedWorktree(record)
   // Through the path that notes on an accepted write (ruling 35); the page's adapter may refuse,

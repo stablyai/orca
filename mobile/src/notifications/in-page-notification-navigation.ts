@@ -17,6 +17,7 @@ type InPageNotificationHandler = (target: InPageNotificationTarget) => boolean
 
 const handlersByHostId = new Map<string, InPageNotificationHandler>()
 const activeInPageHostKeys = new Set<string>()
+const mountedHostBridgesByKey = new Map<string, number>()
 const ENCODED_TARGET_PREFIX = 'orca-nav:'
 let nextNavigationSeq = 0
 
@@ -96,6 +97,11 @@ export function noteInPageStorageWrite(
   if (key === LAST_VISITED_WORKTREE_STORAGE_KEY && value !== null) {
     const visited = readLastVisitedWorktreeOnHost(value, hostId)
     if (visited) {
+      if (visited.inSession === false) {
+        activeInPageHostKeys.delete(normalizeHostKey(hostId))
+        setViewingWorkspace(null)
+        return
+      }
       activeInPageHostKeys.add(normalizeHostKey(hostId))
       setViewingWorkspace({
         hostId,
@@ -109,16 +115,12 @@ export function noteInPageStorageWrite(
 
 export function noteInPageBackClaim(
   claimed: boolean,
-  routePathname: string,
-  hostId: string,
+  _routePathname: string,
+  _hostId: string,
   reportPageBackClaim: (claimed: boolean) => void,
-  setViewingWorkspace: (value: NotificationViewingWorkspace | null) => void
+  _setViewingWorkspace: (value: NotificationViewingWorkspace | null) => void
 ): void {
   reportPageBackClaim(claimed)
-  if (!claimed && isHostRouteOf(routePathname, hostId)) {
-    activeInPageHostKeys.delete(normalizeHostKey(hostId))
-    setViewingWorkspace(null)
-  }
 }
 
 export function noteInPageRouteParamClear(
@@ -154,18 +156,29 @@ export function useInPageNotificationBridge(params: {
     route,
     setViewingWorkspace
   } = params
-  const enabled =
-    pageReady &&
+  const handlesHostNavigation =
     !overlay &&
     (pageRouteWorkspace(route.pathname) !== null ||
       ownsHostArea ||
       isHostRouteOf(route.pathname, hostId))
+  const enabled = pageReady && handlesHostNavigation
   useEffect(() => {
-    return () => {
-      activeInPageHostKeys.delete(normalizeHostKey(hostId))
-      setViewingWorkspace(null)
+    if (!handlesHostNavigation) {
+      return
     }
-  }, [hostId, setViewingWorkspace])
+    const key = normalizeHostKey(hostId)
+    mountedHostBridgesByKey.set(key, (mountedHostBridgesByKey.get(key) ?? 0) + 1)
+    return () => {
+      const remaining = (mountedHostBridgesByKey.get(key) ?? 1) - 1
+      if (remaining <= 0) {
+        mountedHostBridgesByKey.delete(key)
+        activeInPageHostKeys.delete(key)
+        setViewingWorkspace(null)
+      } else {
+        mountedHostBridgesByKey.set(key, remaining)
+      }
+    }
+  }, [handlesHostNavigation, hostId, setViewingWorkspace])
   useEffect(() => {
     if (!enabled) {
       return

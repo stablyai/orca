@@ -110,6 +110,16 @@ function paneKeyMatches(actual: string | undefined, expected: string | undefined
   if (!actual || !expected) {
     return false
   }
+  if (actual.startsWith('terminal:') || expected.startsWith('terminal:')) {
+    const terminalId = (actual.startsWith('terminal:') ? actual : expected).slice(
+      'terminal:'.length
+    )
+    const other = actual.startsWith('terminal:') ? expected : actual
+    const otherColon = other.indexOf(':')
+    if (otherColon > 0 && paramMatches(terminalId, other.slice(0, otherColon))) {
+      return true
+    }
+  }
   const actualColon = actual.lastIndexOf(':')
   const expectedColon = expected.lastIndexOf(':')
   if (actualColon <= 0 || expectedColon <= 0) {

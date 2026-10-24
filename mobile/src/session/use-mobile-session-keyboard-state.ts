@@ -8,6 +8,8 @@ import { sessionTabPaneKey } from './notification-pane-tab'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
+const activeSessionMountByHostId = new Map<string, symbol>()
+
 /**
  * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
  * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
@@ -157,16 +159,47 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   const executionHost = useWorkspaceExecutionHost()
   const activeTab = scope.sessionTabs?.find((tab) => tab.id === activeSessionTabId)
   const activePaneKey = sessionTabPaneKey(activeTab)
+  const sessionMountTokenRef = useRef<symbol | null>(null)
+  if (sessionMountTokenRef.current === null) {
+    sessionMountTokenRef.current = Symbol('session-mount')
+  }
+  const latestVisitRef = useRef({ hostId, worktreeId, executionHost })
+  latestVisitRef.current = { hostId, worktreeId, executionHost }
   useEffect(() => {
     if (hostId && worktreeId) {
+      activeSessionMountByHostId.set(hostId, sessionMountTokenRef.current!)
       void writeLastVisitedWorktree({
         hostId,
         worktreeId,
         executionHost,
+        inSession: true,
         ...(activePaneKey ? { paneKey: activePaneKey } : {})
       })
     }
   }, [hostId, worktreeId, executionHost, activePaneKey])
+  useEffect(() => {
+    const token = sessionMountTokenRef.current
+    return () => {
+      const {
+        hostId: lastHostId,
+        worktreeId: lastWorktreeId,
+        executionHost: lastExecHost
+      } = latestVisitRef.current
+      if (
+        lastHostId &&
+        lastWorktreeId &&
+        activeSessionMountByHostId.get(lastHostId) === token
+      ) {
+        activeSessionMountByHostId.delete(lastHostId)
+        void writeLastVisitedWorktree({
+          hostId: lastHostId,
+          worktreeId: lastWorktreeId,
+          executionHost: lastExecHost,
+          inSession: false
+        })
+      }
+    }
+  }, [])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

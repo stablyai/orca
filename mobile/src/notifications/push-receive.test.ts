@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState } from 'react-native'
-import { setNotificationViewingWorkspace } from './notification-viewing-policy'
+import {
+  setInPageNotificationViewingWorkspace,
+  setNotificationViewingWorkspace
+} from './notification-viewing-policy'
+import { noteInPageBackClaim, noteInPageStorageWrite } from './in-page-notification-navigation'
+import { withLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import { sessionTabPaneKey } from '../session/notification-pane-tab'
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
@@ -361,4 +368,70 @@ it('shows notifications from another tab in the same workspace while suppressing
   })
   await expect(presentPane('tab-a:11111111-1111-4111-8111-111111111111')).resolves.toBe(false)
   await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(true)
+})
+
+it('keeps suppressing the active in-page tab across ready/drawer back-claim drops until leaving the session', async () => {
+  AppState.currentState = 'active'
+  const paneKey = sessionTabPaneKey({
+    type: 'terminal',
+    id: 'tab-a::leaf-1',
+    title: 'Claude',
+    terminal: 'pty-1',
+    isActive: true
+  })
+  expect(paneKey).toBe('tab-a:leaf-1')
+  const storedInSession = withLastVisitedWorktree(null, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    paneKey,
+    inSession: true
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    storedInSession,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  setNotificationViewingWorkspace(null, { preserveInPageForHostId: 'host-1' })
+  noteInPageBackClaim(
+    false,
+    '/h/host-1',
+    'host-1',
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'in-page-active',
+      notificationEpoch: 'epoch',
+      notificationSeq: 1
+    })
+  ).resolves.toBe(false)
+
+  const storedLeftSession = withLastVisitedWorktree(storedInSession, {
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    inSession: false
+  })
+  noteInPageStorageWrite(
+    'host-1',
+    LAST_VISITED_WORKTREE_STORAGE_KEY,
+    storedLeftSession,
+    () => {},
+    setInPageNotificationViewingWorkspace
+  )
+  await expect(
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      paneKey: 'tab-a:leaf-1',
+      notificationId: 'in-page-left',
+      notificationEpoch: 'epoch',
+      notificationSeq: 2
+    })
+  ).resolves.toBe(true)
 })

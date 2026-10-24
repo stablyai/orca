@@ -10,6 +10,8 @@ export type LastVisitedWorktreeOnHost = {
   executionHost?: ExecutionHostId
   /** Active pane key within the workspace so foreground notification suppression only mutes the currently viewed tab. */
   paneKey?: string
+  /** False when the user backed out of the session route to the host worktree list. */
+  inSession?: boolean
 }
 
 /** The route's server for a row, as the host list routes it: only a `runtime:` host is named. */

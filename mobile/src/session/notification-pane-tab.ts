@@ -12,6 +12,17 @@ import type { MobileSessionTab } from './mobile-session-route-types'
  * import its native neighbour by name: the bundler's `resolveExtensions` answers
  * `./use-notification-pane-navigation` with the `.web.ts` file, so that import is the file itself.
  */
+function splitTerminalTabId(id: string): { parentTabId: string; leafId: string } | null {
+  const index = id.indexOf('::')
+  if (index <= 0 || index + 2 >= id.length) {
+    return null
+  }
+  return {
+    parentTabId: id.slice(0, index),
+    leafId: id.slice(index + 2)
+  }
+}
+
 export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: string) {
   const pane = parsePaneKey(paneKey)
   if (!pane) {
@@ -19,7 +30,13 @@ export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: 
   }
   return tabs.find((tab) => {
     if (tab.type === 'terminal') {
-      return (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
+      if (tab.agentStatus?.paneKey === paneKey) {
+        return true
+      }
+      const split = splitTerminalTabId(tab.id)
+      const tabId = tab.parentTabId ?? split?.parentTabId ?? tab.id
+      const leafId = tab.leafId ?? split?.leafId
+      return tabId === pane.tabId && (leafId === undefined || leafId === pane.leafId)
     }
     if (tab.type === 'agent-session') {
       const expectedPaneKey = structuredAgentSessionPaneKey(
@@ -41,8 +58,13 @@ export function sessionTabPaneKey(tab: MobileSessionTab | undefined): string | u
     return undefined
   }
   if (tab.type === 'terminal') {
-    const tabId = tab.parentTabId ?? tab.id
-    return tabId && tab.leafId ? `${tabId}:${tab.leafId}` : `terminal:${tab.id}`
+    if (tab.agentStatus?.paneKey) {
+      return tab.agentStatus.paneKey
+    }
+    const split = splitTerminalTabId(tab.id)
+    const tabId = tab.parentTabId ?? split?.parentTabId ?? tab.id
+    const leafId = tab.leafId ?? split?.leafId
+    return tabId && leafId ? `${tabId}:${leafId}` : `terminal:${tab.id}`
   }
   if (tab.type === 'agent-session') {
     return structuredAgentSessionPaneKey(
