@@ -114,6 +114,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** Wall clock for the recorded title; absent on older or unobserved records. */
+  titleObservedAtEpochMs?: number | null
   /** The name a rename gave this terminal: display only, never title evidence (#20626). */
   manualTitle?: string | null
   lastOutputAt: number | null

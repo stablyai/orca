@@ -4,6 +4,7 @@ import {
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
 import {
+  agentStatusAuthorityObservedAt,
   pickHostTurnEnd,
   type AgentStatusEntry,
   type AgentStatusIpcPayload
@@ -18,7 +19,7 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
   classifyAgentTitle,
-  getLatestAgentCandidateTitle,
+  getLatestAgentCandidate,
   getLatestPtyTitle,
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
@@ -31,6 +32,7 @@ type RuntimeMobileAgentStatusHost = {
   getPtyTitleObservedAtEpochMs?(ptyId: string | null): number | null
 }
 
+/** Preserve hook identity only when its source evidence outranks the selected shell title. */
 export function buildRuntimeMobileAgentStatus(
   pty: RuntimePtyWorktreeRecord | null,
   tab: RuntimeMobileSessionTerminalTab,
@@ -59,17 +61,30 @@ export function buildRuntimeMobileAgentStatus(
       : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
-  const ptyTitle = pty
-    ? getLatestAgentCandidateTitle(
-        { title: pty.title, updatedAt: pty.titleUpdatedAt },
-        { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
+  const titleCandidate = pty
+    ? getLatestAgentCandidate(
+        {
+          title: pty.title,
+          updatedAt: pty.titleUpdatedAt,
+          observedAtEpochMs: pty.titleObservedAtEpochMs ?? null
+        },
+        {
+          title: pty.lastOscTitle,
+          updatedAt: pty.lastOscTitleAt,
+          observedAtEpochMs: pty.lastOscTitleEpochMs
+        }
       )
     : leaf
-      ? getLatestAgentCandidateTitle(
-          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-          { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+      ? getLatestAgentCandidate(
+          { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt, observedAtEpochMs: null },
+          {
+            title: leaf.lastOscTitle,
+            updatedAt: leaf.lastOscTitleAt,
+            observedAtEpochMs: host.getPtyTitleObservedAtEpochMs?.(leaf.ptyId) ?? null
+          }
         )
       : null
+  const ptyTitle = titleCandidate?.title?.trim() || null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
   if (nonAgentTitle) {
@@ -80,6 +95,10 @@ export function buildRuntimeMobileAgentStatus(
       // Why: a pending question is never inherited across hook events (unlike
       // `toolName`), so it proves the agent is parked on a selector right now.
       hookRow.live?.payload.interactivePrompt != null ||
+      // A first-turn hook can arrive while the pre-launch shell title is still painted.
+      (hookRow.live?.payload.agentType != null &&
+        titleCandidate?.observedAtEpochMs != null &&
+        agentStatusAuthorityObservedAt(hookRow.live) > titleCandidate.observedAtEpochMs) ||
       // Why: headless serve has no renderer to retain an OSC row, so hook evidence is the
       // only signal a hook-only pane can offer, and an agent that reports over HTTP need
       // never set a title this gate would recognize. With PTY status, only a shell or

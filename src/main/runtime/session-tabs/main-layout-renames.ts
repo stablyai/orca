@@ -78,7 +78,9 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
   /** A manual name outranks later agent titles, which win by timestamp, so it is the freshest. */
   private stampManualTitle(pty: RuntimePtyWorktreeRecord, title: string | null): void {
     pty.title = title
-    pty.titleUpdatedAt = Date.now()
+    const observedAtEpochMs = Date.now()
+    pty.titleUpdatedAt = observedAtEpochMs
+    pty.titleObservedAtEpochMs = title ? observedAtEpochMs : null
     this.touchMobileSessionSnapshotsForPty(pty.ptyId)
   }
 

@@ -22,10 +22,7 @@ import {
 import { isImageSourceUserTurn } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-/** The centered empty-state copy for a chat with no messages, mirroring the
- *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
- *  stay in lockstep. Returns null when the list should stay bare (idle, or the
- *  loading spinner owns the view). */
+/** Keep an empty mobile conversation bare; reserve centered copy for read errors. */
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
@@ -33,13 +30,10 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // No conversation found yet: the agent has not reported one, or its file is unwritten. That is
-    // a new chat or one whose history the host cannot see, so it promises neither.
     case 'waiting-session':
     case 'awaiting-transcript':
-      return formatNativeChatEmptyStateCopy('notFound', agentLabel)
     case 'ready':
-      return formatNativeChatEmptyStateCopy('empty', agentLabel)
+      return null
     case 'error': {
       const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: error } : copy

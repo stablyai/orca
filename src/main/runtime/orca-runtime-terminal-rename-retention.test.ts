@@ -14,6 +14,7 @@ import {
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst, committingSpawn } from './bind-first-pane.test-fixture'
+import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -301,4 +302,173 @@ describe('terminal query erased boundary regressions', () => {
     await expect(runtime.remove('ssh-host')).rejects.toThrow('PTY provider unavailable')
     expect(runtime.providerReads).not.toHaveBeenCalled()
   })
+})
+
+describe('recorded PTY title observation time', () => {
+  it('dates the selected title independently from an older OSC title on create and update', () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Shared fixture implements RuntimeStore; its legacy Mock typing loses callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    try {
+      const pty = runtime['recordPtyWorktree']('title-clock-pty', TEST_WORKTREE_ID, {
+        title: 'zsh'
+      })
+      expect(pty.titleObservedAtEpochMs).toBe(1_800_000_000_000)
+      pty.lastOscTitle = 'zsh'
+      pty.lastOscTitleEpochMs = 1_799_999_999_000
+      const previousSequence = pty.titleUpdatedAt
+      now.mockReturnValue(1_800_000_001_000)
+
+      runtime['recordPtyWorktree']('title-clock-pty', TEST_WORKTREE_ID, { title: 'bash' })
+
+      expect(pty.title).toBe('bash')
+      expect(pty.titleUpdatedAt).toBeGreaterThan(previousSequence ?? 0)
+      expect(pty.titleObservedAtEpochMs).toBe(1_800_000_001_000)
+      expect(pty.lastOscTitleEpochMs).toBe(1_799_999_999_000)
+    } finally {
+      now.mockRestore()
+    }
+  })
+})
+
+describe('replayed recorded PTY titles', () => {
+  it('preserves first-turn transcript identity when reconciliation repeats the same shell title', () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Shared fixture implements RuntimeStore; its legacy Mock typing loses callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+    const titleTime = 1_800_000_000_000
+    const hookTime = titleTime + 1_000
+    const providerSession = { key: 'session_id' as const, id: 'reconciled-first-turn' }
+    const now = vi.spyOn(Date, 'now').mockReturnValue(titleTime)
+    try {
+      const pty = runtime['recordPtyWorktree']('title-replay-pty', TEST_WORKTREE_ID, {
+        title: 'zsh'
+      })
+      pty.lastAgentStatus = 'idle'
+      const originalSequence = pty.titleUpdatedAt
+      now.mockReturnValue(hookTime + 1_000)
+
+      runtime['recordPtyWorktree']('title-replay-pty', TEST_WORKTREE_ID, { title: 'zsh' })
+
+      const result = buildRuntimeMobileAgentStatus(
+        pty,
+        {
+          type: 'terminal',
+          id: 'tab::leaf',
+          parentTabId: 'tab',
+          leafId: 'leaf',
+          title: 'Terminal',
+          isActive: true
+        },
+        'term-replay',
+        null,
+        () => [
+          {
+            paneKey: 'tab:leaf',
+            state: 'done',
+            prompt: '',
+            agentType: 'codex',
+            connectionId: null,
+            receivedAt: hookTime,
+            evidenceObservedAt: hookTime,
+            providerSession
+          }
+        ],
+        { getPaneKey: () => 'tab:leaf', getLeaf: () => null, getTrackedTitle: () => null }
+      )
+      expect(result.agentStatus?.providerSession).toEqual(providerSession)
+      expect(pty.titleUpdatedAt).toBe(originalSequence)
+      expect(pty.titleObservedAtEpochMs).toBe(titleTime)
+    } finally {
+      now.mockRestore()
+    }
+  })
+})
+
+describe('title evidence received before terminal spawn resolves', () => {
+  it.each(['none', 'recorded', 'osc'] as const)(
+    'preserves first-turn identity and %s title evidence across spawn completion',
+    async (observation) => {
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+        makeWorkspaceSessionWithHeadlessTerminal()
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Shared fixture implements RuntimeStore; its legacy Mock typing loses callable signatures.
+      const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+      const launchTime = 1_800_000_000_000
+      const hookTime = launchTime + 2_000
+      const providerSession = { key: 'session_id' as const, id: 'spawn-first-turn' }
+      const now = vi.spyOn(Date, 'now').mockReturnValue(launchTime)
+      runtime.setPtyController({
+        spawn: vi.fn(
+          committingSpawn(runtime, async () => {
+            now.mockReturnValue(launchTime + 1_000)
+            const pty = runtime['recordPtyWorktree'](
+              'spawn-title-pty',
+              TEST_WORKTREE_ID,
+              observation === 'recorded' ? { title: 'bash' } : {}
+            )
+            if (observation === 'osc') {
+              runtime['applyTrackedPtyTitle']('spawn-title-pty', 'bash', 'bash')
+            }
+            pty.lastAgentStatus = 'idle'
+            now.mockReturnValue(hookTime + 1_000)
+            return { id: 'spawn-title-pty' }
+          })
+        ),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      try {
+        const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+          title: 'zsh',
+          tabId: 'host-tab',
+          leafId: HEADLESS_LEAF_ID
+        })
+        const pty = runtime['ptysById'].get('spawn-title-pty')!
+        const result = buildRuntimeMobileAgentStatus(
+          pty,
+          {
+            type: 'terminal',
+            id: 'host-tab::leaf',
+            parentTabId: 'host-tab',
+            leafId: HEADLESS_LEAF_ID,
+            title: 'Terminal',
+            isActive: true
+          },
+          created.handle,
+          null,
+          () => [
+            {
+              paneKey: 'host-tab:leaf',
+              state: 'done',
+              prompt: '',
+              agentType: 'codex',
+              connectionId: null,
+              receivedAt: hookTime,
+              evidenceObservedAt: hookTime,
+              providerSession
+            }
+          ],
+          { getPaneKey: () => 'host-tab:leaf', getLeaf: () => null, getTrackedTitle: () => null }
+        )
+        expect(result.agentStatus?.providerSession).toEqual(providerSession)
+        if (observation === 'recorded') {
+          expect(pty.title).toBe('bash')
+          expect(pty.titleObservedAtEpochMs).toBe(launchTime + 1_000)
+        } else if (observation === 'osc') {
+          expect(pty.lastOscTitleAt).toBeGreaterThan(pty.titleUpdatedAt ?? 0)
+        } else {
+          expect(pty.titleObservedAtEpochMs).toBe(launchTime)
+        }
+      } finally {
+        now.mockRestore()
+      }
+    }
+  )
 })

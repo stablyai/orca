@@ -23,27 +23,19 @@ function user(id: string, text: string): NativeChatMessage {
 const fold = (messages: NativeChatMessage[]) => foldMobileNativeChatMessages(messages, 'claude')
 
 describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message into a loaded, empty chat, matching desktop copy', () => {
-    expect(mobileNativeChatEmptyState('ready', 'codex')).toEqual({
-      title: 'Start a chat with Codex',
-      subtitle: 'Ask Codex to inspect code, explain output, or make a change.'
-    })
+  it('leaves a loaded, empty chat bare for its first message', () => {
+    expect(mobileNativeChatEmptyState('ready', 'codex')).toBeNull()
   })
 
   it.each(['waiting-session', 'awaiting-transcript'] as const)(
-    'says the conversation is not found yet while %s, never that the chat is new',
+    'leaves the conversation bare while %s instead of reporting missing history',
     (status) => {
-      // A chat with history whose agent reported no conversation reads the same as a new one.
-      expect(mobileNativeChatEmptyState(status, 'claude')).toEqual({
-        title: "Can't find this conversation yet",
-        subtitle:
-          'Send a message to start one, or open the terminal view to see what Claude is doing.'
-      })
+      expect(mobileNativeChatEmptyState(status, 'claude')).toBeNull()
     }
   )
 
-  it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('ready', null)?.title).toBe('Start a chat with the agent')
+  it('leaves an empty chat bare while the agent identity is unknown', () => {
+    expect(mobileNativeChatEmptyState('ready', null)).toBeNull()
   })
 
   it('prefers the provided error message over the default subtitle', () => {

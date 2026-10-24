@@ -13,6 +13,7 @@ import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
 
+  /** Create or reconcile a terminal while keeping launch-title evidence separate from OSC observations. */
   async createTerminal(
     worktreeSelector?: string,
     opts: dependencies.TerminalCreateOptions = {},
@@ -37,6 +38,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, created)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const launchTitleObservedAt = this.nextTitleObservationSequence()
+      const launchTitleObservedAtEpochMs = Date.now()
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
       // The window's latest published active group is where its reveal places the tab.
@@ -240,15 +243,12 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (pty) {
           pty.runtimeSessionOwned = true
           if (!adoptedStablePane) {
-            if (launchOpts.title) {
-              const observedAt = this.nextTitleObservationSequence()
-              pty.title = launchOpts.title
-              pty.titleUpdatedAt = observedAt
-              this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-            } else {
-              pty.title = null
-              pty.titleUpdatedAt = null
-            }
+            this.seedPtyLaunchTitle(
+              pty,
+              launchOpts.title,
+              launchTitleObservedAt,
+              launchTitleObservedAtEpochMs
+            )
             pty.launchConfig = effectiveLaunchConfig
               ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)
               : null
