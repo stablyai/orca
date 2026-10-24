@@ -1,0 +1,4 @@
+Zig is loaded lazily from shiki/langs/zig.mjs, the public entry point in the existing shiki 4.5.0 dependency. It re-exports @shikijs/langs/zig 4.5.0.
+Source: https://github.com/shikijs/shiki/tree/v4.5.0/packages/langs
+License: MIT; LICENSE.txt matches the installed package and upstream v4.5.0 LICENSE byte for byte.
+The grammar is consumed unchanged from the pinned package; no grammar source is vendored here.
