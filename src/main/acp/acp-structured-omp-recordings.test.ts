@@ -81,7 +81,11 @@ describe('OMP recordings through the adapter', () => {
         body: ask,
         fence: 1
       })
-      await waitFor(async () => expect(await turns(rig)).toHaveLength(1))
+      // A second message sent while the first prompt still runs steers it, and this recording has
+      // no cancel in it: wait for the turn to finish before the follow-up.
+      await waitFor(async () =>
+        expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
+      )
       await rig.adapter.dispatch({
         sessionId: SESSION,
         clientMessageId: 'send-2',

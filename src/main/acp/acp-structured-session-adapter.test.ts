@@ -60,6 +60,18 @@ describe('ACP structured session adapter: acquire', () => {
     })
   })
 
+  it('passes the agent own MCP servers into a new session', async () => {
+    const mcpServers = [
+      { name: 'hub', command: 'uv', args: ['run', 'hub'], env: [{ name: 'A', value: 'b' }] }
+    ]
+    const rig = await openAcpAdapterRig({
+      deps: {
+        spec: { ...GROK, mcpServers: async () => ({ servers: mcpServers, skipped: [] }) }
+      }
+    })
+    await rig.acquire()
+    expect(rig.sent('session/new')[0]?.params).toMatchObject({ mcpServers })
+  })
   it('launches without any pane identity, so the agent own status hooks stay silent', async () => {
     const record = agentSessionRecordFixture({
       sessionId: SESSION,
