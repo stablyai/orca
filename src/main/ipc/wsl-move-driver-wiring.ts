@@ -60,6 +60,7 @@ import { inspectPtyProviderProcessForRenderer } from '../providers/pty-process-i
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from './ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { wslMoveReloadableWindow } from './wsl-move-reloadable-window'
 import { setWslMoveReloadableWindow } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import {
@@ -92,7 +93,8 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
   registerWslMoveHandlers(
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
-    () => createWslMoveDriverDeps(store, runtime)
+    () => createWslMoveDriverDeps(store, runtime),
+    () => createWslMoveUndoPorts(store, app.getPath('userData'))
   )
 }
 

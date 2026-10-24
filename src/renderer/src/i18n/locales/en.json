@@ -53,6 +53,8 @@
       "useHereRefusedOk": "OK",
       "useHereSupersededBy": "{{names}} moved to the {{distro}} host after this project. Use those on this computer again first, then this project.",
       "useHereMoveRunning": "A move to the {{distro}} host is still running. Try again once it ends.",
+      "useHereHostUnreachable": "The {{distro}} host isn't answering, so Orca can't stop its copy of this project, and its agents may still be running there. Connect the host in Settings, or remove it, then try again.",
+      "useHereHostStillRunning": "The {{distro}} host's copy of this project is still running terminals, so its agents could run twice. Wait a moment, then try again.",
       "useHereFailed": "Could not bring this project back to this computer.",
       "useHereUnsavedTitle": "Save your files first",
       "useHereUnsavedDescription": "Bringing {{name}} back reloads this window. Save or close these files first: {{files}}"

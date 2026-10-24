@@ -20185,6 +20185,8 @@
       "useHereConfirm": "このコンピューターで使用",
       "useHereSuperseded": "{{distro}} ホストへの後の移動にこのプロジェクトが含まれています。先にそちらを戻してください。",
       "useHereMoveRunning": "{{distro}} ホストへの移動がまだ実行中です。終了してからもう一度お試しください。",
+      "useHereHostUnreachable": "{{distro}} ホストが応答しないため、Orca はこのプロジェクトのホスト側のコピーを停止できず、そのAgentがまだ実行中の可能性があります。設定でホストに接続するか削除してから、もう一度お試しください。",
+      "useHereHostStillRunning": "{{distro}} ホスト上のこのプロジェクトのコピーでまだターミナルが実行中のため、Agentが二重に動く可能性があります。少し待ってからもう一度お試しください。",
       "useHereFailed": "このプロジェクトをこのコンピューターに戻せませんでした。",
       "useHereUnsavedTitle": "先にファイルを保存してください",
       "useHereUnsavedDescription": "{{name}} を戻すとこのウィンドウが再読み込みされます。先に次のファイルを保存するか閉じてください: {{files}}"

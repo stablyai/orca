@@ -29,7 +29,11 @@ import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-m
 import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
-import { bringWslMovedProjectBack } from '../persistence/moving-wsl-projects/wsl-move-use-locally'
+import {
+  findWslMovedProjectMove,
+  releaseWslMove
+} from '../persistence/moving-wsl-projects/wsl-move-use-locally'
+import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import {
   holdWslMoveWindowWrites,
   reloadWslMoveWindowWithWritesHeld
@@ -52,7 +56,9 @@ export function registerWslMoveHandlers(
   /** The renderer stores live in the main window's storage; another window's copy is not them. */
   isMainWindowRenderer: (senderId: number) => boolean,
   /** Built per call, only once the gate is open. */
-  driverDeps?: () => WslMoveDriverDeps
+  driverDeps?: () => WslMoveDriverDeps,
+  /** Undo's reach into the host; absent, there is no host to stop. */
+  undoPorts: () => WslMoveUndoPorts = () => ({ stopHostCopies: async () => 'stopped' })
 ): void {
   for (const channel of WSL_MOVE_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -86,7 +92,7 @@ export function registerWslMoveHandlers(
     }
   )
   registerWslMoveDriverHandlers(getUserDataPath, isMainWindowRenderer, driverDeps)
-  registerWslMoveUseHereHandler(getUserDataPath, isMainWindowRenderer)
+  registerWslMoveUseHereHandler(getUserDataPath, isMainWindowRenderer, undoPorts)
 }
 
 function registerWslMoveDriverHandlers(
@@ -142,11 +148,12 @@ function invalidRequest(): WslMoveRefusal {
 
 function registerWslMoveUseHereHandler(
   getUserDataPath: () => string,
-  isMainWindowRenderer: (senderId: number) => boolean
+  isMainWindowRenderer: (senderId: number) => boolean,
+  createUndoPorts: () => WslMoveUndoPorts
 ): void {
   ipcMain.handle(
     'wslMove:useProjectHereAgain',
-    (event: { sender?: WebContents }, request: unknown): WslMoveUseLocallyResult => {
+    async (event: { sender?: WebContents }, request: unknown): Promise<WslMoveUseLocallyResult> => {
       // Gate first: with it closed, nothing is read.
       if (!wslHostsGateOpen()) {
         return { released: false, reason: 'gated-off' }
@@ -167,7 +174,20 @@ function registerWslMoveUseHereHandler(
       }
       const ref =
         request.kind === 'repo' ? { repoId: request.id } : { folderWorkspaceId: request.id }
-      const result = bringWslMovedProjectBack(getUserDataPath(), ref)
+      const userDataPath = getUserDataPath()
+      const found = findWslMovedProjectMove(userDataPath, ref)
+      if (!('move' in found)) {
+        return found
+      }
+      // The host's copies stop first, or an agent the move resumed there runs beside this one.
+      const stop = await createUndoPorts().stopHostCopies(found.move)
+      if (stop !== 'stopped') {
+        return {
+          released: false,
+          reason: stop === 'unreachable' ? 'host-unreachable' : 'host-still-running'
+        }
+      }
+      const result = releaseWslMove(userDataPath, found.move)
       if (result.released) {
         // The page holds only the project's chats; the reloaded one hydrates its pre-move session.
         holdWslMoveWindowWrites()
