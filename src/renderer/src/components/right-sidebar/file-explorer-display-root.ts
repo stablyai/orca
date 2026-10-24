@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { dirname, getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { FILE_EXPLORER_FULL_ROOT } from '../../../../shared/file-explorer-display-root'
 import { splitPathSegments } from './path-tree'
 
@@ -54,8 +55,12 @@ export function resolveExplorerDisplayRootChoice(
 /** Resolves a display choice against the actual workspace root; the full-root sentinel leaves that root intact. */
 export function getExplorerDisplayRootPath(
   worktreePath: string | null,
-  choice: string
+  choice: string,
+  browsedRootPath?: string | null
 ): string | null {
+  if (browsedRootPath) {
+    return browsedRootPath
+  }
   return worktreePath && choice !== FILE_EXPLORER_FULL_ROOT
     ? joinPath(worktreePath, choice)
     : worktreePath
@@ -68,6 +73,88 @@ export function getExplorerDisplayDepth(
 ): number {
   const relative = displayRootPath ? getRelativePathInsideRoot(displayRootPath, worktreePath) : null
   return relative ? splitPathSegments(relative).length : 0
+}
+
+export function getExplorerDirectoryDepth(
+  worktreePath: string | null,
+  displayRootPath: string,
+  dirPath: string
+): number {
+  const displayRootInsideWorkspace =
+    getRelativePathInsideRoot(displayRootPath, worktreePath) !== null
+  const workspaceRelative = displayRootInsideWorkspace
+    ? getRelativePathInsideRoot(dirPath, worktreePath)
+    : null
+  const displayRelative = getRelativePathInsideRoot(dirPath, displayRootPath)
+  const relativePath = workspaceRelative ?? displayRelative
+  return relativePath ? splitPathSegments(relativePath).length - 1 : -1
+}
+
+export function isExplorerRootOutsideWorkspace(
+  worktreePath: string | null,
+  displayRootPath: string | null
+): boolean {
+  return Boolean(
+    worktreePath &&
+    displayRootPath &&
+    getRelativePathInsideRoot(displayRootPath, worktreePath) === null
+  )
+}
+
+export type ExplorerBreadcrumb = { label: string; path: string }
+
+export function getExplorerBreadcrumbs(path: string): ExplorerBreadcrumb[] {
+  if (isWindowsAbsolutePathLike(path)) {
+    const separator = path.includes('\\') ? '\\' : '/'
+    const normalized = path.replace(/[\\/]+/g, separator)
+    const drive = normalized.match(/^[A-Za-z]:/)
+    if (drive) {
+      const root = `${drive[0]}${separator}`
+      return buildBreadcrumbs(root, normalized.slice(root.length), separator)
+    }
+    const parts = normalized
+      .replace(/^[\\/]+/, '')
+      .split(separator)
+      .filter(Boolean)
+    const rootParts = parts.slice(0, 2)
+    const root = `${separator}${separator}${rootParts.join(separator)}`
+    return buildBreadcrumbs(root, parts.slice(2).join(separator), separator)
+  }
+  return buildBreadcrumbs('/', path.replace(/^\/+/, ''), '/')
+}
+
+function buildBreadcrumbs(
+  root: string,
+  remainder: string,
+  separator: '/' | '\\'
+): ExplorerBreadcrumb[] {
+  const breadcrumbs = [{ label: root, path: root }]
+  let current = root
+  for (const segment of remainder.split(separator).filter(Boolean)) {
+    current = joinPath(current, segment)
+    breadcrumbs.push({ label: segment, path: current })
+  }
+  return breadcrumbs
+}
+
+// Why: deep directory trees push the active folder offscreen; collapsing intermediate segments preserves both root and current folder.
+export function getCollapsedExplorerBreadcrumbs(
+  breadcrumbs: readonly ExplorerBreadcrumb[],
+  maxVisible = 3
+): ExplorerBreadcrumb[] {
+  if (breadcrumbs.length <= maxVisible) {
+    return [...breadcrumbs]
+  }
+  const root = breadcrumbs[0]
+  const trailing = breadcrumbs.slice(-1)
+  return [root, { label: '…', path: breadcrumbs.at(-2)?.path ?? root.path }, ...trailing]
+}
+
+export function getExplorerParentPath(path: string): string {
+  const breadcrumbs = getExplorerBreadcrumbs(path)
+  return breadcrumbs.length > 1
+    ? (breadcrumbs.at(-2)?.path ?? dirname(path))
+    : (breadcrumbs[0]?.path ?? dirname(path))
 }
 
 /** Includes the displayed root for loading and refresh without persisting it as a user-expanded folder. */

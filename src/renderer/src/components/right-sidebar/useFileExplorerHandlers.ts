@@ -147,6 +147,7 @@ export async function activateFileExplorerNode(args: {
       relativePath: escapesWorktree ? node.path : node.relativePath,
       worktreeId: activeWorktreeId,
       runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
+      ...(node.relativePath === node.path ? { readOnly: true } : {}),
       language: detectLanguage(node.name),
       mode: 'edit'
     },

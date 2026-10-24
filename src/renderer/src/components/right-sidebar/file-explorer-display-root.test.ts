@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getCollapsedExplorerBreadcrumbs,
+  getExplorerBreadcrumbs,
+  getExplorerDirectoryDepth,
   getExplorerDisplayDepth,
   getExplorerDisplayRootOptions,
   getExplorerDisplayRootPath,
+  getExplorerParentPath,
+  isExplorerRootOutsideWorkspace,
   resolveExplorerDisplayRootChoice,
   getExplorerEffectiveExpanded
 } from './file-explorer-display-root'
@@ -107,5 +112,67 @@ describe('sparse explorer projection', () => {
     ])
     expect(userExpanded.size).toBe(0)
     expect(getExplorerEffectiveExpanded(userExpanded, null)).toBe(userExpanded)
+  })
+
+  it('resolves an outside browsing root without workspace-relative depth', () => {
+    expect(getExplorerDisplayRootPath('/repo', '/', '/tmp/reference')).toBe('/tmp/reference')
+    expect(getExplorerDisplayDepth('/repo', '/tmp/reference')).toBe(0)
+    expect(isExplorerRootOutsideWorkspace('/repo', '/tmp/reference')).toBe(true)
+    expect(isExplorerRootOutsideWorkspace('/repo', '/repo/docs')).toBe(false)
+  })
+
+  it.each([
+    [
+      '/Users/dev/reference',
+      [
+        { label: '/', path: '/' },
+        { label: 'Users', path: '/Users' },
+        { label: 'dev', path: '/Users/dev' },
+        { label: 'reference', path: '/Users/dev/reference' }
+      ]
+    ],
+    [
+      'C:\\Users\\dev',
+      [
+        { label: 'C:\\', path: 'C:\\' },
+        { label: 'Users', path: 'C:\\Users' },
+        { label: 'dev', path: 'C:\\Users\\dev' }
+      ]
+    ]
+  ])('builds clickable breadcrumb ancestors for %s', (path, expected) => {
+    expect(getExplorerBreadcrumbs(path)).toEqual(expected)
+  })
+
+  it('returns the parent without navigating above a filesystem root', () => {
+    expect(getExplorerParentPath('/Users/dev')).toBe('/Users')
+    expect(getExplorerParentPath('/')).toBe('/')
+    expect(getExplorerParentPath('C:\\Users')).toBe('C:\\')
+    expect(getExplorerParentPath('C:\\')).toBe('C:\\')
+  })
+
+  it('collapses intermediate breadcrumbs for paths exceeding maximum visible count', () => {
+    const full = getExplorerBreadcrumbs('/private/tmp/repo/src')
+    expect(full).toHaveLength(5)
+    expect(getCollapsedExplorerBreadcrumbs(full)).toEqual([
+      { label: '/', path: '/' },
+      { label: '…', path: '/private/tmp/repo' },
+      { label: 'src', path: '/private/tmp/repo/src' }
+    ])
+
+    const shortCrumbs = getExplorerBreadcrumbs('/Users/dev')
+    expect(getCollapsedExplorerBreadcrumbs(shortCrumbs)).toEqual(shortCrumbs)
+  })
+
+  it('computes expanded-directory depth from the workspace or an outside display root', () => {
+    expect(getExplorerDirectoryDepth('/repo', '/repo/packages/app', '/repo/packages/app/src')).toBe(
+      2
+    )
+    expect(getExplorerDirectoryDepth('/repo', '/tmp/reference', '/tmp/reference/src')).toBe(0)
+    expect(getExplorerDirectoryDepth('/repo', '/tmp/reference', '/tmp/reference/src/lib')).toBe(1)
+  })
+
+  it('computes every depth from an ancestor display root while browsing above the workspace', () => {
+    expect(getExplorerDirectoryDepth('/home/dev/repo', '/home/dev', '/home/dev/repo')).toBe(0)
+    expect(getExplorerDirectoryDepth('/home/dev/repo', '/home/dev', '/home/dev/repo/src')).toBe(1)
   })
 })

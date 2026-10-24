@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import {
   shouldShowCollapseFolderAction,
+  isFileExplorerNodeReadOnly,
   shouldShowFindInFolderAction,
   shouldShowCopyFileAction,
+  shouldShowCopyRelativePathAction,
   shouldShowOpenInTerminalAction,
   shouldShowRemoteDownloadAction,
   shouldShowViewFileAction
@@ -66,6 +68,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('only shows find in folder for directories', () => {
     expect(shouldShowFindInFolderAction(directoryNode)).toBe(true)
+    expect(shouldShowFindInFolderAction(directoryNode, true)).toBe(false)
     expect(
       shouldShowFindInFolderAction({
         ...directoryNode,
@@ -75,6 +78,26 @@ describe('FileExplorerRow collapse folder action', () => {
         isDirectory: false
       })
     ).toBe(false)
+  })
+
+  it('keeps workspace descendants writable when browsing from an outside ancestor', () => {
+    expect(isFileExplorerNodeReadOnly(fileNode, '/repo', true)).toBe(false)
+    expect(
+      isFileExplorerNodeReadOnly(
+        {
+          ...fileNode,
+          path: '/tmp/reference/index.ts',
+          relativePath: '/tmp/reference/index.ts'
+        },
+        '/repo',
+        true
+      )
+    ).toBe(true)
+  })
+
+  it('hides copy relative path for outside nodes', () => {
+    expect(shouldShowCopyRelativePathAction(fileNode, false)).toBe(true)
+    expect(shouldShowCopyRelativePathAction(fileNode, true)).toBe(false)
   })
 
   it('only shows open in terminal for directories', () => {

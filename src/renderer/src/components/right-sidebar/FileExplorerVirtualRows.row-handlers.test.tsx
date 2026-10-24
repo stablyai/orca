@@ -282,4 +282,62 @@ describe('FileExplorerRow collapse folder action', () => {
 
     expect(onViewFile).toHaveBeenCalledWith(fileNode)
   })
+
+  it('disables dragging a writable row when the selection includes an outside node', () => {
+    const outsideNode = {
+      ...fileNode,
+      name: 'outside.ts',
+      path: '/tmp/reference/outside.ts',
+      relativePath: '/tmp/reference/outside.ts'
+    }
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'index.ts', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode, outsideNode]),
+      displayDepthOffset: 0,
+      readOnly: true,
+      worktreePath: '/repo',
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set(),
+      loadingDirPaths: new Set<string>(),
+      selectedPaths: new Set([fileNode.path, outsideNode.path]),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    expect(findFileExplorerRow(element).props.dragDisabled).toBe(true)
+  })
 })

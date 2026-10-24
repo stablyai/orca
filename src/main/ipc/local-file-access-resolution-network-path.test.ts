@@ -22,6 +22,12 @@ vi.mock('node:fs/promises', () => {
       if (name !== 'realpath') {
         return { isFile: () => true, isDirectory: () => false }
       }
+      if (String(target).endsWith('device-dir-link')) {
+        return '\\\\?\\UNC\\attacker.example\\share\\dir'
+      }
+      if (String(target).endsWith('reserved-dir-link')) {
+        return 'C:\\Users\\me\\NUL'
+      }
       // A project image that is really a link to a device name.
       if (String(target).endsWith('share-link.png')) {
         // A local image that is really a link onto a network share.
@@ -45,6 +51,7 @@ vi.mock('electron', () => ({ app: { getPath: () => 'C:\\Users\\me\\AppData\\Roam
 vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
 
 import {
+  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath
@@ -108,6 +115,41 @@ describe('document images on a network share', () => {
     )
     expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
   })
+})
+
+describe('user directories on a network share', () => {
+  beforeEach(() => {
+    fsCalls.length = 0
+  })
+
+  it.each(networkTargets.slice(0, 2))('refuses %s without touching it', async (target) => {
+    await expect(
+      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+    ).rejects.toThrow('Access denied')
+    expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
+  })
+
+  it.each([
+    '\\\\?\\UNC\\attacker.example\\share\\dir',
+    '\\\\.\\UNC\\attacker.example\\share\\dir',
+    'C:\\Users\\me\\NUL'
+  ])('refuses the Windows device path %s before any filesystem call', async (target) => {
+    await expect(
+      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+    ).rejects.toThrow('Access denied')
+    expect(fsCalls).toEqual([])
+  })
+
+  it.each(['device-dir-link', 'reserved-dir-link'])(
+    'refuses a directory whose real path from %s is a device path before stat',
+    async (linkName) => {
+      const linkPath = `C:\\Users\\me\\${linkName}`
+      await expect(
+        resolveLocalDirectoryListingPath(linkPath, { kind: 'user-directory' }, store)
+      ).rejects.toThrow('Access denied')
+      expect(fsCalls).toEqual([`realpath ${linkPath}`])
+    }
+  )
 })
 
 const CHAT_IMAGE = { kind: 'chat-image' } as const

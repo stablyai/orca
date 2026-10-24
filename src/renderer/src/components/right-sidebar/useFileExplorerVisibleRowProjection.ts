@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -49,10 +50,15 @@ export function getFileExplorerIgnoredQueryRelativePaths(
       return
     }
     for (const row of cached.children) {
-      if (!showDotfiles && isDotfileRelativePath(row.relativePath, worktreePath)) {
+      const workspaceRelativePath = getRelativePathInsideRoot(row.path, worktreePath)
+      const dotfileRelativePath =
+        workspaceRelativePath ?? getRelativePathInsideRoot(row.path, displayRootPath) ?? row.name
+      if (!showDotfiles && isDotfileRelativePath(dotfileRelativePath, worktreePath)) {
         continue
       }
-      relativePaths.push(row.relativePath)
+      if (workspaceRelativePath) {
+        relativePaths.push(workspaceRelativePath)
+      }
       if (row.isDirectory && expanded.has(row.path)) {
         visitChildren(row.path)
       }
@@ -88,7 +94,10 @@ export function createVisibleFileExplorerRowProjection(
   }
 
   const shouldHideRow = (row: TreeNode): boolean => {
-    if (!options.showDotfiles && isDotfileRelativePath(row.relativePath, worktreePath)) {
+    const workspaceRelativePath = getRelativePathInsideRoot(row.path, worktreePath)
+    const dotfileRelativePath =
+      workspaceRelativePath ?? getRelativePathInsideRoot(row.path, displayRootPath) ?? row.name
+    if (!options.showDotfiles && isDotfileRelativePath(dotfileRelativePath, worktreePath)) {
       return true
     }
     return !options.showGitIgnoredFiles && isPathIgnored(options.ignoredSet, row.relativePath)

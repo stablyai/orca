@@ -39,17 +39,28 @@ function assertRemoteWriteFitsOneRequest(content: string): void {
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   dirPath: string,
-  options: { followSymlinks?: boolean } = {}
+  options: { followSymlinks?: boolean; access?: LocalFileAccess } = {}
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
-    return window.api.fs.readDir({ dirPath, connectionId: context.connectionId, ...options })
+    const { access, ...listingOptions } = options
+    return window.api.fs.readDir({
+      dirPath,
+      connectionId: context.connectionId,
+      ...listingOptions,
+      ...localAccess(context.connectionId, access)
+    })
   }
+  const remoteOptions = options.followSymlinks ? { followSymlinks: true } : {}
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
-    { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath, ...options },
+    {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      ...remoteOptions
+    },
     { timeoutMs: 15_000 }
   )
 }

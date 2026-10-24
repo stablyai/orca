@@ -4,7 +4,10 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
-import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
+import {
+  getFileExplorerOperationOwnerFromState,
+  supportsFileExplorerRootNavigation
+} from './file-explorer-operation-owner'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
@@ -154,5 +157,20 @@ describe('getFileExplorerOperationOwnerFromState', () => {
       environmentId: 'env-a',
       executionHostId: 'ssh:nested-box'
     })
+  })
+})
+
+describe('supportsFileExplorerRootNavigation', () => {
+  it('supports local and WSL-local filesystem owners but not SSH or remote runtimes', () => {
+    expect(supportsFileExplorerRootNavigation({ kind: 'local' })).toBe(true)
+    expect(supportsFileExplorerRootNavigation({ kind: 'ssh', connectionId: 'ssh-1' })).toBe(false)
+    expect(
+      supportsFileExplorerRootNavigation({
+        kind: 'runtime',
+        environmentId: 'env-1',
+        executionHostId: 'runtime:env-1'
+      })
+    ).toBe(false)
+    expect(supportsFileExplorerRootNavigation({ kind: 'unresolved' })).toBe(false)
   })
 })

@@ -14,6 +14,7 @@ import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cach
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
+  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
 import { isPathAbsentError } from '../filesystem-path-containment'
@@ -38,7 +39,12 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     'fs:readDir',
     async (
       _event,
-      args: { dirPath: string; connectionId?: string; followSymlinks?: boolean }
+      args: {
+        dirPath: string
+        connectionId?: string
+        followSymlinks?: boolean
+        access?: LocalFileAccess
+      }
     ): Promise<DirEntry[]> => {
       // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
       let throwSite: ReadDirThrowSite = 'authorize'
@@ -47,14 +53,14 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           throwSite = 'ssh-provider'
           throw new SshHostNotServedError(args.connectionId)
         }
-        const dirPath = await resolveDesktopAuthorizedPath(args.dirPath, store)
+        const dirPath = await resolveLocalDirectoryListingPath(args.dirPath, args.access, store)
         throwSite = 'readdir'
         const entries = await readdir(dirPath, { withFileTypes: true })
         const mapped = await classifyFilesystemDirectoryEntries(
           args.dirPath,
           entries,
           args.followSymlinks ?? store.getSettings().followSymlinkedDirectories ?? false,
-          (path) => resolveDesktopAuthorizedPath(path, store)
+          (path) => resolveLocalDirectoryListingPath(path, args.access, store)
         )
         return sortDirEntries(mapped)
       } catch (error: unknown) {

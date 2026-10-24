@@ -84,10 +84,32 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await expect(
-      handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
+      handlers.get('fs:readDir')!(null, {
+        dirPath: '/remote/repo',
+        connectionId: 'ssh-1',
+        access: { kind: 'user-directory' }
+      })
     ).rejects.toThrow(
       'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
     )
+  })
+
+  it('lists a user-chosen local directory outside project roots', async () => {
+    const outside = path.resolve('/outside')
+    statMock.mockResolvedValue({
+      size: 0,
+      isDirectory: () => true,
+      mtimeMs: 123
+    })
+    readdirMock.mockResolvedValue([dirEntry({ name: 'notes.txt', file: true })])
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, {
+        dirPath: outside,
+        access: { kind: 'user-directory' }
+      })
+    ).resolves.toEqual([{ name: 'notes.txt', isDirectory: false, isSymlink: false }])
   })
 
   // Why: handler-level WSL UNC authorization depends on native Windows path

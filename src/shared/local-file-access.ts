@@ -5,6 +5,8 @@
 export type LocalFileAccess =
   /** A single file the user named (gesture or persisted tab): read in place, regular files only. */
   | { kind: 'user-file' }
+  /** A directory the user chose for browsing: local directory listings only. */
+  | { kind: 'user-directory' }
   /** A resource a document's content references (images): limited to that document's roots or folder. */
   | { kind: 'document-resource'; documentPath: string }
   /** An image a chat transcript or composer shows: any local image file; a network share only inside a project. */

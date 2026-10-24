@@ -112,6 +112,10 @@ export function getFileExplorerOperationOwner(
   return getFileExplorerOperationOwnerFromState(useAppStore.getState(), worktreeId)
 }
 
+export function supportsFileExplorerRootNavigation(owner: FileExplorerOperationOwner): boolean {
+  return owner.kind === 'local'
+}
+
 export function getFileExplorerOperationRoute(
   owner: FileExplorerOperationOwner
 ): FileExplorerOperationRoute | null {

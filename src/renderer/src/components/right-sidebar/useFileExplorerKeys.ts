@@ -41,6 +41,9 @@ export function useFileExplorerKeys(opts: {
   rowProjection: FileExplorerRowProjection
   expandedPaths: Set<string>
   canToggleDirectories: boolean
+  canMutate?: boolean
+  canMutateNode?: (node: TreeNode) => boolean
+  canCopyRelativePathNode?: (node: TreeNode) => boolean
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
@@ -64,6 +67,12 @@ export function useFileExplorerKeys(opts: {
   expandedPathsRef.current = opts.expandedPaths
   const canToggleDirectoriesRef = useRef(opts.canToggleDirectories)
   canToggleDirectoriesRef.current = opts.canToggleDirectories
+  const canMutateRef = useRef(opts.canMutate !== false)
+  canMutateRef.current = opts.canMutate !== false
+  const canMutateNodeRef = useRef(opts.canMutateNode)
+  canMutateNodeRef.current = opts.canMutateNode
+  const canCopyRelativePathNodeRef = useRef(opts.canCopyRelativePathNode)
+  canCopyRelativePathNodeRef.current = opts.canCopyRelativePathNode
   const inlineInputRef = useRef(opts.inlineInput)
   inlineInputRef.current = opts.inlineInput
   const selectedPathsRef = useRef(opts.selectedPaths)
@@ -164,7 +173,7 @@ export function useFileExplorerKeys(opts: {
       const wantRedo =
         keybindingMatchesAction('fileExplorer.redo', e, platform, keybindings) &&
         fileExplorerHasRedo()
-      if (inExplorer && (wantUndo || wantRedo)) {
+      if (inExplorer && canMutateRef.current && (wantUndo || wantRedo)) {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
         void run.catch((err: unknown) => {
@@ -221,7 +230,9 @@ export function useFileExplorerKeys(opts: {
         const node =
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
-        if (node) {
+        const canMutateNode =
+          node && (canMutateRef.current || (canMutateNodeRef.current?.(node) ?? false))
+        if (node && canMutateNode) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
@@ -236,7 +247,13 @@ export function useFileExplorerKeys(opts: {
           if (wantsDelete) {
             e.preventDefault()
             const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
-            requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
+            const targets = selectedNodes.length > 1 ? selectedNodes : [node]
+            if (
+              canMutateRef.current ||
+              targets.every((target) => canMutateNodeRef.current?.(target) === true)
+            ) {
+              requestDeleteAllRef.current(targets)
+            }
             return
           }
         }
@@ -274,6 +291,12 @@ export function useFileExplorerKeys(opts: {
       }
       // ⌥⇧⌘C (Mac) / Ctrl+Shift+Alt+C (Win) — Copy Relative Path
       if (wantsCopyRelativePath) {
+        if (
+          canCopyRelativePathNodeRef.current &&
+          fallbackNodes.some((target) => canCopyRelativePathNodeRef.current?.(target) === false)
+        ) {
+          return
+        }
         e.preventDefault()
         window.api.ui.writeClipboardText(
           formatFileExplorerPathsForClipboard(fallbackNodes, 'relative')

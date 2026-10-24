@@ -20566,6 +20566,12 @@
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again."
   },
   "fileExplorer": {
+    "navigation": {
+      "up": "Up",
+      "openFolder": "Open Folder…",
+      "outsideWorkspace": "Outside the workspace · read-only",
+      "backToWorkspace": "Back to workspace"
+    },
     "root": {
       "label": "Explorer root",
       "full": "Repository root",

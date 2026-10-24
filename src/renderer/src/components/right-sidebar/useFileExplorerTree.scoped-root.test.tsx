@@ -68,3 +68,42 @@ it('distinguishes an unreadable scoped directory from an empty one and allows fo
   expect(result.current.dirCache['/repo/app']).toMatchObject({ children: [] })
   expect(result.current.dirCache['/repo/app'].error).toBeUndefined()
 })
+
+it('loads and refreshes an outside tree root while retaining workspace file identity', async () => {
+  read.mockResolvedValue(listing('package.json'))
+  const { result } = renderHook(() =>
+    useFileExplorerTree('/tmp/reference', new Set(), 'wt', '/repo')
+  )
+
+  await act(async () => {
+    result.current.resetAndLoad()
+  })
+
+  expect(read).toHaveBeenCalledWith('wt', '/repo', '/tmp/reference')
+  expect(result.current.rootCache?.children[0]).toMatchObject({
+    path: '/tmp/reference/package.json',
+    relativePath: '/tmp/reference/package.json',
+    depth: 0
+  })
+  await act(async () => {
+    await result.current.refreshTree()
+  })
+  expect(read).toHaveBeenLastCalledWith('wt', '/repo', '/tmp/reference')
+})
+
+it('retains workspace-relative depth when the tree starts at a nested sparse root', async () => {
+  read.mockResolvedValue(listing('index.ts'))
+  const { result } = renderHook(() =>
+    useFileExplorerTree('/repo/packages/app', new Set(), 'wt', '/repo')
+  )
+
+  await act(async () => {
+    result.current.resetAndLoad()
+  })
+
+  expect(result.current.rootCache?.children[0]).toMatchObject({
+    relativePath: 'packages/app/index.ts',
+    depth: 2
+  })
+  expect(result.current.sourceWorkspaceId).toBe('wt')
+})

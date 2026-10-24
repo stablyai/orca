@@ -25,10 +25,11 @@ export function fileExplorerEntriesToTreeNodes(
 ): TreeNode[] {
   return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
     const path = joinPath(dirPath, entry.name)
+    const workspaceRelativePath = getRelativePathInsideRoot(path, worktreePath)
     return {
       name: entry.name,
       path,
-      relativePath: getRelativePathInsideRoot(path, worktreePath) ?? entry.name,
+      relativePath: workspaceRelativePath ?? path,
       isDirectory: entry.isDirectory,
       isSymlink: entry.isSymlink,
       depth: depth + 1,
@@ -47,6 +48,15 @@ export async function readFileExplorerDirectory(
   if (!route) {
     throw new Error(getFileExplorerOwnerUnresolvedMessage())
   }
+  const followSymlinks = useAppStore.getState().settings?.followSymlinkedDirectories === true
+  const outsideWorkspace = getRelativePathInsideRoot(dirPath, worktreePath) === null
+  const options =
+    followSymlinks || outsideWorkspace
+      ? {
+          ...(followSymlinks ? { followSymlinks: true } : {}),
+          ...(outsideWorkspace ? { access: { kind: 'user-directory' as const } } : {})
+        }
+      : undefined
   const entries = await readRuntimeDirectory(
     {
       target: route.target,
@@ -55,9 +65,7 @@ export async function readFileExplorerDirectory(
       connectionId: route.connectionId
     },
     dirPath,
-    useAppStore.getState().settings?.followSymlinkedDirectories
-      ? { followSymlinks: true }
-      : undefined
+    options
   )
   // Why: remote-runtime and paired-web routes return the host's order verbatim,
   // and an older host may still sort lexicographically; re-sorting an already
