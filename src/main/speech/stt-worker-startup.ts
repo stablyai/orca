@@ -88,6 +88,7 @@ export function initializeSttWorker(
     modelType: string
     streaming: boolean
     sampleRate: number
+    featureDim?: number
     files: readonly string[]
     hotwordsFilePath?: string
     modelingUnit?: string

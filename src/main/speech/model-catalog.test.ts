@@ -19,6 +19,31 @@ describe('SPEECH_MODEL_CATALOG', () => {
     ])
   })
 
+  it('registers GigaAM v3 RNNT as a non-streaming local model with 64 mel bins', () => {
+    const manifest = getCatalogModel('gigaam-v3-rnnt-ru')
+
+    expect(manifest).toBeDefined()
+    expect(manifest?.type).toBe('transducer')
+    expect(manifest?.provider).toBe('local')
+    expect(manifest?.language).toBe('ru')
+    expect(manifest?.streaming).toBe(false)
+    expect(manifest?.sampleRate).toBe(16000)
+    expect(manifest?.featureDim).toBe(64)
+    expect(manifest?.files).toEqual([
+      'encoder.int8.onnx',
+      'decoder.onnx',
+      'joiner.onnx',
+      'tokens.txt'
+    ])
+    expect(manifest?.sizeBytes).toBe(229_343_109)
+    expect(manifest?.downloadFiles?.map(({ name }) => name)).toEqual([
+      'encoder.int8.onnx',
+      'decoder.onnx',
+      'joiner.onnx',
+      'tokens.txt'
+    ])
+  })
+
   it('has unique ids across the catalog', () => {
     const ids = SPEECH_MODEL_CATALOG.map((m) => m.id)
 
