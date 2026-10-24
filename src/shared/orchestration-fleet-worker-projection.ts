@@ -25,6 +25,19 @@ type FleetLivenessSubject = {
   resource: { releaseState?: string | null; hostScope: string | null } | null
 }
 
+/** Durable facts that prove a supervised process ended; the removed-work record reads the same proof. */
+export const DURABLE_EXIT_PROOF = {
+  workerState: 'stopped',
+  workerStage: 'released',
+  resourceReleaseState: 'released',
+  terminationReasons: ['operator_close', 'signaled', 'exited']
+} as const satisfies {
+  workerState: string
+  workerStage: string
+  resourceReleaseState: string
+  terminationReasons: readonly NonNullable<FleetDurableWorker['terminationReason']>[]
+}
+
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
 const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
 
@@ -36,9 +49,7 @@ function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
     // `unknown` there means a stop was issued and no exit was ever observed. A null
     // reason is a pre-v29 row whose stage write was the only exit record.
     (worker.workerStage === 'process_exited' && worker.terminationReason !== 'unknown') ||
-    worker.terminationReason === 'operator_close' ||
-    worker.terminationReason === 'signaled' ||
-    worker.terminationReason === 'exited'
+    DURABLE_EXIT_PROOF.terminationReasons.some((reason) => reason === worker.terminationReason)
   )
 }
 
@@ -49,13 +60,13 @@ export function projectLiveness(
 ): FleetLiveness {
   // A federated release is an execution-host confirmation that the terminal
   // is gone. The worker outcome remains independent of this cleanup fact.
-  if (worker.workerStage === 'released') {
+  if (worker.workerStage === DURABLE_EXIT_PROOF.workerStage) {
     return { verdict: 'exited', source: 'execution_host' }
   }
-  if (worker.resource?.releaseState === 'released') {
+  if (worker.resource?.releaseState === DURABLE_EXIT_PROOF.resourceReleaseState) {
     return { verdict: 'exited', source: 'resource_release' }
   }
-  if (worker.workerState === 'stopped') {
+  if (worker.workerState === DURABLE_EXIT_PROOF.workerState) {
     return { verdict: 'exited', source: 'worker_stop' }
   }
   // An operator close settles the worker as `failed`, which used to fall through to

@@ -41,8 +41,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-show'],
     summary: 'Show one lightweight orchestration Run',
-    usage: 'orca orchestration run-show --id <run_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id']
+    usage: 'orca orchestration run-show --id <run_id> [--removed] [--cursor <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'removed', 'cursor']
   },
   {
     path: ['orchestration', 'send'],

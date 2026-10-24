@@ -6,6 +6,7 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from './db/reset/removed-orchestration-work-store'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 
 const CREATOR_COLUMNS = ['creator_handle', 'creator_pane_key'] as const
@@ -40,6 +41,7 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     seed.close()
 
     const raw = new Database(dbPath)
+    raw.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     for (const column of CREATOR_COLUMNS) {
       raw.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
     }
