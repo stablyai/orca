@@ -10,8 +10,8 @@ vi.mock('node:fs/promises', () => ({
   readFile: async (path: string) => {
     const contents = files.get(path)
     if (contents === undefined) {
-      const error = new Error(`ENOENT: ${path}`) as NodeJS.ErrnoException
-      error.code = 'ENOENT'
+      const error = new Error(`ENOENT: ${path}`)
+      Object.assign(error, { code: 'ENOENT' })
       throw error
     }
     if (contents === STALLED) {
@@ -40,10 +40,8 @@ function credentials(token: string, expiresInSeconds: number): string {
 }
 
 function usageResponse(): Response {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => ({
+  return new Response(
+    JSON.stringify({
       usage: { limit: '1000', remaining: '900' },
       limits: [
         {
@@ -51,8 +49,9 @@ function usageResponse(): Response {
           detail: { limit: '100', remaining: '40' }
         }
       ]
-    })
-  } as Response
+    }),
+    { status: 200 }
+  )
 }
 
 describe('fetchKimiRateLimits with a WSL credentials home', () => {
@@ -120,6 +119,39 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
 
   // Last: an unsettled UNC read stays shared for its path by design, so the stalled
   // distro gets its own home to avoid poisoning the other cases.
+  it('bounds a stalled config.toml read instead of parking the poll cycle', async () => {
+    const stalledHome = '\\\\wsl.localhost\\StoppedCfg\\home\\neil\\.kimi-code'
+    files.set(`${stalledHome}\\config.toml`, STALLED)
+    // The probe only runs when the default slot cannot serve a fresh token;
+    // a missing credentials file is the cheapest such trigger.
+    files.delete(`${stalledHome}\\credentials\\kimi-code.json`)
+    const timeoutController = new AbortController()
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal)
+    // The default credentials read arms AbortSignal.timeout first and must
+    // keep the real implementation (it resolves via the mocked ENOENT); only
+    // the config probe's second arm is faked so the stall can be released.
+    let armed = 0
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      armed += 1
+      return armed === 1 ? realTimeout(ms) : timeoutController.signal
+    })
+
+    const pending = fetchKimiRateLimits({
+      home: { runtime: 'wsl', wslDistro: 'StoppedCfg', path: stalledHome }
+    })
+    // Wait until the stalled config probe has armed its (faked) timeout.
+    await vi.waitFor(() => expect(timeout).toHaveBeenCalledTimes(2))
+    timeoutController.abort()
+
+    const result = await pending
+    // The aborted probe resolves to the default slot; the missing credentials
+    // file then reports "not signed in" instead of parking the poll cycle.
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toMatch(/not signed in/i)
+    expect(fetchMock).not.toHaveBeenCalled()
+    timeout.mockRestore()
+  })
+
   it('bounds a stalled UNC read instead of parking the poll cycle', async () => {
     const stalledHome = '\\\\wsl.localhost\\Stopped\\home\\neil\\.kimi-code'
     files.set(`${stalledHome}\\credentials\\kimi-code.json`, STALLED)
@@ -129,7 +161,10 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
     const pending = fetchKimiRateLimits({
       home: { runtime: 'wsl', wslDistro: 'Stopped', path: stalledHome }
     })
-    expect(timeout).toHaveBeenCalledWith(5_000)
+    // Why: the fetcher reads the default credentials first and probes
+    // config.toml only after that read fails, so the stalled credentials read
+    // arms the first AbortSignal.timeout (#24176); wait until it settles.
+    await vi.waitFor(() => expect(timeout).toHaveBeenCalledWith(5_000))
     await Promise.resolve()
     await Promise.resolve()
     timeoutController.abort()
