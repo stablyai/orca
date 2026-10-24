@@ -146,6 +146,34 @@ describe('MessageRow control visibility', () => {
     })
   })
 
+  it('draws and copies a user message without the [Image #N] its send wrote mid-sentence', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+
+    render(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'user',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [
+            { type: 'text', text: 'Compare this [Image #1] with the old one' },
+            { type: 'image-ref', path: '/tmp/screenshot.png', alt: 'Screenshot' }
+          ]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+    expect(screen.queryByText(/\[Image #1\]/)).toBeNull()
+    expect(screen.getByText(/Compare this\s+with the old one/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }))
+    await waitFor(() => {
+      expect(writeClipboardText).toHaveBeenCalledWith(expect.not.stringContaining('[Image #1]'))
+    })
+  })
+
   it('omits the copy button on image-only user messages', () => {
     render(
       <MessageRow

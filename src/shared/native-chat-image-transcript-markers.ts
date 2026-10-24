@@ -97,6 +97,28 @@ export function stripSentImagePromptMarkers(text: string, imageCount: number): s
   )
 }
 
+/** A user message's blocks as its bubble draws them: the pictures already show above the
+ *  words, so the `[Image #k]` markers its send wrote for them are dropped wherever they sit. */
+export function withoutSentImagePromptMarkers(message: NativeChatMessage): NativeChatBlock[] {
+  const imageCount = message.blocks.filter((block) => block.type === 'image-ref').length
+  if (message.role !== 'user' || imageCount === 0) {
+    return message.blocks
+  }
+  let changed = false
+  const blocks = message.blocks.flatMap((block): NativeChatBlock[] => {
+    if (!isTextBlock(block)) {
+      return [block]
+    }
+    const text = stripSentImagePromptMarkers(block.text, imageCount)
+    if (text === block.text) {
+      return [block]
+    }
+    changed = true
+    return text.trim() ? [{ ...block, text }] : []
+  })
+  return changed ? blocks : message.blocks
+}
+
 export function stripImagePromptMarker(text: string): string {
   return withoutStrippedMarkerSpace(text, text.replace(IMAGE_PROMPT_MARKERS, ''))
 }

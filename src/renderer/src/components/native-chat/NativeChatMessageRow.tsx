@@ -12,6 +12,7 @@ import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat-notice'
 import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
+import { withoutSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type {
@@ -90,7 +91,7 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks)
+  const blocks = nativeChatBlocksInOwnWords(withoutSentImagePromptMarkers(message))
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
   const content = deriveNativeChatRowContent(blocks)
