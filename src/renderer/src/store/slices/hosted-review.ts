@@ -34,10 +34,9 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
-  getHostedReviewRequestForHead,
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
-  finishInflightHostedReviewRequest,
+  inflightHostedReviewRequests,
   queueHostedReviewRevalidation,
   registerInflightHostedReviewRequest
 } from './hosted-review-request-state'
@@ -182,7 +181,15 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    const inflightRequest = getHostedReviewRequestForHead(requestKey, options?.currentHeadOid)
+    const currentHeadOid = options?.currentHeadOid ?? null
+    const inflightRequest = inflightHostedReviewRequests.get(requestKey)
+    // A lookup started at another HEAD may return a merged PR this worktree has moved past.
+    const joinableInflightRequest =
+      currentHeadOid !== null &&
+      inflightRequest?.currentHeadOid != null &&
+      inflightRequest.currentHeadOid !== currentHeadOid
+        ? undefined
+        : inflightRequest
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
@@ -275,22 +282,24 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           }
           return preserved?.data ?? null
         } finally {
-          finishInflightHostedReviewRequest(
-            requestKey,
-            options?.currentHeadOid,
-            cacheKey,
-            generation
-          )
+          const activeRequest = inflightHostedReviewRequests.get(requestKey)
+          if (activeRequest?.generation === generation) {
+            inflightHostedReviewRequests.delete(requestKey)
+            if (requestGenerations.get(cacheKey) === generation) {
+              requestGenerations.delete(cacheKey)
+            }
+          }
         }
       })()
 
-      return registerInflightHostedReviewRequest(requestKey, {
+      registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
-        currentHeadOid: options?.currentHeadOid ?? null,
+        currentHeadOid,
         generation,
         startedAt: requestStartedAt
       })
+      return request
     }
 
     if (
@@ -302,13 +311,14 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       cached !== undefined &&
       cached.data !== null
     ) {
-      // Keep valid cached cards visible during refresh; an outdated merged head must await revalidation.
+      // Why: sidebar PR metadata can stay visible while a quiet refresh updates
+      // it; don't block card rendering on a quota-bound GitHub round trip.
       queueHostedReviewRevalidation(requestKey, startRequest, inflightRequest)
       return cached.data
     }
 
-    if (inflightRequest && (!options?.force || inflightRequest.force)) {
-      return inflightRequest.promise
+    if (joinableInflightRequest && (!options?.force || joinableInflightRequest.force)) {
+      return joinableInflightRequest.promise
     }
 
     return startRequest()
