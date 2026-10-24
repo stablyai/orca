@@ -21,7 +21,11 @@ describe('OMP terminal command catalog', () => {
     )
     expect(names).not.toContain('help')
     expect(getVerifiedNativeChatCommands('omp')).toEqual(commands)
-    expect(getNativeChatAgentProfile('omp')).toBeNull()
+    expect(getNativeChatAgentProfile('omp')).toMatchObject({
+      skillPrefix: '/',
+      skillSourceOwner: 'omp',
+      skillNamePrefix: 'skill:'
+    })
     expect(new Set(names).size).toBe(names.length)
     expect(getAgentSlashCommands('pi').map((command) => command.name)).toEqual(['clear', 'help'])
   })

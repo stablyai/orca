@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { AcpStructuredOptions } from './acp-structured-options'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
+import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 
 const configOptions = [
   {
@@ -117,6 +118,18 @@ describe('ACP session options', () => {
       { value: 'high', label: 'High' }
     ])
     expect(modelB?.defaultEffort).toBeUndefined()
+  })
+
+  it('reports OMP `skill:` commands as skills and the rest as commands', () => {
+    const options = new AcpStructuredOptions(OMP_ACP_DIALECT)
+    options.adoptCommands([
+      { name: 'compact', description: 'Compact the conversation' },
+      { name: 'skill:plan', description: 'Write a plan', input: { hint: 'arguments' } }
+    ])
+    expect(options.readCommands()).toEqual([
+      { name: 'compact', kind: 'command', description: 'Compact the conversation' },
+      { name: 'skill:plan', kind: 'skill', description: 'Write a plan', argumentHint: 'arguments' }
+    ])
   })
 })
 

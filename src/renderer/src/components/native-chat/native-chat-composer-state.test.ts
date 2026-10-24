@@ -180,6 +180,39 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(tokens([{ name: 'skill:caveman' }])).toEqual([['/skill:caveman', 'On disk']])
   })
 
+  it('lists OMP skills as `/skill:<name>`, and only the ones its session reports once it does', () => {
+    const omp = getNativeChatAgentProfile('omp')
+    const scanned = [
+      skill({
+        name: 'plan',
+        description: 'On disk',
+        sourceKind: 'home',
+        skillFilePath: '/home/.omp/agent/skills/plan/SKILL.md'
+      }),
+      skill({
+        name: 'planner',
+        description: 'Not loaded',
+        sourceKind: 'home',
+        skillFilePath: '/home/.omp/agent/skills/planner/SKILL.md'
+      })
+    ]
+    const tokens = (sessionSkills?: { name: string }[]) => {
+      const result = deriveComposerAutocomplete(
+        '/pl',
+        3,
+        [],
+        scanned,
+        omp,
+        undefined,
+        null,
+        sessionSkills
+      )
+      return result.mode === 'slash' ? result.items.map((entry) => entry.token) : []
+    }
+    expect(tokens()).toEqual(['/skill:plan', '/skill:planner'])
+    expect(tokens([{ name: 'skill:plan' }])).toEqual(['/skill:plan'])
+  })
+
   it('opens only Codex skills under `$`, and a pick keeps Codex `$` token', () => {
     for (const [draft, query] of [
       ['use $type', 'type'],

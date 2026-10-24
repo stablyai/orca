@@ -114,6 +114,8 @@ export type AcpDialect = {
   compactionReply?(text: string): AcpCompactionReply | undefined
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Names under this prefix in `available_commands_update` are skills, e.g. OMP's `skill:<name>`. */
+  skillCommandPrefix?: string
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

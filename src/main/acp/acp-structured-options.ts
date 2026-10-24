@@ -51,7 +51,10 @@ function isSelect(option: SessionConfigOption): option is SelectOption {
 
 export class AcpStructuredOptions {
   constructor(
-    private readonly dialect: Pick<AcpDialect, 'modelEfforts' | 'withheldCommands'> = {}
+    private readonly dialect: Pick<
+      AcpDialect,
+      'modelEfforts' | 'withheldCommands' | 'skillCommandPrefix'
+    > = {}
   ) {}
 
   private configOptions: SessionConfigOption[] = []
@@ -103,11 +106,12 @@ export class AcpStructuredOptions {
 
   adoptCommands(commands: readonly AvailableCommand[]): void {
     const withheld = this.dialect.withheldCommands ?? []
+    const skillPrefix = this.dialect.skillCommandPrefix
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
       .map((command) => ({
         name: command.name,
-        kind: 'command',
+        kind: skillPrefix && command.name.startsWith(skillPrefix) ? 'skill' : 'command',
         ...(command.description ? { description: command.description } : {}),
         ...(command.input?.hint ? { argumentHint: command.input.hint } : {})
       }))
