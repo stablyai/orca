@@ -1,3 +1,4 @@
+import { parseLinuxProcessState } from '../../shared/linux-process-state'
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { commandLineMatchesDaemon } from './daemon-pid-identity'
 import { startTimesWithinTolerance } from './daemon-process-start-time'
@@ -233,19 +234,6 @@ async function probeWindowsProcess(
       commandLineMatchesDaemon(identity.commandLine, endpoint.socketPath, endpoint.tokenPath)
       ? ['windows_cim', 'process_command_line', 'endpoint_identity']
       : ['windows_cim', 'endpoint_identity']
-  )
-}
-
-export function parseLinuxProcessState(statLine: string): string | null {
-  const commandEnd = statLine.lastIndexOf(')')
-  if (commandEnd === -1) {
-    return null
-  }
-  return (
-    statLine
-      .slice(commandEnd + 1)
-      .trim()
-      .split(/\s+/, 1)[0] ?? null
   )
 }
 
