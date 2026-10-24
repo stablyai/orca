@@ -1,15 +1,20 @@
 import { useContext, useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
 import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
 import { translate } from '@/i18n/i18n'
+import { dirname } from '@/lib/path'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
-import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
+import {
+  getWorktreePathBasenameFromId,
+  splitWorktreeIdForFilesystem
+} from '../../../shared/worktree/id'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -48,6 +53,8 @@ import {
 } from './native-chat-resume-on-restart-grouping'
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
+
+type WorkspaceFallback = { name: string; parentPath: string }
 
 /**
  * The offered chats as a tree: machine, then project, then workspace (a child workspace is a node
@@ -113,12 +120,14 @@ function WorkspaceNode({
   node,
   hostId,
   depth,
-  tree
+  tree,
+  fallbackDisplays
 }: {
   node: ResumeWorkspaceNode
   hostId: ExecutionHostId
   depth: number
   tree: TreeProps
+  fallbackDisplays?: ReadonlyMap<ResumeWorkspaceGroup, WorkspaceFallback>
 }): React.JSX.Element {
   const { group } = node
   const first = group.candidates[0]
@@ -126,8 +135,10 @@ function WorkspaceNode({
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
   // Kind comes from the host's record, never from a name.
   const KindGlyph = kind === 'folder' ? Folder : GitBranch
+  const fallback = fallbackDisplays?.get(group)
   const name =
     (worktree && resolveWorktreeDisplayName(worktree)) ||
+    fallback?.name ||
     getWorktreePathBasenameFromId(group.workspaceId) ||
     group.workspaceId
   const branch = worktree && kind === 'git-worktree' ? resolveWorktreeBranchLabel(worktree) : ''
@@ -151,6 +162,12 @@ function WorkspaceNode({
             <span className="min-w-0 shrink-2 truncate text-[11px] text-muted-foreground">
               {branch}
             </span>
+          )}
+          {!worktree && fallback?.parentPath && (
+            <ProjectOptionDetail
+              detail={fallback.parentPath}
+              className="shrink-2 text-[11px] text-muted-foreground"
+            />
           )}
         </>
       }
@@ -181,6 +198,7 @@ function WorkspaceNode({
           hostId={hostId}
           depth={depth + 1}
           tree={tree}
+          fallbackDisplays={fallbackDisplays}
         />
       ))}
     </GroupNode>
@@ -277,6 +295,19 @@ function MachineContents({
     <>
       {groupResumeWorkspacesByRepo(workspaces, lookup(tree.repoIdOf, null)).map((repoGroup) => {
         const nodes = nestResumeWorkspaces(repoGroup.workspaces, ancestorsOf)
+        const fallbackDisplays = new Map<ResumeWorkspaceGroup, WorkspaceFallback>()
+        if (repoGroup.repoId === null) {
+          const countByName = new Map<string, number>()
+          for (const group of repoGroup.workspaces) {
+            const name = getWorktreePathBasenameFromId(group.workspaceId) || group.workspaceId
+            const path = splitWorktreeIdForFilesystem(group.workspaceId)?.worktreePath
+            fallbackDisplays.set(group, { name, parentPath: path ? dirname(path) : '' })
+            countByName.set(name, (countByName.get(name) ?? 0) + 1)
+          }
+          for (const display of fallbackDisplays.values()) {
+            if (countByName.get(display.name) === 1) display.parentPath = ''
+          }
+        }
         // A group the store cannot place has no project to name or select; Select all covers it.
         return repoGroup.repoId === null ? (
           nodes.map((node) => (
@@ -286,6 +317,7 @@ function MachineContents({
               hostId={hostId}
               depth={depth}
               tree={tree}
+              fallbackDisplays={fallbackDisplays}
             />
           ))
         ) : (
