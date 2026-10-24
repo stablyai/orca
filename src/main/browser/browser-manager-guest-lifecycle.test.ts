@@ -723,4 +723,49 @@ describe('browserManager', () => {
     expect(debuggerHandlers.has('detach')).toBe(false)
     expect(debuggerAttachMock).not.toHaveBeenCalled()
   })
+
+  // The renderer re-applies a tab's mute on each registration report and clears the
+  // speaker on the unregister report, so neither may be skipped.
+  it('reports page audio on registration and on change, and silence on unregister', () => {
+    const rendererSend = vi.fn()
+    const guest = {
+      id: 301,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      isCurrentlyAudible: vi.fn(() => true),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === guest.id
+        ? guest
+        : id === rendererWebContentsId
+          ? { isDestroyed: () => false, send: rendererSend }
+          : null
+    )
+    browserManager.attachGuestPolicies(guest as never)
+    const onAudioStateChanged: (event: { audible: boolean }) => void = guestOnMock.mock.calls.find(
+      ([event]) => event === 'audio-state-changed'
+    )?.[1]
+
+    browserManager.registerGuest({
+      browserPageId: 'page-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    onAudioStateChanged({ audible: false })
+    browserManager.unregisterGuest('page-1')
+    onAudioStateChanged({ audible: true })
+
+    expect(
+      rendererSend.mock.calls.filter(([channel]) => channel === 'browser:audio-state-changed')
+    ).toEqual([
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: true }],
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: false }],
+      ['browser:audio-state-changed', { browserPageId: 'page-1', audible: false }]
+    ])
+  })
 })
