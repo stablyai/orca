@@ -9,6 +9,7 @@ import type { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog
 import type { RuntimeNativeChatDraftResolutions } from './runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from './runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
+import type { RuntimeUsageAnalyticsController } from './runtime-usage-analytics-controller'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
@@ -70,6 +71,11 @@ export type RuntimeServiceCommandSurface = {
   onAccountsChanged: RuntimeAccountController['onChanged']
   setHostAccountLaunchEnv: RuntimeAccountController['setHostLaunchEnv']
   restoreHostAccountLaunchEnv: RuntimeAccountController['restoreHostLaunchEnv']
+  setUsageAnalyticsStores: RuntimeUsageAnalyticsController['setStores']
+  getUsageAnalyticsScanState: RuntimeUsageAnalyticsController['getScanState']
+  setUsageAnalyticsEnabled: RuntimeUsageAnalyticsController['setEnabled']
+  refreshUsageAnalytics: RuntimeUsageAnalyticsController['refresh']
+  getUsageAnalyticsSnapshot: RuntimeUsageAnalyticsController['getSnapshot']
   listMobileSpeechModels: RuntimeMobileSpeechCatalog['list']
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
   deleteMobileSpeechModel: RuntimeMobileSpeechCatalog['delete']
@@ -97,6 +103,7 @@ type RuntimeServiceCommandOwners = {
   subscriptions: RuntimeSubscriptionRegistry
   mobileNotifications: RuntimeMobileNotificationController
   accounts: RuntimeAccountController
+  usageAnalytics: RuntimeUsageAnalyticsController
   mobileSpeech: RuntimeMobileSpeechCatalog
   mobileDictation: RuntimeMobileDictationController
   browserDrivers: RuntimeBrowserDriverController
@@ -114,6 +121,7 @@ export function installRuntimeServiceCommandSurface(
   const subscriptions = owners.subscriptions
   const notifications = owners.mobileNotifications
   const accounts = owners.accounts
+  const usage = owners.usageAnalytics
   const speech = owners.mobileSpeech
   const dictation = owners.mobileDictation
   const browsers = owners.browserDrivers
@@ -182,6 +190,11 @@ export function installRuntimeServiceCommandSurface(
     onAccountsChanged: accounts.onChanged.bind(accounts),
     setHostAccountLaunchEnv: accounts.setHostLaunchEnv.bind(accounts),
     restoreHostAccountLaunchEnv: accounts.restoreHostLaunchEnv.bind(accounts),
+    setUsageAnalyticsStores: usage.setStores.bind(usage),
+    getUsageAnalyticsScanState: usage.getScanState.bind(usage),
+    setUsageAnalyticsEnabled: usage.setEnabled.bind(usage),
+    refreshUsageAnalytics: usage.refresh.bind(usage),
+    getUsageAnalyticsSnapshot: usage.getSnapshot.bind(usage),
     listMobileSpeechModels: speech.list.bind(speech),
     downloadMobileSpeechModel: speech.download.bind(speech),
     deleteMobileSpeechModel: speech.delete.bind(speech),

@@ -187,7 +187,11 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
     'src/main/startup/main-process-runtime-launch.ts',
     'src/main/window/attach-main-window-services.ts'
   ],
-  orcad: ['src/main/orcad/orcad-entry.ts', 'src/main/orcad/orcad-account-services.ts']
+  orcad: [
+    'src/main/orcad/orcad-entry.ts',
+    'src/main/orcad/orcad-account-services.ts',
+    'src/main/orcad/orcad-usage-analytics.ts'
+  ]
 }
 
 /** Where each root installs process-wide host ports (`set*` calls that are not methods). */
@@ -444,6 +448,8 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
       'runtime.setAccountServices',
+      // Without it `usage.*` refuses and a paired desktop's Stats & Usage cannot read the host.
+      'runtime.setUsageAnalyticsStores',
       // #31112: without it `stats.summary` answers {} and mobile home shows zeros.
       'ctor-arg:stats',
       'host:setAppEnvironment',

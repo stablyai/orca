@@ -258,6 +258,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // `orca computer` forks it; it finds the platform runtimes below beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
+  // The usage stores' worker thread: it scans agent transcripts for Stats & Usage token totals.
+  { filename: 'usage-scan-worker-entry.js' },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

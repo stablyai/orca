@@ -34,6 +34,7 @@ import { installRuntimeSkillCommandSurface } from '../runtime-skill-command-cont
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { RuntimeClientSettingsController } from '../runtime-client-settings'
 import { RuntimeSessionSearchSettingsController } from '../runtime-session-search-settings'
+import { RuntimeUsageAnalyticsController } from '../runtime-usage-analytics-controller'
 import { RuntimeAutomationController } from '../runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
 import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-list'
@@ -154,6 +155,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
       subscriptions: this.subscriptions,
       mobileNotifications: this.mobileNotifications,
       accounts: this.accounts,
+      usageAnalytics: new RuntimeUsageAnalyticsController(),
       mobileSpeech: this.mobileSpeech,
       mobileDictation: this.mobileDictation,
       browserDrivers: this.browserDrivers,

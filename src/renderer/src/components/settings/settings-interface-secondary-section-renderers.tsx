@@ -5,6 +5,8 @@ import { InputPane } from './InputPane'
 import { NotificationsPane } from './NotificationsPane'
 import { ShortcutsPane } from './ShortcutsPane'
 import { SettingsSection } from './SettingsSection'
+import { SettingsHostScopeUnavailableNotice } from './SettingsHostScopePicker'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'
 
@@ -129,18 +131,32 @@ export function renderShortcutsSettingsSection(context: SettingsRenderContext): 
 }
 
 export function renderStatsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
-  const { navigation, view } = context
+  const { model, navigation, view } = context
+  // Why: the web client's only host is its server, and its usage stays on the existing bridge.
+  const hostScope = model.isWebClient ? LOCAL_SETTINGS_HOST_SCOPE : model.settingsHostScope
   return (
     <SettingsSection
       id="stats"
       title={translate('auto.components.settings.Settings.954a8f5aef', 'Stats & Usage')}
-      description={translate(
-        'auto.components.settings.Settings.8acf3f22e0',
-        'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
-      )}
+      description={
+        // Why: Grok credits come from this computer's status bar, so a server's pane has no Grok tab.
+        hostScope.target.kind === 'local'
+          ? translate(
+              'auto.components.settings.Settings.8acf3f22e0',
+              'Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.'
+            )
+          : translate(
+              'auto.components.settings.Settings.statsServerDescription',
+              'Orca stats plus Claude, Codex, OpenCode and Muse token analytics for this server.'
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('stats')}
     >
-      {view.isSectionMounted('stats') ? <StatsPane /> : null}
+      {!view.isSectionMounted('stats') ? null : hostScope.available ? (
+        <StatsPane host={hostScope.target} />
+      ) : (
+        <SettingsHostScopeUnavailableNotice />
+      )}
     </SettingsSection>
   )
 }

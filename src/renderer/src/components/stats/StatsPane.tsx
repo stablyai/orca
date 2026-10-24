@@ -17,6 +17,14 @@ import {
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import {
+  useStructuredAgentSessionHostCapabilityState,
+  type StructuredAgentSessionHostCapabilityState
+} from '@/runtime/structured-agent-session-host-capability'
+import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
+import { isSameStatsHost } from '../../store/slices/stats'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -101,19 +109,71 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   return <AgentIcon agent={tab} size={14} />
 }
 
-export function StatsPane(): React.JSX.Element {
+function StatsHostUsageNotice({
+  support
+}: {
+  support: StructuredAgentSessionHostCapabilityState
+}): React.JSX.Element {
+  return (
+    <div className="rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
+      {support === 'unsupported'
+        ? translate(
+            'auto.components.stats.StatsPane.hostUsageUpdateRequired',
+            'This server runs an older Orca that cannot report token usage. Update Orca on the server to see its usage here.'
+          )
+        : translate(
+            'auto.components.stats.StatsPane.hostUsageConnecting',
+            'Connecting to this server. Its token usage appears once it answers.'
+          )}
+    </div>
+  )
+}
+
+const LOCAL_STATS_HOST: RuntimeClientTarget = { kind: 'local' }
+
+export function StatsPane({
+  host = LOCAL_STATS_HOST
+}: {
+  /** Host chosen at the top of Settings; this computer when omitted. */
+  host?: RuntimeClientTarget
+}): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const setStatsHost = useAppStore((s) => s.setStatsHost)
+  const hostEnvironmentId = runtimeTargetEnvironmentId(host)
+  // Why: panes mount only once the store reads this host, so their first fetch goes to it.
+  const hostReady = useAppStore((s) => isSameStatsHost(s.statsHost, host))
+  const hostUsageSupport = useStructuredAgentSessionHostCapabilityState(
+    host,
+    USAGE_ANALYTICS_RUNTIME_CAPABILITY
+  )
+  // Why: Grok credits still come from this computer's status bar, so a server does not offer them.
+  const usageOptions =
+    hostEnvironmentId === null
+      ? USAGE_ANALYTICS_OPTIONS
+      : USAGE_ANALYTICS_OPTIONS.filter((option) => option.id !== 'grok')
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   const activeUsageOption =
-    USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
-    USAGE_ANALYTICS_OPTIONS[0]
+    usageOptions.find((option) => option.id === activeUsageTab) ?? usageOptions[0]
+
+  useEffect(() => {
+    setStatsHost(
+      hostEnvironmentId === null
+        ? { kind: 'local' }
+        : { kind: 'environment', environmentId: hostEnvironmentId }
+    )
+  }, [hostEnvironmentId, setStatsHost])
 
   useEffect(() => {
     recordFeatureInteraction('usage-tracking')
-    void fetchStatsSummary()
-  }, [fetchStatsSummary, recordFeatureInteraction])
+  }, [recordFeatureInteraction])
+
+  useEffect(() => {
+    if (hostReady) {
+      void fetchStatsSummary()
+    }
+  }, [fetchStatsSummary, hostEnvironmentId, hostReady])
 
   return (
     <div className="space-y-5">
@@ -185,7 +245,7 @@ export function StatsPane(): React.JSX.Element {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              {USAGE_ANALYTICS_OPTIONS.map((option) => (
+              {usageOptions.map((option) => (
                 <DropdownMenuItem key={option.id} onSelect={() => setActiveUsageTab(option.id)}>
                   <span className="flex min-w-0 items-center gap-2">
                     <UsageAnalyticsOptionIcon tab={option.id} />
@@ -193,7 +253,7 @@ export function StatsPane(): React.JSX.Element {
                   </span>
                   <Check
                     className={`ml-auto size-3.5 ${
-                      activeUsageTab === option.id ? 'opacity-100' : 'opacity-0'
+                      activeUsageOption.id === option.id ? 'opacity-100' : 'opacity-0'
                     }`}
                     aria-hidden
                   />
@@ -207,15 +267,17 @@ export function StatsPane(): React.JSX.Element {
             active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
             vertical jitter below the usage card when switching disabled providers. */}
         <div>
-          {activeUsageTab === 'overview' ? (
+          {!hostReady ? null : hostEnvironmentId !== null && hostUsageSupport !== 'supported' ? (
+            <StatsHostUsageNotice support={hostUsageSupport} />
+          ) : activeUsageOption.id === 'overview' ? (
             <UsageOverviewPane />
-          ) : activeUsageTab === 'claude' ? (
+          ) : activeUsageOption.id === 'claude' ? (
             <ClaudeUsagePane />
-          ) : activeUsageTab === 'codex' ? (
+          ) : activeUsageOption.id === 'codex' ? (
             <CodexUsagePane />
-          ) : activeUsageTab === 'opencode' ? (
+          ) : activeUsageOption.id === 'opencode' ? (
             <OpenCodeUsagePane />
-          ) : activeUsageTab === 'muse' ? (
+          ) : activeUsageOption.id === 'muse' ? (
             <MuseUsagePane />
           ) : (
             <GrokUsagePane />

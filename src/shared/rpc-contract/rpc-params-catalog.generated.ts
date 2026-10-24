@@ -624,6 +624,12 @@ import {
 } from './terminal-viewport-schemas-params'
 import { UpdaterCheckParams } from './updater-params'
 import {
+  GetUsageAnalyticsSnapshotParams,
+  RefreshUsageAnalyticsParams,
+  SetUsageAnalyticsEnabledParams,
+  UsageAnalyticsProviderParams
+} from './usage-analytics-params'
+import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
@@ -1426,6 +1432,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'usage.getScanState': UsageAnalyticsProviderParams,
+  'usage.getSnapshot': GetUsageAnalyticsSnapshotParams,
+  'usage.refresh': RefreshUsageAnalyticsParams,
+  'usage.setEnabled': SetUsageAnalyticsEnabledParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,

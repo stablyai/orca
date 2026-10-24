@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { createClaudeUsageSlice } from './usage-provider-slices'
+import { createStatsSlice } from './stats'
 
 // Paired web clients resolve unbridged desktop usage calls to undefined.
 
@@ -35,7 +36,11 @@ afterEach(() => {
 describe('usage slices in the web client (preload fallback -> undefined)', () => {
   it('claude: fetch and enable no-op without throwing', async () => {
     stubWebClientFallback()
-    const store = create<AppState>()((...args) => createClaudeUsageSlice(...args) as AppState)
+    const store = create<AppState>()(
+      (...args) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fallback calls read only the stats host and the Claude usage slice supplied here.
+        ({ ...createStatsSlice(...args), ...createClaudeUsageSlice(...args) }) as AppState
+    )
     await expect(store.getState().fetchClaudeUsage()).resolves.toBeUndefined()
     await expect(store.getState().enableClaudeUsage()).resolves.toBeUndefined()
     expect(store.getState().claudeUsageScanState).toBeNull()

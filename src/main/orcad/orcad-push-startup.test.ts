@@ -63,6 +63,7 @@ vi.mock('./orcad-plaintext-credential-migration', () => ({
   migratePlaintextCredentials: () => ({ sealed: 0, failed: 0 })
 }))
 vi.mock('./orcad-account-services', () => ({ createOrcadAccountServices: () => null }))
+vi.mock('./orcad-usage-analytics', () => ({ startOrcadUsageAnalytics: () => {} }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: state.browserProvider }))
 vi.mock('./orcad-instance-lock', () => ({
   acquireOrcadInstanceLock: () => ({

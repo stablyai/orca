@@ -33,7 +33,7 @@ export async function createPersistedUsageTestFixture(getPath: Mock<() => string
   }
   const transcripts = [transcript]
   getPath.mockReturnValue(directory)
-  initClaudeUsagePath()
+  initClaudeUsagePath(directory)
   vi.mocked(listClaudeTranscriptFiles).mockReset()
   vi.mocked(listClaudeTranscriptFiles).mockImplementation(async () => [...transcripts].sort())
   vi.mocked(splitUsageCacheFileViaWorker).mockReset()

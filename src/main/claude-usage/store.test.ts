@@ -92,7 +92,7 @@ describe('ClaudeUsageStore', () => {
   beforeEach(() => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
-    initClaudeUsagePath()
+    initClaudeUsagePath(tempUserData)
     vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
     vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       sessions: [],
