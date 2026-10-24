@@ -3,7 +3,7 @@ import {
   isCodexAppServerRequestError,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
-import type { CodexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { readCodexThreadId } from './codex-structured-thread-facts'
 
 export type CodexOpenedThread = {

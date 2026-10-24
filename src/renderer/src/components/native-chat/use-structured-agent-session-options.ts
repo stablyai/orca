@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { AgentSessionOptionResult } from '../../../../shared/agent-session-wire'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
@@ -9,16 +8,17 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionSnapshot
+  structuredAgentSessionOptionSnapshot,
+  type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useRememberSessionOptionPicks } from './use-structured-agent-session-option-picks'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
-import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import {
+  useStructuredAgentSessionOptionState,
+  type StructuredAgentSessionOptionsArgs
+} from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
-import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionLaunchSelection,
   holdStructuredAgentSessionLaunchOption,
@@ -27,22 +27,7 @@ import {
 
 const NO_HELD_OPTIONS: Readonly<Record<string, string>> = {}
 
-export function useStructuredAgentSessionOptions(args: {
-  agent: AgentType
-  sessionId: string
-  target: RuntimeClientTarget
-  transportEnabled: boolean
-  isVisible: boolean
-  providerVisible: boolean
-  providerStarting?: boolean
-  providerRunning?: boolean
-  hostOptionStamp?: string
-  fence: number | null
-  turnId: string | null
-  unloadedTurnRevisions: number | undefined
-  mutate: StructuredAgentSessionMutate
-  launch?: StructuredAgentSessionLaunchView
-}) {
+export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOptionsArgs) {
   const {
     agent,
     fence,
@@ -116,6 +101,12 @@ export function useStructuredAgentSessionOptions(args: {
     updateOptionState,
     receiveCatalog
   })
+
+  const pendingView = useCallback(
+    (state: StructuredAgentSessionOptionState) =>
+      optionView(state, launchSeedOptions, held, launch?.explicitOptions),
+    [held, launch?.explicitOptions, launchSeedOptions, optionView]
+  )
 
   const rememberOptionPicks = useRememberSessionOptionPicks(target, agent)
   const sendStructuredOption = useCallback(
@@ -212,11 +203,11 @@ export function useStructuredAgentSessionOptions(args: {
     lockSnapshotRef.current = lockSnapshot
   })
   const optionSnapshot = lockSnapshot(
-    structuredAgentSessionOptionSnapshot(optionView(optionState, launchSeedOptions, held))
+    structuredAgentSessionOptionSnapshot(pendingView(optionState))
   )
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
-      const view = optionView(optionStateRef.current, launchSeedOptions, held)
+      const view = pendingView(optionStateRef.current)
       const pickState = {
         ...view,
         pendingId: providerStarting || pendingOptionsRef.current[id] === undefined ? null : id
@@ -245,13 +236,11 @@ export function useStructuredAgentSessionOptions(args: {
     },
     [
       fence,
-      held,
-      launchSeedOptions,
       optionCatalog,
       isCurrentContext,
       optionStateRef,
-      optionView,
       pendingOptionsRef,
+      pendingView,
       providerStarting,
       sendStructuredOption,
       sessionId,

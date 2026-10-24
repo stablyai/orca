@@ -66,6 +66,7 @@ export type AgentLaunchIntent = {
   /** Seeded launch options: narrowed to what a structured create accepts, and read as the model,
    *  effort and mode preferences of a terminal launch. */
   sessionOptions?: Readonly<Record<string, unknown>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: AgentLaunchReusedTerminal
   /**
    * Per-call replacement for the user's configured launch arguments, as a saved launch recipe

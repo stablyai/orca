@@ -1,3 +1,4 @@
+import type { AgentSessionWriteFailure } from '../../../shared/agent-session-write-failure'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session-wire'
 import type {
   AgentJournalCursor,
@@ -18,6 +19,7 @@ export type StructuredAgentLaunchReceipt = {
   fence: number
   firstMessage?: AgentJournalSubmission
   cursor?: AgentJournalCursor
+  configurationFailure?: AgentSessionWriteFailure
 }
 
 export type StructuredLaunchRecoveryState = {

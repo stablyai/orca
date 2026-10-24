@@ -240,18 +240,29 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
     expect(container.textContent).not.toContain('Launch agent')
   })
-  it('hides the dialog and auto-starts once when the saved repo launch recipe matches', async () => {
-    resetStore(
-      settingsWithGlobalRecipe({ agentId: 'claude', commandInputTemplate: '{basePrompt}' }),
-      [repoWithSavedRecipe()]
-    )
-    renderControlledDialog({ repoId: 'repo-1' })
+  it('auto-starts a sparse repo recipe without giving it inherited model ownership', async () => {
+    const settings = settingsWithGlobalRecipe({
+      agentId: 'codex',
+      commandInputTemplate: '{basePrompt}',
+      launchPreferences: { agentId: 'codex', model: 'gpt-5.6-terra' }
+    })
+    const repo = repoWithSavedRecipe()
+    const sparse = { agentArgs: '--model gpt-5.6-sol' }
+    repo.sourceControlAi = { actionOverrides: { resolveConflicts: sparse } }
+    resetStore(settings, [repo])
+    renderControlledDialog({ repoId: 'repo-1', savedAgentArgs: sparse.agentArgs })
     expect(container.textContent).not.toContain('Launch agent')
     await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(mocks.onOpenChange).toHaveBeenCalledWith(false))
-    expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1)
-    expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: sparse.agentArgs,
+      sessionOptions: { model: 'gpt-5.6-terra' },
+      sessionOptionsYieldToAgentArgs: true
+    })
     expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
+    expect(repo.sourceControlAi.actionOverrides?.resolveConflicts).toEqual(sparse)
     expect(container.textContent).not.toContain('Launch agent')
   })
   it('keeps saved arguments on a prospective SSH terminal launch', async () => {

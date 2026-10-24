@@ -54,6 +54,8 @@ export function dropRepoLegacyInstructionForAction(
   }
 }
 
+/** The action an edit starts from: the complete recipe it resolves to, owned or partial, keeping a
+ *  saved explicit args clear and never the agent only detected to run a default selection. */
 export function readCompleteRecipeForDraft(
   current: RepoSourceControlAiOverrides,
   settings: GlobalSettings | null,
@@ -64,7 +66,8 @@ export function readCompleteRecipeForDraft(
     repo: { sourceControlAi: current },
     actionId
   })
-  return completeRepoActionRecipe(recipe, actionId)
+  const cleared = current.actionOverrides?.[actionId]?.agentArgs === null
+  return { ...completeRepoActionRecipe(recipe, actionId), ...(cleared ? { agentArgs: null } : {}) }
 }
 
 export function setActionOverride(
@@ -155,54 +158,34 @@ export function withRepoAiActionMode(
   )
 }
 
-export function withRepoAiActionAgent(
-  base: RepoSourceControlAiOverrides,
-  settings: GlobalSettings | null,
-  actionId: SourceControlActionId,
-  agentId: RepoActionRecipe['agentId']
-): RepoSourceControlAiOverrides {
-  const currentRecipe =
-    base.actionOverrides?.[actionId] ?? readCompleteRecipeForDraft(base, settings, actionId)
-  return normalizeRepoAiDraft(
-    setActionOverride(base, actionId, {
-      ...currentRecipe,
-      agentId
-    })
-  )
-}
-
 export function withRepoAiActionRecipeText(
   base: RepoSourceControlAiOverrides,
   settings: GlobalSettings | null,
   actionId: SourceControlActionId,
-  text: { commandInputTemplate: string; agentArgs: string }
+  text: ActionRecipeTextDraft
 ): RepoSourceControlAiOverrides {
-  const currentRecipe =
-    base.actionOverrides?.[actionId] ?? readCompleteRecipeForDraft(base, settings, actionId)
+  const currentRecipe = readCompleteRecipeForDraft(base, settings, actionId)
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...currentRecipe,
-      commandInputTemplate: text.commandInputTemplate,
-      agentArgs: text.agentArgs
+      ...(typeof text.commandInputTemplate === 'string'
+        ? { commandInputTemplate: text.commandInputTemplate }
+        : {}),
+      ...(text.agentArgs !== undefined ? { agentArgs: text.agentArgs } : {})
     })
   )
 }
 
-export type ActionRecipeTextDraft = {
-  commandInputTemplate: string
-  agentArgs: string
-}
+/** The action's text as stored: an unset or cleared value stays so until the user types; inputs
+ *  show it as empty. */
+export type ActionRecipeTextDraft = Pick<RepoActionRecipe, 'commandInputTemplate' | 'agentArgs'>
 
 export function readActionRecipeTextDraft(
   value: RepoSourceControlAiOverrides,
   actionId: SourceControlActionId
 ): ActionRecipeTextDraft {
   const recipe = value.actionOverrides?.[actionId]
-  return {
-    commandInputTemplate:
-      typeof recipe?.commandInputTemplate === 'string' ? recipe.commandInputTemplate : '',
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs : ''
-  }
+  return { commandInputTemplate: recipe?.commandInputTemplate, agentArgs: recipe?.agentArgs }
 }
 
 /** Overlay the in-flight custom-command and per-action text drafts onto the optimistic value for display. */

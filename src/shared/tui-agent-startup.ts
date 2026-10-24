@@ -73,9 +73,7 @@ export function buildAgentStartupPlan(args: {
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: picker flags are a one-time launch choice; a resumed provider
-    // session restores its own state and must retain only explicit user args.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
 
   if (!trimmedPrompt) {
@@ -249,8 +247,7 @@ export function buildAgentDraftLaunchPlan(args: {
     agent === 'omp' ? withFreshOmpLaunch(baseCommand.command, shell) : baseCommand.command
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    // Why: see the new-session path above — resume must not replay picker flags.
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag && shell === 'cmd' && /[\r\n]/.test(trimmed)) {

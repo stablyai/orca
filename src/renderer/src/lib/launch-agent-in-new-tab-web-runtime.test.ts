@@ -113,6 +113,11 @@ describe('launchAgentInNewTab paired web runtime', () => {
         pasteDraftAfterLaunch: false
       })
     )
+    const startupPlan = result?.startupPlan
+    expect(startupPlan).toBeDefined()
+    if (!startupPlan) {
+      throw new Error('Expected the terminal startup plan')
+    }
     expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
@@ -121,12 +126,12 @@ describe('launchAgentInNewTab paired web runtime', () => {
       ...(activate ? {} : { selectWorktree: false }),
       agentSessionKind: 'fresh',
       launchAgent: 'claude',
-      command: result?.startupPlan.launchCommand,
-      env: result?.startupPlan.env,
-      launchConfig: result?.startupPlan.launchConfig,
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
       viewMode: 'terminal'
     })
-    expect(result?.startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
+    expect(startupPlan.launchConfig.agentArgs).toBe(store.settings.agentDefaultArgs.claude)
     expect(mocks.createTab).not.toHaveBeenCalled()
     await expect(result?.terminalCompletion).resolves.toMatchObject({
       outcome: { status },

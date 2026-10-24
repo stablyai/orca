@@ -23,7 +23,7 @@ type UseSourceControlAgentActionStartArgs = {
   agentArgs: string
   /** False when the launch would be structured native chat, which reads no CLI arguments. */
   agentArgsApply: boolean
-  commandTemplate: string
+  recipe: SourceControlActionRecipe
   saveLaunchRecipe: boolean
   saveTargetValue: string
   actionId: SourceControlLaunchActionId
@@ -46,6 +46,9 @@ type UseSourceControlAgentActionStartArgs = {
     commandInput: string
     /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
     agentArgs?: string
+    /** The action's saved choice, on either route. */
+    sessionOptions?: Readonly<Record<string, string>>
+    sessionOptionsYieldToAgentArgs?: true
   }) => boolean | Promise<boolean>
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,
@@ -82,7 +85,7 @@ export function useSourceControlAgentActionStart({
   trimmedCommandInput,
   agentArgs,
   agentArgsApply,
-  commandTemplate,
+  recipe,
   saveLaunchRecipe,
   saveTargetValue,
   actionId,
@@ -157,7 +160,7 @@ export function useSourceControlAgentActionStart({
           trimmedCommandInput,
           agentArgs,
           agentArgsApply,
-          commandTemplate,
+          recipe,
           saveTargetValue: saveLaunchRecipe ? (saveTargetValueOverride ?? saveTargetValue) : 'none',
           actionId,
           repoId,
@@ -192,7 +195,7 @@ export function useSourceControlAgentActionStart({
       agentArgs,
       agentArgsApply,
       commandInput,
-      commandTemplate,
+      recipe,
       connectionUnavailable,
       groupId,
       isRemote,

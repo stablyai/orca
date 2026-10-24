@@ -3,7 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
+import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import type { SourceControlActionRecipe } from '../../../shared/source-control-ai-actions'
+import { sourceControlActionLaunchOptions } from '../../../shared/source-control-action-launch-preferences'
 
 const mockCreateTab = vi.fn()
 /** Startup commands published with the created tabs, in creation order. */
@@ -85,6 +89,13 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: mockSeedNativeChatAppliedSessionOptions
 }))
 
+vi.mock('@/lib/launch-agent-in-new-tab-structured-route', () => ({
+  launchStructuredAgentFromNewTab: () => ({
+    surface: { kind: 'host-published' },
+    pasteDraftAfterLaunch: false
+  })
+}))
+
 describe('launchAgentInNewTab terminal tab activation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -92,6 +103,24 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     setLocalRuntimeCapabilitiesForTests([])
     store.settings = placementSettings()
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
+  })
+
+  it('ignores hidden malformed arguments for chat and rejects them before any terminal creation', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const args = { agent: 'codex' as const, worktreeId: 'wt-1', agentArgs: '--model "unfinished' }
+    const result = launchAgentInNewTab({
+      ...args,
+      agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+        route: 'structured-native-chat',
+        requestId: 'chat',
+        agent: 'codex',
+        worktreeId: 'wt-1'
+      })
+    })
+    expect(result?.surface.kind).toBe('host-published')
+    expect(result?.startupPlan).toBeUndefined()
+    expect(launchAgentInNewTab({ ...args, requestId: 'terminal' })).toBeNull()
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
   // Why: the store scopes activation to the launch's own workspace, so the floating panel launches
@@ -142,5 +171,62 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     )
     // Chat UI model preferences belong to structured chats, not a terminal fallback.
     expect(queuedStartups()[0]).not.toHaveProperty('sessionOptions')
+  })
+
+  it('applies a saved action choice as terminal flags by scope', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const base = getDefaultSettings('/tmp')
+    const settings = {
+      ...base,
+      sourceControlAi: {
+        ...base.sourceControlAi!,
+        actions: {
+          fixChecks: {
+            agentId: 'codex' as const,
+            agentArgs: '--model old --dangerously-bypass-approvals-and-sandbox',
+            launchPreferences: {
+              agentId: 'codex' as const,
+              model: 'gpt-5.6-terra',
+              options: { effort: 'high' },
+              permissionMode: 'ask' as const
+            }
+          }
+        }
+      }
+    }
+    const launch = (fixChecks?: SourceControlActionRecipe) => {
+      const recipe = resolveSourceControlActionRecipe({
+        settings,
+        repo: fixChecks ? { sourceControlAi: { actionOverrides: { fixChecks } } } : null,
+        actionId: 'fixChecks'
+      })
+      const options = sourceControlActionLaunchOptions(recipe, 'codex')
+      launchAgentInNewTab({
+        requestId: 'request-3',
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        agentArgs: recipe.agentArgs,
+        ...options
+      })
+      return { command: queuedStartups().at(-1)?.command, chat: options.sessionOptions }
+    }
+
+    // Saved in the same scope as the raw args: the choice replaces the conflicting flags.
+    const global = launch()
+    expect(global.command).toContain("'-m' 'gpt-5.6-terra' '-c' 'model_reasoning_effort=high'")
+    expect(global.command).not.toMatch(/old|dangerously/)
+    // A repository's own choice outranks the raw args it inherits.
+    const repoChoice = launch({
+      agentId: 'codex',
+      launchPreferences: { agentId: 'codex', model: 'gpt-5.5', permissionMode: 'full-access' }
+    })
+    expect(repoChoice.command).toContain("'-m' 'gpt-5.5'")
+    expect(repoChoice.command?.match(/dangerously-bypass/g)).toHaveLength(1)
+    expect(repoChoice.command).not.toContain('old')
+    // N1: a legacy override's own raw model beats the inherited choice on terminals only.
+    const legacy = launch({ agentArgs: '--model mine' })
+    expect(legacy.command).toContain("'--model' 'mine'")
+    expect(legacy.command).not.toMatch(/gpt-5\.6-terra|model_reasoning_effort/)
+    expect(legacy.chat).toMatchObject({ model: 'gpt-5.6-terra', permissionMode: 'ask' })
   })
 })

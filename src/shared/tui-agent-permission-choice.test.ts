@@ -673,7 +673,8 @@ it.each([false, true])('bounds actual startup/raw resume (%s)', (resume) => {
         providerSession: { key: 'session_id', id: 's' }
       })
     )
-    expect(plan?.launchConfig.agentCommand).toBe(`claude ${raw}`)
+    // Restart records surviving raw pins; the provider restores the generated model seed.
+    expect(plan?.launchConfig.agentCommand).toBe(resume ? 'claude' : `claude ${raw}`)
     expect(plan?.launchCommand).toBe(`claude ${resume ? "'--model' 'opus' '--resume' 's'" : raw}`)
     expect(work.visits).toBeLessThanOrEqual(40 * (2 * n + 1))
     expectSettingsWorkScale(`startup-${resume}`, n, [work.visits])

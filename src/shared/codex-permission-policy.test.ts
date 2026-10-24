@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from './codex-permission-policy'
 
 const FULL_ACCESS = {
   approvalPolicy: 'never',

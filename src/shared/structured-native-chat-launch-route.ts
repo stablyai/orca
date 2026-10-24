@@ -54,6 +54,7 @@ export type StructuredNativeChatSupportInput = {
   clientCapabilities?: readonly string[]
   /** Host-derived. Absent means the kind was never established, which is not evidence of any kind. */
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   startsOutsideWorkspaceRoot?: boolean
   /** An existing PTY agent keeps its execution transport. */
@@ -91,7 +92,10 @@ export function resolveStructuredNativeChatSupport(
   // A paired Orca server runs structured sessions itself and answers for them below. An SSH host
   // has no Orca runtime of its own to run one.
   const host = parseExecutionHostId(input.executionHostId)
-  if (host?.kind !== 'local' && host?.kind !== 'runtime') {
+  if (
+    input.projectExecutionKind === 'ssh' ||
+    (host?.kind !== 'local' && host?.kind !== 'runtime')
+  ) {
     return { supported: false, blocker: 'remote-execution-host' }
   }
   if (input.reusesTerminal === true) {

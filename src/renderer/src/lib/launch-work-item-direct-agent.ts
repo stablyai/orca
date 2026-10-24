@@ -16,11 +16,14 @@ import {
   resolveTuiAgentLaunchEnv,
   type AgentLaunchProfileSettings
 } from '../../../shared/tui-agent-launch-defaults'
+import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
   agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  sessionOptionsYieldToAgentArgs?: true
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
   settings:
@@ -47,6 +50,13 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings, args.launchPlatform)
+  const sessionOptionInputs = terminalSessionOptionInputs({
+    agent: args.agent,
+    sessionOptions: args.sessionOptions,
+    yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    agentArgs: effectiveAgentArgs,
+    shell: args.shell ?? (args.launchPlatform === 'win32' ? 'powershell' : 'posix')
+  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -58,7 +68,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           ...(args.shell ? { shell: args.shell } : {}),
           isRemote: args.isRemote,
           agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv
+          agentEnv: effectiveAgentEnv,
+          ...sessionOptionInputs
         })
 
   if (draftLaunchPlan) {
@@ -88,6 +99,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     isRemote: args.isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
+    ...sessionOptionInputs,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && args.promptDelivery === 'draft') {

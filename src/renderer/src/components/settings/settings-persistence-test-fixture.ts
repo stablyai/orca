@@ -35,7 +35,7 @@ beforeEach(() => {
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { settings: { set: persist } }
+    value: { settings: { set: persist }, preflight: { detectAgents: async () => [] } }
   })
 })
 

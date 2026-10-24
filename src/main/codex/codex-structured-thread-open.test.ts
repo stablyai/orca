@@ -5,7 +5,7 @@ import {
   openCodexAppServerConnection,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(

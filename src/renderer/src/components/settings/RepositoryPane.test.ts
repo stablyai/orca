@@ -72,6 +72,7 @@ beforeEach(() => {
   // paths; provide a minimal renderer bridge so mounting the full pane doesn't
   // throw in the test environment.
   ;(window as unknown as { api: unknown }).api = {
+    preflight: { detectAgents: async () => [] },
     fs: { readDir: () => Promise.resolve([]) }
   }
 })

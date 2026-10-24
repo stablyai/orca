@@ -215,7 +215,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       trimmedCommandInput: 'Fix the failing check',
       agentArgs: '',
       agentArgsApply: false,
-      commandTemplate: '{basePrompt}',
+      recipe: { commandInputTemplate: '{basePrompt}' },
       saveTargetValue: 'none',
       actionId: 'resolveComments',
       settings: null,

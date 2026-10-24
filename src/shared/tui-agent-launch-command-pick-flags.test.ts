@@ -43,6 +43,22 @@ describe('one copy of each chat-picked flag', () => {
     }
   )
 
+  it('treats spaced Codex config model and effort as raw pins or removes them when overridden', () => {
+    const agentArgs = '-c " model = o3" -c " model_reasoning_effort = low" -c model_verbosity=low'
+    const inputs = {
+      agent: 'codex' as const,
+      agentArgs,
+      sessionOptions: { model: 'gpt-5.5', effort: 'high' }
+    }
+    expect(launch(inputs).appliedSessionOptions).toEqual({})
+    const saved = launch({ ...inputs, sessionOptionsOverrideAgentArgs: true })
+    expect(saved.appliedSessionOptions).toEqual(inputs.sessionOptions)
+    expect(saved.resumeLaunch).toEqual({
+      agentCommand: "codex '-c' 'model_verbosity=low'",
+      agentArgs: "'-c' 'model_verbosity=low'"
+    })
+  })
+
   it('sends only the configured Grok model without the picked model effort', () => {
     const result = launch({
       agent: 'grok',
@@ -135,5 +151,82 @@ describe('one copy of each chat-picked flag', () => {
     })
     expect(result.command).toBe("codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=low'")
     expect(result.appliedSessionOptions).toEqual({ model: 'gpt-5.5' })
+  })
+})
+
+describe('a saved permission mode on terminals', () => {
+  it.each([
+    [
+      'claude',
+      'accept-edits',
+      '--dangerously-skip-permissions',
+      "'--permission-mode' 'acceptEdits'"
+    ],
+    [
+      'claude',
+      'ask',
+      '--permission-mode auto --verbose',
+      "'--verbose' '--permission-mode' 'default'"
+    ],
+    // A required value that looks like a permission flag, and a positional after one, both stay.
+    [
+      'claude',
+      'ask',
+      "--append-system-prompt '--dangerously-skip-permissions' --dangerously-skip-permissions hi",
+      "'--append-system-prompt' '--dangerously-skip-permissions' 'hi' '--permission-mode' 'default'"
+    ],
+    [
+      'claude',
+      'ask',
+      '-- --dangerously-skip-permissions',
+      "'--permission-mode' 'default' '--' '--dangerously-skip-permissions'"
+    ],
+    [
+      'codex',
+      'ask',
+      '-a never -s danger-full-access --yolo --not-so-yolo -c " approvals_reviewer = auto_review" -c "default_permissions = workspace" -c model_verbosity=low',
+      `'-c' 'model_verbosity=low' '-a' 'on-request' '-s' 'read-only' '-c' 'approvals_reviewer="user"'`
+    ],
+    ['codex', 'auto', '--dangerously-bypass-approvals-and-sandbox', "'--approve-for-me'"],
+    [
+      'codex',
+      'full-access',
+      '-a never -c sandbox_mode=read-only',
+      "'--dangerously-bypass-approvals-and-sandbox'"
+    ],
+    [
+      'grok',
+      'ask',
+      '--permission-mode bypassPermissions --always-approve --yolo --dangerously-skip-permissions',
+      "'--permission-mode' 'default'"
+    ],
+    // No terminal flag for these modes: the raw arguments stay exactly as they were.
+    ['antigravity', 'ask', '--dangerously-skip-permissions', "'--dangerously-skip-permissions'"],
+    [
+      'antigravity',
+      'accept-edits',
+      '--dangerously-skip-permissions',
+      "'--dangerously-skip-permissions'"
+    ],
+    ['opencode', 'full-access', '--print-logs', "'--print-logs'"]
+  ] as const)('%s %s replaces %s', (agent, permissionMode, agentArgs, expectedArgs) => {
+    const plain = launch({ agent, agentArgs: '' }).command
+    const result = launch({
+      agent,
+      agentArgs,
+      sessionOptions: { permissionMode },
+      sessionOptionsOverrideAgentArgs: true
+    })
+    expect(result.command).toBe(expectedArgs ? `${plain} ${expectedArgs}` : plain)
+  })
+
+  it('yields to a permission flag the caller keeps', () => {
+    const result = launch({
+      agent: 'claude',
+      agentArgs: '--dangerously-skip-permissions',
+      sessionOptions: { permissionMode: 'ask' }
+    })
+    expect(result.command).toBe("claude '--dangerously-skip-permissions'")
+    expect(result.appliedSessionOptions).toEqual({})
   })
 })

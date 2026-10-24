@@ -88,7 +88,11 @@ export function resolveSourceControlLaunchAgentScope(input: {
   }
 }
 
-export type SourceControlActionRecipeOverrideField = 'agent' | 'commandTemplate' | 'agentArgs'
+export type SourceControlActionRecipeOverrideField =
+  | 'agent'
+  | 'commandTemplate'
+  | 'agentArgs'
+  | 'launchPreferences'
 
 export type SourceControlActionRecipeOverride = {
   repoId: string
@@ -127,6 +131,9 @@ function readRecipeOverrideFields(
   }
   if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
+  }
+  if (Object.hasOwn(recipe ?? {}, 'launchPreferences')) {
+    fields.push('launchPreferences')
   }
   return fields
 }

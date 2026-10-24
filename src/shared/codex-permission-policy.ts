@@ -1,5 +1,5 @@
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
-import type { CodexApprovalsReviewer } from '../../shared/codex-subagent-reviewer'
+import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
+import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 export type CodexStructuredPermissionPolicy =
   | {
@@ -35,3 +35,18 @@ export function codexStructuredPermissionPolicy(
 ): CodexStructuredPermissionPolicy {
   return mode === 'full-access' ? FULL_ACCESS_POLICY : mode === 'auto' ? AUTO_POLICY : ASK_POLICY
 }
+
+/**
+ * Ask for a Codex terminal, as the CLI's own flags. Intended difference from chat Ask: the
+ * interactive CLI offers only `on-request` and `never` approvals (no `untrusted`), so a read-only
+ * sandbox is what makes it ask before every edit, while commands follow `on-request`. Every field
+ * is stated, as for chats, so the user's own `config.toml` cannot turn it into no prompts.
+ */
+export const CODEX_TERMINAL_ASK_ARGS: readonly string[] = [
+  '-a',
+  'on-request',
+  '-s',
+  'read-only',
+  '-c',
+  'approvals_reviewer="user"'
+]

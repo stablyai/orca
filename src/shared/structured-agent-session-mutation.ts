@@ -50,6 +50,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
 }): string {
   return structuredAgentSessionPayloadFingerprint({
@@ -65,6 +66,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
       // recorded one, since the host owns the id.
       tabId: input.tabId,
       firstMessage: input.firstMessage,
+      optionsMode: input.optionsMode,
       options: input.options
     }
   })

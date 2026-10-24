@@ -49,7 +49,7 @@ export function buildAgentResumeStartupPlan(args: {
     ? ({
         ok: true,
         command: resolvedAgentCommand,
-        commandWithoutSessionOptions: resolvedAgentCommand,
+        resumeLaunch: { agentCommand: resolvedAgentCommand },
         appliedSessionOptions: {}
       } as const)
     : resolveAgentLaunchCommand({
@@ -67,7 +67,7 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
-    agentCommand: baseCommand.commandWithoutSessionOptions
+    ...baseCommand.resumeLaunch
   })
   const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const applied = baseCommand.appliedSessionOptions

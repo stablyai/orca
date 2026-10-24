@@ -34,6 +34,7 @@ export type AgentLaunchFingerprintInput = {
     | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
   /** In: a launch carrying `--model opus` is a different operation from one without, so a retry
    *  that changed them must conflict rather than replay the first answer. `null` is a value here,
@@ -72,6 +73,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
+    chatOptions: input.chatOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
     cwd: input.cwd,

@@ -65,12 +65,13 @@ export function agentLaunchSurfaceFactory(
       worktreeId,
       agent,
       options,
+      chatOptions,
       sessionId: requested,
       tabId,
       withoutPrompt
     }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
-      const seeded = narrowStructuredLaunchSeedOptions(options)
+      const seeded = chatOptions ?? narrowStructuredLaunchSeedOptions(options)
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         withoutPrompt === true &&
@@ -97,6 +98,7 @@ export function agentLaunchSurfaceFactory(
         },
         worktree: `id:${worktreeId}`,
         agent,
+        ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
@@ -144,7 +146,7 @@ export function agentLaunchSurfaceFactory(
       viewMode,
       accountEnv
     }) => {
-      const launchPreferences = toAgentLaunchPreferences(options)
+      const launchPreferences = toAgentLaunchPreferences(options, agent)
       let promptRodeLaunchCommand = false
       const hasEarlyTab = earlyTab !== null
       if (earlyTab?.closedByUser()) {

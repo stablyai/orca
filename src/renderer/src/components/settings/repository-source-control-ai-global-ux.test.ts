@@ -5,6 +5,15 @@ import { normalizeSourceControlAiSettings } from '../../../../shared/source-cont
 import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
 import type { SourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
+import { withRepoAiActionLaunchPreferences } from './repository-source-control-ai-action-agent-draft'
+import {
+  readActionRecipeTextDraft,
+  withRepoAiActionRecipeText
+} from './repository-source-control-ai-draft'
+import { toSourceControlAiRepoUpdate } from '../../../../shared/source-control-ai-recipe-save'
+import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
 
 const source = normalizeSourceControlAiSettings(undefined, undefined)
 
@@ -232,5 +241,70 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
     expect(result.current.displayRepoAi.enabled).toBeUndefined()
     expect(result.current.displayRepoAi.actionOverrides?.fixCommitFailure?.agentId).toBe('codex')
     expect(result.current.saveError).toBe('Failed to save Source Control AI settings.')
+  })
+})
+
+// One action edit saves that action complete, through the real serializer, and nothing else.
+describe('editing one repository action', () => {
+  const base = getDefaultSettings('/tmp')
+  const terra = { agentId: 'codex' as const, model: 'gpt-5.6-terra' }
+  const global = { agentId: 'codex' as const, commandInputTemplate: 'g', agentArgs: '--global' }
+  const actions = {
+    fixCommitFailure: { ...global, launchPreferences: terra },
+    fixPushFailure: global
+  }
+  const settings = { ...base, sourceControlAi: { ...base.sourceControlAi!, actions } }
+  const reload = (repo: RepoSourceControlAiOverrides, actionId: SourceControlActionId) => {
+    const update = toSourceControlAiRepoUpdate(repo)
+    const sourceControlAi = update.sourceControlAi ?? undefined
+    return resolveSourceControlActionRecipe({ settings, repo: { sourceControlAi }, actionId })
+  }
+  const editPrompt = (repo: RepoSourceControlAiOverrides, actionId: SourceControlActionId) =>
+    withRepoAiActionRecipeText(repo, settings, actionId, {
+      ...readActionRecipeTextDraft(repo, actionId),
+      commandInputTemplate: 'mine'
+    })
+
+  it('keeps a legacy partial row on its agent and empty args when its choice is set or reset', () => {
+    const legacy = { actionOverrides: { fixCommitFailure: { agentArgs: '' } } }
+    const set = (value?: typeof terra) =>
+      reload(
+        withRepoAiActionLaunchPreferences(legacy, settings, 'fixCommitFailure', value),
+        'fixCommitFailure'
+      )
+    const luna = { ...terra, model: 'gpt-5.6-luna' }
+    expect(set(luna)).toMatchObject({ agentId: 'codex', agentArgs: '', launchPreferences: luna })
+    expect(set()).toMatchObject({ agentId: 'codex', agentArgs: '' })
+    expect(set().launchPreferences).toBeUndefined()
+  })
+
+  it('makes the copied model owned by the action, so it outranks the raw model it yielded to', () => {
+    const legacy = { actionOverrides: { fixCommitFailure: { agentArgs: '--model gpt-5.6-sol' } } }
+    const stored = {
+      settings,
+      repo: { sourceControlAi: legacy },
+      actionId: 'fixCommitFailure'
+    } as const
+    expect(resolveSourceControlActionRecipe(stored).launchPreferencesYieldToAgentArgs).toBe(true)
+    const edited = reload(editPrompt(legacy, 'fixCommitFailure'), 'fixCommitFailure')
+    expect(edited).toMatchObject({ commandInputTemplate: 'mine', launchPreferences: terra })
+    expect(edited.launchPreferencesYieldToAgentArgs).toBeUndefined()
+  })
+
+  it('saves a prompt edit without authoring args the user never typed or touching a sibling', () => {
+    const sibling = { agentArgs: '--repo' }
+    const cleared = {
+      fixCommitFailure: { agentId: 'codex' as const, agentArgs: null },
+      fixPushFailure: sibling
+    }
+    expect(editPrompt({ actionOverrides: cleared }, 'fixCommitFailure').actionOverrides).toEqual({
+      fixCommitFailure: expect.objectContaining({ agentArgs: null, commandInputTemplate: 'mine' }),
+      fixPushFailure: sibling
+    })
+    // Absent args under nonempty Globals: the edited action keeps the args it ran with.
+    const absent = { actionOverrides: { fixCommitFailure: { agentId: 'codex' as const } } }
+    expect(reload(editPrompt(absent, 'fixCommitFailure'), 'fixCommitFailure').agentArgs).toBe(
+      '--global'
+    )
   })
 })

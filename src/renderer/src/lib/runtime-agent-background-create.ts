@@ -34,7 +34,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
   const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
-  const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
+  const launchPreferences = toAgentLaunchPreferences(args.sessionOptions, args.agent)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
     hostAuthority: () =>

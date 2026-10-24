@@ -44,7 +44,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   session.terminalColorQueryReplies = session.terminalTheme
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
     : undefined
-  session.agentLaunchPreferences = toAgentLaunchPreferences(session.paneStartup?.sessionOptions)
+  const launchAgent = session.paneStartup?.launchAgent
+  session.agentLaunchPreferences = launchAgent
+    ? toAgentLaunchPreferences(session.paneStartup?.sessionOptions, launchAgent)
+    : undefined
   session.transportOptions = buildPaneTransportOptions(session)
   if (session.connectionOwnerHydrating) {
     // Why: this pane holds an inert transport until its host resolves; register it so

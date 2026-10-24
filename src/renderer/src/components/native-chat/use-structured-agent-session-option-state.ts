@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type {
@@ -302,4 +304,21 @@ export function useStructuredAgentSessionOptionState(args: {
     optionMutationGeneration,
     updateOptionState
   }
+}
+
+export type StructuredAgentSessionOptionsArgs = {
+  agent: AgentType
+  sessionId: string
+  target: RuntimeClientTarget
+  transportEnabled: boolean
+  isVisible: boolean
+  providerVisible: boolean
+  providerStarting?: boolean
+  providerRunning?: boolean
+  hostOptionStamp?: string
+  fence: number | null
+  turnId: string | null
+  unloadedTurnRevisions: number | undefined
+  mutate: StructuredAgentSessionMutate
+  launch?: StructuredAgentSessionLaunchView
 }

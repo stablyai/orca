@@ -31,6 +31,7 @@ export type StructuredAgentSessionCreateParams = {
   tabId?: string
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY`. */
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
   tabPlacement?: { groupId?: string; afterTabId?: string }
@@ -70,6 +71,7 @@ export function structuredAgentSessionCreateParams(args: {
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
   /** A display hint, outside the fingerprint: a retry may name a place that moved. */
   tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
@@ -82,6 +84,7 @@ export function structuredAgentSessionCreateParams(args: {
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
     ...(args.tabId ? { tabId: args.tabId } : {}),
     ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+    ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
     ...(args.options ? { options: args.options } : {})
   }
   return {
