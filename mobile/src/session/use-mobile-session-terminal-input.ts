@@ -18,9 +18,25 @@ import {
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
 } from './mobile-session-route-helpers'
-import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
 import type { TerminalPointerInput } from '../terminal/terminal-webview-contract'
+import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
 import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
+
+function hasIsFocused(node: unknown): node is { isFocused: () => boolean } {
+  return (
+    !!node &&
+    typeof node === 'object' &&
+    'isFocused' in node &&
+    typeof node.isFocused === 'function'
+  )
+}
+
+function isInputNodeFocused(node: unknown): boolean {
+  if (hasIsFocused(node) && node.isFocused()) {
+    return true
+  }
+  return typeof document !== 'undefined' && document.activeElement === node
+}
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
@@ -36,6 +52,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     clientRef,
     connStateRef,
     liveInputRef,
+    commandInputRef,
+    keyboardHeight,
     liveInputFocusTimerRef,
     terminalUnsubsRef,
     activeHandleRef,
@@ -52,15 +70,38 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!activeHandle) {
       return
     }
+    const shouldKeepKeyboard =
+      (keyboardHeight ?? 0) > 0 ||
+      isInputNodeFocused(liveInputRef.current) ||
+      isInputNodeFocused(commandInputRef?.current)
     const nextEnabled = toggleTerminalLiveInput(activeHandle)
     clearPendingLiveInputCommit()
+    clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
     if (nextEnabled) {
+      // Why: focus the already-mounted capture before React unmounts the command field.
+      if (shouldKeepKeyboard) {
+        liveInputRef.current?.focus()
+      }
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
+    } else if (shouldKeepKeyboard) {
+      commandInputRef?.current?.focus()
+      scheduleTerminalLiveInputFocus(
+        liveInputFocusTimerRef,
+        () => commandInputRef?.current?.focus(),
+        0
+      )
     } else {
-      clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
       liveInputRef.current?.blur()
     }
-  }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
+  }, [
+    activeHandle,
+    clearPendingLiveInputCommit,
+    commandInputRef,
+    keyboardHeight,
+    liveInputFocusTimerRef,
+    liveInputRef,
+    toggleTerminalLiveInput
+  ])
 
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
