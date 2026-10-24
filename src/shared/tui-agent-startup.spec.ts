@@ -113,7 +113,7 @@ describe('tui agent startup plans', () => {
       shell: 'cmd'
     })
 
-    expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
+    expect(plan?.launchCommand).toBe('claude ^"fix \\^"quoted\\^" ^& ^%PATH^%^"')
   })
 
   it('terminates Grok options before a flag-shaped POSIX prompt', () => {
