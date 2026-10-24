@@ -60,9 +60,10 @@ export function useMobileRemoteDraftSubmit({
         )
         result = terminalDraftSubmit.interpret(response)
       } catch {
-        if (operationGeneration(current.handle) === generation) {
-          markUncertain(current.handle)
+        if (operationGeneration(current.handle) !== generation) {
+          return { applied: false }
         }
+        markUncertain(current.handle)
         showToast('Result unknown — check the terminal before sending again', 2600)
         return { applied: false }
       }

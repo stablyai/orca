@@ -66,9 +66,10 @@ export function useMobileRemoteDraftSave({
       )
       result = terminalDraftSave.interpret(response)
     } catch {
-      if (operationGeneration(current.handle) === generation) {
-        markUncertain(current.handle)
+      if (operationGeneration(current.handle) !== generation) {
+        return
       }
+      markUncertain(current.handle)
       showToast('Result unknown — check the terminal before retrying', 2600)
       return
     }

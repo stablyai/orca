@@ -178,8 +178,14 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         handle !== activeHandleRef.current
       ) {
         const live = sessionRef.current
-        // Release a lease the user abandoned (Exit or another terminal), but not one a newer load owns.
-        if (!live || live.handle !== handle || live.epoch !== next.epoch) {
+        // Why: a newer pending load on the same handle reuses this lease; only an explicit Exit or
+        // a switch to another terminal leaves it abandoned.
+        const abandonedByExit = generation !== operationGeneration(handle)
+        const switchedTerminal = handle !== activeHandleRef.current
+        if (
+          (abandonedByExit || switchedTerminal) &&
+          (!live || live.handle !== handle || live.epoch !== next.epoch)
+        ) {
           release(next)
         }
         return
