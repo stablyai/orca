@@ -424,4 +424,30 @@ describe('quota read safety and diagnostic precedence', () => {
     expect((await h.fetch()).status).toBe('ok')
     expect(runCommand).toHaveBeenCalledTimes(3)
   })
+
+  it('resolves Antigravity CLI when environment provides Windows Git Bash PATH', async () => {
+    const runCommand = vi.fn().mockImplementation(async (spec: { args?: readonly string[] }) =>
+      spec.args?.[0] === '--version'
+        ? processResult({ stdout: 'agy version 1.4.4\n' })
+        : processResult({ stdout: USAGE_ENVELOPE })
+    )
+    const resolveCommand = vi.fn().mockImplementation(async (_cmd, opts) => {
+      const pathValue = opts.env.Path ?? opts.env.PATH
+      if (pathValue?.includes('C:\\Users\\duyen\\AppData\\Local\\agy\\bin')) {
+        return 'C:\\Users\\duyen\\AppData\\Local\\agy\\bin\\agy.exe'
+      }
+      return null
+    })
+    const result = await fetchAntigravityRateLimits({
+      platform: 'win32',
+      resolveCommand,
+      runCommand,
+      resolveEnvironment: async () => ({
+        Path: 'C:\\Users\\duyen\\AppData\\Local\\agy\\bin;C:\\Program Files\\Git\\usr\\bin'
+      })
+    })
+
+    expect(result.status).toBe('ok')
+    expect(result.weekly).toMatchObject({ usedPercent: 60 })
+  })
 })

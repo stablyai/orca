@@ -4,8 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  parsePosixEnvironment,
   resetLoginShellEnvironmentCacheForTests,
-  resolveLoginShellEnvironment
+  resolveLoginShellEnvironment,
+  shellProbe,
+  WIN32_PATH_START_MARKER,
+  WIN32_PATH_END_MARKER
 } from './login-shell-environment'
 
 const originalHome = process.env.HOME
@@ -83,4 +87,66 @@ describe('resolveLoginShellEnvironment', () => {
       expect(environment[SHELL_ONLY_VARIABLE]).toBe('shell-only')
     }
   )
+
+  it('converts Git Bash POSIX PATH to Win32 semicolon-delimited PATH with cygpath trailer', () => {
+    const rawOutput = Buffer.concat([
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_START__\0`),
+      Buffer.from('USER=duyen\0PATH=/c/Users/duyen/AppData/Local/agy/bin:/usr/bin\0'),
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_END__\0`),
+      Buffer.from(`\0${WIN32_PATH_START_MARKER}\0`),
+      Buffer.from('C:\\Users\\duyen\\AppData\\Local\\agy\\bin;C:\\Program Files\\Git\\usr\\bin'),
+      Buffer.from(`\0${WIN32_PATH_END_MARKER}\0`)
+    ])
+    const env = parsePosixEnvironment(rawOutput, { platform: 'win32' })
+    expect(env).not.toBeNull()
+    const pathValue = env?.PATH ?? env?.Path
+    expect(pathValue).toBe(
+      'C:\\Users\\duyen\\AppData\\Local\\agy\\bin;C:\\Program Files\\Git\\usr\\bin'
+    )
+  })
+
+  it('normalizes POSIX drive paths to Win32 when cygpath trailer is absent on Windows', () => {
+    const rawOutput = Buffer.concat([
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_START__\0`),
+      Buffer.from('USER=duyen\0PATH=/c/Users/duyen/AppData/Local/agy/bin:/d/other/bin\0'),
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_END__\0`)
+    ])
+    const env = parsePosixEnvironment(rawOutput, { platform: 'win32' })
+    expect(env).not.toBeNull()
+    const pathValue = env?.PATH ?? env?.Path
+    expect(pathValue).toBe('C:\\Users\\duyen\\AppData\\Local\\agy\\bin;D:\\other\\bin')
+  })
+
+  it('normalizes POSIX drive paths when PATH starts with a relative entry and cygpath is absent', () => {
+    const rawOutput = Buffer.concat([
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_START__\0`),
+      Buffer.from('USER=duyen\0PATH=.:/c/Users/duyen/AppData/Local/agy/bin\0'),
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_END__\0`)
+    ])
+    const env = parsePosixEnvironment(rawOutput, { platform: 'win32' })
+    expect(env).not.toBeNull()
+    const pathValue = env?.PATH ?? env?.Path
+    expect(pathValue).toBe('.;C:\\Users\\duyen\\AppData\\Local\\agy\\bin')
+  })
+
+  it('preserves native POSIX PATH on non-Windows platforms', () => {
+    const rawOutput = Buffer.concat([
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_START__\0`),
+      Buffer.from('USER=duyen\0PATH=/usr/local/bin:/usr/bin\0'),
+      Buffer.from(`\0__ORCA_LOGIN_SHELL_ENV_END__\0`)
+    ])
+    const env = parsePosixEnvironment(rawOutput, { platform: 'linux' })
+    expect(env).not.toBeNull()
+    expect(env?.PATH).toBe('/usr/local/bin:/usr/bin')
+  })
+
+  it('includes cygpath trailer markers in shellProbe for Windows posix shells', () => {
+    const probe = shellProbe('C:\\Program Files\\Git\\bin\\bash.exe', { platform: 'win32' })
+    expect(probe).toEqual([
+      '-ilc',
+      expect.stringContaining('cygpath -wp "$PATH"')
+    ])
+    expect(probe?.[1]).toContain(WIN32_PATH_START_MARKER)
+    expect(probe?.[1]).toContain(WIN32_PATH_END_MARKER)
+  })
 })

@@ -7,8 +7,10 @@ import {
   resolveProfileLoadingShell
 } from './hydrate-shell-path'
 
-const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
-const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
+export const START_MARKER = '__ORCA_LOGIN_SHELL_ENV_START__'
+export const END_MARKER = '__ORCA_LOGIN_SHELL_ENV_END__'
+export const WIN32_PATH_START_MARKER = '__ORCA_LOGIN_SHELL_WIN32_PATH_START__'
+export const WIN32_PATH_END_MARKER = '__ORCA_LOGIN_SHELL_WIN32_PATH_END__'
 const SPAWN_TIMEOUT_MS = 5000
 
 /** Whether a profile-loading shell produced the env, or Orca fell back to its own. */
@@ -52,8 +54,34 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
   )
 }
 
-function shellProbe(shell: string): string[] | null {
-  if (process.platform !== 'win32' || resolveWindowsShellStartupFamily(shell) === 'posix') {
+function normalizePosixPathToWin32(posixPath: string): string {
+  return posixPath
+    .split(':')
+    .map((segment) => {
+      const trimmed = segment.trim()
+      const match = trimmed.match(/^\/([a-zA-Z])\/(.*)$/)
+      if (match) {
+        return `${match[1].toUpperCase()}:\\${match[2].replace(/\//g, '\\')}`
+      }
+      return trimmed
+    })
+    .filter((segment) => segment.length > 0)
+    .join(';')
+}
+
+export function shellProbe(
+  shell: string,
+  options: { platform?: NodeJS.Platform } = {}
+): string[] | null {
+  const platform = options.platform ?? process.platform
+  if (platform === 'win32' && resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Why: native child processes and path.win32 cannot resolve Git Bash /c/... PATH entries (#31459).
+    const command =
+      `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; printf '\\0${END_MARKER}\\0'; ` +
+      `printf '\\0${WIN32_PATH_START_MARKER}\\0'; cygpath -wp "$PATH" 2>/dev/null; printf '\\0${WIN32_PATH_END_MARKER}\\0'`
+    return ['-ilc', command]
+  }
+  if (platform !== 'win32') {
     const command =
       `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
     return ['-ilc', command]
@@ -72,7 +100,11 @@ function shellProbe(shell: string): string[] | null {
   return ['-NoLogo', '-Command', command]
 }
 
-function parsePosixEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
+export function parsePosixEnvironment(
+  output: Buffer,
+  options: { platform?: NodeJS.Platform } = {}
+): NodeJS.ProcessEnv | null {
+  const platform = options.platform ?? process.platform
   const start = output.indexOf(Buffer.from(`\0${START_MARKER}\0`))
   const end = output.indexOf(Buffer.from(`\0${END_MARKER}\0`), start + START_MARKER.length + 2)
   if (start === -1 || end === -1) {
@@ -87,7 +119,55 @@ function parsePosixEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
       environment[entry.slice(0, separator)] = entry.slice(separator + 1)
     }
   }
-  return Object.keys(environment).length > 0 ? environment : null
+  if (Object.keys(environment).length === 0) {
+    return null
+  }
+
+  if (platform === 'win32') {
+    let win32Path: string | null = null
+    const win32PathStart = output.indexOf(Buffer.from(`\0${WIN32_PATH_START_MARKER}\0`))
+    if (win32PathStart !== -1) {
+      const win32PathEnd = output.indexOf(
+        Buffer.from(`\0${WIN32_PATH_END_MARKER}\0`),
+        win32PathStart + WIN32_PATH_START_MARKER.length + 2
+      )
+      if (win32PathEnd !== -1) {
+        const extracted = output
+          .subarray(win32PathStart + WIN32_PATH_START_MARKER.length + 2, win32PathEnd)
+          .toString('utf8')
+          .trim()
+        if (extracted.length > 0) {
+          win32Path = extracted
+        }
+      }
+    }
+
+    if (!win32Path) {
+      const rawPath = Object.entries(environment).find(
+        ([key]) => key.toLowerCase() === 'path'
+      )?.[1]
+      if (
+        rawPath &&
+        !rawPath.includes(';') &&
+        (rawPath.startsWith('/') || /(?:^|:)\/[a-zA-Z]\//.test(rawPath))
+      ) {
+        win32Path = normalizePosixPathToWin32(rawPath)
+      }
+    }
+
+    if (win32Path) {
+      for (const key of Object.keys(environment)) {
+        if (key.toLowerCase() === 'path') {
+          environment[key] = win32Path
+        }
+      }
+      if (!Object.keys(environment).some((k) => k.toLowerCase() === 'path')) {
+        environment.Path = win32Path
+      }
+    }
+  }
+
+  return environment
 }
 
 function parsePowerShellEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
