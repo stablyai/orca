@@ -11,6 +11,8 @@ const BRAILLE_RE = /[⠀-⣿]/
 
 type TitlebarContext = {
   ui: { setTitle: (title: string) => void }
+  hasUI?: boolean
+  agent?: { kind: 'main' | 'sub' }
   isIdle?: () => boolean
 }
 type HookHandler = (event?: unknown, context?: TitlebarContext) => Promise<void> | void
@@ -32,6 +34,8 @@ function createHarness(
     paneKey?: string
     isIdle?: () => boolean
     kind?: PiAgentKind
+    hasUI?: boolean
+    agentKind?: 'main' | 'sub'
     processTitle?: string
     cwdImpl?: () => string
     sessionNameImpl?: () => string
@@ -42,6 +46,8 @@ function createHarness(
 ): Harness {
   const titles: string[] = []
   const ctx: TitlebarContext = {
+    hasUI: options.hasUI,
+    agent: options.agentKind ? { kind: options.agentKind } : undefined,
     ui: {
       setTitle: (title: string) => {
         options.setTitle?.(title)
@@ -123,6 +129,43 @@ describe('getPiTitlebarExtensionSource', () => {
 
   it('registers nothing outside an Orca pane', () => {
     expect(createHarness({ paneKey: '' }).handlers).toEqual({})
+  })
+
+  it.each(['omp', 'pi'] as const)(
+    'publishes a strong idle title at %s main UI startup',
+    async (kind) => {
+      const harness = createHarness({
+        kind,
+        processTitle: 'omp',
+        hasUI: true,
+        agentKind: 'main',
+        isIdle: () => true
+      })
+
+      await harness.callHook('session_start')
+
+      expect(harness.lastTitle()).toBe(IDLE_TITLE)
+      expect(detectAgentStatusFromTitle(harness.lastTitle() ?? '')).toBe('idle')
+      expect(vi.getTimerCount()).toBe(0)
+
+      await harness.callHook('agent_start')
+      expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+      await harness.callHook('agent_end')
+      expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    }
+  )
+
+  it.each([
+    { name: 'busy main UI', hasUI: true, agentKind: 'main', idle: false },
+    { name: 'idle subagent UI', hasUI: true, agentKind: 'sub', idle: true },
+    { name: 'idle main RPC', hasUI: false, agentKind: 'main', idle: true }
+  ] as const)('does not publish a title at $name startup', async ({ hasUI, agentKind, idle }) => {
+    const harness = createHarness({ kind: 'omp', hasUI, agentKind, isIdle: () => idle })
+
+    await harness.callHook('session_start')
+
+    expect(harness.titles).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('stops the spinner when the agent settles', async () => {
