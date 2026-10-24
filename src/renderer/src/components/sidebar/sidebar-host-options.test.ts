@@ -4,6 +4,7 @@ import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
   getSidebarHostVisibilityLabel,
+  getSidebarHostHealthDotClass,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls,
   type SidebarHostOption
@@ -220,6 +221,15 @@ describe('sidebar host options', () => {
     expect(getSidebarHostHealthLabel('blocked', 'incompatible')).toBe('Update needed')
     expect(getSidebarHostHealthLabel('blocked', 'access-revoked')).toBe('Re-pair needed')
     expect(getSidebarHostHealthLabel('error')).toBe('Needs attention')
+  })
+
+  it('colors the host status dot by health', () => {
+    expect(getSidebarHostHealthDotClass('local')).toBe('bg-status-success')
+    expect(getSidebarHostHealthDotClass('available')).toBe('bg-status-success')
+    expect(getSidebarHostHealthDotClass('connecting')).toBe('bg-status-warning')
+    expect(getSidebarHostHealthDotClass('disconnected')).toBe('bg-muted-foreground/40')
+    expect(getSidebarHostHealthDotClass('blocked')).toBe('bg-destructive')
+    expect(getSidebarHostHealthDotClass('error')).toBe('bg-destructive')
   })
 
   it('names a host scope saved under either merged id after the merged host', () => {
