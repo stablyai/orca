@@ -480,6 +480,15 @@ function verifyNativeArgumentGuardrails() {
   ) {
     failures.push('Windows key aliases must accept common PageUp/PageDown/Insert names')
   }
+  const hotkeyFunction = powerShellFunctionBody(windows, 'Send-OrcaHotkey') ?? ''
+  const hotkeyLowerCase = hotkeyFunction.indexOf(
+    'if ($key.Length -eq 1) { $key = $key.ToLowerInvariant() }'
+  )
+  const hotkeySend = hotkeyFunction.indexOf('SendWait($prefix + (ConvertTo-OrcaSendKeysKey $key))')
+  // The lower-casing only counts if it runs before the call that sends $key.
+  if (hotkeyLowerCase === -1 || hotkeySend < hotkeyLowerCase) {
+    failures.push('Windows hotkeys must lower-case a letter key so SendKeys does not add Shift')
+  }
 
   for (const failure of failures) {
     console.error(`[computer-native] ${failure}`)
