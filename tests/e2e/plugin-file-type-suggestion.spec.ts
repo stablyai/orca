@@ -1,6 +1,6 @@
 /**
  * Invariant: opening a file Orca can't highlight suggests the catalog plugin whose release lists
- * its extension; View plugin opens the reviewed preview and never installs.
+ * its extension; View plugin opens the plugin's page and never installs.
  */
 
 import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/plugin-schema-field-docs'
@@ -101,11 +101,15 @@ test('suggests a catalog plugin for an unknown file and never installs it', asyn
     await expect(banner).toBeVisible({ timeout: 15_000 })
 
     await page.getByRole('button', { name: 'View plugin' }).click()
-    const preview = page.getByRole('dialog', { name: 'Gleam' })
-    await expect(preview).toBeVisible({ timeout: 30_000 })
-    await expect(preview).toContainText('Official · stablyai')
-    await expect(preview).toContainText('1 syntax')
-    await preview.getByRole('button', { name: 'Cancel' }).click()
+    // Why the page: a suggestion leads to the same one-action install as the catalog, no dialog.
+    const pluginPage = page.getByRole('article')
+    await expect(pluginPage.locator('#plugin-detail-heading')).toContainText('Gleam', {
+      timeout: 30_000
+    })
+    await expect(pluginPage.getByRole('img', { name: 'Official' })).toBeVisible()
+    await expect(pluginPage).toContainText('Syntax')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await pluginPage.getByRole('button', { name: 'Plugins', exact: true }).click()
     expect(
       await page.evaluate(async () =>
         (await window.api.plugins.list()).map((entry) => entry.pluginKey)

@@ -6,12 +6,9 @@ import { Button } from '../ui/button'
 import { PluginListGroup } from '../plugin-catalog/PluginListGroup'
 import { PluginListRow } from '../plugin-catalog/PluginListRow'
 import { pluginListEntryFromInstalled } from '../plugin-catalog/plugin-list-entries'
-import { PluginDevelopmentSection } from './PluginDevelopmentSection'
-import { PluginFileTypeSuggestionSetting } from './PluginFileTypeSuggestionSetting'
 import { PluginManager } from './PluginManager'
 import type { InstalledRowHandlers } from './PluginManagerRows'
 import { PluginChips } from '../plugin-catalog/PluginChips'
-import { SettingsRow, SettingsSwitch } from './SettingsFormControls'
 import type { PluginLogsState } from './use-plugin-logs'
 import type { PluginPageNavigation } from './use-plugin-page-navigation'
 
@@ -23,13 +20,16 @@ type PluginSettingsOverviewProps = {
   error: string | null
   plugins: PluginHostListEntry[]
   busyPluginKeys: ReadonlySet<string>
-  devPaths: readonly string[]
-  devPathsBusy: boolean
+  /** Records a review decision made on the plugin's page. */
+  onConsent: (
+    pluginKey: string,
+    reviewedFingerprint: string,
+    decision: 'approve' | 'keep-disabled'
+  ) => Promise<void>
   handlers: Omit<InstalledRowHandlers, 'onCheckUpdate'>
   onToggleFeature: () => void
   onRefresh: () => Promise<void>
   onMarketplaceInstalled: (pluginKeys: string | readonly string[]) => Promise<void>
-  onUpdateDevPaths: (paths: string[]) => Promise<void>
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   onShowLogs: (pluginKey: string) => void
   onOpenShortcuts: () => void
@@ -65,29 +65,27 @@ function PluginsOffState({
 }): React.JSX.Element {
   return (
     <>
-      <SettingsCard className="flex items-center gap-4 px-5 py-4">
-        <Puzzle className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">
+      <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/40 py-2.5 pr-3 pl-4">
+        <Puzzle className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-sm">
+          <span className="font-medium">
             {translate(
               'auto.components.settings.PluginSettingsOverview.offTitle',
               'Plugins are off'
             )}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          </span>
+          <span className="text-muted-foreground">
+            {' · '}
             {translate(
-              'auto.components.settings.PluginSettingsOverview.offBody',
-              'Nothing from your plugins runs. Turn them on to browse the catalog and use what you installed.'
+              'auto.components.settings.PluginSettingsOverview.offShort',
+              'Nothing from your plugins runs.'
             )}
-          </p>
-        </div>
+          </span>
+        </p>
         <Button size="sm" disabled={featureBusy} onClick={onTurnOn}>
           {translate('auto.components.settings.PluginSettingsOverview.turnOn', 'Turn on plugins')}
         </Button>
-      </SettingsCard>
-      <SettingsCard className="px-7 py-4">
-        <PluginFileTypeSuggestionSetting />
-      </SettingsCard>
+      </div>
       {plugins.length > 0 ? (
         <SettingsCard className="@container/plugin-list overflow-hidden">
           <PluginListGroup
@@ -126,13 +124,11 @@ export function PluginSettingsOverview({
   error,
   plugins,
   busyPluginKeys,
-  devPaths,
-  devPathsBusy,
+  onConsent,
   handlers,
   onToggleFeature,
   onRefresh,
   onMarketplaceInstalled,
-  onUpdateDevPaths,
   logsByPlugin,
   onShowLogs,
   onOpenShortcuts,
@@ -140,36 +136,9 @@ export function PluginSettingsOverview({
   setSourcesOpen,
   page
 }: PluginSettingsOverviewProps): React.JSX.Element {
-  const pageOpen = page.openKey !== null
   return (
     <>
-      {featureEnabled && pageOpen ? null : featureEnabled ? (
-        <SettingsCard className="divide-y divide-border/60 px-7 py-1">
-          <SettingsRow
-            className="py-4"
-            label={translate(
-              'auto.components.settings.PluginsSettingsSection.systemLabel',
-              'Plugin system'
-            )}
-            labelId="plugin-system-label"
-            description={translate(
-              'auto.components.settings.PluginSettingsOverview.systemDescription',
-              'Turns every plugin off at once. Nothing runs until you review and enable it.'
-            )}
-            control={
-              <SettingsSwitch
-                checked={featureEnabled}
-                disabled={featureBusy}
-                ariaLabelledBy="plugin-system-label"
-                onChange={onToggleFeature}
-              />
-            }
-          />
-          <div className="py-4">
-            <PluginFileTypeSuggestionSetting />
-          </div>
-        </SettingsCard>
-      ) : (
+      {featureEnabled ? null : (
         <PluginsOffState plugins={plugins} featureBusy={featureBusy} onTurnOn={onToggleFeature} />
       )}
       {settingsError ? <p className="text-xs text-destructive">{settingsError}</p> : null}
@@ -179,6 +148,7 @@ export function PluginSettingsOverview({
           pluginsLoading={loading}
           pluginsError={error}
           busyPluginKeys={busyPluginKeys}
+          onConsent={onConsent}
           handlers={handlers}
           onRefreshInstalled={onRefresh}
           onInstalled={onMarketplaceInstalled}
@@ -188,15 +158,6 @@ export function PluginSettingsOverview({
           page={page}
           sourcesOpen={sourcesOpen}
           setSourcesOpen={setSourcesOpen}
-          footer={
-            <SettingsCard className="px-7 py-4">
-              <PluginDevelopmentSection
-                paths={devPaths}
-                busy={devPathsBusy}
-                onChange={onUpdateDevPaths}
-              />
-            </SettingsCard>
-          }
         />
       ) : null}
     </>

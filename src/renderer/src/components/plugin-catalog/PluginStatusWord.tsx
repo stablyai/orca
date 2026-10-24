@@ -1,5 +1,4 @@
-import { translate } from '@/i18n/i18n'
-import { pluginStatusLabel, type PluginStatusKind } from '../settings/plugin-status-presentation'
+import { statusWordFor, type PluginStatusKind } from '../settings/plugin-status-presentation'
 
 /** A status dot and word; narrow lists keep only the dot, the word stays for screen readers. */
 export function StatusWord({ kind }: { kind: PluginStatusKind }): React.JSX.Element {
@@ -18,18 +17,4 @@ export function StatusWord({ kind }: { kind: PluginStatusKind }): React.JSX.Elem
   )
 }
 
-export function statusWordFor(kind: PluginStatusKind): string {
-  if (kind === 'error') {
-    return translate('auto.components.settings.PluginManagerRows.stopped', 'Stopped')
-  }
-  if (kind === 'invalid') {
-    return translate('auto.components.settings.PluginManagerRows.cantLoad', 'Can’t load')
-  }
-  if (kind === 'enabled') {
-    return translate('auto.components.settings.PluginManagerRows.on', 'On')
-  }
-  if (kind === 'disabled') {
-    return translate('auto.components.settings.PluginManagerRows.off', 'Off')
-  }
-  return pluginStatusLabel(kind)
-}
+export { statusWordFor } from '../settings/plugin-status-presentation'

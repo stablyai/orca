@@ -1422,7 +1422,40 @@
           "fullCoverage_one": "All 1 detected agent has the skill.",
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
+        "PluginConsentDialog": {
+          "capabilities": "This plugin can",
+          "declarativeTrust": "Declarative content — no plugin code",
+          "instructionalTitle": "Review plugin content",
+          "instructionalTrust": "Instructional content — runs later under user or agent authority",
+          "keepDisabled": "Keep Disabled",
+          "mixedTitle": "Review access and content",
+          "panelTrust": "Panel or host-integrated content — no worker process",
+          "reviewTitle": "Review plugin",
+          "subtitle": "{{value0}} v{{value1}} · {{value2}}",
+          "title": "Review permissions",
+          "trustShortDeclarative": "Declarative",
+          "trustShortInstructional": "Instructional",
+          "trustShortPanel": "Panel",
+          "trustShortWorker": "Worker",
+          "whatChanged": "What changed",
+          "workerTrust": "Background worker — runs its own process"
+        },
+        "PluginDetailInfo": {
+          "copyHash": "Copy content hash {{value0}}"
+        },
+        "PluginDetailPage": {
+          "content": "Content",
+          "install": "Install…",
+          "reviewBody": "Review what it adds and what it can reach, then enable it. Nothing runs before that."
+        },
+        "PluginDetailSections": {
+          "noAccess": "Nothing outside its own files"
+        },
+        "PluginDevelopmentSection": {
+          "title": "Development"
+        },
         "PluginManager": {
+          "installedElsewhere": "Installed outside a catalog",
           "sourcesLabel": "Catalog sources"
         },
         "PluginManagerRows": {
@@ -1449,10 +1482,13 @@
           "blockedAction": "Blocked",
           "checkUpdate": "Check for update",
           "installed": "Installed",
+          "noDescription": "No description provided.",
           "official": "Official"
         },
         "PluginSettingsOverview": {
-          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on."
+          "offBody": "Nothing from your plugins runs. Turn them on to browse the catalog and use what you installed.",
+          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on.",
+          "systemDescription": "Turns every plugin off at once. Nothing runs until you review and enable it."
         },
         "PluginSettingsRow": {
           "hideLogs": "Hide logs",
@@ -1473,7 +1509,8 @@
           "loading": "Loading plugins…",
           "noInstalledResults": "No installed plugins match this search.",
           "noInstalledResultsTitle": "No matching plugins",
-          "systemDescription": "Nothing runs until you review and enable it."
+          "systemDescription": "Nothing runs until you review and enable it.",
+          "systemLabel": "Plugin system"
         },
         "PrivacyPane": {
           "afec8b03be": "ci"

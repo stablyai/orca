@@ -1,5 +1,6 @@
 import type { PluginCatalogType } from '../../../../shared/plugins/plugin-catalog-release'
 import { PLUGIN_LANGUAGE_PACK_MIN_COVERAGE } from '../../../../shared/plugins/plugin-language-pack-coverage'
+import type { PluginContributionSummaryItem } from '../../../../shared/plugins/plugin-contribution-summary'
 import type { PluginManifest } from '../../../../shared/plugins/plugin-manifest'
 import { translate } from '@/i18n/i18n'
 
@@ -83,6 +84,39 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     panels: contributes.panels.map((panel) => panel.title),
     recipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     agents: contributes.agents.map((agent) => nameFromContributionPath(agent.path))
+  }
+}
+
+/** What a catalog summary names, in the same shape; theme modes come from its preview palettes. */
+export function summaryContributionSource(
+  summary: readonly PluginContributionSummaryItem[],
+  themePreview: readonly { label: string; base: 'light' | 'dark' }[] = []
+): PluginContributionSource {
+  const of = (kind: PluginContributionSummaryItem['kind']) =>
+    summary.filter((item) => item.kind === kind)
+  const base = (label: string) => themePreview.find((theme) => theme.label === label)?.base
+  return {
+    appThemes: of('themes').map((item) => ({
+      id: item.name,
+      label: item.name,
+      base: base(item.name)
+    })),
+    terminalThemes: of('terminalThemes').map((item) => ({
+      id: item.name,
+      label: item.name,
+      mode: base(item.name)
+    })),
+    iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
+    syntaxes: of('syntaxes').map((item) => ({
+      id: item.name,
+      label: item.name,
+      extensions: item.detail ? item.detail.split(', ') : [],
+      filenames: []
+    })),
+    languages: of('languagePacks').map((item) => ({ locale: item.name })),
+    panels: of('panels').map((item) => item.name),
+    recipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
+    agents: of('agents').map((item) => nameFromContributionPath(item.name))
   }
 }
 

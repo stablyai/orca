@@ -15,6 +15,7 @@ const iconThemes = createPluginContentListStore<PluginIconThemeMetadata>({
   isEntry: isPluginIconThemeMetadata
 })
 
+export const usePluginIconThemeStore = iconThemes.useStore
 export const usePluginIconThemes = iconThemes.useEntries
 
 /** The selected icon theme as indexes into its registered icons; null means built-in icons. */

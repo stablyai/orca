@@ -11992,16 +11992,11 @@
           "installFailed": "插件安装失败。请检查来源后重试。"
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "键盘快捷键",
-          "worktree": "仅在有活动工作区时运行。",
-          "global": "在 Orca 中任何位置都可用。",
-          "shadows": "替代：{{value0}}"
+          "worktree": "仅在有活动工作区时运行。"
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "无法加载插件市场中的插件。",
           "refreshFailed": "无法刷新插件市场。请重试。",
-          "previewFailed": "无法加载此插件。请刷新后重试。",
-          "installFailed": "无法安装此插件。审核过的源可能已更改。",
           "manageSources": "管理源",
           "refreshing": "正在刷新…",
           "refresh": "刷新",
@@ -12026,40 +12021,6 @@
           "blockedAction": "已阻止",
           "checkUpdate": "检查更新",
           "install": "Install"
-        },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "1 个语言包",
-          "languagePacks": "{{value0}} 个语言包",
-          "commandsOne": "1 个命令",
-          "commands": "{{value0}} 个命令",
-          "keybindingsOne": "1 个键盘快捷键",
-          "keybindings": "{{value0}} 个键盘快捷键",
-          "vmRecipesOne": "1 个 VM 配方",
-          "vmRecipes": "{{value0}} 个 VM 配方",
-          "panelsOne": "1 个面板",
-          "panels": "{{value0}} 个面板",
-          "eventsOne": "1 个事件订阅",
-          "events": "{{value0}} 个事件订阅",
-          "worker": "后台工作进程",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "包含",
-          "noContributions": "仅清单元数据",
-          "capabilities": "请求的访问权限",
-          "workerWarning": "它的工作进程以普通进程运行，可完全访问你的文件、网络和其他进程。",
-          "blocked": "Orca 的安全列表阻止了此插件：{{value0}}",
-          "current": "此插件内容已安装。",
-          "close": "关闭",
-          "cancel": "取消",
-          "update": "更新插件",
-          "install": "安装插件",
-          "themesOne": "1 个应用主题",
-          "themes": "{{value0}} 个应用主题",
-          "terminalThemesOne": "1 个终端主题",
-          "terminalThemes": "{{value0}} 个终端主题",
-          "iconThemesOne": "1 个图标主题",
-          "iconThemes": "{{value0}} 个图标主题",
-          "syntaxesOne": "1 种语法",
-          "syntaxes": "{{value0}} 种语法"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "无法添加此插件市场。请检查 URL、ref 和 Git 访问权限。",
@@ -12117,6 +12078,17 @@
           "fileTypeSuggestionsDescription": "当 Orca 无法打开或高亮文件时，推荐插件市场中的插件。",
           "restartFailed": "无法重新启动 {{value0}}。"
         },
+        "PluginCardAction": {
+          "installed": "已安装",
+          "installing": "正在安装…",
+          "reviewLabel": "审核并安装 {{value0}}",
+          "review": "审核并安装",
+          "retry": "重试",
+          "moreLabel": "{{value0}} 的更多操作",
+          "disable": "禁用",
+          "enable": "启用",
+          "remove": "移除"
+        },
         "PluginSettingsRow": {
           "blocked": "已阻止",
           "needsReview": "需要审查",
@@ -12156,6 +12128,52 @@
           "destroy": "销毁",
           "heading": "VM 配方命令",
           "commandLabel": "{{value0}} · {{value1}} 个命令"
+        },
+        "PluginThemeUseNow": {
+          "label": "立即使用：",
+          "useName": "立即使用：{{value0}}"
+        },
+        "PluginContributionActionCommand": {
+          "run": "运行",
+          "runName": "运行 {{value0}}",
+          "ran": "已运行 {{value0}}",
+          "failed": "{{value0}} 失败",
+          "seeLogs": "它输出的内容在下方的日志中。",
+          "needsWorkspace": "打开一个工作区后即可运行。"
+        },
+        "PluginContributionActionPanel": {
+          "open": "打开面板",
+          "openName": "打开面板：{{value0}}",
+          "needsWorkspace": "打开一个工作区后即可查看。"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "切换语言",
+          "switchTo": "将语言切换为 {{value0}}",
+          "switchBack": "切回原语言",
+          "switchBackFrom": "从 {{value0}} 切回",
+          "failed": "无法切换语言"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "打开任意 {{value0}} 文件",
+          "openFilename": "打开 {{value0}}"
+        },
+        "PluginContributionActionEvents": {
+          "worktreeCreated": "创建工作区时",
+          "worktreeRemoved": "移除工作区时",
+          "agentStatusChanged": "Agent 状态变化时",
+          "detail": "后台代码会运行"
+        },
+        "pluginInstallAction": {
+          "installed": "已安装 {{value0}}",
+          "tryIt": "试一试",
+          "mismatch": "下载内容与目录发布的内容不一致，因此未安装任何内容。",
+          "catalogChanged": "打开此页面后目录已更改。请刷新后重试。",
+          "blocked": "Orca 的安全列表阻止了此插件。",
+          "downloadFailed": "无法下载此插件。请检查网络连接后重试。未安装任何内容。"
+        },
+        "pluginThemeApply": {
+          "nowUsing": "正在使用 {{value0}}",
+          "switchBack": "切换回去"
         },
         "pluginError": {
           "installManifestMissing": "未找到可读的 orca-plugin.json。请选择插件的根文件夹。",
@@ -13257,7 +13275,8 @@
           "close": "关闭",
           "retry": "重试",
           "updated": "已更新",
-          "needsOrca": "需要 Orca {{value0}} 或更高版本。请先更新 Orca。"
+          "needsOrca": "需要 Orca {{value0}} 或更高版本。请先更新 Orca。",
+          "current": "此插件内容已安装。"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",

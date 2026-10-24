@@ -12008,16 +12008,11 @@
           "installFailed": "No se pudo instalar el plugin. Comprueba el origen e inténtalo de nuevo."
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "Atajos de teclado",
-          "worktree": "Solo se ejecuta mientras hay un espacio de trabajo activo.",
-          "global": "Funciona en cualquier parte de Orca.",
-          "shadows": "Reemplaza: {{value0}}"
+          "worktree": "Solo se ejecuta mientras hay un espacio de trabajo activo."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "No se pudieron cargar los plugins del marketplace.",
           "refreshFailed": "No se pudieron actualizar los marketplaces. Inténtalo de nuevo.",
-          "previewFailed": "No se pudo cargar este plugin. Actualiza e inténtalo de nuevo.",
-          "installFailed": "No se pudo instalar este plugin. Es posible que la fuente revisada haya cambiado.",
           "manageSources": "Gestionar fuentes",
           "refreshing": "Actualizando…",
           "refresh": "Actualizar",
@@ -12042,40 +12037,6 @@
           "blockedAction": "Bloqueado",
           "checkUpdate": "Buscar actualización",
           "install": "Install"
-        },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "1 language pack",
-          "languagePacks": "{{value0}} paquetes de idioma",
-          "commandsOne": "1 command",
-          "commands": "{{value0}} comandos",
-          "keybindingsOne": "1 keyboard shortcut",
-          "keybindings": "{{value0}} atajos de teclado",
-          "vmRecipesOne": "1 VM recipe",
-          "vmRecipes": "{{value0}} recetas de VM",
-          "panelsOne": "1 panel",
-          "panels": "{{value0}} paneles",
-          "eventsOne": "1 event subscription",
-          "events": "{{value0}} suscripciones a eventos",
-          "worker": "Proceso en segundo plano",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "Incluye",
-          "noContributions": "Solo metadatos del manifiesto",
-          "capabilities": "Acceso solicitado",
-          "workerWarning": "Su proceso de trabajo se ejecuta como un proceso normal con acceso completo a tus archivos, la red y otros procesos.",
-          "blocked": "La lista de seguridad de Orca bloquea este plugin: {{value0}}",
-          "current": "Este contenido exacto del plugin ya está instalado.",
-          "close": "Close",
-          "cancel": "Cancelar",
-          "update": "Actualizar plugin",
-          "install": "Instalar plugin",
-          "themesOne": "1 tema de la app",
-          "themes": "{{value0}} temas de la app",
-          "terminalThemesOne": "1 tema de terminal",
-          "terminalThemes": "{{value0}} temas de terminal",
-          "iconThemesOne": "1 tema de iconos",
-          "iconThemes": "{{value0}} temas de iconos",
-          "syntaxesOne": "1 sintaxis",
-          "syntaxes": "{{value0}} sintaxis"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "No se pudo añadir este marketplace. Revisa la URL, la ref y el acceso a Git.",
@@ -12133,6 +12094,17 @@
           "fileTypeSuggestionsDescription": "Ofrece un plugin del catálogo cuando Orca no puede abrir o resaltar un archivo.",
           "restartFailed": "No se pudo reiniciar {{value0}}."
         },
+        "PluginCardAction": {
+          "installed": "Instalado",
+          "installing": "Instalando…",
+          "reviewLabel": "Revisar e instalar {{value0}}",
+          "review": "Revisar e instalar",
+          "retry": "Reintentar",
+          "moreLabel": "Más acciones para {{value0}}",
+          "disable": "Desactivar",
+          "enable": "Activar",
+          "remove": "Eliminar"
+        },
         "PluginSettingsRow": {
           "blocked": "Bloqueado",
           "needsReview": "Requiere revisión",
@@ -12172,6 +12144,52 @@
           "destroy": "Destruir",
           "heading": "Comandos de recetas de VM",
           "commandLabel": "{{value0}} · comando de {{value1}}"
+        },
+        "PluginThemeUseNow": {
+          "label": "Usar ahora:",
+          "useName": "Usar ahora: {{value0}}"
+        },
+        "PluginContributionActionCommand": {
+          "run": "Ejecutar",
+          "runName": "Ejecutar {{value0}}",
+          "ran": "Se ejecutó {{value0}}",
+          "failed": "{{value0}} falló",
+          "seeLogs": "Todo lo que imprimió está en Registros, más abajo.",
+          "needsWorkspace": "Abre un espacio de trabajo para ejecutarlo."
+        },
+        "PluginContributionActionPanel": {
+          "open": "Abrir panel",
+          "openName": "Abrir panel: {{value0}}",
+          "needsWorkspace": "Abre un espacio de trabajo para verlo."
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Cambiar idioma",
+          "switchTo": "Cambiar idioma a {{value0}}",
+          "switchBack": "Volver al idioma anterior",
+          "switchBackFrom": "Dejar de usar {{value0}}",
+          "failed": "No se pudo cambiar el idioma"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Abre cualquier archivo {{value0}}",
+          "openFilename": "Abre {{value0}}"
+        },
+        "PluginContributionActionEvents": {
+          "worktreeCreated": "Cuando se crea un espacio de trabajo",
+          "worktreeRemoved": "Cuando se elimina un espacio de trabajo",
+          "agentStatusChanged": "Cuando cambia el estado de un Agent",
+          "detail": "Se ejecuta código en segundo plano"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} instalado",
+          "tryIt": "Probar",
+          "mismatch": "La descarga no coincidió con lo que publicó el catálogo, así que no se instaló nada.",
+          "catalogChanged": "El catálogo cambió desde que se abrió esta página. Actualízalo y vuelve a intentarlo.",
+          "blocked": "La lista de seguridad de Orca bloquea este plugin.",
+          "downloadFailed": "No se pudo descargar este plugin. Comprueba tu conexión y vuelve a intentarlo. No se instaló nada."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Ahora usas {{value0}}",
+          "switchBack": "Volver"
         },
         "pluginError": {
           "installManifestMissing": "No se encontró un orca-plugin.json legible. Elige la carpeta raíz del plugin.",
@@ -13273,7 +13291,8 @@
           "close": "Cerrar",
           "retry": "Reintentar",
           "updated": "Actualizado",
-          "needsOrca": "Requiere Orca {{value0}} o posterior. Actualiza Orca primero."
+          "needsOrca": "Requiere Orca {{value0}} o posterior. Actualiza Orca primero.",
+          "current": "Este contenido exacto del plugin ya está instalado."
         },
         "PluginDetailInfo": {
           "previous": "Anterior",

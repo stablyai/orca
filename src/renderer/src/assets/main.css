@@ -138,6 +138,7 @@
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
   --color-status-warning: var(--status-warning);
+  --color-status-warning-text: var(--status-warning-text);
   --color-jira-priority-high: var(--jira-priority-high);
   --color-jira-priority-medium: var(--jira-priority-medium);
   --color-jira-priority-low: var(--jira-priority-low);
@@ -417,6 +418,8 @@
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Needs-attention states use yellow, separate from errors and working states. */
   --status-warning: #ca8a04;
+  /* Why: raw amber is under 3:1 on white; small warning text needs the darker mix. */
+  --status-warning-text: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);
@@ -446,6 +449,7 @@
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --status-warning: #eab308;
+  --status-warning-text: var(--status-warning);
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);

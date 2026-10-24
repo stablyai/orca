@@ -11992,16 +11992,11 @@
           "installFailed": "プラグインのインストールに失敗しました。ソースを確認して再試行してください。"
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "キーボードショートカット",
-          "worktree": "ワークスペースがアクティブな間のみ実行。",
-          "global": "Orca のどこでも動作します。",
-          "shadows": "置換: {{value0}}"
+          "worktree": "ワークスペースがアクティブな間のみ実行。"
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "マーケットプレイスプラグインをロードできませんでした。",
           "refreshFailed": "マーケットプレイスを更新できませんでした。もう一度お試しください。",
-          "previewFailed": "このプラグインを読み込めませんでした。更新してもう一度お試しください。",
-          "installFailed": "このプラグインをインストールできませんでした。レビューされたソースが変更された可能性があります。",
           "manageSources": "ソースを管理",
           "refreshing": "更新中…",
           "refresh": "更新",
@@ -12026,40 +12021,6 @@
           "blockedAction": "ブロック中",
           "checkUpdate": "更新を確認",
           "install": "インストール"
-        },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "1つの言語パック",
-          "languagePacks": "{{value0}}つの言語パック",
-          "commandsOne": "1つのコマンド",
-          "commands": "{{value0}}つのコマンド",
-          "keybindingsOne": "1つのキーボードショートカット",
-          "keybindings": "{{value0}}つのキーボードショートカット",
-          "vmRecipesOne": "1つのVMレシピ",
-          "vmRecipes": "{{value0}}つのVMレシピ",
-          "panelsOne": "1つのパネル",
-          "panels": "{{value0}}つのパネル",
-          "eventsOne": "1つのイベントサブスクリプション",
-          "events": "{{value0}}つのイベントサブスクリプション",
-          "worker": "バックグラウンドワーカー",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "含む",
-          "noContributions": "マニフェストメタデータのみ",
-          "capabilities": "要求されたアクセス",
-          "workerWarning": "ワーカーは通常のプロセスとして実行され、ファイル、ネットワーク、他のプロセスに完全にアクセスできます。",
-          "blocked": "Orca の安全リストがこのプラグインをブロック: {{value0}}",
-          "current": "このプラグインコンテンツはすでにインストールされています。",
-          "close": "閉じる",
-          "cancel": "キャンセル",
-          "update": "プラグインを更新",
-          "install": "プラグインをインストール",
-          "themesOne": "アプリテーマ 1 件",
-          "themes": "アプリテーマ {{value0}} 件",
-          "terminalThemesOne": "ターミナルテーマ 1 件",
-          "terminalThemes": "ターミナルテーマ {{value0}} 件",
-          "iconThemesOne": "アイコンテーマ 1 件",
-          "iconThemes": "アイコンテーマ {{value0}} 件",
-          "syntaxesOne": "構文 1 件",
-          "syntaxes": "構文 {{value0}} 件"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "このマーケットプレイスを追加できませんでした。URL、ref、Git のアクセス権を確認してください。",
@@ -12117,6 +12078,17 @@
           "fileTypeSuggestionsDescription": "Orca で開けない、またはハイライトできないファイルにカタログのプラグインを提案します。",
           "restartFailed": "{{value0}} を再起動できませんでした。"
         },
+        "PluginCardAction": {
+          "installed": "インストール済み",
+          "installing": "インストール中…",
+          "reviewLabel": "{{value0}} を確認してインストール",
+          "review": "確認してインストール",
+          "retry": "再試行",
+          "moreLabel": "{{value0}} のその他の操作",
+          "disable": "無効にする",
+          "enable": "有効にする",
+          "remove": "削除"
+        },
         "PluginSettingsRow": {
           "blocked": "ブロック中",
           "needsReview": "レビュー待ち",
@@ -12156,6 +12128,52 @@
           "destroy": "破棄",
           "heading": "VMレシピコマンド",
           "commandLabel": "{{value0}} · {{value1}}個のコマンド"
+        },
+        "PluginThemeUseNow": {
+          "label": "今すぐ使う:",
+          "useName": "今すぐ使う: {{value0}}"
+        },
+        "PluginContributionActionCommand": {
+          "run": "実行",
+          "runName": "{{value0}} を実行",
+          "ran": "{{value0}} を実行しました",
+          "failed": "{{value0}} が失敗しました",
+          "seeLogs": "出力内容は下のログにあります。",
+          "needsWorkspace": "実行するにはワークスペースを開いてください。"
+        },
+        "PluginContributionActionPanel": {
+          "open": "パネルを開く",
+          "openName": "パネルを開く: {{value0}}",
+          "needsWorkspace": "表示するにはワークスペースを開いてください。"
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "言語を切り替える",
+          "switchTo": "言語を {{value0}} に切り替える",
+          "switchBack": "元の言語に戻す",
+          "switchBackFrom": "{{value0}} から元の言語に戻す",
+          "failed": "言語を切り替えられませんでした"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "{{value0}} ファイルを開いてください",
+          "openFilename": "{{value0}} を開いてください"
+        },
+        "PluginContributionActionEvents": {
+          "worktreeCreated": "ワークスペースが作成されたとき",
+          "worktreeRemoved": "ワークスペースが削除されたとき",
+          "agentStatusChanged": "Agent のステータスが変わったとき",
+          "detail": "バックグラウンドでコードが実行されます"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} をインストールしました",
+          "tryIt": "試す",
+          "mismatch": "ダウンロードした内容がカタログの公開内容と一致しなかったため、何もインストールされませんでした。",
+          "catalogChanged": "このページを開いた後にカタログが変更されました。更新してからもう一度お試しください。",
+          "blocked": "Orca の安全リストがこのプラグインをブロックしています。",
+          "downloadFailed": "このプラグインをダウンロードできませんでした。接続を確認してからもう一度お試しください。何もインストールされていません。"
+        },
+        "pluginThemeApply": {
+          "nowUsing": "{{value0}} を使用中",
+          "switchBack": "元に戻す"
         },
         "pluginError": {
           "installManifestMissing": "読み取り可能なorca-plugin.jsonが見つかりません。プラグインのルートフォルダーを選択してください。",
@@ -13257,7 +13275,8 @@
           "close": "閉じる",
           "retry": "再試行",
           "updated": "更新済み",
-          "needsOrca": "Orca {{value0}} 以降が必要です。先に Orca を更新してください。"
+          "needsOrca": "Orca {{value0}} 以降が必要です。先に Orca を更新してください。",
+          "current": "このプラグインコンテンツはすでにインストールされています。"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",

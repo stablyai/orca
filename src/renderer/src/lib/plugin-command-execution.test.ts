@@ -44,11 +44,21 @@ describe('plugin command execution', () => {
     const invokeCommand = vi.fn().mockResolvedValue({ ok: true })
     Object.assign(window, { api: { plugins: { invokeCommand } } })
 
-    await executePluginCommand(command({ type: 'worker' }), 'plugin-keybinding')
+    const result = await executePluginCommand(command({ type: 'worker' }), 'plugin-keybinding')
 
     expect(invokeCommand).toHaveBeenCalledWith({
       pluginKey: 'orca-samples.tasks',
       commandId: 'open'
     })
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('resolves with nothing for a built-in action', async () => {
+    unregister = registerAppCommandDispatcher(() => true)
+    Object.assign(window, { api: { plugins: { invokeCommand: vi.fn() } } })
+
+    await expect(
+      executePluginCommand(command({ type: 'built-in', action: 'view.tasks' }), 'plugin-palette')
+    ).resolves.toBeUndefined()
   })
 })

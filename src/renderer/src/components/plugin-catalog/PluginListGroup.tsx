@@ -14,6 +14,8 @@ type PluginListGroupProps = {
   hiddenCount?: number
   onShowAll?: () => void
   showHeading?: boolean
+  /** `grid` lays its children out as catalog cards. */
+  layout?: 'list' | 'grid'
   children?: React.ReactNode
 }
 
@@ -26,6 +28,7 @@ export function PluginListGroup({
   hiddenCount = 0,
   onShowAll,
   showHeading = true,
+  layout = 'list',
   children
 }: PluginListGroupProps): React.JSX.Element {
   const headingId = useId()
@@ -35,7 +38,10 @@ export function PluginListGroup({
       aria-label={showHeading ? undefined : title}
     >
       {showHeading ? (
-        <div className="flex items-baseline gap-2 px-4 pt-3.5 pb-1.5">
+        <div
+          data-layout={layout}
+          className="flex items-baseline gap-2 px-4 pt-3.5 pb-1.5 data-[layout=grid]:px-0.5 data-[layout=grid]:pt-0 data-[layout=grid]:pb-2.5"
+        >
           <h3
             id={headingId}
             className="text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase"
@@ -51,9 +57,19 @@ export function PluginListGroup({
         </div>
       ) : null}
       {notice}
-      {children ? <ul className="list-none">{children}</ul> : null}
+      {children ? (
+        <ul
+          data-layout={layout}
+          className="list-none data-[layout=grid]:grid data-[layout=grid]:grid-cols-1 data-[layout=grid]:gap-4 data-[layout=grid]:@min-[460px]/plugin-catalog:grid-cols-2 data-[layout=grid]:@min-[720px]/plugin-catalog:grid-cols-3"
+        >
+          {children}
+        </ul>
+      ) : null}
       {hiddenCount > 0 && onShowAll ? (
-        <div className="border-t border-border px-2 py-1.5">
+        <div
+          data-layout={layout}
+          className="border-t border-border px-2 py-1.5 data-[layout=grid]:mt-2 data-[layout=grid]:border-t-0 data-[layout=grid]:px-0"
+        >
           <Button variant="ghost" size="xs" onClick={onShowAll}>
             <ChevronDown />
             {translate(

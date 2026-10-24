@@ -1,6 +1,7 @@
 import { AlertTriangle, Loader2, RotateCw, ShieldCheck } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { PluginExecutionProfile } from '../../../../shared/plugins/plugin-execution-profile'
+import type { PluginTrust } from './plugin-access-profile'
+import { pluginTrustWarnings } from './plugin-consent-copy'
 import { Button } from '../ui/button'
 import { pluginCapabilityDescription } from './plugin-capability-presentation'
 import type { PluginLogsState } from './use-plugin-logs'
@@ -32,13 +33,16 @@ export function DetailRow({
   title,
   detail,
   detailTone = 'default',
-  trailing
+  trailing,
+  wrap = false
 }: {
   icon: React.ReactNode
   title: string
   detail?: React.ReactNode
   detailTone?: 'default' | 'warning' | 'destructive'
   trailing?: React.ReactNode
+  /** Sentences, such as a trust warning, wrap instead of truncating. */
+  wrap?: boolean
 }): React.JSX.Element {
   return (
     <div className="flex min-h-10 items-center gap-3 border-t border-border px-3.5 py-2 text-sm first:border-t-0">
@@ -46,11 +50,13 @@ export function DetailRow({
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate">{title}</p>
+        <p data-wrap={wrap} className="truncate data-[wrap=true]:whitespace-normal">
+          {title}
+        </p>
         {detail ? (
           <p
             data-tone={detailTone}
-            className="mt-px text-xs text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning"
+            className="mt-px text-xs text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning-text"
           >
             {detail}
           </p>
@@ -61,55 +67,32 @@ export function DetailRow({
   )
 }
 
-/** What its execution profile lets it do when it carries no capability rows; null = no extra row. */
-function executionProfileRow(execution: PluginExecutionProfile): React.JSX.Element | null {
-  if (execution === 'trusted-worker') {
-    return (
-      <DetailRow
-        icon={<AlertTriangle />}
-        title={translate(
-          'auto.components.settings.PluginConsentDialog.warning',
-          'Its worker runs as a normal process with full access to your files, network, and other processes.'
-        )}
-      />
-    )
-  }
-  if (execution === 'instructional') {
-    return (
-      <DetailRow
-        icon={<AlertTriangle />}
-        title={translate(
-          'auto.components.settings.PluginConsentDialog.instructionalWarning',
-          'Its commands and instructions can take actions when you or an agent use them.'
-        )}
-      />
-    )
-  }
-  return null
-}
-
-/** What the plugin can reach, in the consent dialog's words. */
+/** What the plugin can reach, in the consent's words. */
 export function PluginAccessSection({
   capabilities,
-  execution,
+  trust,
   loading,
   failed = false,
   onRetry
 }: {
   capabilities: readonly { kind: string; description: string }[] | null
-  /** The verified execution profile; null while unknown, never guessed from contributions. */
-  execution: PluginExecutionProfile | null
+  /** Null while unknown; never guessed from contributions alone. */
+  trust: PluginTrust | null
   loading: boolean
   /** The manifest couldn't be read, so nothing is known about its access. */
   failed?: boolean
   onRetry?: () => void
 }): React.JSX.Element {
-  const profileRow = execution ? executionProfileRow(execution) : null
+  const unknown = trust === null
+  // Why "own files" only then: a panel bounded by no capabilities is sandboxed; anything that
+  // runs instructions or a worker reaches further, whatever it asks for.
+  const ownFilesOnly =
+    trust !== null && !trust.worker && !trust.instructional && capabilities?.length === 0
   return (
     <DetailSection
       title={translate('auto.components.settings.PluginDetailSections.access', 'Can access')}
     >
-      {failed || (!loading && capabilities !== null && execution === null) ? (
+      {failed || (!loading && capabilities !== null && unknown) ? (
         // Why: an unreadable plugin must never read as one that needs no access.
         <DetailRow
           icon={<AlertTriangle />}
@@ -131,7 +114,7 @@ export function PluginAccessSection({
             ) : null
           }
         />
-      ) : loading || capabilities === null || execution === null ? (
+      ) : loading || capabilities === null || trust === null ? (
         <DetailRow
           icon={<Loader2 className="animate-spin" />}
           title={translate(
@@ -139,26 +122,15 @@ export function PluginAccessSection({
             'Reading the plugin…'
           )}
         />
-      ) : capabilities.length > 0 || profileRow ? (
-        <>
-          {profileRow}
-          {capabilities.map((capability) => (
-            <DetailRow
-              key={capability.kind}
-              icon={<AlertTriangle />}
-              title={pluginCapabilityDescription(capability.kind, capability.description)}
-            />
-          ))}
-        </>
-      ) : (
+      ) : ownFilesOnly ? (
         <DetailRow
           icon={<ShieldCheck />}
           title={translate(
-            'auto.components.settings.PluginDetailSections.noAccess',
-            'Nothing outside its own files'
+            'auto.components.settings.PluginDetailSections.noAccessReach',
+            'Can’t reach anything outside its own files'
           )}
           detail={
-            execution === 'sandboxed-ui'
+            trust.panel
               ? translate(
                   'auto.components.settings.PluginDetailSections.noAccessCode',
                   'Its code runs in a sandbox with no extra access.'
@@ -169,6 +141,21 @@ export function PluginAccessSection({
                 )
           }
         />
+      ) : (
+        <>
+          {trust.worker || trust.instructional
+            ? pluginTrustWarnings(trust).map((warning) => (
+                <DetailRow key={warning} icon={<AlertTriangle />} wrap title={warning} />
+              ))
+            : null}
+          {capabilities.map((capability) => (
+            <DetailRow
+              key={capability.kind}
+              icon={<AlertTriangle />}
+              title={pluginCapabilityDescription(capability.kind, capability.description)}
+            />
+          ))}
+        </>
       )}
     </DetailSection>
   )

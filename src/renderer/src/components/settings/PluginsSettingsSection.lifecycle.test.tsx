@@ -7,6 +7,9 @@ import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
+import { applyPluginThemesNow } from './plugin-theme-apply'
+
+vi.mock('./plugin-theme-apply', () => ({ applyPluginThemesNow: vi.fn().mockResolvedValue(false) }))
 
 vi.mock('./SettingsSection', () => ({
   SettingsSection: ({
@@ -40,6 +43,13 @@ vi.mock('../ui/dropdown-menu', () => ({
       {children}
     </button>
   ),
+  DropdownMenuCheckboxItem: ({
+    children,
+    onCheckedChange
+  }: {
+    children: React.ReactNode
+    onCheckedChange?: () => void
+  }) => <button onClick={onCheckedChange}>{children}</button>,
   DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   DropdownMenuSeparator: () => null,
   DropdownMenuShortcut: () => null
@@ -52,28 +62,17 @@ vi.mock('../ui/tooltip', () => ({
 }))
 
 vi.mock('./PluginInstallDialog', () => ({ PluginInstallDialog: () => null }))
-vi.mock('./PluginConsentDialog', () => ({
-  PluginConsentDialog: ({
-    plugin,
-    onDecision
-  }: {
-    plugin: PluginHostListEntry | null
-    onDecision: (key: string, reviewedFingerprint: string, decision: 'approve') => Promise<void>
-  }) => {
+// Why mock the consent: review now happens on the plugin's page, where this section sits.
+vi.mock('./PluginInstallConsent', () => ({
+  PluginInstallConsent: ({ onConfirm }: { onConfirm: () => void }) => {
     const [dirty, setDirty] = useState(false)
-    return plugin ? (
+    return (
       <>
-        <button
-          onClick={() =>
-            void onDecision(plugin.pluginKey, plugin.consentFingerprint ?? '', 'approve')
-          }
-        >
-          Approve
-        </button>
+        <button onClick={onConfirm}>Approve</button>
         <button onClick={() => setDirty(true)}>Mark consent dirty</button>
         {dirty ? <span>Consent local state</span> : null}
       </>
-    ) : null
+    )
   }
 }))
 vi.mock('./PluginRemoveDialog', () => ({
@@ -137,6 +136,16 @@ function deferred<T>(): Deferred<T> {
 
 function click(element: Element): void {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+}
+
+async function openDevelopmentFolders(container: HTMLElement): Promise<void> {
+  const open = Array.from(container.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Development folders…'
+  )
+  if (!open) {
+    throw new Error('missing development folders action')
+  }
+  await act(async () => click(open))
 }
 
 async function renderSection(
@@ -245,6 +254,17 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('offers turning plugins on only from the off state, not off from the menu', async () => {
+    const { container: on } = await renderSection()
+    expect(on.textContent).not.toContain('Turn off plugins')
+    document.body.innerHTML = ''
+    const { container: off } = await renderSection({
+      ...getDefaultSettings('/tmp'),
+      pluginSystemEnabled: false
+    })
+    expect(off.textContent).toContain('Turn on plugins')
+  })
+
   it('persists the feature switch before refreshing discovery', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     const { container } = await renderSection(
@@ -266,6 +286,37 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(window.api.plugins.refresh).toHaveBeenCalledOnce()
   })
 
+  it('clears feature busy state and skips refresh when the setting write fails', async () => {
+    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
+    const { container } = await renderSection(
+      { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
+      updateSettings
+    )
+    const turnOn = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Turn on plugins'
+    )
+    if (!turnOn) {
+      throw new Error('missing turn-on action')
+    }
+
+    await act(async () => click(turnOn))
+
+    expect(turnOn.disabled).toBe(false)
+    expect(window.api.plugins.refresh).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Could not save plugin settings.')
+  })
+
+  it('reports a failed save of the file-suggestion setting', async () => {
+    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
+    const { container } = await renderSection(undefined, updateSettings)
+    const toggle = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Suggest plugins for unknown files')
+    )
+    await act(async () => click(toggle!))
+    expect(updateSettings).toHaveBeenCalledWith({ pluginFileTypeSuggestions: false })
+    expect(container.textContent).toContain('Could not save plugin settings.')
+  })
+
   it('routes enablement and confirmed removal through plugin IPC', async () => {
     const { container } = await renderSection()
     const pluginSwitch = container.querySelector('[aria-label="Disable Notes"]')
@@ -273,16 +324,20 @@ describe('PluginsSettingsSection lifecycle', () => {
       throw new Error('missing plugin switch')
     }
 
+    vi.mocked(applyPluginThemesNow).mockClear()
     await act(async () => click(pluginSwitch))
     expect(window.api.plugins.setEnabled).toHaveBeenCalledWith({
       pluginKey: plugin.pluginKey,
       enabled: false
     })
+    // Why: disabling falls back through the theme sync; only the Enable click applies themes.
+    expect(applyPluginThemesNow).not.toHaveBeenCalled()
     await act(async () => click(pluginSwitch))
     expect(window.api.plugins.setEnabled).toHaveBeenLastCalledWith({
       pluginKey: plugin.pluginKey,
       enabled: true
     })
+    expect(applyPluginThemesNow).toHaveBeenCalledExactlyOnceWith(plugin.pluginKey)
 
     const removeAction = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Remove…'
@@ -324,6 +379,23 @@ describe('PluginsSettingsSection lifecycle', () => {
         (button) => button.textContent === 'Approve'
       )
     ).toBe(true)
+  })
+
+  it('reopens a review after going back from it', async () => {
+    installApi({ list: vi.fn().mockResolvedValue([{ ...plugin, status: 'pending' }]) })
+    const { container } = await renderSection()
+    const review = (): HTMLButtonElement | undefined =>
+      Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Review'
+      )
+    await act(async () => click(review()!))
+    expect(container.textContent).toContain('Approve')
+    await act(async () =>
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true }))
+    )
+    expect(container.textContent).not.toContain('Approve')
+    await act(async () => click(review()!))
+    expect(container.textContent).toContain('Approve')
   })
 
   it('shows what is true after a Restart fails halfway', async () => {
@@ -505,9 +577,9 @@ describe('PluginsSettingsSection lifecycle', () => {
         (button) => button.textContent?.trim() === label
       )
 
-    act(() => click(findButton('Review')!))
-    act(() => click(findButton('Mark consent dirty')!))
+    // Why from the row: View logs opens the plugin's page, where its review and Remove… live.
     act(() => click(findButton('View logs')!))
+    act(() => click(findButton('Mark consent dirty')!))
     act(() => click(findButton('Remove…')!))
     expect(container.textContent).toContain('Consent local state')
     expect(container.textContent).toContain('Confirm remove')
@@ -521,9 +593,9 @@ describe('PluginsSettingsSection lifecycle', () => {
     await act(async () => reinstalledList.resolve([pendingPlugin]))
     expect(container.textContent).not.toContain('Loading logs…')
 
-    act(() => click(findButton('Review')!))
-    expect(container.textContent).not.toContain('Consent local state')
     act(() => click(findButton('View logs')!))
+    expect(container.textContent).toContain('Approve')
+    expect(container.textContent).not.toContain('Consent local state')
     await act(async () => freshLogs.resolve([{ ts: 2, level: 'info', line: 'fresh installation' }]))
     await act(async () => oldLogs.resolve([{ ts: 1, level: 'info', line: 'stale installation' }]))
 
@@ -531,30 +603,11 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(container.textContent).not.toContain('stale installation')
   })
 
-  it('clears feature busy state and skips refresh when the setting write fails', async () => {
-    const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
-    const { container } = await renderSection(
-      { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
-      updateSettings
-    )
-    const turnOn = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Turn on plugins'
-    )
-    if (!turnOn) {
-      throw new Error('missing turn-on action')
-    }
-
-    await act(async () => click(turnOn))
-
-    expect(turnOn.disabled).toBe(false)
-    expect(window.api.plugins.refresh).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Could not save plugin settings.')
-  })
-
   it('persists verbatim development paths and refreshes discovery', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     const { container } = await renderSection(undefined, updateSettings)
-    const input = container.querySelector<HTMLInputElement>('details input')
+    await openDevelopmentFolders(container)
+    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
     if (!input) {
       throw new Error('missing development path input')
     }
@@ -565,7 +618,7 @@ describe('PluginsSettingsSection lifecycle', () => {
       )
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    const add = Array.from(container.querySelectorAll('button')).find(
+    const add = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent === 'Add path'
     )
     if (!add) {
@@ -581,7 +634,8 @@ describe('PluginsSettingsSection lifecycle', () => {
   it('preserves development input and clears busy when adding a path fails', async () => {
     const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
     const { container } = await renderSection(undefined, updateSettings)
-    const input = container.querySelector<HTMLInputElement>('details input')
+    await openDevelopmentFolders(container)
+    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
     if (!input) {
       throw new Error('missing development path input')
     }
@@ -592,7 +646,7 @@ describe('PluginsSettingsSection lifecycle', () => {
       )
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    const add = Array.from(container.querySelectorAll('button')).find(
+    const add = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent === 'Add path'
     )
     if (!add) {
@@ -604,7 +658,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     expect(input.value).toBe('/plugins/demo')
     expect(add.disabled).toBe(false)
     expect(window.api.plugins.refresh).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Could not save plugin settings.')
+    expect(document.body.textContent).toContain('Could not save plugin settings.')
   })
 
   it('keeps a development path and handles a failed removal without rejection', async () => {
@@ -615,8 +669,9 @@ describe('PluginsSettingsSection lifecycle', () => {
       devPluginPaths: ['/plugins/demo']
     }
     const { container } = await renderSection(settings, updateSettings)
-    const remove = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Remove' && button.closest('details')
+    await openDevelopmentFolders(container)
+    const remove = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Remove' && button.closest('[role="dialog"]')
     )
     if (!remove) {
       throw new Error('missing development path remove action')
@@ -624,9 +679,9 @@ describe('PluginsSettingsSection lifecycle', () => {
 
     await act(async () => click(remove))
 
-    expect(container.textContent).toContain('/plugins/demo')
+    expect(document.body.textContent).toContain('/plugins/demo')
     expect(remove.disabled).toBe(false)
     expect(window.api.plugins.refresh).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Could not save plugin settings.')
+    expect(document.body.textContent).toContain('Could not save plugin settings.')
   })
 })

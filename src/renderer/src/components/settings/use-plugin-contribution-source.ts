@@ -53,16 +53,19 @@ export function useInstalledPluginContributionSource(
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }
 
-/** An installed plugin's declared manifest, read when its page opens; undefined until read, null if unreadable. */
+/** An installed plugin's declared manifest, read when its page opens; undefined until read, null if
+ *  unreadable. Keyed by revision too, so a same-key update never pairs old contents with new trust. */
 export function useInstalledPluginManifest(
-  pluginKey: string | null
+  pluginKey: string | null,
+  revision: string | null
 ): PluginManifest | null | undefined {
   const [loaded, setLoaded] = useState<{
-    pluginKey: string
+    key: string
     manifest: PluginManifest | null
   } | null>(null)
+  const key = pluginKey ? `${pluginKey}@${revision ?? ''}` : null
   useEffect(() => {
-    if (!pluginKey) {
+    if (!pluginKey || !key) {
       return
     }
     let stale = false
@@ -70,20 +73,20 @@ export function useInstalledPluginManifest(
       .getInstalledManifest({ pluginKey })
       .then((manifest) => {
         if (!stale) {
-          setLoaded({ pluginKey, manifest })
+          setLoaded({ key, manifest })
         }
       })
       .catch((cause: unknown) => {
         console.warn('[plugins] installed manifest read failed:', cause)
         if (!stale) {
-          setLoaded({ pluginKey, manifest: null })
+          setLoaded({ key, manifest: null })
         }
       })
     return () => {
       stale = true
     }
-  }, [pluginKey])
-  return loaded && loaded.pluginKey === pluginKey ? loaded.manifest : undefined
+  }, [pluginKey, key])
+  return loaded && loaded.key === key ? loaded.manifest : undefined
 }
 
 function hasLiveContent(source: PluginContributionSource): boolean {
@@ -105,7 +108,10 @@ export function useInstalledPluginContributions(
   plugin: PluginHostListEntry | null
 ): PluginContributionSource {
   const live = useInstalledPluginContributionSource(plugin)
-  const manifest = useInstalledPluginManifest(plugin?.pluginKey ?? null)
+  const manifest = useInstalledPluginManifest(
+    plugin?.pluginKey ?? null,
+    plugin?.consentFingerprint ?? plugin?.source?.contentHash ?? null
+  )
   return useMemo(
     () => (hasLiveContent(live) || !manifest ? live : manifestContributionSource(manifest)),
     [live, manifest]

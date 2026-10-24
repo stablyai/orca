@@ -7,8 +7,10 @@ import type {
   PluginHostListEntry,
   PluginMarketplaceHostInstallPreview
 } from '../../../../preload/api-types'
+import { pluginManifestSchema } from '../../../../shared/plugins/plugin-manifest'
 import type { PluginListEntry } from '../plugin-catalog/plugin-list-entries'
-import { PluginUpdateAllDialog, newAccess } from './PluginUpdateAllDialog'
+import { PluginUpdateAllDialog } from './PluginUpdateAllDialog'
+import { newAccess } from './PluginUpdateCandidate'
 
 vi.mock('../ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
@@ -35,6 +37,7 @@ function installed(pluginKey: string, kinds: string[]): PluginHostListEntry {
     capabilities: kinds.map((kind) => ({ kind, description: kind })),
     panels: [],
     commands: [],
+    execution: 'data',
     hasWorker: false,
     restarts: 0
   }
@@ -65,19 +68,29 @@ function preview(
   kinds: string[],
   orca?: string
 ): PluginMarketplaceHostInstallPreview {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial fixture of a wide wire type; the dialog reads only the fields set here.
   return {
     marketplaceSourceId: 'official',
+    marketplaceName: 'Official',
+    marketplaceOwner: 'orca',
     marketplaceCommit: 'c',
     pluginKey,
+    source: { kind: 'git', url: 'https://example.com/plugin.git', ref: 'main' },
+    official: true,
+    bundled: false,
     resolvedCommit: 'r',
     contentHash: 'h',
-    manifest: {
+    consentFingerprint: 'f',
+    manifest: pluginManifestSchema.parse({
+      manifestVersion: 1,
+      id: 'test',
+      publisher: 'acme',
+      name: pluginKey,
       version: '1.1.0',
       capabilities: kinds.map((kind) => ({ kind })),
-      ...(orca ? { engines: { orca } } : {})
-    }
-  } as unknown as PluginMarketplaceHostInstallPreview
+      pluginApi: 1,
+      engines: { orca: orca ?? '>=1.0.0' }
+    })
+  }
 }
 
 let root: Root | null = null
@@ -119,6 +132,18 @@ function button(container: HTMLElement, text: string): HTMLButtonElement | undef
 }
 
 describe('PluginUpdateAllDialog', () => {
+  it('warns before a content-only plugin becomes a trusted worker with no added capabilities', async () => {
+    const worker = preview('a', [])
+    worker.manifest = { ...worker.manifest, main: 'worker.js' }
+    installApi({ previewMarketplaceUpdate: vi.fn().mockResolvedValue(worker) })
+    const container = await renderDialog([entry('a', [])])
+    expect(container.textContent).toContain(
+      'full access to your files, network, and other processes'
+    )
+    expect(container.textContent).not.toContain('No new access')
+    expect(container.textContent).not.toContain('None of these updates asks for new access')
+  })
+
   it('names only access the installed version lacks', () => {
     expect(newAccess(entry('a', ['storage']), preview('a', ['storage', 'secrets']))).toEqual([
       'secrets'

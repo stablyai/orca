@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { shadowedKeybindingTitles } from './PluginKeybindingConsentPreview'
+import { shadowedKeybindingTitles } from './plugin-keybinding-conflicts'
 
-describe('plugin keybinding consent preview', () => {
+describe('plugin keybinding conflicts', () => {
   it('names built-in shortcuts shadowed by plugin chords and user overrides', () => {
     expect(shadowedKeybindingTitles('Mod+P', 'darwin')).toContain('Go to File')
     expect(

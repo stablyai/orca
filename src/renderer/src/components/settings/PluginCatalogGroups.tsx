@@ -5,10 +5,20 @@ import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '../ui/button'
 import type { PluginCatalogFilter } from '../plugin-catalog/PluginCatalogLayout'
 import { PluginListGroup } from '../plugin-catalog/PluginListGroup'
-import { PluginListSkeleton } from '../plugin-catalog/PluginListSkeleton'
 import type { PluginListEntry } from '../plugin-catalog/plugin-list-entries'
-import { AvailablePluginRow } from './PluginManagerRows'
+import { PluginCard } from '../plugin-catalog/PluginCard'
+import { PluginChips } from '../plugin-catalog/PluginChips'
+import { PluginCardAction } from './PluginCardAction'
+import { Badge } from '../ui/badge'
+import { PLUGIN_CONTRIBUTION_SUMMARY_LIMIT } from '../../../../shared/plugins/plugin-contribution-summary'
+import { pluginPointsFromSummary, pluginTrust } from './plugin-access-profile'
+import { pluginTrustLabel } from './plugin-consent-copy'
+import { installedPluginPresentation } from './plugin-status-presentation'
+import { usePluginArtPalettes } from './use-plugin-art-palettes'
+import type { InstalledRowHandlers } from './PluginManagerRows'
 import type { usePluginCatalog } from './use-plugin-catalog'
+import type { usePluginHoverPrefetch } from './use-plugin-hover-prefetch'
+import type { usePluginInstallAction } from './use-plugin-install-action'
 
 function sourceDetail(source: PluginMarketplaceHostSourceState): string {
   const trust = source.official
@@ -54,48 +64,165 @@ export function CatalogNotice({
   )
 }
 
+export type CatalogCardHandlers = {
+  install: ReturnType<typeof usePluginInstallAction>
+  prefetch: ReturnType<typeof usePluginHoverPrefetch>
+  openEntry: (pluginKey: string) => void
+  installedHandlers: InstalledRowHandlers
+  busyPluginKeys: ReadonlySet<string>
+  orcaVersion: string | null
+  /** A catalog refresh is in flight; installs wait for it. */
+  refreshing: boolean
+  /** Requests confirmation before deleting plugin data. */
+  onRemove: (pluginKey: string) => void
+  onToggleEnabled: (pluginKey: string) => void
+}
+
+function CatalogCard({
+  entry,
+  handlers
+}: {
+  entry: PluginListEntry
+  handlers: CatalogCardHandlers
+}): React.JSX.Element {
+  const palettes = usePluginArtPalettes(entry.pluginKey, entry.listing?.release?.themePreview)
+  const phase = handlers.install.phaseOf(entry.pluginKey)
+  const listing = entry.listing
+  const installed = entry.installed
+  const release = listing?.release
+  // Why the summary only below its cap: a capped list can't rule a command out.
+  const trustLabel = release
+    ? pluginTrustLabel(
+        pluginTrust({
+          execution: release.execution,
+          points:
+            release.contributes && release.contributes.length < PLUGIN_CONTRIBUTION_SUMMARY_LIMIT
+              ? pluginPointsFromSummary(release.contributes)
+              : null
+        })
+      )
+    : null
+  const statusText = installed
+    ? installedPluginPresentation(installed, entry.updateVersion).statusText
+    : undefined
+  return (
+    <PluginCard
+      entry={entry}
+      statusText={statusText}
+      palettes={palettes}
+      notice={
+        phase?.kind === 'error'
+          ? { text: phase.message, tone: 'destructive' }
+          : listing?.blockedByKillList && !entry.installed
+            ? {
+                text: translate(
+                  'auto.components.settings.PluginMarketplaceListingRow.blocked',
+                  "Blocked by Orca's safety list: {{value0}}",
+                  { value0: listing.blockedByKillList.reason }
+                ),
+                tone: 'destructive'
+              }
+            : undefined
+      }
+      chips={
+        <>
+          {trustLabel ? <Badge variant="hostContext">{trustLabel}</Badge> : null}
+          <PluginChips entry={entry} />
+        </>
+      }
+      onOpen={() => handlers.openEntry(entry.pluginKey)}
+      onIntent={listing && !entry.installed ? () => handlers.prefetch.intend(listing) : undefined}
+      onIntentEnd={handlers.prefetch.cancel}
+      action={
+        <PluginCardAction
+          entry={entry}
+          phase={phase}
+          orcaVersion={handlers.orcaVersion}
+          refreshing={handlers.refreshing}
+          onInstall={() => {
+            if (listing) {
+              void handlers.install.install(listing)
+            }
+          }}
+          onOpen={() => handlers.openEntry(entry.pluginKey)}
+          busy={handlers.busyPluginKeys.has(entry.pluginKey)}
+          installedHandlers={handlers.installedHandlers}
+          onRemove={() => handlers.onRemove(entry.pluginKey)}
+          onToggleEnabled={() => handlers.onToggleEnabled(entry.pluginKey)}
+        />
+      }
+    />
+  )
+}
+
 /** One group per catalog source, each capped, with its own refresh or load failure. */
 export function PluginCatalogGroups({
   catalog,
   available,
+  installed,
+  cardHandlers,
   matches,
   narrowed,
   filter,
   capped,
   showAll,
-  openEntry,
-  openSources,
-  orcaVersion
+  openSources
 }: {
   catalog: ReturnType<typeof usePluginCatalog>
   available: readonly PluginListEntry[]
+  /** Installed plugins keep their card, in catalog order, so installing never moves it. */
+  installed: readonly PluginListEntry[]
+  cardHandlers: CatalogCardHandlers
   matches: (entry: PluginListEntry) => boolean
   /** Search or a filter is on: show every match and hide groups with none. */
   narrowed: boolean
   filter: PluginCatalogFilter
   capped: (groupId: string, rows: PluginListEntry[]) => PluginListEntry[]
   showAll: (groupId: string) => () => void
-  openEntry: (pluginKey: string) => void
   openSources: () => void
-  orcaVersion: string | null
 }): React.JSX.Element | null {
+  const order = new Map(
+    catalog.listings.map((listing, index) => [
+      `${listing.marketplaceSourceId}:${listing.pluginKey}`,
+      index
+    ])
+  )
+  const rank = (entry: PluginListEntry): number =>
+    order.get(`${entry.listing?.marketplaceSourceId}:${entry.pluginKey}`) ?? Number.MAX_SAFE_INTEGER
+  const listed = [...installed.filter((entry) => entry.listing), ...available]
   const availableBySource = catalog.sources.map((source) => {
-    const rows = available.filter(
-      (entry) => entry.listing?.marketplaceSourceId === source.id && matches(entry)
-    )
+    const rows = listed
+      .filter((entry) => entry.listing?.marketplaceSourceId === source.id && matches(entry))
+      .sort((left, right) => rank(left) - rank(right))
     return { source, rows }
   })
   return filter !== 'all' ? null : catalog.loading ? (
     <PluginListGroup
+      layout="grid"
       title={translate('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
     >
-      <PluginListSkeleton rows={3} />
+      {[0, 1, 2].map((index) => (
+        <li
+          key={index}
+          aria-hidden="true"
+          className="overflow-hidden rounded-xl border border-border/70 bg-card"
+        >
+          <div className="aspect-[16/10] border-b border-border/70 bg-muted/60" />
+          <div className="space-y-2 px-3.5 py-3">
+            <div className="h-3.5 w-1/2 rounded bg-muted" />
+            <div className="h-3 w-1/3 rounded bg-muted" />
+            <div className="h-9 rounded bg-muted/60" />
+          </div>
+        </li>
+      ))}
     </PluginListGroup>
   ) : catalog.error && catalog.sources.length === 0 ? (
     <PluginListGroup
+      layout="grid"
       title={translate('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
       notice={
         <CatalogNotice
+          standalone
           tone="error"
           title={translate(
             'auto.components.settings.PluginManager.catalogFailedTitle',
@@ -117,7 +244,7 @@ export function PluginCatalogGroups({
     <>
       {availableBySource.map(({ source, rows }) => {
         const shown = capped(source.id, rows)
-        const listedTotal = available.filter(
+        const listedTotal = listed.filter(
           (entry) => entry.listing?.marketplaceSourceId === source.id
         ).length
         if (narrowed && rows.length === 0) {
@@ -127,6 +254,7 @@ export function PluginCatalogGroups({
         const notice =
           failed && listedTotal === 0 ? (
             <CatalogNotice
+              standalone
               tone="error"
               title={translate(
                 'auto.components.settings.PluginManager.sourceFailedTitle',
@@ -149,6 +277,7 @@ export function PluginCatalogGroups({
             />
           ) : failed || source.stale ? (
             <CatalogNotice
+              standalone
               tone="warning"
               title={translate(
                 'auto.components.settings.PluginManager.sourceStaleTitle',
@@ -173,6 +302,7 @@ export function PluginCatalogGroups({
         return (
           <PluginListGroup
             key={source.id}
+            layout="grid"
             title={source.marketplace?.name ?? source.source.url}
             detail={sourceDetail(source)}
             aside={
@@ -193,17 +323,10 @@ export function PluginCatalogGroups({
           >
             {shown.length > 0
               ? shown.map((entry) => (
-                  <AvailablePluginRow
+                  <CatalogCard
                     key={`${source.id}:${entry.pluginKey}`}
                     entry={entry}
-                    busy={catalog.previewBusyKey === entry.pluginKey}
-                    orcaVersion={orcaVersion}
-                    onOpen={(target) => openEntry(target.pluginKey)}
-                    onInstall={(target) => {
-                      if (target.listing) {
-                        void catalog.openPreview(target.listing, false)
-                      }
-                    }}
+                    handlers={cardHandlers}
                   />
                 ))
               : null}

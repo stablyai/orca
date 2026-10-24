@@ -15,6 +15,8 @@ export function usePluginReviewQueue(): {
   advance: (plugins: readonly PluginHostListEntry[]) => void
   /** Drops reviews for plugins no longer installed. */
   prune: (installedKeys: ReadonlySet<string>) => void
+  /** Back pauses queued reviews without consuming the next one. */
+  pause: () => void
   clear: () => void
 } {
   const [reviewKey, setReviewKey] = useState<string | null>(null)
@@ -58,5 +60,6 @@ export function usePluginReviewQueue(): {
     waitingRef.current = []
     show(null)
   }, [show])
-  return { reviewKey, show, enqueue, advance, prune, clear }
+  const pause = useCallback(() => show(null), [show])
+  return { reviewKey, show, enqueue, advance, prune, pause, clear }
 }

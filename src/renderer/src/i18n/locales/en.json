@@ -12272,7 +12272,8 @@
           "remove": "Remove",
           "pathLabel": "Development plugin folder path",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
-          "add": "Add path"
+          "add": "Add path",
+          "dialogTitle": "Development folders"
         },
         "PluginInstallDialog": {
           "localRequired": "Enter the plugin folder path.",
@@ -12296,16 +12297,11 @@
           "installFailed": "Plugin installation failed. Check the source and try again."
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "Keyboard shortcuts",
-          "worktree": "Runs only while a workspace is active.",
-          "global": "Works anywhere in Orca.",
-          "shadows": "Replaces: {{value0}}"
+          "worktree": "Runs only while a workspace is active."
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Could not load marketplace plugins.",
           "refreshFailed": "Couldn't refresh marketplaces. Try again.",
-          "previewFailed": "Couldn't load this plugin. Refresh and try again.",
-          "installFailed": "Could not install this plugin. The reviewed source may have changed.",
           "manageSources": "Manage sources",
           "refreshing": "Refreshing…",
           "refresh": "Refresh",
@@ -12330,40 +12326,6 @@
           "blockedAction": "Blocked",
           "checkUpdate": "Check for update",
           "install": "Install"
-        },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "1 language pack",
-          "languagePacks": "{{value0}} language packs",
-          "commandsOne": "1 command",
-          "commands": "{{value0}} commands",
-          "keybindingsOne": "1 keyboard shortcut",
-          "keybindings": "{{value0}} keyboard shortcuts",
-          "vmRecipesOne": "1 VM recipe",
-          "vmRecipes": "{{value0}} VM recipes",
-          "panelsOne": "1 panel",
-          "panels": "{{value0}} panels",
-          "eventsOne": "1 event subscription",
-          "events": "{{value0}} event subscriptions",
-          "worker": "Background worker",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "Includes",
-          "noContributions": "Manifest metadata only",
-          "capabilities": "Requested access",
-          "workerWarning": "Its worker runs as a normal process with full access to your files, network, and other processes.",
-          "blocked": "Orca's safety list blocks this plugin: {{value0}}",
-          "current": "This exact plugin content is already installed.",
-          "close": "Close",
-          "cancel": "Cancel",
-          "update": "Update plugin",
-          "install": "Install plugin",
-          "themesOne": "1 app theme",
-          "themes": "{{value0}} app themes",
-          "terminalThemesOne": "1 terminal theme",
-          "terminalThemes": "{{value0}} terminal themes",
-          "iconThemesOne": "1 icon theme",
-          "iconThemes": "{{value0}} icon themes",
-          "syntaxesOne": "1 syntax",
-          "syntaxes": "{{value0}} syntaxes"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Couldn't add this marketplace. Check the URL, ref, and Git access.",
@@ -13474,7 +13436,9 @@
           "browseAll": "Browse all plugins",
           "resultCount": "{{value0}} plugins match",
           "resultCountOne": "1 plugin matches",
-          "updateAll": "Update all…"
+          "updateAll": "Update all…",
+          "installedElsewhere": "Installed outside a catalog",
+          "bundledAndLocal": "Bundled & local"
         },
         "PluginDetailPage": {
           "bundled": "Bundled with Orca",
@@ -13496,7 +13460,10 @@
           "categories": "Categories",
           "pluginId": "Plugin ID",
           "content": "Content",
-          "repository": "Repository"
+          "repository": "Repository",
+          "newerTitle": "Newer version available",
+          "newerBody": "The catalog changed while this page was open. Show the newer version to review it.",
+          "showNewer": "Show it"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "Interface language",
@@ -13522,7 +13489,8 @@
           "copyLogs": "Copy",
           "accessFailed": "Couldn’t read what it can access",
           "accessFailedDetail": "Orca couldn’t fetch or check this plugin’s files.",
-          "retry": "Retry"
+          "retry": "Retry",
+          "noAccessReach": "Can’t reach anything outside its own files"
         },
         "PluginManagerRows": {
           "crashedCount": "Crashed {{value0}} times in a row. View its logs on the plugin page.",
@@ -13550,7 +13518,8 @@
           "update": "Update {{value0}}",
           "needsOrca": "Needs Orca {{value0}}",
           "off": "Off",
-          "rollbackTo": "Roll back to {{value0}}…"
+          "rollbackTo": "Roll back to {{value0}}…",
+          "copyContentHash": "Copy content hash"
         },
         "PluginSettingsOverview": {
           "offTitle": "Plugins are off",
@@ -13558,7 +13527,8 @@
           "turnOn": "Turn on plugins",
           "systemDescription": "Turns every plugin off at once. Nothing runs until you review and enable it.",
           "pausedCount": "{{value0}} paused",
-          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on."
+          "pausedUnknown": "Your installed plugins are paused and will be back when you turn plugins on.",
+          "offShort": "Nothing from your plugins runs."
         },
         "PluginFilterPopover": {
           "label": "Filter plugins",
@@ -13587,7 +13557,8 @@
           "close": "Close",
           "retry": "Try again",
           "updated": "Updated",
-          "needsOrca": "Needs Orca {{value0}} or later. Update Orca first."
+          "needsOrca": "Needs Orca {{value0}} or later. Update Orca first.",
+          "current": "This exact plugin content is already installed."
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13610,6 +13581,93 @@
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
           "languageCoverage": "Interface language · {{value0}}% translated",
           "agent": "Agent profile"
+        },
+        "PluginCardAction": {
+          "installed": "Installed",
+          "installing": "Installing…",
+          "reviewLabel": "Review and install {{value0}}",
+          "review": "Review & install",
+          "retry": "Try again",
+          "moreLabel": "More actions for {{value0}}",
+          "disable": "Disable",
+          "enable": "Enable",
+          "remove": "Remove"
+        },
+        "PluginInstallConsent": {
+          "install": "Install & enable",
+          "installHeading": "If you install {{value0}}, it can:",
+          "enableHeading": "If you enable {{value0}}, it can:",
+          "noOtherAccess": "It asks for no other access.",
+          "keepOff": "Keep off",
+          "replacesShortcut": "{{value0}} ({{value1}}) replaces your shortcut for {{value2}}.",
+          "reading": "Reading what it can access…"
+        },
+        "PluginPageAction": {
+          "failedTitle": "Couldn’t install {{value0}}",
+          "contentOnly": "Can’t reach anything outside its own files"
+        },
+        "PluginSettingsMenu": {
+          "label": "Plugin settings",
+          "development": "Development folders…"
+        },
+        "PluginThemeUseNow": {
+          "label": "Use now:",
+          "useName": "Use now: {{value0}}"
+        },
+        "PluginPageHero": {
+          "screenshots": "Screenshots",
+          "openScreenshot": "Open screenshot: {{value0}}",
+          "position": "{{value0}} of {{value1}}",
+          "previous": "Previous screenshot",
+          "next": "Next screenshot"
+        },
+        "pluginConsentCopy": {
+          "runsWorker": "Runs a worker",
+          "addsCommands": "Adds commands",
+          "addsPanel": "Adds a panel",
+          "contentOnly": "Content only"
+        },
+        "PluginContributionActionCommand": {
+          "run": "Run",
+          "runName": "Run {{value0}}",
+          "ran": "Ran {{value0}}",
+          "failed": "{{value0}} failed",
+          "seeLogs": "Anything it printed is in Logs below.",
+          "needsWorkspace": "Open a workspace to run it."
+        },
+        "PluginContributionActionPanel": {
+          "open": "Open panel",
+          "openName": "Open panel: {{value0}}",
+          "needsWorkspace": "Open a workspace to see it."
+        },
+        "PluginContributionActionLanguage": {
+          "switch": "Switch language",
+          "switchTo": "Switch language to {{value0}}",
+          "switchBack": "Switch back",
+          "switchBackFrom": "Switch back from {{value0}}",
+          "failed": "Could not switch language"
+        },
+        "PluginContributionActionSyntax": {
+          "openExtension": "Open any {{value0}} file",
+          "openFilename": "Open {{value0}}"
+        },
+        "PluginContributionActionEvents": {
+          "worktreeCreated": "When a workspace is created",
+          "worktreeRemoved": "When a workspace is removed",
+          "agentStatusChanged": "When an agent’s status changes",
+          "detail": "Background code runs"
+        },
+        "pluginInstallAction": {
+          "installed": "{{value0}} installed",
+          "tryIt": "Try it",
+          "mismatch": "The download didn’t match what the catalog published, so nothing was installed.",
+          "catalogChanged": "The catalog changed since this page opened. Refresh it, then try again.",
+          "blocked": "Orca’s safety list blocks this plugin.",
+          "downloadFailed": "Couldn’t download this plugin. Check your connection, then try again. Nothing was installed."
+        },
+        "pluginThemeApply": {
+          "nowUsing": "Now using {{value0}}",
+          "switchBack": "Switch back"
         }
       },
       "right": {

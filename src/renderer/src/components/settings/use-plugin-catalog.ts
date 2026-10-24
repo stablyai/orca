@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
-  PluginHostListEntry,
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
-import type { PluginMarketplacePreviewMode } from './PluginMarketplacePreviewDialog'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -24,29 +22,20 @@ function marketplaceError(cause: unknown, fallback: string): string {
  * listing opens. Requests a newer load superseded, or that finish after unmount, are dropped.
  */
 export function usePluginCatalog({
-  installedPlugins,
-  onInstalled,
-  onRefreshInstalled
+  onRefreshInstalled,
+  onOpenRequested
 }: {
-  installedPlugins: readonly PluginHostListEntry[]
-  onInstalled: (pluginKey: string) => Promise<void>
   onRefreshInstalled?: () => Promise<void>
+  /** A plugin asked for from outside Settings (a file-type suggestion); opens its page. */
+  onOpenRequested?: (pluginKey: string) => void
 }) {
   const [sources, setSources] = useState<PluginMarketplaceHostSourceState[]>([])
   const [listings, setListings] = useState<PluginMarketplaceHostListing[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshBusy, setRefreshBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<PluginMarketplaceHostInstallPreview | null>(null)
-  const [previewMode, setPreviewMode] = useState<PluginMarketplacePreviewMode>('install')
-  // Why: opened from a plugin page, the review skips what the page already showed.
-  const [previewAccessOnly, setPreviewAccessOnly] = useState(false)
-  const [previewBusyKey, setPreviewBusyKey] = useState<string | null>(null)
-  const [installBusy, setInstallBusy] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
-  const previewRequestRef = useRef(0)
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
@@ -85,14 +74,9 @@ export function usePluginCatalog({
     return () => {
       mountedRef.current = false
       requestRef.current += 1
-      previewRequestRef.current += 1
     }
   }, [loadMarketplaceData])
 
-  const installedByKey = useMemo(
-    () => new Map(installedPlugins.map((plugin) => [plugin.pluginKey, plugin])),
-    [installedPlugins]
-  )
   const refresh = async (): Promise<void> => {
     setRefreshBusy(true)
     setError(null)
@@ -118,51 +102,12 @@ export function usePluginCatalog({
     }
   }
 
-  const openPreview = async (
-    listing: PluginMarketplaceHostListing,
-    update: boolean,
-    accessOnly = false
-  ): Promise<void> => {
-    const requestId = ++previewRequestRef.current
-    setPreviewBusyKey(listing.pluginKey)
-    setActionError(null)
-    setError(null)
-    try {
-      const nextPreview = update
-        ? await window.api.plugins.previewMarketplaceUpdate({ pluginKey: listing.pluginKey })
-        : await window.api.plugins.previewMarketplacePlugin({
-            marketplaceSourceId: listing.marketplaceSourceId,
-            pluginKey: listing.pluginKey
-          })
-      if (mountedRef.current && requestId === previewRequestRef.current) {
-        setPreviewMode(update ? 'update' : 'install')
-        setPreviewAccessOnly(accessOnly)
-        setPreview(nextPreview)
-      }
-    } catch (cause) {
-      if (mountedRef.current && requestId === previewRequestRef.current) {
-        setError(
-          marketplaceError(
-            cause,
-            translate(
-              'auto.components.settings.PluginMarketplaceBrowser.previewFailed',
-              "Couldn't load this plugin. Refresh and try again."
-            )
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current && requestId === previewRequestRef.current) {
-        setPreviewBusyKey(null)
-      }
-    }
-  }
-
   const previewRequest = usePluginPreviewRequestStore((state) => state.request)
-  const openPreviewRef = useRef(openPreview)
+  const openRequestedRef = useRef(onOpenRequested)
   useLayoutEffect(() => {
-    openPreviewRef.current = openPreview
+    openRequestedRef.current = onOpenRequested
   })
+  // Why the page: a suggestion leads to the same one-action install as the catalog, not a dialog.
   useEffect(() => {
     if (!previewRequest || loading) {
       return
@@ -175,52 +120,10 @@ export function usePluginCatalog({
         candidate.pluginKey === previewRequest.pluginKey
     )
     if (listing) {
-      void openPreviewRef.current(listing, false)
+      openRequestedRef.current?.(listing.pluginKey)
     }
   }, [previewRequest, listings, loading])
 
-  const installPreview = async (): Promise<void> => {
-    if (!preview || installBusy) {
-      return
-    }
-    setInstallBusy(true)
-    setActionError(null)
-    try {
-      const result = await window.api.plugins.installMarketplacePlugin({
-        marketplaceSourceId: preview.marketplaceSourceId,
-        marketplaceCommit: preview.marketplaceCommit,
-        pluginKey: preview.pluginKey,
-        resolvedCommit: preview.resolvedCommit
-      })
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      setPreview(null)
-      await onInstalled(result.pluginKey)
-    } catch (cause) {
-      if (mountedRef.current) {
-        setActionError(
-          marketplaceError(
-            cause,
-            translate(
-              'auto.components.settings.PluginMarketplaceBrowser.installFailed',
-              'Could not install this plugin. The reviewed source may have changed.'
-            )
-          )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setInstallBusy(false)
-      }
-    }
-  }
-
-  const currentVersion = Boolean(
-    preview && installedByKey.get(preview.pluginKey)?.source?.contentHash === preview.contentHash
-  )
-
-  // Why: the plugin page reads the same preview the install dialog would, without opening it.
   const previewCacheRef = useRef(new Map<string, Promise<PluginPagePreview>>())
   const fetchPreview = useCallback(
     (listing: PluginMarketplaceHostListing): Promise<PluginPagePreview> => {
@@ -253,18 +156,7 @@ export function usePluginCatalog({
     loading,
     refreshBusy,
     error,
-    preview,
-    previewMode,
-    previewAccessOnly,
-    previewBusyKey,
-    installBusy,
-    actionError,
-    installedByKey,
-    currentVersion,
     loadMarketplaceData,
-    refresh,
-    openPreview,
-    installPreview,
-    closePreview: () => setPreview(null)
+    refresh
   }
 }

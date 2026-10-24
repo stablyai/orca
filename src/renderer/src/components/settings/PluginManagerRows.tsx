@@ -1,4 +1,4 @@
-import { ArrowUpCircle, Copy, FileText, Loader2, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowUpCircle, Copy, FileText, Hash, Loader2, RotateCcw, Trash2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
@@ -7,17 +7,15 @@ import { PluginListRow } from '../plugin-catalog/PluginListRow'
 import type { PluginListEntry } from '../plugin-catalog/plugin-list-entries'
 import { SettingsSwitch } from './SettingsFormControls'
 import {
-  isPluginEnabled,
   pluginNeedsReview,
-  pluginStatusKind,
+  installedPluginPresentation,
   type PluginStatusKind
 } from './plugin-status-presentation'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
 import { usePluginRollbackVersion } from './use-plugin-rollback-version'
-import { satisfiesOrcaEngineRange } from '../../../../shared/plugins/plugin-manifest'
-import { copyPluginId, DetailsItem, MoreButton } from './PluginRowMenu'
+import { copyContentHash, copyPluginId, DetailsItem, MoreButton } from './PluginRowMenu'
 import { PluginChips } from '../plugin-catalog/PluginChips'
-import { StatusWord, statusWordFor } from '../plugin-catalog/PluginStatusWord'
+import { StatusWord } from '../plugin-catalog/PluginStatusWord'
 
 export type InstalledRowHandlers = {
   onOpen: (pluginKey: string) => void
@@ -58,17 +56,12 @@ export function installedPluginControls(
     inPage?: boolean
   }
 ): InstalledPluginControls {
-  const kind = pluginStatusKind(plugin)
+  const { kind, enabled, statusText, removable, primary, switchable } = installedPluginPresentation(
+    plugin,
+    entry.updateVersion,
+    busy
+  )
   const needsReview = pluginNeedsReview(plugin)
-  const enabled = isPluginEnabled(plugin)
-  const statusText = entry.updateVersion
-    ? `${statusWordFor(kind)}, ${translate(
-        'auto.components.settings.PluginManagerRows.updateAvailable',
-        'update {{value0}} available',
-        { value0: entry.updateVersion }
-      )}`
-    : statusWordFor(kind)
-  const removable = !plugin.bundled && !plugin.isDev
 
   let description: React.ReactNode = entry.description ?? ''
   let tone: 'default' | 'destructive' = 'default'
@@ -103,9 +96,9 @@ export function installedPluginControls(
   }
 
   let action: React.ReactNode = null
-  if (busy) {
+  if (primary === 'busy') {
     action = <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
-  } else if (plugin.blockedByKillList && removable) {
+  } else if (primary === 'remove') {
     action = (
       <Button
         variant="outline"
@@ -115,20 +108,20 @@ export function installedPluginControls(
         {translate('auto.components.settings.PluginManagerRows.remove', 'Remove…')}
       </Button>
     )
-  } else if (needsReview) {
+  } else if (primary === 'review') {
     action = (
       <Button size="xs" onClick={() => handlers.onReview(plugin.pluginKey)}>
         {translate('auto.components.settings.PluginManagerRows.review', 'Review')}
       </Button>
     )
-  } else if (kind === 'error') {
+  } else if (primary === 'restart') {
     action = (
       <Button variant="outline" size="xs" onClick={() => handlers.onRestart(plugin.pluginKey)}>
         <RotateCcw />
         {translate('auto.components.settings.PluginManagerRows.restart', 'Restart')}
       </Button>
     )
-  } else if (entry.updateVersion) {
+  } else if (primary === 'update') {
     action = (
       <Button
         variant="outline"
@@ -146,7 +139,7 @@ export function installedPluginControls(
         })}
       </Button>
     )
-  } else if (kind === 'invalid') {
+  } else if (primary === 'error') {
     action = (
       <Button variant="outline" size="xs" onClick={() => handlers.onOpen(plugin.pluginKey)}>
         {translate('auto.components.settings.PluginManagerRows.viewError', 'View error')}
@@ -154,20 +147,19 @@ export function installedPluginControls(
     )
   }
 
-  const switchDisabled =
-    busy || needsReview || kind === 'invalid' || Boolean(plugin.blockedByKillList)
   return {
     kind,
     statusText,
     description,
     tone,
-    status: <StatusWord kind={kind} />,
+    // Why none for review: the Review button and the off switch already say it.
+    status: kind === 'review' ? null : <StatusWord kind={kind} />,
     action,
     toggle: (
       <span className="relative inline-flex">
         <SettingsSwitch
           checked={enabled && !needsReview}
-          disabled={switchDisabled}
+          disabled={!switchable}
           onChange={() => handlers.onToggleEnabled(plugin.pluginKey)}
           ariaLabel={
             enabled && !needsReview
@@ -209,6 +201,15 @@ export function installedPluginControls(
           <Copy />
           {translate('auto.components.settings.PluginManagerRows.copyId', 'Copy plugin ID')}
         </DropdownMenuItem>
+        {inPage && plugin.source?.contentHash ? (
+          <DropdownMenuItem onSelect={() => void copyContentHash(plugin.source?.contentHash ?? '')}>
+            <Hash />
+            {translate(
+              'auto.components.settings.PluginManagerRows.copyContentHash',
+              'Copy content hash'
+            )}
+          </DropdownMenuItem>
+        ) : null}
         {canCheckUpdate ? (
           <DropdownMenuItem onSelect={() => handlers.onCheckUpdate(entry)}>
             <ArrowUpCircle />
@@ -304,96 +305,6 @@ export function InstalledPluginRow({
       toggle={controls.toggle}
       more={controls.more}
       onOpen={() => handlers.onOpen(plugin.pluginKey)}
-    />
-  )
-}
-
-export function AvailablePluginRow({
-  entry,
-  busy,
-  orcaVersion,
-  onOpen,
-  onInstall
-}: {
-  entry: PluginListEntry
-  busy: boolean
-  orcaVersion: string | null
-  onOpen: (entry: PluginListEntry) => void
-  onInstall: (entry: PluginListEntry) => void
-}): React.JSX.Element {
-  const blocked = entry.listing?.blockedByKillList
-  const needsOrca =
-    entry.minimumOrca &&
-    orcaVersion &&
-    !satisfiesOrcaEngineRange(orcaVersion, `>=${entry.minimumOrca}`)
-      ? entry.minimumOrca
-      : null
-  const needsOrcaText = needsOrca
-    ? translate('auto.components.settings.PluginManagerRows.needsOrca', 'Needs Orca {{value0}}', {
-        value0: needsOrca
-      })
-    : null
-  return (
-    <PluginListRow
-      entry={entry}
-      statusText={
-        blocked
-          ? translate('auto.components.settings.PluginSettingsRow.blocked', 'Blocked')
-          : undefined
-      }
-      description={
-        blocked
-          ? translate(
-              'auto.components.settings.PluginMarketplaceListingRow.blocked',
-              "Blocked by Orca's safety list: {{value0}}",
-              { value0: blocked.reason }
-            )
-          : (entry.description ??
-            translate(
-              'auto.components.settings.PluginMarketplaceListingRow.noDescription',
-              'No description provided.'
-            ))
-      }
-      descriptionTone={blocked ? 'destructive' : 'default'}
-      chips={<PluginChips entry={entry} />}
-      status={
-        blocked ? (
-          <StatusWord kind="blocked" />
-        ) : needsOrcaText ? (
-          <span className="text-xs whitespace-nowrap text-status-warning">{needsOrcaText}</span>
-        ) : null
-      }
-      action={
-        blocked ? null : busy ? (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
-        ) : (
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={Boolean(needsOrca)}
-            aria-label={translate(
-              'auto.components.settings.PluginManagerRows.installName',
-              'Install {{value0}}',
-              {
-                value0: entry.name
-              }
-            )}
-            onClick={() => onInstall(entry)}
-          >
-            {translate('auto.components.settings.PluginMarketplaceListingRow.install', 'Install')}
-          </Button>
-        )
-      }
-      more={
-        <MoreButton name={entry.name}>
-          <DetailsItem onSelect={() => onOpen(entry)} />
-          <DropdownMenuItem onSelect={() => void copyPluginId(entry.pluginKey)}>
-            <Copy />
-            {translate('auto.components.settings.PluginManagerRows.copyId', 'Copy plugin ID')}
-          </DropdownMenuItem>
-        </MoreButton>
-      }
-      onOpen={() => onOpen(entry)}
     />
   )
 }

@@ -44,9 +44,14 @@ describe('plugin language-pack artifacts', () => {
     'pluginError',
     'PluginKeybindingConsentPreview',
     'PluginMarketplaceListingRow',
-    'PluginMarketplacePreviewDialog',
+    'PluginUpdateAllDialog',
     'PluginMarketplaceSourceDialog',
-    'PluginVmRecipeConsentPreview'
+    'PluginVmRecipeConsentPreview',
+    // The inline consent and its copy replaced the review dialog.
+    'PluginInstallConsent',
+    'PluginPageAction',
+    'pluginConsentCopy',
+    'pluginInstallAction'
   ])('prevents language packs from rewriting %s security copy', (component) => {
     expect(
       parsePluginLanguagePackArtifact(

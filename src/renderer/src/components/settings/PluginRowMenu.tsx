@@ -26,6 +26,22 @@ export async function copyPluginId(pluginKey: string): Promise<void> {
   }
 }
 
+export async function copyContentHash(hash: string): Promise<void> {
+  try {
+    await window.api.ui.writeClipboardText(hash)
+    toast.success(
+      translate('auto.components.settings.PluginDetailInfo.hashCopied', 'Content hash copied')
+    )
+  } catch {
+    toast.error(
+      translate(
+        'auto.components.settings.PluginDetailInfo.hashCopyFailed',
+        "Couldn't copy the hash."
+      )
+    )
+  }
+}
+
 export function MoreButton({
   name,
   children

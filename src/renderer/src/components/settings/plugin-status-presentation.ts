@@ -97,3 +97,52 @@ export function sortByAttention<T extends { installed: PluginHostListEntry | nul
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map(({ entry }) => entry)
 }
+
+/** One installed-action priority; surfaces choose only their layout. */
+export function installedPluginPresentation(
+  plugin: PluginHostListEntry,
+  updateVersion: string | null,
+  busy = false
+) {
+  const kind = pluginStatusKind(plugin)
+  const removable = !plugin.bundled && !plugin.isDev
+  const primary = busy
+    ? 'busy'
+    : plugin.blockedByKillList && removable
+      ? 'remove'
+      : pluginNeedsReview(plugin)
+        ? 'review'
+        : kind === 'error'
+          ? 'restart'
+          : updateVersion
+            ? 'update'
+            : kind === 'invalid'
+              ? 'error'
+              : null
+  return {
+    kind,
+    removable,
+    primary,
+    enabled: isPluginEnabled(plugin),
+    switchable: !busy && kind !== 'review' && kind !== 'invalid' && kind !== 'blocked',
+    statusText: updateVersion
+      ? `${statusWordFor(kind)}, ${translate('auto.components.settings.PluginManagerRows.updateAvailable', 'update {{value0}} available', { value0: updateVersion })}`
+      : statusWordFor(kind)
+  }
+}
+
+export function statusWordFor(kind: PluginStatusKind): string {
+  if (kind === 'error') {
+    return translate('auto.components.settings.PluginManagerRows.stopped', 'Stopped')
+  }
+  if (kind === 'invalid') {
+    return translate('auto.components.settings.PluginManagerRows.cantLoad', 'Can’t load')
+  }
+  if (kind === 'enabled') {
+    return translate('auto.components.settings.PluginManagerRows.on', 'On')
+  }
+  if (kind === 'disabled') {
+    return translate('auto.components.settings.PluginManagerRows.off', 'Off')
+  }
+  return pluginStatusLabel(kind)
+}

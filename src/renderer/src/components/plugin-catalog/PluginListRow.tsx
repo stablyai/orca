@@ -1,6 +1,6 @@
 import { BadgeCheck } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { PluginCatalogAvatar } from './PluginCatalogAvatar'
+import { PluginRowArt } from './PluginRowArt'
 import type { PluginListEntry } from './plugin-list-entries'
 
 type PluginListRowProps = {
@@ -46,10 +46,9 @@ export function PluginListRow({
       data-dimmed={dimmed}
       data-inert={inert}
     >
-      <PluginCatalogAvatar
-        name={entry.name}
-        className="size-8 rounded-lg text-2xs group-data-[dimmed=true]/plugin-row:opacity-55"
-      />
+      <div className="group-data-[dimmed=true]/plugin-row:opacity-55">
+        <PluginRowArt entry={entry} />
+      </div>
       <div className="min-w-0 group-data-[dimmed=true]/plugin-row:opacity-55">
         <div className="flex min-w-0 items-center gap-1.5">
           {onOpen && !inert ? (

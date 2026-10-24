@@ -26,6 +26,7 @@ const terminalThemes = createPluginContentListStore<PluginTerminalThemeRegistrat
 
 export const usePluginThemeStore = appThemes.useStore
 export const usePluginThemes = appThemes.useEntries
+export const usePluginTerminalThemeStore = terminalThemes.useStore
 export const usePluginTerminalThemes = terminalThemes.useEntries
 
 /** Keeps the saved snapshot of selected plugin terminal palettes current as plugins update. */

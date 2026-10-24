@@ -32,28 +32,9 @@ export type PluginPageNavigation = {
  * Which plugin's page is open, and the way back: the back link, Alt+← or ⌘[ on Mac. Going back
  * returns focus to that plugin's name in the list. Esc stays with Settings.
  */
-export function usePluginPageNavigation(): PluginPageNavigation {
+export function usePluginPageNavigation(onBack?: () => void): PluginPageNavigation {
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [returnKey, setReturnKey] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!openKey) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (
-        isBackShortcut(event) &&
-        !event.defaultPrevented &&
-        !belongsToFieldOrDialog(event.target)
-      ) {
-        event.preventDefault()
-        setReturnKey(openKey)
-        setOpenKey(null)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openKey])
 
   useEffect(() => {
     if (openKey || !returnKey) {
@@ -71,9 +52,28 @@ export function usePluginPageNavigation(): PluginPageNavigation {
     openKeyRef.current = openKey
   })
   const back = useCallback(() => {
+    onBack?.()
     setReturnKey(openKeyRef.current)
     setOpenKey(null)
-  }, [])
+  }, [onBack])
+  useEffect(() => {
+    if (!openKey) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (
+        isBackShortcut(event) &&
+        !event.defaultPrevented &&
+        !belongsToFieldOrDialog(event.target)
+      ) {
+        event.preventDefault()
+        back()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [openKey, back])
+
   const leave = useCallback((pluginKey: string) => {
     if (openKeyRef.current === pluginKey) {
       setOpenKey(null)

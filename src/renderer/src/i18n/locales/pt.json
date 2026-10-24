@@ -6259,32 +6259,6 @@
           "import_theme_other": "Importar {{value0}} Temas",
           "import_themes": "Importar Temas"
         },
-        "PluginMarketplacePreviewDialog": {
-          "languagePacksOne": "1 pacote de idioma",
-          "languagePacks": "{{value0}} pacotes de idioma",
-          "commandsOne": "1 comando",
-          "commands": "{{value0}} comandos",
-          "keybindingsOne": "1 atalho de teclado",
-          "keybindings": "{{value0}} atalhos de teclado",
-          "vmRecipesOne": "1 receita de VM",
-          "vmRecipes": "{{value0}} receitas de VM",
-          "panelsOne": "1 painel",
-          "panels": "{{value0}} painéis",
-          "eventsOne": "1 inscrição de evento",
-          "events": "{{value0}} inscrições de evento",
-          "worker": "Worker em segundo plano",
-          "versionLine": "v{{value0}} · {{value1}}",
-          "includes": "Inclui",
-          "noContributions": "Somente metadados do manifesto",
-          "capabilities": "Acesso solicitado",
-          "workerWarning": "As capacidades limitam como este plugin usa a API do Orca. Seu worker ainda é executado como um processo normal neste computador, com acesso total aos seus arquivos, rede e outros processos.",
-          "blocked": "A lista de segurança do Orca bloqueia este plugin: {{value0}}",
-          "current": "Este exato conteúdo de plugin já está instalado.",
-          "close": "Fechar",
-          "cancel": "Cancelar",
-          "update": "Atualizar plugin",
-          "install": "Instalar plugin"
-        },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
           "0de9fda203": "Descartar",
@@ -6808,8 +6782,6 @@
         "PluginMarketplaceBrowser": {
           "loadFailed": "Não foi possível carregar os plugins do marketplace.",
           "refreshFailed": "Não foi possível atualizar os marketplaces. As listagens em cache continuam disponíveis.",
-          "previewFailed": "Não foi possível preparar este plugin para revisão. Atualize o marketplace e tente novamente.",
-          "installFailed": "Não foi possível instalar este plugin. A origem revisada pode ter mudado.",
           "manageSources": "Gerenciar origens",
           "refreshing": "Atualizando…",
           "refresh": "Atualizar",
@@ -8204,10 +8176,7 @@
           "description": "Links do terminal, do chat e do markdown abrem no navegador sem tirar o foco de onde você clicou."
         },
         "PluginKeybindingConsentPreview": {
-          "heading": "Atalhos de teclado",
-          "worktree": "Executa somente enquanto um espaço de trabalho está ativo.",
-          "global": "Executa no app sem exigir um espaço de trabalho ativo.",
-          "shadows": "Substitui: {{value0}}"
+          "worktree": "Executa somente enquanto um espaço de trabalho está ativo."
         },
         "PluginRemoveDialog": {
           "title": "Remover plugin?",

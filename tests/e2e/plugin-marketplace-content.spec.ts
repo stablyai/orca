@@ -112,36 +112,69 @@ async function openPluginSettings(page: Page): Promise<void> {
   await expect(page.locator('[data-settings-section="plugins"]')).toBeVisible()
 }
 
+async function backToPluginList(page: Page): Promise<void> {
+  await page.getByRole('article').getByRole('button', { name: 'Plugins', exact: true }).click()
+  await expect(page.getByRole('article')).toBeHidden()
+}
+
+/** Installs from the plugin's page: one click for content only, else the inline consent. */
 async function installMarketplacePluginThroughUi(
   page: Page,
   pluginKey: string,
   pluginName: string,
-  consentDialogName: string
+  { runsInstructions }: { runsInstructions: boolean }
 ): Promise<void> {
   const listing = page.locator(`[data-plugin-key="${pluginKey}"]`)
   await expect(listing).toBeVisible()
-  await listing.getByRole('button', { name: 'Install' }).click()
-  const preview = page.getByRole('dialog', { name: pluginName })
-  await expect(preview).toContainText('Official · stablyai')
-  await preview.getByRole('button', { name: 'Install plugin' }).click()
-  const consent = page.getByRole('dialog', { name: consentDialogName })
-  await expect(consent).toBeVisible()
-  await consent.getByRole('button', { name: 'Enable plugin' }).click()
-  await expect(consent).toBeHidden()
+  // Why the page: an older catalog vouches for no profile, so the card asks for review first.
+  await listing.getByRole('button', { name: /^Review and install / }).click()
+  await expect(page.locator('#plugin-detail-heading')).toContainText(pluginName)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  if (runsInstructions) {
+    const consent = page.getByRole('region', {
+      name: new RegExp(`^If you install .*${pluginName}, it can:$`)
+    })
+    await expect(consent).toContainText('Official · stablyai')
+    // Why the page: the one decision sits beside the name, above the consent it grants.
+    await page
+      .getByRole('article')
+      .getByRole('button', { name: /^Install & enable/ })
+      .click()
+    // Why a second step: recipe command lines are read from the installed files, so they are
+    // reviewed on the page after install instead of approved unseen.
+    const review = page.getByRole('region', {
+      name: new RegExp(`^If you enable .*${pluginName}, it can:$`)
+    })
+    await page
+      .getByRole('article')
+      .getByRole('button', { name: /^Enable plugin/ })
+      .click()
+    await expect(review).toBeHidden()
+  } else {
+    await page.getByRole('button', { name: new RegExp(`^Install .*${pluginName}$`) }).click()
+    await expect(
+      page.getByRole('button', { name: new RegExp(`^More actions for .*${pluginName}$`) })
+    ).toBeVisible()
+  }
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await backToPluginList(page)
 }
 
 async function enableInstalledPluginThroughUi(
   page: Page,
   pluginKey: string,
-  consentDialogName: string
+  pluginName: string
 ): Promise<void> {
   await page.getByRole('tab', { name: /^Installed/ }).click()
   const plugin = page.locator(`[data-plugin-key="${pluginKey}"]`)
   await expect(plugin).toBeVisible()
   await plugin.getByRole('button', { name: 'Review', exact: true }).click()
-  const consent = page.getByRole('dialog', { name: consentDialogName })
+  const consent = page.getByRole('region', { name: `If you enable ${pluginName}, it can:` })
   await expect(consent).toBeVisible()
-  await consent.getByRole('button', { name: 'Enable plugin' }).click()
+  await page
+    .getByRole('article')
+    .getByRole('button', { name: /^Enable plugin/ })
+    .click()
   await expect(consent).toBeHidden()
 }
 
@@ -173,7 +206,7 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
   await openPluginSettings(page)
   // Why a button: with plugins off the page offers one action, and the switch appears once on.
   await page.getByRole('button', { name: 'Turn on plugins' }).click()
-  await expect(page.getByRole('switch', { name: 'Plugin system' })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Turn on plugins' })).toBeHidden()
   await expect
     .poll(
       () =>
@@ -199,18 +232,18 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     page,
     FIXTURE_LANGUAGE_PLUGIN.pluginKey,
     FIXTURE_LANGUAGE_PLUGIN.name,
-    'Review plugin'
+    { runsInstructions: false }
   )
   await installMarketplacePluginThroughUi(
     page,
     'stablyai.orca-multipass-recipes',
     'Multipass VM Recipes',
-    'Review plugin content'
+    { runsInstructions: true }
   )
   await enableInstalledPluginThroughUi(
     page,
     'stablyai.orca-navigation-shortcuts',
-    'Review plugin content'
+    'Orca Navigation Shortcuts'
   )
 
   await applyInstalledLanguage(page)

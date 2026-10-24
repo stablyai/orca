@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { pluginManifestSchema } from '../../../../shared/plugins/plugin-manifest'
-import { pluginConsentTier, pluginPageExecutionProfile } from './plugin-access-profile'
+import {
+  pluginPageExecutionProfile,
+  pluginPointsFromManifest,
+  pluginTrust
+} from './plugin-access-profile'
+import { pluginTrustWarnings } from './plugin-consent-copy'
 
 const commandManifest = pluginManifestSchema.parse({
   manifestVersion: 1,
@@ -14,14 +19,6 @@ const commandManifest = pluginManifestSchema.parse({
     commands: [{ id: 'toggle', title: 'Toggle', action: 'sidebar.left.toggle' }]
   }
 })
-
-const listEntry = {
-  hasWorker: false,
-  commands: [],
-  vmRecipes: [],
-  panels: [],
-  capabilities: []
-}
 
 describe('pluginPageExecutionProfile', () => {
   it('uses the release profile for a listed plugin, not the absence of a worker', () => {
@@ -86,14 +83,40 @@ describe('pluginPageExecutionProfile', () => {
   })
 })
 
-describe('pluginConsentTier', () => {
-  it('follows the installed profile', () => {
-    expect(pluginConsentTier({ ...listEntry, execution: 'instructional' })).toBe('instructional')
-    expect(pluginConsentTier({ ...listEntry, execution: 'data' })).toBe('declarative')
-    expect(pluginConsentTier({ ...listEntry, execution: 'trusted-worker' })).toBe('worker')
+describe('pluginTrust', () => {
+  it('warns about commands a panel profile carries, and never calls it bounded', () => {
+    const trust = pluginTrust({
+      execution: 'sandboxed-ui',
+      points: pluginPointsFromManifest(commandManifest)
+    })
+    expect(trust).toEqual({ worker: false, instructional: true, panel: true })
+    expect(pluginTrustWarnings(trust)).toEqual([
+      'Its commands and instructions can take actions when you or an agent use them.'
+    ])
   })
 
-  it('never calls an unknown profile content only', () => {
-    expect(pluginConsentTier(listEntry)).toBe('instructional')
+  it('says a panel is bounded only when it is known to carry no instructions', () => {
+    const trust = pluginTrust({ execution: 'sandboxed-ui', points: new Set(['panels']) })
+    expect(pluginTrustWarnings(trust)).toEqual([
+      'No background worker. These permissions limit what it can do in Orca.'
+    ])
+  })
+
+  it('over-warns when the profile or contributions are unknown', () => {
+    expect(pluginTrust({ execution: 'sandboxed-ui', points: null }).instructional).toBe(true)
+    expect(pluginTrust({ execution: null, points: null })).toEqual({
+      worker: false,
+      instructional: true,
+      panel: false
+    })
+    expect(pluginTrust({ execution: null, points: null, hasWorker: true }).worker).toBe(true)
+  })
+
+  it('claims nothing runs only for content-only plugins', () => {
+    expect(pluginTrust({ execution: 'data', points: null })).toEqual({
+      worker: false,
+      instructional: false,
+      panel: false
+    })
   })
 })
