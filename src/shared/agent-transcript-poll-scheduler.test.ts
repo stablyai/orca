@@ -37,33 +37,34 @@ describe('host transcript wakeup budget', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it.each([500, 1_000])(
-    'bounds quiet root probes across 100 panes with one timer (cadence %i ms)',
-    (cadence) => {
-      let before = 0
-      let after = 0
-      const baseline = new CodexSubagentPollScheduler<number>(cadence, (key, value) => {
-        before++
-        baseline.schedule(key, value)
-      })
-      const optimized = new AgentTranscriptPollScheduler<number>(cadence, (key, value) => {
-        after++
-        optimized.schedule(key, value, `/rollout-${key}.jsonl`)
-      })
-      for (let i = 0; i < 100; i++) {
-        baseline.schedule(String(i), i)
-        optimized.schedule(String(i), i, `/rollout-${i}.jsonl`)
-      }
-      expect(vi.getTimerCount()).toBe(2)
-      vi.advanceTimersByTime(60_000)
-      expect(before).toBe(100 * (60_000 / cadence))
-      expect(after).toBe(1_200)
-      optimized.clearAll()
-      baseline.clearAll()
-      expect(vi.getTimerCount()).toBe(0)
-      expect(watchers.entries.every((entry) => entry.dispose.mock.calls.length === 1)).toBe(true)
+  it.each([
+    { count: 10, cadence: 1_000 },
+    { count: 100, cadence: 1_000 }
+  ])('bounds quiet root probes across $count panes with one timer', ({ count, cadence }) => {
+    let before = 0
+    let after = 0
+    const baseline = new CodexSubagentPollScheduler<number>(cadence, (key, value) => {
+      before++
+      baseline.schedule(key, value)
+    })
+    const optimized = new AgentTranscriptPollScheduler<number>(cadence, (key, value) => {
+      after++
+      optimized.schedule(key, value, `/rollout-${key}.jsonl`)
+    })
+    for (let i = 0; i < count; i++) {
+      baseline.schedule(String(i), i)
+      optimized.schedule(String(i), i, `/rollout-${i}.jsonl`)
     }
-  )
+    expect(vi.getTimerCount()).toBe(2)
+    vi.advanceTimersByTime(60_000)
+    expect(before).toBe(count * (60_000 / cadence))
+    expect(after).toBe(count * 12)
+    expect(watchers.entries).toHaveLength(count)
+    optimized.clearAll()
+    baseline.clearAll()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(watchers.entries.every((entry) => entry.dispose.mock.calls.length === 1)).toBe(true)
+  })
 
   it('coalesces a stream without postponing reads and reuses the latest hook', () => {
     const seen: string[] = []

@@ -44,6 +44,7 @@ export function normalizeHookPayload(
   expectedEnv: string,
   options: {
     deferCompactOwnershipToClient?: boolean
+    observeClaudePermissions?: boolean
     previousOpenCodeMainAgent?: AgentMainAgentStatus
     admitOpenCodeTui?: (
       identity: Pick<
@@ -267,6 +268,7 @@ export function normalizeHookPayload(
     hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt,
+    observeClaudePermissions: options.observeClaudePermissions,
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
   })
   const providerSessionOnly =
@@ -314,13 +316,7 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
-    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
-    toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
-    teammateName:
-      source === 'claude' && eventName === 'TeammateIdle'
-        ? readString(hookPayloadRecord, 'teammate_name')
-        : undefined,
-    toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+    ...dispatched.toolIdentity,
     ...(source === 'claude'
       ? {
           claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(state, paneKey)

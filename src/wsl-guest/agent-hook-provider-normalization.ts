@@ -73,6 +73,20 @@ export class RelayProviderHookNormalization {
     return event
   }
 
+  acceptClaudeTranscript(canonical: HookListenerState, event: AgentHookEventPayload): void {
+    const provider = this.states.get('claude')
+    if (!provider) {
+      return
+    }
+    provider.lastToolByPaneKey.set(
+      event.paneKey,
+      canonical.lastToolByPaneKey.get(event.paneKey) ?? {}
+    )
+    cacheRelayLegacyAgentStatus(provider, event, MAX_CACHED_PANES, (paneKey) =>
+      clearPaneCacheState(provider, paneKey)
+    )
+  }
+
   clearPane(paneKey: string): void {
     for (const state of this.states.values()) {
       clearPaneCacheState(state, paneKey)

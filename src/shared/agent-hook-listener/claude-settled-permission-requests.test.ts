@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentHookEventPayload } from './listener-event'
 import {
-  isClaudePermissionSettledByReplay,
+  isClaudePermissionSettled,
   MAX_CLAUDE_SETTLED_REQUESTS,
   readClaudeSettledRequests,
   retainClaudeSettledRequests
@@ -101,27 +101,15 @@ describe('retained Claude request settlements', () => {
         { toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }
       ]
     }
-    expect(isClaudePermissionSettledByReplay(waiting, replay)).toBe(true)
-    expect(isClaudePermissionSettledByReplay(waiting, { ...replay, isReplay: undefined })).toBe(
-      false
-    )
-    expect(isClaudePermissionSettledByReplay({ ...waiting, toolAgentId: undefined }, replay)).toBe(
-      false
-    )
-    expect(isClaudePermissionSettledByReplay(waiting, { ...replay, connectionId: 'conn-2' })).toBe(
-      false
-    )
-    expect(isClaudePermissionSettledByReplay(waiting, { ...replay, launchToken: 'launch-2' })).toBe(
-      false
-    )
-    expect(isClaudePermissionSettledByReplay({ ...waiting, toolUseId: 'tool-2' }, replay)).toBe(
-      false
-    )
-    expect(isClaudePermissionSettledByReplay({ ...waiting, toolAgentType: 'Review' }, replay)).toBe(
-      false
-    )
+    expect(isClaudePermissionSettled(waiting, replay)).toBe(true)
+    expect(isClaudePermissionSettled(waiting, { ...replay, isReplay: undefined })).toBe(true)
+    expect(isClaudePermissionSettled({ ...waiting, toolAgentId: undefined }, replay)).toBe(false)
+    expect(isClaudePermissionSettled(waiting, { ...replay, connectionId: 'conn-2' })).toBe(false)
+    expect(isClaudePermissionSettled(waiting, { ...replay, launchToken: 'launch-2' })).toBe(false)
+    expect(isClaudePermissionSettled({ ...waiting, toolUseId: 'tool-2' }, replay)).toBe(false)
+    expect(isClaudePermissionSettled({ ...waiting, toolAgentType: 'Review' }, replay)).toBe(false)
     expect(
-      isClaudePermissionSettledByReplay(waiting, {
+      isClaudePermissionSettled(waiting, {
         ...replay,
         providerSession: { key: 'session_id', id: 'session-2' }
       })

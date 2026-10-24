@@ -101,8 +101,10 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       state: this.state,
       env: this.env,
       isListening: () => this.server !== null,
-      applyEvent: (event, source, env, version) =>
-        this.applyEvent(event, source, env, version, { checkPresence: false })
+      onClaudeTranscriptAccepted: (event) =>
+        this.providerNormalization.acceptClaudeTranscript(this.state, event),
+      applyEvent: (event, source, env, version, onAccepted) =>
+        this.applyEvent(event, source, env, version, { checkPresence: false, onAccepted })
     })
   }
 
@@ -286,7 +288,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     source: AgentHookSource,
     env?: string,
     version?: string,
-    options: { isReplay?: boolean; checkPresence?: boolean } = {}
+    options: { isReplay?: boolean; checkPresence?: boolean; onAccepted?: () => void } = {}
   ): AgentHookEventPayload | undefined {
     return applyRelayHookEvent(
       {

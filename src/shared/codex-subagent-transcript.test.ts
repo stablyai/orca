@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -59,6 +59,30 @@ describe('Codex subagent transcript reconciliation', () => {
       rmSync(dir, { recursive: true, force: true })
     }
     dirs.length = 0
+  })
+
+  it('reads a replaced parent incarnation without its predecessor partial record', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-incarnation-'))
+    dirs.push(dir)
+    const path = join(dir, 'rollout.jsonl')
+    const event = (type: string, turnId: string) => ({
+      type: 'event_msg',
+      payload: { type, turn_id: turnId, reason: 'interrupted' }
+    })
+    writeFileSync(path, `${jsonl([event('task_started', 'old')])}{"type":"event_`)
+    const state = createCodexSubagentTranscriptState()
+    const roster: CodexSubagentRoster = new Map()
+    reconcileCodexSubagentTranscript(state, roster, path)
+    expect(state.rootTurn).toEqual({ turnId: 'old', interrupted: false })
+    const replacement = join(dir, 'replacement.jsonl')
+    writeFileSync(replacement, jsonl([event('task_started', 'new'), event('turn_aborted', 'new')]))
+    renameSync(replacement, path)
+    reconcileCodexSubagentTranscript(state, roster, path)
+    expect(state.rootTurn).toEqual({ turnId: 'new', interrupted: true })
+    expect(state.parent.carry).toBe('')
+    writeFileSync(path, jsonl([event('task_started', 'short')]))
+    reconcileCodexSubagentTranscript(state, roster, path)
+    expect(state.rootTurn).toEqual({ turnId: 'short', interrupted: false })
   })
 
   it('adds a child from the parent rollout and removes it after task completion', () => {

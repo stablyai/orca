@@ -32,7 +32,7 @@ export function applyRelayHookEvent(
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: { isReplay?: boolean; checkPresence?: boolean; onAccepted?: () => void } = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
@@ -110,6 +110,7 @@ export function applyRelayHookEvent(
     version,
     ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
+  options.onAccepted?.()
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

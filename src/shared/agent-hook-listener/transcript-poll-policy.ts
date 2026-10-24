@@ -1,3 +1,4 @@
+import { hasClaudePermissionObservation } from './providers/claude-permission-transcript'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
@@ -10,6 +11,9 @@ export function shouldPollHookTranscript(
   source: AgentHookSource,
   event: AgentHookEventPayload
 ): boolean {
+  if (source === 'claude') {
+    return hasClaudePermissionObservation(state, event)
+  }
   if (source === 'codex') {
     return (
       hasCodexTranscriptSubagents(state, event.paneKey) ||
@@ -30,6 +34,9 @@ export function hookTranscriptWatchPath(
   source: AgentHookSource,
   paneKey: string
 ): string | undefined {
+  if (source === 'claude') {
+    return state.claudePermissionObservationByPaneKey.get(paneKey)?.cursor.filePath
+  }
   return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
     ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
     : undefined

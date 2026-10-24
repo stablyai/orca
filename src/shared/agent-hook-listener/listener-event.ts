@@ -45,7 +45,7 @@ export type AgentHookEventPayload = {
   compactTrigger?: 'manual' | 'auto'
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
-  /** Requests a relay saw end, sent only beside a replayed row; never stored on a status row. */
+  /** Exact requests the execution host saw end; live transition proof or bounded replay history. */
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string

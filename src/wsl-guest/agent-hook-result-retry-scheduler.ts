@@ -1,3 +1,4 @@
+import { applyClaudePermissionTranscript } from '../shared/agent-hook-listener/providers/claude-permission-transcript'
 import { pollCodexTranscriptStatus } from '../shared/agent-hook-listener/providers/codex-transcript-poll'
 // Deferred re-normalization timers for late-arriving agent results: the transcript hadn't caught up
 // when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
@@ -37,11 +38,13 @@ export type AgentHookResultRetryHost = {
   env: string
   /** Why: must be read live — a retry armed before stop() must not resurrect on a downed server. */
   isListening: () => boolean
+  onClaudeTranscriptAccepted?: (event: AgentHookEventPayload) => void
   applyEvent: (
     event: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
-    version?: string
+    version?: string,
+    onAccepted?: () => void
   ) => AgentHookEventPayload | undefined
 }
 
@@ -104,7 +107,7 @@ export class AgentHookResultRetryScheduler {
     version?: string
   ): void {
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'claude') {
       return
     }
     if (!shouldPollHookTranscript(this.host.state, source, original)) {
@@ -133,6 +136,18 @@ export class AgentHookResultRetryScheduler {
       !this.host.isListening() ||
       this.host.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {
+      return
+    }
+    if (source === 'claude') {
+      const next = applyClaudePermissionTranscript(this.host.state, original, (event, onAccepted) =>
+        this.host.applyEvent(event, source, env, version, () => {
+          onAccepted()
+          this.host.onClaudeTranscriptAccepted?.(event)
+        })
+      )
+      if (next) {
+        this.scheduleTranscriptPoll(source, body, next, env, version)
+      }
       return
     }
     const event =

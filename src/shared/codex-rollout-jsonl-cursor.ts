@@ -1,23 +1,15 @@
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  openSync,
-  readSync,
-  readdirSync,
-  statSync,
-  type Stats
-} from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readSync, readdirSync } from 'node:fs'
 
 const TRANSCRIPT_READ_MAX_BYTES = 1024 * 1024
 const TRANSCRIPT_LINE_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_DIRECTORY_MAX_ENTRIES = 4096
 
-/** Resume point for an incremental read of one Codex rollout file. */
+/** Resume point for a bounded incremental read of one transcript file. */
 export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  incarnation?: string
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -57,35 +49,45 @@ export function readJsonlFirstRecord(filePath: string): JsonRecord | undefined {
  *  `lineFilter` skips JSON.parse for raw lines the caller can reject by substring. */
 export function readJsonlCursor(
   cursor: JsonlCursor,
-  lineFilter?: (line: string) => boolean
+  lineFilter?: (line: string) => boolean,
+  onGap?: () => void
 ): JsonRecord[] | undefined {
   if (!cursor.filePath) {
     return undefined
   }
-  let stats: Stats
-  try {
-    stats = statSync(cursor.filePath)
-  } catch {
-    return undefined
-  }
-  if (!stats.isFile()) {
-    return undefined
-  }
-  if (stats.size < cursor.offset) {
-    cursor.offset = 0
-    cursor.carry = ''
-  }
-  if (stats.size === cursor.offset) {
-    return []
-  }
-  const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
-  const start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
-  const buffer = Buffer.allocUnsafe(bytesToRead)
-  let bytesRead = 0
   let fd: number | undefined
+  let buffer: Buffer
+  let start: number
+  let bytesRead: number
   try {
-    fd = openSync(cursor.filePath, 'r')
+    fd = openSync(
+      cursor.filePath,
+      constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
+    )
+    const stats = fstatSync(fd)
+    if (!stats.isFile()) {
+      return undefined
+    }
+    const incarnation = `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`
+    if (stats.size < cursor.offset || (cursor.incarnation && cursor.incarnation !== incarnation)) {
+      cursor.offset = 0
+      cursor.carry = ''
+      onGap?.()
+    }
+    cursor.incarnation = incarnation
+    if (stats.size === cursor.offset) {
+      return []
+    }
+    const bytesToRead = Math.min(stats.size - cursor.offset, TRANSCRIPT_READ_MAX_BYTES)
+    start = stats.size - cursor.offset > bytesToRead ? stats.size - bytesToRead : cursor.offset
+    buffer = Buffer.allocUnsafe(bytesToRead)
     bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
+    if (onGap && bytesRead !== bytesToRead) {
+      cursor.offset = stats.size
+      cursor.carry = ''
+      onGap()
+      return []
+    }
   } catch {
     return undefined
   } finally {
@@ -94,10 +96,17 @@ export function readJsonlCursor(
     }
   }
   const skippedPrefix = start !== cursor.offset
+  if (skippedPrefix) {
+    onGap?.()
+  }
   const content = `${skippedPrefix ? '' : cursor.carry}${buffer.toString('utf8', 0, bytesRead)}`
   const lines = content.split('\n')
   cursor.offset = start + bytesRead
   cursor.carry = lines.pop() ?? ''
+  const oversizedCarry = Buffer.byteLength(cursor.carry, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+  if (oversizedCarry) {
+    cursor.carry = ''
+  }
   if (skippedPrefix) {
     lines.shift()
   }
@@ -107,6 +116,10 @@ export function readJsonlCursor(
       (lineFilter && !lineFilter(line)) ||
       Buffer.byteLength(line, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
     ) {
+      if (onGap) {
+        records.length = 0
+        onGap()
+      }
       continue
     }
     try {
@@ -115,8 +128,16 @@ export function readJsonlCursor(
         records.push(parsed)
       }
     } catch {
+      if (onGap) {
+        records.length = 0
+        onGap()
+      }
       // A malformed rollout line must not block later lifecycle events.
     }
+  }
+  if (oversizedCarry && onGap) {
+    onGap()
+    return []
   }
   return records
 }

@@ -5,7 +5,7 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
+import { isClaudePermissionSettled } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** Retain the shell-work fact only with the main-agent observation that established it. */
@@ -76,7 +76,7 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
-  if (isClaudePermissionSettledByReplay(previous, next)) {
+  if (isClaudePermissionSettled(previous, next)) {
     return false
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {

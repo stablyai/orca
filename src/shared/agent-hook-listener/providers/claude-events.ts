@@ -48,6 +48,7 @@ export function normalizeClaudeEvent(
   ) {
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
+  const previousSessionOwner = state.claudeSessionOwnerByPaneKey.get(paneKey)
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
   if (eventName === 'SessionStart') {
     // Why: SessionStart is the only signal a resumed session emits before its first prompt
@@ -156,16 +157,16 @@ export function normalizeClaudeEvent(
   }
 
   const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
-  const previousTool = state.lastToolByPaneKey.get(paneKey)
-  const isParallelSiblingCompletionDuringQuestion =
+  const isParallelSiblingActivityDuringWait =
     eventAgentId === undefined &&
     previousLead?.state === 'waiting' &&
-    isAskUserQuestionTool(previousTool?.toolName) &&
-    (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
+    (eventName === 'PreToolUse' ||
+      eventName === 'PostToolUse' ||
+      eventName === 'PostToolUseFailure') &&
     previousLead.waitingToolUseId !== undefined &&
     eventToolUseId !== undefined &&
     eventToolUseId !== previousLead.waitingToolUseId
-  if (isParallelSiblingCompletionDuringQuestion) {
+  if (isParallelSiblingActivityDuringWait) {
     return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
@@ -256,7 +257,16 @@ export function normalizeClaudeEvent(
               : {})
           }
       : undefined
-  const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
+  // Why: only an established question refresh owns the old ID; a new approval may be unknown.
+  const isQuestionRefresh =
+    isAskUserQuestionWait &&
+    previousLead?.state === 'waiting' &&
+    previousLead.waitingAgentId === eventAgentId &&
+    isAskUserQuestionTool(state.lastToolByPaneKey.get(paneKey)?.toolName) &&
+    (previousSessionOwner === undefined ||
+      previousSessionOwner === state.claudeSessionOwnerByPaneKey.get(paneKey))
+  const waitingToolUseId =
+    eventToolUseId ?? (isQuestionRefresh ? previousLead?.waitingToolUseId : undefined)
 
   if (isManualCompactCompletion) {
     // Why: a manual /compact only ever completes at an idle prompt, so a child that exists ONLY as
@@ -308,7 +318,7 @@ export function normalizeClaudeEvent(
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
     ...(outcome ? { outcome } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
+    ...(isWaitingInducing && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
     ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
   })

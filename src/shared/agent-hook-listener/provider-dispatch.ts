@@ -1,3 +1,8 @@
+import {
+  prepareClaudePermissionObservation,
+  claudeWaitingRequestIdentity
+} from './providers/claude-permission-transcript'
+import { readHookAgentProcess } from '../agent-process-presence'
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
 import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
@@ -37,6 +42,15 @@ export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
   resolvedPromptText: string
   promptInteractionKey?: string
+  toolIdentity: Pick<
+    AgentHookEventPayload,
+    | 'toolUseId'
+    | 'toolAgentId'
+    | 'toolAgentType'
+    | 'teammateName'
+    | 'hookEventName'
+    | 'providerPromptId'
+  >
   hasTranscriptPromptEvidence: boolean
   /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
   eventName: unknown
@@ -54,6 +68,7 @@ export function normalizeProviderEvent(input: {
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
   previousOpenCodeMainAgent?: AgentMainAgentStatus
+  observeClaudePermissions?: boolean
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
   const eventName =
@@ -62,6 +77,7 @@ export function normalizeProviderEvent(input: {
       : input.eventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
+  let toolUseId: string | undefined
   let hasTranscriptPromptEvidence = false
   let payload: ParsedAgentStatusPayload | null
 
@@ -76,9 +92,22 @@ export function normalizeProviderEvent(input: {
         hookPayload
       )
       break
-    case 'claude':
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+    case 'claude': {
+      const providerHook =
+        input.observeClaudePermissions === false
+          ? hookPayload
+          : prepareClaudePermissionObservation(
+              state,
+              paneKey,
+              eventName,
+              hookPayload,
+              readFirstString(envelope, ['launchToken']),
+              readHookAgentProcess('claude', envelope.agentProcess)
+            )
+      toolUseId = readFirstString(providerHook, ['tool_use_id', 'toolUseId'])
+      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, providerHook)
       break
+    }
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -223,6 +252,16 @@ export function normalizeProviderEvent(input: {
 
   return {
     payload,
+    toolIdentity: {
+      toolUseId: toolUseId ?? readFirstString(hookPayload, ['tool_use_id', 'toolUseId']),
+      toolAgentId: readFirstString(hookPayload, ['agent_id', 'agentId']),
+      toolAgentType: readFirstString(hookPayload, ['agent_type']),
+      teammateName:
+        source === 'claude' && eventName === 'TeammateIdle'
+          ? readFirstString(hookPayload, ['teammate_name'])
+          : undefined,
+      ...claudeWaitingRequestIdentity(state, source, paneKey, eventName)
+    },
     resolvedPromptText,
     promptInteractionKey,
     hasTranscriptPromptEvidence,

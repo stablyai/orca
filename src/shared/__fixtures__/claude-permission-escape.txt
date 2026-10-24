@@ -1,0 +1,25 @@
+]7501;state=blocked:app=claude-code:kind=permission:msg=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX+IGVzY2FwZTItcHJvYmUudHh0[?2026h[2D[3B
+[6A[38;2;177;185;249m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[1C[1B[1mBash command
+[1B[22m[39m [38;2;153;153;153mWrite probe text to a file[39m[K
+[1B[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+[1B[39m printf permission_probe > escape2-probe.txt[K
+[1B[38;2;80;80;80m╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌[39m
+
+[2GPermission[13Grule[18G[1mBash[23G[22mrequires[32Gconfirmation[45Gfor[49Gthis[54Gcommand.
+
+[2G[38;2;153;153;153m/permissions[15Gto[18Gupdate[25Grules[39m
+
+
+
+[2GDo[5Gyou[9Gwant[14Gto[17Gproceed?
+
+[2G[38;2;177;185;249m❯[4G[38;2;153;153;153m1.[7G[38;2;177;185;249mYes[39m
+
+[4G[38;2;153;153;153m2.[7G[39mNo
+
+
+
+[2G[38;2;153;153;153mEsc[6Gto[9Gcancel[16G·[18GTab[22Gto[25Gamend[39m
+
+[1C[4A[?2026l]0;Bash permission probe escape2-probe.txt(B[?2004h[<u[>5u[>4;2m]7501;state=idle:app=claude-code

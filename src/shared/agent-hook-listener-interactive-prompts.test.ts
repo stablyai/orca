@@ -332,6 +332,37 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it.each<[Record<string, unknown>, Record<string, unknown>, string | undefined]>([
+    [{ tool_name: 'Bash' }, {}, undefined],
+    [{}, { tool_name: 'Bash' }, undefined],
+    [{}, { agent_id: 'child' }, undefined],
+    [{ agent_id: 'child' }, {}, undefined],
+    [{ agent_id: 'child' }, { agent_id: 'other' }, undefined],
+    [{ session_id: 's1' }, { session_id: 's2' }, undefined],
+    [{ agent_id: 'child' }, { agent_id: 'child' }, 'q1'],
+    [{ session_id: 's1' }, {}, 'q1'],
+    [{}, { session_id: 's1' }, 'q1'],
+    [{}, { tool_use_id: 'q2' }, 'q2']
+  ])('keeps request identity within its kind/owner: %j -> %j', (previous, next, expectedId) => {
+    const post = (payload: Record<string, unknown>) =>
+      normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PermissionRequest',
+            tool_name: 'AskUserQuestion',
+            ...payload
+          }
+        },
+        'production'
+      )
+    post({ tool_use_id: 'q1', ...previous })
+    post(next)
+    expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)?.waitingToolUseId).toBe(expectedId)
+  })
+
   it('clears AskUserQuestion when its own PostToolUse arrives', () => {
     normalizeHookPayload(
       state,

@@ -158,7 +158,7 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
     expect(pane.forwarded.at(-1)?.claudeSettledRequests).toBeUndefined()
   })
 
-  it('ignores settled requests on a live (non-replay) envelope', async () => {
+  it('accepts exact execution-host settlements on a live envelope', async () => {
     const pane = await waitingOnFirstRequest()
     pane.connected = false
     await pane.post(secondTool)
@@ -175,6 +175,6 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
       },
       'conn-1'
     )
-    expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
+    expect(row(pane.desktop)).toMatchObject({ state: 'working' })
   })
 })

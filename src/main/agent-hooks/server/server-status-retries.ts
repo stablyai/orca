@@ -1,3 +1,4 @@
+import { applyClaudePermissionTranscript } from '../../../shared/agent-hook-listener/providers/claude-permission-transcript'
 import { pollCodexTranscriptStatus } from '../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import {
@@ -34,6 +35,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearAllTranscriptPolls(): void {
     this.transcriptPollScheduler.clearAll()
+    this.state.claudePermissionObservationByPaneKey.clear()
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {
@@ -47,6 +49,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearTranscriptPoll(paneKey: string): void {
     this.transcriptPollScheduler.clear(paneKey)
+    this.state.claudePermissionObservationByPaneKey.delete(paneKey)
   }
 
   protected scheduleTranscriptPoll(
@@ -55,7 +58,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     original: EnrichedAgentHookEventPayload
   ): void {
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'claude') {
       return
     }
     if (!shouldPollHookTranscript(this.state, source, original)) {
@@ -77,6 +80,15 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       !this.server ||
       this.state.lastStatusByPaneKey.get(original.paneKey) !== original
     ) {
+      return
+    }
+    if (source === 'claude') {
+      const next = applyClaudePermissionTranscript(this.state, original, (event, onAccepted) =>
+        this.applyNormalizedStatus(event, onAccepted)
+      )
+      if (next) {
+        this.scheduleTranscriptPoll(source, body, next)
+      }
       return
     }
     const normalized =

@@ -92,12 +92,12 @@ export function retainClaudeSettledRequests(
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
   const settled = settledRequestOf(next)
-  if (settled) {
-    const existing = kept.findIndex((request) => sameRequest(request, settled))
+  for (const settlement of [...(next.claudeSettledRequests ?? []), ...(settled ? [settled] : [])]) {
+    const existing = kept.findIndex((request) => sameRequest(request, settlement))
     if (existing !== -1) {
       kept.splice(existing, 1)
     }
-    kept.push(settled)
+    kept.push(settlement)
   }
   return kept.length > 0 ? kept.slice(-MAX_CLAUDE_SETTLED_REQUESTS) : undefined
 }
@@ -110,14 +110,13 @@ function sameRequest(a: ClaudeSettledRequest, b: ClaudeSettledRequest): boolean 
   )
 }
 
-/** A replayed row whose host saw this exact request end: the held wait is over, whatever came after. */
-export function isClaudePermissionSettledByReplay(
+/** A row whose execution host saw this exact request end: the held wait is over, whatever came after. */
+export function isClaudePermissionSettled(
   waiting: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
   const toolUseId = readId(waiting.toolUseId)
   if (
-    next.isReplay !== true ||
     !toolUseId ||
     !next.claudeSettledRequests ||
     waiting.connectionId !== next.connectionId ||

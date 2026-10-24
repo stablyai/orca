@@ -110,11 +110,9 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Live hooks settle their own requests; retained settlements only repair replay gaps.
+    // The execution host can observe a request result without a corresponding hook.
     claudeSettledRequests:
-      source === 'claude' && envelope.isReplay === true
-        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
-        : undefined,
+      source === 'claude' ? readClaudeSettledRequests(envelope.claudeSettledRequests) : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

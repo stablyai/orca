@@ -251,6 +251,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearTranscriptPoll(previousOwnerPaneKey)
+    if (transferredStatus && this.state.claudePermissionObservationByPaneKey.has(toPaneKey)) {
+      this.scheduleTranscriptPoll('claude', undefined, transferredStatus)
+    }
     // Detached processes keep posting the physical key; retain its mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
