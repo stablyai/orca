@@ -17,6 +17,7 @@ import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-rout
 import * as sessionTabsStream from './rpc-client-session-tabs-stream'
 import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
+import { RpcSessionPreambles, type RpcSessionPreamble } from './rpc-session-preambles'
 
 export type RpcStreamingListener = (result: unknown) => void
 
@@ -45,6 +46,9 @@ type StreamRegistryOptions = {
 
 export class RpcClientStreamRegistry {
   private readonly streams = new Map<string, StreamRequest>()
+  private readonly preambles = new RpcSessionPreambles(({ method, params, envelope }) =>
+    this.options.sendFrame({ id: this.options.nextId(), method, params, envelope })
+  )
   private readonly terminalRouter = new RpcClientTerminalStreamRouter()
   private activeBrowserRequestId: string | null = null
   private pendingBrowserRequestId: string | null = null
@@ -84,7 +88,12 @@ export class RpcClientStreamRegistry {
     return () => this.dispose(id)
   }
 
+  setPreamble(key: string, preamble: RpcSessionPreamble): void {
+    this.preambles.set(key, preamble, this.options.getState() === 'connected')
+  }
+
   replayAfterAuthentication(): void {
+    this.preambles.sendAll()
     for (const [id, stream] of this.streams) {
       if (stream.cancelled) {
         this.remove(id)

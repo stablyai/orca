@@ -50,6 +50,7 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
 const MOBILE_SIDEBAR_INPUTS_RPC_METHODS = [
   'sidebarInputs.read',
   'sidebarInputs.repoIcons',
+  'sidebarInputs.reportView',
   'ui.setCollapsed'
 ]
 
@@ -92,6 +93,10 @@ function mobileLiteralRpcMethods(): string[] {
       methods.add(match[1]!)
     }
     for (const match of source.matchAll(/subscribe\(\s*['"]([^'"]+)/g)) {
+      methods.add(match[1]!)
+    }
+    // A preamble is a request the transport sends on every session: (key, method, params).
+    for (const match of source.matchAll(/setSessionPreamble\(\s*['"][^'"]+['"],\s*['"]([^'"]+)/g)) {
       methods.add(match[1]!)
     }
     for (const match of source.matchAll(/method:\s*['"]([^'"]+)/g)) {

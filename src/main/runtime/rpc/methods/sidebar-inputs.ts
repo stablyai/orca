@@ -115,17 +115,18 @@ export const SIDEBAR_INPUT_METHODS = [
     name: 'sidebarInputs.reportView',
     permission: 'workspace',
     params: ClientWorkspaceViewParams,
-    // What a client window shows, so this host raises no unread flag on it; held until it closes.
+    // What a client window shows (or whether a phone is in the foreground), so this host raises no
+    // unread flag on it; held until it closes.
     handler: async (params, { runtime, connectionId, signal }) => {
-      const viewers = requireSwitchedOn(runtime.sidebarFacts).workspaceViewers
+      const facts = requireSwitchedOn(runtime.sidebarFacts)
       // A view outlives the call, so it needs a connection whose close drops it.
       if (connectionId === undefined || signal?.aborted) {
         throw new Error('client_disconnected')
       }
-      if (viewers.reportClientView(connectionId, params)) {
+      if (facts.reportClientWorkspaceView(connectionId, params)) {
         runtime.registerSubscriptionCleanup(
           `sidebar-view-${connectionId}`,
-          () => viewers.dropClient(connectionId),
+          () => facts.workspaceViewers.dropClient(connectionId),
           connectionId
         )
       }

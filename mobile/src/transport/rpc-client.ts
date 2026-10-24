@@ -44,6 +44,17 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   /**
+   * Holds `params` as the latest for `key`: sent now when connected, and again as the first frame
+   * of every later authenticated session, ahead of its replayed subscriptions. Its replies are
+   * dropped. For state the host must know before any subscription, such as what is on screen.
+   */
+  setSessionPreamble?: (
+    key: string,
+    method: string,
+    params: unknown,
+    options?: { envelope?: RpcEnvelopeFields }
+  ) => void
+  /**
    * Must settle every pending `sendRequest` promise before returning.
    *
    * `StableLogicalRpcClient.migrateTo` no longer rejects pendings itself — the physical

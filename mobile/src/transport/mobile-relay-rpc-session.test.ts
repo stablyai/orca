@@ -137,6 +137,18 @@ describe('mobile relay RPC session', () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  it('writes a session preamble at once, ahead of a subscription made after it', async () => {
+    const { session } = await authenticateSession()
+    session.setSessionPreamble?.('view', 'sidebarInputs.reportView', { presentForMs: 0 })
+    session.subscribe('session.tabs.subscribe', { worktree: 'id:a' }, () => {})
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+    expect(fakes.sendText.mock.calls).toEqual([
+      [expect.stringContaining('"method":"sidebarInputs.reportView"')],
+      [expect.stringContaining('"method":"session.tabs.subscribe"')]
+    ])
+    session.close()
+  })
+
   it('releases stream listeners on failure even when close follows it', async () => {
     const { session } = await authenticateSession()
     const listener = vi.fn()
