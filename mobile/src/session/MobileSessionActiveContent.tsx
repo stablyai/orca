@@ -38,7 +38,6 @@ export function MobileSessionActiveContent({
     dictationMode,
     dictationEnabled,
     toastMessage,
-    handleTerminalTap,
     browserScreencastSupported,
     showToast,
     nativeChatSendError,
@@ -232,7 +231,7 @@ export function MobileSessionActiveContent({
           onHaptic={handleHaptic}
           onTerminalInput={handleTerminalInput}
           onTerminalQueryReply={handleTerminalQueryReply}
-          onTerminalTap={handleTerminalTap}
+          onTerminalTap={() => {}}
           onFileTap={handleFileTap}
           onOpenUrl={handleTerminalOpenUrl}
         />
