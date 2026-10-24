@@ -88,15 +88,15 @@ describe('parseRecentSessionCards', () => {
 })
 
 describe('recordRecentSessionCardVisit', () => {
-  it('updates a revisit inside the top display set in place', () => {
+  it('promotes a revisited card to the front for Alt+Tab MRU ordering', () => {
     recordRecentSessionCardVisit(card({ tabId: 'tab-1', title: 'first', lastVisitedAt: 1 }))
     recordRecentSessionCardVisit(card({ tabId: 'tab-2', lastVisitedAt: 2 }))
     const next = recordRecentSessionCardVisit(
       card({ tabId: 'tab-1', title: 'again', lastVisitedAt: 3 })
     )
 
-    expect(next.map((item) => item.tabId)).toEqual(['tab-2', 'tab-1'])
-    expect(next[1]).toMatchObject({ title: 'again', lastVisitedAt: 3 })
+    expect(next.map((item) => item.tabId)).toEqual(['tab-1', 'tab-2'])
+    expect(next[0]).toMatchObject({ title: 'again', lastVisitedAt: 3 })
   })
 
   it('inserts a visit outside the top display set at the front', () => {
@@ -149,12 +149,13 @@ describe('recordRecentSessionCardVisit', () => {
 })
 
 describe('getVisibleRecentSessionCards', () => {
-  it('includes the open card and caps the strip at the display limit', () => {
+  it('excludes the currently open card so the previous card is at index 0 and caps at the display limit', () => {
     for (let index = 0; index < MAX_RECENT_SESSION_CARDS_DISPLAY + 2; index += 1) {
       recordRecentSessionCardVisit(card({ tabId: `tab-${index}`, lastVisitedAt: index }))
     }
 
     const currentTabId = `tab-${MAX_RECENT_SESSION_CARDS_DISPLAY + 1}`
+    const previousTabId = `tab-${MAX_RECENT_SESSION_CARDS_DISPLAY}`
     const visible = getVisibleRecentSessionCards({
       hostId: 'host-1',
       currentWorktreeId: 'wt-1',
@@ -162,7 +163,8 @@ describe('getVisibleRecentSessionCards', () => {
     })
 
     expect(visible).toHaveLength(MAX_RECENT_SESSION_CARDS_DISPLAY)
-    expect(visible[0]?.tabId).toBe(currentTabId)
+    expect(visible.map((item) => item.tabId)).not.toContain(currentTabId)
+    expect(visible[0]?.tabId).toBe(previousTabId)
   })
 
   it('allows increasing and persisting the display limit beyond the default 7', async () => {
@@ -375,6 +377,9 @@ describe('storage hydration', () => {
       card({ worktreeId: 'wt-1', tabId: 'tab-1', terminalHandle: 'pty-1', lastVisitedAt: 10 })
     )
     recordRecentSessionCardVisit(card({ worktreeId: 'wt-1', tabId: 'tab-2', lastVisitedAt: 20 }))
+    recordRecentSessionCardVisit(
+      card({ worktreeId: 'wt-1', tabId: 'tab-4', terminalHandle: 'pty-4', lastVisitedAt: 25 })
+    )
     recordRecentSessionCardVisit(card({ worktreeId: 'wt-2', tabId: 'tab-3', lastVisitedAt: 30 }))
 
     expect(
@@ -382,16 +387,25 @@ describe('storage hydration', () => {
         hostId: 'host-1',
         currentWorktreeId: 'wt-1',
         currentTabId: 'tab-1',
-        currentWorktreeTabs: [{ id: 'tab-1', terminal: 'pty-1' }]
-      }).map((item) => item.tabId)
-    ).toEqual(['tab-3', 'tab-1'])
+        currentWorktreeTabs: [
+          { id: 'tab-1', terminal: 'pty-1' },
+          { id: 'tab-4', terminal: 'pty-4', agentState: 'working' }
+        ]
+      })
+    ).toEqual([
+      expect.objectContaining({ tabId: 'tab-3' }),
+      expect.objectContaining({ tabId: 'tab-4', agentState: 'working' })
+    ])
 
     reconcileRecentSessionCardsForWorktree({
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      liveTabs: [{ id: 'tab-1', terminal: 'pty-1' }]
+      liveTabs: [{ id: 'tab-1', terminal: 'pty-1', agentState: 'done' }]
     })
-    expect(readAllRecentSessionCardsSync().map((item) => item.tabId)).toEqual(['tab-3', 'tab-1'])
+    expect(readAllRecentSessionCardsSync()).toEqual([
+      expect.objectContaining({ tabId: 'tab-3' }),
+      expect.objectContaining({ tabId: 'tab-1', agentState: 'done' })
+    ])
 
     removeRecentSessionCard('host-1', 'wt-1', undefined, 'pty-1')
     expect(readAllRecentSessionCardsSync().map((item) => item.tabId)).toEqual(['tab-3'])
@@ -399,7 +413,7 @@ describe('storage hydration', () => {
 })
 
 describe('buildRecentSessionCardFromTab', () => {
-  it('copies terminal identity and the agent-session agent', () => {
+  it('copies terminal identity, the agent-session agent, and SSOT agent dot state', () => {
     expect(
       buildRecentSessionCardFromTab({
         hostId: 'host-1',
@@ -439,9 +453,16 @@ describe('buildRecentSessionCardFromTab', () => {
           title: '',
           sessionId: 'session-1',
           agent: 'claude',
+          chatStatus: { state: 'working', updatedAt: 7 },
           isActive: false
         }
       })
-    ).toMatchObject({ tabId: 'tab-2', title: 'Chat', tabType: 'agent-session', agentId: 'claude' })
+    ).toMatchObject({
+      tabId: 'tab-2',
+      title: 'Chat',
+      tabType: 'agent-session',
+      agentId: 'claude',
+      agentState: 'working'
+    })
   })
 })

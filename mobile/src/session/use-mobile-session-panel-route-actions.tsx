@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
-import { readInitialMobileAgentHistoryWorktrees } from '../agent-history/mobile-agent-history-worktree-cache'
+import { getCachedWorktrees } from '../cache/worktree-cache'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   useWorkspaceExecutionHost,
@@ -14,9 +14,9 @@ import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { sessionTabsListRead } from './mobile-session-read-operations'
 import {
   activateMobileSessionTab,
-  requestLocalSessionTabFollow,
   setPendingCrossWorktreeTabTarget
 } from './mobile-session-tab-activation'
+import { recentCardSnapshotTabs } from './mobile-terminal-tab-agent'
 import {
   getVisibleRecentSessionCards,
   readAllRecentSessionCardsSync,
@@ -69,34 +69,6 @@ function isUnpublishedSnapshot(snapshot: unknown): boolean {
     snapshot !== null &&
     'publicationEpoch' in snapshot &&
     snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-  )
-}
-
-function recentCardSnapshotTabs(value: unknown): { id: string; terminal?: string | null }[] | null {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('tabs' in value) ||
-    !Array.isArray(value.tabs)
-  ) {
-    return null
-  }
-  return value.tabs.flatMap((item) =>
-    typeof item === 'object' &&
-    item !== null &&
-    'id' in item &&
-    typeof item.id === 'string' &&
-    item.id.length > 0
-      ? [
-          {
-            id: item.id,
-            terminal:
-              'terminal' in item && (typeof item.terminal === 'string' || item.terminal === null)
-                ? item.terminal
-                : undefined
-          }
-        ]
-      : []
   )
 }
 
@@ -225,7 +197,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   }
 
   const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })
+    const params = new URLSearchParams({ name: worktreeName || '' })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
@@ -248,7 +220,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   const [, setRecentCardsRevision] = useState(0)
   useEffect(() => subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1)), [])
   const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
-    () => readInitialMobileAgentHistoryWorktrees(hostId)
+    () => recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
   )
   useEffect(() => {
     if (
@@ -349,7 +321,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     jumpLockRef.current = true
     setJumpingRecentCardKey(`${card.worktreeId}:${card.tabId}`)
     try {
-      requestLocalSessionTabFollow(card.worktreeId)
       setPendingCrossWorktreeTabTarget({
         worktreeId: card.worktreeId,
         tabId: card.tabId,
@@ -380,7 +351,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         }
         showToast('Card was closed; opening workspace')
       } else {
-        requestLocalSessionTabFollow(card.worktreeId)
         triggerSuccess()
       }
       closeRecentCardSheets()

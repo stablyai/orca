@@ -1,19 +1,12 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/mobile-translation'
-import {
-  File,
-  FileText,
-  Globe,
-  LocateFixed,
-  Minus,
-  Plus,
-  SquareTerminal
-} from 'lucide-react-native'
+import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
+import { AgentStateDot } from '../components/AgentStateDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useNow } from '../hooks/use-now'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { agentStateLabel, formatTimeAgo } from '../worktree/agent-row-display'
 import {
   getRecentSessionCardsMaxDisplaySync,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -98,12 +91,21 @@ export function RecentSessionCardsSection({
   const now = useNow(30_000)
   const sectionTitle = translate('recentSessionCardsSectionTitle', 'Recently Used')
   const emptyLabel = translate('recentSessionCardsEmpty', 'No other recent cards yet')
-  const currentSessionLabel = translate('recentSessionCardsCurrentSession', 'Current')
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
   const canDecrease = effectiveMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
   const canIncrease = effectiveMaxDisplay < MAX_RECENT_SESSION_CARDS_LIMIT
-  const visibleCards = cards.slice(0, effectiveMaxDisplay)
+  const visibleCards = cards
+    .filter(
+      (card) =>
+        !(
+          Boolean(currentWorktreeId) &&
+          Boolean(currentTabId) &&
+          card.worktreeId === currentWorktreeId &&
+          card.tabId === currentTabId
+        )
+    )
+    .slice(0, effectiveMaxDisplay)
   return (
     <View style={styles.section}>
       <View style={styles.header}>
@@ -155,10 +157,12 @@ export function RecentSessionCardsSection({
             const timeAgo = formatTimeAgo(card.lastVisitedAt, now)
             const isCurrentWorkspace =
               Boolean(currentWorktreeId) && card.worktreeId === currentWorktreeId
-            const isCurrentCard =
-              isCurrentWorkspace && Boolean(currentTabId) && card.tabId === currentTabId
-            const accessibilityLabel = isCurrentCard
-              ? `${card.title}, ${workspaceLabel}, ${currentSessionLabel}, ${timeAgo}`
+            const stateLabel =
+              card.agentState && card.agentState !== 'idle'
+                ? agentStateLabel(card.agentState)
+                : null
+            const accessibilityLabel = stateLabel
+              ? `${card.title}, ${stateLabel}, ${workspaceLabel}, ${timeAgo}`
               : `${card.title}, ${workspaceLabel}, ${timeAgo}`
             return (
               <View key={key}>
@@ -169,18 +173,16 @@ export function RecentSessionCardsSection({
                   accessibilityLabel={accessibilityLabel}
                   disabled={jumpingCardKey !== null}
                   onPress={() => onSelectCard(card)}
-                  style={({ pressed }) => [
-                    styles.row,
-                    isCurrentCard && styles.rowCurrentCard,
-                    pressed && styles.rowPressed
-                  ]}
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 >
+                  {card.agentState && card.agentState !== 'idle' ? (
+                    <View testID={`recent-session-card-state-dot-${card.worktreeId}-${card.tabId}`}>
+                      <AgentStateDot state={card.agentState} />
+                    </View>
+                  ) : null}
                   <RecentCardIcon card={card} />
                   <View style={styles.textBlock}>
-                    <Text
-                      style={[styles.cardTitle, isCurrentCard && styles.cardTitleCurrent]}
-                      numberOfLines={1}
-                    >
+                    <Text style={styles.cardTitle} numberOfLines={1}>
                       {card.title}
                     </Text>
                     <View style={styles.metaRow}>
@@ -206,12 +208,6 @@ export function RecentSessionCardsSection({
                   </View>
                   {jumpingCardKey === key ? (
                     <ActivityIndicator size="small" color={colors.textSecondary} />
-                  ) : isCurrentCard ? (
-                    <View
-                      testID={`recent-session-card-current-icon-${card.worktreeId}-${card.tabId}`}
-                    >
-                      <LocateFixed size={15} color={colors.accentBlue} />
-                    </View>
                   ) : (
                     <Text style={styles.timeText}>{timeAgo}</Text>
                   )}
@@ -323,9 +319,6 @@ const styles = StyleSheet.create({
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
-  rowCurrentCard: {
-    backgroundColor: colors.bgRaised
-  },
   textBlock: {
     flex: 1,
     minWidth: 0
@@ -334,9 +327,6 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     fontWeight: '500',
     color: colors.textPrimary
-  },
-  cardTitleCurrent: {
-    fontWeight: '600'
   },
   metaRow: {
     flexDirection: 'row',

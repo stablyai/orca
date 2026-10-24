@@ -2,7 +2,6 @@ import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Pressable, Text } from 'react-native'
-import { colors } from '../theme/mobile-theme'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { formatWorkspaceBadgeLabel, RecentSessionCardsSheet } from './RecentSessionCardsSheet'
 import type { RecentSessionCardRecord } from './recent-session-cards'
@@ -28,7 +27,6 @@ vi.mock('lucide-react-native', () => ({
   History: 'History',
   ListChecks: 'ListChecks',
   ArrowUpRight: 'ArrowUpRight',
-  LocateFixed: 'LocateFixed',
   Minus: 'Minus',
   Plus: 'Plus',
   SquareTerminal: 'SquareTerminal',
@@ -50,6 +48,19 @@ vi.mock('../agent-history/MobileAgentSessionHistoryIcon', () => ({
 
 vi.mock('../components/MobileAgentIcon', () => ({
   MobileAgentIcon: () => null
+}))
+
+vi.mock('../components/AgentStateDot', () => ({
+  AgentStateDot: ({ state }: { state?: string }) =>
+    state && state !== 'idle' ? createElement('AgentStateDot', { state }) : null,
+  agentStateLabel: (state: string) =>
+    state === 'working'
+      ? 'Working'
+      : state === 'done'
+        ? 'Done'
+        : state === 'waiting'
+          ? 'Waiting for input'
+          : ''
 }))
 
 function card(
@@ -150,7 +161,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
     )
   })
 
-  it('marks the current workspace badge, shows LocateFixed on the current card without time text, and shows trailing time text on other cards', () => {
+  it('hides the currently open card, marks same-workspace cards with a badge dot, and renders SSOT AgentStateDot indicators', () => {
     const activeCard = card({
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -167,9 +178,10 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
             worktreeId: 'wt-1',
             tabId: 'tab-3',
             title: 'Other notes',
+            agentState: 'working',
             lastVisitedAt: NOW - 10 * 60 * 1_000
           }),
-          shell
+          { ...shell, agentState: 'done' }
         ],
         currentWorktreeId: 'wt-1',
         currentTabId: 'tab-1',
@@ -181,9 +193,7 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
         onClose: () => {}
       })
     )
-    expect(
-      tree.root.findByProps({ testID: 'recent-session-card-current-dot-wt-1-tab-1' })
-    ).toBeTruthy()
+    expect(tree.root.findAllByProps({ testID: 'recent-session-card-wt-1-tab-1' })).toHaveLength(0)
     expect(
       tree.root.findByProps({ testID: 'recent-session-card-current-dot-wt-1-tab-3' })
     ).toBeTruthy()
@@ -191,25 +201,23 @@ describe('MobileSessionHeaderMoreActionsSheet', () => {
       tree.root.findAllByProps({ testID: 'recent-session-card-current-dot-wt-2-tab-2' })
     ).toHaveLength(0)
     expect(
-      tree.root.findByProps({ testID: 'recent-session-card-current-icon-wt-1-tab-1' })
+      tree.root.findByProps({ testID: 'recent-session-card-state-dot-wt-1-tab-3' })
     ).toBeTruthy()
-    expect(tree.root.findAllByType('LocateFixed')).toHaveLength(1)
-    expect(tree.root.findByType('LocateFixed').props).toMatchObject({ color: colors.accentBlue })
-    expect(texts(tree)).not.toContain('just now')
+    expect(
+      tree.root.findByProps({ testID: 'recent-session-card-state-dot-wt-2-tab-2' })
+    ).toBeTruthy()
+    expect(
+      tree.root.findAllByType('AgentStateDot' as unknown as string).map((node) => node.props.state)
+    ).toEqual(['working', 'done'])
+    expect(texts(tree)).not.toContain('Ship notes')
     expect(texts(tree)).toContain('10m')
     expect(texts(tree)).toContain('5m')
     expect(
-      tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-1' }).props.accessibilityLabel
-    ).toBe('Ship notes, Orca, Current, just now')
-    expect(
       tree.root.findByProps({ testID: 'recent-session-card-wt-1-tab-3' }).props.accessibilityLabel
-    ).toBe('Other notes, Orca, 10m')
+    ).toBe('Other notes, Working, Orca, 10m')
     expect(
-      tree.root.findAllByProps({ testID: 'recent-session-card-current-icon-wt-1-tab-3' })
-    ).toHaveLength(0)
-    expect(
-      tree.root.findAllByProps({ testID: 'recent-session-card-current-icon-wt-2-tab-2' })
-    ).toHaveLength(0)
+      tree.root.findByProps({ testID: 'recent-session-card-wt-2-tab-2' }).props.accessibilityLabel
+    ).toBe('Shell, Done, Tools, 5m')
   })
 
   it('truncates long workspace branch names by abbreviating prefix before slash and keeping tail after slash', () => {
