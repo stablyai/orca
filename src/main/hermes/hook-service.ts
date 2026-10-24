@@ -131,7 +131,9 @@ export class HermesHookService {
       }
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/plugin.yaml`, getPluginManifest())
       await writeTextFileRemoteAtomic(sftp, `${remotePluginDir}/__init__.py`, getPluginInitSource())
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      if (next.content !== existing) {
+        await writeTextFileRemoteAtomic(sftp, remoteConfigPath, next.content)
+      }
       return {
         agent: 'hermes',
         state: 'installed',
