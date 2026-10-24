@@ -20,6 +20,8 @@ import {
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveStructuredAgentSessionOwner } from '../structured-agent-session-owner'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
@@ -41,7 +43,21 @@ export function prepareWebSessionTabsSnapshotBrowser(
   } = base
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
-  const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const previousUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const legacyOwner =
+    previousUnifiedTabs.some(
+      (tab) => tab.contentType === 'agent-session' && tab.executionHostId === undefined
+    ) && getKnownExecutionHostIdForWorktree(state, worktreeId) !== null
+      ? resolveStructuredAgentSessionOwner(state, worktreeId)
+      : null
+  // Bind a legacy chat's known read owner before another connection can adopt or retire it.
+  const currentUnifiedTabs = legacyOwner
+    ? previousUnifiedTabs.map((tab) =>
+        tab.contentType === 'agent-session' && tab.executionHostId === undefined
+          ? { ...tab, executionHostId: legacyOwner }
+          : tab
+      )
+    : previousUnifiedTabs
   const publishedAgentSessionIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
@@ -183,6 +199,13 @@ export function prepareWebSessionTabsSnapshotBrowser(
   advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'agent-session') {
+      // Paired routes can publish the same session id; only its owner may replace or retire it.
+      if (
+        tab.executionHostId !== undefined &&
+        tab.executionHostId !== executionHostIdForSessionTabsOwner(environmentId)
+      ) {
+        return true
+      }
       // A matching host row is authoritative; retaining the provisional tab beside its mirror
       // would briefly render two panes before lifecycle publication is recorded.
       // A host that cannot list its chats is no evidence this one closed.

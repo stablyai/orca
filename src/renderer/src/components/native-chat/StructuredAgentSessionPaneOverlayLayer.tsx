@@ -87,7 +87,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [groups]
     )
     const structuredTabs = useMemo(
-      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
+      // Moving retained DOM panes resets their scroll offsets; strip order is independent.
+      () =>
+        unifiedTabs
+          .filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab))
+          .sort((left, right) => left.id.localeCompare(right.id)),
       [unifiedTabs]
     )
 

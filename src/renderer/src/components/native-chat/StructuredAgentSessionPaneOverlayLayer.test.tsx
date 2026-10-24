@@ -155,6 +155,47 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     )
   })
 
+  it('does not move mounted chat panes when publications or tab-strip order change', () => {
+    const first = {
+      ...structuredTab(FIRST_TAB_ID, 'same-session', 0),
+      executionHostId: 'runtime:server-1' as const
+    }
+    const second = {
+      ...structuredTab(SECOND_TAB_ID, 'same-session', 1),
+      executionHostId: 'runtime:server-2' as const
+    }
+    mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: [first, second] } })
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
+    )
+    const hosts = Array.from(view.container.children)
+    const observer = new MutationObserver(() => {})
+    observer.observe(view.container, { childList: true })
+    try {
+      for (const tabs of [
+        [second, first],
+        [first, second]
+      ]) {
+        act(() => {
+          mocks.store?.setState({
+            unifiedTabsByWorktree: { [WORKTREE_ID]: tabs },
+            groupsByWorktree: {
+              [WORKTREE_ID]: [{ ...createGroup(FIRST_TAB_ID), tabOrder: tabs.map((tab) => tab.id) }]
+            }
+          })
+        })
+        // Moving an existing DOM node clears Chromium's nested scroll offsets without unmounting.
+        expect(observer.takeRecords().flatMap((record) => Array.from(record.removedNodes))).toEqual(
+          []
+        )
+        expect(Array.from(view.container.children)).toEqual(hosts)
+        expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatVisible).toBe('true')
+      }
+    } finally {
+      observer.disconnect()
+    }
+  })
+
   it('routes overlay interaction back to the owning split group', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
