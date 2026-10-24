@@ -1,4 +1,5 @@
 import type { IBufferLine } from '@xterm/xterm'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 import { translateLineWithColumns, type WrappedLogicalLine } from './wrapped-terminal-link-ranges'
 
@@ -8,6 +9,8 @@ const HTTP_STATUS_ROW_PATTERN = /^HTTP\/\d(?:\.\d)?:\d{3}(?:\s|$)/i
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
 const EMPTY_LABEL_ROW_PATTERN = /^[^\s:][^:]*:$/
 const LABEL_WITH_SPACING_ROW_PATTERN = /^[^\s:][^:]*:\s/
+const HANGING_INDENT_REMAINDER_PATTERN = /^\s+\S/
+const URL_WRAP_REMAINDER_PREFIX_PATTERN = /^[/?#&=%]/
 
 function maxEdgeWrappedHttpRows(lineLength: number, padding: number): number {
   // Why: every continued row reaches the terminal edge, so even all-width-2
@@ -87,6 +90,41 @@ function findHttpSchemeIndex(text: string): number {
   return -1
 }
 
+
+function isNonUrlContinuationRow(
+  nextRow: TrimmedTranslatedLine,
+  padding: number,
+  rightPadding: number
+): boolean {
+  const nextColumnAfterText = nextRow.columns.at(-1)
+  const nextRowText = nextRow.text.slice(padding)
+  const nextRowReachesEdge =
+    nextColumnAfterText !== undefined && nextColumnAfterText >= nextRow.lineLength - rightPadding
+  const trimmedNext = nextRowText.trimStart()
+  const isLabelRow =
+    LABEL_WITH_SPACING_ROW_PATTERN.test(nextRowText) ||
+    ((EMPTY_LABEL_ROW_PATTERN.test(nextRowText) || HTTP_STATUS_ROW_PATTERN.test(nextRowText)) &&
+      !nextRowReachesEdge)
+  return (
+    isLabelRow ||
+    HTTP_SCHEME_START_PATTERN.test(trimmedNext) ||
+    isWindowsAbsolutePathLike(trimmedNext)
+  )
+}
+
+function urlFragmentFromTranslatedRow(
+  translated: TrimmedTranslatedLine,
+  startIndex: number,
+  stripLeadingWhitespace: boolean
+): { text: string; columns: number[] } {
+  const rawFragment = translated.text.slice(startIndex)
+  const indent = stripLeadingWhitespace ? rawFragment.length - rawFragment.trimStart().length : 0
+  return {
+    text: rawFragment.slice(indent),
+    columns: translated.columns.slice(startIndex + indent)
+  }
+}
+
 function rowsCanContinueAtTerminalEdge(
   row: TrimmedTranslatedLine,
   nextRow: TrimmedTranslatedLine,
@@ -98,15 +136,21 @@ function rowsCanContinueAtTerminalEdge(
   }
   // Why: a cursor-positioned label is not URL continuation evidence even when
   // the preceding URL happens to end at the terminal edge (#8832).
-  const nextColumnAfterText = nextRow.columns.at(-1)
-  const nextRowText = nextRow.text.slice(padding)
-  const nextRowReachesEdge =
-    nextColumnAfterText !== undefined && nextColumnAfterText >= nextRow.lineLength - rightPadding
-  const isLabelRow =
-    LABEL_WITH_SPACING_ROW_PATTERN.test(nextRowText) ||
-    ((EMPTY_LABEL_ROW_PATTERN.test(nextRowText) || HTTP_STATUS_ROW_PATTERN.test(nextRowText)) &&
-      !nextRowReachesEdge)
-  if (isLabelRow || HTTP_SCHEME_START_PATTERN.test(nextRowText) || nextRow.padding !== padding) {
+  if (isNonUrlContinuationRow(nextRow, padding, rightPadding)) {
+    return false
+  }
+  // Why: PowerShell Format-List and word-wrap emit a hard newline, so the first
+  // row often misses the terminal edge. Join a hanging indent, or a `/ ? & # % =`
+  // remainder only when the previous URL looks cut off — a complete `.../` next
+  // to `/usr/...` is a following path, not a wrap (#8832, #14291).
+  const nextRemainder = nextRow.text.trimStart()
+  if (
+    HANGING_INDENT_REMAINDER_PATTERN.test(nextRow.text) ||
+    (URL_WRAP_REMAINDER_PREFIX_PATTERN.test(nextRemainder) && !row.text.endsWith('/'))
+  ) {
+    return true
+  }
+  if (nextRow.padding !== padding) {
     return false
   }
   const columnAfterText = row.columns.at(-1)
@@ -125,8 +169,8 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
   buffer: { getLine(y: number): IBufferLine | undefined },
   bufferLineNumber: number
 ): WrappedLogicalLine[] {
-  // Why: cursor-positioned output lacks xterm wrap metadata, but an HTTP URL
-  // may still continue when each earlier row reaches the terminal edge.
+  // Why: cursor-positioned output lacks xterm wrap metadata. Join at the
+  // terminal edge, and also join PowerShell hanging-indent / cut-off remainders.
   const currentY = bufferLineNumber - 1
   const currentLine = buffer.getLine(currentY)
   if (!currentLine) {
@@ -196,9 +240,13 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
       }
       const fragmentStartIndex =
         rowY === startY ? schemeIndex : line.isWrapped ? 0 : continuationPadding
-      const fragment = translated.text.slice(fragmentStartIndex)
-      const whitespaceIndex = fragment.search(/\s/)
-      const possibleUrlFragmentLength = whitespaceIndex === -1 ? fragment.length : whitespaceIndex
+      const fragment = urlFragmentFromTranslatedRow(translated, fragmentStartIndex, rowY > startY)
+      if (!fragment.text) {
+        break
+      }
+      const whitespaceIndex = fragment.text.search(/\s/)
+      const possibleUrlFragmentLength =
+        whitespaceIndex === -1 ? fragment.text.length : whitespaceIndex
       if (text.length + possibleUrlFragmentLength > TERMINAL_HTTP_URL_MAX_LENGTH) {
         exceedsLengthLimit = true
         break
@@ -206,14 +254,14 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
 
       rows.push({
         y: rowY,
-        text: fragment,
+        text: fragment.text,
         sourceText: translated.sourceText,
-        columns: translated.columns.slice(fragmentStartIndex),
+        columns: fragment.columns,
         startIndex: text.length,
         isWrapped: line.isWrapped,
         lineLength: line.length
       })
-      text += fragment
+      text += fragment.text
       if (whitespaceIndex !== -1) {
         break
       }
