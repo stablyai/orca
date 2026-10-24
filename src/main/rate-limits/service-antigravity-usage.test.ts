@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getDefaultSettings } from '../../shared/constants'
+import { createAccountRuntimeTargetSettingsSync } from './account-runtime-target-sync'
+import { getAntigravityUsageTarget } from './antigravity-usage-runtime'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import {
+  deferred,
   errorProvider,
   okProvider,
   resetRateLimitProviderMocks
@@ -62,12 +69,195 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
+function antigravityReading(usedPercent: number): ProviderRateLimits {
+  return {
+    provider: 'antigravity',
+    session: null,
+    weekly: { usedPercent, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
+    status: 'ok',
+    error: null,
+    updatedAt: Date.now()
+  }
+}
+
 describe('RateLimitService Antigravity usage', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
     vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+  })
+
+  it('continues the provider cycle when persisted WSL distro settings are not a string', async () => {
+    const settings = Object.assign(getDefaultSettings('/tmp'), {
+      localAccountRuntime: 'wsl' as const,
+      localAccountWslDistro: 42
+    })
+    const service = new RateLimitService()
+    service.setAntigravityUsageTargetResolver(() => getAntigravityUsageTarget(settings, 'win32'))
+    await service.refresh()
+    expect(service.getState().claude?.status).toBe('ok')
+    expect(service.getState().codex?.status).toBe('ok')
+    expect(service.getState().antigravity?.status).toBe('ok')
+    expect(fetchAntigravityRateLimits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ target: { runtime: 'wsl', wslDistro: null } })
+    )
+  })
+
+  it('completes a settings change that retargets Claude, Codex, and Antigravity together', async () => {
+    let settings: GlobalSettings = { ...getDefaultSettings('/tmp'), localAccountRuntime: 'host' }
+    const service = new RateLimitService()
+    service.setCodexHomePathResolver(async () => ({
+      kind: 'ready',
+      codexHomePath: '/tmp/orca-settings-sync-codex-home'
+    }))
+    service.setAntigravityUsageTargetResolver(() => getAntigravityUsageTarget(settings, 'win32'))
+    const sync = createAccountRuntimeTargetSettingsSync(service, settings, 'win32')
+    settings = { ...settings, localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' }
+    await sync({ localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' }, settings)
+    expect(service.getState().claudeTarget).toMatchObject({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(service.getState().codexTarget).toMatchObject({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(service.getState().antigravity?.status).toBe('ok')
+    expect(fetchAntigravityRateLimits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ target: { runtime: 'wsl', wslDistro: 'Ubuntu' } })
+    )
+  })
+
+  it('retains default-WSL quota while refreshing the same resolved distro', async () => {
+    const service = new RateLimitService()
+    service.setAntigravityUsageTargetResolver(() => ({ runtime: 'wsl', wslDistro: null }))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce({
+      ...antigravityReading(42),
+      usageMetadata: { authProvenance: 'wsl:ubuntu' }
+    })
+    await service.refresh()
+    const response = deferred<ProviderRateLimits>()
+    const started = deferred<void>()
+    vi.mocked(fetchAntigravityRateLimits).mockImplementationOnce(() => {
+      started.resolve()
+      return response.promise
+    })
+    const refreshing = service.refresh()
+    await started.promise
+    expect(service.getState().antigravity?.weekly?.usedPercent).toBe(42)
+    response.resolve({
+      ...antigravityReading(43),
+      usageMetadata: { authProvenance: 'wsl:ubuntu' }
+    })
+    await refreshing
+    expect(service.getState().antigravity?.weekly?.usedPercent).toBe(43)
+  })
+
+  it('queues a settings refresh even when Claude and Codex already target that distro', async () => {
+    let settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      localAccountRuntime: 'wsl' as const,
+      localAccountWslDistro: null
+    }
+    const service = new RateLimitService()
+    service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'ubuntu' })
+    service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'ubuntu' })
+    service.setAntigravityUsageTargetResolver(() => getAntigravityUsageTarget(settings, 'win32'))
+    const sync = createAccountRuntimeTargetSettingsSync(service, settings, 'win32')
+    const response = deferred<ProviderRateLimits>()
+    const started = deferred<void>()
+    vi.mocked(fetchAntigravityRateLimits)
+      .mockImplementationOnce(() => {
+        started.resolve()
+        return response.promise
+      })
+      .mockResolvedValueOnce({
+        ...antigravityReading(77),
+        usageMetadata: { authProvenance: 'wsl:ubuntu' }
+      })
+    const refreshing = service.refresh()
+    await started.promise
+    settings = { ...settings, localAccountWslDistro: 'ubuntu' }
+    const applyingSettings = sync({ localAccountWslDistro: 'ubuntu' }, settings)
+    expect(service.getState().antigravity).toBeNull()
+    response.resolve({
+      ...antigravityReading(42),
+      usageMetadata: { authProvenance: 'wsl:ubuntu' }
+    })
+    await Promise.all([refreshing, applyingSettings])
+
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().antigravity?.weekly?.usedPercent).toBe(77)
+  })
+
+  it('does not retain host quota when the selected WSL runtime fails', async () => {
+    let target: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+    const service = new RateLimitService()
+    service.setAntigravityUsageTargetResolver(() => target)
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce({
+      ...antigravityReading(30),
+      usageMetadata: { authProvenance: 'host' }
+    })
+    await service.refresh()
+    target = { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce({
+      ...errorProvider('antigravity', 'WSL unavailable'),
+      usageMetadata: { authProvenance: 'wsl:ubuntu' }
+    })
+    await service.refresh()
+
+    expect(service.getState().antigravity?.status).toBe('error')
+    expect(service.getState().antigravity?.weekly).toBeNull()
+    expect(fetchAntigravityRateLimits).toHaveBeenLastCalledWith(expect.objectContaining({ target }))
+  })
+
+  it('discards an in-flight quota result when the runtime selection changes', async () => {
+    let target: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+    const service = new RateLimitService()
+    service.setAntigravityUsageTargetResolver(() => target)
+    const result = deferred<ProviderRateLimits>()
+    const started = deferred<void>()
+    vi.mocked(fetchAntigravityRateLimits).mockImplementationOnce(() => {
+      started.resolve()
+      return result.promise
+    })
+    const refreshing = service.refresh()
+    await started.promise
+    target = { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    service.invalidateAntigravityUsageTarget()
+    result.resolve(antigravityReading(30))
+    await refreshing
+    expect(service.getState().antigravity).toBeNull()
+
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce({
+      ...antigravityReading(80),
+      usageMetadata: { authProvenance: 'wsl:ubuntu' }
+    })
+    await service.refresh()
+    expect(service.getState().antigravity?.weekly?.usedPercent).toBe(80)
+  })
+
+  it('does not resurrect an old runtime snapshot while resolving another provider home', async () => {
+    let target: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }
+    const service = new RateLimitService()
+    service.setAntigravityUsageTargetResolver(() => target)
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(antigravityReading(30))
+    await service.refresh()
+    const home = deferred<{ kind: 'ready'; codexHomePath: null }>()
+    const entered = deferred<void>()
+    service.setCodexHomePathResolver(() => {
+      entered.resolve()
+      return home.promise
+    })
+    const refreshing = service.refresh()
+    await entered.promise
+    target = { runtime: 'wsl', wslDistro: 'Ubuntu' }
+    service.invalidateAntigravityUsageTarget()
+    const afterSwitch: (number | undefined)[] = []
+    service.onStateChange((state) => {
+      afterSwitch.push(state.antigravity?.weekly?.usedPercent)
+    })
+    home.resolve({ kind: 'ready', codexHomePath: null })
+    await refreshing
+
+    expect(service.getState().antigravity).toBeNull()
+    expect(afterSwitch.every((value) => value === undefined)).toBe(true)
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
   })
 
   it('publishes the Antigravity CLI reading, not the Gemini one', async () => {

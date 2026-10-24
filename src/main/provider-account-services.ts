@@ -17,6 +17,7 @@ import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-ru
 import { normalizeCodexRuntimeSelection } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../shared/claude-statusline-rate-limits'
+import { getAntigravityUsageTarget } from './rate-limits/antigravity-usage-runtime'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -52,6 +53,7 @@ export function createProviderAccountServices(
   rateLimits.setCodexFetchTarget(getInitialCodexRateLimitTarget(store.getSettings()))
   // Read credentials where Kimi’s CLI refreshes its token, including WSL (#12370).
   rateLimits.setKimiHomeResolver(() => resolveKimiHome(getKimiRuntimeTarget(store.getSettings())))
+  rateLimits.setAntigravityUsageTargetResolver(() => getAntigravityUsageTarget(store.getSettings()))
   rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     rateLimits,

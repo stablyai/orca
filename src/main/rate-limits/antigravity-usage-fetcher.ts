@@ -1,4 +1,10 @@
 import { runProcess } from '@orca/process-host'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import {
+  antigravityUsageTargetKey,
+  resolveRunningAntigravityWslDistro,
+  runAntigravityWslProbe
+} from './antigravity-usage-runtime'
 import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
@@ -36,11 +42,11 @@ const UNSUPPORTED_USAGE_COMMAND_REASON =
  * event that spends a turn of the user's quota. Retrying on a cadence would keep paying for the
  * same discovery, so the probe is abandoned for the rest of the process's life.
  */
-let usageCommandUnsupported = false
+const unsupportedUsageRuntimes = new Set<string>()
 
 /** Clears the unsupported latch. Tests only — a live process has no way back. */
 export function resetAntigravityUsageSupportForTests(): void {
-  usageCommandUnsupported = false
+  unsupportedUsageRuntimes.clear()
 }
 
 export type AntigravityUsageDependencies = {
@@ -54,6 +60,7 @@ export type AntigravityUsageDependencies = {
 
 export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
   signal?: AbortSignal
+  target?: LocalAccountRuntimeTarget
 }
 
 function unavailable(
@@ -112,19 +119,64 @@ export async function fetchAntigravityRateLimits(
   options: FetchAntigravityRateLimitsOptions = {}
 ): Promise<ProviderRateLimits> {
   const now = options.now ?? Date.now
-  if (usageCommandUnsupported) {
+  const platform = options.platform ?? process.platform
+  const target: LocalAccountRuntimeTarget =
+    platform === 'win32' && options.target?.runtime === 'wsl'
+      ? options.target
+      : { runtime: 'host', wslDistro: null }
+  try {
+    if (options.signal?.aborted) {
+      throw new Error('Usage refresh cancelled')
+    }
+    const distro =
+      target.runtime === 'wsl' ? await resolveRunningAntigravityWslDistro(target) : null
+    const runtimeKey = antigravityUsageTargetKey(
+      distro ? { runtime: 'wsl', wslDistro: distro } : target
+    )
+    const result =
+      target.runtime === 'wsl' && !distro
+        ? unavailable(
+            'Antigravity usage is unavailable because the selected WSL distro is stopped or unavailable.',
+            'cli-unavailable',
+            now()
+          )
+        : await fetchAntigravityForRuntime(options, distro, runtimeKey)
+    return { ...result, usageMetadata: { ...result.usageMetadata, authProvenance: runtimeKey } }
+  } catch {
+    const result = failed(
+      'Antigravity usage could not be read from the selected runtime.',
+      'cli-unavailable',
+      now()
+    )
+    return {
+      ...result,
+      usageMetadata: { ...result.usageMetadata, authProvenance: antigravityUsageTargetKey(target) }
+    }
+  }
+}
+
+async function fetchAntigravityForRuntime(
+  options: FetchAntigravityRateLimitsOptions,
+  distro: string | null,
+  runtimeKey: string
+): Promise<ProviderRateLimits> {
+  const now = options.now ?? Date.now
+  if (unsupportedUsageRuntimes.has(runtimeKey)) {
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
   }
-  const run = options.runCommand ?? runProcess
+  const runHost = options.runCommand ?? runProcess
+  const run: typeof runProcess = distro
+    ? (spec) => runAntigravityWslProbe(spec, distro, runHost)
+    : runHost
   const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
   const platform = options.platform ?? process.platform
   const resolveEnvironment = options.resolveEnvironment ?? (() => resolveLoginShellEnvironment())
 
   // Why the login shell's env: agy installs to ~/.local/bin, which is on the user's PATH but not on
   // the PATH an Electron app inherits from the window server or a desktop launcher.
-  const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
+  const env = distro ? {} : { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
-  const program = await resolve(command, { platform, env })
+  const program = distro ? command : await resolve(command, { platform, env })
   if (!program) {
     return unavailable(
       `Antigravity usage is not available. The Antigravity CLI (\`${command}\`) was not found on this machine.`,
@@ -146,6 +198,13 @@ export async function fetchAntigravityRateLimits(
     })
   } catch (error) {
     return failed(spawnFailureMessage(error), 'cli-unavailable', now())
+  }
+  if (distro && versionRun.code === 127) {
+    return unavailable(
+      'Antigravity CLI was not found in the selected runtime.',
+      'cli-unavailable',
+      now()
+    )
   }
   const version =
     versionRun.code === 0 && !versionRun.timedOut && versionRun.signal === null
@@ -187,7 +246,7 @@ export async function fetchAntigravityRateLimits(
   // Why the successful read is checked first: a real reading can never be evidence of a prompt, so
   // ordering it ahead of the turn check makes a false latch impossible.
   if (!reading && stdoutShowsModelTurn(result.stdout)) {
-    usageCommandUnsupported = true
+    unsupportedUsageRuntimes.add(runtimeKey)
     return unavailable(UNSUPPORTED_USAGE_COMMAND_REASON, 'usage-unavailable', now())
   }
   if (!reading) {

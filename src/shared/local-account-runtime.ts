@@ -34,7 +34,7 @@ export function resolveLocalAccountRuntimeTarget(
   return { runtime: 'host', wslDistro: null }
 }
 
-function normalizeDistro(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
+function normalizeDistro(value: unknown): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed ? trimmed : null
 }

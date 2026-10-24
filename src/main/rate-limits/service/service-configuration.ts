@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import type { LocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
@@ -65,6 +66,16 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
     this.antigravityUsageEnabledResolver = resolver
+  }
+
+  setAntigravityUsageTargetResolver(resolver: () => LocalAccountRuntimeTarget): void {
+    this.antigravityUsageTargetResolver = resolver
+  }
+
+  invalidateAntigravityUsageTarget(): boolean {
+    this.antigravityFetchGeneration += 1
+    this.updateState({ ...this.state, antigravity: null })
+    return this.antigravityUsageEnabledResolver?.() ?? true
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
