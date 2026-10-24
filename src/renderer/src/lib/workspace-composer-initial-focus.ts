@@ -11,6 +11,12 @@ export function getWorkspaceComposerInitialFocusTarget(root: ParentNode): HTMLEl
   return (
     root.querySelector<HTMLElement>(WORKSPACE_NAME_INPUT_SELECTOR) ??
     root.querySelector<HTMLElement>(WORKSPACE_SOURCE_PILL_SELECTOR) ??
+    getWorkspaceComposerProjectFieldTarget(root)
+  )
+}
+
+export function getWorkspaceComposerProjectFieldTarget(root: ParentNode): HTMLElement | null {
+  return (
     root.querySelector<HTMLElement>(PROJECT_COMBOBOX_TRIGGER_SELECTOR) ??
     root.querySelector<HTMLElement>(LEGACY_REPO_COMBOBOX_TRIGGER_SELECTOR)
   )
