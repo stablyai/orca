@@ -56,13 +56,13 @@ describe('spawn observer', () => {
     expect(seen).toEqual([missing, process.execPath])
   })
 
-  it('stays silent with no observer registered', async () => {
+  it('stops reporting after the observer is cleared', async () => {
     let calls = 0
-    setSpawnObserver(null)
-    await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
     setSpawnObserver(() => {
       calls += 1
     })
+    setSpawnObserver(null)
+    await runProcess({ program: process.execPath, args: ['-e', 'process.exit(0)'] })
     expect(calls).toBe(0)
   })
 })

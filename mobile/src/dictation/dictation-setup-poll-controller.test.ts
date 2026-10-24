@@ -34,7 +34,7 @@ describe('DictationSetupPollController', () => {
     vi.useRealTimers()
   })
 
-  it('does not refresh while hidden, unfocused, or backgrounded', async () => {
+  it('does not refresh while hidden or backgrounded', async () => {
     const refresh = vi.fn().mockResolvedValue(true)
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
     poller.setPolling(true)

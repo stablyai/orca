@@ -132,7 +132,8 @@ export function useRemoteBrowserPageNavigation({
       }
       setPaneBusy(true)
       setPaneNotice(null)
-      onUpdatePageState(browserTab.id, { loading: true, loadError: null })
+      // Why: a standing failure (and its auto-retry) stays up until a load succeeds or fails anew.
+      onUpdatePageState(browserTab.id, { loading: true })
       try {
         const params =
           method === 'browser.goto'
@@ -154,12 +155,14 @@ export function useRemoteBrowserPageNavigation({
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
         setPaneNotice({ kind: 'consequence', text: message })
+        // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
+        const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
           // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
           loadError: {
-            code: 0,
-            description: message,
+            code: netError ? Number(netError[2]) : 0,
+            description: netError ? netError[1] : message,
             validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
           }
         })

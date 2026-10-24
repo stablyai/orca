@@ -14,7 +14,9 @@ describe('toAgentLaunchPreferences', () => {
   })
 
   it('answers nothing when no preference survives', () => {
-    expect(toAgentLaunchPreferences({ model: '  ', fastMode: true })).toBeUndefined()
+    expect(
+      toAgentLaunchPreferences({ model: '  ', effort: 123, mode: false, fastMode: true })
+    ).toBeUndefined()
     expect(toAgentLaunchPreferences(undefined)).toBeUndefined()
   })
 })

@@ -4,11 +4,7 @@ import {
   type AgentStatusHooksSettings
 } from '../../shared/agent-status-hooks-setting'
 
-/**
- * The one list of agents a connector may start. Each needs hook status reporting (checked below)
- * and a terminal that takes input mid-turn; no capability data records the latter for terminals
- * yet, so membership here is where that fact lives.
- */
+// Membership records mid-turn terminal input support until capability data covers it.
 export const CONNECTOR_AGENTS = ['claude', 'codex'] as const satisfies readonly ConnectorAgent[]
 
 export function admitConnectorAgent(

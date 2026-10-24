@@ -54,12 +54,7 @@ function isRemoteOnlyFolderScope(
   return hasRemoteCandidate
 }
 
-/**
- * Deliberately stricter than `resolveFolderWorkspaceHost`, which lets the workspace's own
- * `executionHostId` pin win: a workspace pinned `local` under a group carrying only a legacy
- * `connectionId` dispatches locally but is denied here. Letting the pin win would hand out a root
- * the store refuses today, so authorization keeps the fail-closed read of either field.
- */
+/** Authorization rejects either remote ownership field, even where dispatch lets a workspace-local pin override legacy group ownership. */
 function hasRemoteFolderWorkspaceOwner(
   workspace: FolderWorkspace,
   projectGroups: readonly ProjectGroup[]
@@ -73,7 +68,7 @@ function hasRemoteFolderWorkspaceOwner(
 
 function getLocalFolderScopeRoots(store: RuntimeStore, repos: readonly Repo[]): string[] {
   const scopeStore = store as FolderScopeStore
-  // Why: many filesystem tests use narrow RuntimeStore doubles; folder scopes are additive.
+  // Narrow RuntimeStore doubles may omit additive folder-scope methods.
   const projectGroups = scopeStore.getProjectGroups?.() ?? []
   const childGroupIndex = buildProjectGroupChildIndex(projectGroups)
   const roots: string[] = []
@@ -113,15 +108,7 @@ type HostPathResolver = {
   resolve: (value: string) => string
 }
 
-/**
- * The allowed root a `workspaceDir` with no local repo to anchor it may contribute, or `null`.
- *
- * The predicate has to be the host's own, not `isRuntimePathAbsolute`: that helper accepts either
- * flavour, so on POSIX it calls `C:\ws` absolute while this `resolve` reads the same string as a
- * relative name and anchors the root under the main-process cwd — authorizing an unrelated local
- * tree. Pairing both here keeps them from diverging again; `hostPath` is injectable so the
- * flavour matrix can run POSIX and Windows without the test choosing on `process.platform`.
- */
+/** Pair host-native absolute checks and resolution: cross-flavor acceptance could anchor C:\ws under POSIX cwd and grant an unrelated tree. */
 export function resolveUnanchoredWorkspaceRoot(
   workspaceDir: string,
   hostPath: HostPathResolver = { isAbsolute, resolve }
@@ -130,7 +117,7 @@ export function resolveUnanchoredWorkspaceRoot(
 }
 
 export function getAllowedRoots(store: RuntimeStore): string[] {
-  // Why one read: `getRepos` rehydrates every repo, and this runs twice per filesystem IPC.
+  // Rehydrate repos only once per authorization snapshot.
   const repos = store.getRepos()
   const localRepos = filterLocalRepos(repos)
   const settings = store.getSettings()
@@ -151,9 +138,7 @@ export function getAllowedRoots(store: RuntimeStore): string[] {
           resolve(
             computeWorkspaceRoot(
               repo.path,
-              // Why enriched here too: placement has to agree with the create
-              // flow, or renderer file access is denied for a worktree Orca
-              // just put on the WSL side.
+              // Match creation placement, including WSL, so newly created worktrees remain authorized.
               getWorktreePathSettings(
                 repo,
                 settings,

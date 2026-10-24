@@ -163,7 +163,6 @@ describe('CodexRuntimeHomeService', () => {
       createSettings({
         activeCodexManagedAccountId: null,
         activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } },
-        // Why: the override is a Linux path inside the distro, not <wslHome>/.codex.
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.config/codex' } }
       })
     )

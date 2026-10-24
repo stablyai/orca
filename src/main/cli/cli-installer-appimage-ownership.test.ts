@@ -213,8 +213,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     expect(repaired).toMatchObject({ state: 'installed', launcherPath: first.launcherPath })
     await expect(readlink(fixture.commandPath)).resolves.toBe(first.launcherPath)
     await expect(lstat(relocatedRoot.payloadLauncherPath)).resolves.toBeDefined()
-    // A path namespace is an ownership boundary; the relocated process cannot prove that no
-    // sibling AppImage still owns the prior namespace.
+    // Relocation cannot prove that no sibling AppImage still owns the prior namespace.
     await expect(lstat(firstRoot.rootPath)).resolves.toBeDefined()
   })
 
@@ -259,8 +258,6 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     )
   })
 
-  // #15081 review: the Linux reclaim rule was narrowed to extracted-cache launchers, which left a
-  // deb/rpm -> AppImage migration wedged on its own leftover symlink.
   it('reclaims a symlink left by a packaged deb/rpm install', async () => {
     for (const directory of ['/opt/Orca', '/opt/orca-ide', '/opt/orca']) {
       const fixture = await makeFixture()

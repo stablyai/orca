@@ -23,7 +23,6 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
   return stdout.trim()
 }
 
-/** What an unfenced login-shell read returns — the shape this suite exists to rule out. */
 async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
   const { stdout } = await execFileAsync(
     'wsl.exe',
@@ -57,9 +56,7 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
     const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
     const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`)
 
-    // Contrast: routed through a login shell the read carries whatever the rc
-    // files printed (stock Ubuntu ships a sudo hint). These reads use a plain
-    // `sh -c`, which runs no rc at all, so they are exactly the file.
+    // A login shell may print rc banners; plain sh must return only the file’s bytes.
     expect(raw.endsWith(FILE_CONTENTS)).toBe(true)
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)

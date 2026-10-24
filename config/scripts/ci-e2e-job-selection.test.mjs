@@ -136,6 +136,7 @@ it('preserves the requested specs across source-routed and mixed selections', ()
     [NODE_NETWORK_E2E_SPEC, 'tests/e2e/future-unclassified.spec.ts']
   ]) {
     const specs = selectPrE2eSpecs(files)
+    expect(specs.length).toBeGreaterThan(0)
     const general = selectGeneralE2eSpecs(specs)
     const dedicated = specs.filter((spec) => DEDICATED_E2E_SPECS.includes(spec))
     expect([...general, ...dedicated].sort(), files.join(', ')).toEqual(specs)

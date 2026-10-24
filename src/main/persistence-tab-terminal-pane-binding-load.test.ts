@@ -34,7 +34,7 @@ const REPO = 'repo-a'
 const WORKTREE = `${REPO}::/work/a`
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
-/** An older build's save: the terminal is named on the tab, its one pane binds nothing. */
+// Legacy saves bind the terminal on its tab while leaving the pane map empty.
 function tabLevelOnly(): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),

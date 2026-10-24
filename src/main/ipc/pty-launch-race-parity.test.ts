@@ -72,7 +72,7 @@ vi.mock('../codex/codex-pane-account-registry', () =>
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-// Why: the host lane's real mkdir is thread-pool I/O, so a joiner could miss flushMacrotasks' turns under load.
+// Real mkdir uses thread-pool I/O and could outlast the fixture's fixed macrotask drain under load.
 vi.mock('../../shared/jcode-runtime-dir', async (importOriginal) => {
   const actual = await importOriginal<typeof JcodeRuntimeDir>()
   return {
@@ -84,7 +84,6 @@ vi.mock('../../shared/jcode-runtime-dir', async (importOriginal) => {
 const mintedFor = (worktreeId: string): string[] =>
   getHiddenRendererPtyIds().filter((id) => id.startsWith(`${worktreeId}@@`))
 
-// Pins main's window lane (pty:spawn) and host lane (runtime controller) as the spawn-lane merge's baseline.
 describe('launch race parity, both spawn lanes', () => {
   const suite = setupPtyIpcSuite()
   const { handlers, mainWindow, installDaemonTestProvider } = suite
@@ -175,7 +174,6 @@ describe('launch race parity, both spawn lanes', () => {
       }
     )
 
-    // C6 spreads joinPaneSpawn to both lanes: a slept-worktree refusal means "nothing to join".
     it('runtime lane: a spawn joining an automatic spawn refused for a slept worktree spawns itself', async () => {
       const pane = launchRacePane('race-slept-runtime', '73737373-7373-4373-8373-737373737373')
       let refused = false
@@ -207,7 +205,6 @@ describe('launch race parity, both spawn lanes', () => {
       expect(spawnedAfterRefusal).toEqual([true])
     })
 
-    // C2 and C6 rely on this: createTerminal's claim makes the window wait out the refusal, then wake it.
     it('a window mount racing a claimed automatic spawn refused for a slept worktree spawns itself', async () => {
       const pane = launchRacePane('race-slept-claimed', '77777777-7777-4777-8777-777777777777')
       const spawn = vi.fn(async () => ({ id: 'pty-user-mount' }))
@@ -236,7 +233,6 @@ describe('launch race parity, both spawn lanes', () => {
     })
   })
 
-  // C1b: a desktop window's restore, a phone's first view and a CLI send of one restored pane.
   it('starts a restored pane once for a window restore, a client first view and a CLI send', async () => {
     const pane = launchRacePane('race-three-starters', '73737373-7373-4373-8373-737373737373')
     let finishSpawn!: () => void
@@ -284,7 +280,7 @@ describe('launch race parity, both spawn lanes', () => {
   })
 
   describe('cleanup when a start fails', () => {
-    // C5d and C6 pick one: the host overwrites a cached size while building, then restores it.
+    // Host preparation temporarily overwrites cached size before restoring it.
     const CACHED_SIZE_WHILE_BUILDING: Record<LaunchRaceLane, object> = {
       ipc: { cols: 100, rows: 30 },
       runtime: { cols: 80, rows: 24 }
@@ -344,7 +340,6 @@ describe('launch race parity, both spawn lanes', () => {
       })
     })
 
-    // C5a and C5e rely on this: a throw after the provider spawn rolls the pre-spawn mark back.
     it.each(LAUNCH_RACE_LANES)(
       '%s lane: a throw after the provider spawn rolls the pre-spawn hidden mark back',
       async (lane) => {
@@ -372,7 +367,6 @@ describe('launch race parity, both spawn lanes', () => {
       }
     )
 
-    // C5e relies on this: the hidden mark follows the id the provider returned.
     it.each(LAUNCH_RACE_LANES)(
       '%s lane: the hidden mark moves to the id the provider returned',
       async (lane) => {
@@ -389,7 +383,7 @@ describe('launch race parity, both spawn lanes', () => {
       }
     )
 
-    // C5e and C6 change one cell: the window keeps the hidden mark on a reattach; the host skips it.
+    // Current reattach difference: window preserves the hidden mark; host skips it.
     const HIDDEN_REATTACH: Record<LaunchRaceLane, boolean> = { ipc: true, runtime: false }
     it.each(LAUNCH_RACE_LANES)('%s lane: a hidden-requested reattach', async (lane) => {
       const sessionId = `race-hidden-reattach-${lane}`
@@ -411,7 +405,7 @@ describe('launch race parity, both spawn lanes', () => {
       onTestFinished(() => clearProviderPtyState(ptyId))
     }
 
-    // C2 and C5e rely on this: a failed save discards the PTY, reports "unknown" and cancels registration.
+    // Failed binding saves discard the PTY and cancel registration.
     const SAVE_BINDING_ARGS: Record<LaunchRaceLane, Record<string, unknown>> = {
       ipc: {},
       runtime: { persistHostSessionBinding: true }
@@ -452,7 +446,7 @@ describe('launch race parity, both spawn lanes', () => {
       }
     )
 
-    // C5e/C6: the pipeline returns an incarnation that exits mid-registration; the host adapter fails it.
+    // Current lane difference: host rejects an incarnation that exits during registration.
     const EXITED_DURING_REGISTRATION: Record<LaunchRaceLane, 'resolves' | 'rejects'> = {
       ipc: 'resolves',
       runtime: 'rejects'
@@ -489,7 +483,6 @@ describe('launch race parity, both spawn lanes', () => {
       }
     )
 
-    // C5e relies on this: the model is resized to the grid only after the process is registered.
     it.each(LAUNCH_RACE_LANES)(
       '%s lane: an admitted spawn resizes the model to its grid after registering it',
       async (lane) => {

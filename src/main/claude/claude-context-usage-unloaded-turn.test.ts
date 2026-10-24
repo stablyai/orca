@@ -72,7 +72,6 @@ function translate(journal: AgentSessionJournal) {
   return { translator, settle }
 }
 
-/** A turn long enough that a small tail page starts after its turn row. */
 function runTurn(
   translator: ReturnType<typeof translate>['translator'],
   turnId: string,
@@ -201,7 +200,7 @@ describe('context usage for a turn row outside the loaded page', () => {
 
     const options = await readOptions(journal, NO_STRUCTURED_AGENTS)
     expect(options).not.toHaveProperty('contextUsage')
-    // An older host answers the same way, so the ring reads only the loaded page, as before.
+    // Older hosts omit context facts, so clients fall back to loaded rows.
     expect(selectStructuredAgentContextUsage(attachTail(journal, 2).items)).toBeNull()
   })
 
@@ -237,7 +236,6 @@ describe('context usage for a turn row outside the loaded page', () => {
     await settle()
     const hostAnswer = async () =>
       (await readOptions(journal, claudeAndCodexAgents())).contextUsage?.current
-    // The client reads the host once per turn, and again whenever its window loses a turn row.
     let state = attachTail(journal, 200)
     let host = await hostAnswer()
     const respond = (index: number): void => {
@@ -251,7 +249,6 @@ describe('context usage for a turn row outside the loaded page', () => {
     state = catchUp(journal, state)
     expect(hasTurnRow(state)).toBe(true)
 
-    // Step one response at a time across the batch that trims the turn row out, and past it.
     let stepsAfterTrim = 0
     while (stepsAfterTrim < 5 && index < 3_000) {
       respond(index++)

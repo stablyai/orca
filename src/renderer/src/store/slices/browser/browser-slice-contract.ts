@@ -1,4 +1,8 @@
 import type { StateCreator } from 'zustand'
+import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
+
+/** What a new tab opens on; a partition only when it must not be derived from the profile. */
+export type NewBrowserTabProfile = { sessionProfileId: string | null; sessionPartition?: string }
 import type { AppState } from '../../types'
 import type {
   BrowserCertificateFailure,
@@ -100,6 +104,11 @@ export type RemoteBrowserPageHandle = {
   restoredFromSession?: true
   /** The restored page was hosted by this desktop, so it must not restore as a streamed pane. */
   restoredClientHosted?: true
+}
+
+export type RemovedBrowserHistory = {
+  browserUrlHistory: BrowserHistoryEntry[]
+  workspaceDocHistory: WorkspaceDocHistoryEntry[]
 }
 
 export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
@@ -239,6 +248,15 @@ export type BrowserSlice = {
     label: string
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
+  /** A repo's or workspace's own local profile, at once; a placeholder until main first creates it. */
+  ensureManagedBrowserSessionProfile: (
+    owner: ManagedBrowserProfileOwner,
+    label: string
+  ) => NewBrowserTabProfile
+  /** A removed repo's or workspace's own profile goes with it, whichever host ran the removal. */
+  deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
+  /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
+  managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
   importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
@@ -262,15 +280,21 @@ export type BrowserSlice = {
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
   /** Returns the removed entry so an Undo can put it back with its visit count. */
   removeBrowserHistoryEntry: (normalizedUrl: string) => BrowserHistoryEntry | null
-  restoreBrowserHistoryEntry: (entry: BrowserHistoryEntry) => void
+  /** Puts removed or cleared entries back, except ones a revisit has already re-created. */
+  restoreBrowserHistory: (removed: RemovedBrowserHistory) => void
   workspaceDocHistory: WorkspaceDocHistoryEntry[]
+  removeWorkspaceDocHistoryEntry: (docLocation: BrowserPageDocLocation) => void
   /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
   recordWorkspaceDocVisit: (
     docLocation: BrowserPageDocLocation,
     title: string | null,
     options?: { bump?: boolean }
   ) => void
-  clearBrowserHistory: () => void
+  /** Clears pages and documents last visited at or after `since` (everything when omitted). */
+  clearBrowserHistory: (since?: number) => RemovedBrowserHistory
+  /** The page whose history view is open; it opens what you pick in that page. */
+  browserHistoryPageId: string | null
+  setBrowserHistoryPageId: (pageId: string | null) => void
   defaultBrowserSessionProfileId: string | null
   defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void

@@ -24,7 +24,6 @@ import type {
 const missingRootWarnings = new Set<string>()
 const skippedWslWarnings = new Set<string>()
 
-// Why: match existing worktree probe caps.
 export const WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY = 8
 
 function normalizeWatchKey(pathValue: string): string {
@@ -79,9 +78,7 @@ async function maybeAddBaseTarget(
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
     nestWorkspaces: pathSettings.nestWorkspaces
   }
-  // Why: WSL UNC paths are unreliable for native watching. A repo inside the
-  // distro has nothing watchable at all; a Windows-drive repo whose worktrees
-  // are mirrored into the distro still has its gitdir on the Windows side.
+  // UNC watching is unreliable; distro repos have no native target, but mirrored Windows repos retain their Git-common watch.
   if (isWslUncPath(repo.path)) {
     warnSkippedWslRoot(repo.id, workspaceRoot)
     return
@@ -116,7 +113,7 @@ async function resolveRepoTargets(
   if (isFolderRepo(repo)) {
     return targets
   }
-  // Why: the desktop can only watch its own disk; an SSH repo has no local root to watch.
+  // Desktop watches can inspect only locally owned disk paths.
   if (getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) {
     await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
   }

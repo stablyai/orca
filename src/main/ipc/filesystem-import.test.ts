@@ -514,7 +514,7 @@ describe('fs:importExternalPaths', () => {
       }
     ])
     expect(copyFileMock).not.toHaveBeenCalled()
-    // Why: bodies stream at upload time, so staging must never read the file.
+    // Bodies stream at upload time; staging must not read them.
     expect(readFileHandleMock).not.toHaveBeenCalled()
     expect(closeMock).toHaveBeenCalled()
   })
@@ -652,7 +652,6 @@ describe('fs:importExternalPaths', () => {
       path.join(resolvedPath, name)
     )
     const mib = 1024 * 1024
-    // Four files exactly fill the 8 GB total ceiling; the fifth pushes past it.
     const regularSize = 2 * 1024 * mib
     const overflowSize = Number(mib)
     const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))

@@ -29,8 +29,7 @@ describe('JcodeHookService', () => {
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-jcode-home-'))
     homedirMock.mockReturnValue(homeDir)
-    // Why: getJcodeConfigPath prefers JCODE_HOME; an ambient value would write
-    // outside the temp home and leak the written config past afterEach.
+    // Isolate JCODE_HOME as well as homedir so installs cannot escape the temporary home.
     vi.stubEnv('JCODE_HOME', '')
   })
 
@@ -58,9 +57,7 @@ describe('JcodeHookService', () => {
 
     const config = readFileSync(getJcodeConfigPath(), 'utf8')
     for (const event of JCODE_HOOK_EVENTS) {
-      // Why both wrappers: the value is shell-quoted for jcode's hook tokenizer and
-      // then TOML-quoted for the file, so neither the raw path nor the shell-quoted
-      // string appears on its own.
+      // Commands are shell-quoted for jcode, then TOML-quoted for config storage.
       expect(config).toContain(
         `${event} = ${tomlQuoteString(getJcodeManagedCommand(getJcodeManagedScriptPath()))}`
       )
@@ -68,7 +65,6 @@ describe('JcodeHookService', () => {
     const script = readFileSync(getJcodeManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/jcode')
     expect(script).toContain('payload@-')
-    // Why: the payload is jcode's own JCODE_HOOK_PAYLOAD, forwarded verbatim.
     expect(script).toContain('$JCODE_HOOK_PAYLOAD')
     expect(script).toContain('payload="$JCODE_HOOK_PAYLOAD"')
   })

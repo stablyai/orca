@@ -1,11 +1,12 @@
 import React from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Workflow } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { LinearAgentSkillSetupPrompt } from './LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from './WorktreeCardAgents'
-import { WorktreeLineageToggle } from './WorktreeLineageToggle'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
@@ -23,7 +24,6 @@ export function WorktreeCardSecondaryRows({
     isActive,
     newCardStyle,
     lineageCollapsed,
-    lineageChildWorktreeIds,
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
@@ -31,7 +31,7 @@ export function WorktreeCardSecondaryRows({
     compactInlineAgentRows,
     showLineageChildChip,
     lineageChildAriaLabel,
-    lineageChildCount,
+    childWorkspaceShortLabel,
     isDeleting
   } = card
   const { hasMetaRow } = presentation
@@ -94,14 +94,43 @@ export function WorktreeCardSecondaryRows({
       )}
 
       {showLineageChildChip && (
-        <WorktreeLineageToggle
-          childWorktreeIds={lineageChildWorktreeIds}
-          collapsed={lineageCollapsed}
-          ariaLabel={lineageChildAriaLabel}
-          count={lineageChildCount}
-          newCardStyle={newCardStyle}
-          onToggle={onLineageToggle}
-        />
+        <div
+          className={cn('relative mt-1 flex min-w-0 justify-start', !newCardStyle && '-ml-1')}
+          style={{
+            color: 'color-mix(in srgb, var(--muted-foreground) 42%, var(--worktree-sidebar))'
+          }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="chip"
+                className="relative z-10 max-w-32"
+                aria-label={lineageChildAriaLabel}
+                aria-expanded={!lineageCollapsed}
+                onClick={onLineageToggle}
+              >
+                <Workflow className="size-2.5" />
+                <span className="truncate">{childWorkspaceShortLabel}</span>
+                <ChevronDown
+                  className={cn('size-2.5 transition-transform', lineageCollapsed && '-rotate-90')}
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {lineageCollapsed
+                ? translate(
+                    'auto.components.sidebar.WorktreeCard.8cb634cda6',
+                    'Show child workspaces'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeCard.57eaa61b55',
+                    'Hide child workspaces'
+                  )}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       )}
     </>
   )

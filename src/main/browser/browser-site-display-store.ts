@@ -19,7 +19,6 @@ function parseSiteDisplay(value: unknown): BrowserSiteDisplay | null {
   return Object.keys(display).length > 0 ? display : null
 }
 
-/** Browser profile id → site → its own zoom and color scheme. */
 const store = createBrowserProfileSiteStore({
   fileName: 'browser-site-display.json',
   description: 'site zoom and appearance',

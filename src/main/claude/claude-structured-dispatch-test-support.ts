@@ -55,7 +55,6 @@ export function userMessage(blocks: AgentJournalMessageItem['blocks']): AgentJou
   return { kind: 'message', role: 'user', blocks }
 }
 
-/** The child died. Nothing else retires a live waiter now that no deadline does. */
 export function childExited(session: ClaudeSession): void {
   retireClaudeDispatchWaiters(session)
 }

@@ -33,7 +33,6 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
-// Why: snapshot/restore are spies, not no-ops, so a rollback that never ran cannot pass as one.
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -44,8 +43,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
   }) => ({
     get: (filter: CookiesGetFilter) => targetSession.cookies.get(filter),
     remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
-    // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
-    // a missing method cannot silently reroute every write down the rejected-cookie path.
+    // Route CDP writes to the spy so missing-method errors cannot mask the real write path.
     writeCookieIdentity: (identity: Record<string, unknown>) =>
       targetSession.cookies.set!(identity),
     snapshotClearIdentities: snapshotClearIdentitiesMock,
@@ -161,10 +159,7 @@ describe('validated cookie replacement', () => {
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
-  // Why (STA-4097): this rollback puts back the user's ORIGINAL cookies, which the import had
-  // already deleted. cookies.get drops partitionKey and cookies.set ignores it, so rebuilding
-  // them through the Electron API resurrected CHIPS cookies unpartitioned. The undo now travels
-  // back through the CDP identities, which are the only thing that carries the partition.
+  // Rollback must restore captured CDP identities; Electron’s cookie API drops partition keys.
   it('restores the previous cookies through CDP identities when an incoming cookie is rejected', async () => {
     const partitionKey = { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
     cookiesGetMock.mockResolvedValue([cookie('.example.com', 'existing')])
@@ -193,14 +188,10 @@ describe('validated cookie replacement', () => {
     expect(restoreClearIdentitiesMock.mock.calls[0]?.[0]).toEqual([
       { url: 'https://example.com/', ...cookie('.example.com', 'existing'), partitionKey }
     ])
-    // Why: cookies.set is only ever the two imported cookies — a third call would mean the
-    // partition-dropping reconstruction came back.
     expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['first', 'second'])
     expect(disposeClearStoreMock).toHaveBeenCalledOnce()
   })
 
-  // Why: restoreClearIdentities attaches a debugger before it iterates, so calling it with an
-  // empty restore set would create a hidden BrowserWindow to put nothing back.
   it('does not reach for CDP when the rollback has nothing to restore', async () => {
     cookiesGetMock.mockResolvedValue([])
     cookiesSetMock
@@ -215,8 +206,7 @@ describe('validated cookie replacement', () => {
     const result = await importCookiesFromFile(filePath, 'persist:test')
 
     expect(result.ok).toBe(false)
-    // Why: a rejected CDP command does not prove the cookie was not written before the transport
-    // failed, so rollback must remove the failing coordinate as well as earlier successes.
+    // A rejected CDP write may have landed before transport failure; remove its coordinate too.
     expect(cookiesRemoveMock.mock.calls).toEqual([
       ['https://example.com/', 'second'],
       ['https://example.com/', 'first']

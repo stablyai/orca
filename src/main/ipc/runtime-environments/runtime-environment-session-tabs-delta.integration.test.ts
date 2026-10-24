@@ -94,7 +94,7 @@ describe('session.tabs tab delta across mixed client versions', () => {
     })
     await server.start()
     cleanups.push(() => server.stop())
-    // Why a profile per desktop: one profile saves a server once, so each desktop needs its own.
+    // Duplicate server registrations are forbidden within one profile; isolate each desktop.
     const pair = (name: string): { userDataPath: string; id: string } => {
       const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope: 'runtime' })
       if (!offer.available) {

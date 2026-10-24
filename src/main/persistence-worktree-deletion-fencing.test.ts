@@ -15,7 +15,6 @@ import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()

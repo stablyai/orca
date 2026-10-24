@@ -9,7 +9,7 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
+import { applyAllAgentsPermission } from '../../../../shared/tui-agent-permission-choice'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
@@ -184,11 +184,10 @@ export function usePersistCurrentStep({
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
           defaultTuiAgent,
-          ...applyAgentPermissionMode({
-            mode: yoloPermissions ? 'yolo' : 'manual',
-            agentDefaultArgs: settings.agentDefaultArgs,
-            agentDefaultEnv: settings.agentDefaultEnv
-          }),
+          // Off adds no flag, as it always has: each agent's own settings apply.
+          ...(yoloPermissionsChosen.current
+            ? applyAllAgentsPermission(settings, yoloPermissions ? 'full-access' : 'own')
+            : {}),
           ...onboardingChatPermissionSetting(
             settings.nativeChatPermissionMode,
             yoloPermissions,

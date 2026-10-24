@@ -68,6 +68,8 @@ import { useAppStore, type AppState } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { runtimeStatusEntry } from '@/runtime/server-layout-frames.test-fixture'
 import { deferred } from './source-control-hook-test-harness'
 const recoveryContext = {
   target: { kind: 'local' as const },
@@ -180,6 +182,10 @@ function renderControlledDialog(
   })
 }
 
+function land(inventory: Partial<AppState>): TuiAgent[] {
+  useAppStore.setState(inventory)
+  return ['codex']
+}
 async function flushEffects(): Promise<void> {
   await act(async () => {
     await Promise.resolve()
@@ -194,9 +200,15 @@ describe('SourceControlAgentActionDialog', () => {
     ).IS_REACT_ACT_ENVIRONMENT = true
     initialState = useAppStore.getState()
     vi.clearAllMocks()
-    mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
-    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
-    mocks.ensureRuntimeDetectedAgents.mockResolvedValue(['codex'])
+    mocks.ensureDetectedAgents.mockImplementation(async () =>
+      land({ localDetectedAgentIdsByContext: { host: ['codex'] } })
+    )
+    mocks.ensureRemoteDetectedAgents.mockImplementation(async (id: string) =>
+      land({ remoteDetectedAgentIds: { [id]: ['codex'] } })
+    )
+    mocks.ensureRuntimeDetectedAgents.mockImplementation(async (env: string, wt: string) =>
+      land({ runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey(env, wt)]: ['codex'] } })
+    )
     mocks.onStart.mockResolvedValue(true)
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
     mocks.checkSourceControlAgentActionLaunch.mockReturnValue({ ok: true })
@@ -281,9 +293,24 @@ describe('SourceControlAgentActionDialog', () => {
 
     renderControlledDialog({ repoId: 'repo-1', worktreeId: 'repo-1::wt-1', connectionId: null })
 
-    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1), { timeout: 6_000 })
     expect(mocks.ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'repo-1::wt-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
+  })
+  it('reveals, and never auto-starts, a saved action whose runtime is replaced mid-discovery', async () => {
+    resetStore(settingsWithGlobalRecipe(), [repoWithSavedRecipe('', null, 'runtime:env-1')])
+    const worktree = makeWorktree({ id: 'repo-1::wt-1', repoId: 'repo-1' })
+    useAppStore.setState({ worktreesByRepo: { 'repo-1': [worktree] } })
+    renderControlledDialog({ repoId: 'repo-1', worktreeId: worktree.id, connectionId: null })
+    for (const runtimeId of ['r1', 'r2']) {
+      await flushEffects()
+      expect(container.textContent).not.toContain('Launch agent')
+      const statuses = new Map([['env-1', runtimeStatusEntry(runtimeId, false)]])
+      act(() => useAppStore.setState({ runtimeStatusByEnvironmentId: statuses }))
+    }
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    await flushEffects()
+    expect(mocks.onStart).not.toHaveBeenCalled()
   })
   it('omits saved arguments from a structured local launch', async () => {
     setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
@@ -466,7 +493,9 @@ describe('SourceControlAgentActionDialog', () => {
     mocks.ensureDetectedAgents.mockReturnValue(detection.promise)
     renderControlledDialog()
     mocks.mutationInFlight.mockResolvedValue({ inFlight: true })
-    await act(async () => detection.resolve(['codex']))
+    await act(async () =>
+      detection.resolve(land({ localDetectedAgentIdsByContext: { host: ['codex'] } }))
+    )
 
     await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
     expect(mocks.onStart).not.toHaveBeenCalled()

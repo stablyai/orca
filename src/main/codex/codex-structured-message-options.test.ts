@@ -163,7 +163,6 @@ describe('Codex captured message choices', () => {
       request.mock.calls.filter(([method]) => method === 'turn/start').map(([, params]) => params)
     ).toMatchObject([
       { model: 'model-a', effort: 'high', personality: 'friendly', serviceTier: 'priority' },
-      // Unchosen keys keep the thread's own model and effort, not the listing's defaults.
       { model: 'model-a', effort: 'high', personality: 'pragmatic', serviceTier: 'flex' },
       { model: 'model-a', effort: 'high' },
       { model: 'model-a', effort: 'low' }

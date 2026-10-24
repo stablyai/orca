@@ -1,8 +1,6 @@
 import type { CookieClearPartitionKey } from './browser-cookie-import-clear'
 
-// Why (STA-4300): a partition identity that cannot be read faithfully must skip the cookie, never
-// downgrade it. An unpartitioned write of a partitioned cookie looks like a success and leaves the
-// site unable to see its own session — the failure mode that produced STA-4013/4061/4090/4170.
+// Skip unreadable partition identities; an unpartitioned fallback would lose the site’s session.
 export type SourcePartitionRead =
   | { status: 'unpartitioned' }
   | { status: 'partitioned'; partitionKey: CookieClearPartitionKey }
@@ -47,20 +45,12 @@ export function normalizeCookiePartitionSite(raw: string): string | null {
   }
 }
 
-/**
- * Reads a Chromium cookie row's partition identity.
- *
- * Chromium stores the partition as `top_frame_site_key` (empty string when unpartitioned) plus
- * `has_cross_site_ancestor`, which older schemas predate. Both halves are required: a partition key
- * written with the wrong ancestor bit files the cookie under a partition the site never reads, which
- * is indistinguishable from losing it.
- */
+/** A partitioned Chromium cookie needs both the site and cross-site-ancestor bit. */
 export function readChromiumRowPartition(
   sourceRow: Record<string, unknown>,
   sourceColumns: ReadonlySet<string>
 ): SourcePartitionRead {
-  // Why: a schema without the column predates cookie partitioning, so every row is genuinely
-  // unpartitioned — that is a faithful read, not a missing one.
+  // Schemas without this column predate partitioned cookies.
   if (!sourceColumns.has(CHROMIUM_PARTITION_SITE_COLUMN)) {
     return UNPARTITIONED
   }
@@ -93,12 +83,7 @@ export function readChromiumRowPartition(
 
 const FIREFOX_PARTITIONED_ATTRIBUTE_COLUMN = 'isPartitionedAttributeSet'
 
-/**
- * Reads whether Firefox recorded the server-declared `Partitioned` attribute.
- *
- * `originAttributes.partitionKey` is Firefox storage isolation and may include port or ancestor
- * context. The separate `isPartitionedAttributeSet` column is the server-declared CHIPS signal.
- */
+/** Firefox’s Partitioned attribute is distinct from originAttributes storage isolation. */
 export function readFirefoxRowPartition(
   sourceRow: Record<string, unknown>,
   sourceColumns: ReadonlySet<string>
@@ -119,14 +104,7 @@ export function readFirefoxRowPartition(
   }
 }
 
-/**
- * Reads a JSON cookie entry's partition identity.
- *
- * Absent means unpartitioned — every mainstream exporter omits the field for ordinary cookies, so
- * treating absence as unreadable would reject whole exports. Present-but-incomplete is unreadable:
- * exporters that emit only `topLevelSite` (or the legacy CDP string form) carry no ancestor bit, and
- * guessing it silently misfiles the cookie.
- */
+/** Absent partition metadata means unpartitioned; incomplete metadata must be skipped. */
 export function readJsonCookiePartition(
   raw: unknown,
   partitionKeyOpaque: unknown = undefined

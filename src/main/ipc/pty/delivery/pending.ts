@@ -51,9 +51,7 @@ export function getDroppedMode2031RendererData(pending: PendingPtyData): string 
   return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
 }
 
-/** Releases xterm's DEC 2026 render hold when the dropped span left a frame open.
- *  Without it the pane freezes on its last painted frame until xterm's 1000ms
- *  forced flush. */
+/** Release DEC 2026 left open by dropped bytes so xterm need not wait for its forced-flush timeout. */
 export function getDroppedSynchronizedOutputRendererData(pending: PendingPtyData): string {
   return pending.droppedSynchronizedOutputState?.active === true ? '\x1b[?2026l' : ''
 }
@@ -72,7 +70,7 @@ export function dropOversizedPendingPtyData(
     console.error(
       `[pty] dropped ${pending.data.length} buffered chars for ${redactPtyIdForDiagnostics(id)}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
     )
-    // Why: field visibility for cap tuning (issue #2836 / #7017); no pty id since session ids can embed workspace paths.
+    // Report cap pressure without session IDs, which can contain workspace paths (#2836, #7017).
     recordCrashBreadcrumb('terminal_pending_output_dropped', {
       droppedChars: pending.data.length,
       capChars
@@ -90,7 +88,7 @@ export function dropOversizedPendingPtyData(
     pending.data,
     INITIAL_SYNCHRONIZED_OUTPUT_LATCH_STATE
   )
-  // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
+  // A trimmed tail would retain a corrupting gap; restore from snapshot and salvage only bounded query bytes.
   return {
     data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
     droppedOutput: true,
@@ -111,7 +109,7 @@ export function appendPendingPtyData(
   rawLength = data.length,
   transformed = false
 ): PendingPtyData {
-  // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
+  // Once dropped, keep bounded query/mode state while the restore sentinel supersedes ordinary output.
   if (existing?.droppedOutput === true) {
     const mode2031 = scanDroppedMode2031Data(
       data,

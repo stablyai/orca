@@ -29,7 +29,6 @@ describe('AI Vault preview-window truncation signal', () => {
   it('flags the session once an older turn falls out of the window', () => {
     const session = finalizeSession(accumulatorWithUserTurns(PREVIEW_LIMIT + 1), 'darwin')
 
-    // The opening ask is gone, so the earliest preview turn is not the first prompt.
     expect(session?.previewMessages[0]?.text).toBe('turn 1')
     expect(session?.previewMessagesTruncated).toBe(true)
   })

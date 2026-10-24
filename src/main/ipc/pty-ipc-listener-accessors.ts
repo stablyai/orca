@@ -5,7 +5,6 @@ type MainWindowDouble = {
   webContents: { on: { mock: { calls: unknown[][] } }; send: { mock: { calls: unknown[][] } } }
 }
 
-/** Accessors for the ipcMain listeners and renderer sends the pty IPC suites assert against. */
 export function createPtyIpcListenerAccessors(ctx: {
   handlers: IpcHandlerMap
   mainWindow: MainWindowDouble
@@ -67,7 +66,7 @@ export function createPtyIpcListenerAccessors(ctx: {
       throw new Error('missing pty:rendererDispatcherReady listener')
     }
     const listener = readyCall[1] as (event: unknown) => void
-    // Why: the production handler sender-guards its destructive reconcile, so tests must present as the main window.
+    // Destructive reconcile accepts only the main-window sender.
     return () => listener(mainWindowIpcEvent)
   }
 

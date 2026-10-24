@@ -9,7 +9,6 @@ import {
   ROUTE_MODULE_SYNCHRONOUS_EXPORTS,
   collectMobileWebAppRouteKeys,
   collectMobileWebAppRoutes,
-  renderMobileWebAppRouteManifest,
   routeModuleSynchronousExports
 } from './mobile-web-app-route-manifest.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
@@ -83,49 +82,12 @@ describe('route manifest', () => {
   })
 
   it('refuses an empty subtree rather than emitting a context with no routes', async () => {
-    await expect(collectMobileWebAppRouteKeys(appDir, 'does-not-exist')).rejects.toThrow()
-  })
-
-  it('emits one lazy import per key, and no static import of a route', () => {
-    const source = renderMobileWebAppRouteManifest([
-      { key: './h/index.tsx', module: '/app/h/index.tsx' },
-      { key: './h/_layout.tsx', module: '/app/h/_layout.tsx' }
-    ])
-    expect(source).toContain('["./h/index.tsx"]: { default: lazy(() => import("/app/h/index.tsx")')
-    expect(source).toContain(
-      '["./h/_layout.tsx"]: { default: lazy(() => import("/app/h/_layout.tsx")'
-    )
-    // A static import is what collapses the split back into one chunk.
-    expect(source).not.toContain('import * as route')
-    expect(source.match(/import\(/g)).toHaveLength(2)
-  })
-
-  it('reports the paint off the screen behind the chunk, not off the router above it', () => {
-    const source = renderMobileWebAppRouteManifest([
-      { key: './h/index.tsx', module: '/app/h/index.tsx' },
-      { key: './h/_layout.tsx', module: '/app/h/_layout.tsx' }
-    ])
-    // The screen, wrapped where the chunk resolves: the wrapper above expo-router commits with the
-    // suspense fallback, so a report hung there lands while the body is still empty.
-    expect(source).toContain(
-      '["./h/index.tsx"]: { default: lazy(() => import("/app/h/index.tsx").then(withRouteScreenPaintReport))'
-    )
-    // And never the layout, which commits with the screen below it still arriving.
-    expect(source).toContain(
-      '["./h/_layout.tsx"]: { default: lazy(() => import("/app/h/_layout.tsx")) }'
-    )
-    expect(source).toContain('import { withRouteScreenPaintReport } from')
-  })
-
-  it('leaves the RequireContext itself synchronous', () => {
-    // expo-router calls keys() to build the route tree before anything renders, so the context
-    // may not be a promise; only the screen behind each key is deferred.
-    const source = renderMobileWebAppRouteManifest([
-      { key: './h/index.tsx', module: '/app/h/index.tsx' }
-    ])
-    expect(source).toContain('routeContext.keys = () => keys.slice()')
-    expect(source).not.toContain('async function routeContext')
-    expect(source).not.toContain('await import(')
+    await withScratch(async (scratch) => {
+      await mkdir(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT))
+      await expect(collectMobileWebAppRouteKeys(scratch)).rejects.toThrow(
+        '[mobile-web-app] no routes under'
+      )
+    })
   })
 
   it('has no route carrying an export a lazy module would swallow', async () => {

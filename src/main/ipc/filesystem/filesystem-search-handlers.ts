@@ -33,7 +33,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
       try {
-        // Why: an SSH target is not served here; quick-open shows "No matching files", as it did when disconnected.
+        // This process serves no SSH targets; preserve the disconnected empty-list contract.
         if (args.connectionId) {
           return []
         }

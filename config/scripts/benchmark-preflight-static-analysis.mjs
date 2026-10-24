@@ -1,3 +1,4 @@
+import { readPinnedBunVersion } from './pinned-bun-executable.mjs'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -40,8 +41,8 @@ async function requireSuccess(program, args, label) {
 }
 const bun = process.env.ORCA_BENCHMARK_BUN ?? 'bun'
 report.host.bun = (await requireSuccess(bun, ['--version'], 'bun-version')).stdout.trim()
-if (report.host.bun !== '1.4.3') {
-  throw new Error('Pin Bun 1.4.3')
+if (report.host.bun !== readPinnedBunVersion(root)) {
+  throw new Error(`Pin Bun ${readPinnedBunVersion(root)}`)
 }
 await requireSuccess(process.execPath, ['config/scripts/sync-anti-slop-plugin.mjs'], 'sync-plugin')
 rmSync(baseline, { recursive: true, force: true })

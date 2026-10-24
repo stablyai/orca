@@ -7,7 +7,7 @@ export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
   )
 }
 
-function getSplitDirection(split: HTMLElement): 'vertical' | 'horizontal' {
+export function getSplitDirection(split: HTMLElement): 'vertical' | 'horizontal' {
   return split.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
 }
 

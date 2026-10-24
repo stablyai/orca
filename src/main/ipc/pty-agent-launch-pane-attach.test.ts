@@ -108,7 +108,6 @@ describe('a pane whose process belongs to an agent launch', () => {
     )
   }
 
-  /** Returns the runtime the spawn reports to. */
   function registerWithRuntime(providerSpawn: ReturnType<typeof vi.fn>) {
     setLocalPtyProvider(localProvider(providerSpawn))
     const runtime = {
@@ -182,7 +181,7 @@ describe('a pane whose process belongs to an agent launch', () => {
 
     await mounted.catch(() => {})
     expect(providerSpawn).toHaveBeenCalled()
-    // Settled for the window: a later close reaches the launch through main's commit of it.
+    // Main commits the settled launch so later pane closure can reach it.
     expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
       kind: 'proceed'
     })
@@ -212,7 +211,7 @@ const DAEMON_ANSWERS = [
   ['daemon gone: the terminal host is unavailable, as for any tab', 'gone']
 ] as const
 
-// What a launch pane is after a restart: nothing about its launch is restored, so it spawns as any pane.
+// Restored panes have no launch state and follow ordinary spawn semantics.
 describe('a restored pane after a restart', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 

@@ -12,6 +12,8 @@ export type TreeNode = {
   relativePath: string
   isDirectory: boolean
   isSymlink?: boolean
+  /** Inferred from an opened link, not the parent's latest host listing. */
+  isDirectoryFromOpenedLink?: boolean
   depth: number
   /** Host snapshot that produced this node. Destructive actions fail closed without it. */
   operationOwner?: FileExplorerOperationOwner

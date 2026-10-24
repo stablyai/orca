@@ -1,5 +1,4 @@
-// Shared node-pty stub, PowerShell path stubs and daemon env lifecycle for the
-// pty-subprocess test files. `vi.mock` calls must stay in each test file.
+// Keep hoisted vi.mock calls in each test file.
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -18,16 +17,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
-/**
- * Makes the daemon look like it is sitting in a deleted cwd, without moving the
- * test process there.
- *
- * Why: `process.cwd()` and `process.chdir()` are process-global. The previous
- * version of these tests really did chdir into a temp dir and delete it, so every
- * other test file sharing the worker saw a missing cwd for that window — an
- * intermittent failure that got likelier once this suite was split across files.
- * Stubbing keeps the cwd-repair assertion exact and the process untouched.
- */
+/** Stub cwd repair without changing the process-wide cwd of other tests. */
 export function stubMissingDaemonCwd(): {
   chdirSpy: Mock<(directory: string) => void>
   restoreCwdStubs: () => void
@@ -87,7 +77,6 @@ export type PtySubprocessSpawnMocks = {
   validateWorkingDirectoryMock: Mock
 }
 
-/** Registers the createPtySubprocess beforeEach/afterEach; `userDataPath` is set per test. */
 export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
   userDataPath: string
 } {

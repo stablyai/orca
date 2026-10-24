@@ -19,7 +19,6 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-sc
 import { createProfileStateStore } from './persistence/profile-state/profile-state-store-factory'
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -71,11 +70,9 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── Telemetry cohort migration ─────────────────────────────────────
-  // Why: keys on `existsSync(dataFile)`, not the new `telemetry` field, so pre-telemetry installs aren't misclassified as fresh and flipped default-on.
+  // Cohort on file existence so pre-telemetry profiles cannot default to opted in.
 
   it('classifies a truly fresh install as new-user cohort (file absent → optedIn=true)', async () => {
-    // No data file written — truly fresh install of the telemetry release.
     const store = await createStore()
     const t = store.getSettings().telemetry
     expect(t).toBeDefined()
@@ -87,7 +84,6 @@ describe('Store', () => {
   })
 
   it('classifies a pre-existing install as existing-user cohort (file present → optedIn=null)', async () => {
-    // A pre-telemetry data file exists on disk with no telemetry block.
     writeDataFile({
       schemaVersion: 1,
       repos: [makeRepo()],
@@ -105,7 +101,6 @@ describe('Store', () => {
     expect(t!.installId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     )
-    // Sibling migrations still run alongside the telemetry migration.
     expect(store.getSettings().theme).toBe('dark')
   })
 
@@ -147,7 +142,7 @@ describe('Store', () => {
 })
 
 describe('Store.migrateTabSwitchKeybindings', () => {
-  // Freezes the tab-switch cohort on first load, keying on `fileExistedOnLoad` (not field presence) so the verdict survives later launches.
+  // Freeze the cohort from first-load file existence so later launches preserve the decision.
 
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -195,7 +190,6 @@ describe('Store.migrateTabSwitchKeybindings', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    // Existing file, cohort already 'done' — must not flip to 'pending' just because the file exists.
     expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
   })
 })
@@ -345,7 +339,6 @@ describe('Store.migrateWorktreeIdentity', () => {
       store.getWorkspaceLineage(worktreeWorkspaceKey('repo1::/ws/child'))?.parentWorkspaceKey
     ).toBe(NEW_WORKSPACE_KEY)
 
-    // The live session's tab keeps its frozen ptyId but now belongs to the new id.
     expect(store.getWorktreeIdForTab('tab1')).toBe(NEW)
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree[OLD]).toBeUndefined()
@@ -407,7 +400,7 @@ describe('Store.migrateWorktreeIdentity', () => {
 
   it('moves persisted mobile selections across reloads', async () => {
     const store = await createStore()
-    // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+    // Register the repo so orphan cleanup does not discard the fixture on reload.
     store.addRepo(makeRepo({ id: 'repo1', path: '/repo1' }))
     store.setMobileClientTabSelections({
       'device-a': {

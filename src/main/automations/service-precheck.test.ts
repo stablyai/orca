@@ -58,7 +58,7 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   ...overrides
 })
 
-/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+/** Inject persisted drift that normal creation would resolve. */
 function mutateDataFile(
   mutate: (state: {
     automations: Record<string, unknown>[]

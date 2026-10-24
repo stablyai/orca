@@ -21,15 +21,15 @@ function write(contents: string): string {
 }
 
 function record(paneKey: string): string {
-  return JSON.stringify({ paneKey, source: 'PreToolUse', payload: {}, receivedAt: Date.now() })
+  return JSON.stringify({ paneKey, source: 'codex', payload: {}, receivedAt: Date.now() })
 }
 
 describe('readSpoolFile', () => {
   it('leaves a trailing line without its newline unconsumed', () => {
-    const complete = `${record('a')}\n`
+    const complete = `${record('café😀')}\n`
     const result = readSpoolFile(write(`${complete}${record('b')}`))
 
-    expect(result.records.map((entry) => entry.paneKey)).toEqual(['a'])
+    expect(result.records.map((entry) => entry.paneKey)).toEqual(['café😀'])
     // The in-flight final record must stay replayable: consumed stops at the last newline.
     expect(result.consumed).toBe(Buffer.byteLength(complete))
   })

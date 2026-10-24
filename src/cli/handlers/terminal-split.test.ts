@@ -1,18 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClient } from '../runtime-client'
+import type { CliStatusResult } from '../../shared/runtime-types'
 import { TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { TERMINAL_HANDLERS } from './terminal'
 
-function splitClient(call: ReturnType<typeof vi.fn>, capabilities: string[]): RuntimeClient {
-  const client = {
-    call,
-    isRemote: false,
-    getCliStatus: vi.fn().mockResolvedValue({
-      result: { runtime: { reachable: true, runtimeId: 'runtime-1', capabilities } }
-    })
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `terminal split` with --terminal reads only `call` and `getCliStatus`, both stubbed; RuntimeClient is a class, so a structural double needs the cast.
-  return client as unknown as RuntimeClient
+function splitClient(
+  call: RuntimeClient['call'],
+  capabilities: NonNullable<CliStatusResult['runtime']['capabilities']>
+): RuntimeClient {
+  const client = new RuntimeClient('/tmp/orca-split-test', 60_000, null, null)
+  vi.spyOn(client, 'call').mockImplementation(call)
+  vi.spyOn(client, 'getCliStatus').mockResolvedValue({
+    id: 'status',
+    ok: true,
+    result: {
+      app: { running: true, pid: 123 },
+      runtime: { state: 'ready', reachable: true, runtimeId: 'runtime-1', capabilities },
+      graph: { state: 'ready' }
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  })
+  return client
 }
 
 function retrySplit(client: RuntimeClient, splitId = 'leaf-1') {
@@ -41,10 +49,12 @@ describe('terminal split --retry-split', () => {
 
     await retrySplit(splitClient(call, [TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY]))
 
-    expect(call).toHaveBeenCalledWith(
-      'terminal.split',
-      expect.objectContaining({ terminal: 'term_1', retrySplit: 'leaf-1' })
-    )
+    expect(call).toHaveBeenCalledExactlyOnceWith('terminal.split', {
+      terminal: 'term_1',
+      direction: undefined,
+      command: 'agent --task 1',
+      retrySplit: 'leaf-1'
+    })
   })
 
   // An older host strips `retrySplit` and splits again, starting a second copy of the command.

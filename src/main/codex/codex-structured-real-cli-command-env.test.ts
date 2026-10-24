@@ -1,7 +1,3 @@
-// The installed Codex under a user policy that keeps only core env vars: a user shell command
-// (`thread/shellCommand`) must still see the chat's identity, on a new thread and on a cold resume.
-// The model's exec tool reads the same `shell_environment_policy.set` in Codex's source. Opt-in
-// (ORCA_REAL_CODEX_CLI_TEST=1); no account is used, nothing reaches a model.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,7 +44,7 @@ async function probeIdentity(
       { threadId: opened.threadId, command: PROBE },
       { timeoutMs: 10_000 }
     )
-    // Until the turn completes Codex may not have saved the rollout the cold resume reads.
+    // Cold resume needs the rollout saved at turn completion.
     const deadline = Date.now() + 15_000
     while (!turnCompleted && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -71,7 +67,6 @@ describe.skipIf(!enabled)('Codex real app-server command env', () => {
         '[shell_environment_policy]\ninherit = "core"\n'
       )
       const commandEnv = { ORCA_AGENT_SESSION_ID: SESSION_ID }
-      // The policy really strips it: the app-server holds the id, its command does not.
       expect((await probeIdentity(base, { resumeThreadId: null })).seen).toBe('')
       const started = await probeIdentity(base, { resumeThreadId: null, commandEnv })
       expect(started.seen).toBe(SESSION_ID)

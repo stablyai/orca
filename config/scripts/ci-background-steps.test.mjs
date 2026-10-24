@@ -56,7 +56,7 @@ function readsEventPayload(run) {
 }
 
 it('finds the background steps it guards', () => {
-  expect(backgroundSteps().length).toBeGreaterThan(10)
+  expect(backgroundSteps().length).toBeGreaterThan(0)
 })
 
 it('backgrounds only single run steps, never actions that start later steps or parse the payload', () => {

@@ -233,6 +233,51 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     })
   })
 
+  it.each([false, true])(
+    'routes a helper exit through its creator mailbox, settled=%s',
+    async (creatorSettled) => {
+      const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+      const db = new OrchestrationDb(':memory:')
+      try {
+        const run = db.createRun({
+          objective: 'helper failure routing',
+          coordinatorHandle,
+          coordinatorPaneKey: COORDINATOR_PANE_KEY
+        })
+        const parentTask = db.createTask({ runId: run.id, spec: 'parent work' })
+        const parent = createRootDispatch(db, parentTask.id, 'term_parent')
+        const task = db.createTask({ runId: run.id, spec: 'helper work' })
+        const child = db.createDispatchContext({
+          taskId: task.id,
+          assigneeHandle: workerHandle,
+          assigneePaneKey: WORKER_PANE_KEY,
+          creator: { kind: 'terminal', handle: 'term_parent' },
+          maxDepth: Number.MAX_SAFE_INTEGER
+        })
+        expect(child.creator_dispatch_id).toBe(parent.id)
+        if (creatorSettled) {
+          db.completeDispatch(parent.id)
+        }
+        runtime.setOrchestrationDb(db)
+
+        runtime.onPtyExit(WORKER_PTY_ID, 137)
+        await settle()
+
+        const messages = db.db.prepare("SELECT * FROM messages WHERE type = 'escalation'").all()
+        expect(messages).toEqual([
+          expect.objectContaining({
+            to_handle: creatorSettled ? `run:${run.id}` : `dispatch:${parent.id}`,
+            run_id: run.id,
+            from_handle: workerHandle
+          })
+        ])
+        expect(db.getDispatchContextById(child.id)?.status).toBe('failed')
+      } finally {
+        db.close()
+      }
+    }
+  )
+
   it('keeps legacy coordinator_runs delivery on the coordinator handle', async () => {
     const graded = await gradeWorkerExit('legacy-run')
     expect(graded).toMatchObject({
@@ -511,7 +556,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       terminationReason: 'exited'
     })
     expect(warn).toHaveBeenCalledWith(
-      '[orchestration] failed to escalate worker exit',
+      '[orchestration] failed to escalate worker failure',
       expect.objectContaining({ dispatchId: 'ctx-1', runId: 'run-1' })
     )
     warn.mockRestore()

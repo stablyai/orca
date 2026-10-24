@@ -2,7 +2,12 @@ import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { editorModelRegistry, type EditorModelRegistryBridge } from '@/lib/editor-model-registry'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { editorTabModelUri, isCodeViewTab } from './editor-save-disk-precondition'
+import {
+  editorModelSiblingTabs,
+  editorTabModelUri,
+  isCodeViewTab
+} from './editor-save-disk-precondition'
+import { getOpenFilesForExternalFileChange, type EditorPathMutationTarget } from './editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 
 /**
@@ -67,4 +72,24 @@ export function withRecordDiskText(
     next[viewId] = { ...loaded, content }
   }
   return next
+}
+
+/**
+ * Every view an outside change to a path reaches: the event names one workspace, but a view of the
+ * same record in another workspace's panel shows that text too, so it must reload as well.
+ */
+export function externalChangeRecordViewIds(
+  state: AppState | undefined,
+  panelFiles: readonly OpenFile[],
+  target: EditorPathMutationTarget
+): Set<string> {
+  const storeFiles = state?.openFiles ?? []
+  const matched = getOpenFilesForExternalFileChange([...panelFiles, ...storeFiles], target, state)
+  return new Set(
+    matched.flatMap((file) =>
+      state && storeFiles.some((tab) => tab.id === file.id)
+        ? editorModelSiblingTabs(state, file).map((tab) => tab.id)
+        : [file.id]
+    )
+  )
 }

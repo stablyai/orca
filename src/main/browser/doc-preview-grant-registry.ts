@@ -2,43 +2,26 @@ import { randomBytes } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 
-/**
- * A preview grant is the only authority that turns an `orca-preview://` request
- * into bytes: it names the host that owns the file and the single directory
- * subtree requests may resolve inside. No grant, no bytes.
- */
 export type DocPreviewOwner =
   | { kind: 'ssh'; connectionId: string }
   | {
       kind: 'runtime'
       environmentId: string
-      /** Selector the runtime resolves `files.read` against. */
       worktreeSelector: string
-      /** Worktree root on the runtime host; `files.read` only accepts paths inside it. */
+      /** File reads are scoped to this root on the runtime host. */
       worktreeRoot: string
     }
 
 export type DocPreviewGrant = {
   id: string
   owner: DocPreviewOwner
-  /** Directory relative preview URLs resolve against. */
+  /** Base directory for relative preview URLs. */
   requestBase: string
-  /**
-   * Containing directory of the opened document, on the owning host. It carries silent read
-   * authority only while it sits strictly inside `requestBase`: a document at the workspace root —
-   * or outside any workspace, where its directory IS the request base — starts with the entry file
-   * alone, because that directory is where secrets live and a DNS-prefetch beacon needs no click.
-   */
+  /** Document directory; implicit access excludes requestBase to protect neighboring secrets. */
   root: string
-  /** Additional directories the reader approved for this grant. */
   authorizedRoots: string[]
-  /** Path of the opened document relative to `requestBase`. */
   entryRelativePath: string
-  /**
-   * Browser page the reader opened this document in. Main registers the guest under it once the
-   * guest commits to the grant, so the surface a tool names is the page the reader is looking at
-   * and not the grant, which a re-mint replaces underneath the same page.
-   */
+  /** Stable tool target across grant replacements for the same preview page. */
   browserPageId: string
 }
 
@@ -52,12 +35,10 @@ function normalizeRootPath(root: string): string {
   const flavor = pathFlavorFor(root)
   const normalized =
     flavor === win32 ? flavor.normalize(root.replace(/\//g, '\\')) : flavor.normalize(root)
-  // Why: `C:\` is the whole root, and trimming its separator would make win32.join answer the
-  // drive-relative `C:x`, which resolves against the host's cwd instead of inside the grant.
+  // Preserve drive-root separators: C: is drive-relative, whereas C:\ is absolute.
   if (flavor === win32 && /^[a-zA-Z]:\\$/.test(normalized)) {
     return normalized
   }
-  // Why: a trailing separator would make the containment prefix check accept a sibling directory.
   return normalized.length > 1 && normalized.endsWith(flavor.sep)
     ? normalized.slice(0, -1)
     : normalized
@@ -93,15 +74,10 @@ export function getDocPreviewGrant(grantId: string): DocPreviewGrant | null {
   return grantsById.get(grantId) ?? null
 }
 
-/**
- * Why anything listens at all: a grant is the only thing that names a preview's lifetime. State
- * elsewhere in main keyed by a preview's tool target — grab intent, a queued grab chain — has no
- * other signal telling it the surface is gone, and would otherwise accrete one entry per grant
- * for the life of the process.
- */
+// Revocation lets grab and other page-scoped state release entries before guest teardown.
 const revocationListeners = new Set<(grant: DocPreviewGrant) => void>()
 
-/** Why the whole grant and not its id: it is already gone from the registry when listeners run. */
+/** Listeners receive the removed grant because it is no longer in the registry. */
 export function onDocPreviewGrantRevoked(listener: (grant: DocPreviewGrant) => void): () => void {
   revocationListeners.add(listener)
   return () => revocationListeners.delete(listener)
@@ -144,13 +120,13 @@ function hasUnsafeSegment(segments: string[]): boolean {
   )
 }
 
-/** Resolves a safe request inside the workspace boundary, before grant authorization. */
+/** Resolves within the workspace boundary without granting read access. */
 export function resolveDocPreviewCandidatePath(
   grant: DocPreviewGrant,
   relativePath: string
 ): string | null {
   const segments = relativePath.split('/').filter((segment, index, all) => {
-    // Why: keep empty segments visible to the safety check except a single trailing one from `dir/`.
+    // Preserve internal empty segments for validation; allow a trailing slash.
     return !(segment === '' && index === all.length - 1)
   })
   if (segments.length === 0 || hasUnsafeSegment(segments)) {
@@ -196,12 +172,10 @@ export function resolveDocPreviewAuthorityPaths(grant: DocPreviewGrant): {
   }
 }
 
-/** The one path an entry-only grant can read before the reader approves a directory. */
 function resolveEntryAbsolutePath(grant: DocPreviewGrant): string | null {
   return resolveDocPreviewCandidatePath(grant, grant.entryRelativePath)
 }
 
-/** Resolves a request only when it is the entry document or its directory is authorized. */
 export function resolveDocPreviewTargetPath(
   grant: DocPreviewGrant,
   relativePath: string
@@ -219,7 +193,6 @@ export function resolveDocPreviewTargetPath(
     : null
 }
 
-/** Expands a live grant to the directory containing one reader-approved request. */
 export function authorizeDocPreviewDirectory(grantId: string, relativePath: string): boolean {
   const grant = grantsById.get(grantId)
   if (!grant) {
@@ -241,18 +214,13 @@ export function authorizeDocPreviewDirectory(grantId: string, relativePath: stri
   return true
 }
 
-/** Why: realpath is a host round-trip, and a grant's root is fixed for its lifetime. */
+// Cache canonical authority paths until revocation or a directory-authorization change.
 const canonicalRootByGrantId = new Map<
   string,
   Promise<{ boundary: string; roots: string[]; entry: string | null }>
 >()
 
-/**
- * Second containment pass for hosts where the lexical one is not enough: a symlink
- * inside the root can point anywhere, and the SSH read RPC applies no root of its
- * own. Both sides are canonicalized on the owning host before the prefix re-check;
- * a host that cannot canonicalize a path answers nothing.
- */
+// Canonicalize on the owning host to catch symlinks that escape lexical containment.
 export async function resolveCanonicalDocPreviewPath(
   grant: DocPreviewGrant,
   absolutePath: string,
@@ -289,17 +257,13 @@ export async function resolveCanonicalDocPreviewPath(
       ? canonicalPath
       : null
   } catch {
-    // Why: a root that no longer canonicalizes must not fall back to the lexical answer.
+    // Canonicalization failure must not fall back to lexical containment.
     canonicalRootByGrantId.delete(grant.id)
     return null
   }
 }
 
-/**
- * Path a runtime `files.read` can address, i.e. relative to the worktree root.
- * Returns null when the grant root sits outside the worktree — the runtime file
- * RPCs are worktree-scoped, so those documents are unreadable client-side.
- */
+/** Returns null for the worktree root itself or files outside it. */
 export function toRuntimeWorktreeRelativePath(
   worktreeRoot: string,
   absolutePath: string

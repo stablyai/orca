@@ -10,7 +10,6 @@ type ScreenRect = { x: number; y: number; width: number; height: number }
 const CURSOR_POLL_MS = 16
 const GEOMETRY_REFRESH_MS = 250
 
-/** Chrome's DevTools window behaviour that Orca's menu and shortcut routing never reach. */
 export function installGuestDevToolsWindowBehavior(args: {
   guest: Electron.WebContents
   getKeybindings: () => KeybindingOverrides | undefined
@@ -62,8 +61,7 @@ function installCloseShortcut(
   devTools: Electron.WebContents,
   getKeybindings: () => KeybindingOverrides | undefined
 ): void {
-  // Why input-event: Electron never emits before-input-event for a DevTools webContents.
-  // The listener dies with the DevTools webContents, which is destroyed on close.
+  // DevTools emits input-event, not before-input-event; closing it also destroys this listener.
   devTools.on('input-event', (_event, inputEvent) => {
     const input = readKeyDown(inputEvent)
     if (
@@ -72,7 +70,7 @@ function installCloseShortcut(
     ) {
       return
     }
-    // Why deferred: closing while AppKit still routes this key crashes in performKeyEquivalent.
+    // Defer closing until AppKit finishes routing the key to avoid a performKeyEquivalent crash.
     setImmediate(() => {
       if (!guest.isDestroyed()) {
         guest.closeDevTools()
@@ -119,7 +117,7 @@ async function readGuestScreenRect(guest: Electron.WebContents): Promise<ScreenR
   }
 }
 
-// Why: macOS Chromium drops mouse moves to non-key windows unless (in Chrome only) a debugger is attached (#22789).
+// Relay hover while DevTools has focus: macOS Chromium drops moves to non-key windows (#22789).
 function installMacHoverRelay(
   guest: Electron.WebContents,
   devTools: Electron.WebContents,
@@ -146,7 +144,7 @@ function installMacHoverRelay(
     } catch {
       guestRect = null
     }
-    // Why re-arm after the read: a busy renderer must not stack executeJavaScript calls.
+    // Re-arm after the read to avoid piling up calls while the renderer is busy.
     if (cursorTimer && !geometryTimer) {
       geometryTimer = setTimeout(() => {
         geometryTimer = null
@@ -203,7 +201,6 @@ function installMacHoverRelay(
 
   devTools.on('focus', start)
   devTools.on('blur', stop)
-  // A destroyed guest takes its DevTools with it, so this also covers guest teardown.
   devTools.once('destroyed', stop)
   if (devTools.isFocused()) {
     start()

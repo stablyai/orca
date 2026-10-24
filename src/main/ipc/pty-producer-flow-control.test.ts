@@ -51,7 +51,6 @@ describe('PtyProducerFlowController', () => {
     expect(resumeProducer).toHaveBeenCalledTimes(1)
     expect(resumeProducer).toHaveBeenCalledWith('pty-1')
     expect(controller.isPaused('pty-1')).toBe(false)
-    // A second drain report on the now-unpaused pty must not resume again.
     controller.update('pty-1', 0)
     expect(resumeProducer).toHaveBeenCalledTimes(1)
   })
@@ -59,14 +58,12 @@ describe('PtyProducerFlowController', () => {
   it('holds hysteresis: no flapping while pending sits between the watermarks', () => {
     controller.update('pty-1', HIGH + 1)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
-    // Draining but still above LOW: stay paused, no extra calls either way.
     controller.update('pty-1', HIGH - 16 * 1024)
     controller.update('pty-1', 128 * 1024)
     controller.update('pty-1', LOW)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
     expect(resumeProducer).not.toHaveBeenCalled()
     expect(controller.isPaused('pty-1')).toBe(true)
-    // An unpaused pty hovering in the same band must not pause.
     controller.update('pty-2', LOW + 1)
     controller.update('pty-2', HIGH)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
@@ -76,17 +73,15 @@ describe('PtyProducerFlowController', () => {
     controller.update('pty-1', HIGH + 1)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
 
-    // Within the failsafe window: no re-assert even far above HIGH.
     vi.advanceTimersByTime(PRODUCER_PAUSE_REASSERT_INTERVAL_MS - 1)
     controller.update('pty-1', HIGH * 4)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
 
-    // After the window (daemon failsafe has auto-resumed by now): re-pause.
+    // Reassert after the daemon's lost-resume failsafe releases the pause.
     vi.advanceTimersByTime(1)
     controller.update('pty-1', HIGH * 4)
     expect(pauseProducer).toHaveBeenCalledTimes(2)
 
-    // The re-assert re-stamps the clock — no immediate third pause.
     controller.update('pty-1', HIGH * 4)
     expect(pauseProducer).toHaveBeenCalledTimes(2)
   })

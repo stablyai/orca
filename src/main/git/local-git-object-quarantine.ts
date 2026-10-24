@@ -73,8 +73,7 @@ export function createLocalGitObjectQuarantine(
       ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
       ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     })
-    // Why after the read: that first Git call is what settles the WSL linked-worktree route,
-    // and Windows Git on that route may not share the spelling resolved above.
+    // Probe first to settle linked-worktree routing; host Git may need a different object-store spelling.
     if (!commonDir || usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro)) {
       return undefined
     }
@@ -82,7 +81,7 @@ export function createLocalGitObjectQuarantine(
   })
   return {
     run: (command) =>
-      // Why no WSLENV: the WSL runner puts both variables on WSL Git's command line.
+      // The WSL runner injects these variables in the command, without WSLENV.
       quarantine.run((env) => command(env ? { ...process.env, ...env } : undefined))
   }
 }

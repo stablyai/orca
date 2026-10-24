@@ -16,6 +16,7 @@ import {
 import { forgetFailedAgentLaunches } from '../../agent-launch/agent-launch-pane-attachment'
 import { closeClientHostedBrowserPagesForWorktree } from '../worktree-browser-client-page-close'
 import { teardownStops } from '../owned-session-teardown-policy'
+import { deleteRemovedOwnerBrowserProfile } from '../browser-host/managed-browser-profile-removal'
 import type {
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult
@@ -214,6 +215,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       void backend?.closeTab(tab.browserPageId).catch(() => {})
     }
     closeClientHostedBrowserPagesForWorktree(this, worktreeId)
+    deleteRemovedOwnerBrowserProfile({ kind: 'worktree', id: worktreeId })
   }
 
   async forceDeletePreservedBranch(

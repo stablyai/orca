@@ -22,7 +22,6 @@ export type CreateOrAttachOptions = {
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
-  /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
@@ -39,8 +38,7 @@ export type CreateOrAttachOptions = {
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
     onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
   }
-  /** Lets the daemon route output under the adopted owner's canonical id before
-   *  attaching its stream callbacks. */
+  /** Resolve the adopted owner’s canonical ID before stream callbacks can emit output. */
   onSessionResolved?: (sessionId: string) => void
 }
 
@@ -55,6 +53,6 @@ export type CreateOrAttachResult = {
   attachToken: symbol
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
-  /** Daemon-process verdict on the spawn cwd; only set on a fresh spawn that was given a cwd. */
+  /** Fresh non-WSL spawns with an explicit cwd only; false means a proven permission denial. */
   cwdReadableByDaemon?: boolean
 }

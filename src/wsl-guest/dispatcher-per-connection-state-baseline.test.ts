@@ -6,7 +6,7 @@ import { RelayDispatcher } from './dispatcher'
 // not by timing a teardown. Every number here is exact and load-independent.
 
 type Probed = {
-  attachClient: (w: (b: Buffer) => void) => number
+  attachClient: RelayDispatcher['attachClient']
   detachClient: (id: number) => void
   onClientCapacity: (id: number, listener: () => void) => (() => void) | null
   clients: Map<number, unknown>
@@ -37,7 +37,7 @@ function countAbortControllers(d: Probed): number {
   return total
 }
 
-function census(d: Probed): Record<string, number | string> {
+function census(d: Probed) {
   return {
     clients: d.clients.size,
     requestHandlers: d.requestHandlers.size,
@@ -73,30 +73,27 @@ describe('relay dispatcher per-connection state', () => {
     for (let cycle = 0; cycle < 3; cycle++) {
       const ids: number[] = []
       for (let i = 0; i < CLIENTS_PER_CYCLE; i++) {
-        ids.push(d.attachClient(() => {}))
+        ids.push(d.attachClient(() => true, { supportsWriteCallback: true }))
       }
       for (const id of ids) {
         d.onClientCapacity(id, () => {})
         d.requestAborts.create(id, 1)
       }
 
-      // The ledger is the one container with no per-client teardown: an entry is reclaimed by its
-      // own lease's release(), never by closeClient. `ledgerClientBytes` returning to baseline
-      // below is therefore load-bearing -- it is the proof that normal closes settle every queued
-      // and in-flight entry. An entry that did somehow survive a close would not be reclaimed, and
-      // that is a gap to close, not a contract to pin.
-      //
-      // The census must be able to find things: these two are the containers that stay 0 unless
-      // deliberately loaded, so assert they actually moved before trusting that they came back.
       expect(census(d).clients).toBe(CLIENTS_PER_CYCLE + 1)
       expect(census(d).clientCapacityListeners).toBe(CLIENTS_PER_CYCLE)
       expect(census(d).requestAbortControllers).toBe(CLIENTS_PER_CYCLE)
 
-      d.tryPublishToClients(
-        d.activeClients(),
-        { jsonrpc: '2.0', method: 'pty.data', params: { d: 'x'.repeat(256) } },
-        'bulk'
-      )
+      expect(
+        d.tryPublishToClients(
+          d.activeClients(),
+          { jsonrpc: '2.0', method: 'pty.data', params: { d: 'x'.repeat(256) } },
+          'bulk'
+        )
+      ).toBe(true)
+      // Pending sink callbacks retain publication leases until detach closes each writer.
+      expect(census(d).ledgerClientBytes).toBe(CLIENTS_PER_CYCLE)
+      expect(census(d).ledgerAggregateBytes).toBeGreaterThan(baseline.ledgerAggregateBytes)
       for (const id of ids) {
         d.detachClient(id)
       }

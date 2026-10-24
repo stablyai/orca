@@ -57,7 +57,7 @@ export function createClaudeJournalFailureHandler(input: {
   }
 }
 
-// A write refused under backpressure may have no later provider event to retry it, so the drain does.
+// Retry on drain because the provider may send no further events.
 function retryOwedWritesOnDrain(
   translator: ClaudeJournalTranslator | null
 ): StructuredAgentSessionSinkAdmission {
@@ -92,11 +92,6 @@ export function bindClaudeJournalReadingControl(
   })
 }
 
-/**
- * Every binding an acquisition makes between the connection and the journal:
- * reading control, and the `/context` breakdown the translator asks for. One
- * release covers both.
- */
 export function bindClaudeConnectionJournalControls(
   sink: StructuredAgentSessionEventSink | undefined,
   connection: ClaudeStreamJsonConnection,

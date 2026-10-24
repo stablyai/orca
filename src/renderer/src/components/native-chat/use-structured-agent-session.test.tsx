@@ -387,7 +387,7 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual([3, 4])
   })
 
-  it('ignores an option failure from a superseded fence', async () => {
+  it('reports an option failure across startup while its pane remains current', async () => {
     let reject!: (error: Error) => void
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
@@ -420,7 +420,7 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(result.current.error).toBeNull()
-    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
   })
 
   it('includes one background task id in the cancel fingerprint and payload', async () => {

@@ -7,7 +7,10 @@ import {
   type EditorRequestFileCloseDetail,
   type EditorSaveAndCloseDetail
 } from './editor/editor-autosave'
-import { EDITOR_STALE_SAVE_MESSAGE } from './editor/editor-save-disk-precondition'
+import {
+  EDITOR_NOT_UTF8_SAVE_MESSAGE,
+  EDITOR_STALE_SAVE_MESSAGE
+} from './editor/editor-save-disk-precondition'
 import { discardEditorFileChangesAndClose } from './editor/discard-editor-file-changes'
 import { translate } from '@/i18n/i18n'
 import type { TerminalEditorCloseQueueController } from './use-terminal-editor-close-queue'
@@ -60,7 +63,7 @@ export function useTerminalEditorCloseDialogActions(
     }
 
     setSaveDialogFileId(null)
-    let notClosedReason: 'blocked-stale' | 'not-saved' | null = null
+    let notClosedReason: 'blocked-stale' | 'not-utf8' | 'not-saved' | null = null
     const notClosed = new Promise<false>((resolve) => {
       const detail: EditorSaveAndCloseDetail = {
         fileId,
@@ -91,10 +94,15 @@ export function useTerminalEditorCloseDialogActions(
       toast.error(
         notClosedReason === 'blocked-stale'
           ? translate('auto.components.editor.editor.save.stale.notice', EDITOR_STALE_SAVE_MESSAGE)
-          : translate(
-              'auto.components.Terminal.a2a279b32a',
-              'Save timed out or failed. Fix errors before closing.'
-            )
+          : notClosedReason === 'not-utf8'
+            ? translate(
+                'auto.components.editor.editor.save.notUtf8.refused',
+                EDITOR_NOT_UTF8_SAVE_MESSAGE
+              )
+            : translate(
+                'auto.components.Terminal.a2a279b32a',
+                'Save timed out or failed. Fix errors before closing.'
+              )
       )
       setSaveDialogFileId(fileId)
       isClosingRef.current = false

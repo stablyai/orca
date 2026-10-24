@@ -1,8 +1,27 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
-import { createFakeBridgePortPair, type BridgePortPair } from './bridge-port-pair-test-harness'
+import {
+  createFakeBridgePortPair as createPair,
+  type BridgePortPair
+} from './bridge-port-pair-test-harness'
 import type { FakeRpcClient } from '../bridge-host-test-fakes'
+
+const resources = new Set<ReturnType<typeof createPair>>()
+function createFakeBridgePortPair(
+  ...args: Parameters<typeof createPair>
+): ReturnType<typeof createPair> {
+  const resource = createPair(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+    resource.host.dispose()
+  }
+  resources.clear()
+}
 
 async function opened(): Promise<BridgePortPair<FakeRpcClient>> {
   const pair = createFakeBridgePortPair()
@@ -33,6 +52,10 @@ describe('a Back press crossing from the shell to the page', () => {
     expect(pair.host.sendBack()).toBe(true)
     await pair.flush()
     expect(took).toHaveBeenCalledTimes(1)
+    expect(pair.readToShell().find((frame) => frame.type === 'ready')).toEqual({
+      v: 1,
+      type: 'ready'
+    })
     // Nothing crosses back for a press that landed: the page spent it.
     expect(notifies(pair)).toEqual([BRIDGE_BACK_CLAIM_NOTIFY])
   })
@@ -114,13 +137,10 @@ describe('the Back lane with no negotiation', () => {
     expect(pair.host.sendBack()).toBe(true)
     await pair.flush()
     expect(pair.toPage.length).toBe(before + 1)
-  })
-
-  it('posts the claim to the shell with nothing offered in init', async () => {
-    const pair = await opened()
-    pair.client.claimBack(() => true)
-    await pair.flush()
-    expect(notifies(pair)).toEqual([BRIDGE_BACK_CLAIM_NOTIFY])
-    expect(pair.backClaims).toEqual([true])
+    expect(pair.readToPage().at(-1)).toEqual({ v: 1, type: 'back' })
+    expect(pair.backPops).toEqual(['popped'])
+    expect(pair.diagnostics).toContainEqual({ kind: 'back-unclaimed' })
   })
 })
+
+afterEach(closeResources)

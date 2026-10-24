@@ -17,7 +17,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
-  // Why: forward grab's Cmd/Ctrl+C from a focused guest only when no edit field/selection is active, so native copy still works.
   protected setupGrabShortcut(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.grabShortcutCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
@@ -38,7 +37,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
     )
   }
 
-  // Why: a focused webview guest is a separate process, so its key events never reach the renderer; intercept and forward app shortcuts.
   protected setupShortcutForwarding(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.shortcutForwardingCleanupByTabId.get(browserTabId)
     if (previousCleanup) {

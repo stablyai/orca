@@ -1,7 +1,4 @@
-// Restart recovery for an ACP agent that keeps its own store: whether a message a crash left
-// unconfirmed reached the agent. Presence only: a match settles it as sent, while absence proves
-// nothing, so nothing is ever called undelivered. Bounded, and null on any failure; the user can
-// always resend or discard, so this never stands between them and the chat.
+// Recovery proves delivery only by presence; missing history never proves non-delivery.
 
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { agentSessionSendBodyFingerprint } from '../../shared/structured-agent-session-send-mutation'
@@ -21,24 +18,21 @@ import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-a
 
 const RECOVERY_READ_MS = 5_000
 
-/** A person's message as the agent's own store holds it. */
 export type AcpStoredUserMessage = {
-  /** The store's id for it, claimed at most once. */
+  /** Provider ID, claimed at most once. */
   id: string
   blocks: NativeChatBlock[]
-  /** Epoch ms the agent recorded it, on this machine's clock. */
+  /** Epoch milliseconds on the execution host's clock. */
   createdAt: number
 }
 
-/** Reads the user messages of one provider session from the agent's own store; null when it cannot. */
 export type AcpStoredUserMessagesReader = (input: {
   env: Record<string, string>
   providerSessionId: string
   signal: AbortSignal
 }) => Promise<AcpStoredUserMessage[] | null>
 
-/** Sends a crash may have left unconfirmed; a queued card was never handed over, so the agent
- *  cannot hold it. */
+// Queued submissions never reached the agent.
 function sendsInDoubt(load: JournalLoad): AgentJournalSubmission[] {
   return [...load.state.submissions.values()].filter(
     (submission) =>
@@ -55,13 +49,7 @@ function fingerprintOf(sessionId: string, message: AcpStoredUserMessage): string
   })
 }
 
-/**
- * The agent's store keeps no id of Orca's, so a stored message can only match a send by content.
- * Each send the journal already accepted first claims the earliest stored copy of its text written
- * no earlier than it was sent, so an identical message that did reach the agent is never offered as
- * the one in doubt; what is left, from the first send in doubt on, is the window. Claiming more than
- * a send's own copy only leaves a send in doubt unconfirmed, never wrongly confirmed.
- */
+/** Claim accepted sends' matching copies first to avoid falsely confirming identical sends in doubt. */
 function recoveryWindow(
   load: JournalLoad,
   inDoubt: readonly AgentJournalSubmission[],
@@ -94,7 +82,6 @@ function recoveryWindow(
   )
 }
 
-/** The window for one chat; null for an agent whose store Orca does not read. */
 export async function readAcpRecoveryHistory(
   input: Pick<AcpStructuredSessionAdapterDeps, 'readLaunch' | 'readJournal' | 'logger'> & {
     spec: Pick<AcpLaunchSpec, 'readStoredUserMessages'>
@@ -129,7 +116,7 @@ export async function readAcpRecoveryHistory(
       return null
     }
     return {
-      // Absence proves nothing: neither the start of the read nor the end of the agent's work is known.
+      // Neither the read boundary nor completion of the agent's work is known.
       boundaryConsistent: false,
       turnInFlight: true,
       items: recoveryWindow(load, inDoubt, messages)

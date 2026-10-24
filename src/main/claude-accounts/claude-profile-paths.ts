@@ -10,7 +10,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { ClaudeProfileSurfaceError } from './claude-profile-report'
 
-/** `executionHostId` routes calls to the host; it is the caller's view, so it is never persisted. */
+/** Caller-relative `executionHostId` routes calls but must not be persisted. */
 export type ClaudeProfileTarget =
   | { executionHostId: ExecutionHostId; runtime: 'host' }
   | { executionHostId: ExecutionHostId; runtime: 'wsl'; distro: string }
@@ -43,11 +43,7 @@ export function readClaudeProfileObject(file: string): ClaudeProfileRead<Record<
   }
 }
 
-/**
- * dataRoot belongs to the execution host: for WSL it is the guest's Linux data root. `home` is the
- * one spelling (absolute, normalized, no trailing separator) sign-in and launch must pass as
- * CLAUDE_CONFIG_DIR: Claude names the profile's Keychain entry from that exact text.
- */
+/** Use execution-host paths; pass the same normalized home at login and launch for Keychain identity. */
 export function describeClaudeProfile(
   dataRoot: string,
   accountId: string,
@@ -68,7 +64,7 @@ export function describeClaudeProfile(
   }
 }
 
-// Host-local facts only, in a fixed key order: the marker sits on the execution host's own disk.
+// Persist host-local identity in a stable key order for comparison.
 function ownershipRecord(
   version: unknown,
   accountId: unknown,
@@ -111,17 +107,13 @@ function readOwnershipMarker(file: string): string | null {
   return comparableOwnershipRecord(version, accountId, runtime, distro)
 }
 
-// Written when a first setup finishes, so its absence means no setup has finished here yet.
+// Setup writes this marker only after completing successfully.
 export function claudeProfileMarkerPath(profile: ClaudeProfileDescriptor): string {
   const path = profile.target.runtime === 'wsl' ? hostPath.posix : hostPath
   return path.join(path.dirname(profile.home), 'profile.json')
 }
 
-/**
- * The only gate before writing into a profile: namespace, containment, no linked components,
- * outside Claude's default homes, and an ownership marker beside the home. Refuses before creating
- * anything. Returns the step that writes the marker, which setup runs last.
- */
+/** Validate ownership before creation; the returned marker writer must run last during setup. */
 export function prepareClaudeProfileDirectory(
   dataRoot: string,
   profile: ClaudeProfileDescriptor,
@@ -191,10 +183,7 @@ function assertClaudeProfileDescendant(root: string, destination: string): void 
   }
 }
 
-/**
- * Resolves links in the deepest existing ancestor so a not-yet-created path cannot hide behind one;
- * the native call also returns on-disk case, so a case-only alias compares equal.
- */
+/** Resolve ancestor links and on-disk casing even for paths that do not exist yet. */
 function canonicalPath(file: string): string {
   const resolved = resolve(file)
   try {
@@ -225,7 +214,7 @@ function assertDistinctClaudeProfile(profile: string, defaultHome: string): void
   }
 }
 
-/** Claude's default homes: a profile may never be, contain, or sit inside one. */
+/** Profiles and default homes must not overlap in either direction. */
 function assertOutsideDefaultClaudeHomes(
   profileHome: string,
   userHome: string,
@@ -238,16 +227,12 @@ function assertOutsideDefaultClaudeHomes(
   }
 }
 
-/** The user's own CLAUDE_CONFIG_DIR (their System default), or undefined for `~/.claude`. */
 export function readUserClaudeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
   const user = readUserClaudeConfigDirAsSet(env)
   return user === undefined ? undefined : resolve(user.trim())
 }
 
-/**
- * The user's own CLAUDE_CONFIG_DIR exactly as they set it. Why unresolved: Claude keys its login by
- * the literal string, and the shell compares it against what an rc file re-exports.
- */
+/** Preserve literal spelling for Keychain identity and shell rc comparisons. */
 export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | undefined {
   const configDir = env.CLAUDE_CONFIG_DIR
   const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
@@ -260,7 +245,6 @@ export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | u
   return configDir
 }
 
-/** The folder profiles share from: the user's own CLAUDE_CONFIG_DIR, else `~/.claude`. */
 export function resolveClaudeDefaultHome(userHome: string, userConfigDir?: string): string {
   return userConfigDir ?? join(userHome, '.claude')
 }

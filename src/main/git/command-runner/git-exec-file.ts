@@ -29,21 +29,16 @@ import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-out
 import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
 
-/**
- * Async git command execution. Drop-in replacement for
- * `execFileAsync('git', args, { cwd, encoding, ... })`.
- */
 async function gitExecFileAsyncUnlocked(
   args: string[],
   options: GitExecOptions,
   terminationState: { current: Promise<void> | null }
 ): Promise<{ stdout: string; stderr: string }> {
-  // Why: span the user-visible `git <subcommand>` form, not the resolved binary, so dashboards group by intent.
+  // Trace caller intent rather than the resolved binary so WSL and native commands group together.
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async (span) => {
       if (options.onStderr && options.terminationBarrier) {
-        // Why: checked before admission; that path's streams belong to runProcess.
         throw new Error('onStderr is not supported with terminationBarrier.')
       }
       const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
@@ -115,7 +110,7 @@ async function gitExecFileAsyncUnlocked(
               command.termination
             )
           : execFileCapture(command.binary, command.args, captureOptions)
-        // Why: a dead WSL distro fails with an empty stderr, so the span would carry no cause at all.
+        // Add a cause when a dead WSL distro returns empty stderr.
         return captured.catch((error: unknown) => {
           throw annotateWslHostFailure(error, command)
         })
@@ -183,7 +178,7 @@ export function gitExecFileAsync(
   const releaseMutation = trackGitWorktreeMutation(args, options)
   const terminationState: { current: Promise<void> | null } = { current: null }
   const command = resolveGitFetchHeadCommand(args, options.cwd)
-  // Why outside the lock and span: a known-missing folder starts no process, so it records no git.exec.
+  // Missing folders start no child and must not record a git.exec span.
   const result = runUnlessGitCwdKnownMissing(options, () =>
     command.needsLock
       ? runWithGitFetchHeadLock(
@@ -204,10 +199,6 @@ export function gitExecFileAsync(
   })
 }
 
-/**
- * Async git command execution that returns a Buffer.
- * Used for reading binary blobs (git show).
- */
 async function gitExecFileAsyncBufferInSpan(
   args: string[],
   options: {
@@ -232,9 +223,7 @@ async function gitExecFileAsyncBufferInSpan(
     if (readEnvironmentReady) {
       await readEnvironmentReady
     }
-    // `git show` is a read, so this normally runs with no shell at all. The fence
-    // still matters for the login-shell fallback: these are raw blob bytes going
-    // straight to the diff/blob viewer, where a banner becomes file content.
+    // Fence fallback login-shell output so rc banners cannot become raw blob content.
     let resolved = resolveGitCommand(args, options, false, true)
     const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined, options.signal)
     if (environmentReady) {
@@ -284,7 +273,7 @@ async function gitExecFileAsyncBufferInSpan(
   })
 }
 
-// Why: sync git blocks the main thread; a dead network drive can hang git for minutes without a timeout (issue #7225's 127s freeze).
+// Bound synchronous Git: a dead network drive can freeze the main thread.
 const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
 
 export function gitExecFileAsyncBuffer(
@@ -294,12 +283,7 @@ export function gitExecFileAsyncBuffer(
   return runUnlessGitCwdKnownMissing(options, () => gitExecFileAsyncBufferInSpan(args, options))
 }
 
-/**
- * Sync git command execution. Drop-in replacement for
- * `execFileSync('git', args, { cwd, encoding, ... })`.
- *
- * Returns trimmed stdout as a string.
- */
+/** Return trimmed stdout; prefer async execution to avoid blocking main. */
 export function gitExecFileSync(
   args: string[],
   options: {
@@ -321,7 +305,6 @@ export function gitExecFileSync(
       windowsHide: true
     }) as string
   } finally {
-    // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
     recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   }
 }

@@ -34,33 +34,19 @@ import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 
-/**
- * Serves the host catalog to pickers, never through a session's serialize
- * queue. A session record names its own catalog (the account home pinned at
- * launch); without one, the key is the account a launch would pin right now —
- * never "whichever account listed last". `unknown` tells the client to keep
- * its static seed, and a missing or aged entry kicks one joined background
- * probe so the next read is warm. With no entry, the answer says that listing
- * is running, and only a read that asks waits for it. Failures suppress a new
- * probe for 30s, but never hide another listing already running for the account.
- * A probe failure that says why no chat can start rides every answer as
- * `unavailable` until a later probe answers again.
- */
+/** Keep picker discovery outside session queues and key it to the launched/selected account.
+ * Probe unavailability persists until another probe answers, independently of live model listings. */
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
-  // One per host: stopping it ends every listing this service started.
   const lifetime = new AbortController()
   const admission = new PrioritySemaphore(2)
   const sessionKeys = new Map<string, string>()
-  // A chat's configured default still being checked against its workspace, per catalog: a read
-  // answers after it, so the chat that reported it is followed by an answer naming it.
+  // Reads await configured-default recording so they reflect the reporting chat's resolution.
   const recordingDefaults = new Map<string, Promise<void>>()
   const listWith = agentModelCatalogProbeLister(lifetime.signal)
-  // A running chat's saves for agents kept per folder, which wait on a folder lookup.
+  // Serialize folder-scoped writes across asynchronous folder lookups.
   const liveWrites = new Map<string, Promise<void>>()
-  /** The catalog a session's own listings belong to: its pinned account and host, and its folder
-   *  for an agent kept per folder. */
   const sessionCatalogKey = async (record: AgentSessionRecord): Promise<string> =>
     agentModelCatalogFingerprintForRecord(
       record,
@@ -79,7 +65,7 @@ export function createAgentModelCatalogService(
       'live'
     )
     if (saved && configuredDefault !== undefined) {
-      // In report order, so the latest chat's resolution is the one kept.
+      // Preserve report order when learning configured defaults.
       const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
         .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault))
         .catch(() => {})
@@ -121,11 +107,10 @@ export function createAgentModelCatalogService(
         : params.workspacePath
       const folder = await catalogFolder(deps, params.agent, workspacePath, scoped)
       let fingerprint: string
-      // The account a probe lists under; null where this host cannot spawn one natively.
       let probeHome: AgentSessionAccountHome | null
       if (scoped) {
         fingerprint = agentModelCatalogFingerprintForRecord(scoped, folder)
-        // Probes spawn natively; a WSL-pinned record has no host-side lister.
+        // Native probes cannot list a WSL-pinned account.
         probeHome =
           scoped.location.executionHostId === 'local' && scoped.location.wslDistro === null
             ? scoped.accountHome
@@ -174,7 +159,6 @@ export function createAgentModelCatalogService(
         probeHome,
         workspacePath: cwd ?? folder
       })
-      // Every answer carries the reason the probe last found, read when the answer is made.
       const answer = async (
         listed: AgentModelCatalogEntry | null,
         extra: { listingInProgress?: true } = {}
@@ -235,14 +219,13 @@ export function createAgentModelCatalogService(
             : {})
         }
       }
-      // An observed exit prevents background relaunch; a new chat can still discover.
+      // Observed process exit suppresses background relaunch; explicit new chats may discover.
       if (
         params.savedOnly ||
         (!exact && scoped?.lease?.claimStatus === 'released' && scoped.lease.deathEvidence)
       ) {
         return answer(entry)
       }
-      // Only a requested wait blocks on rechecking an expired held reason.
       if (probe && probeHome && !lifetime.signal.aborted && deps.store.heldReasonDue(fingerprint)) {
         void deps.store.refresh(fingerprint, params.agent, probe, list)
         if (!params.waitForListing) {
@@ -251,7 +234,6 @@ export function createAgentModelCatalogService(
         await deps.store.pendingListing(fingerprint, true, params.legacy)
         return answer(deps.store.get(fingerprint))
       }
-      // Without an entry, answer from any running listing instead of starting a second one.
       let listing =
         !entry && probeHome ? deps.store.pendingListing(fingerprint, false, params.legacy) : null
       if (probe && probeHome && !lifetime.signal.aborted) {
@@ -302,7 +284,7 @@ export function createAgentModelCatalogService(
         saveLiveListing(record, listing, agentModelCatalogFingerprintForRecord(record))
         return
       }
-      // In report order: a folder lookup that resolves late must not let an older listing land last.
+      // Serialize reports so a slow folder lookup cannot overwrite a newer listing.
       const writing = (liveWrites.get(sessionId) ?? Promise.resolve())
         .then(async () => saveLiveListing(record, listing, await sessionCatalogKey(record)))
         .catch((error: unknown) => {

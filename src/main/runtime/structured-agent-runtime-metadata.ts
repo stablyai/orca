@@ -20,8 +20,11 @@ import {
   claudeModelCatalogDiscovery,
   codexModelCatalogDiscovery
 } from './structured-agent-model-catalog-discovery'
+import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type {
   StructuredAgentAccountHomeRequest,
+  StructuredAgentChatProgram,
   StructuredAgentAccountHomeServices,
   StructuredAgentRuntimeMetadata
 } from './structured-agent-runtime-registration-types'
@@ -30,10 +33,35 @@ export type StructuredAgentRuntimeCatalogEntry =
   | { kind: 'pi' | 'codex' | 'claude'; metadata: StructuredAgentRuntimeMetadata }
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
+// Why the host's data folder: a start runs Orca's installed release before PATH.
+function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
+  const { managedRuntime } = spec
+  return {
+    resolve: (shellEnv, commandSettings) => {
+      const env = { ...shellEnv, ...spec.env }
+      const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
+      return { command: resolveAcpLaunchCommand(spec, env, options), env }
+    },
+    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {})
+  }
+}
+
+function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
+  return {
+    resolve: (env, commandSettings) => {
+      const homePath = env.HOME ?? env.USERPROFILE
+      const pathEnv = env.PATH ?? env.Path ?? null
+      const options = { pathEnv, ...(homePath ? { homePath } : {}) }
+      return { command: resolveStructuredAgentCommand(agent, commandSettings, options), env }
+    }
+  }
+}
+
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
   const { minimumVersions } = spec
   return {
     definition: acpStructuredAgentDefinition(spec),
+    chatProgram: acpChatProgram(spec),
     supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
     ...(minimumVersions
       ? {
@@ -84,6 +112,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
     kind: 'codex',
     metadata: {
       definition: CODEX_STRUCTURED_AGENT,
+      chatProgram: cliChatProgram('codex'),
       modelCatalog: codexModelCatalogDiscovery,
       ...CODEX_CLI_CONVERSATIONS,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
@@ -98,6 +127,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
     kind: 'claude',
     metadata: {
       definition: CLAUDE_STRUCTURED_AGENT,
+      chatProgram: cliChatProgram('claude'),
       modelCatalog: claudeModelCatalogDiscovery,
       ...CLAUDE_CLI_CONVERSATIONS,
       supportsLocation: supportsClaudeStructuredLocation,

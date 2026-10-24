@@ -18,7 +18,6 @@ import type {
 import { failedProviderChildStart } from './structured-agent-session-provider-child'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 
-/** A queued message whose child died while it waited inherits that child's failure. */
 export function startThatFailedWhileQueued(
   session: StructuredAgentSessionHostSession,
   oldest: AgentJournalSubmission
@@ -59,17 +58,11 @@ export function refusedStructuredAgentSessionStart(
   }
 }
 
-/** A start that failed, keyed like its row, in the words `structuredAgentSessionStartFailure` gave. */
 export type StructuredAgentSessionStartFailure = StructuredAgentSessionStartFailureWords & {
   startKey: string | null
 }
 
-/**
- * The one row a start that failed leaves in the chat, whoever saw it fail: an error row, so the
- * reason outlives any error strip. Keyed by the start — the child's generation, or the oldest
- * message it was for when no child was ever published — so a second report of the same failure
- * lands on the same row instead of adding one.
- */
+/** Deduplicate durable failure by child generation, or oldest opening message if no child published. */
 export function structuredAgentSessionStartFailureRow(
   startKey: string,
   words: StructuredAgentSessionStartFailureWords
@@ -77,15 +70,12 @@ export function structuredAgentSessionStartFailureRow(
   return {
     kind: 'item',
     identity: structuredAgentSessionStartFailureRowIdentity(startKey),
-    // The row repeats the sentence the start's rejected messages carry.
     body: { kind: 'status', text: words.reason, tone: 'error', failure: words.rejection },
-    // A start that failed opened no turn.
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   }
 }
 
-/** Whether the start's row is already written. Its words are the ones its rejected messages carry,
- *  and rejected is terminal, so the exit's later report of the same start must not reword it. */
+/** Preserve original rejection wording; later exit reports must not revise terminal startup failures. */
 export function hasStructuredAgentSessionStartFailureRow(
   items: readonly { itemId: string }[],
   startKey: string
@@ -94,14 +84,11 @@ export function hasStructuredAgentSessionStartFailureRow(
   return items.some((item) => item.itemId === itemId)
 }
 
-/**
- * A start the delivery loop needed and did not get: every queued message rejected with the same
- * words, then the start's row. A failed owned open also records its cause before any message.
- */
+/** Reject affected queued messages before the failure row; owned-open failure may already have recorded cause. */
 export async function recordStructuredAgentSessionStartFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
   failure: StructuredAgentSessionStartFailure,
-  /** Only these of what is queued: the rest was accepted after the start was asked for. */
+  /** Exclude messages accepted after startup began. */
   which?: (submission: AgentJournalSubmission) => boolean
 ): Promise<void> {
   const oldest = oldestQueuedSubmission(session)
@@ -136,7 +123,6 @@ export async function recordStructuredAgentSessionStartFailure(
   })
 }
 
-/** Accepted no later than `cursor`, in the journal epoch it names. */
 export function acceptedNoLaterThan(
   journal: Pick<StructuredAgentSessionHostSession['journal'], 'cursor'>,
   cursor: AgentJournalCursor

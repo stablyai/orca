@@ -1,5 +1,3 @@
-// The pane identity a new PTY's env carries, stamped from the spawn's own ids, for both spawn lanes.
-
 import { mkdirSync } from 'node:fs'
 import {
   buildJcodeRuntimeDirEnv,
@@ -14,7 +12,6 @@ export type PtySpawnPane = {
   worktreeId: string | undefined
 }
 
-/** The pane a host spawn's own ids name, or null when they name none. */
 export function ptySpawnPaneFromIds(ids: {
   tabId?: string
   leafId?: string
@@ -47,7 +44,7 @@ export function stampPtySpawnPaneEnv(
   }
   const { pane } = args
   if (!pane) {
-    // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key naming this spawn's own pane may reach it.
+    // Shell/hook identity must name this spawn's own pane, never an unproved renderer key.
     delete env.ORCA_PANE_KEY
     delete env.ORCA_TAB_ID
     delete env.ORCA_WORKTREE_ID

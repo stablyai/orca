@@ -22,9 +22,7 @@ vi.mock('child_process', () => ({
     execMock(cmd, opts, cb)
 }))
 
-// Why mock the chokepoint for the Windows sweep: maxBuffer, timeout and the
-// hidden console are its contract now, so the assertions below are about which
-// query runs, not how a process is started.
+// Mock the process wrapper; this suite verifies queries, while wrapper tests cover launch policy.
 vi.mock('@orca/process-host', () => ({
   runProcess: (spec: { program: string; args?: string[] }) => runProcessMock(spec)
 }))
@@ -75,10 +73,7 @@ describe('parsePsOutput', () => {
 
   it('parses dot-decimal cpu values (LC_ALL=C contract)', async () => {
     const { parsePsOutput } = await loadCollector()
-    // Why: the enumerator forces LC_ALL=C so ps emits dots, not commas.
-    // If that env override is removed, de_DE systems emit "12,5" and
-    // parseFloat silently returns 12. This test pins the parser's
-    // assumption so the regression is caught here, not in the field.
+    // C-locale ps output is required: parseFloat silently truncates comma decimals.
     const rows = parsePsOutput('10 1 12.5 1024')
     expect(rows[0].cpu).toBe(12.5)
   })
@@ -155,9 +150,6 @@ describe('collectSubtree', () => {
 
   it('does not revisit pids when cycles are present', async () => {
     const { collectSubtree } = await loadCollector()
-    // Why: the ppid graph is untrusted — a buggy `ps` snapshot (or a
-    // wrapped/reparented process) could present a cycle. collectSubtree
-    // must terminate and not double-count the same pid.
     const index = makeIndex([
       { pid: 1, ppid: 2 },
       { pid: 2, ppid: 1 }
@@ -170,9 +162,7 @@ describe('collectSubtree', () => {
 
   it('returns only pids that exist in byPid', async () => {
     const { collectSubtree } = await loadCollector()
-    // Why: childrenOf may reference a pid that no longer has a row (it
-    // exited between sampling its parent and sampling itself). We list
-    // those as "walked" but do not fabricate a row for them.
+    // Exited descendants can remain in the sampled parent index; walk them without fabricating rows.
     const index = {
       byPid: new Map([[1, { pid: 1, ppid: 0, cpu: 0, memory: 0 }]]),
       childrenOf: new Map([[1, [2]]]),
@@ -200,11 +190,8 @@ describe('collectSubtree', () => {
     const byPid = new Map([1, 2, 3, 4, 5].map((pid) => [pid, { pid, ppid: 0, cpu: 0, memory: 0 }]))
     const index = { byPid, childrenOf, hasPrivateMemory: false }
 
-    // A prior PTY rooted at 2 already claimed 2 and all of its descendants;
-    // the overlapping walk must still include the independent sibling 4.
     expect(collectSubtree(index, 1, new Set([2]))).toEqual([1, 4])
-    // The excluded branch is not even expanded (2 lookups: roots 1 and 4,
-    // versus 5 without the claimed-subtree fast path).
+    // Excluded subtrees must not be expanded again.
     expect(childrenOf.lookups).toBe(2)
   })
 })
@@ -299,10 +286,6 @@ describe('collectMemorySnapshot', () => {
   }
 
   it('coalesces concurrent callers onto a single in-flight sweep', async () => {
-    // Why: the collector exists in part to prevent a burst of renderer
-    // polls from spawning overlapping `ps` children. If a regression ever
-    // removes the `inflight` guard, this test catches it without needing
-    // to measure real process spawns.
     mockPsResponse('1 0 0 1024')
     const { collectMemorySnapshot } = await loadCollector()
 
@@ -313,7 +296,6 @@ describe('collectMemorySnapshot', () => {
     ])
 
     expectProcessSweepCount(1)
-    // All three callers see the same snapshot object (same promise).
     expect(a).toBe(b)
     expect(b).toBe(c)
   })
@@ -381,32 +363,21 @@ describe('collectMemorySnapshot', () => {
   })
 
   it('attributes a process shared by two PTYs to the first registrant only', async () => {
-    // Why: when two PTYs share an ancestor (e.g. a supervisor or a shell
-    // that re-execed), a naive per-PTY subtree walk would double-count
-    // the shared process. The `claimed` set in runSnapshot enforces
-    // first-wins attribution in registration order. This test pins that
-    // invariant — if the dedupe is lost, the totals balloon.
-    mockPsResponse(
-      [
-        '100 1 0 1024', // shared ancestor of both PTYs
-        '101 100 0 512', // pty A's only unique child
-        '102 100 0 256' // pty B's only unique child
-      ].join('\n')
-    )
+    mockPsResponse(['100 1 0 1024', '101 100 0 512', '102 100 0 256'].join('\n'))
     listRegisteredPtysMock.mockReturnValue([
       {
         ptyId: 'pty-a',
         worktreeId: 'repo-1::/wt/a',
         sessionId: 's-a',
         paneKey: 'p-a',
-        pid: 100 // sees {100, 101, 102}
+        pid: 100
       },
       {
         ptyId: 'pty-b',
         worktreeId: 'repo-1::/wt/b',
         sessionId: 's-b',
         paneKey: 'p-b',
-        pid: 101 // a descendant of the first root, already claimed with its subtree
+        pid: 101
       }
     ])
 
@@ -417,12 +388,8 @@ describe('collectMemorySnapshot', () => {
     const a = byWt.get('repo-1::/wt/a')
     const b = byWt.get('repo-1::/wt/b')
 
-    // pty-a claims all three pids (1024 + 512 + 256 KiB).
     expect(a?.memory).toBe((1024 + 512 + 256) * 1024)
-    // pty-b gets zero because everything it would walk is already claimed.
     expect(b?.memory).toBe(0)
-    // And the overall session memory equals the unique sum, not the
-    // double-walked sum — this is the actual regression we care about.
     expect(snap.totalMemory).toBe((1024 + 512 + 256) * 1024)
   })
 
@@ -464,9 +431,6 @@ describe('collectMemorySnapshot', () => {
     const { collectMemorySnapshot } = await loadCollector()
     const snap = await collectMemorySnapshot(emptyStore)
 
-    // Enumeration failure should not surface as a rejected promise or crash the
-    // renderer; the collector swallows and returns zeros so the UI can
-    // render an empty state.
     expect(snap.worktrees).toEqual([])
     expect(snap.totalMemory).toBe(0)
   })

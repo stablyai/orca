@@ -24,6 +24,11 @@ import {
   isOpenSshConfigBackedTarget,
   type SystemSshBuildArgsOptions
 } from '../system-transport/system-ssh-args'
+import {
+  shouldUseSystemSshLoopbackRoute,
+  startSystemSshLoopbackRoute,
+  type SystemSshLoopbackRoute
+} from '../system-transport/system-ssh-loopback-route'
 import { removeControlSocketPath } from '../ssh-control-socket'
 import { INITIAL_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY_MS, sleep } from './ssh-connection-timing'
 import {
@@ -100,6 +105,9 @@ export class SshConnection {
   } | null = null
   private systemSshControlMasterDisabledForSession = false
   private systemSshGssapiOnlyForSession = false
+  private systemSshLoopbackRoute: SystemSshLoopbackRoute | null = null
+  private systemSshLoopbackRouteStartingGeneration: number | null = null
+  private systemSshLoopbackRouteAbortController: AbortController | null = null
   private useSystemSshTransport = false
   private credentialAbortController = new AbortController()
   private readonly pendingSsh2Clients = new Set<SshClient>()
@@ -576,7 +584,10 @@ export class SshConnection {
         target: this.target,
         resolvedConfig: () => this.systemSshResolvedConfig,
         isCurrentAttempt: () => this.isCurrentConnectAttempt(connectGeneration),
-        onConnected: () => this.setState('connected'),
+        onConnected: () => {
+          this.setState('connected')
+          this.startSystemSshLoopbackRoute(connectGeneration)
+        },
         untrackChannel: (probeChannel) => this.systemCommandChannels.delete(probeChannel)
       })
     } catch (err) {
@@ -651,7 +662,57 @@ export class SshConnection {
     if (this.systemSshGssapiOnlyForSession) {
       options.gssapiOnly = true
     }
+    if (this.systemSshLoopbackRoute) {
+      options.loopbackRoute = this.systemSshLoopbackRoute.args
+    }
     return options
+  }
+
+  /** Off the connect path: commands keep the direct proxy route until the forward is proven. */
+  private startSystemSshLoopbackRoute(connectGeneration: number): void {
+    const options = this.getSystemSshBuildArgsOptions()
+    if (
+      !this.isCurrentConnectAttempt(connectGeneration) ||
+      !this.useSystemSshTransport ||
+      this.systemSshLoopbackRoute ||
+      this.systemSshLoopbackRouteStartingGeneration === connectGeneration ||
+      !shouldUseSystemSshLoopbackRoute(this.target, this.systemSshResolvedConfig, options)
+    ) {
+      return
+    }
+    // Why per generation: a start a reconnect superseded can still be in flight, and must not block the new one.
+    this.systemSshLoopbackRouteStartingGeneration = connectGeneration
+    const controller = new AbortController()
+    this.systemSshLoopbackRouteAbortController = controller
+    const settle = (): void => {
+      if (this.systemSshLoopbackRouteAbortController === controller) {
+        this.systemSshLoopbackRouteStartingGeneration = null
+        this.systemSshLoopbackRouteAbortController = null
+      }
+    }
+    startSystemSshLoopbackRoute(this.target, options, process.platform, controller.signal).then(
+      (route) => {
+        settle()
+        if (
+          controller.signal.aborted ||
+          !this.isCurrentConnectAttempt(connectGeneration) ||
+          !this.useSystemSshTransport
+        ) {
+          route.dispose()
+          return
+        }
+        this.systemSshLoopbackRoute = route
+        route.onExit(() => {
+          if (this.systemSshLoopbackRoute === route) {
+            this.systemSshLoopbackRoute = null
+          }
+        })
+      },
+      () => {
+        // Why: per-command proxy logins still work; the route only makes them cheaper.
+        settle()
+      }
+    )
   }
 
   // Why: ssh2 may destroy the proxy socket on auth failure, so credential retries need a fresh proxy process and Duplex stream.
@@ -794,6 +855,11 @@ export class SshConnection {
   }
 
   private resetSystemTransport(): void {
+    this.systemSshLoopbackRouteAbortController?.abort()
+    this.systemSshLoopbackRouteAbortController = null
+    this.systemSshLoopbackRouteStartingGeneration = null
+    this.systemSshLoopbackRoute?.dispose()
+    this.systemSshLoopbackRoute = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false

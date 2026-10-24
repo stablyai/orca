@@ -17,7 +17,7 @@ import { useTaskPageGitHubDetail } from './use-task-page-github-detail'
 import { useTaskPageGitHubCacheReconciliation } from './use-task-page-github-cache-reconciliation'
 import { useTaskPageGitHubIssueDraft } from './use-task-page-github-issue-draft'
 import { useTaskPageDetailRouting } from './use-task-page-detail-routing'
-import { useTaskPageLinearViewState } from './use-task-page-linear-view-state'
+import { useTaskPageLinearViewState } from './task-page/linear/use-task-page-linear-view-state'
 const { readSavedFilters, mutateSavedFilters, readQuickFilters, writeQuickFilters } = vi.hoisted(
   () => ({
     readSavedFilters: vi.fn(),

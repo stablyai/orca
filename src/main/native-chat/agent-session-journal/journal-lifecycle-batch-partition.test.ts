@@ -36,7 +36,7 @@ function item(
   }
 }
 
-// Frozen size probe from the previous partitioner, including Stop's larger turn outcome.
+// Frozen previous size probe, including Stop's larger turn outcome.
 function previousProbe(settlementId: string, mutations: readonly JournalLifecycleMutationInput[]) {
   const row: JournalLifecycleBatchRow = {
     v: journalRowSchemaVersion(

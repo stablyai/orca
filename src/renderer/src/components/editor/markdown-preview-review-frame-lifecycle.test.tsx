@@ -13,10 +13,6 @@ import {
   useMarkdownPreviewViewport,
   type MarkdownPreviewViewport
 } from './use-markdown-preview-viewport'
-import {
-  cancelMarkdownPreviewEditorRevealFrames,
-  requestMarkdownPreviewEditorRevealFrame
-} from './markdown-preview-editor-reveal'
 
 function ref<T>(current: T): MutableRefObject<T> {
   return { current }
@@ -83,7 +79,6 @@ function mountSurface(
     matchesRef: ref<Range[]>([]),
     searchInstanceRef: ref({}),
     lastAppliedInitialAnchorRef: ref<string | null>(null),
-    pendingEditorRevealFrameIdsRef: ref<number[]>([]),
     isSearchOpen: false,
     setIsSearchOpen: vi.fn(),
     query: '',
@@ -360,24 +355,6 @@ describe('Markdown review frame lifetime', () => {
     expect(surface.attention.mock.calls).toEqual([[null], ['note'], [null], ['note']])
     expect(surface.foundation.attentionReviewCommentTimeoutRef.current).toBe(successor)
     expect(vi.getTimerCount()).toBe(1)
-  })
-
-  it('keeps editor-navigation cancellation separate from live review frames', () => {
-    const frames = frameQueue()
-    const surface = mountSurface()
-    const editorReveal = vi.fn()
-    requestMarkdownPreviewEditorRevealFrame(
-      surface.foundation.pendingEditorRevealFrameIdsRef,
-      editorReveal
-    )
-    surface.click()
-    expect(frames.pending.size).toBe(3)
-    cancelMarkdownPreviewEditorRevealFrames(surface.foundation.pendingEditorRevealFrameIdsRef)
-    expect(frames.pending.size).toBe(2)
-    frames.flush()
-    expect(editorReveal).not.toHaveBeenCalled()
-    expect(surface.scroll).toHaveBeenCalledOnce()
-    expect(surface.attention.mock.calls).toEqual([[null], ['note']])
   })
 
   it('keeps a successor attached to the same DOM node independent of old callbacks', () => {

@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 
-// Every remote command runs in a real local shell, so the host-side checks are the real ones.
+// Execute generated host guards in real local shells.
 const shell = vi.hoisted((): { env: NodeJS.ProcessEnv | undefined } => ({ env: undefined }))
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => {
   const { runProcess } = await import('@orca/process-host')
@@ -45,8 +45,6 @@ afterEach(() => {
   }
 })
 
-// Astra pass 8: a holder suspended past the stale window resumed, kept acting, and its release
-// deleted the successor's fence and recovery journal mid-update.
 describe.skipIf(process.platform === 'win32')('a superseded activation fence holder', () => {
   it('can neither act nor release once a successor took its fence over', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orcad-fence-gen-'))
@@ -66,14 +64,13 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
       async () => {
         staleEntered = true
         await new Promise<void>((resolve) => (resumeStale = resolve))
-        // Resumed: it still believes it holds the fence and tries to start its slot.
         await execOrcadRemote(options, `touch '${launched}'`)
         return 'acted'
       },
       () => 'held'
     )
     await vi.waitFor(() => expect(staleEntered).toBe(true))
-    // Suspended past the stale window: nothing refreshes its fence.
+    // Model a suspended holder by aging its unrefreshed fence.
     utimesSync(fence, new Date(0), new Date(0))
     expect(await orcadActivationFenceRefusal(options, 'update')).toMatchObject({ cleared: true })
 
@@ -82,7 +79,6 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     const successor = withOrcadActivationLock(
       options,
       async () => {
-        // As the journal store writes it: stamped with the writing generation.
         writeFileSync(
           journal,
           JSON.stringify({ phase: 'mid-update', fenceToken: 'successor' }, null, 2)
@@ -99,7 +95,6 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     resumeStale()
     await expect(stale).rejects.toBeInstanceOf(OrcadFenceLostError)
     expect(existsSync(launched)).toBe(false)
-    // The successor's fence and journal survive the stale holder's release.
     expect(existsSync(fence)).toBe(true)
     expect(existsSync(journal)).toBe(true)
 
@@ -109,8 +104,6 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     expect(existsSync(journal)).toBe(false)
   })
 
-  // Astra pass 9: a release already past its token check stalled, a takeover and a successor
-  // came and went, and the resumed release deleted the successor's journal and lock.
   it('leaves a successor’s journal and lock when its own release resumes after a stall', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orcad-fence-release-'))
     homes.push(home)
@@ -121,7 +114,7 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     const ready = join(home, 'ready')
     const resume = join(home, 'resume')
     mkdirSync(bin)
-    // Stalls the first move of the journal, the release step right after its token check.
+    // Stall the journal move immediately after release checks its token.
     writeFileSync(
       join(bin, 'mv'),
       `#!/bin/sh\nif [ "$1" = '${journal}' ] && [ ! -f '${ready}' ]; then touch '${ready}'; while [ ! -f '${resume}' ]; do sleep 0.05; done; fi\nexec /bin/mv "$@"\n`
@@ -167,7 +160,6 @@ describe.skipIf(process.platform === 'win32')('a superseded activation fence hol
     }
   })
 
-  // Astra pass 9 §3: a state mutation from a superseded run must not run either.
   it('refuses a superseded run’s state mutation before it touches profile state', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orcad-fence-mutation-'))
     homes.push(home)

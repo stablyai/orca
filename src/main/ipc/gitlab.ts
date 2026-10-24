@@ -44,9 +44,7 @@ export function registerGitLabHandlers(store: Store): void {
   registerGitLabMergeRequestMutationHandlers(store)
   registerGitLabCiJobHandlers(store)
 
-  // Why: My Todos surface — cross-project, user-scoped. The repoPath is
-  // only used for the registered-repo guard; `glab api todos` doesn't
-  // care about cwd because the endpoint is user-scoped.
+  // Todos are user-scoped; repoPath is only the registration guard.
   ipcMain.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listTodos(repo.path, repoConnectionId(repo), ...localGitOptionArgs(store, repo))

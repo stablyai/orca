@@ -27,7 +27,6 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionRecord | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
-  /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(

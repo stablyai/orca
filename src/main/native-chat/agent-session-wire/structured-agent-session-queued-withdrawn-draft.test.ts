@@ -1,9 +1,3 @@
-// A consumed draft whose submission a Stop withdrew before the agent had it is
-// not a failure: it waits again at its own position under the Stop's hold, so
-// it never blocks the paused cards behind it. After the user's next turn the
-// whole queue drains one per turn in queue order, the withdrawn draft first,
-// under a fresh submission id.
-
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -21,7 +15,7 @@ const observationClock = createStructuredSessionObservationClock(() => rig.host,
 beforeEach(() => observationClock.start())
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig()
+  rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
 afterEach(async () => {
@@ -49,20 +43,18 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   const a = await queuedDraft('A')
   const b = await queuedDraft('B')
   const c = await queuedDraft('C')
-  // The turn ends and the drain consumes A; its delivery is held, so A is not handed over.
+  // Hold provider delivery after A is consumed.
   const { release } = holdDelivery()
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
-  // Never under the draft's own id: the submission names A by its link.
   const firstA = await rig.handoffId(a)
   expect(firstA).not.toBe(a)
   expect((await rig.submission(firstA))?.handedOverAt).toBeUndefined()
 
-  // The Stop runs once the held step returns, ahead of A's handover.
+  // Release the held lane so Stop runs ahead of provider handover.
   const stopped = rig.stop()
   release()
   expect(await stopped).toMatchObject({ ok: true })
-  // A is back in its place, behind the same queue pause as B and C: no returned card blocks them.
   const paused = [a, b, c].map((messageId) => ({ messageId, state: 'waiting' }))
   expect(await rig.drafts()).toEqual(paused)
   expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
@@ -73,7 +65,7 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   expect(await rig.drafts()).toEqual(paused)
   await rig.settleAccepted(d.id, 'd')
 
-  // After D's turn, A drains first, under another fresh id: the first names the withdrawn submission.
+  // A drains under a fresh ID, preserving the first withdrawn submission.
   const before = new Set([working, firstA, d.id])
   let resentA = ''
   await eventually(async () => {
@@ -82,7 +74,6 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
     resentA = fresh[0] ?? ''
   })
   expect((await rig.submission(firstA))?.dispatchState).toBe('rejected')
-  // Both hand-offs of A name it; D, a direct send, names no draft.
   expect((await rig.submission(resentA))?.queuedMessageId).toBe(a)
   expect((await rig.submission(firstA))?.queuedMessageId).toBe(a)
   expect(await rig.submission(d.id)).not.toHaveProperty('queuedMessageId')
@@ -104,8 +95,6 @@ it('Stop, then a user send: the withdrawn draft and the paused cards behind it d
   expect(await rig.drafts()).toEqual([])
 })
 
-// One transaction: a Stop whose acceptance cannot be saved takes back nothing, so the card's
-// hand-off it would have held goes out as it was, under its own id.
 it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it was', async () => {
   const working = await rig.workingSend()
   const a = await queuedDraft('A')

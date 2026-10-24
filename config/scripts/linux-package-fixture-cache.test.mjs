@@ -159,7 +159,7 @@ it.each([
   const source = workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses
   const warm = parse(readFileSync(source, 'utf8')).jobs['warm-linux-package-fixtures']
   const context = { github: { event_name: event } }
-  expect(warm['runs-on']).toBe('ubuntu-latest')
+  expect(warm['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
   expect(warm.steps.map((step) => step.uses)).toEqual([
     'actions/checkout@v6',
     './.github/actions/prepare-linux-package-fixture',

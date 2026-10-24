@@ -103,14 +103,12 @@ describe('provider frame classification catalog', () => {
   })
 
   it('dispositions codex item-form frames, which the method catalog never matches', () => {
-    // Both provider generations reach the journal's compaction deduplication.
     expect(classifyProviderFrame('codex', 'item:contextCompaction', {})).toBe(
       'timeline-substantive'
     )
     expect(classifyProviderFrame('codex', 'notification:thread/compacted', {})).toBe(
       'timeline-substantive'
     )
-    // An item type nobody has dispositioned still falls through visibly.
     expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
   })
 
@@ -128,8 +126,7 @@ describe('provider frame classification catalog', () => {
         agentThreadId: 'thread-child',
         agentPath: '/root/list_directory'
       })
-      // The spawn-group roster row renders this now, so a raw gray row beside it
-      // would duplicate it. Suppressing it was gated on that renderer existing.
+      // The roster already renders this lifecycle; raw fallback would duplicate it.
     ).toBe('status-chrome')
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
@@ -144,8 +141,6 @@ describe('provider frame classification catalog', () => {
   })
 
   it('leaves content-bearing codex item types on the visible fallback', () => {
-    // Each carries text or a path a user would want: review output, the image
-    // the agent looked at or generated, injected hook prompt text.
     for (const type of [
       'imageView',
       'imageGeneration',
@@ -162,8 +157,7 @@ describe('provider frame classification catalog', () => {
 
 describe('failure is decided by kind, never by searching the payload', () => {
   it('writes no row for a Claude session start that lists MCP servers which failed to connect', () => {
-    // The roster as Claude Code 2.1.289 sends it (issue #25477): a failed server carries
-    // only its status, and used to turn the whole session start into a red opcode card.
+    // Captured Claude 2.1.289 init includes failed MCP servers, not a failed session (#25477).
     const init = {
       type: 'system',
       subtype: 'init',
@@ -188,7 +182,6 @@ describe('failure is decided by kind, never by searching the payload', () => {
         error: 'auth expired'
       })
     ).toBeNull()
-    // A kind nobody catalogued stays an ordinary fallback row, not a failure.
     const unknown = unhandledProviderFrameJournalItem('claude', 'message:system:future', failed)
     expect(unknown?.classification).toBe('timeline-substantive')
     expect(unknown?.body.tone).toBeUndefined()
@@ -223,8 +216,7 @@ describe('codex subagent item disposition', () => {
   })
 
   it('leaves collab tool calls substantive — they may be the only subagent signal', () => {
-    // A session that reports no `subAgentActivity` gets no roster row, so
-    // suppressing this too would render its fan-out blank.
+    // Without subAgentActivity, collab calls may be the only visible fan-out signal.
     expect(
       classifyProviderFrame('codex', 'item:collabAgentToolCall', {
         type: 'collabAgentToolCall',

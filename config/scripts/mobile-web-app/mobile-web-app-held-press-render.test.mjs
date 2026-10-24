@@ -133,6 +133,8 @@ async function openProbe(pathname) {
     { timeout: 60_000, polling: 100 }
   )
   expect(await page.evaluate(() => globalThis.__orcaRenderCheckFaults ?? [])).toEqual([])
+  await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') })
+  await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'))
   return { errors, page }
 }
 
@@ -148,7 +150,7 @@ async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
   const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
   const input = await page.context().newCDPSession(page)
   await input.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] })
-  await page.waitForTimeout(LONG_PRESS_MS)
+  await page.clock.runFor(LONG_PRESS_MS)
   const selectable = await target.evaluate((node, at) => {
     node.dispatchEvent(
       new MouseEvent('contextmenu', {
@@ -171,12 +173,12 @@ async function holdLikeAndroidWebView(page, selector, { holdMs, read }) {
     await page.evaluate(() => document.dispatchEvent(new Event('selectionchange')))
     await input.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
   }
-  await page.waitForTimeout(holdMs - LONG_PRESS_MS)
+  await page.clock.runFor(holdMs - LONG_PRESS_MS)
   const midHold = { selectable, ...(await read(target)) }
   if (!selectable) {
     await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   }
-  await page.waitForTimeout(300)
+  await page.clock.runFor(300)
   return { midHold, afterRelease: await read(target) }
 }
 
@@ -235,22 +237,27 @@ describeRender(
     })
 
     describe('the key bar', () => {
-      const sentCount = async (page) =>
-        (await page.evaluate(() => globalThis.__orcaHeldPressProbe.sent())).length
-
-      it('keeps repeating a held arrow key until the finger lifts', async () => {
+      it('starts repeat on press and stops it only when the finger lifts', async () => {
         const { errors, page } = await openProbe(ROUTES.keys)
         const { midHold, afterRelease } = await holdLikeAndroidWebView(
           page,
           `[aria-label="${REPEAT_KEY_LABEL}"]`,
-          { holdMs: 1500, read: async () => ({ sent: await sentCount(page) }) }
+          {
+            holdMs: 1500,
+            read: () =>
+              page.evaluate(() => ({
+                sent: globalThis.__orcaHeldPressProbe.sent(),
+                repeats: globalThis.__orcaHeldPressProbe.repeats()
+              }))
+          }
         )
-        // One send on press-in, then every 45 ms from 400 ms: ~25 by 1.5 s, against 1 when the
-        // long-press ends the press before the first repeat.
-        expect(midHold.sent).toBeGreaterThan(20)
-        expect(midHold.selectable).toBe(false)
-        // Nothing more once the finger is up.
-        expect(afterRelease.sent - midHold.sent).toBeLessThan(3)
+        expect(midHold).toEqual({
+          selectable: false,
+          sent: ['\x1b[A'],
+          repeats: [{ kind: 'start', bytes: '\x1b[A' }]
+        })
+        expect(afterRelease.sent).toEqual(['\x1b[A'])
+        expect(afterRelease.repeats).toEqual([{ kind: 'start', bytes: '\x1b[A' }, { kind: 'stop' }])
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

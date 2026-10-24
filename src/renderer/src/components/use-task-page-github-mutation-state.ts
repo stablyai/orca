@@ -1,4 +1,4 @@
-import type { TaskPageLinearCreationStateModel } from './use-task-page-linear-creation-state'
+import type { TaskPageLinearCreationStateModel } from './task-page/linear/use-task-page-linear-creation-state'
 import { getGitHubTaskKind } from '@/components/task-page-github-task-kind'
 import { useMemo, useLayoutEffect, useEffect, useCallback, useRef } from 'react'
 import { parseTaskQuery } from '../../../shared/task-query'

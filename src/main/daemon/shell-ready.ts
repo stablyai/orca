@@ -28,20 +28,13 @@ const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
 function getShellReadyWrapperBaseDir(): string {
   const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
-  // Why a base dir of its own rather than the legacy `shell-ready/`: daemons of
-  // older builds still write that path unconditionally, so leaving it to them
-  // keeps this build's content-addressed trees out of their reach.
-  // Why the tmpdir fallback: older/test launchers may not seed
-  // ORCA_USER_DATA_PATH, and daemon startup must not fail before the parent can
-  // be fixed. It is dev/test-only -- daemon-init always passes the real path --
-  // which matters because the presence check is size-only, so a complete tree
-  // pre-planted under a shared /tmp would be trusted rather than overwritten.
+  // Isolate content-addressed trees from older daemons that overwrite the legacy shell-ready directory.
+  // Temp fallback serves old/test launchers; production supplies ORCA_USER_DATA_PATH.
+  // Only file sizes are checked, so do not use the shared-temp fallback in production.
   return join(userDataPath || tmpdir(), userDataPath ? 'shell-wrappers' : 'orca-shell-wrappers')
 }
 
-// Why memoized and keyed on the base dir: the digest is stable for a given base
-// dir, every shell launch asks for it, and the key self-invalidates if
-// ORCA_USER_DATA_PATH is ever re-pointed mid-process.
+// Cache the digest per base directory so changing ORCA_USER_DATA_PATH selects a fresh root.
 let cachedShellReadyWrapperRoot: { baseDir: string; root: string } | null = null
 
 export function getShellReadyWrapperRoot(): string {
@@ -59,8 +52,7 @@ function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): r
   return getDaemonShellReadyWrapperPaths(root)
 }
 
-// Why non-empty and not just present: a partial write leaves a zero-byte
-// .zshenv, and pointing ZDOTDIR at that dir makes zsh skip the user's config.
+// A zero-byte .zshenv can suppress user config, so mere file presence is insufficient.
 function shellReadyWrappersExist(): boolean {
   return getRequiredShellReadyWrapperPaths().every((path) => {
     try {
@@ -71,24 +63,18 @@ function shellReadyWrappersExist(): boolean {
   })
 }
 
-/** True when every wrapper file is present and non-empty afterwards. */
 function ensureShellReadyWrappers(): boolean {
   if (process.platform === 'win32') {
     return false
   }
   const root = getShellReadyWrapperRoot()
-  // Why existence alone decides, with no per-process flag: the root is keyed by
-  // a hash of the exact bytes we would write, so a tree that is present and
-  // non-empty is a tree this build wrote. Rewriting it would replace a live file
-  // on the terminal-spawn path for no gain.
+  // Reuse nonempty files at the content-derived path to avoid replacing live wrappers on each spawn.
   if (!shellReadyWrappersExist()) {
     const written = writeShellWrapperFiles(
       buildDaemonShellReadyWrapperFiles(root),
       '[daemon/shell-ready]'
     )
     if (!written || !shellReadyWrappersExist()) {
-      // Why no flag to reset: the next launch re-checks the files themselves, so
-      // a half-written tree is retried without any extra bookkeeping.
       return false
     }
   }
@@ -103,10 +89,7 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
-/**
- * The shell a Unix pane asks for, before the executable fallback: the pane's own override, the
- * host's default-shell setting, then SHELL.
- */
+/** Resolve the requested Unix shell before executable fallback. */
 export function resolveUnixPaneShellPath(
   env: Record<string, string>,
   shellOverride: string | undefined,
@@ -117,8 +100,7 @@ export function resolveUnixPaneShellPath(
 
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
-  // Why fish: markerless, its startup command is written before fish's reader owns
-  // the PTY and the launch is lost under slow prompts like Starship (STA-3417).
+  // Fish needs readiness gating to avoid losing startup commands during slow prompt initialization.
   return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
 }
 
@@ -134,10 +116,6 @@ const UNWRAPPED: ShellLaunchConfig = {
   supportsReadyMarker: false
 }
 
-/**
- * The one launch-config entry point: args + env for a shell that should start
- * with exactly `features` enabled. An empty selection is never wrapped.
- */
 export function getShellLaunchConfig(
   shellPath: string,
   features: readonly ShellStartupFeature[],
@@ -154,8 +132,7 @@ export function getShellLaunchConfig(
       return UNWRAPPED
     }
     if (!ensureShellReadyWrappers()) {
-      // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
-      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      // Fall back rather than point ZDOTDIR at incomplete wrappers that suppress user config.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
     return {
@@ -196,8 +173,7 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why: mirrors local-pty-shell-ready.ts; only these need the -C init, plain fish gets
-  // the env-only handoff below. The selection is baked in, so no feature env var.
+  // Startup fish embeds feature selection in -C; plain panes use the environment handoff below.
   if (shellName === 'fish' && (features.includes('ready') || options?.hasStartupCommand)) {
     return {
       args: [
@@ -210,7 +186,7 @@ export function getShellLaunchConfig(
     }
   }
 
-  // Why env only: mirrors local-pty-shell-ready.ts; a plain fish pane keeps fish's own argv.
+  // Preserve plain fish argv by delivering integrations through its environment.
   if (shellName === 'fish' && ensureShellReadyWrappers()) {
     return {
       args: null,

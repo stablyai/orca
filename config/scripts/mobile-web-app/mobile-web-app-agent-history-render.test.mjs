@@ -7,6 +7,7 @@ import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
+  waitForPageFrames,
   installShellDouble,
   readBridgeFaultGrant,
   readBridgePagePainted,
@@ -292,9 +293,9 @@ describeRender('the agent-history route in a real browser', () => {
       shellPageRoutes: [HOST_ROUTE_PATTERN]
     })
     await opened.page.getByLabel('Back').click()
-    // Nothing to wait for but the absence of a navigation, so settle the microtask the notify
-    // would have posted on and then read the page that is still there.
-    await opened.page.waitForTimeout(1_000)
+    await expect
+      .poll(() => readNotifies(opened.page))
+      .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate-back' }])
     expect(await readNotifies(opened.page)).toEqual([
       { v: bridgeVersion, type: 'notify', name: 'navigate-back' }
     ])
@@ -311,7 +312,7 @@ describeRender('the agent-history route in a real browser', () => {
     const route = `${HOST_ROUTE}/agent-history/wt-1`
     const opened = await openRoute(route, 'Agent Session History')
     await opened.page.getByLabel('Back').click()
-    await opened.page.waitForTimeout(1_000)
+    await waitForPageFrames(opened.page)
     expect(await readNotifies(opened.page)).toEqual([])
     expect(await opened.page.evaluate(() => location.pathname)).toBe(route)
     expect(opened.errors).toEqual([])

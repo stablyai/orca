@@ -44,7 +44,7 @@ describe('filesystem watcher native ignores', () => {
       buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
     )
     const seen = (file: string): boolean => events.some((event) => event.path === file)
-    // Why: under CI load a single write can miss delivery, so rewrite until each file is seen.
+    // Retry writes until observed to tolerate native delivery gaps under CI load.
     const writeUntilSeen = async (files: string[]): Promise<void> => {
       await vi.waitFor(
         async () => {
@@ -56,7 +56,7 @@ describe('filesystem watcher native ignores', () => {
       )
     }
 
-    // Proves both watched levels are live before the storm, so the ignore check can't pass vacuously.
+    // Prove both watch levels are live before checking ignored events.
     await writeUntilSeen([join(root, 'ready.ts'), join(nestedSource, 'ready.ts')])
 
     const generatedNames = Array.from({ length: 20 }, (_, index) => `generated-${index}.js`)
@@ -73,8 +73,7 @@ describe('filesystem watcher native ignores', () => {
       sourceFiles.push(join(root, 'source\nnewline.ts'), join(nestedSource, 'source\nnewline.ts'))
     }
     await writeUntilSeen(sourceFiles)
-    // Why: events arrive in order, so once a file written after the storm is seen at both levels, any
-    // unignored generated event is already recorded. Replaces a fixed debounce sleep.
+    // A post-storm sentinel at each level proves prior events arrived without a fixed sleep.
     await writeUntilSeen([join(root, 'sentinel.ts'), join(nestedSource, 'sentinel.ts')])
 
     expect(errors).toEqual([])

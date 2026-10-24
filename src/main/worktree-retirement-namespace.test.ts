@@ -41,7 +41,6 @@ describe('recordRetirementNamespaceRegistry', () => {
       recordRetirementNamespaceRegistry(namespaces, `local:posix:/w/${index}`, registry('nautilus'))
     }
 
-    // The oldest key retires a second name, then a brand new namespace forces one eviction.
     recordRetirementNamespaceRegistry(namespaces, 'local:posix:/w/0', registry('nautilus', 'orca'))
     recordRetirementNamespaceRegistry(namespaces, 'local:posix:/w/new', registry('seahorse'))
 
@@ -80,8 +79,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('keeps the source bucket when an endpoint identity moves, since a live target may share it', () => {
-    // A second target can still resolve to `old|22|dev`. Stripping its tombstones would reissue a
-    // path whose agent history is still on disk — the one outcome retirement exists to prevent.
     const namespaces = {
       'ssh:old|22|dev:posix:/srv/a': registry('nautilus')
     }
@@ -101,7 +98,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('reports no change when a repeated copy adds nothing the destination lacks', () => {
-    // Re-import runs this on every add; a no-op copy must not schedule a save.
     const namespaces = {
       'ssh:old|22|dev:posix:/srv/a': registry('nautilus'),
       'ssh:new|22|dev:posix:/srv/a': registry('nautilus')
@@ -113,7 +109,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
         to: 'ssh:new|22|dev'
       })
     ).toBe(false)
-    // Reporting "no change" must mean it left both buckets intact, not that it emptied them.
     expect(Object.keys(namespaces).toSorted()).toEqual([
       'ssh:new|22|dev:posix:/srv/a',
       'ssh:old|22|dev:posix:/srv/a'
@@ -123,8 +118,7 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('still copies a name the destination folded into its watermark', () => {
-    // A destination stored uncompacted trades a folded name for the incoming one, so comparing
-    // sizes alone would read as unchanged and drop the copy.
+    // Equal sizes can hide a new name when an old one folds into the watermark.
     const namespaces = {
       'ssh:old|22|dev:posix:/srv/a': registry('seahorse-2'),
       'ssh:new|22|dev:posix:/srv/a': { exhaustedTiers: 1, names: ['nautilus'] }
@@ -140,11 +134,7 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('keeps the namespace map within its cap by evicting bystanders, not the copy itself', () => {
-    // The cap must not turn a copy back into a move: the source buckets are older than the
-    // destinations just appended, so a naive oldest-first trim would delete exactly what the copy
-    // was retaining for a live sibling target.
-    // The source buckets are the OLDEST entries, so an oldest-first trim would take them first —
-    // which is precisely the copy collapsing back into a move.
+    // Old source buckets must survive trimming too, or copying would effectively move their tombstones.
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:old|22|dev:posix:/srv/a': registry('nautilus'),
       'ssh:old|22|dev:posix:/srv/b': registry('manta')
@@ -160,7 +150,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
       })
     ).toBe(true)
     expect(Object.keys(namespaces).length).toBe(MAX_RETIREMENT_NAMESPACES)
-    // Both halves of the copy survive; the two oldest bystanders are what give way.
     expect(namespaces['ssh:old|22|dev:posix:/srv/a']).toBeDefined()
     expect(namespaces['ssh:old|22|dev:posix:/srv/b']).toBeDefined()
     expect(namespaces['ssh:new|22|dev:posix:/srv/a']).toBeDefined()
@@ -171,9 +160,7 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('refreshes a retained source even when its own merge added nothing', () => {
-    // Mixed migration: /srv/a is a no-op because the destination already covers it, /srv/b writes and
-    // grows the map. The no-op source is still the bucket a live sibling on the old endpoint reads,
-    // so the trim must take a stale bystander instead of it.
+    // A no-op source remains live while another copied namespace grows the map.
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:old|22|dev:posix:/srv/a': registry('seahorse'),
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse'),
@@ -193,8 +180,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('refreshes a move destination that the move just made the only copy', () => {
-    // The merge is a no-op, but deleting the source leaves this destination holding the sole copy —
-    // so it has been used and must not stay at the front of the eviction queue.
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse'),
       'local:posix:/w/0': registry('dolphin'),
@@ -209,9 +194,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('leaves a merged destination newest, so the very next ordinary write cannot evict it', () => {
-    // Protecting the destination only inside the migration's own trim is not enough: the key keeps
-    // its original slot, so the next unrelated retirement write evicts it as "oldest" and undoes
-    // the migration along with the name the destination already held.
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse')
     }
@@ -232,8 +214,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('does not let the cap evict a destination it just merged into', () => {
-    // Assigning to an existing key leaves it in its original slot, so the merged destination is the
-    // OLDEST entry here and an unguarded oldest-first trim would drop the name it just absorbed.
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse')
     }
@@ -255,7 +235,6 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
   })
 
   it('leaves an identity that merely shares a prefix with the old one alone', () => {
-    // `dev` must not swallow `dev2`: the separator is part of the prefix, not an afterthought.
     const namespaces = {
       'ssh:h|22|dev2:posix:/srv/a': registry('nautilus')
     }

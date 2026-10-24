@@ -26,8 +26,7 @@ import {
   subagentJournalItemIdentity
 } from '../agent-session-journal/journal-subagent-item'
 
-// A backward page windows over the session's own rows, and a subagent's rows in
-// that range ride along, so a burst cannot crowd the conversation off the page.
+// Window on session-owned rows; include subagent rows without letting bursts crowd out conversation.
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',

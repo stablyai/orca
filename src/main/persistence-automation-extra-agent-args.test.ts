@@ -81,7 +81,7 @@ describe('automation extra agent args persistence', () => {
     store.addRepo(makeRepo())
     const { id } = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
 
-    // An older client's unrelated patch carries no extras key.
+    // Older clients omit extraAgentArgs from unrelated patches.
     expect(store.updateAutomation(id, { name: 'Renamed' }).extraAgentArgs).toBe('--model opus')
     expect(store.updateAutomation(id, { extraAgentArgs: '--effort high' }).extraAgentArgs).toBe(
       '--effort high'
@@ -121,7 +121,6 @@ describe('automation extra agent args persistence', () => {
     expect(() =>
       store.createAutomation({ ...BASE, reuseSession: true, extraAgentArgs: '--model opus' })
     ).toThrow('fresh session')
-    // Switching to an agent without modeled options re-validates the stored extras.
     expect(() => store.updateAutomation(id, { agentId: 'gemini' })).toThrow("aren't supported")
     expect(
       store.updateAutomation(id, { extraAgentArgs: '', reuseSession: true }).reuseSession

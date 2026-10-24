@@ -4,11 +4,7 @@ import type {
 } from './claude-structured-session-state'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 
-/**
- * Record a completed turn: its leaf becomes the one close and exit persist, and the durable point
- * advances in place so an owner that dies before its close path runs keeps it. Writes run one at a
- * time, and a failure is only logged: this is bookkeeping and must never fail the turn.
- */
+/** Serialize completed-turn cursor writes; persistence failures must not fail the turn. */
 export function persistClaudeTurnResumePoint(
   sessionId: string,
   session: ClaudeSession,
@@ -18,7 +14,6 @@ export function persistClaudeTurnResumePoint(
     return
   }
   session.turnEndLeafUuid = session.leafUuid
-  // The turn ended: a Stop waiting to end the child re-reads what Claude still has in flight.
   settleClaudeTurnEndWaiters(session)
   const leafUuid = session.turnEndLeafUuid
   const persist = deps.persistResumePoint
@@ -43,7 +38,7 @@ export function persistClaudeTurnResumePoint(
           leafUuid,
           error
         })
-        // Forget the failed leaf so the next turn end retries it even when the leaf has not moved.
+        // Allow retry at the next turn end even if the leaf stays unchanged.
         if (session.resumePointWrite === write) {
           session.resumePointWrite = undefined
         }
@@ -52,7 +47,7 @@ export function persistClaudeTurnResumePoint(
   session.resumePointWrite = write
 }
 
-/** Close and exit persist the last completed turn, after any in-flight turn-end write settles. */
+/** Drain turn-end writes before close or exit persists the final cursor. */
 export async function settledClaudeTurnEndLeaf(session: ClaudeSession): Promise<string | null> {
   await session.resumePointWrite?.settled
   return session.turnEndLeafUuid

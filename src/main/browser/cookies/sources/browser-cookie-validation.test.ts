@@ -8,9 +8,7 @@ describe('databaseSameSite', () => {
     { raw: 1, expected: 'lax' },
     { raw: 2, expected: 'strict' },
     { raw: 3, expected: 'unspecified' },
-    // Why: 256 is Firefox's nsICookie SAMESITE_UNSET, written for every cookie with no SameSite
-    // attribute -- the most common shape in a modern Firefox profile. It reaches the default arm,
-    // so without this case the decoder's busiest Firefox input would be untested.
+    // Firefox stores SAMESITE_UNSET as 256.
     { raw: 256, expected: 'unspecified' },
     { raw: 99, expected: 'unspecified' },
     { raw: 1.5, expected: 'unspecified' }
@@ -18,8 +16,7 @@ describe('databaseSameSite', () => {
     expect(databaseSameSite(raw)).toBe(expected)
   })
 
-  // Why: pre-v10 Firefox rows carry NULL, and the Chromium scan feeds `?? -1`. Both arrive here as
-  // a non-integer rather than a number, and both must be unspecified rather than None (0).
+  // Nullish and nonnumeric inputs must not become SameSite=None.
   it.each([
     { label: 'null', raw: null },
     { label: 'undefined', raw: undefined },

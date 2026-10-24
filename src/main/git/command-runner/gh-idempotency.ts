@@ -1,5 +1,5 @@
 const NON_IDEMPOTENT_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE'])
-// `gh <noun> <verb>` write subcommands; reads are absent on purpose so they keep retrying.
+// Write verbs cannot be safely retried after an uncertain response.
 const NON_IDEMPOTENT_GH_VERBS = new Set([
   'create',
   'edit',
@@ -33,7 +33,6 @@ export function argsLookIdempotent(args: string[]): boolean {
         return false
       }
     }
-    // Single-token form `--method=POST` (gh accepts this).
     if (a.startsWith('--method=')) {
       explicitMethodSeen = true
       const value = a.slice('--method='.length)
@@ -52,7 +51,7 @@ export function argsLookIdempotent(args: string[]): boolean {
     ) {
       hasApiBodyField = true
     }
-    // Detect GraphQL `query=mutation(…)` so endpoint writes also fail fast on transient errors.
+    // GraphQL mutations must not be retried after an uncertain response.
     if (a.startsWith('query=')) {
       hasGraphQlQuery = true
       const trimmed = a.slice('query='.length).trimStart().toLowerCase()
@@ -61,7 +60,7 @@ export function argsLookIdempotent(args: string[]): boolean {
       }
     }
   }
-  // `gh api -f foo=bar` with no -X auto-POSTs → non-idempotent; GraphQL query bodies are the exception (still reads).
+  // Body fields imply POST unless a method is explicit; GraphQL queries remain safe to retry.
   if (
     args[0] === 'api' &&
     hasApiBodyField &&
@@ -70,7 +69,6 @@ export function argsLookIdempotent(args: string[]): boolean {
   ) {
     return false
   }
-  // `gh <noun> <verb>` writes (args[1]); `gh api` without -X defaults to idempotent GET, so it's excluded here.
   if (args.length >= 2 && args[0] !== 'api') {
     if (NON_IDEMPOTENT_GH_VERBS.has(args[1])) {
       return false

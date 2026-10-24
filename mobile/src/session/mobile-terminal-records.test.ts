@@ -186,6 +186,30 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
   })
 
+  it('treats a browser load failure appearing or changing as a session-tab change', () => {
+    const url = 'http://localhost:3000/'
+    const page: Parameters<typeof mobileSessionTabsEqual>[0][number] = {
+      type: 'browser',
+      id: 'browser-1',
+      url,
+      loading: false
+    }
+    const refused = {
+      ...page,
+      loadError: { code: -102, description: 'ERR_CONNECTION_REFUSED', validatedUrl: url }
+    }
+    expect(mobileSessionTabsEqual([page], [refused])).toBe(false)
+    expect(
+      mobileSessionTabsEqual([refused], [{ ...refused, loadError: { ...refused.loadError } }])
+    ).toBe(true)
+    expect(
+      mobileSessionTabsEqual(
+        [refused],
+        [{ ...refused, loadError: { ...refused.loadError, code: -105 } }]
+      )
+    ).toBe(false)
+  })
+
   it('treats terminal agent-status changes as session-tab changes', () => {
     const base: MobileTerminalSessionTab = {
       type: 'terminal',

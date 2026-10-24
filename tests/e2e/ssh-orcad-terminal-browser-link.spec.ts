@@ -60,7 +60,9 @@ async function terminalLinkPoint(
 
 /** Prints origin+path as one link; split apart so the typed command never shows the whole URL. */
 async function printLink(page: Page, tabId: string, origin: string, path: string): Promise<void> {
-  await typeInTerminal(page, tabId, `printf '%s%s\\n' '${origin}' '${path}'`)
+  // Why the blank row: a link opened beside the terminal narrows it, and a URL that exactly fills a
+  // row would read the prompt below as its edge-wrapped continuation.
+  await typeInTerminal(page, tabId, `printf '%s%s\\n\\n' '${origin}' '${path}'`)
   await expectPaneText(page, tabId, `${origin}${path}`)
 }
 

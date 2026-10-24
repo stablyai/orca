@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { RUNTIME_RELEASE_RECEIPT } from '../node-runtime/managed-runtime-release'
@@ -12,6 +12,7 @@ afterEach(() => closeProviderTimelineRigs())
 
 it('starts the installed release first, else a copy beside every pinned member', async () => {
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-acp-managed-'))
+  onTestFinished(() => rm(dataDirectory, { recursive: true, force: true }))
   const homePath = join(dataDirectory, 'home')
   const command = `orca-managed-${basename(dataDirectory)}`
   const root = join(dataDirectory, 'agent-runtimes', 'grok')
@@ -51,7 +52,7 @@ it('starts the installed release first, else a copy beside every pinned member',
   }
   await expect(spawn()).rejects.toMatchObject({ reason: 'runtimeNotInstalled' })
 
-  // A server without its companion beside it is no copy.
+  // A server without its companion is an incomplete runtime.
   const localBin = join(homePath, '.local', 'bin')
   await mkdir(localBin, { recursive: true })
   await writeFile(join(localBin, command), '', { mode: 0o755 })
@@ -76,5 +77,4 @@ it('starts the installed release first, else a copy beside every pinned member',
 
   await truncate(join(release, command), 2)
   expect(await spawn()).toBe(await realpath(join(localBin, command)))
-  await rm(dataDirectory, { recursive: true, force: true })
 })

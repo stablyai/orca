@@ -1,7 +1,3 @@
-// The restart continuation is accepted like any send, so its verdict is its delivery: a cold start
-// longer than the legacy client wait must not turn a continuation that went through into an
-// "unconfirmed" one.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import {
@@ -89,7 +85,6 @@ describe('a restart batch holds a chat until its continuation is handed over', (
       })
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(released).toBe(false)
-    // Handed over: still pending at the provider, no longer queued.
     submission = { ...submission, handedOverAt: 2 }
     settlement.publish(SESSION, journal)
     await expect(handedOver).resolves.toMatchObject({
@@ -115,8 +110,7 @@ describe('a restart batch holds a chat until its continuation is handed over', (
   })
 })
 
-// No source: Orca's own instruction is no person's, so a restart or a close rejects it, never keeps
-// it as a card; the next restart offers the continuation again.
+// Host-origin continuations must not become personal kept cards on close/restart.
 it('sends the continuation with no source, as Orca’s and no person’s', async () => {
   const send = vi.fn(async () => {
     throw new Error('refused')

@@ -44,7 +44,7 @@ describe('last-status persist throttle', () => {
 
   beforeEach(async () => {
     _internals.resetCachesForTests()
-    // Why shouldAdvanceTime: the hooks are real loopback POSTs, which need the clock to move.
+    // Real loopback POSTs need fake time to advance.
     vi.useFakeTimers({
       shouldAdvanceTime: true,
       toFake: ['setTimeout', 'clearTimeout', 'Date']

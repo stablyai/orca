@@ -8,8 +8,6 @@ import {
 const okResult = { environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false }
 const running = async (): Promise<boolean> => true
 
-// Why reset on BOTH sides: the cleanup queue is module state, so one test's
-// pending work would otherwise serialize behind — or deadlock — the next.
 beforeEach(() => {
   __resetWslFishHistoryCleanups()
 })
@@ -43,8 +41,6 @@ describe('deleteWslFishHistoryFile', () => {
   })
 
   it('coalesces concurrent requests for the same distro and session', async () => {
-    // Why: the GC sweep and an explicit worktree delete can queue the same
-    // tombstone, and one wsl.exe launch per cleanup is enough.
     let settle!: () => void
     const run = vi.fn().mockReturnValue(
       new Promise((resolve) => {

@@ -30,9 +30,9 @@ describe('classifyTruncatedHookRequest', () => {
   })
 
   it('reads the first value when the header arrives duplicated', () => {
-    expect(classifyTruncatedHookRequest(['4096', '4096'], 12)).toBeInstanceOf(
-      HookRequestTruncatedError
-    )
+    const error = classifyTruncatedHookRequest(['4096', '8'], 12)
+    expect(error).toBeInstanceOf(HookRequestTruncatedError)
+    expect(error).toMatchObject({ bytesRead: 12, contentLength: 4096 })
   })
 })
 

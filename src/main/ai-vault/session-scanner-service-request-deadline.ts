@@ -4,13 +4,11 @@ import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 
 export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
 
-/** Follows one scan request's reports of its work. */
 export type AiVaultServiceScanListener = {
   work: (work: AiVaultScanWork) => void
 }
 
-// Why: a scan has no deadline; however long a large history takes, it ends by
-// finishing, by Refresh preempting it, by every waiter leaving, or by the child exiting.
+// Large scans run until completion, cancellation, or child exit; history size must not time them out.
 function armAiVaultServiceRequestDeadline(
   call: AiVaultServicePendingCall,
   onTimeout: (error: Error) => void
@@ -29,9 +27,8 @@ function armAiVaultServiceRequestDeadline(
   call.timer.unref?.()
 }
 
-/** Starts an interactive call's deadline only once the child is ready to receive it. */
+/** Startup time does not count toward request deadlines. */
 export function sendAiVaultServiceCall(
-  // Only the send this needs, so the module stays off the direct child_process import list.
   child: { send(request: AiVaultServiceRequest): unknown },
   call: AiVaultServicePendingCall,
   isActive: () => boolean,
@@ -45,7 +42,6 @@ export function sendAiVaultServiceCall(
   child.send(call.request)
 }
 
-/** Passes a running scan's reported work to its listener; a cancelled or unsent call has none. */
 export function noteAiVaultServiceScanProgress(
   call: AiVaultServicePendingCall,
   work: AiVaultScanWork

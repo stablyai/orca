@@ -9,8 +9,7 @@ import {
 import { writeShellWrapperFiles } from './shell-wrapper-file-writer'
 
 function builderFor(marker: string): ShellWrapperFileBuilder {
-  // Why the root is embedded: mirrors .zshenv, the one wrapper file that names
-  // its own tree. The digest must stay stable despite it.
+  // Model the embedded root in .zshenv to verify stable hashing.
   return (root) => [
     [join(root, 'zsh', '.zshrc'), `zshrc ${marker} root=${root}`],
     [join(root, 'bash', 'rcfile'), `rcfile ${marker}`]
@@ -36,13 +35,9 @@ describe('resolveShellWrapperRoot', () => {
     )
   })
 
-  // Why: `*/shell-ready/zsh` globs baked into the wrapper scripts, plus TS
-  // guards, detect a self-referential ZDOTDIR by this exact suffix. Losing it
-  // makes a wrapper source itself until zsh hits its recursion limit.
   it('keeps the zsh dir ending in /shell-ready/zsh', () => {
     const root = resolveShellWrapperRoot(makeBase(), builderFor('a'))
-    // Compare in POSIX form: the guards match a POSIX suffix, and the value they
-    // see is built with POSIX concatenation regardless of the host separator.
+    // Shell guards match a POSIX suffix on every host.
     expect(join(root, 'zsh').split(sep).join('/').endsWith('/shell-ready/zsh')).toBe(true)
   })
 
@@ -56,15 +51,10 @@ describe('resolveShellWrapperRoot', () => {
     writeShellWrapperFiles(oldBuild(oldRoot), '[test]')
     writeShellWrapperFiles(newBuild(newRoot), '[test]')
 
-    // The regression: the second writer used to overwrite the first writer's
-    // file in place, leaving the first build launching shells it cannot read.
     expect(readFileSync(join(oldRoot, 'bash', 'rcfile'), 'utf8')).toBe('rcfile old')
     expect(readFileSync(join(newRoot, 'bash', 'rcfile'), 'utf8')).toBe('rcfile new')
   })
 
-  // Why: older builds still write the unversioned `<userData>/shell-ready/` tree
-  // and long-lived daemons launch shells from it. Addressing by content has to
-  // land somewhere that cannot collide with it.
   it('never resolves onto the legacy unversioned tree', () => {
     const userData = makeBase()
     const root = resolveShellWrapperRoot(join(userData, 'shell-wrappers'), builderFor('a'))

@@ -12,8 +12,6 @@ import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
-  // ── Mouse commands ──
-
   async mouseClick(
     x: number,
     y: number,
@@ -41,15 +39,14 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         let releaseFocusGuard = (): void => {}
         try {
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
-          // Why: the hit test below can activate the element, and access may be revoked meanwhile.
+          // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
           const point =
             cdpButton === 'left'
-              ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
+              ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
-          // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
-          // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
+          // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
           if (!point.handled) {
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
@@ -88,8 +85,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     )
   }
 
-  // ── Find (semantic locators) ──
-
   async find(
     locator: string,
     value: string,
@@ -106,8 +101,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
       return await this.execAgentBrowser(sessionName, args)
     })
   }
-
-  // ── Set commands ──
 
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {

@@ -14,6 +14,8 @@ export type WorkspaceSleepTarget = {
 
 export type WorkspaceSleepRequest = {
   targets: WorkspaceSleepTarget[]
+  /** A main-owned project move with a negotiated renderer persistence barrier. */
+  projectMovePauseId?: string
   /** Only the user's Sleep hides its chats; a project move pauses through the same sleep. */
   markChatsAsleep?: boolean
 }
@@ -36,10 +38,11 @@ export type WorkspaceSleepOutcome = {
 
 /** What the window follows of a sleep main runs, whoever asked for it. */
 export type WorkspaceSleepNotice =
-  | { worktreeId: string; phase: 'started' }
+  | { worktreeId: string; phase: 'started'; projectMovePauseId?: string }
   | {
       worktreeId: string
       phase: 'ended'
+      projectMovePauseId?: string
       /** The terminals main proved stopped, as the window's PTY ids; null when the stop failed. */
       stoppedPtyIds: string[] | null
       slept: boolean

@@ -63,7 +63,7 @@ export class JournalLifecycleBatchAppender {
       .then((rows) => this.cursorAfter(rows))
   }
 
-  /** `append`, with every row chosen at the batch's own turn in the queue. */
+  /** Resolve rows at the batch's own position in the write queue. */
   appendPlanned(input: JournalPlannedLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.deps
       .enqueueRows(() => {
@@ -84,8 +84,6 @@ export class JournalLifecycleBatchAppender {
     return last ? { epoch: last.epoch, sequence: last.seq } : this.deps.cursor()
   }
 
-  /** The rows a resolved settlement writes, planned at its own turn in the queue: its mutations,
-   *  chosen then, in as many consecutive rows as they need, minus any already applied. */
   planResolved(
     input: JournalResolvedLifecycleBatchInput
   ): ((seq: number, ts: number) => JournalRow)[] {
@@ -101,7 +99,6 @@ export class JournalLifecycleBatchAppender {
     if (this.wasApplied(input.settlementId)) {
       return []
     }
-    // A provider's batch states its generation on every item it creates.
     const { ownerFence } = input
     const mutations =
       ownerFence === undefined
@@ -113,7 +110,7 @@ export class JournalLifecycleBatchAppender {
           )
     const current = this.deps.state()
     const options = { ...input, epoch: current.epoch }
-    // Every row in this transaction must advance past the rows planned before it.
+    // Later writes in this transaction must outrank revisions planned earlier in the same batch.
     const revisions = new Map<string, number>()
     const plannedItems = new Set<string>()
     let namedSettlement = false
@@ -152,7 +149,7 @@ export class JournalLifecycleBatchAppender {
                 ]
           }
           const existing = current.items.get(resolved)
-          // An all-oversized settlement has no batch receipt; its terminal bodies are its receipt.
+          // Oversized-only settlements lack batch receipts; terminal item bodies prove completion.
           return !previouslyPlanned &&
             existing &&
             isDeepStrictEqual(existing.body, only.body) &&
@@ -180,7 +177,7 @@ export class JournalLifecycleBatchAppender {
                 )
               ]
         }
-        // One bounded row remembers the generation even when the re-derived plan has fewer items.
+        // Preserve generation evidence even when replanning yields fewer mutations.
         const id = namedSettlement ? chunk.settlementId : input.settlementId
         namedSettlement = true
         return this.wasApplied(id)

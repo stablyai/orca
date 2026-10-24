@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type {
   MobileWebBundleFetchProgress,
@@ -107,7 +107,6 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
     })
 }))
 
-import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import { DOCUMENT_LOAD_DEADLINE_MS, PAGE_READY_DEADLINE_MS } from './mobile-web-shell-runtime'
 import { SHELL_STALL_LOG_MS } from './shell-lifecycle-log'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
@@ -234,6 +233,22 @@ function live(timers: readonly ArmedTimer[]): ArmedTimer[] {
   return timers.filter((timer) => !timer.cancelled)
 }
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 async function mount(store: GenerationStore): Promise<Mounted> {
   const timers = createTimerSeam()
   const handle: {
@@ -278,7 +293,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(createElement(Probe))
+    rendered.tree = createTracked(createElement(Probe))
   })
   const tree = rendered.tree
   if (tree === null) {
@@ -508,12 +523,6 @@ describe('the wait for the page to speak', () => {
     return mounted
   }
 
-  it(`waits out several of the page's own asks before it gives up on one`, () => {
-    // The number the deadline is for: a page whose backoff has widened to the ceiling still gets
-    // several asks inside the wait, so a slow device is never mistaken for a page that never ran.
-    expect(PAGE_READY_DEADLINE_MS / BRIDGE_READY_RETRY_MAX_MS).toBe(5)
-  })
-
   it('fails the generation a finished document never spoke for, and asks to fetch it again', async () => {
     const mounted = await ready()
     await act(async () => {
@@ -554,7 +563,7 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  it('stops the clock when the page speaks inside it, whichever of the two lands first', async () => {
+  it('stays ready when the page speaks after document load and the timers fire', async () => {
     const mounted = await ready()
     await act(async () => {
       mounted.documentLoaded()
@@ -624,7 +633,7 @@ describe('the wait for the page to speak', () => {
     }
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
     await act(async () => {
-      rendered.tree = create(createElement(Probe))
+      rendered.tree = createTracked(createElement(Probe))
     })
     const tree = rendered.tree
     if (tree === null) {
@@ -728,6 +737,9 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.documentLoaded()
     })
+    expect(
+      live(mounted.timers.armed).filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
+    ).toHaveLength(1)
     await act(async () => {
       mounted.tree.unmount()
     })

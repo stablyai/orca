@@ -322,7 +322,7 @@ describe('registerPtyHandlers', () => {
     expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
     expect(spawnMock).not.toHaveBeenCalled()
   })
-  // Why: cold-start teardown must select the daemon after startup, else fallback shutdown orphans the restored daemon PTY (#7742).
+  // Cold-start kills must await daemon selection or fallback shutdown orphans restored PTYs (#7742).
   it('waits for the desktop startup barrier before renderer local kills resolve the provider', async () => {
     const barrier = makeDeferred()
     const awaitLocalPtyStartup = vi.fn(() => new Promise<void>(() => {}))

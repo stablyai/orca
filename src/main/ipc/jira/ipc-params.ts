@@ -1,4 +1,4 @@
-import type { JiraIssueUpdate, JiraSiteSelection } from '../../../shared/jira-types'
+import type { JiraIssueUpdate, JiraSiteSelection } from '../../../shared/jira/jira-types'
 
 export function normalizeJiraSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined

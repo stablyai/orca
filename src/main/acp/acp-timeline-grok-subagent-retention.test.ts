@@ -70,7 +70,6 @@ function record(fixture: Fixture, id: string) {
   return fixture.subagents().filter((view) => view.providerId === id)
 }
 
-/** The scope of the rows the latest turn writes. */
 async function openTurnScope(fixture: Fixture) {
   const turn = (await fixture.rig.rows()).findLast((row) => readAgentJournalTurn(row.body))
   return turn ? { kind: 'turn', turnItemId: turn.itemId } : undefined
@@ -253,7 +252,7 @@ describe('a Grok subagent reported on long after the turn that spawned it', () =
     )
     expect(events).toEqual([])
     await fixture.rig.rows()
-    // Disposal says the session ended once more; nothing reports the child live again.
+    // Repeated session-end evidence must not revive the child.
     expect(evidence.map((edge) => edge.type).slice(0, 2)).toEqual(['live', 'session-ended'])
     expect(evidence.filter((edge) => edge.type === 'live')).toHaveLength(1)
   })

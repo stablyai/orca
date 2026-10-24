@@ -59,14 +59,19 @@ export const DEFAULT_DISABLED_TUI_AGENTS = [] as const satisfies readonly TuiAge
 export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,
   detected: Iterable<TuiAgent>,
-  disabled?: Iterable<unknown> | null
+  disabled?: Iterable<unknown> | null,
+  chosenUsable?: (agent: TuiAgent) => boolean
 ): TuiAgent | null {
   if (preferred === 'blank') {
     return null
   }
   const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
   const detectedSet = detected instanceof Set ? detected : new Set(detected)
-  if (preferred && detectedSet.has(preferred) && !disabledSet.has(preferred)) {
+  if (
+    preferred &&
+    (detectedSet.has(preferred) || chosenUsable?.(preferred)) &&
+    !disabledSet.has(preferred)
+  ) {
     return preferred
   }
   for (const agent of TUI_AGENT_AUTO_PICK_ORDER) {

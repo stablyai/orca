@@ -23,12 +23,9 @@ export type JournalLifecycleMutationInput = JournalItemAddress &
         kind: 'item'
         echoOf?: unknown
         body: AgentJournalItemBody
-        /** Who wrote the row. Absent ⇒ the session's own agent on a first write,
-         *  and the row's existing producer on a revision. */
+        /** Absent means root on creation, existing producer on revision. */
         linkage?: AgentJournalProducerLinkage
-        /** Which turn the row belongs to. Kept from the write that creates the row. */
         turnScope: AgentJournalTurnScope
-        /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
         ownerFence?: number
       }
     | { kind: 'tombstone' }
@@ -45,10 +42,7 @@ export function journalLifecycleMutationItemId(mutation: JournalItemAddress): st
   return agentJournalItemKey(mutation.identity)
 }
 
-/** An item mutation from a writer that knows who produced the row. Needed
- *  because a batch can CREATE a row — a Codex child's prompt, or its item
- *  settled before any checkpoint landed — and one batch can mix producers.
- *  The session's own rows carry no key at all: absence is the claim. */
+/** Batches can create rows from mixed producers; absent linkage explicitly means the session agent. */
 export function journalLifecycleItemMutation(
   attribution: AgentJournalRowAttribution & JournalItemEcho,
   identity: AgentJournalItemIdentity,
@@ -67,13 +61,11 @@ export function journalLifecycleItemMutation(
   }
 }
 
-/** The persisted form of one mutation, shared with the partitioner's size probe
- *  so a chunk is measured with the linkage it will actually carry. */
+/** Use identical persisted linkage when measuring and writing mutations. */
 export function journalLifecycleMutationRow(
   mutation: JournalLifecycleMutationInput,
   itemId: string,
   revision: number,
-  /** What an item mutation states (`journalItemOwnerFence`). */
   ownerFence: number
 ): JournalLifecycleMutation {
   return mutation.kind === 'item'

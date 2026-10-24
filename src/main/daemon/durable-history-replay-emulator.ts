@@ -8,9 +8,8 @@ export type NormalBufferHead = {
   oscLinks: TerminalOscLinkRange[]
 }
 
-/** Replays durable history so a checkpoint can take the rows the live window evicted. */
 export class DurableHistoryReplayEmulator extends HeadlessEmulator {
-  /** Normal-buffer rows older than the newest `keepRows`, as content-only ANSI, whichever buffer is active. */
+  /** Serialize older normal-buffer rows even while the alternate buffer is active. */
   serializeNormalBufferHead(keepRows: number): NormalBufferHead {
     const rowCount = Math.max(0, this.terminal.buffer.normal.length - keepRows)
     if (rowCount === 0) {

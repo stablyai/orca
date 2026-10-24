@@ -22,7 +22,7 @@ const TAB = 'host-tab'
 
 type TestStore = ReturnType<typeof createStore>
 
-/** A tab main wrote and whose terminal started, then a split main wrote whose terminal is starting. */
+// Main knows the tab’s running terminal and a split whose terminal is still starting.
 async function tabWithStartingSplit(store: TestStore): Promise<void> {
   expect(
     await store.admitTerminalPane({
@@ -53,7 +53,7 @@ async function tabWithStartingSplit(store: TestStore): Promise<void> {
   ).toBe('admitted')
 }
 
-/** The window's spawn of the split's terminal committing late: it names no expected state. */
+// Simulate a late window binding that carries no expected state.
 function lateWindowBinding(store: TestStore): Promise<boolean> {
   return store.persistPtyBinding({
     worktreeId: WORKTREE,
@@ -64,7 +64,6 @@ function lateWindowBinding(store: TestStore): Promise<boolean> {
   })
 }
 
-/** Main's own close of a pane or tab (the CLI's, a phone's), through the one close transaction. */
 async function closeThroughMain(
   store: TestStore,
   target: TerminalSurfaceCloseTarget

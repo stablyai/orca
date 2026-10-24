@@ -4,50 +4,11 @@ allowBuilds:
   react-native-libsodium: true
 
 minimumReleaseAge: 4320
-# Latest requested releases are still within the three-day delay; exempt only these versions.
-minimumReleaseAgeExclude:
-  - '@oxfmt/binding-android-arm-eabi@0.73.0'
-  - '@oxfmt/binding-android-arm64@0.73.0'
-  - '@oxfmt/binding-darwin-arm64@0.73.0'
-  - '@oxfmt/binding-darwin-x64@0.73.0'
-  - '@oxfmt/binding-freebsd-x64@0.73.0'
-  - '@oxfmt/binding-linux-arm-gnueabihf@0.73.0'
-  - '@oxfmt/binding-linux-arm-musleabihf@0.73.0'
-  - '@oxfmt/binding-linux-arm64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-arm64-musl@0.73.0'
-  - '@oxfmt/binding-linux-ppc64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-riscv64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-riscv64-musl@0.73.0'
-  - '@oxfmt/binding-linux-s390x-gnu@0.73.0'
-  - '@oxfmt/binding-linux-x64-gnu@0.73.0'
-  - '@oxfmt/binding-linux-x64-musl@0.73.0'
-  - '@oxfmt/binding-openharmony-arm64@0.73.0'
-  - '@oxfmt/binding-win32-arm64-msvc@0.73.0'
-  - '@oxfmt/binding-win32-ia32-msvc@0.73.0'
-  - '@oxfmt/binding-win32-x64-msvc@0.73.0'
-  - '@oxlint/binding-android-arm-eabi@1.88.0'
-  - '@oxlint/binding-android-arm64@1.88.0'
-  - '@oxlint/binding-darwin-arm64@1.88.0'
-  - '@oxlint/binding-darwin-x64@1.88.0'
-  - '@oxlint/binding-freebsd-x64@1.88.0'
-  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
-  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
-  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
-  - '@oxlint/binding-linux-arm64-musl@1.88.0'
-  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
-  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
-  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-gnu@1.88.0'
-  - '@oxlint/binding-linux-x64-musl@1.88.0'
-  - '@oxlint/binding-openharmony-arm64@1.88.0'
-  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
-  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
-  - '@oxlint/binding-win32-x64-msvc@1.88.0'
-  - oxfmt@0.73.0
-  - oxlint@1.88.0
 
 overrides:
+  # Expo still requires Zod 3; pin the version with our security backport.
+  zod@>=3 <4: 3.25.76
+  dompurify@<3.4.17: 3.4.17
   sprintf-js@<1.1.3: 1.1.3
   markdown-it@>=14.0.0 <14.3.3: 14.3.3
   # Mermaid 11 still requests KaTeX 0.16; the security fix starts at 0.18.2.
@@ -58,6 +19,7 @@ overrides:
   query-string: 9.5.1
 
 patchedDependencies:
+  zod@3.25.76: patches/zod@3.25.76.patch
   sprintf-js@1.1.3: patches/sprintf-js@1.1.3.patch
   '@xterm/addon-webgl@0.20.0-beta.300': patches/@xterm__addon-webgl@0.20.0-beta.300.patch
   expo-notifications@55.0.27: patches/expo-notifications@55.0.27.patch

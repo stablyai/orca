@@ -13,7 +13,7 @@
  */
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE } from './mobile-dictation-session-state'
 
@@ -61,6 +61,7 @@ import { useMobileDictation, type UseMobileDictationResult } from './use-mobile-
 
 const held: { dictation: UseMobileDictationResult | null } = { dictation: null }
 const errors = new Array<string>()
+let renderer: ReactTestRenderer | null = null
 
 function Probe({ client, enabled }: { client: FakeRpcClient; enabled: boolean }): null {
   held.dictation = useMobileDictation({
@@ -99,10 +100,14 @@ beforeEach(() => {
   held.dictation = null
 })
 
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+})
+
 describe('a tapped dictation start the composer disables while the microphone is opening', () => {
   it('reports the stop through onError instead of returning to idle in silence', async () => {
     const rpc = createFakeRpcClient()
-    let renderer: ReactTestRenderer | null = null
     act(() => {
       renderer = create(createElement(Probe, { client: rpc, enabled: true }))
     })
@@ -131,7 +136,7 @@ describe('a tapped dictation start the composer disables while the microphone is
   it('keeps a cancel the user asked for silent', async () => {
     const rpc = createFakeRpcClient()
     act(() => {
-      create(createElement(Probe, { client: rpc, enabled: true }))
+      renderer = create(createElement(Probe, { client: rpc, enabled: true }))
     })
     await act(async () => {
       void dictation()
@@ -139,12 +144,19 @@ describe('a tapped dictation start the composer disables while the microphone is
         .catch(() => undefined)
       await Promise.resolve()
     })
+    expect(dictation().status).toBe('starting')
+    expect(device.releasePermission).toEqual(expect.any(Function))
     await act(async () => {
       const cancelled = dictation().cancel()
       await pump(rpc)
       await cancelled
     })
+    await act(async () => {
+      device.releasePermission?.()
+      await pump(rpc)
+    })
     expect(errors).toEqual([])
     expect(dictation().status).toBe('idle')
+    expect(device.calls).not.toContain('toggleRecording(true)')
   })
 })

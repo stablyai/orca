@@ -47,13 +47,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
-// During the cold-start daemon swap the installed local provider is still the plain
-// in-process LocalPtyProvider; it does not own daemon-restored PTY ids, so its
-// "no PTY" is fabricated, not observed. A confident false here tears down live
-// panes (shouldReconcileMissingSession reconciles ONLY on false) and blocks
-// input-undeliverable remount recovery. These suites pin: while the swap is in
-// flight the presence answer is deferred (IPC) or unverifiable-null (sync), and
-// the post-swap owner's answer is the one that lands.
+// During daemon startup, local-provider absence cannot prove restored PTYs dead; await the owning provider or report unknown.
 describe('registerPtyHandlers daemon-swap-window presence', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
 
@@ -105,9 +99,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
 
     await Promise.resolve()
     await Promise.resolve()
-    // Pre-fix this has already resolved false — the pre-swap LocalPtyProvider
-    // answered for a PTY it does not own, and the renderer reconciler treats
-    // exactly that false as authority to tear the pane down.
+    // Defer absence until the restored session's owning provider is installed.
     expect(settled).toBe(false)
 
     installDaemonTestProvider({ hasPty: (id: string) => id === 'daemon-restored-pty' })
@@ -120,9 +112,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     const barrier = makeDeferred()
     const controller = installRuntimeControllerWithBarrier(barrier.promise)
 
-    // Pre-fix: the pre-swap LocalPtyProvider's ptyProcesses.has() answers a
-    // confident false for a daemon-owned id. terminal.list then records an
-    // observed absence (verdict forgotten) instead of unverifiable.
+    // The pre-swap local provider cannot authoritatively answer for a daemon-owned PTY.
     expect(controller.hasPty('daemon-restored-pty')).toBe(null)
 
     installDaemonTestProvider({ hasPty: (id: string) => id === 'daemon-restored-pty' })
@@ -134,11 +124,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
   })
 
   it('runtime controller hasPty never answers a paired-runtime handle from the local registry', () => {
-    // No startup barrier: the remote-handle guard must hold on its own, not
-    // ride on the swap-window gate. Same routing hazard the async probe and
-    // pty:hasPty already guard — no locally routed provider can
-    // authoritatively answer for a remote host's PTY, so remote-scoped ids
-    // stay unknown, never absent.
+    // Exercise remote ownership without a startup barrier; local-provider silence must still remain unknown.
     let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
     registerPtyHandlers(
       mainWindow as never,
@@ -171,11 +157,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
-    // Pre-fix this has already resolved — the pre-swap LocalPtyProvider was
-    // consulted about a PTY it does not own. Its non-ownership happens to read
-    // as unavailable today only because the inspection funnel consults hasPty
-    // before the provider's own inspection; completion-sensitive evidence must
-    // come from the post-swap owner, not from that internal ordering.
+    // Completion-sensitive inspection must wait for the owning provider, regardless of local hasPty ordering.
     expect(settled).toBe(false)
 
     installDaemonTestProvider({
@@ -194,9 +176,7 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
   })
 
   it('keeps the in-process provider authoritative when no startup barrier is configured', async () => {
-    // Headless/orcad installs the daemon before registerPtyHandlers and passes
-    // no barrier; the installed provider is then the sole owner (#12393) and
-    // its false stays an observed absence.
+    // Headless hosts install their sole provider before registration; its absence is authoritative (#12393).
     let controller: { hasPty: (ptyId: string) => boolean | null } | undefined
     registerPtyHandlers(
       mainWindow as never,
@@ -215,8 +195,6 @@ describe('registerPtyHandlers daemon-swap-window presence', () => {
     await expect(handlers.get('pty:hasPty')!(null, { id: 'never-spawned-pty' })).resolves.toBe(
       false
     )
-    // The sole owner's inspection answer stays immediate too: with no swap in
-    // flight there is no window in which its word could be fabricated.
     await expect(
       handlers.get('pty:inspectProcess')!(null, { id: 'never-spawned-pty' })
     ).resolves.toEqual({

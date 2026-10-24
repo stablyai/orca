@@ -181,7 +181,6 @@ describe('registerPtyHandlers', () => {
         expect.objectContaining({ rendererPtyDataListenerCount: 1 })
       )
 
-      // Delivery is unwedged: fresh output flows to the renderer again.
       mockProc.emitData('after-heal')
       vi.advanceTimersByTime(2)
       expect(getPtyDataSendCalls()).toHaveLength(33)
@@ -310,7 +309,7 @@ describe('registerPtyHandlers', () => {
 
       handleRendererLoading()
 
-      // Why: reload kills the dispatcher that would ACK, so stale counters would gate PTYs in the fresh renderer forever.
+      // Reload destroys the ACK dispatcher; stale debt must not gate PTYs in the replacement page.
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightPtyCount: 0,
         rendererInFlightChars: 0

@@ -84,17 +84,34 @@ export function AgentCommandOverrideInput({
 export function AgentDefaultArgsInput({
   defaultArgs,
   argsOverride,
-  onSaveArgs
+  onSaveArgs,
+  permissionChip,
+  note
 }: {
   defaultArgs: string
   argsOverride: string
   onSaveArgs: (value: string) => void | Promise<void>
+  /** The permission flag terminals add ahead of the text, drawn just before the box. */
+  permissionChip?: React.ReactNode
+  note?: string
 }): React.JSX.Element {
-  const [argsDraft, setArgsDraft] = useState(argsOverride)
+  const [draft, setDraft] = useState<string | null>(null)
+  const argsDraft = draft ?? argsOverride
   const { pending, write } = useAgentLaunchFieldWrite()
   const commitArgs = (): void => {
-    const value = argsDraft.trim()
-    write(value, () => onSaveArgs(value))
+    if (pending || draft === null) {
+      return
+    }
+    const value = draft.trim()
+    if (value === argsOverride) {
+      setDraft(null)
+      return
+    }
+    write(
+      value,
+      () => onSaveArgs(value),
+      () => setDraft((current) => (current === draft ? null : current))
+    )
   }
 
   return (
@@ -103,10 +120,11 @@ export function AgentDefaultArgsInput({
         {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
       </span>
       <div className="flex items-center gap-2">
+        {permissionChip}
         <Input
           value={argsDraft}
           readOnly={pending}
-          onChange={(event) => setArgsDraft(event.target.value)}
+          onChange={(event) => setDraft(event.target.value)}
           onBlur={commitArgs}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -114,8 +132,7 @@ export function AgentDefaultArgsInput({
               event.currentTarget.blur()
             }
             if (event.key === 'Escape') {
-              setArgsDraft(argsOverride)
-              event.currentTarget.blur()
+              setDraft(null)
             }
           }}
           placeholder={
@@ -125,16 +142,17 @@ export function AgentDefaultArgsInput({
           spellCheck={false}
           className="h-7 flex-1 font-mono text-xs"
         />
-        {argsOverride !== defaultArgs && (
+        {(argsOverride !== defaultArgs || argsDraft !== defaultArgs) && (
           <Button
             type="button"
             variant="ghost"
             size="xs"
             onClick={() => {
+              setDraft(argsDraft)
               write(
                 defaultArgs,
                 () => onSaveArgs(defaultArgs),
-                () => setArgsDraft(defaultArgs)
+                () => setDraft((current) => (current === argsDraft ? null : current))
               )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
@@ -143,35 +161,52 @@ export function AgentDefaultArgsInput({
           </Button>
         )}
       </div>
+      {note ? <p className="text-[11px] text-muted-foreground">{note}</p> : null}
     </div>
   )
 }
 
 export function AgentDefaultEnvInput({
+  showEmpty = false,
   defaultEnv,
   envOverride,
   onSaveEnv
 }: {
+  showEmpty?: boolean
   defaultEnv: Record<string, string>
   envOverride: Record<string, string>
-  onSaveEnv: (value: Record<string, string>) => void
-}): React.JSX.Element {
+  onSaveEnv: (value: Record<string, string>) => void | Promise<void>
+}): React.JSX.Element | null {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
-  const [envDraft, setEnvDraft] = useState(draftSeed)
+  const [draft, setDraft] = useState<string | null>(null)
+  const envDraft = draft ?? draftSeed
+  const { pending, write } = useAgentLaunchFieldWrite()
   const [envDraftError, setEnvDraftError] = useState<AgentDefaultEnvDraftInvalidReason | null>(null)
   const envDraftErrorId = useId()
   const commitEnv = (): void => {
+    if (pending || draft === null) {
+      return
+    }
     if (envDraft === draftSeed) {
+      setDraft(null)
       return
     }
     const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
     setEnvDraftError(parsedDraft.invalidReason)
     if (!parsedDraft.invalidReason) {
-      onSaveEnv(parsedDraft.env)
+      setDraft(envDraft)
+      write(
+        stringifyAgentDefaultEnvDraft(parsedDraft.env),
+        () => onSaveEnv(parsedDraft.env),
+        () => setDraft((current) => (current === envDraft ? null : current))
+      )
     }
   }
 
+  if (!showEmpty && !defaultEnvText && !draftSeed && draft === null && !pending) {
+    return null
+  }
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">
@@ -180,8 +215,9 @@ export function AgentDefaultEnvInput({
       <div className="flex items-center gap-2">
         <Input
           value={envDraft}
+          readOnly={pending}
           onChange={(event) => {
-            setEnvDraft(event.target.value)
+            setDraft(event.target.value)
             if (envDraftError) {
               setEnvDraftError(null)
             }
@@ -193,9 +229,8 @@ export function AgentDefaultEnvInput({
               event.currentTarget.blur()
             }
             if (event.key === 'Escape') {
-              setEnvDraft(draftSeed)
+              setDraft(null)
               setEnvDraftError(null)
-              event.currentTarget.blur()
             }
           }}
           placeholder={
@@ -207,15 +242,21 @@ export function AgentDefaultEnvInput({
           aria-describedby={envDraftError ? envDraftErrorId : undefined}
           className="h-7 flex-1 font-mono text-xs"
         />
-        {draftSeed !== defaultEnvText && (
+        {(draftSeed !== defaultEnvText || envDraft !== defaultEnvText) && (
           <Button
             type="button"
             variant="ghost"
             size="xs"
             onClick={() => {
-              onSaveEnv(defaultEnv)
-              setEnvDraft(defaultEnvText)
-              setEnvDraftError(null)
+              setDraft(envDraft)
+              write(
+                defaultEnvText,
+                () => onSaveEnv(defaultEnv),
+                () => {
+                  setDraft((current) => (current === envDraft ? null : current))
+                  setEnvDraftError(null)
+                }
+              )
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >

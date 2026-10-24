@@ -158,7 +158,6 @@ describe('BrowserSessionRegistry persistence', () => {
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieImports).toEqual({ 'persist:orca-browser': '/staged/default' })
-    // Why: the default partition still has a staged replay, so the legacy pointer must survive.
     expect(written.pendingCookieDbPath).toBe('/staged/default')
     for (const suffix of ['', '-wal', '-shm']) {
       expect(fsState.present.has(`/staged/other${suffix}`)).toBe(false)
@@ -210,7 +209,6 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.clearPendingCookieImport('persist:orca-browser-session-unknown')
 
-    // Why: an absent key must not rewrite meta or touch another partition's staged file.
     expect(fsState.files.get(META_PATH)).toBe(metaBefore)
     expect(fsState.present.has('/staged/default')).toBe(true)
   })
@@ -258,8 +256,7 @@ describe('BrowserSessionRegistry persistence', () => {
         details
       )
 
-    // The user allowed this site's camera before; nothing else was answered, and the tab has no
-    // window to ask in.
+    // Only camera has a saved answer; this guest has no prompt window.
     request('fullscreen')
     request('clipboard-read')
     request('clipboard-sanitized-write')
@@ -278,10 +275,8 @@ describe('BrowserSessionRegistry persistence', () => {
       geolocation: false,
       media: true
     })
-    // Unanswered questions are not Orca's refusal, so no notice.
     expect(browserManagerNotifyPermissionDeniedMock).not.toHaveBeenCalled()
 
-    // What the user cannot decide keeps the denial notice, naming the frame that asked.
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'https://widget.example.net/embed',
       isMainFrame: false
@@ -292,7 +287,6 @@ describe('BrowserSessionRegistry persistence', () => {
       rawUrl: 'https://widget.example.net/embed'
     })
 
-    // Missing or empty frame URLs fall back to the visible top-level page.
     browserManagerNotifyPermissionDeniedMock.mockClear()
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, { isMainFrame: true })
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
@@ -303,7 +297,6 @@ describe('BrowserSessionRegistry persistence', () => {
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.rawUrl)
     ).toEqual(['https://example.com/account', 'https://example.com/account'])
 
-    // Opaque frame URLs have no site Orca can name accurately.
     browserManagerNotifyPermissionDeniedMock.mockClear()
     requestHandler(guestWc, 'mediaKeySystem', permissionCallback, {
       requestingUrl: 'about:blank',
@@ -323,22 +316,15 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(checkHandler(guestWc, 'media', '', { mediaType: 'video' })).toBe(true)
     expect(checkHandler(guestWc, 'media', '', { mediaType: 'audio' })).toBe(false)
 
-    // Why: this session allows unpartitioned third-party cookies, so a cross-site frame already has
-    // the access requestStorageAccess() would grant. Denying it protected nothing and only broke
-    // sites taking the API's failure path. Red before the grant landed.
     requestHandler(guestWc, 'storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(true)
     expect(checkHandler(null, 'storage-access', '')).toBe(true)
 
-    // Why: requestStorageAccessFor() is a different platform decision — Chromium consults Related
-    // Website Sets and has no third-party-cookie auto-grant, and Orca has no such data source. This
-    // pins the deliberate denial so a future blanket widening of the allow-set fails loudly.
+    // Related Website Sets gate top-level storage access; Orca has no such data source.
     requestHandler(guestWc, 'top-level-storage-access', permissionCallback, {})
     expect(permissionCallback).toHaveBeenLastCalledWith(false)
     expect(checkHandler(null, 'top-level-storage-access', '')).toBe(false)
 
-    // Why: the reported symptom was a user-visible denial notice, so pin the notified list here —
-    // storage-access must no longer raise one, while the deliberate top-level denial still does.
     expect(
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
     ).toEqual(['mediaKeySystem', 'top-level-storage-access'])
@@ -465,7 +451,6 @@ describe('BrowserSessionRegistry persistence', () => {
       profiles: []
     })
 
-    // The user allowed the site, so only the operating system refuses.
     seedSitePermissions(fsState, { default: { 'https://example.com': { camera: 'allow' } } })
     const {
       sessionFromPartitionMock,

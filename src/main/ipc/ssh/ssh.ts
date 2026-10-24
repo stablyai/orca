@@ -91,7 +91,7 @@ export function registerSshHandlers(
   runtime?: OrcaRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
   initializeSshConnectionGenerationSession()
-  // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
+  // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
   }
@@ -112,7 +112,7 @@ export function registerSshHandlers(
     connectionManager.setCallbacks(callbacks)
   } else {
     setConnectionManager(new SshConnectionManager(callbacks))
-    // Why only here: a window re-registration must not re-gate a host the user already signed in to.
+    // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())

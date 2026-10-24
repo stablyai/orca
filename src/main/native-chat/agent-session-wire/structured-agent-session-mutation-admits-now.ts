@@ -5,8 +5,7 @@ import {
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 
-/** Whether admission would run `plan` for the first time now, placing nothing: for an effect that
- *  must not wait in the session's queue for its turn. */
+/** Read-only first-run admission check for effects that cannot wait for session serialization. */
 export function agentSessionMutationAdmitsNow<TValue>(
   request: Pick<AgentSessionMutationRequest<TValue>, 'store' | 'callerKey' | 'envelope' | 'now'> & {
     plan: Pick<MutationPlan<TValue>, 'method' | 'fields' | 'operationIdScope' | 'conversationWrite'>

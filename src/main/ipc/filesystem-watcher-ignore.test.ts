@@ -20,9 +20,7 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     setPlatform('darwin')
     const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
     const option = options.ignore ?? []
-    // @parcel/watcher passes non-glob entries to FSEventStreamSetExclusionPaths,
-    // which rejects the WHOLE set past 8 paths — silently disabling daemon-side
-    // exclusion of node_modules/.git churn.
+    // FSEvents rejects all plain exclusions above eight paths, silently restoring node_modules/.git churn.
     const plainPaths = option.filter((entry) => !entry.includes('*'))
     expect(plainPaths.length).toBeLessThanOrEqual(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
     expect(option).toEqual(WATCHER_IGNORE_DIRS.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT))

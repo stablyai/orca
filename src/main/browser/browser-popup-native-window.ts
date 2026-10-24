@@ -9,7 +9,7 @@ import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-windo
 import { describeCommittedPopupOrigin } from './popup-committed-origin'
 
 const rejectedNativePopups = new WeakSet<BrowserWindow>()
-// Why: like Electron, an opener's latest script admission answers the next child it shows.
+// The latest script admission belongs to the next child the opener shows.
 const pendingScriptedNativePopups = new WeakMap<
   WebContents,
   ((window: BrowserWindow) => void) | null
@@ -28,10 +28,7 @@ export function isNativeBrowserPopupRequest(input: {
   )
 }
 
-/**
- * OpenURL constructs this window synchronously, before resuming its native navigation; a script
- * window.open constructs it in a later task, when the renderer shows the child it created.
- */
+// OpenURL creates synchronously; scripted window.open creates its child in a later task.
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
   options: Electron.BrowserWindowConstructorOptions
@@ -101,8 +98,7 @@ export function allowNativeBrowserPopup(input: {
   }
 }
 
-// Electron emits did-create-window on the opener synchronously after constructing the child, before
-// the child's first request; unadmitted native children there are discarded rather than left bare.
+// did-create-window runs before the child's first request, allowing unadmitted children to be rejected.
 function awaitScriptedNativePopup(
   opener: WebContents,
   admit: (window: BrowserWindow) => void
@@ -128,7 +124,6 @@ function awaitScriptedNativePopup(
   pendingScriptedNativePopups.set(opener, admit)
 }
 
-/** Ends popup contents Chromium created before their pending first request can leave. */
 export function discardBrowserPopupContents(contents: WebContents): void {
   if (contents.isDestroyed()) {
     return
@@ -147,7 +142,7 @@ export function discardBrowserPopupContents(contents: WebContents): void {
 function rejectNativeBrowserPopup(window: BrowserWindow): void {
   rejectedNativePopups.add(window)
   discardBrowserPopupContents(window.webContents)
-  // Destroy only after Electron's constructor returns, even if close failed or was intercepted.
+  // Wait for Electron's constructor to return before destroying the window.
   queueMicrotask(() => {
     if (!window.isDestroyed()) {
       window.destroy()

@@ -49,10 +49,7 @@ export function removeManagedGrokHookEntries(
   return { config: nextConfig, removedAny: true }
 }
 
-// Why not "the whole object is empty": orca-status.json is Orca-owned, so once no hook entries
-// remain the file has no reason to exist. Keying off total emptiness leaves a stray non-hook key
-// (a `$schema`, say) behind, and the user-cleared install guard then reads that remnant as a
-// deliberate opt-out and never reinstalls.
+// Remove Orca-owned hookless remnants even with schema keys, or they look like a deliberate user opt-out.
 export function isOrcaOwnedRemnant(config: HooksConfig): boolean {
   return Object.keys(config.hooks ?? {}).length === 0
 }

@@ -1,4 +1,3 @@
-// The real orca-agent-hook.exe must keep the .cmd hook's contract under every Windows hook runner (#20913).
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { spawn } from 'node:child_process'
 import { createServer, type IncomingMessage, type Server } from 'node:http'

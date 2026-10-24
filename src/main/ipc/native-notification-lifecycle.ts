@@ -3,7 +3,7 @@ import type { Notification } from 'electron'
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 
-// Why: keep a strong reference so GC can't collect notifications (and their click handlers) before the user interacts with them.
+// Keep strong references so GC cannot discard displayed notifications and click handlers.
 export const activeNotifications = new Set<Notification>()
 export const activeNotificationsById = new Map<
   string,

@@ -4,22 +4,17 @@ import type {
 } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
-// Why: omit repoId — the main process only has the path; the renderer stamps repoId after IPC.
+// The renderer supplies repoId after IPC; main knows only the repository path.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
 export const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
-// Requested reviewers stay in the list payload because Tasks renders that column on first paint.
-// Why: kept out of `gh pr list` — statusCheckRollup/reviewDecision/merge metadata fan out into expensive per-row GraphQL.
-// Requested reviewers stay in the list payload because Tasks renders that column on first paint.
+// Keep first-paint reviewers in list payloads; defer costly checks, review decisions and merge metadata.
 export const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
 
-/**
- * Derive author login + avatar_url together so GHE avatars render — the login-only
- * `{login}.png` URL 404s on GHE. REST uses `user.avatar_url`, gh/GraphQL `author.avatarUrl` (#8784).
- */
+/** Preserve API-provided avatars with logins; dotcom login-based URLs do not identify Enterprise avatars. */
 export function authorFieldsFromUnknown(
   item: Record<string, unknown>
 ): Pick<MainWorkItem, 'author' | 'authorAvatarUrl'> {
@@ -54,7 +49,7 @@ export function extractHeadOwnerLogin(item: Record<string, unknown>): string | n
         }
       }
     }
-    // Why: a deleted/inaccessible fork returns head.repo = null but still has head.user/head.label.
+    // Deleted/inaccessible forks may retain head.user/head.label while head.repo is null.
     const user = head.user
     if (typeof user === 'object' && user !== null) {
       const login = (user as { login?: unknown }).login
@@ -152,7 +147,7 @@ export function latestReviewsFromUnknown(
 }
 
 export function numberFromUnknown(value: unknown): number | undefined {
-  // Why: Number(null) is 0 — an explicit null must stay "unknown", not become a real count or user id.
+  // Preserve null as unknown: Number(null) would invent a zero count or user ID.
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : undefined
   }
@@ -203,7 +198,7 @@ export function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['chec
         return { status: '', conclusion: '' }
       }
       const raw = entry as Record<string, unknown>
-      // Why: StatusContext reports `state` and carries no `status`; CheckRun reports both.
+      // StatusContext supplies state without CheckRun's status/conclusion.
       return {
         status: String(raw.status ?? ''),
         conclusion: String(raw.conclusion ?? raw.state ?? '')

@@ -36,8 +36,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:fs', () => ({ ...actualFs, rmSync: rmSyncSpy }))
 
     try {
-      // Why realpath: assertManagedHomePath canonicalizes before rmSync, so the
-      // spy sees /private/var-style paths on macOS.
+      // Match ownership canonicalization, including /private/var paths on macOS.
       const managedHomePath = actualFs.realpathSync(
         createManagedHome(testState.userDataDir, 'account-1')
       )

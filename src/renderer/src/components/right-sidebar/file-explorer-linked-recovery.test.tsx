@@ -136,3 +136,41 @@ it('a cached link recovers when its missing target directory returns', async () 
   expect(hook.result.current.dirCache['/repo/link'].children[0].name).toBe('fresh.ts')
   cleanup()
 })
+
+it('keeps a manually opened folder link after parent and full-tree refreshes (#29069)', async () => {
+  readDirectoryMock
+    .mockReset()
+    .mockImplementation(async (_id, _root, path) =>
+      path === '/repo'
+        ? listing({ name: 'link', isDirectory: false, isSymlink: true })
+        : listing(entry('example.txt'))
+    )
+  const hook = renderHook(() => useFileExplorerTree('/repo', new Set(['/repo/link']), 'wt-1'))
+  await act(async () => {
+    await hook.result.current.loadDir('/repo', -1)
+    await hook.result.current.loadDir('/repo/link', 0, { force: true, failOnError: true })
+    hook.result.current.markPathAsDirectory('/repo/link')
+  })
+  expect(hook.result.current.rootCache?.children[0].isDirectory).toBe(true)
+
+  await act(async () => {
+    await hook.result.current.refreshDir('/repo')
+  })
+  expect(hook.result.current.rootCache?.children[0].isDirectory).toBe(true)
+
+  await act(async () => {
+    await hook.result.current.refreshTree()
+  })
+  expect(hook.result.current.rootCache?.children[0]).toMatchObject({
+    isDirectory: true,
+    isSymlink: true
+  })
+  expect(hook.result.current.dirCache['/repo/link'].children[0].name).toBe('example.txt')
+
+  readDirectoryMock.mockRejectedValueOnce(new Error('ENOTDIR'))
+  await act(async () => {
+    await hook.result.current.refreshDir('/repo/link')
+  })
+  expect(hook.result.current.rootCache?.children[0].isDirectory).toBe(false)
+  expect(hook.result.current.dirCache['/repo/link'].error).toBe('ENOTDIR')
+})

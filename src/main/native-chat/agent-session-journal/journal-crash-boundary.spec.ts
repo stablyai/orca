@@ -1,7 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// The crash boundary: the host wrote a submission row, dispatched, and died
-// before it learned whether the provider took the message. Replay must reconcile
-// without duplicating the user's message and without losing it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -71,7 +68,6 @@ export function registerJournalCrashBoundaryTests(): void {
     })
   }
 
-  /** A Codex `userMessage` history item; `clientId` is the echoed client message id. */
   function history(input: {
     itemId: string
     clientId: string | null
@@ -112,13 +108,12 @@ export function registerJournalCrashBoundaryTests(): void {
         body: userMessage('deploy the thing'),
         fence: 1
       })
-      // Host dies here: the provider accepted, but no dispatch row was written.
+      // Crash after provider acceptance, before durable dispatch confirmation.
 
       const restarted = await open()
       expect(restarted.pendingSubmissions().map((entry) => entry.clientMessageId)).toEqual(['cm_1'])
       await restarted.markPendingSubmissionsUnknown(2)
       expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
-      // Marks the send as outlived by its writer, so no reader reports it as still working.
       expect(restarted.submissions()[0]?.recovered).toBe(true)
 
       const [outcome] = reconcileSubmissions({
@@ -139,8 +134,7 @@ export function registerJournalCrashBoundaryTests(): void {
         fence: 2,
         recovered: true
       })
-      // The provider's own copy of the message arrives next, under the identity
-      // reconciliation adopted. It must land in the bubble the user already sees.
+      // Provider echoes must reuse the reconciled identity and existing message bubble.
       await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), {
         fence: 2,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
@@ -198,8 +192,7 @@ export function registerJournalCrashBoundaryTests(): void {
       const restarted = await open()
       await restarted.markPendingSubmissionsUnknown(2)
 
-      // A restart re-opens what it could not answer. This one is already answered,
-      // so recovery must not reopen it as doubt.
+      // Recovery must preserve settled rejection instead of reopening it as unknown.
       expect(restarted.submissions()[0]).toMatchObject({
         dispatchState: 'rejected',
         reason: 'provider_write_failed'
@@ -208,8 +201,7 @@ export function registerJournalCrashBoundaryTests(): void {
       expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
     })
 
-    // Only an older Orca minted this reason -- Codex now settles a send on the
-    // provider echo -- but rows written under it still come back from disk.
+    // Older Codex rows retain this uncertainty reason even though current sends settle on echoes.
     it('keeps a codex turn it could not name in doubt, never rejected', async () => {
       const journal = await open()
       await journal.appendSubmission({
@@ -228,7 +220,7 @@ export function registerJournalCrashBoundaryTests(): void {
       const restarted = await open()
       await restarted.markPendingSubmissionsUnknown(2, 'provider_exited_before_acknowledgement')
 
-      // The turn IS started; recovery may not overwrite that with a weaker guess,
+      // Preserve proven turn start; rejection would incorrectly authorize redelivery.
       // and it may never become a rejection, which would license a re-delivery.
       expect(restarted.submissions()[0]).toMatchObject({
         dispatchState: 'unknown',
@@ -267,8 +259,6 @@ export function registerJournalCrashBoundaryTests(): void {
         fence: 2,
         recovered: true
       })
-      // The bubble survives with an explicit terminal state — the message is not
-      // silently retried and not silently dropped.
       expect(restarted.snapshot().items).toHaveLength(1)
       expect(restarted.snapshot().submissions[0]?.dispatchState).toBe('rejected')
       expect(restarted.receiptFor('cm_1')).toBeNull()
@@ -431,7 +421,7 @@ export function registerJournalCrashBoundaryTests(): void {
           { ...submissions[0]!, providerItemId: agentJournalItemKey(ACCEPTED_IDENTITY) }
         ],
         history: window([
-          // The provider renumbered its raw id; the identity-derived key did not move.
+          // Raw provider IDs may change while identity-derived keys remain stable.
           history({ itemId: 'item-7', clientId: null, text: 'unrelated', ordinal: 0 })
         ])
       })
@@ -444,8 +434,7 @@ export function registerJournalCrashBoundaryTests(): void {
           { ...submissions[0]!, providerItemId: agentJournalItemKey(ACCEPTED_IDENTITY) },
           submissions[1]!
         ],
-        // One item, wanted by both passes: cm_1 adopted its key, cm_2 is echoed on
-        // it. Adopting it twice would render the same provider message twice.
+        // Two passes claiming one provider item must not create duplicate message bubbles.
         history: window([
           history({ itemId: 'item-7', clientId: 'cm_2', text: 'same text', ordinal: 0 })
         ])

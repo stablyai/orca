@@ -13,20 +13,16 @@ export type BuildPtyHostEnvOptions = {
   userDataPath: string
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
-  /** System-default real-home routing (flag ON): inject no managed CODEX_HOME,
-   *  and strip only an inherited Orca-owned override so nested Orca panes do not
-   *  leak the parent's managed home. A user-set CODEX_HOME is preserved. */
+  /** Real-home routing strips only inherited Orca-owned Codex overrides, preserving user CODEX_HOME. */
   stripInheritedOrcaCodexHome?: boolean
-  /** Launch command the renderer chose (e.g. 'pi', 'omp', 'claude'); resolves the per-agent
-   *  extension target for Pi/OMP. Undefined for bare shells → defaults to Pi. NEVER infer from
-   *  disk presence (cross-agent shadowing when both dirs exist). */
+  /** Explicit launch command selects Pi/OMP extension targets; never infer agent identity from directories on disk. */
   launchCommand?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
   launchAgent?: TuiAgent
   /** Selected execution shell, which may differ from inherited SHELL. */
   shellPath?: string
   isWsl?: boolean
-  /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
+  /** WSL relay target; null selects the default distro. Read only for WSL spawns. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   terminalInlineImages?: boolean
@@ -41,13 +37,10 @@ export type BuildPtyHostEnvOptions = {
 
 export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
-  /** An Orca-launched Codex, which may wait briefly for its status hook; other spawns never do. */
   launchesCodex?: boolean
 }
 
-// Why (#16441): Codex launch prep grants hook trust through a codex app-server
-// session. It resolves asynchronously so the Electron main thread stays
-// responsive; every consumer already runs inside an async spawn path.
+// Codex hook-trust preparation may await app-server I/O without blocking main (#16441).
 export type GetSelectedCodexHomePath = (
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,

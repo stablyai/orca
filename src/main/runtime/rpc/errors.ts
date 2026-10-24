@@ -114,6 +114,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
+  'run_home_unreachable',
   'run_required',
   'stable_pane_required',
   'consumer_fenced',
