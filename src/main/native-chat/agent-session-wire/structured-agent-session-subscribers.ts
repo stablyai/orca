@@ -1,3 +1,5 @@
+import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
+export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -31,19 +33,6 @@ import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
-export type AgentSessionSubscribeInput = {
-  id: string
-  sessionId: string
-  emit: AgentSessionSubscriberEmit
-  cursor?: AgentJournalCursor
-  /** Bound frames to the phone bridge limit. */
-  boundedFrames?: boolean
-  projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
-  readsCurrentRequests?: boolean
-  /** False for desktops that need exact replay to keep send echoes and current requests. */
-  snapshotCatchUp?: boolean
-}
-
 export type Subscriber = CurrentRequestsSubscriber & {
   id: string
   sessionId: string
@@ -59,6 +48,8 @@ export type Subscriber = CurrentRequestsSubscriber & {
   backgroundTasks?: string
   /** Last frame’s current-work key; row-free changes still require a frame. */
   workView?: string
+  /** Semantic history baseline actually emitted, independent of token/row progress. */
+  historyView?: string
 }
 
 export type AgentSessionSubscribersHooks = {
@@ -118,12 +109,14 @@ export class AgentSessionSubscribers {
         this.hooks.readCurrentWork?.(input.sessionId, input.journal)
       )
     } else {
+      const view = input.journal.publicRead()
       const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)
       const page = withPublishedWork(
         readAgentSessionHydrationPage(
           input.journal,
           input.fence,
-          subscriberHistoryReader(subscriber)
+          subscriberHistoryReader(subscriber),
+          view.snapshot
         ),
         work
       )
@@ -137,7 +130,7 @@ export class AgentSessionSubscribers {
           hostNow,
           ...this.activityField(input.sessionId)
         },
-        { currentWork: work }
+        { currentWork: work, historyView: view.normalizationKey }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
@@ -194,13 +187,19 @@ export class AgentSessionSubscribers {
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
+    const view = journal.publicRead()
     const work = this.hooks.readCurrentWork?.(sessionId, journal)
     // Cache each stored/bounded form separately; each sizes its own page.
     let storedPage: AgentSessionHistoryPage | undefined
     let boundedPage: AgentSessionHistoryPage | undefined
     const read = (subscriber: Subscriber): AgentSessionHistoryPage =>
       withPublishedWork(
-        readAgentSessionHydrationPage(journal, fence, subscriberHistoryReader(subscriber)),
+        readAgentSessionHydrationPage(
+          journal,
+          fence,
+          subscriberHistoryReader(subscriber),
+          view.snapshot
+        ),
         work
       )
     const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
@@ -220,7 +219,7 @@ export class AgentSessionSubscribers {
           hostNow,
           ...this.activityField(sessionId)
         },
-        { currentWork: work }
+        { currentWork: work, historyView: view.normalizationKey }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
@@ -311,6 +310,9 @@ export class AgentSessionSubscribers {
   ): void {
     try {
       emitSubscriberFrame(this.hooks, subscriber, event, options)
+      if (options?.historyView !== undefined && this.isActive(subscriber)) {
+        subscriber.historyView = options.historyView
+      }
     } catch {
       this.drop(subscriber)
     }

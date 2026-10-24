@@ -57,7 +57,7 @@ export async function startAgent(state: {
 
 export async function interruptedRestart(
   work: 'turn' | 'submission' | 'send-after-reply' | 'children' | 'queued-cards' = 'turn',
-  historyBoundaryConsistent = true,
+  /** What the restarted host proves about the recorded owner; gone unless a test says otherwise. */
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
   }),
@@ -145,19 +145,7 @@ export async function interruptedRestart(
     agents,
     logger: log.logger,
     store,
-    adapter: {
-      ...adapter(),
-      closeSession,
-      ...(work === 'submission' || work === 'send-after-reply'
-        ? {
-            providerHistoryWindow: async () => ({
-              items: [],
-              boundaryConsistent: historyBoundaryConsistent,
-              turnInFlight: false
-            })
-          }
-        : {})
-    },
+    adapter: { ...adapter(), closeSession },
     journalDatabase: openTestJournalHostDatabase(previous.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',

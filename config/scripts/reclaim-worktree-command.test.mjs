@@ -74,6 +74,9 @@ it.each([
   ['--release-cache-min-age-days'],
   ['--release-cache-min-age-days', 'NaN'],
   ['--release-cache-min-age-days', '-1'],
+  ['--generated-min-age-days'],
+  ['--generated-min-age-days', 'NaN'],
+  ['--generated-min-age-days', '-1'],
   ['--unknown']
 ])('rejects invalid flags before any sweep: %j', (...args) => {
   expect(() => parseReclaimArguments(args)).toThrow()

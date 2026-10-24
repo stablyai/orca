@@ -1,5 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
@@ -288,7 +288,7 @@ export type WorktreeSlice = {
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
-    context?: WorkspaceReferenceTerminalContext
+    context?: WorkspaceReferenceObservationContext
   ) => void
   bumpWorktreeActivity: (worktreeId: string) => void
   /**

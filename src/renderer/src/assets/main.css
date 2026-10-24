@@ -558,6 +558,16 @@ body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay']) {
   line-height: 1.45;
 }
 
+/* Visible toasts absorb backdrop clicks; Toaster gates actions while a modal owns the pointer lock. */
+body:has(> [data-slot='dialog-overlay'], > [data-slot='sheet-overlay'])
+  [data-sonner-toaster]
+  [data-sonner-toast][data-visible='true'][data-removed='false']:is(
+    [data-front='true'],
+    [data-expanded='true']
+  ) {
+  pointer-events: auto;
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
   /* Why: Sonner's dark-theme defaults can resolve the close icon and button
      background to the same color; keep the X readable on both Orca themes. */

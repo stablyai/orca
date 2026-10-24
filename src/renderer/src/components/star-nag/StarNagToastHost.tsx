@@ -130,6 +130,7 @@ function StarNagToast({
           variant="ghost"
           size="icon"
           className="size-7 shrink-0"
+          data-close-button
           onClick={close}
           disabled={busy}
           aria-label={translate('auto.components.star.nag.StarNagToastHost.dismiss', 'Dismiss')}

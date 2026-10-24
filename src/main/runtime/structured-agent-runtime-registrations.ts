@@ -147,7 +147,6 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
-      readJournal,
       resolveLaunch: composeStructuredLaunch(definition, sources, part),
       readLaunch: composeStructuredLaunchRead(definition, sources, part),
       dataDirectory: deps.stateDirectory,

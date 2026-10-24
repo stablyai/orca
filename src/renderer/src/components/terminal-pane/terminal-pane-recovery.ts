@@ -101,7 +101,10 @@ function shouldScheduleRecoveryRetry(
     return request.terminalRecoveryGeneration !== undefined
   }
   if (decline.declinedBy === 'window-cap') {
-    return request.reason !== 'reattach-unverifiable'
+    // Why: a host that keeps contradicting itself must stop at the cap and leave the pane ended.
+    return (
+      request.reason !== 'reattach-unverifiable' && request.reason !== 'host-rebound-exited-pane'
+    )
   }
   // 'settled-failure' deliberately schedules nothing: a retry timer would be
   // the counting loop again. Only a new trigger reopens that reason.

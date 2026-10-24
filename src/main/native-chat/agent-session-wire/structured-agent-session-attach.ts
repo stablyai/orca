@@ -36,9 +36,6 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
 
 /** Clients cannot assert spawn tokens, claim keys or owner death; only host observations grant authority. */
@@ -152,79 +149,38 @@ export function journalIdentityFor(
 
 export type AttachedJournal = {
   journal: AgentSessionJournal
+  /** Submissions the crash boundary left `unknown`; kept on the wire for older peers. */
   unconfirmedClientMessageIds: string[]
 }
 
-/** Reconcile pre-spawn history under the won lease; never resend or touch unhanded queues. */
+/**
+ * The conversation's journal, opened — and its crash boundary settled — by the conversation's own
+ * open. A send the boundary could only doubt stays `unknown`: whether the provider took it is never
+ * inferred from provider history, since absence from a log Orca does not own proves nothing.
+ */
 export async function attachJournal(input: {
   record: AgentSessionRecord
-  params: AgentSessionAttachParams
-  adapter: StructuredAgentSessionAdapter
+  /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
-  /** Pre-spawn history; null means unavailable, omitted permits lazy reads for direct callers. */
-  providerHistoryWindow?: ProviderHistoryWindow | null
 }): Promise<AttachedJournal> {
-  const identity = journalIdentityFor(input.record, input.params)
-  const fence = input.record.lease.runtimeFence
   const journal = await input.openConversation(input.record)
-  const settled = await reconcileAgainstProviderHistory({
-    adapter: input.adapter,
-    identity,
-    journal,
-    fence,
-    accountHome: input.record.accountHome,
-    ...(Object.hasOwn(input, 'providerHistoryWindow')
-      ? { history: input.providerHistoryWindow }
-      : {})
-  })
   return {
     journal,
     unconfirmedClientMessageIds: journal
       .submissions()
-      .filter(
-        (entry) =>
-          entry.dispatchState === 'unknown' &&
-          entry.recovered === true &&
-          !settled.includes(entry.clientMessageId)
-      )
+      .filter((entry) => entry.dispatchState === 'unknown' && entry.recovered === true)
       .map((entry) => entry.clientMessageId)
   }
 }
 
-/** History reads are best effort; journal write failures must propagate to the handle owner. */
-async function reconcileAgainstProviderHistory(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  journal: AgentSessionJournal
-  fence: number
-  accountHome: AgentSessionAccountHome
-  history?: ProviderHistoryWindow | null
-}): Promise<string[]> {
-  let history = input.history
-  if (history === undefined) {
-    if (!input.adapter.providerHistoryWindow) {
-      return []
-    }
-    try {
-      history = await input.adapter.providerHistoryWindow({
-        identity: input.identity,
-        accountHome: input.accountHome
-      })
-    } catch {
-      return []
-    }
-  }
-  if (!history) {
-    return []
-  }
-  return reconcileJournalSubmissionsAgainstHistory({
-    journal: input.journal,
-    fence: input.fence,
-    history
-  })
-}
-
-/** Adoption starts at fence 1; resumed links may be elided when identical proof is replayed. */
+/**
+ * The first link of an adopting session's chain.
+ *
+ * `adopted` is the only origin besides `created` a chain will accept at its head, and it is the
+ * honest one here: this session did not create the conversation. The adapter appends its own
+ * `resumed` link once the provider proves the same identity root — or, when it proves the identical
+ * handle at the same fence, the validator elides that as a retry and this link stays the head.
+ */
 const ADOPTED_HANDLE_FENCE = 1
 
 function adoptedProviderHandleLink(

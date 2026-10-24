@@ -113,6 +113,11 @@ export function WorktreeCardLinkedItemsSection({
                         url={url}
                         onOpen={(url, event) => open({ ...item, url }, event)}
                         onManage={onManage ? (event) => open(item, event) : undefined}
+                        origins={
+                          item.origins?.length ? (
+                            <WorkspaceAttachmentOrigins item={item} workspace={workspace} compact />
+                          ) : undefined
+                        }
                         actions={
                           item.type !== 'issue' ? renderReviewActions?.(item, live) : undefined
                         }
@@ -138,9 +143,6 @@ export function WorktreeCardLinkedItemsSection({
                             <IssueStateBadge state={detail.issueState} />
                           ) : null}
                         </div>
-                      ) : null}
-                      {item.origins?.length ? (
-                        <WorkspaceAttachmentOrigins item={item} workspace={workspace} />
                       ) : null}
                     </div>
                   )

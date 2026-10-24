@@ -1,5 +1,4 @@
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
-import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
@@ -8,14 +7,9 @@ import type {
 // The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
 import type {
-  AgentChildWorkStopAcknowledgement,
-  AgentSessionBackgroundTaskStops
-} from '../../../shared/agent-child-work-stop-targets'
-import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalDispatchState,
   AgentJournalTurnItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -29,12 +23,8 @@ import type {
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type {
-  AgentSessionCancelOutcome,
-  StructuredAgentSessionAdapterStop
-} from './structured-agent-session-adapter-stop'
+import type { StructuredAgentSessionAdapterStop } from './structured-agent-session-adapter-stop'
 export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
 export type {
   StructuredAgentSessionChildEndCause,
@@ -43,7 +33,6 @@ export type {
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
-import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt
@@ -60,38 +49,14 @@ import type {
 } from './structured-agent-session-option-models'
 export type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'
 
-export class AgentSessionAcquisitionRefusal extends Error {
-  readonly code = 'agent_session_operation_invalid'
-
-  constructor(
-    message: string,
-    /** UI refusal reason; message stays in logs. Defaults to providerStartFailed. */
-    readonly reason: AgentSessionRefusalReason<'agent_session_operation_invalid'> = 'providerStartFailed',
-    readonly account?: AgentSessionAccountKind
-  ) {
-    super(message)
-    this.name = 'AgentSessionAcquisitionRefusal'
-  }
-
-  static historyTooLarge(message: string): AgentSessionAcquisitionRefusal {
-    return new AgentSessionAcquisitionRefusal(message, 'historyTooLarge')
-  }
-}
-
-export class AgentSessionPromptUnavailableError extends Error {
-  constructor(itemId: string) {
-    super(`The provider is no longer waiting on ${itemId}.`)
-    this.name = 'AgentSessionPromptUnavailableError'
-  }
-}
-
-/** Reject before journal commit when a provider reply cannot be constructed. */
-export class AgentSessionPromptAnswerRejectedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AgentSessionPromptAnswerRejectedError'
-  }
-}
+export {
+  AgentSessionAcquisitionRefusal,
+  AgentSessionPreSpawnError,
+  AgentSessionPromptAnswerRejectedError,
+  AgentSessionPromptUnavailableError,
+  isAgentSessionPreSpawnError
+} from './structured-agent-session-adapter-errors'
+export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
 export {
   AgentSessionAcquisitionExitProvenError,
@@ -105,38 +70,6 @@ export type AgentSessionAcquisition = {
   link?: AgentSessionProviderHandleLink
   /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
   acquisitionGeneration: string
-}
-
-export type AgentSessionPreSpawnReason = Extract<
-  AgentSessionRefusalReason<'agent_session_operation_invalid'>,
-  | 'managedAccountEnvOverride'
-  | 'accountSwitchInProgress'
-  | 'managedAccountUnsupported'
-  | 'launchFolderMissing'
-  | 'historyInOtherAccount'
-  | 'claudeAccountFolderMissing'
-  | 'claudeAccountSetupFailed'
-  | 'agentCommandNotRunnable'
-  | 'runtimeNotInstalled'
->
-
-/** First-hand proof that acquisition spawned no process. */
-export class AgentSessionPreSpawnError extends Error {
-  /** Absent reasons are log-only; wrapped pre-spawn errors retain theirs. */
-  readonly reason: AgentSessionPreSpawnReason | undefined
-
-  constructor(
-    cause: unknown,
-    options: { reason?: AgentSessionPreSpawnReason; message?: string } = {}
-  ) {
-    super(options.message ?? (cause instanceof Error ? cause.message : String(cause)), { cause })
-    this.name = 'AgentSessionPreSpawnError'
-    this.reason = options.reason ?? (isAgentSessionPreSpawnError(cause) ? cause.reason : undefined)
-  }
-}
-
-export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessionPreSpawnError {
-  return error instanceof Error && error.name === 'AgentSessionPreSpawnError'
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -284,18 +217,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
     command: StructuredAgentSessionCommandRun
   }): Promise<AgentSessionCommandAdmission>
-  /** Cancel only the requested turn; absent turnId also covers dispatches whose turns have not opened. */
-  cancelTurn(input: {
-    sessionId: string
-    turnId?: string
-    fence: number
-    prompt?: { itemId: string }
-    /** Original host Stop time; in-process only, for a Stop that ends the session. */
-    stoppedAt?: number
-    dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
-    /** Re-read journal turn immediately before interrupt; direct callers may omit this guard. */
-    resolveLiveTurnId?: () => string | null
-  }): Promise<AgentSessionCancelOutcome>
   /** Rejection proves refusal; thrown changes have unknown effects. */
   changeThreadGoal?(input: {
     sessionId: string
@@ -305,15 +226,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     replacesGoal: boolean
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
-  stopBackgroundTasks?(input: {
-    sessionId: string
-    fence: number
-    taskIds: readonly string[]
-    acknowledge?: (acknowledgement: AgentChildWorkStopAcknowledgement) => void
-  }): Promise<{ cancelled: boolean; stillRunning?: true }>
-  /** Undefined when no live session exposes stop support. */
-  backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
   /** Derive unanswered retained work from the live child; false without one. */
   holdsDispatch?(sessionId: string): boolean
   /** Captures only this input's pending answer/output in the supplied live acquisition. */
@@ -357,11 +269,6 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
   readOptionRestoreFailures?(sessionId: string): readonly string[]
-  /** Only consistent history boundaries can prove non-delivery; omitted windows leave unsettled sends unknown. */
-  providerHistoryWindow?(input: {
-    identity: AgentSessionJournalIdentity
-    accountHome: AgentSessionAccountHome
-  }): Promise<ProviderHistoryWindow | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity

@@ -1,5 +1,14 @@
-// Opening starts no provider. Settle crash-stranded work before readers: handed-over sends become
-// unknown, provably unhanded personal text becomes cards. History reconciliation later requires a lease.
+// The one way a conversation's journal becomes open on this host: for a send, for a reader, and
+// for an attach that finds none open.
+//
+// A damaged journal fails the open, which refuses it as unloadable. It marks what an earlier host
+// process handed over and left unanswered as in doubt, and settles what it left running — the
+// crash boundary. That
+// needs no lease, and the doubt is final: whether the provider took such a row is never guessed. A
+// row an earlier process accepted and never handed over (it quit or crashed first) is settled here
+// too, before any reader, command or child sees it: a person's message is kept as a card, the rest
+// rejected (`journal-unsent-send-hold.ts`). The cards then wait for the chat's next turn
+// (`queued-message-pause.ts`). Nothing here starts a provider child.
 
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -90,7 +99,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const identity = journalIdentityFor(record, params)
   const journal = await openAgentSessionJournal({ identity, database: deps.journalDatabase })
   try {
-    // Provider history may resolve uncertainty only after winning the lease.
+    // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
     await journal.markPendingSubmissionsUnknown(fence)
   } catch (error) {
     deps.logger.warn('marking pending sends unknown on open failed', {
