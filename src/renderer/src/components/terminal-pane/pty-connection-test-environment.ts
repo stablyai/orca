@@ -11,6 +11,39 @@ type StatusSnapshot = ReturnType<
 >
 let statusSnapshot: StatusSnapshot | undefined
 let resetStatusSnapshot: StatusSnapshot | undefined
+const realTimerClearsKey = Symbol.for('orca.terminalTestRealTimerClears')
+
+// Why: vi.resetModules() does not stop real timers, so an undisposed session's retry/poll loops
+// would otherwise fire into the next test's rAF/setTimeout stubs. The first load (before any test
+// fakes timers) wraps them once per worker; the registry lives on globalThis so instances
+// re-imported after resetModules clear the same timers.
+const pendingRealTimerClears: Set<() => void> = (() => {
+  if (realTimerClearsKey in globalThis && globalThis[realTimerClearsKey] instanceof Set) {
+    return globalThis[realTimerClearsKey]
+  }
+  const clears = new Set<() => void>()
+  Object.defineProperty(globalThis, realTimerClearsKey, { value: clears })
+  const realSetTimeout = globalThis.setTimeout
+  const realSetInterval = globalThis.setInterval
+  globalThis.setTimeout = Object.assign((...args: Parameters<typeof realSetTimeout>) => {
+    const handle = realSetTimeout(...args)
+    clears.add(() => clearTimeout(handle))
+    return handle
+  }, realSetTimeout)
+  globalThis.setInterval = Object.assign((...args: Parameters<typeof realSetInterval>) => {
+    const handle = realSetInterval(...args)
+    clears.add(() => clearInterval(handle))
+    return handle
+  }, realSetInterval)
+  return clears
+})()
+
+function clearTrackedRealTimers(): void {
+  for (const clear of pendingRealTimerClears) {
+    clear()
+  }
+  pendingRealTimerClears.clear()
+}
 
 export function buildAgentStatusModuleMock(
   actual: Record<string, unknown>
@@ -123,6 +156,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // continuation throws `ReferenceError: window is not defined` and fails the
   // whole file (orca#14728, CI-only because it needs a slow enough tick).
   await flushAsyncTicks(20)
+  clearTrackedRealTimers()
   statusSnapshot?.dispose()
   resetStatusSnapshot?.dispose()
   statusSnapshot = undefined
