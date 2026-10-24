@@ -41,6 +41,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
+    this.lastClaudeAuthSnapshot = null
+    this.updateClaudeCredentialWatch()
   }
 
   setOpenCodeGoConfigResolver(
@@ -111,6 +113,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.credentialWatchingEnabled = true
+    this.updateClaudeCredentialWatch()
     if (options.fetchImmediately !== false) {
       void this.fetchAll()
     } else {
@@ -120,6 +124,8 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
   }
 
   stop(): void {
+    this.credentialWatchingEnabled = false
+    this.updateClaudeCredentialWatch()
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()
