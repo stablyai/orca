@@ -32,6 +32,7 @@ import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
   splitActiveTerminalPane,
+  waitForActivePaneHookDescriptor,
   waitForActivePanePtyId,
   waitForPaneCount,
   waitForTerminalOutput
@@ -54,13 +55,14 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
 import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 
 const LINES = 2_000
 const LEAF = '6f1b0c3e-8d2a-4c5b-9e7f-1a2b3c4d5e6f'
 const DRAFT = 'unsaved words typed before the move'
+const MOVED_AGENT_SESSION = 'e2e-wsl-moved-resume-session'
+const UNDO_AGENT_SESSION = 'e2e-wsl-undo-resume-session'
 const MIGRATION = { migrationId: 'restore-lifecycle-move', manifestSha256: 'a'.repeat(64) }
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-restore-lifecycle-'))
@@ -72,6 +74,16 @@ writeFileSync(
     `for (let i = 1; i <= ${LINES}; i += 1) process.stdout.write(\`\${marker} \${String(i).padStart(4, '0')}\\r\\n\`)`,
     'process.stdin.resume()'
   ].join('\n')
+)
+
+const stubAgentDir = path.join(scratch, 'agents')
+mkdirSync(stubAgentDir)
+writeFileSync(
+  path.join(stubAgentDir, 'codex'),
+  '#!/bin/sh\necho "STUB_CODEX_ARGV $*"\necho "STUB_CODEX_CWD $PWD"\nexec cat\n',
+  {
+    mode: 0o755
+  }
 )
 
 test.afterAll(() => {
@@ -140,7 +152,9 @@ test('a moved pane shows its own history once, in its folder, across three reloa
   const marker = `MOVED-${randomUUID().slice(0, 8)}`
   const host = await launchHeadlessPairedRuntimeHost({
     pinnedServePort: true,
-    withoutBrowser: true
+    withoutBrowser: true,
+    // The distro's agent: a stub "codex" that prints how it was started, then waits.
+    extraEnv: { PATH: [stubAgentDir, process.env.PATH ?? ''].join(path.delimiter) }
   })
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
@@ -204,6 +218,39 @@ test('a moved pane shows its own history once, in its folder, across three reloa
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test seeded the profile and writes only these session maps.
           const session = state.workspaceSession as Record<string, unknown>
           Reflect.set(session, 'activeWorktreeId', null)
+          // The agent's own session file on the host, as the distro keeps it: a resume whose owning
+          // account cannot be verified starts the agent fresh instead.
+          const codexHome = host.env.CODEX_HOME ?? path.join(host.env.HOME ?? '', '.codex')
+          const sessionsDir = path.join(codexHome, 'sessions', '2026', '07', '28')
+          mkdirSync(sessionsDir, { recursive: true })
+          const transcriptPath = path.join(
+            sessionsDir,
+            `rollout-2026-07-28T00-00-00-${MOVED_AGENT_SESSION}.jsonl`
+          )
+          writeFileSync(
+            transcriptPath,
+            `${JSON.stringify({
+              timestamp: '2026-07-28T00:00:00.000Z',
+              type: 'session_meta',
+              payload: { id: MOVED_AGENT_SESSION, cwd: deep }
+            })}\n`
+          )
+          // The pane's idle agent, as the move carries it: resumed in the pane when it opens.
+          Reflect.set(session, 'sleepingAgentSessionsByPaneKey', {
+            [paneKey]: {
+              paneKey,
+              tabId: MOVED_TAB,
+              worktreeId,
+              agent: 'codex',
+              providerSession: { key: 'session_id', id: MOVED_AGENT_SESSION, transcriptPath },
+              prompt: 'finish the task',
+              state: 'done',
+              capturedAt: 1,
+              updatedAt: 1,
+              origin: 'worktree-sleep',
+              restoreOnTabOpenOnly: true
+            }
+          })
           withMovedRows(
             session,
             movedWorkspaceRows(worktreeId, {
@@ -294,32 +341,25 @@ test('a moved pane shows its own history once, in its folder, across three reloa
           )
           .toBe(true)
         await openPairedClientTab(client.page, worktreeId, webTabId)
+        await expect
+          .poll(
+            async () =>
+              (await readPairedPaneContent(client.page, webTabId)).includes('STUB_CODEX_CWD'),
+            {
+              timeout: 60_000,
+              message: 'the carried agent never started in the moved pane'
+            }
+          )
+          .toBe(true)
         const pane = await readShownPane(client.page, webTabId, marker)
+        const resumes = count(pane.content, 'STUB_CODEX_CWD')
         console.log(
-          `[restore-lifecycle] launch ${launch}: first=${pane.first} last=${pane.last} chars=${pane.content.length}`
+          `[restore-lifecycle] launch ${launch}: first=${pane.first} last=${pane.last} agent=${resumes} chars=${pane.content.length}`
         )
         shown.push(pane)
         if (launch === 0) {
-          // The shell the host started for the pane sits in the folder the pane was in.
-          await expect
-            .poll(
-              async () => {
-                const listed = await host.client.call<RuntimeTerminalListResult>('terminal.list', {
-                  worktree: `id:${worktreeId}`
-                })
-                const moved = listed.result.terminals.find((entry) => entry.tabId === MOVED_TAB)
-                if (moved) {
-                  await host.client.call('terminal.send', {
-                    terminal: moved.handle,
-                    text: 'pwd',
-                    enter: true
-                  })
-                }
-                return (await readPairedPaneContent(client.page, webTabId)).includes(deep)
-              },
-              { timeout: 30_000, message: 'the restored shell is not in the moved folder' }
-            )
-            .toBe(true)
+          // The agent resumed in the folder the pane was in (the stub prints where it started).
+          expect.soft(pane.content).toContain(`STUB_CODEX_CWD ${deep}`)
           const moved = await client.page.evaluate(
             ({ id, path: filePath }) => {
               const store = window.__store?.getState()
@@ -345,6 +385,9 @@ test('a moved pane shows its own history once, in its folder, across three reloa
         expect.soft(pane.last).toBe(1)
         expect.soft(pane.first).toBe(1)
       }
+      // The carried agent resumed on the first open only: a reload never resumes it again.
+      expect.soft(shown[0]?.content).toContain(`resume ${MOVED_AGENT_SESSION}`)
+      expect.soft(shown.map((pane) => count(pane.content, 'STUB_CODEX_CWD'))).toEqual([1, 1, 1, 1])
     } finally {
       await client.dispose()
     }
@@ -371,6 +414,29 @@ test('"Use on this computer again" after reloads and a restart brings back slept
     // The variable keeps the printed lines out of the echoed command.
     await execInTerminal(launched.page, firstPty, `M=UNDO; seq -f "\${M}A-%04g" 1 ${LINES}`)
     await waitForTerminalOutput(launched.page, `UNDOA-${LINES}`, 30_000)
+    // Pane A also holds an idle, resumable agent, as a hook-reporting Codex leaves it.
+    const agentPane = await waitForActivePaneHookDescriptor(launched.page)
+    const transcriptPath = session.seedCodexResumeRollout(UNDO_AGENT_SESSION, repoPath)
+    await launched.page.evaluate(
+      ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
+        window.__store
+          ?.getState()
+          .setAgentStatus(
+            paneKey,
+            { state: 'done', prompt: 'finish the task', agentType: 'codex' },
+            'Codex',
+            undefined,
+            { worktreeId: wtId },
+            { providerSession: { key: 'session_id', id: providerSessionId, transcriptPath } }
+          )
+      },
+      {
+        paneKey: agentPane.paneKey,
+        worktreeId: agentPane.worktreeId,
+        providerSessionId: UNDO_AGENT_SESSION,
+        transcriptPath
+      }
+    )
     await splitActiveTerminalPane(launched.page, 'vertical')
     await waitForPaneCount(launched.page, 2, 30_000)
     const secondPty = await waitForActivePanePtyId(launched.page)
@@ -400,6 +466,25 @@ test('"Use on this computer again" after reloads and a restart brings back slept
     const repoId = worktreeId.split('::')[0]
     await session.close(launched.app)
     launched = undefined
+    // Hermetic resume: the agent command echoes its arguments instead of running Codex.
+    mutateStoppedProfileState(session.userDataDir, (state) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test owns the persisted fixture; the record is checked below.
+      const records = (
+        state.workspaceSession as {
+          sleepingAgentSessionsByPaneKey?: Record<
+            string,
+            { providerSession?: { id?: unknown }; launchConfig?: unknown }
+          >
+        }
+      ).sleepingAgentSessionsByPaneKey
+      const record = Object.values(records ?? {}).find(
+        (candidate) => candidate.providerSession?.id === UNDO_AGENT_SESSION
+      )
+      if (!record) {
+        throw new Error('the pause kept no resumable agent for pane A')
+      }
+      record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+    })
 
     // The move committed: startup runs its desktop rewrite and retention, as after a real move.
     seedWslMoveCutover(
@@ -476,6 +561,15 @@ test('"Use on this computer again" after reloads and a restart brings back slept
         message: 'a woken pane did not run what was typed'
       })
       .toBe(2)
+    // Pane A's agent resumed there, once; pane B started no agent.
+    const panes = await readPanes()
+    expect.soft(count(panes[0] ?? '', UNDO_AGENT_SESSION)).toBeGreaterThan(0)
+    expect.soft(count(panes[1] ?? '', UNDO_AGENT_SESSION)).toBe(0)
+    const resumeTabs = await page.evaluate(
+      (id) => (window.__store!.getState().tabsByWorktree[id] ?? []).length,
+      worktreeId
+    )
+    expect.soft(resumeTabs).toBe(1)
   } finally {
     if (launched) {
       await session.close(launched.app)
