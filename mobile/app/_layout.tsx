@@ -25,6 +25,8 @@ import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { AndroidAppUpdateModal } from '../src/app-update/AndroidAppUpdateModal'
+import { startAndroidUpdateForeground } from '../src/app-update/android-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
@@ -73,6 +75,7 @@ export default function RootLayout() {
   useEffect(() => startPushTokenSync(), [])
   // Cold start, then foreground and timer checks on the desktop updater's cadence.
   useEffect(() => appUpdateChecker.start(), [])
+  useEffect(() => startAndroidUpdateForeground(), [])
   useEffect(() => startAndroidForegroundPushPresentation(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
@@ -252,6 +255,7 @@ export default function RootLayout() {
             />
           </Stack>
         </SideSafeArea>
+        <AndroidAppUpdateModal />
       </View>
     </RpcClientProvider>
   )
