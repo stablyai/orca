@@ -94,6 +94,24 @@ describe('terminal Chat pending delivery', () => {
     expect(result.current.notices.size).toBe(0)
     expect(result.current.pending[0]?.delivery).toBeUndefined()
   })
+  it('records a pending send with queued true when options.queued is true', () => {
+    const { result } = render()
+    act(() => result.current.record('queued prompt', undefined, { queued: true }))
+    expect(result.current.pending[0]?.queued).toBe(true)
+  })
+  it('clears sticky queued once the live turn that forced queueing is idle', () => {
+    const { result } = render()
+    act(() => {
+      result.current.record('follow-up', undefined, { queued: true })
+    })
+    expect(result.current.pending[0]?.queued).toBe(true)
+    act(() => {
+      result.current.clearQueued()
+    })
+    expect(result.current.pending[0]?.queued).toBeUndefined()
+    expect(result.current.pending[0]?.text).toBe('follow-up')
+  })
+
   it('marks a refused write as not sent, keeps its text, and dismisses it', () => {
     const { result } = render()
     act(() => {

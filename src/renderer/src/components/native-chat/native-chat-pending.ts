@@ -21,6 +21,7 @@ import {
   type NativeChatGluedUserRow,
   type NativeChatUserRow
 } from './native-chat-pending-occurrence'
+import { LIFECYCLE_CLOCK_SKEW_SLACK_MS } from './native-chat-live-status'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -48,6 +49,8 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** Queued while the agent was already streaming/working — sorts after the live reply. */
+  queued?: boolean
 }
 
 export type NativeChatPendingSendScope = {
@@ -164,11 +167,21 @@ function messageIsAfterPendingTimestamp(
     return true
   }
   const boundary = nativeChatPendingMatchingAfter(pending)
-  // A transcript-clock boundary describes an existing message, so exclude ties.
-  // Local send time has no existing record and remains inclusive.
-  return pending.afterMessageTimestamp == null
-    ? message.timestamp >= boundary
-    : message.timestamp > boundary
+  if (pending.afterMessageTimestamp == null) {
+    // Local send time has no existing record. Slack accounts for cross-host
+    // clock skew between the client renderer's sentAt and the host transcript clock.
+    if (
+      message.timestamp > 1e11 &&
+      boundary > 1e11 &&
+      message.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= boundary
+    ) {
+      return true
+    }
+    return message.timestamp >= boundary
+  }
+  // A transcript-clock boundary describes an existing message from the same host,
+  // so no cross-host clock skew exists and ties are strictly excluded.
+  return message.timestamp > boundary
 }
 
 /**
@@ -254,10 +267,11 @@ export function prunePendingSends(
 }
 
 /**
- * Turn pending sends into chat messages so they render in the list as queued
+ * Turn pending sends into chat messages so they render in the list as optimistic
  * user bubbles. They carry the `scrape` source (lowest priority) so the real
  * transcript turn always supersedes them if both are briefly present, and the
- * send time as the timestamp so they sort to the end (most recent) of the list.
+ * send time as the timestamp so they sort with ordinary transcript order.
+ * Mid-turn follow-ups set `queued: true` so they wait behind the streaming preview.
  */
 export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
@@ -303,13 +317,29 @@ export function pendingSendsAsMessages(
         ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
       ],
       timestamp: entry.sentAt,
-      source: 'scrape' as const
+      source: 'scrape' as const,
+      ...(entry.queued ? { queued: true as const } : {})
     }))
 }
 
 /** True when a message id was minted for an optimistic pending send. */
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
+}
+
+/** Include transcript rows at/after a launch seed, with wall-clock skew slack. */
+function messageIsAtOrAfterLaunchCreatedAt(message: NativeChatMessage, createdAt: number): boolean {
+  if (message.timestamp === null) {
+    return true
+  }
+  if (
+    message.timestamp > 1e11 &&
+    createdAt > 1e11 &&
+    message.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= createdAt
+  ) {
+    return true
+  }
+  return message.timestamp >= createdAt
 }
 
 // Why: the seeded prompt has a synthetic id that never matches the real turn's,
@@ -325,8 +355,8 @@ export function launchPromptAsMessage(
   // Why: a launch prompt seeds a brand-new session, so a matching user turn
   // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
   const represented = matchingNativeChatUserContentCounts(
-    existingMessages.filter(
-      (message) => message.timestamp === null || message.timestamp >= entry.createdAt
+    existingMessages.filter((message) =>
+      messageIsAtOrAfterLaunchCreatedAt(message, entry.createdAt)
     )
   )
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
@@ -348,8 +378,8 @@ export function shouldPruneLaunchPrompt(
   entry: NativeChatLaunchPrompt,
   messages: NativeChatMessage[]
 ): boolean {
-  const relevant = messages.filter(
-    (message) => message.timestamp === null || message.timestamp >= entry.createdAt
+  const relevant = messages.filter((message) =>
+    messageIsAtOrAfterLaunchCreatedAt(message, entry.createdAt)
   )
   return (
     (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
