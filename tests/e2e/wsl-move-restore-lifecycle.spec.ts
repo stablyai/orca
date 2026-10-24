@@ -355,16 +355,23 @@ test('a moved pane shows its own history once, in its folder, across three reloa
           )
           .toBe(true)
         await openPairedClientTab(client.page, worktreeId, webTabId)
-        await expect
-          .poll(
-            async () =>
-              (await readPairedPaneContent(client.page, webTabId)).includes('STUB_CODEX_CWD'),
-            {
-              timeout: 60_000,
-              message: 'the carried agent never started in the moved pane'
-            }
-          )
-          .toBe(true)
+        try {
+          await expect
+            .poll(
+              async () =>
+                (await readPairedPaneContent(client.page, webTabId)).includes('STUB_CODEX_CWD'),
+              {
+                timeout: 60_000,
+                message: 'the carried agent never started in the moved pane'
+              }
+            )
+            .toBe(true)
+        } catch (error) {
+          // What the pane shows instead: a refused resume names itself, a plain shell shows its prompt.
+          const tail = (await readPairedPaneContent(client.page, webTabId)).slice(-800)
+          console.log(`[restore-lifecycle] launch ${launch} pane tail: ${JSON.stringify(tail)}`)
+          throw error
+        }
         const pane = await readShownPane(client.page, webTabId, marker)
         const resumes = count(pane.content, 'STUB_CODEX_CWD')
         console.log(
