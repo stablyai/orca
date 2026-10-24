@@ -12,12 +12,11 @@ export function forEachLine(
 ): void {
   let lineStart = 0
   let lineNumber = 1
-  for (let index = 0; index <= content.length; index += 1) {
-    if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
-    }
+  while (lineStart <= content.length) {
+    const newline = content.indexOf('\n', lineStart)
+    const index = newline === -1 ? content.length : newline
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    if (visit(lineStart, lineEnd, lineNumber) === false) {
+    if (visit(lineStart, lineEnd, lineNumber) === false || newline === -1) {
       return
     }
     lineStart = index + 1
