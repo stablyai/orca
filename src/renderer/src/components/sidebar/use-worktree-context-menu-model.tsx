@@ -35,6 +35,8 @@ import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
+type ParentPicker = { childWorktreeId: string; anchorElement: HTMLElement }
+
 export type WorktreeContextMenuProps = {
   worktree: Worktree
   children: React.ReactNode
@@ -82,15 +84,9 @@ export function useWorktreeContextMenuModel({
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const createGroupDialogActiveRef = useRef(false)
-  const [parentPicker, setParentPicker] = useState<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const [parentPicker, setParentPicker] = useState<ParentPicker | null>(null)
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
-  const pendingParentPickerRef = useRef<{
-    childWorktreeId: string
-    anchorElement: HTMLElement
-  } | null>(null)
+  const pendingParentPickerRef = useRef<ParentPicker | null>(null)
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
@@ -320,6 +316,7 @@ export function useWorktreeContextMenuModel({
     moveProjectToGroup,
     onAssignWorkspaceStatus,
     openModal,
+    projectGroups,
     repo,
     scopeRef,
     setCreateGroupDialogOpen,

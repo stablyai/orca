@@ -26,6 +26,7 @@ export function useWorktreeContextMenuCommands(args: {
   getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
+  projectGroups: ReturnType<typeof useAppStore.getState>['projectGroups']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined

@@ -6,9 +6,7 @@ import { selectProjectGroupRemovalTargets } from '../slices/project-group-remova
 import {
   getProjectGroupHostId,
   isProjectGroupJoinableFromCatalog,
-  projectGroupMatchesOwnerHost,
-  resolveProjectGroupOwnerHostId,
-  runtimeTargetForProjectGroupOwner
+  projectGroupMatchesOwnerHost
 } from '../slices/project-group-owner-routing'
 import {
   findRepoForHost,
@@ -21,6 +19,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
+import { resolveProjectGroupMutationTarget } from './project-group-mutation-routing'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -97,11 +96,11 @@ export function createProjectGroupMutationActions(
     updateProjectGroup: async (groupId, updates, options) => {
       try {
         // Why: the sidebar lists groups from every host, so the mutation follows the group's owner, not the focused host.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
-        if (!target) {
+        const route = resolveProjectGroupMutationTarget(get(), groupId, options)
+        if (!route) {
           return false
         }
+        const { target, ownerHostId } = route
         const updated =
           target.kind === 'local'
             ? await window.api.projectGroups.update({ groupId, updates })
@@ -133,11 +132,11 @@ export function createProjectGroupMutationActions(
     deleteProjectGroup: async (groupId, options) => {
       try {
         // Why: deletion targets the group's owner host (see updateProjectGroup); focus may be elsewhere.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
-        if (!target) {
+        const route = resolveProjectGroupMutationTarget(get(), groupId, options)
+        if (!route) {
           return false
         }
+        const { target, ownerHostId } = route
         const deleted =
           target.kind === 'local'
             ? await window.api.projectGroups.delete({ groupId })
@@ -161,27 +160,31 @@ export function createProjectGroupMutationActions(
     },
 
     deleteProjectGroupWithContainedProjects: async (groupId, options) => {
-      const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options.hostId)
-      const targets = selectProjectGroupRemovalTargets(
-        get().projectGroups,
-        get().repos,
-        groupId,
-        ownerHostId
-      )
-      const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
-      if (!targets.groupExists) {
+      const route = resolveProjectGroupMutationTarget(get(), groupId, options)
+      const targets = route
+        ? selectProjectGroupRemovalTargets(
+            get().projectGroups,
+            get().repos,
+            groupId,
+            route.ownerHostId
+          )
+        : null
+      if (!route || !targets?.groupExists) {
         return {
           status: 'missing-group',
           groupId,
-          requestedProjectIds,
+          requestedProjectIds: [],
           removedProjectIds: [],
           failedProjectRemovals: []
         }
       }
+      const { ownerHostId } = route
+      const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
 
-      const deleted = await get().deleteProjectGroup(groupId, {
-        hostId: ownerHostId ?? undefined
-      })
+      const deleted = await get().deleteProjectGroup(
+        groupId,
+        options.executionHostId ? { executionHostId: ownerHostId } : { hostId: ownerHostId }
+      )
       if (!deleted) {
         return {
           status: 'group-delete-failed',
