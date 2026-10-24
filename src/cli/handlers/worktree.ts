@@ -44,7 +44,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
+import { getWorktreeStateFlags } from './worktree-pin-flags'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
@@ -234,7 +234,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         `Parent selector "${parentSelector}" is a folder. Folder parents are accepted only by orca worktree create.`
       )
     }
-    const isUnread = getOptionalWorktreeUnreadFlag(flags)
+    const stateFlags = getWorktreeStateFlags(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
@@ -248,7 +248,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
-      isUnread,
+      ...stateFlags,
       parentWorktree: await withWorktreeSelectorRecovery(
         getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
         parentCwdNextSteps(parentSelector),
