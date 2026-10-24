@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
+import { registerWslDriveProjectHandlers } from '../wsl-drive-project-handlers'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
@@ -259,6 +260,7 @@ export function registerCoreHandlers(
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
   registerWslMoveWiring(store, runtime)
+  registerWslDriveProjectHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>

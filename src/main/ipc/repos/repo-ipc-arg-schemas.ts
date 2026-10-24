@@ -49,7 +49,11 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit-global') }),
   z.object({ kind: z.literal('windows-host') }),
-  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+  z.object({
+    kind: z.literal('wsl'),
+    distro: z.string().min(1),
+    git: z.literal('windows-host').optional()
+  })
 ])
 
 export const ProjectUpdateIpcArgs = z.object({

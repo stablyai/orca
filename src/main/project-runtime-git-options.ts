@@ -47,7 +47,7 @@ function getLocalProjectGitExecOptionsForRuntime(
       `Project runtime requires repair before git execution: ${projectRuntime.repair.reason}`
     )
   }
-  if (projectRuntime.runtime.kind === 'wsl') {
+  if (projectRuntime.runtime.kind === 'wsl' && projectRuntime.runtime.git !== 'windows-host') {
     return { cwd: repo.path, wslDistro: projectRuntime.runtime.distro }
   }
   return { cwd: repo.path }
@@ -110,5 +110,8 @@ export function getWorktreeMirrorDistroForRuntime(
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return undefined
   }
-  return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : undefined
+  // Windows Git can't use a worktree WSL Git would create inside the distro.
+  return projectRuntime.runtime.kind === 'wsl' && projectRuntime.runtime.git !== 'windows-host'
+    ? projectRuntime.runtime.distro
+    : undefined
 }

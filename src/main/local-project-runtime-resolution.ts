@@ -74,6 +74,16 @@ function resolveLocalProjectRuntime(
   })
 }
 
+/** One local project's runtime, from the current WSL discovery caches. */
+export function resolveLocalProjectRuntimeForProject(
+  store: ProjectRuntimeResolutionStore,
+  project: Pick<Project, 'id' | 'localWindowsRuntimePreference'>
+): ProjectExecutionRuntimeResolution | undefined {
+  return canResolveProjectRuntimeForRepo(store)
+    ? resolveLocalProjectRuntime(store, project)
+    : undefined
+}
+
 export function resolveLocalProjectRuntimeForRepo(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
