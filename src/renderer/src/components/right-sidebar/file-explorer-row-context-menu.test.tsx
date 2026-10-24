@@ -27,6 +27,7 @@ const storeState = vi.hoisted(
   })
 )
 const revealInFileManager = vi.hoisted(() => vi.fn())
+const attachExplorerFileAsContext = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/context-menu', async () => {
   const React_ = await import('react')
@@ -64,6 +65,10 @@ vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
 vi.mock('./file-explorer-row-file-transfer', () => ({
   copyFileToOsClipboard: vi.fn(),
   downloadRemoteFile: vi.fn()
+}))
+
+vi.mock('./file-explorer-attach-as-context', () => ({
+  attachExplorerFileAsContext
 }))
 
 const fileNode: TreeNode = {
@@ -182,5 +187,42 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     storeState.activeWorktreeId = 'folder:fw-1'
 
     expect(renderRevealItem()?.disabled).toBe(false)
+  })
+})
+
+describe('FileExplorerRowContextMenu attach as context', () => {
+  beforeEach(() => {
+    items.list = []
+    attachExplorerFileAsContext.mockReset()
+  })
+
+  it('offers Attach as context for a file and attaches the resolved path', () => {
+    renderRevealItem({ connectionId: 'ssh-1' })
+
+    const attachItem = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Attach as context')
+    )
+
+    expect(attachItem).toBeDefined()
+    attachItem?.onSelect?.()
+    expect(attachExplorerFileAsContext).toHaveBeenCalledExactlyOnceWith(
+      '/repo/src/index.ts',
+      'ssh-1'
+    )
+  })
+
+  it('does not offer Attach as context for a directory', () => {
+    renderRevealItem({
+      node: {
+        ...fileNode,
+        name: 'src',
+        isDirectory: true
+      }
+    })
+
+    expect(
+      items.list.some((item) => React.Children.toArray(item.children).includes('Attach as context'))
+    ).toBe(false)
+    expect(attachExplorerFileAsContext).not.toHaveBeenCalled()
   })
 })
