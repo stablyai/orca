@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -211,5 +211,48 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
         <ProviderSegment p={partialProvider} compact={false} display="used" mode="compact" />
       )
     ).not.toThrow()
+  })
+})
+
+describe('fableWeekly compact label (issue #13041)', () => {
+  const NOW = 1_000_000_000
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('renders remaining duration instead of the Fable window name in compact mode', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      fableWeekly: windowOf(50, 10080, NOW + 3600_000),
+      updatedAt: NOW,
+      error: null,
+      status: 'ok'
+    }
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
+    )
+    expect(markup).toContain('50% used 1h')
+    expect(markup).not.toContain('Fable')
+  })
+
+  it('tightest fableWeekly section uses remaining duration, not the window name', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const { getTightestUsageSection } = await import('./UsageRosterPanel')
+    const limits: ProviderRateLimits = {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      fableWeekly: windowOf(80, 10080, NOW + 2 * 3600_000 + 30 * 60_000),
+      updatedAt: NOW,
+      error: null,
+      status: 'ok'
+    }
+    const tightest = getTightestUsageSection(limits)
+    expect(tightest?.label).toBe('2h 30m')
   })
 })
