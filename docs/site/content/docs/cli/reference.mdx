@@ -210,6 +210,19 @@ By default, `terminal read` returns the accumulated output stream with terminal 
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
 
+## Chats
+
+Agents that run as chats are read and messaged with `chat` commands. `--session` takes the session id from `chat list` or the handle `agent launch` returns.
+
+```bash
+orca chat list --json
+orca chat list --state working --json
+orca chat read --session <session> --limit 10 --json
+orca chat send --session <session> --text "Run the tests, then summarize failures" --json
+```
+
+`chat read` returns the newest messages, tool calls, approvals and questions; an approval or question waiting for an answer has `pending: true`. `chat send` sends the text as your message. While the agent is working, hosts with a message queue hold it until the turn ends and report `delivery: "queued"`. A chat that restarted since it was read refuses the send.
+
 ## Files
 
 ```bash

@@ -8,6 +8,7 @@ export const CLI_COMMAND_NAMES = [
   'back',
   'browser',
   'capture',
+  'chat',
   'check',
   'claude-teams',
   'clear',

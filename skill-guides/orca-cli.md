@@ -26,9 +26,9 @@ Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
 
-A handoff is done when the new worktree id and agent handle have been reported and the prompt was delivered: the launch's `prompt.outcome` is `journaled` or `handed-to-terminal`, or, for an agent that was already running, the send receipt reported `accepted: true`. Do not wait for the receiving agent to finish.
+A handoff is done when the new worktree id and agent handle have been reported and the prompt was delivered: the launch's `prompt.outcome` is `journaled` or `handed-to-terminal`, or, for an agent that was already running, the `terminal send` receipt reported `accepted: true` or `chat send` reported `delivery` `submitted` or `queued`. Do not wait for the receiving agent to finish.
 
-Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
+Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with `terminal send` or `chat send` for an agent that is already running.
 
 Independent new-worktree handoff:
 
@@ -56,6 +56,12 @@ Existing-terminal handoff:
 
 ```text
 ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
+```
+
+Existing-chat handoff, for an agent that runs as a chat (`outcome.kind` `structured`):
+
+```text
+ORCA chat send --session <session> --text "<task brief>" --json
 ```
 
 ## Starting agents
@@ -234,6 +240,22 @@ Terminal rules:
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
+
+## Chats
+
+Agents launched as chats are read and messaged with `chat`, not `terminal`. `chat list` names each chat's workspace, agent, state and last reply; `--session` takes the `session` it reports or the `handle` a launch returned.
+
+```text
+ORCA chat list --json
+ORCA chat list --state working --json
+ORCA chat read --session <session> --limit 10 --json
+ORCA chat send --session <session> --text "<message>" --json
+```
+
+- `chat read` returns messages, tool calls, and approvals or questions; `pending: true` marks one waiting for the user.
+- `chat send` sends the text as the user's message. While the agent works, a host with a message queue holds it until the turn ends and reports `delivery: "queued"`.
+- A refused send was not delivered. Read the chat again before resending.
+- When relaying for a user from outside Orca (for example a voice or messaging assistant on the same machine), report from `chat list` and `chat read`, repeat an instruction back and get the user's confirmation before `chat send`, and send the user's words without adding instructions.
 
 ## Artifacts
 
