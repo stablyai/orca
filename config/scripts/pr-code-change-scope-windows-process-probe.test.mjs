@@ -15,7 +15,7 @@ describe('Windows installer process probe routing', () => {
     ['config/scripts/nsis-process-check.test.mjs'],
     ['config/scripts/idle-cpu-process-sampling.mjs'],
     ['config/scripts/idle-cpu-process-sampling.test.mjs'],
-    ['src/packages/process-host/src/run-process-sync.ts'],
+    ['src/packages/process-host/src/run-process.ts'],
     ['config/vitest.config.ts'],
     ['config/scripts/vitest-host-ports-setup.ts'],
     ['config/scripts/ci-unit-files.mjs'],

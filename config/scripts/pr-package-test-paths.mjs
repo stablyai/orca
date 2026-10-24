@@ -108,8 +108,7 @@ const WINDOWS_PROCESS_PROBE_PREFIXES = [
   'config/scripts/ci-unit-',
   'config/scripts/workspace-source-exports',
   'config/dark-build-switches.',
-  'src/packages/process-host/',
-  'src/shared/process-host/'
+  'src/packages/process-host/'
 ]
 
 export function isWindowsProcessProbePath(file) {
