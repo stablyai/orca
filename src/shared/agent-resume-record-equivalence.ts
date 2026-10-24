@@ -12,7 +12,8 @@ export function launchConfigsEqual(
   if (
     a.agentCommand !== b.agentCommand ||
     a.agentArgs !== b.agentArgs ||
-    a.ompResumeFilePath !== b.ompResumeFilePath
+    a.ompResumeFilePath !== b.ompResumeFilePath ||
+    a.claudeAccountId !== b.claudeAccountId
   ) {
     return false
   }
@@ -41,7 +42,8 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&
-    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+    launchConfigsEqual(existing.launchConfig, next.launchConfig) &&
+    existing.claudeAccountId === next.claudeAccountId
   )
 }
 
@@ -61,7 +63,8 @@ export function recoveryRecordMatches(
     existing.state === next.state &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
-    launchConfigsEqual(existing.launchConfig, next.launchConfig)
+    launchConfigsEqual(existing.launchConfig, next.launchConfig) &&
+    existing.claudeAccountId === next.claudeAccountId
   )
 }
 

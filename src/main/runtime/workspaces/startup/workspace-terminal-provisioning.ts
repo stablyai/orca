@@ -7,6 +7,7 @@ import type { WorktreeStartupReadinessHost } from '../../runtime-worktree-startu
 import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
+import { resolveWorktreeStartupClaudeAccount } from '../../runtime-worktree-startup-claude-account'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -76,6 +77,18 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
+  }
+
+  protected resolveStartupClaudeAccount(
+    request: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['request'],
+    createRouteKind: Parameters<typeof resolveWorktreeStartupClaudeAccount>[0]['createRouteKind']
+  ): string | undefined {
+    return resolveWorktreeStartupClaudeAccount({
+      request,
+      createRouteKind,
+      canSpawn: Boolean(this.ptyController?.spawn),
+      listClaudeAccounts: () => this.getAccountsSnapshot().claude
+    })
   }
 
   private getLayoutOwnerTerminalProvisioningHost(

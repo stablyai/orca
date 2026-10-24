@@ -52,6 +52,8 @@ type RuntimeFolderWorktreeCreateDeps = {
 
 export async function createRuntimeFolderWorktree(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -154,6 +156,7 @@ export async function createRuntimeFolderWorktree(args: {
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(launchRuntime instanceof Error
           ? { startFailure: launchRuntime }
           : launchRuntime
@@ -193,9 +196,10 @@ export async function createRuntimeFolderWorktree(args: {
       worktree.id,
       undefined,
       // Switch point: a start main could not make stays main's to show, never the window's.
+      // Why the account check: the renderer's fallback launch cannot honour --account; it would use the active one.
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? undefined
-        : args.startup && !didSpawnStartup
+        : args.startup && !didSpawnStartup && !args.startupClaudeAccountId
           ? args.startup
           : undefined,
       ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])

@@ -11,6 +11,8 @@ import {
   hasClientEnvironmentFooter,
   stripClientEnvironmentFooter
 } from '../../../../shared/client-environment-info'
+import { describeClaudePinnedLaunchError } from './claude-pinned-launch-error-copy'
+import { StartOnActiveAccountButton } from './StartOnActiveAccountButton'
 import {
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
@@ -92,6 +94,9 @@ export function shouldOfferDaemonRestart(error: string): boolean {
 }
 
 export function isExplainedTerminalError(error: string): boolean {
+  if (describeClaudePinnedLaunchError(error)) {
+    return true
+  }
   return error
     .split('\n')
     .some(
@@ -155,6 +160,10 @@ function isSshHostStateTerminalError(error: string): boolean {
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string, agentId?: string | null): string {
+  const pinnedLaunch = describeClaudePinnedLaunchError(error)
+  if (pinnedLaunch) {
+    return pinnedLaunch.message
+  }
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
@@ -228,6 +237,7 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
+  onStartOnActiveAccount,
   onOpenNewTerminal
 }: {
   error: string
@@ -237,6 +247,7 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onStartOnActiveAccount?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
 }): React.JSX.Element {
@@ -402,6 +413,7 @@ export function TerminalErrorToast({
               : translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
           </Button>
         ) : null}
+        <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
         {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
         {paneOwnerUnverified && onOpenNewTerminal ? (
           <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">

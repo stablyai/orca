@@ -7,6 +7,7 @@ import { commitPtySpawn } from '../spawn-commit-assembly'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { markRuntimeClaudePtySpawned } from './spawn-claude-account'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
@@ -15,6 +16,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     // Fallback may follow an access error; only proven absence authorizes changing the saved folder.
     const correctStartupCwd = startupCwdFallback ? ctx.correctStartupCwd : undefined
     const ensure = ctx.result.agentSessionEnsure
+    if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+      markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
+    }
     return commitPtySpawn({
       state: ctx,
       nativeWindowsConptySpawn: isNativeWindowsLocalPtySpawn({

@@ -7,6 +7,7 @@ import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { markClaudePtySpawnedForAuth } from '../claude-pinned-spawn'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
@@ -19,6 +20,9 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? args.worktreeId
         : null
     const response = ipcSpawnResponse(ctx)
+    if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+      markClaudePtySpawnedForAuth(ctx.result.id, ctx.claudeAuth)
+    }
     return commitPtySpawn<PtySpawnResult>({
       state: ctx,
       nativeWindowsConptySpawn: ctx.nativeWindowsConptySpawn,

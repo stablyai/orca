@@ -264,7 +264,17 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     readyRestartPtyIds
   ])
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  const restartPaneWithStartup = useCallback(
+    (paneId: number, startup: PtyConnectionDeps['startup']) =>
+      handleRestartPane(paneId, startup, { focus: true }),
+    [handleRestartPane]
+  )
+
+  return {
+    handleRestartExitedPane,
+    handleCloseExitedPane,
+    restartPaneWithStartup
+  }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

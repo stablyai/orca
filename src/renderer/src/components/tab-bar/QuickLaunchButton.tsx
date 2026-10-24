@@ -2,7 +2,12 @@ import React, { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { launchWithClaudeAccountChoice } from '../claude-account-prompt/choose-claude-launch-account'
+import {
+  captureNativeChatComposerFocusIntent,
+  type NativeChatComposerFocusIntent
+} from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 import { Settings as SettingsIcon } from 'lucide-react'
@@ -49,6 +54,8 @@ export type QuickLaunchAgentMenuItemsProps = {
   disabled?: boolean
 }
 
+type NewTabLaunchableRow = Exclude<NewTabAgentMenuRow, { kind: 'chat-unavailable' }>
+
 const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
 
 const PLACEHOLDER_WIDTHS = ['w-3/5', 'w-1/2', 'w-2/3', 'w-2/5', 'w-3/4', 'w-1/3', 'w-4/5', 'w-1/4']
@@ -68,23 +75,29 @@ export function useTabAgentMenuLaunch({
   onPromptHandedOff,
   disabled,
   onFocusHostTerminal,
-  onFocusChat
+  onFocusChat,
+  afterDeferredLaunch
 }: QuickLaunchAgentMenuItemsProps & {
   onFocusHostTerminal?: () => void
   /** A New Chat opened at once: its composer takes the focus the menu gives back. */
   onFocusChat?: (tabId: string) => void
+  /** Runs after a launch the Claude account prompt delayed past the menu's close. */
+  afterDeferredLaunch?: () => void
 }) {
-  const runLaunch = useCallback(
-    (row: NewTabAgentMenuRow) => {
-      if (disabled || row.kind === 'chat-unavailable') {
-        return
-      }
+  const launchOnAccount = useCallback(
+    (
+      row: NewTabLaunchableRow,
+      focusIntent: NativeChatComposerFocusIntent,
+      claudeAccountId: string | undefined,
+      deferred: boolean
+    ) => {
       const { agent } = row
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
-        focusIntent: captureNativeChatComposerFocusIntent(),
+        focusIntent,
+        ...(claudeAccountId ? { claudeAccountId } : {}),
         ...(row.kind === 'chat' || row.kind === 'cli'
           ? {
               requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
@@ -139,7 +152,12 @@ export function useTabAgentMenuLaunch({
         onFocusHostTerminal?.()
         return
       }
-      onFocusTerminal(result.surface.tabId)
+      // Why: after the account prompt the menu has closed, so a queued focus runs only if flushed.
+      if (deferred && !afterDeferredLaunch) {
+        focusTerminalTabSurface(result.surface.tabId)
+      } else {
+        onFocusTerminal(result.surface.tabId)
+      }
     },
     [
       worktreeId,
@@ -150,13 +168,27 @@ export function useTabAgentMenuLaunch({
       launchSource,
       onPromptDelivered,
       onPromptHandedOff,
-      disabled,
       onFocusHostTerminal,
-      onFocusChat
+      onFocusChat,
+      afterDeferredLaunch
     ]
   )
 
-  return runLaunch
+  return useCallback(
+    (row: NewTabAgentMenuRow) => {
+      if (disabled || row.kind === 'chat-unavailable') {
+        return
+      }
+      // Why captured before the account prompt: the prompt itself takes focus.
+      const focusIntent = captureNativeChatComposerFocusIntent()
+      launchWithClaudeAccountChoice(
+        row.agent,
+        { worktreeId, afterDeferredLaunch },
+        (claudeAccountId, deferred) => launchOnAccount(row, focusIntent, claudeAccountId, deferred)
+      )
+    },
+    [disabled, worktreeId, afterDeferredLaunch, launchOnAccount]
+  )
 }
 
 function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): React.JSX.Element {

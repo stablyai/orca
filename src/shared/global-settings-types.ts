@@ -543,7 +543,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Re-exported so existing importers keep one entry point; the shape lives in its
-// own file because this one is at the max-lines ceiling.
+// Re-exported so existing importers keep one entry point; these shapes live in
+// their own files because this one is at the max-lines ceiling.
 export type { GhosttyImportPreview } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

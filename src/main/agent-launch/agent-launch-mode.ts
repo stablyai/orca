@@ -17,6 +17,11 @@ import {
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  PROJECT_CLAUDE_ACCOUNT_DETAIL,
+  projectClaudeAccountForLaunch,
+  type AgentLaunchModeHostRuntime
+} from './agent-launch-project-claude-account'
 import type { AgentLaunchSurface } from '../../shared/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
@@ -47,6 +52,8 @@ export type AgentLaunchModePlacement = {
   terminal?: string
   /** Derived by the host; absent means unknown, not a default workspace kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** `--account`: a structured session cannot run on a non-active account. */
+  claudeAccount?: string
   /** Structured sessions cannot honor a cwd outside their workspace root. */
   cwd?: string
   /** Missing until materialization; a requested cwd cannot be classified without it. */
@@ -68,7 +75,9 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  pinned_claude_account:
+    '--account runs Claude on a non-active account, which only a terminal can do'
 }
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
@@ -125,6 +134,9 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return blocked('remote_execution_host')
   }
+  if (placement.claudeAccount) {
+    return blocked('pinned_claude_account')
+  }
   const cwdRelation = launchCwdRelation(placement)
   const support = resolveStructuredNativeChatSupport({
     agent,
@@ -160,7 +172,7 @@ export function decideAgentLaunchMode(args: {
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: AgentLaunchModeHostRuntime,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -182,12 +194,21 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  return downgradeAgentLaunchModeForHost(
+  const settled = downgradeAgentLaunchModeForHost(
     receipt,
     await readStructuredCreateSupport(runtime, worktreeId, agent),
     vocabulary,
     context ? { ...context, agent } : undefined
   )
+  // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
+  if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, worktreeId, agent)) {
+    return settled
+  }
+  const requested = settled.reason === 'requested'
+  // Why refused: an explicit chat request must not quietly become a terminal before anything opens.
+  return requested && context?.phase === 'before-effects'
+    ? unavailableLaunchMode('pinned_claude_account', vocabulary, true, { ...context, agent })
+    : downgraded('pinned_claude_account', vocabulary, requested, PROJECT_CLAUDE_ACCOUNT_DETAIL)
 }
 
 /** Unknown host support must fall back to a terminal. */
@@ -280,9 +301,10 @@ function unavailableLaunchMode(
 function downgraded(
   reason: AgentLaunchDowngradeReason,
   vocabulary: AgentLaunchModeVocabulary,
-  requested = false
+  requested = false,
+  detail?: string
 ): AgentLaunchModeReceipt {
-  const why = vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
+  const why = detail ?? vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
   return {
     mode: 'terminal',
     preferred: 'structured',

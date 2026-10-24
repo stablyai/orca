@@ -28,6 +28,7 @@ import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-s
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { relaunchWithClaudeAccount, stampClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch
@@ -77,6 +78,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
    * terminal route, whose readiness signal the client watches itself.
    */
   onPromptDeliveryUnconfirmed?: () => void
+  /** A one-time Claude account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
   /** Keep terminal launches in a floating workspace from taking global selection. */
   activate?: boolean
   /** The launch seeds a workspace being opened, so its PTY spawn must not reshuffle Recent. */
@@ -104,12 +107,6 @@ export type LaunchAgentInNewTabResult = {
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
 } | null
-
-export function shouldQueueTerminalFocusAfterMenuClose(
-  result: NonNullable<LaunchAgentInNewTabResult>
-): boolean {
-  return result.surface.kind === 'host-published'
-}
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -177,6 +174,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
+  const launchConfig = stampClaudeLaunchAccount(store, args, startupPlan.launchConfig)
   // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
   // server included, so only a non-structured route falls through to the host-published terminal.
   const route = routeNewTabLaunch(store, args, {
@@ -231,7 +229,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       environmentId: runtimeEnvironmentId,
       groupId,
       cwd: initialCwd,
-      startupPlan,
+      startupPlan: { ...startupPlan, launchConfig },
       prompt: trimmedPrompt,
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
@@ -241,7 +239,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
-      onPromptDelivered
+      onPromptDelivered,
+      relaunch: relaunchWithClaudeAccount(launchAgentInNewTabInternal, args)
     })
     return {
       surface: { kind: 'host-published' },
@@ -259,6 +258,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   if (
     pasteDraftAfterLaunch !== null &&
+    // Why: the host's plan carries only the project's saved account, not a one-time choice.
+    !args.claudeAccountId &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({
@@ -292,7 +293,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
-      launchConfig: startupPlan.launchConfig,
+      launchConfig,
       launchAgent: agent,
       ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery

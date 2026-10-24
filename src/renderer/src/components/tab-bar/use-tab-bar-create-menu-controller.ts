@@ -235,7 +235,8 @@ export function useTabBarCreateMenuController({
     onFocusTerminal: queueTerminalTabFocusAfterNewTabMenuClose,
     onFocusHostTerminal: queueNewActiveTerminalFocusAfterNewTabMenuClose,
     onFocusChat: (tabId) =>
-      queueFocusAfterNewTabMenuClose(() => requestNativeChatComposerFocus(tabId), true)
+      queueFocusAfterNewTabMenuClose(() => requestNativeChatComposerFocus(tabId), true),
+    afterDeferredLaunch: () => runPendingNewTabMenuFocusAfterClose()
   })
   const launchAgentFromNewTabEntry = (option: TabAgentLaunchOption): void => {
     if (option.row) {

@@ -28,8 +28,12 @@ type AwaitingHostAnswer = { awaited: Promise<void>; replan: () => AgentSessionLa
 export function routeNewTabLaunch(
   store: Parameters<typeof planAgentSessionLaunch>[0],
   args: LaunchAgentInNewTabArgs,
-  request: Omit<AgentSessionLaunchRequest, 'requestId'>
+  routeRequest: Omit<AgentSessionLaunchRequest, 'requestId'>
 ): { plan: AgentSessionLaunchPlan | undefined } | AwaitingHostAnswer {
+  // Why here: a one-time Claude account choice decides the route, so every planning path sees it.
+  const request = args.claudeAccountId
+    ? { ...routeRequest, claudeAccountId: args.claudeAccountId }
+    : routeRequest
   const { requestId } = args
   if (requestId === undefined) {
     return { plan: args.agentSessionLaunchPlan }

@@ -58,6 +58,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
@@ -115,6 +117,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(launchRuntime instanceof Error
           ? { startFailure: launchRuntime }
           : launchRuntime
@@ -150,7 +153,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     const provisionInBackground = ports.provisionInBackground?.() === true
     // Why: a failed agent start hands the whole create to the window, which seeds the agent's tab
     // first and lays setup and default tabs around it; main provisioning first would leave it no tab.
-    const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
+    // An --account start is never handed to the window, whose launch would use the active account.
+    const agentStartFailed =
+      Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup) &&
+      !args.startupClaudeAccountId
     // Switch point: main provisions whether or not a window is open; no window takes over.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
@@ -179,7 +185,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         repo.id,
         worktree.id,
         // Switch point: a start main could not make stays main's to show, never the window's.
-        ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : startup && !didSpawnStartup ? startup : undefined,
+        // Why the account check: the renderer's fallback launch cannot honour --account.
+        ORCA_LAYOUT_OWNER_IS_MAIN || args.startupClaudeAccountId
+          ? undefined
+          : startup && !didSpawnStartup
+            ? startup
+            : undefined,
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : failedSetup,
         undefined,
         ...(args.promisedAgentChat && !startup ? ([true] as const) : [])

@@ -198,6 +198,10 @@ export class ClaudeProfileRouter {
     return this.describe(accountId).home
   }
 
+  envSettled(): Promise<unknown> {
+    return this.envReady
+  }
+
   async prepareAccount(accountId: string): Promise<string> {
     const profile = this.describe(accountId)
     const report = await this.setUp(profile).catch(() => null)

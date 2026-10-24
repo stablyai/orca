@@ -7,7 +7,8 @@ export function TabHoverCard({
   icon,
   programName,
   description,
-  alert
+  alert,
+  onOpenChange
 }: {
   children: ReactNode
   title: string
@@ -16,10 +17,11 @@ export function TabHoverCard({
   description?: string
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const interactive = alert !== undefined && alert !== null
   return (
-    <Tooltip disableHoverableContent={!interactive}>
+    <Tooltip disableHoverableContent={!interactive} onOpenChange={onOpenChange}>
       <TooltipTrigger
         asChild
         onFocus={(event) => {

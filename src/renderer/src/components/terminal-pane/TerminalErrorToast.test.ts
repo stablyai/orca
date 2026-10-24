@@ -24,6 +24,7 @@ import {
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
+import { claudePinnedLaunchError } from '../../../../shared/claude/claude-pinned-launch-error'
 
 beforeEach(() => {
   environmentMocks.resolveFooter.mockReset()
@@ -539,6 +540,25 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() =>
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
+  })
+
+  it('shows the friendly message and a "Start on active account" button for a tagged account-missing refusal', () => {
+    const onStartOnActiveAccount = vi.fn()
+    const error = claudePinnedLaunchError('account-missing', 'refused').message
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error,
+        onDismiss: vi.fn(),
+        onStartOnActiveAccount
+      })
+    )
+
+    expect(view.container.textContent).toContain(
+      'The saved Claude account for this project is no longer signed in.'
+    )
+    expect(view.container.querySelector('a')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Start on active account' }))
+    expect(onStartOnActiveAccount).toHaveBeenCalledTimes(1)
   })
 
   // #30486: Retry was the only action, so a pane whose owner stays unverifiable looped on it.

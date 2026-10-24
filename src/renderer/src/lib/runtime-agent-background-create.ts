@@ -1,5 +1,5 @@
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/agent-session-launch-options'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
@@ -32,7 +32,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   }
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
   const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-  const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+  const launchOptions = createAgentSessionLaunchOptions(keyboardProtocol)
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
   return await runRemoteAgentSessionLaunch({
@@ -44,7 +44,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           'terminal.createAgentSession',
           withAgentSessionCreateOperationId(
             {
-              ...(await keyboardOptions(args.environmentId)),
+              ...(await launchOptions(args.environmentId, args.legacy.launchConfig)),
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
               agent: args.agent,
               ...(args.prompt
