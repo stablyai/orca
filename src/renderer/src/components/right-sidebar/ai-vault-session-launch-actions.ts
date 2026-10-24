@@ -32,6 +32,7 @@ import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuati
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { openAiVaultSessionHistoryChatForRow } from './ai-vault-session-history-chat-open'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
@@ -189,11 +190,22 @@ export function useAiVaultSessionLaunchActions({
   )
 
   const handleResumeInNewChat = useCallback(
-    (session: AiVaultSession, targetWorktreeId?: string): void => {
+    (
+      session: AiVaultSession,
+      targetWorktreeId?: string,
+      /** The route the eligibility gate decided; a structured lane skips the read-only tab. */
+      route?: 'structured' | 'history'
+    ): void => {
+      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
+      // The read-only tab needs no host adoption — the conversation renders from the agent's own
+      // store, which is the whole conversation, not a fork of it. It must land in the row's own
+      // workspace, not whichever one happens to be active.
+      if (route !== 'structured' && openAiVaultSessionHistoryChatForRow(session, worktreeId)) {
+        return
+      }
       if (!adoptsCliConversations(session.agent)) {
         return
       }
-      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
       if (!worktreeId) {
         toast.error(
           translate(

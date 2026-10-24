@@ -71,7 +71,11 @@ describe('resuming a conversation from history in a chat', () => {
   it('is offered in a workspace on the machine that recorded it', () => {
     mocks.owner.mockReturnValue('local')
 
-    expect(resumeInChat()).toEqual({ available: true, workspaceId: PAIRED_WORKSPACE })
+    expect(resumeInChat()).toEqual({
+      available: true,
+      workspaceId: PAIRED_WORKSPACE,
+      route: 'structured'
+    })
   })
 
   it('asks the host that would run it whether it can resume, not another', () => {

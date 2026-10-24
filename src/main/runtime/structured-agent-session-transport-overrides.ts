@@ -2,6 +2,8 @@ import type { CodexModelCatalogProbeDeps } from '../codex/codex-model-catalog-pr
 import type { AcpStructuredSessionAdapterDeps } from '../acp/acp-structured-session-adapter-deps'
 import type { AcpStructuredLaunchPartDeps } from '../acp/acp-structured-launch-resolution'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
+import type { ZcodeStructuredSessionAdapterDeps } from '../zcode/zcode-structured-session-state'
+import type { ZcodeStructuredLaunchPartDeps } from '../zcode/zcode-structured-launch-resolution'
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type { StructuredAgentSessionStartupLimits } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
@@ -23,6 +25,8 @@ export type StructuredAgentSessionTransportOverrides = {
    *  still resolves and checks through them. Unset, the real binary is found and probed. */
   acpLaunchCommand?: Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'probeVersion'>
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
+  resolveZcodeCommand?: ZcodeStructuredLaunchPartDeps['resolveCommand']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** The shipped startup limits unless a test shortens them. */

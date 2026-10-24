@@ -10,6 +10,7 @@ export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   codex: ['codex'],
   grok: ['grok'],
   omp: ['omp'],
+  zcode: ['zcode'],
   opencode: ['opencode'],
   // An OpenCode 2.x conversation: the OpenCode 2 chat runs only 2.x, an OpenCode chat runs 2.x
   // where `opencode` is 2.x.
