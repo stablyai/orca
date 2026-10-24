@@ -82,6 +82,24 @@ export function focusMobileTerminal(
   )
 }
 
+const pendingLocalFollowWorktrees = new Set<string>()
+
+export function requestLocalSessionTabFollow(worktree: string): void {
+  const normalized = worktree.startsWith('id:') ? worktree.slice(3) : worktree
+  if (normalized) {
+    pendingLocalFollowWorktrees.add(normalized)
+  }
+}
+
+export function consumeLocalSessionTabFollow(worktree: string): boolean {
+  const normalized = worktree.startsWith('id:') ? worktree.slice(3) : worktree
+  return pendingLocalFollowWorktrees.delete(normalized)
+}
+
+export function cancelLocalSessionTabFollow(worktree: string): void {
+  consumeLocalSessionTabFollow(worktree)
+}
+
 export function activateMobileSessionTab(
   client: ActivationClient,
   params: MobileSessionTabActivationParams

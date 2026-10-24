@@ -58,6 +58,23 @@ describe('buildMobileAgentHistoryCard', () => {
     const card = buildMobileAgentHistoryCard(session({ title: '' }), null, NOW)
     expect(card.title).toBe('Untitled session')
     expect(card.isCurrentWorktree).toBe(false)
+    expect(card.openTab).toBeNull()
+  })
+
+  it('keeps the open tab when the session is still open', () => {
+    const openTab = { worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1' }
+    const card = buildMobileAgentHistoryCard(session({ openTab }), null, NOW)
+    expect(card.openTab).toEqual(openTab)
+  })
+
+  it('clears openTab after the session is closed locally', () => {
+    const card = buildMobileAgentHistoryCard(
+      session({ openTab: { worktreeId: 'wt-1', tabId: 'tab-1' } }),
+      null,
+      NOW,
+      new Set(['claude:1'])
+    )
+    expect(card.openTab).toBeNull()
   })
 })
 
@@ -67,13 +84,33 @@ describe('buildMobileAgentHistoryResumeActionState', () => {
       [session({ id: 'claude:1' }), session({ id: 'codex:2', agent: 'codex' })],
       'codex:2'
     )
-    expect(state.get('claude:1')).toEqual({ disabled: true, loading: false })
-    expect(state.get('codex:2')).toEqual({ disabled: true, loading: true })
+    expect(state.get('claude:1')).toEqual({ disabled: true, loading: false, closing: false })
+    expect(state.get('codex:2')).toEqual({ disabled: true, loading: true, closing: false })
   })
 
   it('keeps resume buttons enabled when no launch is in flight', () => {
     const state = buildMobileAgentHistoryResumeActionState([session({ id: 'claude:1' })], null)
-    expect(state.get('claude:1')).toEqual({ disabled: false, loading: false })
+    expect(state.get('claude:1')).toEqual({ disabled: false, loading: false, closing: false })
+  })
+
+  it('disables every action and marks the session that is closing', () => {
+    const state = buildMobileAgentHistoryResumeActionState(
+      [session({ id: 'claude:1' }), session({ id: 'claude:2' })],
+      null,
+      'claude:2'
+    )
+    expect(state.get('claude:1')).toEqual({ disabled: true, loading: false, closing: false })
+    expect(state.get('claude:2')).toEqual({ disabled: true, loading: false, closing: true })
+  })
+
+  it('disables resume while the legacy open-tab lookup is pending', () => {
+    const state = buildMobileAgentHistoryResumeActionState(
+      [session({ id: 'claude:1' })],
+      null,
+      null,
+      true
+    )
+    expect(state.get('claude:1')).toEqual({ disabled: true, loading: false, closing: false })
   })
 })
 
@@ -177,6 +214,29 @@ describe('buildMobileAgentHistorySections', () => {
         .map((card) => card.id)
         .sort()
     ).toEqual(['claude:a', 'claude:b'])
+  })
+
+  it('drops openTab only for sessions closed in this panel', () => {
+    const sections = buildMobileAgentHistorySections(
+      [
+        session({ id: 'claude:open', openTab: { worktreeId: 'wt-1', tabId: 'tab-1' } }),
+        session({ id: 'claude:shut', openTab: { worktreeId: 'wt-1', tabId: 'tab-2' } })
+      ],
+      {
+        query: '',
+        scope: 'all',
+        scopeFilterPaths: [],
+        activeWorktreePath: null,
+        now: NOW,
+        closedSessionIds: new Set(['claude:shut'])
+      }
+    )
+    const cards = sections.flatMap((section) => section.data)
+    expect(cards.find((card) => card.id === 'claude:open')?.openTab).toEqual({
+      worktreeId: 'wt-1',
+      tabId: 'tab-1'
+    })
+    expect(cards.find((card) => card.id === 'claude:shut')?.openTab).toBeNull()
   })
 
   it('shows all sessions under All scope regardless of path', () => {

@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
+import {
+  consumeLocalSessionTabFollow,
+  requestLocalSessionTabFollow
+} from './mobile-session-tab-activation'
 import { useMobileSessionTabApplication } from './use-mobile-session-tab-application'
 
 function terminalTab(id: string, terminal: string, isActive = false): MobileSessionTab {
@@ -168,6 +172,28 @@ describe('landing on a launched tab', () => {
 
     expect(activations(sendRequest)).toEqual([])
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('tab-old')
+  })
+
+  it('consumes a local follow even when the snapshot already follows the host', () => {
+    requestLocalSessionTabFollow('workspace-1')
+    const { state, sendRequest } = scope(null)
+    const apply = mount(state)
+    const host = terminalTab('tab-host', 'term_host', true)
+    const other = terminalTab('tab-other', 'term_other')
+
+    apply(snapshot([other, host], { navigationIntent: 'follow' }))
+
+    expect(consumeLocalSessionTabFollow('workspace-1')).toBe(false)
+    expect(activations(sendRequest)).toEqual([])
+    expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('tab-host')
+
+    apply(
+      snapshot([
+        terminalTab('tab-host', 'term_host'),
+        terminalTab('tab-other', 'term_other', true)
+      ])
+    )
+    expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('tab-host')
   })
 
   it('frees the + lock when the tab lands, not when the host replies', () => {

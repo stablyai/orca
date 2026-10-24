@@ -20,7 +20,10 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
-import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import {
+  activateMobileSessionTab,
+  consumeLocalSessionTabFollow
+} from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from './mobile-native-chat-eligibility'
@@ -123,7 +126,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         applicationRevision
       }
 
-      const followsHost = result.navigationIntent === 'follow'
+      // Why: `||` would skip consume when the snapshot already follows, leaking the request onto the next one.
+      const localFollow = consumeLocalSessionTabFollow(result.worktree)
+      const followsHost = result.navigationIntent === 'follow' || localFollow
       if (followsHost) {
         pendingSelectionRef.current = withoutPendingHandle(
           pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
@@ -153,7 +158,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       const resolved = resolveActiveSessionTab(nextTabs, {
         pendingActiveSessionTabId,
         selectedSessionTabId: selectedSessionTabIdRef.current,
-        navigationIntent: result.navigationIntent
+        navigationIntent: followsHost ? 'follow' : result.navigationIntent
       })
       let active = resolved.activeTab
       let selectionSource: string = resolved.selectionSource
