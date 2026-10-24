@@ -44,7 +44,12 @@ export function waitsForCodexTurnOptions(
     }
     return agentJournalSubmissionKey(submission.clientMessageId) === turn.userItemId
   })
-  return active
-    ? !sameOptions(active.options, next.options, structuredAgentSessionChildRan(child))
-    : true
+  const ran = structuredAgentSessionChildRan(child)
+  if (active) {
+    return !sameOptions(active.options, next.options, ran)
+  }
+  // Goal continuations have no submission opener; unchanged choices can still steer them.
+  return OPTION_ORDER.some(
+    (key) => next.options?.[key] !== undefined && next.options[key] !== ran?.[key]
+  )
 }
