@@ -17,7 +17,7 @@ type PublishedState = Pick<
 // and which the checked reader drops as an unreadable repo entry.
 const TRUSTED_HOOKS = { 'repo-1': { setup: { contentHash: 'sha-1', approvedAt: 1700000000000 } } }
 const UI_WITH_TRUST = { ui: { trustedOrcaHooks: TRUSTED_HOOKS } }
-const SETTINGS = { defaultTuiAgent: 'codex', visibleTaskProviders: ['github', 'linear'] }
+const SETTINGS = { defaultTuiAgent: 'codex' as const, visibleTaskProviders: ['github', 'linear'] }
 
 function reply(result: unknown): RpcResponse {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -144,5 +144,37 @@ describe('useNewWorkspaceRuntimeContext', () => {
       TRUSTED_HOOKS
     )
     expect((await answer({ settings: SETTINGS }, null)).trustedOrcaHooks).toEqual({})
+  })
+  it.each(['pending', 'refused', 'rejected'])(
+    'does not reuse runtime settings or approvals from the previous client when the new reads are %s',
+    async (outcome) => {
+      await answer({ settings: SETTINGS }, UI_WITH_TRUST)
+      const next = new FakeSession('connected')
+      next.sendRequest.mockImplementation(async () => {
+        if (outcome === 'pending') {
+          return new Promise<RpcResponse>(() => {})
+        }
+        if (outcome === 'rejected') {
+          throw new Error('host unavailable')
+        }
+        return { id: 'refused', ok: false, error: { code: 'UNAVAILABLE', message: 'Unavailable' } }
+      })
+      await act(async () => renderer?.update(createElement(Harness, { client: next })))
+      expect(currentContext().runtimeSettings).toBeNull()
+      expect(currentContext().trustedOrcaHooks).toEqual({})
+      expect(currentContext().availableProviders).not.toContain('linear')
+    }
+  )
+
+  it('ignores a settings or trust publisher retained by the previous host', async () => {
+    await answer({ settings: SETTINGS }, UI_WITH_TRUST)
+    const previous = currentContext()
+    await answer({ settings: { defaultTuiAgent: 'claude' } }, { ui: {} })
+    act(() => {
+      previous.setRuntimeSettings(SETTINGS)
+      previous.setTrustedOrcaHooks(TRUSTED_HOOKS)
+    })
+    expect(currentContext().runtimeSettings).toEqual({ defaultTuiAgent: 'claude' })
+    expect(currentContext().trustedOrcaHooks).toEqual({})
   })
 })
