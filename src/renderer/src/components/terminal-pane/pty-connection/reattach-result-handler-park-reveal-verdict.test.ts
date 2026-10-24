@@ -25,7 +25,12 @@ const REMOTE_PTY_ID = 'remote:env-1@@pty-1'
 const HOST_IMAGE = { data: 'PROMPT $ ', cols: 80, rows: 24, seq: 7, source: 'headless' as const }
 
 const mocks = vi.hoisted(() => {
-  const state: Record<string, unknown> = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  const state: Record<string, unknown> = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
   const capturedContexts: ReattachPayloadContext[] = []
   const callOrder: string[] = []
   return { state, capturedContexts, callOrder }
@@ -155,7 +160,12 @@ function decidedContext(): ReattachPayloadContext {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
   mocks.capturedContexts = []
   mocks.callOrder = []
 })
@@ -351,6 +361,7 @@ describe('handleReattachResult empty reattach under a hibernation note', () => {
   const startup: ColdRestoreAgentResumeStartup = {
     command: 'codex resume conv-1',
     agent: 'codex',
+    resumeOrigin: 'saved',
     resumeProviderSession: record.providerSession,
     launchConfig: { agentArgs: '', agentEnv: {} },
     launchToken: 'token-1',

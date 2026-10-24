@@ -47,12 +47,22 @@ describe('runtime spawn commit: adopted agent-session claim', () => {
   it('commits the live grid from the adoption reply before the early return', async () => {
     const { runtime, ctx } = makeAdoptedCtx({
       isReattach: true,
+      launchAgent: 'codex',
+      launchToken: 'owner-token',
       snapshotCols: LIVE_GRID.cols,
       snapshotRows: LIVE_GRID.rows
     })
 
-    await commitRuntimePtySpawn(ctx)
+    const reply = await commitRuntimePtySpawn(ctx)
 
+    expect(reply).toMatchObject({
+      id: PTY_ID,
+      isReattach: true,
+      launchAgent: 'codex',
+      launchToken: 'owner-token',
+      snapshotCols: LIVE_GRID.cols,
+      snapshotRows: LIVE_GRID.rows
+    })
     expect(ptySizes.get(PTY_ID)).toEqual(LIVE_GRID)
     expect(runtime.reflowHeadlessTerminalToPtyGrid).toHaveBeenCalledWith(
       PTY_ID,

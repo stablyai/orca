@@ -143,6 +143,29 @@ describe('adopted conversation ownership', () => {
     ).not.toThrow()
   })
 
+  it('admits a conversation another record only held before its current one', () => {
+    const fixture = agentSessionRecordFixture()
+    const holder: AgentSessionRecord = {
+      ...fixture,
+      providerHandleChain: [
+        ...fixture.providerHandleChain,
+        adoptedLink({
+          linkId: 'later',
+          handle: claudeProviderHandle('provider-session-later', null),
+          origin: 'created'
+        })
+      ]
+    }
+
+    expect(() =>
+      applyAgentSessionReservation(
+        storeState([holder]),
+        reserveRequest({ adoptedHandleLink: adoptedLink() }),
+        LEASE_TTL_MS
+      )
+    ).not.toThrow()
+  })
+
   it('exempts the requesting session so a committed create can be re-run', () => {
     // Pins the guard's own contract. No wire shape reaches it today: `adopt` is accepted only on
     // create-by-intent, which always carries a null expected fence, and an existing record with a

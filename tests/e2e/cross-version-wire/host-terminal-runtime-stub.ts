@@ -117,6 +117,8 @@ export function createHostTerminalRuntimeStub(
 
   const runtime: Record<string, unknown> = {
     getRuntimeId: () => 'cross-version-host',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     registerRemoteTerminalViewSubscriber: () => () => {},

@@ -1,3 +1,4 @@
+import { NOT_REOPENED, reopenPaneAfterMissingReattach } from './cold-restore-resume-startup'
 import { writeStartupCwdFallbackNotice } from './startup-cwd-fallback-notice'
 import { armPaneOwnerRetry } from './pane-owner-recovery'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
@@ -65,8 +66,6 @@ async function prepareDeferredSessionReattach(
   void connectDeferredSessionReattach(session, deferredReattachSessionId, options)
 }
 
-const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
-
 /** Resolves to what the reattach did, which a held pane's release reports. */
 function connectDeferredSessionReattach(
   session: ConnectPanePtySession,
@@ -120,7 +119,8 @@ function connectDeferredSessionReattach(
       session.reportError(message)
     },
     // Why the resume even under main: it is what main ran, so a capacity retry resumes it again.
-    toProcessExitStartup(resumeStartup ?? session.paneStartup)
+    toProcessExitStartup(resumeStartup ?? session.paneStartup),
+    resumeStartup ?? session.paneStartup
   )
   session.beginReattachLiveDataDeferral(outputCallbacks.generation)
   session.transportConnectInFlightSince = Date.now()
@@ -137,6 +137,7 @@ function connectDeferredSessionReattach(
     ...(coldRestoreStartup?.resumeProviderSession
       ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
       : {}),
+    ...(coldRestoreStartup ? { resumeOrigin: coldRestoreStartup.resumeOrigin } : {}),
     ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
     ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
@@ -148,15 +149,7 @@ function connectDeferredSessionReattach(
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     outputCallbacks.generation === session.transportStreamGeneration
   const startFreshInstead = (): Promise<HeldPaneReopenOutcome> =>
-    session
-      .startFreshColdRestoreAgentResume(coldRestoreStartup, { forceBlankRestoredViewport: true })
-      .then(
-        (ptyId: string | null) => ({
-          reopened: ptyId !== null,
-          agentResumed: ptyId !== null && resumedAgent(ptyId)
-        }),
-        () => NOT_REOPENED
-      )
+    reopenPaneAfterMissingReattach(session, coldRestoreStartup, resumedAgent)
 
   void Promise.resolve(reattachPromise)
     .catch(() => null)
@@ -243,7 +236,8 @@ function connectDeferredSessionReattach(
         result,
         deferredReattachSessionId,
         coldRestoreStartup,
-        outputCallbacks.generation
+        outputCallbacks.generation,
+        outputCallbacks.launchContext
       )
       if (accepted && isCurrentReattach()) {
         writeStartupCwdFallbackNotice(session, result)

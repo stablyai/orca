@@ -28,6 +28,7 @@ import {
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
+  forgetRefusedPaneResumeMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
@@ -148,6 +149,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
+    forgetRefusedPaneResumeMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()

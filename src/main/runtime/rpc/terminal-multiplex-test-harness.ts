@@ -25,6 +25,8 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   return {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({}),
+    getTerminalLaunchResult: () => undefined,
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).

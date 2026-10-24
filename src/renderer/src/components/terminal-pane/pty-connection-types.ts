@@ -11,6 +11,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type {
+  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
@@ -29,6 +30,9 @@ export type PtyPaneStartup = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** `saved`: a resume built from saved facts, which the host refuses for a chat's conversation. */
+  resumeOrigin?: 'saved'
+  resumeSource?: SavedResumeStartupSource
   launchToken?: string
   launchAgent?: TuiAgent
   /** The agent launch the pane's own spawn starts, instead of `command`. */

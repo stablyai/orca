@@ -1,3 +1,4 @@
+import { hostSleepKey } from './terminal/stop/worktree-terminal-sleep-key'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
@@ -217,7 +218,10 @@ describe('execution-host conversation writer inspection', () => {
     const pane = `tab-a:${leaf}`
     let rows: AgentStatusIpcPayload[] = []
     const store = ORCA_LAYOUT_OWNER_IS_MAIN ? writerLayoutStore() : null
-    const runtime = new OrcaRuntimeService(store, undefined, {
+    class WriterRuntime extends OrcaRuntimeService {
+      readonly sleepStates = this.terminalSleepStateByHostWorktree
+    }
+    const runtime = new WriterRuntime(store, undefined, {
       getAgentProviderSessionSnapshot: () => rows,
       readHookCliWriterObservation: () => ({
         current: () => true,
@@ -268,6 +272,24 @@ describe('execution-host conversation writer inspection', () => {
     }
     // The header switch inspects the pane it leaves even when nothing recorded the conversation.
     await census(() => check('claude', { workspaceId: 'workspace', paneKey: pane }))
+    // Another host's same-id workspace cannot hold this local source; each local sleep phase does.
+    const source = { workspaceId: 'workspace', paneKey: pane }
+    for (const phase of ['sleeping', 'partial', 'stopping'] as const) {
+      const state = {
+        worktreeId: 'workspace',
+        generation: 1,
+        phase,
+        ptyIds: [],
+        terminalHandles: [],
+        terminalHandlesByPtyId: {}
+      }
+      runtime.sleepStates.set(hostSleepKey('ssh:twin', 'workspace'), state)
+      await expect(check('claude', source)).resolves.toBeUndefined()
+      runtime.sleepStates.set(hostSleepKey('local', 'workspace'), state)
+      await expect(check('claude', source)).rejects.toMatchObject(refusal)
+      runtime.sleepStates.delete(hostSleepKey('local', 'workspace'))
+    }
+    runtime.sleepStates.clear()
     // A row restored after restart has no observed identity; the pane's current PTY decides.
     rows = [{ ...row, paneKey: pane, agentType: 'claude' }]
     await census(() => check('claude'))

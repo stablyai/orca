@@ -3,8 +3,38 @@ import { paneCacheKeyMatchesTab } from './server-status-identity'
 import { AgentHookServerCleanup } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
+import type { RefusedPaneResume } from '../../../shared/agent-status-types'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
+  /** The host refused `paneKey`'s saved resume because a native chat is its conversation's home:
+   *  forget the pane's claim here, with no resumable remnant, and tell renderers to forget theirs. */
+  forgetRefusedPaneResume(paneKey: string, refused: RefusedPaneResume): void {
+    // A moved pane's row, and the renderer's state for it, live under its owner's key.
+    const ownerKey = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(ownerKey)
+    const clear = { paneKey: ownerKey, refusedResume: refused }
+    if (
+      row &&
+      'receivedAt' in row &&
+      typeof row.receivedAt === 'number' &&
+      'stateStartedAt' in row &&
+      typeof row.stateStartedAt === 'number' &&
+      refused.expectedStatus &&
+      row.receivedAt <= refused.expectedStatus.receivedAt &&
+      row.stateStartedAt === refused.expectedStatus.stateStartedAt &&
+      row.payload.agentType === refused.agent &&
+      agentProviderSessionsEqual(refused.agent, row.providerSession, refused.providerSession)
+    ) {
+      this.dropStatusEntry(ownerKey, { preserveResumeIdentity: false })
+      this.emitPaneStatusCleared(clear)
+      return
+    }
+    // Renderers only: the pane's row is another conversation's, which other subscribers keep.
+    this.onPaneStatusCleared?.(clear)
+  }
+
+  /** Drop every status/cache claim attributable to a closed tab prefix. */
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
     this.clearTmuxTabSubjects(tabId)

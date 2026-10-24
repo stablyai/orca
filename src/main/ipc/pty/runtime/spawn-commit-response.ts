@@ -10,14 +10,15 @@ type RuntimeResumeOutcomeState = Pick<
 
 /** Whether a fresh start resumed the agent it was asked to; a reattach ran no launch command. */
 export function resumeOutcomeOf(ctx: RuntimeResumeOutcomeState): PaneResumeOutcome | null {
-  if (!ctx.args.resumeProviderSession || ctx.result.isReattach) {
+  if (ctx.result.isReattach) {
     return null
   }
-  if (ctx.codexResumeUnavailable) {
+  // Refused saved admission removes the request; the spawned shell still carries its outcome.
+  if (ctx.result.agentResumeUnavailable || ctx.codexResumeUnavailable) {
     return 'resume-unavailable'
   }
   // A resume dropped silently named another agent's session: nothing came back, and nothing is owed.
-  return ctx.codexResumeArgvDropped ? null : 'restored'
+  return ctx.args.resumeProviderSession && !ctx.codexResumeArgvDropped ? 'restored' : null
 }
 
 /** Publish resume outcome before binding so the first frame with the new terminal includes it. */

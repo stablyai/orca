@@ -81,6 +81,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
   runtimeNotInstalled:
     "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
+  conversationOpenElsewhere:
+    'Codex still has this conversation open somewhere else. Close it there, then try again.',
+  conversationOpenInTerminal:
+    "Orca can't confirm {{agent}} has exited in its terminal. Stop what's running there or close the terminal, then try again.",
   chooseClaudeAccount: 'Choose or add one in Claude Accounts settings.',
   chooseClaudeAccountThenRunCommand:
     'Choose or add one in Claude Accounts settings, then run /{{command}} again.',

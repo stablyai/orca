@@ -204,8 +204,9 @@ export function buildWorkspaceSessionPatch(
         : undefined
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
+    // Why `{}`: the host split drops undefined, so clearing the last record never reached disk.
     patch.sleepingAgentSessionsByPaneKey =
-      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey ?? {}
   }
 
   return patch

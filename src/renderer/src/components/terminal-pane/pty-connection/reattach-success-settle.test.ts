@@ -15,7 +15,12 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
  * the positive one.
  */
 const mocks = vi.hoisted(() => ({
-  state: { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  state: {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -92,7 +97,12 @@ async function driveReattach(
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.state = { tabsByWorktree: {}, terminalLayoutsByTabId: {} }
+  mocks.state = {
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {}
+  }
 })
 
 describe('handleReattachResult recovery settle', () => {

@@ -63,7 +63,7 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
   z.record(z.string(), z.string())
 )
 
-const sleepingAgentLaunchConfigBaseSchema = z.object({
+export const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
   agentEnv: sleepingAgentLaunchEnvSchema,

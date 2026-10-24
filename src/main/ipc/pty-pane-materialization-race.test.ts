@@ -389,6 +389,12 @@ describe('registerPtyHandlers', () => {
     expect(rendererResult).toEqual({ id: 'pty-renderer' })
     expect(runtimeResult).toEqual({
       id: 'pty-renderer',
+      isReattach: true,
+      launchAgent: undefined,
+      launchToken: undefined,
+      resumeProviderSession: undefined,
+      snapshotKittyKeyboardFlags: undefined,
+      wslDistro: undefined,
       stablePaneOwner: {
         handle: 'term_trusted',
         tabId: 'tab-race',

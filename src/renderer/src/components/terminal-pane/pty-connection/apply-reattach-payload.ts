@@ -1,3 +1,7 @@
+import {
+  applyTerminalLaunchResult,
+  captureTerminalLaunchContext
+} from './terminal-launch-result-policy'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
@@ -260,19 +264,38 @@ export function createReattachPayloadHandlers(
       session.writeReplayData(
         `${RESET_GRAPHIC_RENDITION}${ctx.connectResult.coldRestore.scrollback}`
       )
-      // Why: main started the pane and its agent; the window only paints it.
-      const preparedStartup = mainStartsPane(session)
-        ? null
-        : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
-      const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
-      if (didPrepareResume) {
-        if (ctx.connectResult.agentResumeUnavailable) {
-          // Why: main dropped the resume argv, so this pane is a NEW session —
-          // the plain restored banner would claim the old one came back.
-          session.showSessionRestoredBanner('resume-unavailable')
-        } else if (preparedStartup?.hasSleepingRecord) {
-          session.showSessionRestoredBanner()
+      // An existing owner permits history replay, not another saved continuation.
+      let resumeUnavailable = Boolean(ctx.connectResult.agentResumeUnavailable)
+      let preparedStartup =
+        mainStartsPane(session) ||
+        ctx.connectResult.isReattach === true ||
+        ctx.connectResult.agentResumeRefused ||
+        resumeUnavailable
+          ? null
+          : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
+      if (preparedStartup && !ctx.coldRestoreStartup) {
+        const rejected = applyTerminalLaunchResult(
+          session,
+          ctx.connectResult,
+          captureTerminalLaunchContext(session, preparedStartup),
+          'candidate'
+        )
+        if (rejected) {
+          resumeUnavailable = true
+          preparedStartup = null
         }
+      }
+      const didPrepareResume =
+        ctx.connectResult.isReattach !== true &&
+        session.applyColdRestoreAgentResumeStartup(preparedStartup)
+      if (resumeUnavailable) {
+        // Why: main dropped the resume argv, so this pane is a NEW session —
+        // the plain restored banner would claim the old one came back.
+        session.showSessionRestoredBanner('resume-unavailable')
+      } else if (didPrepareResume && preparedStartup?.hasSleepingRecord) {
+        session.showSessionRestoredBanner()
+      }
+      if (didPrepareResume) {
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.

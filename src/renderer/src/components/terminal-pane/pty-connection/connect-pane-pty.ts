@@ -150,6 +150,9 @@ export function connectPanePty(
   // own outer reference, since `deps` here is a shallow copy and our
   // mutation does not propagate back.
   session.paneStartup = session.deps.startup ?? null
+  if (session.paneStartup?.resumeOrigin === 'saved') {
+    session.paneStartup.resumeSource ??= { cancelled: false }
+  }
   session.deps.startup = undefined
   // Why the session holds it until a spawn request carries it: the pane already dropped every other
   // reference to this PTY, so the stop is owed until main takes it or dispose kills it.

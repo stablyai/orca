@@ -15,15 +15,22 @@ import { startDesktopMultiplexSubscribe } from './terminal-multiplex-test-harnes
 
 function startPendingPtyHarness() {
   const waits = new Map<string, { signal: AbortSignal; resolve: (ptyId: string) => void }>()
+  const ptyIds = new Map<string, string>()
   const requestRendererTerminalTabMount = vi.fn()
   const harness = startDesktopMultiplexSubscribe({
-    resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+    resolveLiveLeafForHandle: vi.fn((handle: string) => ({ ptyId: ptyIds.get(handle) ?? null })),
     requestRendererTerminalTabMount,
     waitForLeafPtyId: vi.fn(
       (handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
         new Promise<string>((resolve, reject) => {
           if (signal) {
-            waits.set(handle, { signal, resolve })
+            waits.set(handle, {
+              signal,
+              resolve: (ptyId) => {
+                ptyIds.set(handle, ptyId)
+                resolve(ptyId)
+              }
+            })
           }
           signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
             once: true

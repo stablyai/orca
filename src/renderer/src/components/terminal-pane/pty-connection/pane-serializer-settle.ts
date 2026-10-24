@@ -61,9 +61,10 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   // replacement. Only explicit terminal-paste stays renderer-owned.
   session.pendingStartupCommand = session.shouldDeliverStartupViaTerminalPaste
     ? session.paneStartup?.command
-      ? { command: session.paneStartup.command }
+      ? { command: session.paneStartup.command, resumeSource: session.paneStartup.resumeSource }
       : null
     : null
+  const startupSource = session.paneStartup?.resumeSource
   const startupDraftReadyScanner = session.ownsStartupDraftPaste
     ? createDraftPasteReadyScanner(
         session.startupDraftAgentConfig?.draftPasteReadySignal ??
@@ -91,6 +92,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     const ptyId = session.transport.getPtyId()
     if (
       !ptyId ||
+      startupSource?.cancelled ||
       session.disposed ||
       session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport
     ) {
@@ -118,6 +120,9 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     // Why: xterm focus reports share this transport queue. Bypassing it can
     // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
     void sendAgentDraftPasteContent(ptyId, session.startupDraftPrompt, 'launch', async (data) => {
+      if (getStartupDraftPtyId() !== ptyId) {
+        return false
+      }
       const accepted = await writeTerminalPastePtyInput(session.transport, data, 'launch')
       if (accepted && !startupDraftInputRecorded) {
         // Why: this transport write bypasses xterm's user-input signal; keep
@@ -159,6 +164,9 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     }
     startupDraftHardTimer = setTimeout(() => {
       startupDraftHardTimer = null
+      if (!getStartupDraftPtyId()) {
+        return
+      }
       if (session.startupDraftAgent === 'codex') {
         startupDraftPasteSettled = true
         // A timed-out launch stays consumed across pane disposal and remount.

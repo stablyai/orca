@@ -9,6 +9,7 @@ import type {
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { PtySpawnTiming } from '../../pty-spawn-timing'
 import { createPtySpawnTiming } from '../../pty-spawn-timing'
@@ -85,6 +86,8 @@ export type PtyIpcSpawnState = {
   nativeWindowsConptySpawn: boolean
   codexSelectionTarget: CodexAccountSelectionTarget
   codexResumeLaunch: CodexResumeLaunch
+  /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
+  resumeAdmission: ResumeSpawnAdmission | null
   launchCommand: string | undefined
   env: Record<string, string> | undefined
   selectedCodexHomePath: string | null
@@ -162,6 +165,7 @@ export function createPtyIpcSpawnState(
     nativeWindowsConptySpawn: false,
     codexSelectionTarget: { runtime: 'host' },
     codexResumeLaunch: noCodexResumeLaunch(undefined),
+    resumeAdmission: null,
     launchCommand: undefined,
     env: undefined,
     selectedCodexHomePath: null,

@@ -1,6 +1,9 @@
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  TerminalLaunchResult,
+  SleepingAgentLaunchConfig
+} from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
@@ -71,6 +74,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
    * it — see pty-recorded-surface-topology.ts.
    */
   surfaceRecordedAtGraphSequence?: number
+  savedTerminalLaunchResult?: {
+    incarnationId: PtyIncarnationId | null
+    launchConfig: SleepingAgentLaunchConfig | null
+    launchToken: string | null
+    result: TerminalLaunchResult
+  }
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null

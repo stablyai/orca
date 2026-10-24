@@ -225,7 +225,8 @@ export function applyAgentSessionReservation(
 }
 
 /**
- * Refuse an adoption whose conversation ANOTHER record already holds.
+ * Refuse an adoption whose conversation ANOTHER record continues now (its head link), the same rule
+ * as the pre-commit check, so that check never admits what this one refuses.
  *
  * The self-exemption is part of that definition, not a replay mechanism: replay is settled earlier
  * by the operation ledger, and an adoption always arrives with a null expected fence, so a request
@@ -250,14 +251,15 @@ export function assertAdoptedConversationUnowned(
     if (record.sessionId === request.sessionId) {
       continue
     }
-    const holdsSameConversation = record.providerHandleChain.some(
-      (link) =>
-        agentSessionProviderHandleRoot(link.handle) === root ||
+    // Only the conversation a chat continues now: an earlier link no longer holds anything.
+    const head = record.providerHandleChain.at(-1)
+    const holdsSameConversation =
+      !!head &&
+      (agentSessionProviderHandleRoot(head.handle) === root ||
         // One id from two chat agents that open the same conversations (`opencode`, `opencode2`).
-        (link.handle.transport === adopted.handle.transport &&
-          link.handle.nativeId === adopted.handle.nativeId &&
-          chatAgentsShareConversations(link.handle.agent, adopted.handle.agent))
-    )
+        (head.handle.transport === adopted.handle.transport &&
+          head.handle.nativeId === adopted.handle.nativeId &&
+          chatAgentsShareConversations(head.handle.agent, adopted.handle.agent)))
     if (holdsSameConversation) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere',

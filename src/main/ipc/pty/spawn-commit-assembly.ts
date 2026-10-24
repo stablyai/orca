@@ -196,7 +196,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
       return resolvePaneSpawnReservation(
         state.paneSpawnReservationKey,
         state.paneSpawnReservation,
-        result
+        input.joinPayload.reply
       )
     }
   } else if (input.earlyExit === 'throw') {
@@ -223,7 +223,7 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
   input: PtySpawnCommitInput<Reply>,
   adopted: AgentSessionClaimedSpawnResult,
   providerReattachLaunchIdentity: ReturnType<typeof admitProviderReattachLaunchIdentity>
-): Pick<PtySpawnResult, 'id' | 'incarnationId' | 'agentSessionEnsure'> | Promise<never> {
+): PtySpawnResult | Promise<never> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -270,9 +270,5 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
     state.paneSpawnReservation,
     adoptedResult
   )
-  return {
-    id: result.id,
-    ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
-    agentSessionEnsure: adopted
-  }
+  return adoptedResult
 }

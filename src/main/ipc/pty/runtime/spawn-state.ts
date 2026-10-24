@@ -15,9 +15,13 @@ import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { PtyBindingSourceExpectation } from '../../../persistence'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
@@ -50,6 +54,8 @@ export type RuntimePtySpawnState = {
   effectiveSessionAppId: string | undefined
   isNewDaemonSession: boolean
   expectedWslDistro: string | null
+  /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
+  resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
   launchCommand: string | undefined
   claudeAuth: ClaudeRuntimeAuthPreparation | null
@@ -68,6 +74,7 @@ export type RuntimePtySpawnState = {
   requestedAgentTeamsPath: string | undefined
   selectedCodexHomePath: string | null
   codexResumeHomeSelected: boolean
+  agentResumeUnavailable: boolean
   codexResumeArgvDropped: boolean
   /** The dropped resume owes the user a notice: the pane runs a fresh session. */
   codexResumeUnavailable: boolean
@@ -106,6 +113,8 @@ export type RuntimePtySpawnArgs = {
   cwd?: string
   command?: string
   launchAgent?: TuiAgent
+  launchConfig?: SleepingAgentLaunchConfig
+  launchToken?: string
   commandDelivery?: 'renderer' | 'provider'
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: {
@@ -116,6 +125,8 @@ export type RuntimePtySpawnArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
+  resumeOrigin?: 'saved'
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string
@@ -184,6 +195,7 @@ export function createRuntimePtySpawnState(
     effectiveSessionAppId: undefined,
     isNewDaemonSession: false,
     expectedWslDistro: null,
+    resumeAdmission: null,
     codexSelectionTarget: { runtime: 'host' },
     launchCommand: undefined,
     claudeAuth: null,
@@ -193,6 +205,7 @@ export function createRuntimePtySpawnState(
     requestedAgentTeamsPath: undefined,
     selectedCodexHomePath: null,
     codexResumeHomeSelected: false,
+    agentResumeUnavailable: false,
     codexResumeArgvDropped: false,
     codexResumeUnavailable: false,
     skipCodexHomeEnv: false,
