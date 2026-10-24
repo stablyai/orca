@@ -1,9 +1,20 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  BackHandler,
+  ScrollView
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
+import {
+  resolvePairConfirmRouteState,
+  type PairConfirmRouteState
+} from '../src/transport/pair-confirm-state'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
@@ -27,10 +38,19 @@ type Status = 'awaiting-confirm' | 'connecting' | 'error'
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
+  const params = useLocalSearchParams<{ code?: string | string[] }>()
+  return (
+    <PairConfirmContent
+      key={typeof params.code === 'string' ? params.code : undefined}
+      routeState={resolvePairConfirmRouteState(params.code)}
+    />
+  )
+}
+
+function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState }) {
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
@@ -41,7 +61,6 @@ export default function PairConfirmScreen() {
   const mountedRef = useRef(true)
   const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
-  const routeState = resolvePairConfirmRouteState(params.code)
   const offer = routeState.offer
   const resolvedStatus =
     status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
@@ -51,6 +70,9 @@ export default function PairConfirmScreen() {
       : errorMessage
 
   const cancel = useCallback(() => {
+    mountedRef.current = false
+    activePairingAttemptRef.current?.dispose()
+    activePairingAttemptRef.current = null
     router.replace('/')
   }, [router])
 
@@ -153,7 +175,11 @@ export default function PairConfirmScreen() {
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={[styles.content, { paddingBottom: spacing.xl * 2 + insets.bottom }]}
+        nestedScrollEnabled
+      >
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
             <Text style={styles.title}>Pair with this desktop?</Text>
@@ -196,7 +222,7 @@ export default function PairConfirmScreen() {
             </View>
           </>
         )}
-      </View>
+      </ScrollView>
     </View>
   )
 }
@@ -215,14 +241,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.sm
   },
+  scrollContainer: {
+    flex: 1
+  },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    // Why: nudges the centered group slightly above the geometric
-    // middle so the eye reads it as visually centered above the home
-    // indicator / nav bar.
-    paddingBottom: spacing.xl * 2
+    paddingHorizontal: spacing.sm
   },
   title: {
     fontSize: typography.titleSize,
