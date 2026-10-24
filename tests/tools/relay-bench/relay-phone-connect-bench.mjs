@@ -18,10 +18,13 @@
 import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { b64url, PhoneE2EE, sha256, utf8 } from './phone-e2ee-v2-session.mjs'
 import {
-  classifyPublicHttpsOrigin,
   LIVE_ENV_VAR,
+  classifyPublicHttpsOrigin,
+  describeUntrustedText,
   parseArgs,
   refuse,
   requireBoundedInteger,
@@ -41,12 +44,24 @@ const RPC_TIMEOUT_MS = 15_000
 // before any dial or RPC deadline has started.
 const RESOLVE_TIMEOUT_MS = 10_000
 const DEFAULT_HOLD_MS = 45_000
-const DEFAULT_STATE_PATH = '/tmp/relay-bench/state.json'
+// Under the operator's home, not /tmp: the file holds a live resume token, and a shared
+// world-writable directory is where another local user can pre-create the path.
+const DEFAULT_STATE_PATH = join(homedir(), '.orca', 'relay-bench', 'state.json')
 const MAX_RUNS = 1000
 const MAX_DELAY_MS = 3_600_000
 
 // ---------- one relay dial, phone-shaped ----------
 // Resolves once e2ee_authenticated lands, with timings and an rpc() bound to the live socket.
+// JSON.parse quotes a fragment of its input in the SyntaxError, and every input here is peer,
+// desktop, or credential text, so the failure names only what was being parsed.
+export function parsePeerJson(text, what) {
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`${what}: not valid JSON`)
+  }
+}
+
 export function dialRelay({
   cellUrl,
   relayHostId,
@@ -123,14 +138,16 @@ export function dialRelay({
     ws.on('message', (raw, isBinary) => {
       try {
         if (stage === 'awaiting-hello') {
-          const hello = JSON.parse(raw.toString())
+          const hello = parsePeerJson(raw.toString(), 'relay hello')
           handle.hello = hello
           mark('relayHello')
           if (!hello.ok) {
-            throw new Error(`relay-hello rejected code=${hello.code}`)
+            throw new Error(`relay-hello rejected code=${describeUntrustedText(hello.code)}`)
           }
           if (hello.credentialKind !== expectedKind) {
-            throw new Error(`credentialKind ${hello.credentialKind} != ${expectedKind}`)
+            throw new Error(
+              `credentialKind ${describeUntrustedText(hello.credentialKind)} != ${expectedKind}`
+            )
           }
           stage = 'awaiting-ready'
           ws.send(JSON.stringify(e2ee.hello))
@@ -138,7 +155,7 @@ export function dialRelay({
           return
         }
         if (stage === 'awaiting-ready') {
-          e2ee.acceptReady(JSON.parse(raw.toString()))
+          e2ee.acceptReady(parsePeerJson(raw.toString(), 'relay ready'))
           mark('e2eeReady')
           stage = 'awaiting-authenticated'
           ws.send(
@@ -160,9 +177,10 @@ export function dialRelay({
         }
         const text = e2ee.openText(raw.toString())
         if (stage === 'awaiting-authenticated') {
-          const msg = JSON.parse(text)
+          const msg = parsePeerJson(text, 'desktop authentication')
           if (msg.type !== 'e2ee_authenticated') {
-            throw new Error(`auth rejected: ${text.slice(0, 120)}`)
+            // Type only: the plaintext is the desktop's and would land in row.error.
+            throw new Error(`auth rejected: desktop sent ${describeUntrustedText(msg.type)}`)
           }
           mark('e2eeAuthenticated')
           stage = 'ready'
@@ -171,7 +189,7 @@ export function dialRelay({
           resolve(handle)
           return
         }
-        const msg = JSON.parse(text)
+        const msg = parsePeerJson(text, 'desktop frame')
         const waiter = msg.id && pending.get(msg.id)
         if (waiter) {
           clearTimeout(waiter.timer)
@@ -183,13 +201,14 @@ export function dialRelay({
       }
     })
     ws.on('close', (code, reason) => {
+      // Scrubbed where it is stored: the hold row prints this object verbatim.
       handle.closed = {
         code,
-        reason: reason.toString(),
+        reason: describeUntrustedText(reason.toString()),
         atMs: Math.round(performance.now() - timings.start)
       }
       if (!settled) {
-        fail(new Error(`closed ${code} ${reason.toString()}`))
+        fail(new Error(`closed ${code} ${handle.closed.reason}`))
         return
       }
       clearTimeout(dialTimer)
@@ -217,7 +236,7 @@ export function decodeOffer(pairingUrl) {
   }
   let offer
   try {
-    offer = JSON.parse(Buffer.from(code, 'base64url').toString('utf8'))
+    offer = parsePeerJson(Buffer.from(code, 'base64url').toString('utf8'), 'pairing offer')
   } catch {
     throw new Error('pairing link code did not decode to JSON')
   }
@@ -230,10 +249,13 @@ export function decodeOffer(pairingUrl) {
 async function resolveCell(relay, resumeToken) {
   const started = performance.now()
   try {
+    // redirect: 'error': the body carries the resume token, and a redirect would replay it
+    // to a destination that was never vetted, possibly over plain http.
     const res = await fetch(`${relay.directorUrl}/v1/resolve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ v: 1, relayHostId: relay.relayHostId, resumeToken }),
+      redirect: 'error',
       signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS)
     })
     const body = await res.json().catch(() => null)
@@ -330,6 +352,20 @@ async function refreshCell(state, row) {
   }
 }
 
+/** Both destinations the resume token is sent to, each through the literal check and DNS. */
+export async function vetRelayEndpoint(relay, deps) {
+  for (const [label, value] of [
+    ['cell', relay?.cellUrl],
+    ['director', relay?.directorUrl]
+  ]) {
+    const verdict = await vetCellUrl(value, deps)
+    if (!verdict.ok) {
+      return { ok: false, reason: `${label}: ${verdict.reason}` }
+    }
+  }
+  return { ok: true }
+}
+
 export async function vetCellUrl(cellUrl, deps) {
   const verdict = classifyPublicHttpsOrigin(cellUrl)
   if (!verdict.ok) {
@@ -339,26 +375,33 @@ export async function vetCellUrl(cellUrl, deps) {
   return resolved.ok ? verdict : resolved
 }
 
-function loadState(statePath) {
-  const state = JSON.parse(readSecretFile(statePath))
+async function loadState(statePath) {
+  // A fixed message: a SyntaxError quotes the offending text, and this file holds the token.
+  const state = parsePeerJson(readSecretFile(statePath), 'state file')
   for (const field of ['relayHostId', 'cellUrl', 'directorUrl']) {
     if (!state.relay?.[field]) {
       throw new Error(`${statePath} has no relay.${field}; re-run pair`)
     }
   }
-  for (const [label, value] of [
-    ['relay.cellUrl', state.relay.cellUrl],
-    ['relay.directorUrl', state.relay.directorUrl]
-  ]) {
-    const verdict = classifyPublicHttpsOrigin(value)
-    if (!verdict.ok) {
-      throw new Error(`${statePath} ${label} ${verdict.reason}`)
-    }
+  // A state file is operator-owned, but its destinations came from the desktop and the director
+  // and the resume token goes to both, so they are vetted again on every load.
+  const verdict = await vetRelayEndpoint(state.relay)
+  if (!verdict.ok) {
+    throw new Error(`${statePath} relay ${verdict.reason}`)
   }
   return state
 }
 
 // ---------- commands ----------
+// The peer picks the code, so only a plain identifier is echoed; anything else is named by kind.
+const REMOTE_ERROR_CODE = /^[A-Za-z0-9_.-]{1,64}$/
+export function describeRemoteErrorCode(code) {
+  if (typeof code !== 'string') {
+    return code === undefined ? 'unknown' : `non-string code (${typeof code})`
+  }
+  return REMOTE_ERROR_CODE.test(code) ? code : `unprintable code (${code.length} chars)`
+}
+
 async function pair(pairingUrl, statePath) {
   const offer = decodeOffer(pairingUrl)
   if (!offer.relay) {
@@ -372,7 +415,9 @@ async function pair(pairingUrl, statePath) {
   const resumeToken = b64url(nacl.randomBytes(32))
   const resumeTokenHash = b64url(sha256(utf8(resumeToken)))
   const installReqId = `install-${b64url(nacl.randomBytes(12))}`
-  console.log(`pair: dialing ${relay.cellUrl} host=${relay.relayHostId}`)
+  // The offer is operator-pasted text: the vetted origin, not the raw URL, and the host id
+  // through the same scrub as any other peer-chosen string.
+  console.log(`pair: dialing ${verdict.origin} host=${describeUntrustedText(relay.relayHostId)}`)
   const dial = await dialRelay({
     cellUrl: relay.cellUrl,
     relayHostId: relay.relayHostId,
@@ -389,16 +434,27 @@ async function pair(pairingUrl, statePath) {
   })
   const provisionMs = Math.round(performance.now() - provisionStarted)
   if (!provision.ok) {
-    throw new Error(`provisionRelay failed: ${JSON.stringify(provision.error)}`)
+    throw new Error(
+      `provisionRelay failed: error ${describeRemoteErrorCode(provision.error?.code)}`
+    )
   }
   const endpointsStarted = performance.now()
   const endpoints = await dial.rpc('pairing.getEndpoints', { installReqId })
   const endpointsMs = Math.round(performance.now() - endpointsStarted)
   if (!endpoints.ok || !endpoints.result.relay) {
-    throw new Error(`getEndpoints failed: ${JSON.stringify(endpoints)}`)
+    // Shape only: the reply is peer-supplied and this line lands in the operator's terminal.
+    throw new Error(
+      `getEndpoints failed: ${endpoints.ok ? 'no relay block in result' : `error ${describeRemoteErrorCode(endpoints.error?.code)}`}`
+    )
   }
   console.log(`provisionRelay ${provisionMs} ms, getEndpoints ${endpointsMs} ms`)
   dial.close()
+  // The desktop names the cell and the director the resume token will be sent to, so both get
+  // the same two-layer check as every other supplied destination before they are stored.
+  const endpointVerdict = await vetRelayEndpoint(endpoints.result.relay)
+  if (!endpointVerdict.ok) {
+    throw new Error(`desktop named an unusable relay endpoint: ${endpointVerdict.reason}`)
+  }
   const state = {
     relay: endpoints.result.relay,
     deviceToken: offer.deviceToken,
@@ -414,7 +470,7 @@ async function pair(pairingUrl, statePath) {
 }
 
 async function run(statePath, runs, opts) {
-  const state = loadState(statePath)
+  const state = await loadState(statePath)
   const rows = []
   for (let index = 0; index < runs; index++) {
     const row = { run: index }
@@ -425,7 +481,7 @@ async function run(statePath, runs, opts) {
     try {
       const dial = await resumeDial(state)
       row.dial = dial.timings
-      row.acceptedAs = dial.hello.acceptedAs
+      row.acceptedAs = describeUntrustedText(dial.hello.acceptedAs)
       const { rpc } = await runConnectedSequence(dial)
       row.rpc = rpc
       row.totalToConnectedMs = connectedMs(dial, rpc)
@@ -473,14 +529,14 @@ async function run(statePath, runs, opts) {
 // retained socket is still usable and what the fallback resume redial costs. The relay's client
 // silence watchdog is ~105 s, so --hold=120000 is the interesting "crossed the watchdog" case.
 async function foreground(statePath, opts) {
-  const state = loadState(statePath)
+  const state = await loadState(statePath)
   const row = { mode: 'foreground', holdMs: opts.holdMs }
   if (opts.resolve) {
     await refreshCell(state, row)
   }
   const dial = await resumeDial(state)
   row.dial = dial.timings
-  row.acceptedAs = dial.hello.acceptedAs
+  row.acceptedAs = describeUntrustedText(dial.hello.acceptedAs)
   const { rpc } = await runConnectedSequence(dial)
   row.rpc = rpc
   row.totalToConnectedMs = connectedMs(dial, rpc)
@@ -619,7 +675,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // A bad state file or a refused destination is operator input, not a crash; say what is wrong
   // without spilling the credential-bearing stack.
   await main(process.argv.slice(2)).catch((err) => {
-    console.error(err.message)
+    // Our own messages are already scrubbed; a library error (DNS, TLS, ws) is not.
+    console.error(describeUntrustedText(err.message))
     process.exitCode = 1
   })
 }

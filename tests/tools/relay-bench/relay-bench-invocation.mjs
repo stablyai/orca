@@ -83,6 +83,24 @@ export function requirePort(value, label, usage) {
   return parsed
 }
 
+// ---------- untrusted text ----------
+// Anything a peer, the desktop, or a stored file chose and that lands in the operator's terminal
+// goes through here: printable ASCII only, bounded, everything else named by count. Bidi and
+// C1 controls are outside the allow-list, so a hostile reason cannot repaint the screen.
+const UNTRUSTED_TEXT = /^[\x20-\x7e]{1,120}$/
+export function describeUntrustedText(value) {
+  if (typeof value !== 'string') {
+    return value === undefined ? 'unknown' : `non-string (${typeof value})`
+  }
+  if (!value) {
+    return 'empty'
+  }
+  if (UNTRUSTED_TEXT.test(value)) {
+    return value
+  }
+  return `unprintable (${value.length} chars)`
+}
+
 // ---------- destinations ----------
 const BLOCKED_IPV4_RANGES = [
   ['0.0.0.0', 8],
@@ -172,15 +190,40 @@ function ipv6ToBytes(host) {
   return bytes
 }
 
+function v4At(bytes, offset) {
+  return (
+    ((bytes[offset] << 24) >>> 0) +
+    (bytes[offset + 1] << 16) +
+    (bytes[offset + 2] << 8) +
+    bytes[offset + 3]
+  )
+}
+
 function isPublicIpv6(bytes) {
   const leadingZeros = bytes.slice(0, 10).every((byte) => byte === 0)
   if (leadingZeros && bytes[10] === 0xff && bytes[11] === 0xff) {
-    return isPublicIpv4(
-      ((bytes[12] << 24) >>> 0) + (bytes[13] << 16) + (bytes[14] << 8) + bytes[15]
-    )
+    return isPublicIpv4(v4At(bytes, 12))
   }
   if (leadingZeros && bytes[10] === 0 && bytes[11] === 0) {
     // Covers :: and ::1 as well as the deprecated v4-compatible form.
+    return false
+  }
+  // Transition prefixes that reach an embedded v4 address: judge that address.
+  // NAT64 64:ff9b::/96 puts the v4 in the last 32 bits; 6to4 2002::/16 in bits 16-47.
+  // 64:ff9b:1::/48 (NAT64 local) embeds it at a position set by the deployment's prefix
+  // length, which this harness cannot know, so it is refused. Teredo 2001:0::/32 embeds the
+  // client v4 inverted, so it is refused too.
+  const nat64 = bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b
+  if (nat64 && bytes.slice(4, 12).every((byte) => byte === 0)) {
+    return isPublicIpv4(v4At(bytes, 12))
+  }
+  if (nat64 && bytes[4] === 0 && bytes[5] === 1) {
+    return false
+  }
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) {
+    return isPublicIpv4(v4At(bytes, 2))
+  }
+  if (bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0 && bytes[3] === 0) {
     return false
   }
   if ((bytes[0] & 0xfe) === 0xfc || bytes[0] === 0xff) {
@@ -225,22 +268,22 @@ export function classifyPublicHttpsOrigin(value) {
   try {
     parsed = new URL(value)
   } catch {
-    return { ok: false, reason: `not a URL: ${value}` }
+    return { ok: false, reason: `not a URL: ${describeUntrustedText(value)}` }
   }
   if (parsed.protocol !== 'https:') {
-    return { ok: false, reason: `must be an https origin: ${value}` }
+    return { ok: false, reason: `must be an https origin: ${describeUntrustedText(value)}` }
   }
   if (parsed.username || parsed.password) {
-    return { ok: false, reason: `must not carry credentials: ${value}` }
+    return { ok: false, reason: `must not carry credentials: ${describeUntrustedText(value)}` }
   }
   const host = normalizeHostname(parsed.hostname)
   if (host === 'localhost' || host.endsWith('.localhost')) {
-    return { ok: false, reason: `refusing a loopback destination: ${value}` }
+    return { ok: false, reason: `refusing a loopback destination: ${describeUntrustedText(value)}` }
   }
   if (isPublicIpAddress(host) === false) {
     return {
       ok: false,
-      reason: `refusing a loopback, link-local, or private destination: ${value}`
+      reason: `refusing a loopback, link-local, or private destination: ${describeUntrustedText(value)}`
     }
   }
   return { ok: true, origin: parsed.origin }
@@ -260,14 +303,20 @@ export async function resolvesToPublicAddress(origin, { lookup = dnsLookup } = {
   try {
     addresses = await lookup(host, { all: true })
   } catch (err) {
-    return { ok: false, reason: `cannot resolve ${host}: ${err.message}` }
+    return {
+      ok: false,
+      reason: `cannot resolve ${describeUntrustedText(host)}: ${err.code ?? 'lookup failed'}`
+    }
   }
   if (!addresses.length) {
-    return { ok: false, reason: `cannot resolve ${host}` }
+    return { ok: false, reason: `cannot resolve ${describeUntrustedText(host)}` }
   }
   const blocked = addresses.find((entry) => isPublicIpAddress(entry.address) === false)
   if (blocked) {
-    return { ok: false, reason: `${host} resolves to a private address ${blocked.address}` }
+    return {
+      ok: false,
+      reason: `${describeUntrustedText(host)} resolves to a private address ${describeUntrustedText(blocked.address)}`
+    }
   }
   return { ok: true }
 }
