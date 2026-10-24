@@ -1,6 +1,7 @@
 // Isolate native watcher teardown crashes so they cannot kill the app and its agent sessions (#7547).
 import type * as ParcelWatcher from '@parcel/watcher'
 import { loadParcelWatcher } from './parcel-watcher-module-loader'
+import { isParcelWatcherRescanRequiredError } from './parcel-watcher-rescan-error'
 import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
 import { detectShallowWatchDelivery } from './shallow-watch-delivery-probe'
 import { startWatcherDeliveryCanary } from './parcel-watcher-delivery-canary'
@@ -125,6 +126,10 @@ function main(): void {
                 return
               }
               if (err) {
+                if (isParcelWatcherRescanRequiredError(err)) {
+                  eventDelivery.overflow()
+                  return
+                }
                 send({ op: 'watch-error', id, message: errorMessage(err) })
                 return
               }

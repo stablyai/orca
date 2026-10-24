@@ -13,6 +13,8 @@ const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
 export type WatcherProcessEventDeliveryQueue = {
   enqueue(events: readonly ParcelWatcherEvent[]): void
+  /** Replace pending paths with one overflow; the subscription stays live. */
+  overflow(): void
   flush(): Promise<void>
   close(): void
 }
@@ -129,6 +131,14 @@ export function createWatcherProcessEventDeliveryQueue(
           pendingEvents.push(event)
         }
       }
+      void drain()
+    },
+    overflow(): void {
+      if (!active) {
+        return
+      }
+      pendingEvents = []
+      pendingOverflow = true
       void drain()
     },
     flush(): Promise<void> {

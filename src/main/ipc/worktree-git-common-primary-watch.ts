@@ -150,6 +150,17 @@ export async function startGitCommonPrimaryWatch(
       .catch(() => {})
   }
 
+  const reportLostEvents = (reason: string): void => {
+    if (!disposed) {
+      const error = new Error(`Git primary metadata watcher ${reason}`)
+      if (onWatchError) {
+        onWatchError(error)
+      } else {
+        onEvents(primaryMetadataEvents(commonDirPath))
+      }
+    }
+  }
+
   try {
     watcher = await subscribeViaWatcherProcess(
       commonDirPath,
@@ -164,16 +175,9 @@ export async function startGitCommonPrimaryWatch(
       },
       PRIMARY_WATCH_OPTIONS,
       {
-        onInterruption: () => {
-          if (!disposed) {
-            const error = new Error('Git primary metadata watcher interrupted')
-            if (onWatchError) {
-              onWatchError(error)
-            } else {
-              onEvents(primaryMetadataEvents(commonDirPath))
-            }
-          }
-        }
+        onInterruption: () => reportLostEvents('interrupted'),
+        // Why: FSEvents rescan errors now arrive as overflow on a live stream, not as a terminal error.
+        onOverflow: () => reportLostEvents('overflowed')
       }
     )
     if (watcher && !disposed && !fallbackFlight.pending()) {

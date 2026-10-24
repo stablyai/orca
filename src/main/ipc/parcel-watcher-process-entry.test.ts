@@ -600,14 +600,9 @@ describe('parcel watcher process canary', () => {
     callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith(
-      {
-        op: 'watch-error',
-        id: 1,
-        message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
-      },
-      expect.any(Function)
-    )
+    // Why: watch-error retires the host subscription, which left large folder roots unwatched.
+    expect(sendMock.mock.calls.some(([message]) => message.op === 'watch-error')).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith({ op: 'overflow', id: 1 }, expect.any(Function))
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',
