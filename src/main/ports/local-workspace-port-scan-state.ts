@@ -146,6 +146,7 @@ export function partitionListenersNeedingMetadata(
     if (
       remembered?.commandLine !== undefined &&
       remembered.processName === port.processName &&
+      port.socketId !== undefined &&
       remembered.socketId === port.socketId &&
       metadataScanSequence - remembered.probedAtScan < METADATA_REPROBE_INTERVAL_SCANS &&
       port.pid !== undefined

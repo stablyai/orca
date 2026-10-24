@@ -8,10 +8,13 @@ export const PORT_SCAN_COMMAND_TIMEOUT_MS = 4_000
 // covers "the callback never arrived", so it must fire strictly later.
 export const WATCHDOG_GRACE_MS = 1_000
 
+export type DarwinPortScanOperation = 'listeners' | 'attribution'
+
 export type PortScanCommandRequest = {
   id: number
   command: string
   args: string[]
+  darwinOperation?: DarwinPortScanOperation
 }
 
 export type PortScanCommandResponse =
