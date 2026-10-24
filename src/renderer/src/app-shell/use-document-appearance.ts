@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
+import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
+import { browserColorProbe } from '../lib/plugin-theme-tokens'
+import { usePluginMonacoThemeStore } from '../store/plugin-monaco-theme'
 import {
   usePluginAppThemeSync,
   usePluginTerminalPaletteRefresh,
@@ -54,6 +57,17 @@ export function useDocumentAppearance(): void {
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (pluginThemesLoaded && theme) {
       applyPluginAppTheme(pluginTheme)
+      // Why read the document: the editor should match what was painted, built-ins included.
+      const computed = getComputedStyle(document.documentElement)
+      usePluginMonacoThemeStore.setState({
+        theme: pluginTheme
+          ? derivePluginMonacoTheme({
+              base: pluginTheme.base,
+              read: (token) => computed.getPropertyValue(token),
+              probe: browserColorProbe
+            })
+          : null
+      })
     }
   }, [pluginTheme, pluginThemesLoaded, theme])
 

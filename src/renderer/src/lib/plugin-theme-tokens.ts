@@ -1,6 +1,6 @@
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
 export type ColorProbe = (value: string) => readonly [number, number, number, number] | null
-type Rgba = readonly [number, number, number, number]
+export type Rgba = readonly [number, number, number, number]
 
 // Why: a theme must not be able to hide text, so every text/surface pair keeps WCAG AA contrast.
 const CONTRAST_PAIRS: readonly (readonly [string, string])[] = [
@@ -38,7 +38,8 @@ function luminance([r, g, b]: Rgba): number {
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }
 
-function contrast(a: Rgba, b: Rgba): number {
+/** WCAG contrast ratio between two opaque colors. */
+export function contrastRatio(a: Rgba, b: Rgba): number {
   const first = luminance(a)
   const second = luminance(b)
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
@@ -90,7 +91,7 @@ export function safePluginThemeTokens(
         textColor &&
         (surfaceColor[3] < 1 ||
           textColor[3] < 1 ||
-          contrast(surfaceColor, textColor) < MIN_TEXT_CONTRAST)
+          contrastRatio(surfaceColor, textColor) < MIN_TEXT_CONTRAST)
       ) {
         changed = drop(surface, text) || changed
       }
@@ -101,7 +102,7 @@ export function safePluginThemeTokens(
       if (
         ringColor &&
         surfaceColor &&
-        contrast(over(ringColor, surfaceColor), surfaceColor) < MIN_RING_CONTRAST
+        contrastRatio(over(ringColor, surfaceColor), surfaceColor) < MIN_RING_CONTRAST
       ) {
         changed = drop(ring) || changed
       }
