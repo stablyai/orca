@@ -18759,6 +18759,13 @@
         "cancelled": "This plain SSH terminal was closed before it started.",
         "terminalUnavailable": "Orca couldn’t open a terminal here.",
         "openHint": "Keeps you working on the host while Orca can’t set up there."
+      },
+      "task-page": {
+        "NoConnectedSource": {
+          "title": "Connect a task source",
+          "description": "Sign in to GitHub or GitLab, or connect Jira or Linear, to browse and start work from your tasks here.",
+          "action": "Open integrations"
+        }
       }
     },
     "i18n": {
