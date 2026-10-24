@@ -20619,6 +20619,11 @@
       "review": "Review restart options",
       "title": "Terminal service may need a restart"
     },
+    "degradedDaemonBanner": {
+      "body": "The terminal service keeps your earlier terminals running but cannot start new ones, so new terminals run inside Orca. Orca switches back by itself once those earlier terminals are closed. Restarting the terminal service now ends them.",
+      "review": "Review restart options",
+      "title": "New terminals are not kept when Orca quits"
+    },
     "severedDaemonBanner": {
       "unknownCount": "its running terminals",
       "count": "{{count}} running terminals",

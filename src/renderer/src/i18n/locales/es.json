@@ -20674,6 +20674,11 @@
       "review": "Revisar las opciones de reinicio",
       "title": "Es posible que el servicio de terminal necesite reiniciarse"
     },
+    "degradedDaemonBanner": {
+      "body": "El servicio de terminal mantiene en ejecución tus terminales anteriores, pero no puede iniciar otras nuevas, así que las terminales nuevas se ejecutan dentro de Orca. Orca vuelve al servicio por sí solo cuando se cierran esas terminales anteriores. Reiniciar ahora el servicio de terminal las finaliza.",
+      "review": "Revisar las opciones de reinicio",
+      "title": "Las terminales nuevas no se conservan al cerrar Orca"
+    },
     "claudeDiffPanelNotice": {
       "gotIt": "Entendido",
       "body": "Para ocultarlo, escriba /diff en Claude Code. Claude recuerda esa elección para sesiones posteriores.",

@@ -39,6 +39,14 @@ export function daemonOwnsFreshPersistentPtys(): boolean {
   return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
 }
 
+/** Fresh terminals run on the in-process provider now, without daemon persistence (degraded routing). */
+export function freshSpawnsRunInProcess(): boolean {
+  return (
+    adapter instanceof DegradedDaemonPtyProvider &&
+    adapter.routesFreshSpawnsToLocalProvider === true
+  )
+}
+
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
 export type DaemonEndpointFacts = {
   runtimeDir: string

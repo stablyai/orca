@@ -20710,6 +20710,11 @@
       "review": "查看重新启动选项",
       "title": "终端服务可能需要重新启动"
     },
+    "degradedDaemonBanner": {
+      "body": "终端服务仍在运行你之前的终端，但无法启动新终端，因此新终端在 Orca 内部运行。关闭这些之前的终端后，Orca 会自动切换回来。现在重启终端服务会结束它们。",
+      "review": "查看重启选项",
+      "title": "退出 Orca 时不会保留新终端"
+    },
     "claudeDiffPanelNotice": {
       "gotIt": "知道了",
       "title": "Claude Code 可以在宽终端中的聊天旁边打开自己的差异面板。该面板是 Claude 的，而不是 Orca 的。",

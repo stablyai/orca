@@ -251,6 +251,30 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     await this.respawnPromise
   }
 
+  /**
+   * Replace a daemon kept only for its live sessions once none remain, so degraded routing can send
+   * fresh terminals back to a daemon. Never runs while any session is alive or the count is unknown.
+   */
+  async replaceIdleDaemonForFreshSpawns(): Promise<boolean> {
+    if (!this.respawnFn || this.respawnAdoptionClosed || this.activeSessionIds.size > 0) {
+      return false
+    }
+    if ((await this.getDaemonLiveSessionCount()) !== 0) {
+      return false
+    }
+    if (!this.respawnPromise) {
+      this.respawnPromise = this.doRespawn(
+        '[daemon] Degraded daemon has no live sessions - respawning so fresh terminals are daemon-backed again',
+        'failed_health_check'
+      ).finally(() => {
+        this.respawnPromise = null
+      })
+    }
+    await this.respawnPromise
+    await this.ensureConnected()
+    return true
+  }
+
   protected async getDaemonLiveSessionCount(): Promise<number | null> {
     try {
       await this.client.ensureConnected()
