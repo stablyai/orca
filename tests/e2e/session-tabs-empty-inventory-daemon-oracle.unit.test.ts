@@ -2,13 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubprocessHandle } from '../../src/main/daemon/session-subprocess-handle'
 import { TerminalHost } from '../../src/main/daemon/terminal-host'
 
-vi.mock('../../src/renderer/src/store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
+vi.mock('../../src/renderer/src/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      setState: vi.fn(),
+      getState: vi.fn(() => ({})),
+      subscribe: vi.fn(() => () => {})
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status'
 import {

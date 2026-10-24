@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { getAgentStatusOwner } from '../agent-status-commit'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import { createAgentStatusRuntime } from './agent-status-runtime'
 import { createAgentStatusAuthorityActions } from './agent-status-authority-actions'
@@ -79,8 +80,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     }
     return composedActions
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The spread creators together supply every AgentStatusSlice action; state fields are added below.
-  const actions = {
+  const owner = getAgentStatusOwner({ getState: storeGet })
+  const rawActions = {
     ...createAgentStatusAuthorityActions(runtime),
     ...createAgentStatusCleanupActions(runtime),
     ...createAgentStatusDropActions(runtime),
@@ -92,7 +93,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusProgramStatusActions(runtime),
     ...createAgentStatusRecoveryActions(runtime),
     ...createAgentStatusRetentionActions(runtime)
-  } as AgentStatusSlice
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each reflected key keeps its original action's arguments and return value inside the transaction.
+  const actions = Object.fromEntries(
+    Object.entries(rawActions).map(([key, action]) => {
+      const invoke: (...args: never[]) => unknown = action
+      return [key, (...args: never[]) => owner.transact(() => invoke(...args))]
+    })
+  ) as typeof rawActions
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
     recordAgentProviderSession: actions.recordAgentProviderSession,
@@ -100,7 +108,6 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
   }
   return {
     ...actions,
-    agentStatusByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,

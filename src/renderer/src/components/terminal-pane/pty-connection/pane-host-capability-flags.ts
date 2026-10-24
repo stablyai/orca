@@ -1,3 +1,5 @@
+import { getAgentStatusState, getAgentStatusEntry } from '@/store/agent-status'
+
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
@@ -30,7 +32,7 @@ import {
 } from '../renderer-owned-agent-status-registry'
 
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import {
   createTerminalInputEchoDelay,
   noteTerminalInputAwaitingEcho
@@ -67,40 +69,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
   session.unsubscribeWindowsDoneTerminalModeReset = null
   if (session.isNativeWindowsConpty) {
-    const initialAgentStatus = session.state.agentStatusByPaneKey[session.cacheKey]
-    let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
-    if (
-      !initialAgentStatus &&
-      session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
-      session.paneStartup.telemetry.request_kind === 'resume' &&
-      (session.paneStartup.launchAgent === 'codex' ||
-        session.paneStartup.telemetry.agent_kind === 'codex')
-    ) {
-      // Why: history resumes open on a completed Codex composer without a done
-      // row, so arm the same Windows stale-focus guard until work starts again.
-      session.suppressNativeWindowsIdleCodexFocusReports = true
-    }
-    if (initialAgentStatus?.state === 'done') {
-      session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
-    }
-    session.unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
-      const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
-      const nextAgentStatusState = nextAgentStatus?.state
-      if (nextAgentStatusState === 'done') {
-        session.setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
-      } else if (nextAgentStatusState) {
-        session.suppressNativeWindowsIdleCodexFocusReports = false
-      }
-      const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
-      // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
-      if (
-        nextAgentDoneStartedAt !== undefined &&
-        nextAgentDoneStartedAt !== lastAgentDoneStartedAt
-      ) {
-        session.queueAgentIdleTerminalModeReset()
-      }
-      lastAgentDoneStartedAt = nextAgentDoneStartedAt
-    })
+    installWindowsDoneTerminalModeReset(session)
   }
 
   session.localWindowsTerminalCapabilities = hasCachedWindowsTerminalCapabilities()
@@ -123,7 +92,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       ? registerRendererOwnedAgentStatusPane(session.cacheKey, session.runtimeEnvironmentId)
       : null
   session.handleRendererOwnedAgentStatus = (payload): void => {
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     const routing = session.resolveCurrentAgentStatusRouting()
     if (!routing) {
       return
@@ -134,7 +103,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
     const observedStatusPayload = {
       ...statusPayload,
-      observation: rendererAgentStatusObservations.observe(session.cacheKey, {
+      observation: getAgentStatusOwner(useAppStore).observations().observe(session.cacheKey, {
         origin: 'osc',
         observedAt: Date.now(),
         kind: 'snapshot'
@@ -173,7 +142,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     if (payload.state === 'working' && session.syncAgentTaskCompleteTrackingEnabled()) {
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
     }
-    const storedStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const storedStatus = getAgentStatusEntry(session.cacheKey)
     const notificationPayload =
       typeof storedStatus?.stateStartedAt === 'number'
         ? { ...statusPayload, stateStartedAt: storedStatus.stateStartedAt }
@@ -245,7 +214,7 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     requestTerminalWritePipelineProbe(session.pane.terminal)
   }
   session.recordTerminalInputForHibernation = (): void => {
-    useAppStore.getState().recordTerminalInput(session.cacheKey)
+    getAgentStatusState().recordTerminalInput(session.cacheKey)
   }
   // Why: onData mixes real user input with xterm's parser auto-replies (focus
   // reports, DA/DSR/CPR responses). Recording those replies as activity makes
@@ -267,4 +236,53 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       session.recordTerminalInputForHibernation()
     }
   }
+}
+
+export function installWindowsDoneTerminalModeReset(
+  session:
+    | Pick<
+        ConnectPanePtySession,
+        | 'state'
+        | 'cacheKey'
+        | 'paneStartup'
+        | 'suppressNativeWindowsIdleCodexFocusReports'
+        | 'setFocusReportSuppressionForAgentCompletion'
+        | 'unsubscribeWindowsDoneTerminalModeReset'
+        | 'queueAgentIdleTerminalModeReset'
+      >
+    | ConnectPanePtySession
+): void {
+  const initialAgentStatus = getAgentStatusEntry(session.cacheKey)
+  let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
+  if (
+    !initialAgentStatus &&
+    session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
+    session.paneStartup.telemetry.request_kind === 'resume' &&
+    (session.paneStartup.launchAgent === 'codex' ||
+      session.paneStartup.telemetry.agent_kind === 'codex')
+  ) {
+    // Why: history resumes open on a completed Codex composer without a done
+    // row, so arm the same Windows stale-focus guard until work starts again.
+    session.suppressNativeWindowsIdleCodexFocusReports = true
+  }
+  if (initialAgentStatus?.state === 'done') {
+    session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
+  }
+  session.unsubscribeWindowsDoneTerminalModeReset = getAgentStatusOwner(
+    useAppStore
+  ).subscribeTransitions(({ next: nextState }) => {
+    const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
+    const nextAgentStatusState = nextAgentStatus?.state
+    if (nextAgentStatusState === 'done') {
+      session.setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
+    } else if (nextAgentStatusState) {
+      session.suppressNativeWindowsIdleCodexFocusReports = false
+    }
+    const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
+    // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
+    if (nextAgentDoneStartedAt !== undefined && nextAgentDoneStartedAt !== lastAgentDoneStartedAt) {
+      session.queueAgentIdleTerminalModeReset()
+    }
+    lastAgentDoneStartedAt = nextAgentDoneStartedAt
+  }, session.cacheKey)
 }

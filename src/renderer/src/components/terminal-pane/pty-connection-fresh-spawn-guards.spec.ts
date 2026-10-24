@@ -18,14 +18,16 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+const deleteDefaults = { error: null, canForceDelete: false, forceDeleteReason: null }
+
 export function registerPtyConnectionFreshSpawnGuardsTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -35,9 +37,10 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -49,11 +52,12 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not surface the zero-dimensions diagnostic for a hidden pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -68,7 +72,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('still surfaces the zero-dimensions diagnostic for a visible pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
@@ -90,13 +94,14 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // (main fences it with TerminalRemovalInProgressError and the pane is about to
     // unmount). See docs — bad UI was the raw fence error flashing on the tab.
     it('skips a fresh spawn while the pane worktree is being deleted', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
-      }
+      storeFixture.patch({
+        deleteStateByWorktreeId: {
+          'wt-1': { ...deleteDefaults, isDeleting: true, phase: 'deleting' }
+        }
+      })
       // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
       const deps = createDeps({ tabId: 'tab-removal-skip-spawn' })
 
@@ -109,13 +114,14 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     // A queued row may still fail its own delete and stay; a new terminal there must still start.
     it('still spawns while the pane worktree is only queued for deletion', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'queued' } }
-      }
+      storeFixture.patch({
+        deleteStateByWorktreeId: {
+          'wt-1': { ...deleteDefaults, isDeleting: true, phase: 'queued' }
+        }
+      })
       const deps = createDeps({ tabId: 'tab-queued-delete-spawn' })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
@@ -127,14 +133,13 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
     // answer from the live store, or a remounted pane's shell dies under it.
     it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const deps = createDeps({ tabId: 'tab-retain-disposed-spawn' })
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: { 'wt-1': [{ id: 'tab-retain-disposed-spawn', ptyId: null }] }
-      }
+      })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await flushAsyncTicks()
@@ -144,26 +149,27 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         throw new Error('pane transport was built without retainDisposedSpawn')
       }
       expect(retain()).toBe(true)
-      mockStoreState = {
-        ...mockStoreState,
-        deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
-      }
+      storeFixture.patch({
+        deleteStateByWorktreeId: {
+          'wt-1': { ...deleteDefaults, isDeleting: true, phase: 'deleting' }
+        }
+      })
       expect(retain()).toBe(false)
-      mockStoreState = {
-        ...mockStoreState,
-        deleteStateByWorktreeId: { 'local|wt-1': { isDeleting: true, phase: 'deleting' } }
-      }
+      storeFixture.patch({
+        deleteStateByWorktreeId: {
+          'local|wt-1': { ...deleteDefaults, isDeleting: true, phase: 'deleting' }
+        }
+      })
       expect(retain()).toBe(false)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         deleteStateByWorktreeId: {},
         tabsByWorktree: { 'wt-1': [] }
-      }
+      })
       expect(retain()).toBe(false)
     })
 
     it('carries the pane placement onto its transport', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       transportFactoryQueue.push(createMockTransport())
       const placement = { kind: 'new-tab' } as const
       const deps = createDeps({ tabId: 'tab-placement', placement })
@@ -175,7 +181,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       // Why: unique tab id → deterministic fresh spawn (mirrors the skip test's control).
@@ -192,7 +198,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     // that main fences. reportError must swallow that fence so the tab never flashes
     // the raw "Terminal cannot start while the worktree is being removed" banner.
     it('swallows a worktree-removal fence error instead of surfacing it', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
         await import('../../../../shared/worktree/removal-fence-error')
       const transport = createMockTransport()
@@ -221,7 +227,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('still surfaces non-fence spawn errors through the pane error sink', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -242,19 +248,28 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('threads the resolved local project runtime into IPC terminal transport options', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           terminalWindowsShell: 'wsl.exe',
           terminalWindowsWslDistro: 'Debian',
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
         },
-        projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
-      }
+        projects: [
+          {
+            id: 'repo1',
+            displayName: 'repo1',
+            badgeColor: '#737373',
+            sourceRepoIds: ['repo1'],
+            createdAt: 1,
+            updatedAt: 1,
+            localWindowsRuntimePreference: { kind: 'windows-host' }
+          }
+        ]
+      })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
       await flushAsyncTicks()
@@ -272,19 +287,18 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('keeps an explicit host fallback out of the project runtime', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: null, forceHostRuntime: true }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
         }
-      }
+      })
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
       await flushAsyncTicks()
@@ -293,30 +307,37 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('spawns a Floating agent on native Windows beside an active WSL project', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { createIpcPtyTransport } = await import('./pty-transport')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         activeWorktreeId: 'wt-1',
         tabsByWorktree: {
-          ...mockStoreState.tabsByWorktree,
+          ...storeFixture.read().tabsByWorktree,
           [FLOATING_TERMINAL_WORKTREE_ID]: [
             { id: 'tab-floating-agent', ptyId: null, launchAgent: 'codex' }
           ]
         },
         projects: [
-          { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+          {
+            id: 'repo1',
+            displayName: 'repo1',
+            badgeColor: '#737373',
+            sourceRepoIds: ['repo1'],
+            createdAt: 1,
+            updatedAt: 1,
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+          }
         ],
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           terminalWindowsShell: 'wsl.exe',
           terminalWindowsWslDistro: 'Ubuntu',
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
         }
-      }
+      })
 
       connectPanePty(
         createPane(1) as never,
@@ -341,7 +362,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('observes live terminal GitHub PR URLs before agent completion', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -357,7 +378,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
       capturedDataCallback.current?.('Created https://github.com/acme/orca/pull/42\r\n')
 
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
+      expect(storeFixture.read().observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
         'wt-1',
         expect.objectContaining({
           url: 'https://github.com/acme/orca/pull/42',
@@ -369,7 +390,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('surfaces an actionable error when a Codex backfill timeout drops to the shell', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -397,7 +418,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
 
     it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
       // Regression (cold-restore reattach lockout): a stuck replay guard dropped every keystroke ("can't type after reconnecting"); engaged guard suppresses input, released forwards it.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const transport = createMockTransport('ssh:ssh-1@@pty-1')
       transportFactoryQueue.push(transport)
@@ -419,7 +440,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('preserves classified user input during replay while suppressing synthetic replies', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const pane = createPane(1)
       const userInputListeners = new Set<() => void>()
       Object.assign(pane.terminal, {
@@ -496,7 +517,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
     })
 
     it('settles a queued startup only after the pane binds its spawned PTY', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-resume')
       transportFactoryQueue.push(transport)
       const onStartupBound = vi.fn()

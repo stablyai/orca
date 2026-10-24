@@ -1,3 +1,4 @@
+import { coordinatedPurgeSet } from '../teardown/worktree-purge-preparation'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -137,7 +138,7 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
 }
 
 export function mergeFetchedWorktrees(
-  set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
+  storeSet: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   get: () => AppState,
   args: FencedWorktreeMergeArgs
 ): WorktreeListingMergeOutcome {
@@ -155,6 +156,7 @@ export function mergeFetchedWorktrees(
     )
   }
   // Why a holder: the updater decides the outcome, and a narrowed `let` would hide that assignment.
+  const set = coordinatedPurgeSet(storeSet, get)
   const decision: { outcome: WorktreeListingMergeOutcome } = { outcome: 'not-current' }
   let authoritativelyRemovedIds: readonly string[] = []
   let authoritativelySeenIds: readonly string[] = []

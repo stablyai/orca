@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import {
   syncRuntimeGraph,
   setTrailingGraphSyncScheduler
@@ -6,7 +7,7 @@ import {
 import { graphState, RUNTIME_GRAPH_SYNC_COALESCE_MS } from './sync-runtime-graph/graph-state'
 import { subscribeMountedTerminalTabChanges } from './mounted-terminal-tab-registry'
 import { measureTerminalGroupGridSizes } from './sync-runtime-graph/terminal-group-grid-sizes'
-export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null): void {
+export function setRuntimeGraphStoreStateGetter(getter: (() => AgentStatusReadState) | null): void {
   graphState.getStoreState = getter
 }
 

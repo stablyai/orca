@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -17,9 +18,16 @@ const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   pending: false
 }))
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector({})
+  }
+  const readFixture = () => ({})
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('../tab-bar/cli-chat-resume-source', () => ({
   resolveCliChatResumeSource: (_state: unknown, args: unknown) => {
     mocks.resolve(args)
@@ -52,4 +60,14 @@ it('dispatches the exact pane with owner-opening intent and shares pending', () 
   )
   expect(screen.getByRole('button').getAttribute('aria-busy')).toBe('true')
   expect(screen.getByRole('button').hasAttribute('disabled')).toBe(true)
+})
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
 })

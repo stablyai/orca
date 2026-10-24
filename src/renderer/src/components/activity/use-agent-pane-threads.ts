@@ -1,3 +1,5 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -36,7 +38,7 @@ import type {
 } from './activity-thread-types'
 
 export type AgentPaneThreadsStoreData = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'migrationUnsupportedByPtyId'
@@ -112,7 +114,7 @@ export function useAgentPaneThreads(args: {
     raw: AppState['unifiedTabsByWorktree'] | null
     projected: ActivityTabProjection | null
   }>({ raw: null, projected: null })
-  const storeData = useAppStore(
+  const storeData = useAgentStatusSelector(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,

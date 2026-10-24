@@ -10,7 +10,7 @@ import { runtimeWaitExitCode } from '@/lib/agent-background-session-exit'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 
 export async function observeExistingAutomationSession(args: {
   ptyId: string
@@ -47,7 +47,7 @@ export async function observeExistingAutomationSession(args: {
             paneKey,
             {
               ...payload,
-              observation: rendererAgentStatusObservations.observe(paneKey, {
+              observation: getAgentStatusOwner(useAppStore).observations().observe(paneKey, {
                 origin: 'osc',
                 observedAt: Date.now(),
                 kind: 'snapshot'

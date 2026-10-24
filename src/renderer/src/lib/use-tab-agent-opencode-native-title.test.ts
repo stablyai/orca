@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -14,7 +15,7 @@ import { useTabAgent } from './use-tab-agent'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 let latestAgent: TerminalAgent | null | undefined
@@ -81,8 +82,8 @@ describe('OpenCode native title tab identity', () => {
     latestAgent = undefined
     getForegroundProcess.mockReset()
     clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, initialAppState)
+    applyAgentStatusPatch(useAppStore, {
       activeTabId: 'other-tab',
       ptyIdsByTabId: { 'opencode-tab': ['pty-opencode'] },
       agentStatusByPaneKey: {},
@@ -104,7 +105,7 @@ describe('OpenCode native title tab identity', () => {
       root = null
     }
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
     window.api = originalApi
   })
 
@@ -292,7 +293,7 @@ describe('OpenCode native title tab identity', () => {
     const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         ptyIdsByTabId: { 'opencode-tab': ['pty-opencode', 'pty-sibling'] },
         terminalLayoutsByTabId: { 'opencode-tab': splitLayout() },
         sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingClaudeRecord(paneKey) }

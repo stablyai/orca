@@ -15,6 +15,7 @@ export type StructuredAgentSessionReadSnapshot = {
 }
 
 export type StructuredAgentSessionReadOwner = {
+  readonly lifetime: { retired: boolean }
   publishCreated: (page: AgentSessionHistoryPage) => void
   activate: () => () => void
   dispose: () => void

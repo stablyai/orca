@@ -1,9 +1,20 @@
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  execInTerminal,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
+} from './helpers/terminal'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
   enableNativeChatSetting,
@@ -52,6 +63,46 @@ test('ZCode native chat reads ordered visible history and follows new messages',
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
     const [tabId] = descriptor.paneKey.split(':')
     await enableNativeChatSetting(orcaPage)
+    const stubScript = path.join(home, '.zcode', 'zcode.cjs')
+    const stubCommand = path.join(
+      home,
+      '.zcode',
+      process.platform === 'win32' ? 'zcode.cmd' : 'zcode'
+    )
+    writeFileSync(
+      stubScript,
+      "process.title = 'zcode'; process.stdout.write('ZCODE_TRANSCRIPT_FIXTURE_READY\\n'); process.stdin.resume()\n"
+    )
+    writeFileSync(
+      stubCommand,
+      process.platform === 'win32'
+        ? `@echo off\r\n"${process.execPath}" "${stubScript}" %*\r\n`
+        : `#!/bin/sh\nexec ${quotePosixShell(process.execPath)} ${quotePosixShell(stubScript)} "$@"\n`
+    )
+    if (process.platform !== 'win32') {
+      chmodSync(stubCommand, 0o755)
+    }
+    const command = buildFakeAgentCommandOverride(stubCommand)
+    await orcaPage.evaluate(
+      async ({ command, windowsShell }) => {
+        await window.__store?.getState().updateSettings({
+          agentCmdOverrides: { zcode: command },
+          ...(windowsShell ? { terminalWindowsShell: windowsShell } : {})
+        })
+      },
+      { command, windowsShell: process.platform === 'win32' ? FAKE_AGENT_WINDOWS_SHELL : null }
+    )
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await execInTerminal(orcaPage, ptyId, command)
+    await waitForTerminalOutput(orcaPage, 'ZCODE_TRANSCRIPT_FIXTURE_READY')
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          async (id) => (await window.api.pty.inspectProcess(id)).foregroundProcess,
+          ptyId
+        )
+      )
+      .toMatch(/zcode/i)
     const endpoint = await readHookEndpoint(electronApp)
     const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/zcode`, {
       method: 'POST',
@@ -75,7 +126,7 @@ test('ZCode native chat reads ordered visible history and follows new messages',
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (paneKey) => window.__store?.getState().agentStatusByPaneKey[paneKey]?.agentType,
+          (paneKey) => window.__agentStatus?.getState().agentStatusByPaneKey[paneKey]?.agentType,
           descriptor.paneKey
         )
       )
@@ -99,6 +150,14 @@ test('ZCode native chat reads ordered visible history and follows new messages',
       timeout: 15_000
     })
     await orcaPage.screenshot({ path: testInfo.outputPath('03-live-update.png') })
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          async (id) => (await window.api.pty.inspectProcess(id)).foregroundProcess,
+          ptyId
+        )
+      )
+      .toMatch(/zcode/i)
   } finally {
     db.close()
   }

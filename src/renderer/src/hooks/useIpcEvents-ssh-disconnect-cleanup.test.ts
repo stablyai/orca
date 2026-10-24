@@ -86,15 +86,22 @@ describe('useIpcEvents updater integration', () => {
       }
     })
 
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => storeState,
-        setState: vi.fn((updater: (state: typeof storeState) => typeof storeState) =>
-          updater(storeState)
-        )
+    vi.doMock('../store', async () => {
+      const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+      const fixture = {
+        useAppStore: {
+          subscribe: vi.fn(() => () => {}),
+          getState: () => storeState,
+          setState: vi.fn((updater: (state: typeof storeState) => typeof storeState) =>
+            updater(storeState)
+          )
+        }
       }
-    }))
+      const readFixture = fixture.useAppStore.getState
+
+      return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+    })
 
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()

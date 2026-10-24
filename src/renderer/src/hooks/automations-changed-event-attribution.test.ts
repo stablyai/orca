@@ -31,23 +31,31 @@ async function mountIpcEvents(): Promise<Mounted> {
     const actual = await vi.importActual<typeof ReactModule>('react')
     return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
   })
-  vi.doMock('../store', () => ({
-    useAppStore: {
-      subscribe: vi.fn(() => () => {}),
-      getState: () => ({
-        settings: { activeRuntimeEnvironmentId: null },
-        repos: [],
-        worktreesByRepo: {},
-        folderWorkspaces: [],
-        projectGroups: [],
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        fetchRepos: vi.fn(() => Promise.resolve()),
-        fetchProjectGroups: vi.fn(() => Promise.resolve()),
-        fetchFolderWorkspaces: vi.fn(() => Promise.resolve())
-      })
+  vi.doMock('../store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixtureState = {
+      settings: { activeRuntimeEnvironmentId: null },
+      repos: [],
+      worktreesByRepo: {},
+      folderWorkspaces: [],
+      projectGroups: [],
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      fetchRepos: vi.fn(() => Promise.resolve()),
+      fetchProjectGroups: vi.fn(() => Promise.resolve()),
+      fetchFolderWorkspaces: vi.fn(() => Promise.resolve())
     }
-  }))
+    const fixture = {
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => fixtureState
+      }
+    }
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
   vi.doMock('./runtime-client-events-sync', () => ({
     createRuntimeClientEventsSync: (deps: {
       onEvent: (environmentId: string, event: RuntimeClientEvent) => void

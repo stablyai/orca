@@ -12,7 +12,6 @@ import {
   retainedAgentEntryFromLive,
   shouldReplaceRetainedWithLive
 } from './agent-status-pane-key-tab-binding'
-import { retireAgentPaneAuthorityAliasesByOwnerTab } from './agent-pane-authority'
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-verdict'
 
 function removeAcknowledgement(
@@ -76,7 +75,9 @@ export function createAgentStatusDropActions(
           }
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
-        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const nextLive: Record<string, (typeof s.agentStatusByPaneKey)[string]> = hasLive
+          ? { ...s.agentStatusByPaneKey }
+          : s.agentStatusByPaneKey
         if (hasLive) {
           delete nextLive[paneKey]
         }
@@ -111,7 +112,7 @@ export function createAgentStatusDropActions(
         }
       })
       if (liveExisted) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.drop?.(paneKey)
@@ -119,7 +120,9 @@ export function createAgentStatusDropActions(
     },
 
     dropAgentStatusByTabPrefix: (tabIdPrefix, opts?: DropAgentStatusByTabPrefixOptions) => {
-      const retiredAliasPaneKeys = retireAgentPaneAuthorityAliasesByOwnerTab(tabIdPrefix)
+      const retiredAliasPaneKeys = runtime
+        .authority()
+        .retireAgentPaneAuthorityAliasesByOwnerTab(tabIdPrefix)
       let hadLive = false
       set((s) => {
         const dropped = buildAgentStatusTabPrefixDropPatch(
@@ -132,7 +135,7 @@ export function createAgentStatusDropActions(
         return dropped.patch
       })
       if (hadLive) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.dropByTabPrefix?.(tabIdPrefix)
@@ -201,7 +204,9 @@ export function createAgentStatusDropActions(
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         hadLive = hasLive
-        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        const nextLive: Record<string, (typeof s.agentStatusByPaneKey)[string]> = hasLive
+          ? { ...s.agentStatusByPaneKey }
+          : s.agentStatusByPaneKey
         if (hasLive) {
           delete nextLive[paneKey]
         }
@@ -249,7 +254,7 @@ export function createAgentStatusDropActions(
         }
       })
       if (hadLive) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
     }
   }

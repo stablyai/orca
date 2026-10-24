@@ -31,13 +31,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionColdRestoreRepaintTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -47,9 +47,10 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -61,10 +62,11 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
     it('paints only the daemon snapshot when reattach result includes both snapshot and replay', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -77,12 +79,12 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         return null
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -102,7 +104,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
     })
 
     it('paints only relay replay when reattach result has replay and coldRestore but no snapshot', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -115,12 +117,12 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         return null
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -148,7 +150,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
     })
 
     it('blanks restored scrollback before fresh shell output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       const written: string[] = []
       transport.connect.mockImplementation(
@@ -158,8 +160,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         }
       )
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
         ptyIdsByTabId: { 'tab-1': [] },
         terminalLayoutsByTabId: {
@@ -170,7 +172,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
             ptyIdsByLeafId: {}
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       pane.terminal.rows = 4
@@ -203,7 +205,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
     })
 
     it('cold-restores at the recovered grid and clears only the dirty viewport before blanking', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       const written: string[] = []
       const operations: (
@@ -232,12 +234,12 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         return 'fresh-pty'
       })
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       pane.terminal.rows = destinationRows

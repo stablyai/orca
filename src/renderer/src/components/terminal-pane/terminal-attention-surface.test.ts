@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
@@ -48,7 +49,7 @@ function seedLiveTab(): TestStore {
 }
 
 function surfaceFor(store: TestStore): ReturnType<typeof createTerminalAttentionSurface> {
-  return createTerminalAttentionSurface(store.getState())
+  return createTerminalAttentionSurface(getAgentStatusOwner(store).getState())
 }
 
 describe('createTerminalAttentionSurface', () => {
@@ -134,7 +135,7 @@ describe('createTerminalAttentionSurface', () => {
   it('treats every split pane of the tab on screen as viewed', () => {
     const store = seedLiveTab()
     store.setState({ activeWorktreeId: WORKSPACE, activeTabId: TAB })
-    const hidden = createTerminalAttentionSurface(store.getState())
+    const hidden = createTerminalAttentionSurface(getAgentStatusOwner(store).getState())
     expect(hidden.isWorkspaceActive(WORKSPACE)).toBe(true)
     expect(hidden.isSurfaceViewed({ workspaceId: WORKSPACE, surfaceKey: PANE })).toBe(true)
     expect(
@@ -157,7 +158,7 @@ describe('createTerminalAttentionSurface', () => {
           settlesTurn: true,
           hasFreshActivityEvidence: false
         },
-        createTerminalAttentionSurface(store.getState())
+        createTerminalAttentionSurface(getAgentStatusOwner(store).getState())
       )
       return decision.admitted && decision.unread !== null
     }

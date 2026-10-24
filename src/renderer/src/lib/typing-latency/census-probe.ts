@@ -3,7 +3,7 @@
  * mode, mounted agent-row count, and the zustand listener count. Split from the
  * probe so the sampling loop stays free of store/DOM lookups.
  */
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { listProbePanes, paneRootElement, type ProbePane } from './echo-instrumentation'
 import type { FocusedPaneCensus } from './diagnostic-summary'
 
@@ -15,7 +15,7 @@ type ProbeStoreState = {
 
 export function readProbeStoreState(): (ProbeStoreState & Record<string, unknown>) | null {
   try {
-    return useAppStore.getState() as unknown as ProbeStoreState & Record<string, unknown>
+    return getAgentStatusState() as unknown as ProbeStoreState & Record<string, unknown>
   } catch {
     return null
   }

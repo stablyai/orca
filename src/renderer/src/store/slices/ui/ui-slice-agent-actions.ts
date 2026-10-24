@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { formatAgentTypeLabel, agentKindForAgentType } from '../../../lib/agent-status'
 import {
@@ -18,7 +19,7 @@ function createAgentSendTargetModeInstanceId(): string {
 
 export function createUiAgentActions(
   set: UISliceSet,
-  get: UISliceGet
+  storeGet: UISliceGet
 ): Pick<
   UISlice,
   | 'sidebarOpen'
@@ -41,6 +42,7 @@ export function createUiAgentActions(
   | 'manuallyUnreadTurnsByPaneKey'
   | 'clearManuallyUnreadTurns'
 > {
+  const get = getAgentStatusOwner({ getState: storeGet }).getTransactionState
   return {
     ...createUiActivityActions(set, get),
     sidebarOpen: true,

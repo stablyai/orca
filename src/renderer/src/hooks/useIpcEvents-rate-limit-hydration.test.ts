@@ -50,52 +50,60 @@ describe('useIpcEvents rate-limit hydration', () => {
         }
       }
     })
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => ({
-          setUpdateStatus: vi.fn(),
-          fetchRepos: vi.fn(),
-          fetchWorktrees: vi.fn(),
-          setActiveView: vi.fn(),
-          activeModal: null,
-          closeModal: vi.fn(),
-          openModal: vi.fn(),
-          activeWorktreeId: 'wt-1',
-          activeView: 'terminal',
-          setActiveRepo: vi.fn(),
-          setActiveWorktree: vi.fn(),
-          revealWorktreeInSidebar: vi.fn(),
-          setIsFullScreen: vi.fn(),
-          updateBrowserTabPageState: vi.fn(),
-          activeTabType: 'terminal',
-          editorFontZoomLevel: 0,
-          setEditorFontZoomLevel: vi.fn(),
-          settings: { terminalFontSize: 13 },
-          setRateLimitsFromPush,
-          updateWorktreeBaseStatus: vi.fn(),
-          updateWorktreeRemoteBranchConflict: vi.fn(),
-          setSshConnectionState: vi.fn(),
-          setSshTargetLabels: vi.fn(),
-          setPortForwards: vi.fn(),
-          clearPortForwards: vi.fn(),
-          setDetectedPorts: vi.fn(),
-          enqueueSshCredentialRequest: vi.fn(),
-          removeSshCredentialRequest: vi.fn(),
-          clearTabPtyId: vi.fn(),
-          updateTabTitle: vi.fn(),
-          runtimePaneTitlesByTabId: {},
-          terminalLayoutsByTabId: {},
-          agentStatusByPaneKey: {},
-          recentlyClosedAgentStatusTabIds: {},
-          repos: [],
-          worktreesByRepo: {},
-          tabsByWorktree: {},
-          unifiedTabsByWorktree: {},
-          workspaceSessionReady: false
-        })
+    vi.doMock('../store', async () => {
+      const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+      const fixtureState = {
+        setUpdateStatus: vi.fn(),
+        fetchRepos: vi.fn(),
+        fetchWorktrees: vi.fn(),
+        setActiveView: vi.fn(),
+        activeModal: null,
+        closeModal: vi.fn(),
+        openModal: vi.fn(),
+        activeWorktreeId: 'wt-1',
+        activeView: 'terminal',
+        setActiveRepo: vi.fn(),
+        setActiveWorktree: vi.fn(),
+        revealWorktreeInSidebar: vi.fn(),
+        setIsFullScreen: vi.fn(),
+        updateBrowserTabPageState: vi.fn(),
+        activeTabType: 'terminal',
+        editorFontZoomLevel: 0,
+        setEditorFontZoomLevel: vi.fn(),
+        settings: { terminalFontSize: 13 },
+        setRateLimitsFromPush,
+        updateWorktreeBaseStatus: vi.fn(),
+        updateWorktreeRemoteBranchConflict: vi.fn(),
+        setSshConnectionState: vi.fn(),
+        setSshTargetLabels: vi.fn(),
+        setPortForwards: vi.fn(),
+        clearPortForwards: vi.fn(),
+        setDetectedPorts: vi.fn(),
+        enqueueSshCredentialRequest: vi.fn(),
+        removeSshCredentialRequest: vi.fn(),
+        clearTabPtyId: vi.fn(),
+        updateTabTitle: vi.fn(),
+        runtimePaneTitlesByTabId: {},
+        terminalLayoutsByTabId: {},
+        agentStatusByPaneKey: {},
+        recentlyClosedAgentStatusTabIds: {},
+        repos: [],
+        worktreesByRepo: {},
+        tabsByWorktree: {},
+        unifiedTabsByWorktree: {},
+        workspaceSessionReady: false
       }
-    }))
+      const fixture = {
+        useAppStore: {
+          subscribe: vi.fn(() => () => {}),
+          getState: () => fixtureState
+        }
+      }
+      const readFixture = fixture.useAppStore.getState
+
+      return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+    })
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
     vi.doMock('@/lib/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),

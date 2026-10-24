@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../../src/renderer/src/store/agent-status-commit'
 import { describe, expect, it } from 'vitest'
 import { createAgentStatusExtensionHarness } from '../../src/main/pi/agent-status-extension-test-harness'
 import { normalizeHookPayload } from '../../src/shared/agent-hook-listener'
@@ -68,7 +69,9 @@ async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>
     { message: { role: 'assistant', content: 'ROOT assistant preview' } },
     root
   )
-  expect(store.getState().agentStatusByPaneKey[PANE]?.providerSession?.id).toBe(ROOT_SESSION)
+  expect(
+    getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.providerSession?.id
+  ).toBe(ROOT_SESSION)
 
   // OMP binds each task's extension factory to a different SessionManager in the same process.
   harness.reload()
@@ -89,7 +92,7 @@ async function rootWithActiveChild(): Promise<ReturnType<typeof createTestStore>
 describe('OMP child lifecycle recovery boundaries', () => {
   it('retains the normalized root prompt and assistant preview while its child works (#9348)', async () => {
     const store = await rootWithActiveChild()
-    expect(store.getState().agentStatusByPaneKey[PANE]).toMatchObject({
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]).toMatchObject({
       prompt: 'ROOT distinctive user request',
       lastAssistantMessage: 'ROOT assistant preview',
       state: 'working',

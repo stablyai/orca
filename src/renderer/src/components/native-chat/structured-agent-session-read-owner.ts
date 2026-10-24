@@ -1,6 +1,9 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import {
+  type AgentProviderSessionMetadata,
+  agentProviderSessionsEqual
+} from '../../../../shared/agent-session-resume'
+
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
@@ -20,7 +23,6 @@ import {
 } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
-
 import type {
   StructuredAgentSessionReadSnapshot,
   StructuredAgentSessionReadOwner
@@ -29,7 +31,6 @@ export type {
   StructuredAgentSessionReadSnapshot,
   StructuredAgentSessionReadOwner
 } from './structured-agent-session-read-owner-contract'
-
 import {
   adoptStructuredReadOwner,
   getOrCreateStructuredReadOwner,
@@ -42,15 +43,15 @@ export {
   resetStructuredAgentSessionReadOwnersForTests
 } from './structured-agent-session-read-owner-registry'
 
-function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
-  return item.body.kind !== 'status' || !item.body.providerFrame
-}
+const countsTowardInitialHistory = (item: AgentJournalRenderItem): boolean =>
+  item.body.kind !== 'status' || !item.body.providerFrame
 
 function createReadOwner(
   key: string,
   sessionId: string,
   target: RuntimeClientTarget
 ): StructuredAgentSessionReadOwner {
+  const lifetime = { retired: false }
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false,
@@ -64,17 +65,19 @@ function createReadOwner(
   const listeners = new Set<() => void>()
   const observePRLinks = createStructuredAgentSessionPRLinkObserver(sessionId, target)
 
-  const emit = (): void => {
+  const setSnapshot = (next: StructuredAgentSessionReadSnapshot): void => {
+    if (lifetime.retired || next === snapshot) {
+      return
+    }
+    snapshot = next
     for (const listener of listeners) {
       listener()
     }
   }
-  const setSnapshot = (next: StructuredAgentSessionReadSnapshot): void => {
-    if (next === snapshot) {
-      return
+  const markStale = (): void => {
+    if (snapshot.current) {
+      setSnapshot({ ...snapshot, current: false })
     }
-    snapshot = next
-    emit()
   }
   const apply = (action: StructuredAgentSessionAction): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
@@ -88,19 +91,9 @@ function createReadOwner(
       setSnapshot({ ...snapshot, state, current })
     }
   }
-  const markStale = (): void => {
-    if (snapshot.current) {
-      setSnapshot({ ...snapshot, current: false })
-    }
-  }
   const setProviderSession = (providerSession: AgentProviderSessionMetadata | undefined): void => {
     if (!agentProviderSessionsEqual(undefined, snapshot.providerSession, providerSession)) {
       setSnapshot({ ...snapshot, providerSession })
-    }
-  }
-  const clearLoadingOlder = (): void => {
-    if (snapshot.loadingOlder) {
-      setSnapshot({ ...snapshot, loadingOlder: false })
     }
   }
   const invalidateOlderPages = (): void => {
@@ -111,6 +104,9 @@ function createReadOwner(
     })
   }
   const hydrate = async (shouldStop: () => boolean): Promise<void> => {
+    if (shouldStop()) {
+      return
+    }
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
       target,
       'agentSession.history',
@@ -120,10 +116,10 @@ function createReadOwner(
       return
     }
     setProviderSession(result.providerSession)
+    if (shouldStop()) {
+      return
+    }
     if (!result.ok) {
-      if (shouldStop()) {
-        return
-      }
       apply({
         type: 'event',
         event: {
@@ -134,9 +130,6 @@ function createReadOwner(
           fence: result.fence ?? 0
         }
       })
-      return
-    }
-    if (shouldStop()) {
       return
     }
     apply({ type: 'history-page', page: result.page })
@@ -167,9 +160,6 @@ function createReadOwner(
       if (!older.ok || older.page.window.oldest?.sequence === oldest.sequence) {
         break
       }
-      if (shouldStop()) {
-        return
-      }
       // A live batch that head-trimmed past the anchor makes this page discontiguous;
       // the reducer drops it, so re-anchor rather than chase a moving window forever.
       if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== oldest.sequence) {
@@ -196,11 +186,17 @@ function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
+    if (lifetime.retired) {
+      return
+    }
     const transport = startStructuredAgentSessionReadTransport({
+      shouldStop: () => lifetime.retired,
       applyRequests: apply,
       applyEvent: (event, options) => {
         apply({ type: 'event', event, ...options })
-        observePRLinks(event)
+        if (!lifetime.retired) {
+          observePRLinks(event)
+        }
       },
       applyError: (message, refusal) => {
         // Once loaded, a failure with no host refusal attached is treated as lost contact: the
@@ -233,6 +229,7 @@ function createReadOwner(
     }
   }
   owner = {
+    lifetime,
     publishCreated: (page) => {
       if (snapshot.state.epoch === null) {
         apply({ type: 'history-page', page })
@@ -240,7 +237,9 @@ function createReadOwner(
     },
     activate: () => {
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
-      adoptStructuredReadOwner(key, owner)
+      if (!adoptStructuredReadOwner(key, owner)) {
+        return () => {}
+      }
       const token = Symbol(sessionId)
       activations.add(token)
       if (activations.size === 1) {
@@ -288,14 +287,16 @@ function createReadOwner(
           return
         }
         olderPage = null
-        if (!shouldStop()) {
-          clearLoadingOlder()
+        if (!shouldStop() && snapshot.loadingOlder) {
+          setSnapshot({ ...snapshot, loadingOlder: false })
         }
       })
       return page.promise
     },
     subscribe: (listener) => {
-      adoptStructuredReadOwner(key, owner)
+      if (!adoptStructuredReadOwner(key, owner)) {
+        return () => {}
+      }
       listeners.add(listener)
       return () => {
         listeners.delete(listener)

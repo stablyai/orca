@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '../../src/renderer/src/store/agent-status-patch'
 // @vitest-environment happy-dom
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
@@ -308,7 +309,7 @@ beforeEach(() => {
     }
     return reply.result
   })
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     repos: [TEST_REPO],
     worktreesByRepo: { repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1' })] },
     unifiedTabsByWorktree: {

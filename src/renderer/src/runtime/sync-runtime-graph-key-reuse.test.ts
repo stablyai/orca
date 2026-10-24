@@ -1,13 +1,15 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import {
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph/sync-key'
-import type { AppState } from '../store/types'
 
-function makeState(overrides: Partial<AppState> = {}): AppState {
-  return {
+function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
+  return makeAgentStatusReadState({
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -21,7 +23,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     editorDrafts: {},
     activeTabId: null,
     ...overrides
-  } as AppState
+  })
 }
 
 function makeOpenMarkdownFile(): AppState['openFiles'][number] {
@@ -214,7 +216,7 @@ describe('mobile session snapshot reuse', () => {
   })
 
   it('bumps only the changed worktree version when a sibling stays byte-identical', () => {
-    const makeTwoWorktreeState = (title: string): AppState =>
+    const makeTwoWorktreeState = (title: string): AgentStatusReadState =>
       makeState({
         tabsByWorktree: {
           'wt-changed': [{ id: 'term-a', title, customTitle: null }],

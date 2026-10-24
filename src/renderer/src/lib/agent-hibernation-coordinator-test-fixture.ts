@@ -1,8 +1,11 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import { resetAgentHibernationCoordinatorForTests } from './agent-hibernation-coordinator'
 import { hydrateDrivers } from './pane-manager/mobile-driver-state'
@@ -70,15 +73,17 @@ export function entry(): AgentStatusEntry {
   }
 }
 
-export type HibernationShutdownStub = Mock<AppState['shutdownCompletedAgentPaneForHibernation']>
+export type HibernationShutdownStub = Mock<
+  AgentStatusReadState['shutdownCompletedAgentPaneForHibernation']
+>
 
 export function installEligibleState(
   shutdownCompletedAgentPaneForHibernation: HibernationShutdownStub = vi.fn(),
-  overrides: Partial<AppState> = {}
+  overrides: Partial<AgentStatusReadState> = {}
 ): HibernationShutdownStub {
   const e = entry()
   const runtimeOwnerEnvironmentId = overrides.settings?.activeRuntimeEnvironmentId ?? undefined
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     settings: {
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
@@ -110,7 +115,7 @@ export function installEligibleState(
   // coordinator passes, so its PTY binding is old. Seed that here — otherwise the
   // binding-age floor (which exists to stop a wake or app restart sleeping the whole
   // backlog immediately) would defer every candidate on its first observed tick.
-  const state = useAppStore.getState()
+  const state = getAgentStatusOwner(useAppStore).getState()
   observeHibernationPtyBindings({
     tabsByWorktree: state.tabsByWorktree,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,

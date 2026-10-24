@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
+import '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
@@ -25,7 +26,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (session.pendingStartupCommand) {
       return null
     }
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
     const sleepingRecord = sleepingRecordEntry?.record

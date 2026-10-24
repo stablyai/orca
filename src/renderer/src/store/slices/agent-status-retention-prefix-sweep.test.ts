@@ -1,6 +1,8 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
+
 import type { RetainedAgentEntry } from './agent-status'
 import { createTestStore, makeTab } from './store-test-helpers'
 
@@ -21,7 +23,7 @@ describe('agent status retention + prefix sweep', () => {
 
     store.getState().removeAgentStatusByTabPrefix('tab-1')
 
-    const map = store.getState().agentStatusByPaneKey
+    const map = getAgentStatusOwner(store).getState().agentStatusByPaneKey
     expect(map['tab-1:0']).toBeUndefined()
     expect(map['tab-1:1']).toBeUndefined()
     // Why: the ":" delimiter on the prefix guards against false-prefix matches
@@ -75,7 +77,7 @@ describe('agent status retention + prefix sweep', () => {
         { updatedAt: 2_000, stateStartedAt: 2_000 }
       )
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey['tab-a:0']).toMatchObject({
       state: 'done',
       prompt: 'interrupted turn',
@@ -202,13 +204,13 @@ describe('agent status retention + prefix sweep', () => {
           terminalHandle: 'term-worker'
         }
       )
-    store.setState({
+    applyAgentStatusPatch(store, {
       acknowledgedAgentsByPaneKey: { [paneKey]: Date.now() }
-    } as Partial<AppState>)
+    })
 
     store.getState().dropAgentStatusByWorktree('wt-a')
 
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().retentionSuppressedPaneKeys[paneKey]).toBe(true)
   })

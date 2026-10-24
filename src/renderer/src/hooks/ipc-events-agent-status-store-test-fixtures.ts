@@ -1,9 +1,11 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
 import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate
 } from '../store/slices/agent-status'
-import type { AppState } from '../store/types'
+
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 export const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -117,16 +119,12 @@ export function installMockAgentStatusTransaction(state: StoreLike): void {
   state.transactAgentStatuses = <Result>(
     operation: (transaction: AgentStatusBatchTransaction) => Result
   ): Result => {
-    const stagedState = {
-      ...state,
-      agentStatusByPaneKey: {
-        ...(state.agentStatusByPaneKey as Record<string, unknown>)
-      }
-    }
+    const stagedState = { ...makeAgentStatusReadState(), ...state }
+    stagedState.agentStatusByPaneKey = { ...stagedState.agentStatusByPaneKey }
     const attemptedUpdates: AgentStatusBatchUpdate[] = []
     const effects: (() => void)[] = []
     const result = operation({
-      getState: () => stagedState as AppState,
+      getState: () => stagedState,
       apply: (update) => {
         attemptedUpdates.push(update)
         return applyMockAgentStatusUpdate(stagedState, update)

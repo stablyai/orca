@@ -1,3 +1,9 @@
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import type { AppState } from '../store/types'
+import { getDefaultSettings } from '../../../shared/constants'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { useAppStore } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
 import {
@@ -40,13 +46,14 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'subscribe').mockImplementation(mocks.subscribe)
+  return { useAppStore }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
@@ -92,18 +99,19 @@ const CLIENT_HOSTING_CAPABILITIES = [
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
 ]
 
-type HarnessState = Record<string, unknown>
+type HarnessState = AppState
 
 /** The runtime status the create reads its capabilities and device scope from. */
 function statusMap(options: {
-  capabilities: string[]
-  deviceScope?: string
-}): Map<string, unknown> {
+  capabilities: RuntimeStatus['capabilities']
+  deviceScope?: RuntimeStatus['deviceScope']
+}): AppState['runtimeStatusByEnvironmentId'] {
   return new Map([
     [
       ENVIRONMENT_ID,
       {
         status: {
+          ...createCompatibleRuntimeStatusResponse().result,
           capabilities: options.capabilities,
           ...(options.deviceScope !== undefined ? { deviceScope: options.deviceScope } : {})
         },
@@ -119,20 +127,21 @@ function statusMap(options: {
  */
 async function stageHandleFor(
   options: {
-    capabilities?: string[]
-    deviceScope?: string
+    capabilities?: RuntimeStatus['capabilities']
+    deviceScope?: RuntimeStatus['deviceScope']
     clientHostedSetting?: boolean
     placementPreference?: BrowserClientHostPlacementPreference
     onCreateCall?: (state: HarnessState) => void
   } = {}
 ): Promise<Record<string, unknown>> {
-  const state = mocks.getState() as HarnessState
+  const state = useAppStore.getState()
   state.runtimeStatusByEnvironmentId = statusMap({
     capabilities: options.capabilities ?? CLIENT_HOSTING_CAPABILITIES,
     ...(options.deviceScope !== undefined ? { deviceScope: options.deviceScope } : {})
   })
   state.settings = {
-    ...(state.settings as Record<string, unknown>),
+    ...getDefaultSettings('/tmp'),
+    ...state.settings,
     ...(options.clientHostedSetting !== undefined
       ? { browserClientHostedRemoteEnabled: options.clientHostedSetting }
       : {})
@@ -164,7 +173,7 @@ async function stageHandleFor(
 }
 
 describe('staged client-hosting intent', () => {
-  beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
+  beforeEach(() => stubBrowserTabCreateEnvironment(mocks, useAppStore))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
   it('marks the staged handle client-hosted when the create will be', async () => {
@@ -203,7 +212,7 @@ describe('staged client-hosting intent', () => {
       }
     },
     { name: 'the user turned client hosting off', options: { clientHostedSetting: false } },
-    { name: 'the runtime is a mobile device', options: { deviceScope: 'mobile' } }
+    { name: 'the runtime is a mobile device', options: { deviceScope: 'mobile' as const } }
   ])('leaves the staged handle server-hosted when $name', async ({ options }) => {
     const handle = await stageHandleFor(options)
 
@@ -213,7 +222,7 @@ describe('staged client-hosting intent', () => {
 })
 
 describe('materialization wait group', () => {
-  beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
+  beforeEach(() => stubBrowserTabCreateEnvironment(mocks, useAppStore))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
   /** Group ids the create asked `hasMaterializedWebRuntimeBrowserPage` about. */
@@ -228,6 +237,11 @@ describe('materialization wait group', () => {
         state.unifiedTabsByWorktree = {
           [WORKTREE_ID]: [
             {
+              ...makeUnifiedTab({
+                id: 'staged-unified-tab',
+                worktreeId: WORKTREE_ID,
+                groupId: SPLIT_GROUP_ID
+              }),
               id: 'staged-unified-tab',
               entityId: STAGED_WORKSPACE_ID,
               contentType: 'browser',

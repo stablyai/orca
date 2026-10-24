@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../shared/constants'
+import { TEST_REPO, makeWorktree } from '../store/slices/store-test-helpers'
+import { runtimeEnvironment } from './server-layout-frames.test-fixture'
+import { useAppStore } from '../store'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setWebRuntimeTabProps } from './web-runtime-terminal-actions'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { ENVIRONMENT_ID, WORKTREE_ID } from './web-runtime-session-test-harness'
@@ -25,13 +29,12 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
@@ -93,7 +96,7 @@ describe('setWebRuntimeTabProps', () => {
 
   it('pushes pin to the host via session.tabs.setTabProps for a remote tab', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    mocks.getState.mockReturnValue(ownedBy(RUNTIME_ROW))
+    useAppStore.setState(ownedBy(RUNTIME_ROW))
     const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
@@ -120,7 +123,7 @@ describe('setWebRuntimeTabProps', () => {
 
   it('maps mirrored browser/editor unified ids before setting host tab props', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    mocks.getState.mockReturnValue(ownedBy(RUNTIME_ROW))
+    useAppStore.setState(ownedBy(RUNTIME_ROW))
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
@@ -151,7 +154,7 @@ describe('setWebRuntimeTabProps', () => {
 
   it('no-ops for a worktree with no runtime environment (local tab)', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    mocks.getState.mockReturnValue(ownedBy({ hostId: 'local' }))
+    useAppStore.setState(ownedBy({ hostId: 'local' }))
     const runtimeCall = vi.fn()
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
 
@@ -163,7 +166,7 @@ describe('setWebRuntimeTabProps', () => {
 
   it('refuses a local twin of the paired server instead of pushing to either host', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    mocks.getState.mockReturnValue(ownedBy({ hostId: 'local' }, RUNTIME_ROW))
+    useAppStore.setState(ownedBy({ hostId: 'local' }, RUNTIME_ROW))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const runtimeCall = vi.fn()
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
@@ -179,12 +182,12 @@ describe('setWebRuntimeTabProps', () => {
 
   it('does not push an unstamped row to the focused server', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
-      runtimeEnvironments: [{ id: ENVIRONMENT_ID }],
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+      runtimeEnvironments: [runtimeEnvironment(ENVIRONMENT_ID, ENVIRONMENT_ID, 1)],
       runtimeEnvironmentCatalogHydrated: true,
-      repos: [{ id: REPO_ID }],
-      worktreesByRepo: { [REPO_ID]: [{ id: WORKTREE_ID, repoId: REPO_ID }] }
+      repos: [{ ...TEST_REPO, id: REPO_ID }],
+      worktreesByRepo: { [REPO_ID]: [makeWorktree({ id: WORKTREE_ID, repoId: REPO_ID })] }
     })
     const runtimeCall = vi.fn()
     stubRuntimeEnvironmentBridge({ call: runtimeCall })

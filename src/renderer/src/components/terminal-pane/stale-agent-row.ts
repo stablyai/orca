@@ -1,10 +1,11 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 
 export function dismissStaleAgentRowByKey(paneKey: string): void {
-  const store = useAppStore.getState()
+  const store = getAgentStatusState()
   const liveExisted = paneKey in store.agentStatusByPaneKey
   const retainedExisted = paneKey in store.retainedAgentsByPaneKey
   store.dropAgentStatus(paneKey, { paneRemoved: true })

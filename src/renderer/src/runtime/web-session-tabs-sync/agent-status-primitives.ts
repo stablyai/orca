@@ -5,8 +5,11 @@ import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
-import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
-import { buildRetiredTerminalTabStateSweepPatch } from '../../store/slices/retired-terminal-tab-state-sweep'
+import {
+  type RetiredTerminalTabSweepState,
+  buildRetiredTerminalTabStateSweepPatch
+} from '../../store/slices/retired-terminal-tab-state-sweep'
+
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 
@@ -182,6 +185,7 @@ export function buildRetractedMirroredTabSweepPatch(
   }
   let sweepState: RetiredTerminalTabSweepState = {
     acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
+    transferAgentPaneAuthority: state.transferAgentPaneAuthority,
     activityClearedAtByPaneKey: state.activityClearedAtByPaneKey ?? {},
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? {},
     agentStatusByPaneKey: agentStatusPatch?.agentStatusByPaneKey ?? state.agentStatusByPaneKey,

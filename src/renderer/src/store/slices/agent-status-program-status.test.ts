@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { createTestStore } from './store-test-helpers'
@@ -19,14 +20,18 @@ describe('agent status program-status facet', () => {
       .setAgentStatus(PANE, { state: 'working', prompt: 'p', programStatus: FACET }, undefined, {
         updatedAt: 10
       })
-    expect(store.getState().agentStatusByPaneKey[PANE].programStatus).toEqual(FACET)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].programStatus).toEqual(
+      FACET
+    )
 
     store
       .getState()
       .setAgentStatus(PANE, { state: 'working', prompt: 'p', programStatus: null }, undefined, {
         updatedAt: 11
       })
-    expect(store.getState().agentStatusByPaneKey[PANE]).not.toHaveProperty('programStatus')
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]).not.toHaveProperty(
+      'programStatus'
+    )
   })
 
   it('keeps the facet across a writer with no facet channel', () => {
@@ -40,7 +45,9 @@ describe('agent status program-status facet', () => {
     store.getState().setAgentStatus(PANE, { state: 'done', prompt: 'p' }, undefined, {
       updatedAt: 11
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].programStatus).toEqual(FACET)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].programStatus).toEqual(
+      FACET
+    )
   })
 
   it('patches only the facet: no timing, history, sequence or epoch change', () => {
@@ -50,12 +57,12 @@ describe('agent status program-status facet', () => {
       updatedAt: 10,
       stateStartedAt: 5
     })
-    const before = store.getState()
+    const before = getAgentStatusOwner(store).getState()
     const entryBefore = before.agentStatusByPaneKey[PANE]
 
     expect(store.getState().setAgentProgramStatus(PANE, FACET)).toBe(true)
 
-    const after = store.getState()
+    const after = getAgentStatusOwner(store).getState()
     const entryAfter = after.agentStatusByPaneKey[PANE]
     expect(entryAfter).toEqual({ ...entryBefore, programStatus: FACET })
     expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
@@ -63,21 +70,21 @@ describe('agent status program-status facet', () => {
     expect(after.unreadAgentCompletionPanes).toBe(before.unreadAgentCompletionPanes)
 
     expect(store.getState().setAgentProgramStatus(PANE, null)).toBe(true)
-    expect(store.getState().agentStatusByPaneKey[PANE]).toEqual(entryBefore)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]).toEqual(entryBefore)
   })
 
   it('ignores an equal facet and never creates a row', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     expect(store.getState().setAgentProgramStatus(PANE, FACET)).toBe(false)
-    expect(store.getState().agentStatusByPaneKey[PANE]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]).toBeUndefined()
 
     store.getState().setAgentStatus(PANE, { state: 'working', prompt: 'p', programStatus: FACET })
-    const map = store.getState().agentStatusByPaneKey
+    const map = getAgentStatusOwner(store).getState().agentStatusByPaneKey
     expect(store.getState().setAgentProgramStatus(PANE, { ...FACET, observedAt: 2_000 })).toBe(
       false
     )
-    expect(store.getState().agentStatusByPaneKey).toBe(map)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey).toBe(map)
   })
 
   it('applies a facet patch inside a batch and reports whether it changed anything', () => {
@@ -89,6 +96,8 @@ describe('agent status program-status facet', () => {
       { kind: 'programStatus', paneKey: PANE, programStatus: FACET }
     ])
     expect(outcomes).toEqual([true, false])
-    expect(store.getState().agentStatusByPaneKey[PANE].programStatus).toEqual(FACET)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].programStatus).toEqual(
+      FACET
+    )
   })
 })

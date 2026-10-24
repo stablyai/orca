@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type { AppState } from '@/store/types'
 import {
@@ -28,8 +29,8 @@ function getTerminalThemeSystemPrefersDark(
 }
 
 export function canSkipRuntimeMobileSessionSyncKeyBuild(
-  state: AppState,
-  previousState: AppState,
+  state: AgentStatusReadState,
+  previousState: AgentStatusReadState,
   systemPrefersDark?: boolean,
   previousSystemPrefersDark: boolean | null | undefined = systemPrefersDark
 ): boolean {
@@ -68,8 +69,8 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
 }
 
 export function getRuntimeMobileSessionSyncKey(
-  state: AppState,
-  previousState?: AppState,
+  state: AgentStatusReadState,
+  previousState?: AgentStatusReadState,
   previousKey?: RuntimeMobileSessionSyncKey,
   systemPrefersDark = getSystemPrefersDark()
 ): RuntimeMobileSessionSyncKey {

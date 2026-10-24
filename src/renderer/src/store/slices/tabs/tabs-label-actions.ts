@@ -1,6 +1,7 @@
-import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
-import type { AppState } from '../../types'
+import { launchAgentOf } from './tabs-toggle-telemetry'
+import { terminalFactSetter } from '../../terminal-fact-publication'
+import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
 import {
@@ -54,14 +55,6 @@ export function createTabsLabelActions(
       }
     })
     mirrorTabViewModeToHost(get(), tabId, mode)
-  }
-
-  // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); toggle telemetry attributes by it.
-  function launchAgentOf(state: AppState, worktreeId: string, entityId: string): TuiAgent | null {
-    return (
-      (state.tabsByWorktree[worktreeId] ?? []).find((terminal) => terminal.id === entityId)
-        ?.launchAgent ?? null
-    )
   }
 
   /** `to`: the mode main switched to, which a frame may already show. */
@@ -207,9 +200,10 @@ export function createTabsLabelActions(
       }
     },
 
-    setTabLabel: (tabId, label) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state)
-    },
+    setTabLabel: (tabId, label) =>
+      terminalFactSetter(set, get, [get().getTab(tabId)?.entityId ?? tabId])(
+        (state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? state
+      ),
 
     setTabViewMode: (tabId, mode) => {
       const local = (): void => setTabViewModeHere(tabId, mode)
@@ -228,7 +222,9 @@ export function createTabsLabelActions(
 
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
+      terminalFactSetter(set, get, [get().getTab(tabId)?.entityId ?? tabId])(
+        (state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state
+      )
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -236,7 +232,9 @@ export function createTabsLabelActions(
 
     setUnifiedTabColor: (tabId, color, opts) => {
       const exists = get().getTab(tabId) !== null
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
+      terminalFactSetter(set, get, [get().getTab(tabId)?.entityId ?? tabId])(
+        (state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state
+      )
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

@@ -197,3 +197,20 @@ export function clearWebSessionFocusIntentsForOwner(owner: WebSessionIntentOwner
 export function resetWebSessionFocusIntentForTests(): void {
   pendingFocusByOwnerAndWorktree.clear()
 }
+
+export function prepareWebSessionFocusIntentRemoval(
+  owner: WebSessionIntentOwner,
+  worktreeId: string,
+  hostTabId: string
+) {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  const intent = pendingFocusByOwnerAndWorktree.get(key)
+  return {
+    install: () => {
+      if (intent?.hostTabId === hostTabId && pendingFocusByOwnerAndWorktree.get(key) === intent) {
+        pendingFocusByOwnerAndWorktree.delete(key)
+      }
+    },
+    effects: []
+  }
+}

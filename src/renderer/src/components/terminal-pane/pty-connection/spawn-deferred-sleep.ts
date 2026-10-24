@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
+import '@/store'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import {
@@ -80,7 +81,7 @@ function deferredResumeRecord(
 }
 
 function providerSessionLiveInAnotherPane(resume: SleepingAgentSessionRecord): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   return Object.values(state.agentStatusByPaneKey).some((entry) => {
     const pane = entry.paneKey === resume.paneKey ? null : parsePaneKey(entry.paneKey)
     return (
@@ -101,7 +102,7 @@ function providerSessionQueuedInAnotherTab(
   resume: SleepingAgentSessionRecord,
   ownTabId: string
 ): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const sameSession = (
     agent: string | undefined,
     providerSession: AgentProviderSessionMetadata | undefined
@@ -159,7 +160,7 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     const record = deferredResumeRecord(session, startupOverride)
     if (record) {
       // Why left after a later resume: the next quit capture replaces it, and a pane with a live PTY owns it.
-      useAppStore.getState().rememberSleepingAgentSession(record)
+      getAgentStatusState().rememberSleepingAgentSession(record)
     }
     session.deferredSpawn = { reason, startupOverride, options }
     const deferral = { reason, resume: () => void session.resumeDeferredSpawn() }

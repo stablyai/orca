@@ -1,3 +1,4 @@
+import { terminalFactSetter } from '../terminal-fact-publication'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -14,7 +15,7 @@ export function createTerminalTabAppearanceActions(
       void import('@/runtime/web-runtime-terminal-rename').then(({ renameHostTerminalTab }) =>
         renameHostTerminalTab(state, tabId, title)
       )
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
@@ -28,7 +29,7 @@ export function createTerminalTabAppearanceActions(
       }
     },
     setTabColor: (tabId, color, opts) => {
-      set((s) => {
+      terminalFactSetter(set, get, [tabId])((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))

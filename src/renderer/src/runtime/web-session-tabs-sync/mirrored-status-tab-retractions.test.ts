@@ -1,3 +1,4 @@
+import type { AgentStatusEntry } from '@/store/slices/agent-status-contract'
 import { beforeEach, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
@@ -15,7 +16,8 @@ beforeEach(resetWebSessionTabsSyncTestState)
 
 it('indexes statuses once per batch instead of once per workspace', () => {
   let enumerations = 0
-  const state = makeState()
+  const live: Record<string, AgentStatusEntry> = {}
+  const state = { ...makeState(), agentStatusByPaneKey: live }
   const batchContext: WebSessionTabsBatchContext = {
     agentPaneKeysByTabId: null,
     changedRecords: new Set(),
@@ -62,7 +64,8 @@ it('indexes statuses once per batch instead of once per workspace', () => {
 })
 
 it('does not retract a colliding tab id owned by another host', () => {
-  const state = makeState()
+  const live: Record<string, AgentStatusEntry> = {}
+  const state = { ...makeState(), agentStatusByPaneKey: live }
   const tabId = toWebTerminalSurfaceTabId('same-tab')
   const paneKey = makePaneKey(tabId, LEAF_ID)
   state.agentStatusByPaneKey[paneKey] = {

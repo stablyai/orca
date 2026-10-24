@@ -19,33 +19,40 @@ let hostedReviewCache: Record<string, unknown> = {}
 let prCache: Record<string, unknown> = {}
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => {
-  const getState = () => ({
-    deleteStateByWorktreeId: {},
-    fetchHostedReviewForBranch,
-    fetchIssue,
-    fetchLinearIssue,
-    gitConflictOperationByWorktree: {},
-    hostedReviewCache,
-    issueCache: {},
-    linearIssueCache: {},
-    openModal,
-    prCache,
-    projectGroups: [],
-    remoteBranchConflictByWorktreeId: {},
-    settings,
-    sshConnectionStates: new Map(),
-    sshTargetLabels: new Map(),
-    updateWorktreeMeta,
-    workspacePortScan: null,
-    worktreeCardProperties
-  })
-  return {
-    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
-      getState,
-      subscribe: () => () => {}
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const getState = () => ({
+      deleteStateByWorktreeId: {},
+      fetchHostedReviewForBranch,
+      fetchIssue,
+      fetchLinearIssue,
+      gitConflictOperationByWorktree: {},
+      hostedReviewCache,
+      issueCache: {},
+      linearIssueCache: {},
+      openModal,
+      prCache,
+      projectGroups: [],
+      remoteBranchConflictByWorktreeId: {},
+      settings,
+      sshConnectionStates: new Map(),
+      sshTargetLabels: new Map(),
+      updateWorktreeMeta,
+      workspacePortScan: null,
+      worktreeCardProperties
     })
-  }
+    return {
+      useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+        getState,
+        subscribe: () => () => {}
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@/lib/worktree-activation', () => ({

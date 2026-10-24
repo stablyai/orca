@@ -24,9 +24,16 @@ type MockState = {
 
 let mockState: MockState
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
+  }
+  const readFixture = () => mockState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
   return {

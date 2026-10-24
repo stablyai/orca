@@ -7,12 +7,19 @@ const mocks = vi.hoisted(() => ({
   setAgentStatuses: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      getState: mocks.getState,
+      setState: mocks.setState
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import { seedDevActivityFixture } from './dev-activity-fixture'
 

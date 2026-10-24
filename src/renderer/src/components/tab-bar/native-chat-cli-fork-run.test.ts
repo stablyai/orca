@@ -1,4 +1,6 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runNativeChatCliFork } from './native-chat-cli-fork-run'
 import type {
   NativeChatCliForkPreparation,
@@ -11,27 +13,8 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn(),
   notify: vi.fn(),
   activate: vi.fn(),
-  activeWorktreeId: 'workspace-1',
   error: vi.fn(),
-  open: true,
-  host: 'runtime:peer',
-  listeners: new Set<() => void>()
-}))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      activeWorktreeId: mocks.activeWorktreeId,
-      unifiedTabsByWorktree: {
-        'workspace-1': mocks.open
-          ? [{ id: 'tab-1', contentType: 'agent-session', entityId: 'chat-1' }]
-          : []
-      }
-    }),
-    subscribe: (listener: () => void) => {
-      mocks.listeners.add(listener)
-      return () => mocks.listeners.delete(listener)
-    }
-  }
+  host: 'runtime:peer'
 }))
 vi.mock('./tab-session-history-switch', () => ({
   resolveNativeChatCliForkIdentity: () => ({ executionHostScope: mocks.host }),
@@ -68,9 +51,24 @@ const prepared: NativeChatCliForkPreparation = {
   session: { agent: 'claude', sessionId: 'source', cwd: '/host/repo', codexHome: null },
   copied: false
 }
+const original = useAppStore.getState()
+afterEach(() => useAppStore.setState(original))
 beforeEach(() => {
-  mocks.open = true
-  mocks.activeWorktreeId = 'workspace-1'
+  useAppStore.setState({
+    activeWorktreeId: 'workspace-1',
+    unifiedTabsByWorktree: {
+      'workspace-1': [
+        makeUnifiedTab({
+          id: 'tab-1',
+          groupId: 'group',
+          contentType: 'agent-session',
+          entityId: 'chat-1',
+          worktreeId: 'workspace-1',
+          executionHostId: 'runtime:peer'
+        })
+      ]
+    }
+  })
   mocks.activate.mockReset()
   mocks.prepare.mockReset()
   mocks.launch.mockReset().mockReturnValue({ tabId: 'destination' })
@@ -79,8 +77,7 @@ beforeEach(() => {
   replaceRuntimeEnvironmentRevisions([{ id: 'peer', createdAt: 1, pairingRevision: 7 }])
 })
 function closeSource() {
-  mocks.open = false
-  mocks.listeners.forEach((listener) => listener())
+  useAppStore.setState({ unifiedTabsByWorktree: { 'workspace-1': [] } })
 }
 
 it('shares pending across menu openings and suppresses dispatch after source retirement', async () => {
@@ -93,7 +90,7 @@ it('shares pending across menu openings and suppresses dispatch after source ret
   const first = runNativeChatCliFork(args)
   await runNativeChatCliFork(args)
   expect(mocks.prepare).toHaveBeenCalledTimes(1)
-  mocks.listeners.forEach((listener) => listener())
+  useAppStore.setState({ activeWorktreeId: 'workspace-1' })
   expect(mocks.error).not.toHaveBeenCalled()
   closeSource()
   settle(prepared)
@@ -135,7 +132,7 @@ it('lets the destination finish after dispatch and passes no source resume ident
 
 it('reveals the successful source workspace after another workspace was selected', async () => {
   mocks.prepare.mockImplementation(async () => {
-    mocks.activeWorktreeId = 'workspace-2'
+    useAppStore.setState({ activeWorktreeId: 'workspace-2' })
     return prepared
   })
   await runNativeChatCliFork(args)

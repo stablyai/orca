@@ -43,6 +43,7 @@ it('keeps same-id browser results on their owner with recency, and follows owner
   type PaletteInput = Parameters<typeof useWorktreeJumpPaletteOpenTabs>[0]
   const input: Partial<PaletteInput> = {
     ...useAppStore.getInitialState(),
+    agentStatusByPaneKey: {},
     // The store holds {key, result}; the hook takes the unwrapped result.
     workspacePortScan: null,
     paletteStatusInputsActive: true,

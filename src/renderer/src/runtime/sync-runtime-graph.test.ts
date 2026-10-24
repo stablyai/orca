@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
@@ -7,7 +9,6 @@ import {
 import { buildRuntimeMobileAgentStatusProjectionForTests } from './sync-runtime-graph/agent-status-projection'
 import { makeAgentStatusEntry, makeState } from './sync-runtime-graph-test-harness'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { AppState } from '../store/types'
 
 // Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
 // `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
@@ -19,8 +20,9 @@ import type { AppState } from '../store/types'
 // share every other reference-checked collection between the two states; this
 // factory produces one `Partial<AppState>` whose fields can be spread into both
 // `makeState` calls.
-function makeSharedOverrides(): Partial<AppState> {
+function makeSharedOverrides(): Partial<AgentStatusReadState> {
   return {
+    ...makeState(),
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -246,7 +248,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     // deep-equal comparator, defeating the purpose of pinning down the
     // by-reference contract. Share every map the comparator inspects by
     // reference — any unshared default `{}` from `makeState` would diverge.
-    const sharedOverrides: Partial<AppState> = {
+    const sharedOverrides: Partial<AgentStatusReadState> = {
       ...makeSharedOverrides(),
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1', customTitle: null }]

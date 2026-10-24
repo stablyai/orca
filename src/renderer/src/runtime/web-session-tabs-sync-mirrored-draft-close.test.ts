@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -80,7 +82,7 @@ function hostCleanRepublish() {
 }
 
 describe('tab-strip close of a client-dirty mirrored file after a host republish (#21392)', () => {
-  const initialState = useAppStore.getState()
+  const initialState = getAgentStatusOwner(useAppStore).getState()
   const closeRequests: string[] = []
   const onCloseRequest = (event: Event): void => {
     if (event instanceof CustomEvent) {
@@ -93,7 +95,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
     closeWebRuntimeSessionTabMock.mockClear()
     closeRequests.length = 0
     window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, onCloseRequest)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       ...initialState,
       activeWorktreeId: WT,
       openFiles: [clientDirtyMirroredNotes],
@@ -104,7 +106,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
 
   afterEach(() => {
     window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, onCloseRequest)
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
   })
 
   it('routes the close to the unsaved-changes prompt instead of discarding the draft', () => {
@@ -112,12 +114,12 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
     // path loses one on an ordinary Cmd+W / tab X unless the client's dirty flag survives the
     // host's republish, because the tab strip gates its prompt on that flag alone.
     const patch = applyWebSessionTabsSnapshot(
-      useAppStore.getState(),
+      getAgentStatusOwner(useAppStore).getState(),
       hostCleanRepublish(),
       ENV,
       NOW
     )
-    useAppStore.setState(patch)
+    applyAgentStatusPatch(useAppStore, patch)
 
     createWorkspaceTabCloseCommands({ worktreeId: WT, groupTabs: [notesUnifiedTab] }).closeItem(
       notesUnifiedTab.id
@@ -125,7 +127,7 @@ describe('tab-strip close of a client-dirty mirrored file after a host republish
 
     // Prompted, not closed: the request went to the save/discard queue and nothing was lost.
     expect(closeRequests).toEqual([notesPath])
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     expect(state.openFiles.some((file) => file.id === notesPath)).toBe(true)
     expect(state.editorDrafts[notesPath]).toBe(clientDraft)
     expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()

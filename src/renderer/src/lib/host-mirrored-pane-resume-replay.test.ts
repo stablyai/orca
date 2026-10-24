@@ -1,7 +1,10 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -17,7 +20,7 @@ import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/sl
 // traded for a resume that never happens. These pin both halves plus the
 // per-connection reset a host restart depends on.
 
-const initialAppStoreState = useAppStore.getState()
+const initialAppStoreState = getAgentStatusOwner(useAppStore).getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
@@ -33,7 +36,7 @@ function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree>
 }
 
 function seedState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): void {
-  const state: Partial<AppState> = {
+  const state: Partial<AgentStatusReadState> = {
     repos: [
       {
         id: 'repo-1',
@@ -100,12 +103,12 @@ function seedState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): void 
     refreshGitHubForWorktreeIfStale: vi.fn(),
     revealWorktreeInSidebar: vi.fn()
   }
-  useAppStore.setState(state)
+  applyAgentStatusPatch(useAppStore, state)
 }
 
 function seedSleepingRecord(worktreeId: string, sessionId: string): string {
   const paneKey = makePaneKey(WEB_TAB_ID, LEAF_ID)
-  useAppStore.setState((s) => ({
+  applyAgentStatusPatch(useAppStore, (s) => ({
     sleepingAgentSessionsByPaneKey: {
       ...s.sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -127,7 +130,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
 }
 
 function retractMirroredTab(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
+  applyAgentStatusPatch(useAppStore, { tabsByWorktree: { [worktreeId]: [] } })
 }
 
 function connectRuntime(runtimeId: string): void {
@@ -150,7 +153,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  applyAgentStatusPatch(useAppStore, initialAppStoreState)
   resetHostSessionMirrorHydrationForTests()
   clearRuntimeEnvironmentConnectionGenerationsForTests()
 })
@@ -168,7 +171,7 @@ describe('parked mirrored-pane resume replay', () => {
     retractMirroredTab(worktree.id)
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.tabsByWorktree[worktree.id]).toEqual([])
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
@@ -182,10 +185,10 @@ describe('parked mirrored-pane resume replay', () => {
     resumeSleepingAgentSessionsForWorktree(worktree.id)
 
     // The host answered: the PTY is still attached to the mirrored pane.
-    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['pty-host-old-1'] } })
+    applyAgentStatusPatch(useAppStore, { ptyIdsByTabId: { [WEB_TAB_ID]: ['pty-host-old-1'] } })
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect((after.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)

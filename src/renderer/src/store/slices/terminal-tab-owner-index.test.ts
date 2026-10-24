@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createTerminalTabOwnerIndex } from './terminal-tab-owner-index'
 
 function trackedTab(id: string, onRead: () => void): { id: string } {
@@ -155,4 +155,49 @@ describe('terminal tab owner index', () => {
     )
     expect(idReads).toBe(0)
   })
+})
+
+it('keeps immutable answers through A/B/A/C/A without rewinding the builder', () => {
+  const NativeMap = Map
+  let copies = 0
+  vi.stubGlobal(
+    'Map',
+    class extends NativeMap {
+      constructor(entries?: Iterable<readonly [unknown, unknown]>) {
+        super(entries)
+        if (entries instanceof NativeMap) {
+          copies++
+        }
+      }
+    }
+  )
+  try {
+    const index = createTerminalTabOwnerIndex()
+    let reads = 0
+    const first = [trackedTab('duplicate', () => reads++), { id: 'first' }]
+    const second = [{ id: 'duplicate' }, { id: 'second' }]
+    const a = { first, second }
+    const answerA = index.getOwners(a)
+    const firstCopies = copies
+    const entriesA = [...answerA]
+    const b = { second, first }
+    const answerB = index.getOwners(b)
+    const secondCopies = copies
+    expect(answerB.get('duplicate')).toBe('first')
+    expect([...answerA]).toEqual(entriesA)
+    expect(index.getOwners(a)).toBe(answerA)
+    const c = { first }
+    const answerC = index.getOwners(c)
+    expect(answerC.has('second')).toBe(false)
+    expect([...answerA]).toEqual(entriesA)
+    const before = reads
+    expect(index.getOwners(a)).toBe(answerA)
+    const d = { first: [{ id: 'duplicate' }, { id: 'first' }] }
+    index.adoptMetadataOnlyBucketReplacements(c, d, ['first'])
+    expect(index.getOwners(d)).toBe(answerC)
+    expect([firstCopies, secondCopies, copies]).toEqual([1, 2, 3])
+    expect(reads).toBe(before)
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

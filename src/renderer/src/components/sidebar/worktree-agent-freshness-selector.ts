@@ -1,12 +1,13 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import type { AppState } from '@/store/types'
+
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectLiveAgentStatusEntriesForWorktree } from './worktree-agent-row-selectors'
 
 export const EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE = ''
 
 type WorktreeAgentFreshnessState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'agentStatusEpoch'
   | 'migrationUnsupportedByPtyId'

@@ -1,3 +1,5 @@
+import { getAgentStatusState, getAgentStatusEntry } from '@/store/agent-status'
+
 import { resolvePaneTitleDecision } from '../terminal-title-evidence'
 import { useAppStore } from '@/store'
 import { shouldSeedCacheTimerOnInitialTitle } from '../cache-timer-seeding'
@@ -8,7 +10,7 @@ import {
 } from '../command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -32,7 +34,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       rawTitle,
       displayOwnerAgentType: session.getAuthoritativePaneAgent(),
       rendererOwnerAgentType: session.getPaneScopedRendererOwner(),
-      userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
+      userGpuMode: getAgentStatusState().settings?.terminalGpuAcceleration ?? 'auto'
     })
     const paneTitle = decision.displayTitle
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
@@ -42,7 +44,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     // feed completion tracking — observeTitle would classify the cleared
     // title as idle and mint a task-complete for a merely-paused agent.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
-      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const activeHookStatus = getAgentStatusEntry(session.cacheKey)
       if (!session.shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
         // Why: display titles still update while hooks are active, but a stale
         // idle frame must not complete the coordinator turn before hook `done`.
@@ -60,7 +62,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
 
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       if (
         shouldSeedCacheTimerOnInitialTitle({
           rawTitle,
@@ -87,7 +89,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         initialStatus.agent,
         session.getAuthoritativePaneAgent()
       ),
-      observation: rendererAgentStatusObservations.observe(session.cacheKey, {
+      observation: getAgentStatusOwner(useAppStore).observations().observe(session.cacheKey, {
         origin: 'launch',
         observedAt: Date.now(),
         kind: 'transition'
@@ -108,7 +110,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   }
 
   session.canApplyCommandCodeOutputStatus = (): boolean => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
@@ -127,7 +129,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     if (!routing) {
       return
     }
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
     const currentTitle =
       currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
@@ -145,7 +147,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         state: 'working',
         prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
         agentType: 'command-code',
-        observation: rendererAgentStatusObservations.observe(session.cacheKey, {
+        observation: getAgentStatusOwner(useAppStore).observations().observe(session.cacheKey, {
           origin: 'process',
           observedAt: Date.now(),
           kind: 'transition'
@@ -169,7 +171,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       if (!routing) {
         return
       }
-      const currentState = useAppStore.getState()
+      const currentState = getAgentStatusState()
       const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
       if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
         return
@@ -186,7 +188,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
           state: 'done',
           prompt: currentPrompt || normalizedPrompt,
           agentType: 'command-code',
-          observation: rendererAgentStatusObservations.observe(session.cacheKey, {
+          observation: getAgentStatusOwner(useAppStore).observations().observe(session.cacheKey, {
             origin: 'process',
             observedAt: Date.now(),
             kind: 'transition'

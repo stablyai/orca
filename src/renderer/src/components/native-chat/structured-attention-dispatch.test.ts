@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // The acceptance test for A1: a SETTLED structured native chat lights the unread indicators and
 // raises one OS notification, whatever the turn's outcome was.
 //
@@ -30,7 +31,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
+vi.mock('@/store', () => ({
+  get useAppStore() {
+    return store
+  }
+}))
 // The two client-side follow-ups of a delivery are leaf side effects with their own tests; this
 // file is about the request that reaches main and the markers left behind.
 vi.mock('@/lib/desktop-notification-sound', () => ({
@@ -93,7 +98,7 @@ function seed(overrides?: {
   floatingPanelOpen?: boolean
 }): void {
   const workspaceId = overrides?.workspaceId ?? WORKSPACE
-  store.setState({
+  applyAgentStatusPatch(store, {
     repos: [TEST_REPO],
     worktreesByRepo: { repo1: [makeWorktree({ id: WORKSPACE, repoId: 'repo1' })] },
     folderWorkspaces: overrides?.folderWorkspaces ?? [],
@@ -213,7 +218,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
   })
 
   it('uses the receiving paired subscription over the tab’s execution host', () => {
-    store.setState({
+    applyAgentStatusPatch(store, {
       runtimeEnvironments: [
         {
           id: 'env-1',
@@ -305,7 +310,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   it('earns unread when the workspace chat is behind another top-level view', () => {
     seed({ activeWorktreeId: WORKSPACE })
-    store.setState({ activeView: 'tasks' })
+    applyAgentStatusPatch(store, { activeView: 'tasks' })
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(indicators().paneDot).toBe('agent-completion')
   })
@@ -358,7 +363,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     // main word a finished turn as "working" (notification-options.ts), which is the whole reason
     // the state is taken from the host's report instead.
     const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         [paneKey]: {
           state: 'working',
@@ -378,7 +383,7 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
 
   it('delivers the edge identity as its id, retired by subject when the user reads the chat', () => {
     const paneKey = structuredAgentSessionPaneKey(CHAT_TAB, SESSION)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         [paneKey]: {
           state: 'done',

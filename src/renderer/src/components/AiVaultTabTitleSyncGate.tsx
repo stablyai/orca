@@ -1,7 +1,7 @@
+import { getAgentStatusState, subscribeAgentStatusState } from '@/store/agent-status'
 import { useEffect } from 'react'
 import { startAiVaultTabTitleSync } from '@/lib/ai-vault-tab-title-sync'
 import { scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
-import { useAppStore } from '@/store'
 
 const TITLE_SYNC_DELAY_MS = 1_000
 const TITLE_SYNC_QUIET_MS = 1_500
@@ -11,8 +11,8 @@ export function AiVaultTabTitleSyncGate(): null {
   useEffect(
     () =>
       startAiVaultTabTitleSync({
-        getState: useAppStore.getState,
-        subscribe: useAppStore.subscribe,
+        getState: getAgentStatusState,
+        subscribe: subscribeAgentStatusState,
         resolveSessionTitles: (args) => window.api.aiVault.resolveSessionTitles(args),
         scheduleReconcile: (callback) =>
           scheduleAfterInputQuiet(callback, {

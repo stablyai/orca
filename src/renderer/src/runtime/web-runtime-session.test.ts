@@ -1,3 +1,6 @@
+import { getAgentStatusOwner } from '../store/agent-status-commit'
+import { getDefaultSettings } from '../../../shared/constants'
+import { useAppStore } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activateWebRuntimeSessionWorktree } from './web-runtime-worktree-activation'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
@@ -38,13 +41,12 @@ const mocks = vi.hoisted(() => ({
   )
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
@@ -166,7 +168,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
   it('applies the recovered snapshot instead of a transient pending-handle frame', async () => {
     const pending = makeSnapshot()
     const recovered = { ...pending, publicationEpoch: 'recovered', snapshotVersion: 2 }
-    const state = { state: 'before' }
+    const state = useAppStore.getState()
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'list',
       ok: true,
@@ -174,7 +176,6 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       _meta: { runtimeId: 'host-runtime' }
     })
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
-    mocks.getState.mockReturnValue(state)
     mocks.setState.mockImplementation((updater: (current: unknown) => unknown) => updater(state))
     mocks.recoverWebSessionTerminalOrphansBeforeApply.mockResolvedValueOnce(recovered)
     mocks.applyWebSessionTabsSnapshot.mockImplementation((state) => state)
@@ -184,7 +185,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
 
     // The post-adoption read must be fenced to the runtime that answered this list.
     expect(mocks.recoverWebSessionTerminalOrphansBeforeApply).toHaveBeenCalledWith(
-      state,
+      getAgentStatusOwner(useAppStore).getState(),
       pending,
       ENVIRONMENT_ID,
       {
@@ -200,8 +201,9 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
 describe('activateWebRuntimeSessionWorktree', () => {
   beforeEach(() => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
+    useAppStore.setState({
       settings: {
+        ...getDefaultSettings('/tmp'),
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       }
     })

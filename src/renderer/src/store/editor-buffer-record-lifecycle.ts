@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import { afterStoreAcceptance } from './agent-status-commit'
 import {
   editorBufferMirrorMismatch,
   type EditorBufferState
@@ -213,7 +214,7 @@ export function withEditorBufferRecords<TState extends EditorBufferStoreState>(
               state,
               typeof partial === 'function' ? partial(state) : partial,
               checkInvariant,
-              scheduleRejoin
+              () => afterStoreAcceptance(api, scheduleRejoin)
             ),
           replace
         )

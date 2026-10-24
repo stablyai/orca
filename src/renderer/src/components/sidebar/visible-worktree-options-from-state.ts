@@ -1,7 +1,7 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { Repo } from '../../../../shared/repo-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
-import type { useAppStore } from '@/store'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -17,7 +17,7 @@ import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
  * the sidebar, Cmd+J and the Cmd+1–9 handler all reuse it without a React render.
  */
 export function buildVisibleWorktreeOptionsFromState(
-  state: ReturnType<typeof useAppStore.getState>,
+  state: AgentStatusReadState,
   repoMap: Map<string, Repo>
 ): VisibleWorktreeOptions {
   return {

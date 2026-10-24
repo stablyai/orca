@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 /**
  * Turns a host-derived structured edge — a settled turn, or a prompt put to the user mid-turn — into
  * unread markers and one OS notification.
@@ -49,7 +50,7 @@ import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
-import { useAppStore } from '@/store'
+import '@/store'
 import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -100,7 +101,7 @@ function dispatchStructuredAttention(
     return
   }
   const attentionKey = agentSessionAttentionKey(edge)
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const decision = resolveAgentAttention(
     {

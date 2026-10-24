@@ -31,8 +31,6 @@ import type {
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
-  /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
   /** Main-synced dispatch metadata for live panes that may only have title-derived status in the renderer. */
   runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
   /** PTYs still reporting legacy numeric pane keys but with registry-backed UUID proof; stored separately from normal hook-reported status. */

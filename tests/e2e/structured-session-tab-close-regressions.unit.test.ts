@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '../../src/renderer/src/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -519,7 +520,7 @@ describe('in-flight structured session close', () => {
         ]
       })
       const applyServerFrame = (snapshot: RuntimeMobileSessionTabsResult): void =>
-        useAppStore.setState((state) =>
+        applyAgentStatusPatch(useAppStore, (state) =>
           applyWebSessionTabsSnapshot(
             state,
             suppressCancelledStructuredSessionTabs(snapshot, {

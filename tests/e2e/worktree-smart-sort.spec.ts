@@ -36,7 +36,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
       throw new Error('window.__store is not available')
     }
 
-    const state = store.getState()
+    const state = window.__agentStatus!.getState()
     state.setActiveView('terminal')
     state.setSidebarOpen(true)
     state.setGroupBy('none')
@@ -80,13 +80,13 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
     }))
 
     for (const worktree of [blocked, done]) {
-      const currentState = store.getState()
+      const currentState = window.__agentStatus!.getState()
       if ((currentState.tabsByWorktree[worktree.id] ?? []).length === 0) {
         currentState.createTab(worktree.id)
       }
     }
 
-    const stateWithTabs = store.getState()
+    const stateWithTabs = window.__agentStatus!.getState()
     const blockedTab = stateWithTabs.tabsByWorktree[blocked.id]?.[0]
     const doneTab = stateWithTabs.tabsByWorktree[done.id]?.[0]
     if (!blockedTab || !doneTab) {
@@ -150,7 +150,7 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
       }
     })
 
-    const actions = store.getState()
+    const actions = window.__agentStatus!.getState()
     actions.setAgentStatus(
       `${doneTab.id}:${doneLeafId}`,
       { state: 'done', prompt: 'Finished', agentType: 'codex' },
@@ -186,7 +186,7 @@ async function getSmartSortScenarioReadiness(
   fallbackOrder: string[]
 }> {
   return page.evaluate((scenario) => {
-    const state = window.__store?.getState()
+    const state = window.__agentStatus?.getState()
     if (!state) {
       return {
         blockedHasLivePty: false,

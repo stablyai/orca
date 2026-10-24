@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 // A chat whose start the host refused has no host session, so nothing publishes its row. The
@@ -13,12 +14,14 @@ import { structuredAgentSessionAgentStatus } from '../../../../shared/structured
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import type { AppState } from '@/store/types'
+import {
+  type StructuredAgentSessionLaunchIntent,
+  StructuredAgentSessionCreateRefusalError
+} from '@/lib/launch-structured-agent-session'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState> & { testRuntimeOwner?: string | null }) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -44,8 +47,13 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
   const useAppStore = createTestStore()
-  mocks.store = useAppStore
+  mocks.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 
@@ -78,7 +86,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
 })
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+
 import {
   retryStructuredAgentSessionLaunch,
   startStructuredAgentLaunch

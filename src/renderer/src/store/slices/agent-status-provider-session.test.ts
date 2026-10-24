@@ -1,6 +1,8 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { AppState } from '../types'
+
 import { getProviderSessionClaimKey } from '../../lib/sleeping-agent-pane-ownership'
 import { createTestStore, makeTab, seedStore } from './store-test-helpers'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -34,7 +36,9 @@ describe('recordAgentProviderSession', () => {
       )
     store.getState().captureAllSleepingAgentSessions('quit')
 
-    expect(store.getState().agentStatusByPaneKey[paneKey]?.providerSession).toEqual(providerSession)
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[paneKey]?.providerSession
+    ).toEqual(providerSession)
     expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
   })
 
@@ -59,9 +63,9 @@ describe('recordAgentProviderSession', () => {
       subagents: [{ id: 'child-1', state: 'waiting', startedAt: 11 }]
     })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
-      providerSession
-    )
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession
+    ).toEqual(providerSession)
   })
 
   // Why: mobile Chat UI keys its transcript subscription on providerSession.id, so a
@@ -86,9 +90,9 @@ describe('recordAgentProviderSession', () => {
       agentType: 'claude'
     })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
-      providerSession
-    )
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession
+    ).toEqual(providerSession)
   })
 
   // Why: `done` is the resting state, and both OSC 9999 repaints and reconnect snapshot
@@ -114,9 +118,9 @@ describe('recordAgentProviderSession', () => {
         .setAgentStatus('tab-1:leaf-1', { state: 'done', prompt, agentType: 'claude' })
     }
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
-      providerSession
-    )
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession
+    ).toEqual(providerSession)
   })
 
   // Why: retention stops at the turn boundary. A metadata-less `working` after `done` starts
@@ -141,7 +145,9 @@ describe('recordAgentProviderSession', () => {
       .getState()
       .setAgentStatus('tab-1:leaf-1', { state: 'working', prompt: 'second', agentType: 'claude' })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession
+    ).toBeUndefined()
   })
 
   it('uses the session file as part of transcript-based resume ownership only', () => {
@@ -177,11 +183,11 @@ describe('recordAgentProviderSession', () => {
 
   it('keeps Pi session identity durable without fabricating a visible turn', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
-    } as Partial<AppState>)
+    })
     const launchConfig = {
       agentCommand: "pi '--model' 'anthropic/claude-sonnet-4'",
       agentArgs: '--model anthropic/claude-sonnet-4',
@@ -220,7 +226,9 @@ describe('recordAgentProviderSession', () => {
         { launchToken: 'pi-launch-1' }
       )
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']
+    ).toBeUndefined()
     expect(store.getState().retainedAgentsByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       paneKey: 'tab-1:leaf-1',
@@ -246,9 +254,9 @@ describe('recordAgentProviderSession', () => {
 
   it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
-    } as Partial<AppState>)
+    })
     const providerSession = {
       key: 'session_id' as const,
       id: 'pi-session-1',
@@ -286,7 +294,7 @@ describe('recordAgentProviderSession', () => {
 
   it('does not reuse Pi launch config when the session file identity changes', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       },
@@ -309,7 +317,7 @@ describe('recordAgentProviderSession', () => {
           origin: 'live'
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().recordAgentProviderSession(
       'tab-1:leaf-1',
@@ -332,11 +340,11 @@ describe('recordAgentProviderSession', () => {
     'keeps a completed $label session resumable through manual worktree sleep',
     async ({ agent, label }) => {
       const store = createTestStore()
-      store.setState({
+      applyAgentStatusPatch(store, {
         tabsByWorktree: {
           'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
         }
-      } as Partial<AppState>)
+      })
       const providerSession = makePiCompatibleProviderSession(agent)
 
       store
@@ -369,7 +377,9 @@ describe('recordAgentProviderSession', () => {
           { providerSession }
         )
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.state).toBe('done')
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']?.state
+      ).toBe('done')
       const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
       expect(liveRecord).toMatchObject({
         agent,
@@ -388,7 +398,9 @@ describe('recordAgentProviderSession', () => {
         sleepingPaneKeys: ['tab-1:leaf-1']
       })
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']
+      ).toBeUndefined()
       expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
         agent,
         providerSession,
@@ -401,11 +413,11 @@ describe('recordAgentProviderSession', () => {
 
   it('does not turn a completed recovery record back into working on a same-session update', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
-    } as Partial<AppState>)
+    })
     const providerSession = makePiCompatibleProviderSession('pi')
 
     store
@@ -458,11 +470,11 @@ describe('recordAgentProviderSession', () => {
 
   it('keeps a completed recovery record failed on a same-session update', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
-    } as Partial<AppState>)
+    })
     const providerSession = makePiCompatibleProviderSession('pi')
 
     store
@@ -513,11 +525,11 @@ describe('recordAgentProviderSession', () => {
 
   it('does not downgrade a quit recovery record on a same-session update', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
-    } as Partial<AppState>)
+    })
     const providerSession = makePiCompatibleProviderSession('pi')
 
     store
@@ -572,11 +584,11 @@ describe('recordAgentProviderSession', () => {
     'keeps a completed $label session resumable through quit capture',
     ({ agent, label }) => {
       const store = createTestStore()
-      store.setState({
+      applyAgentStatusPatch(store, {
         tabsByWorktree: {
           'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
         }
-      } as Partial<AppState>)
+      })
       const providerSession = makePiCompatibleProviderSession(agent)
 
       store
@@ -638,7 +650,7 @@ describe('Cursor quit checkpoint', () => {
     'retains the same %s conversation in a folder workspace',
     (state) => {
       const store = createTestStore()
-      store.setState({
+      applyAgentStatusPatch(store, {
         tabsByWorktree: { 'folder-1': [makeTab({ id: 'tab-1', worktreeId: 'folder-1' })] }
       })
       store
@@ -673,7 +685,7 @@ describe('Cursor quit checkpoint', () => {
 describe('quit-time capture for newly resumable agents', () => {
   it('checkpoints a live Kimi provider session before quit-time capture', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
@@ -796,7 +808,7 @@ describe('sleepingAgentSessionsByPaneKey after reminted-hook settlement', () => 
       { tabId: 'tab-1', worktreeId: 'wt-1' }
     )
 
-    expect(store.getState().agentStatusByPaneKey[PANE]?.state).toBe('done')
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.state).toBe('done')
     const sleeping = store.getState().sleepingAgentSessionsByPaneKey[PANE]
     expect(sleeping?.state === 'working' && sleeping.prompt === 'finish the reminted pane').toBe(
       false

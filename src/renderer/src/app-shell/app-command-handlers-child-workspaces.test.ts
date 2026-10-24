@@ -18,9 +18,16 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../store', () => ({
-  useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
-}))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('../components/sidebar/child-workspaces-toggle-target', () => ({
   getRenderedLineageChipKeys: () => new Set<string>(),

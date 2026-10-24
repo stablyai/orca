@@ -1,9 +1,13 @@
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
+
 import {
   MAX_LIVE_AGENT_STATUSES,
   type AgentStatusBatchUpdate,
@@ -46,12 +50,12 @@ function seedBatchStore() {
     agentType: 'pi',
     startedAt: BASE_TIME - 200
   }
-  store.setState({
+  applyAgentStatusPatch(store, {
     tabsByWorktree: { 'wt-1': [tab] },
     retainedAgentsByPaneKey: { [FIRST_PANE]: retained },
     retentionSuppressedPaneKeys: { [FIRST_PANE]: true },
     refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -113,7 +117,7 @@ function makeUpdates(): AgentStatusBatchUpdate[] {
   ]
 }
 
-function selectBatchState(state: AppState) {
+function selectBatchState(state: AgentStatusReadState) {
   return {
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
@@ -150,11 +154,19 @@ describe('setAgentStatuses', () => {
       }
     })
     sequentialStore.setState({
-      setGeneratedTabTitleFromAgentPrompt: sequentialTitleGeneration
-    } as Partial<AppState>)
+      setGeneratedTabTitlesFromAgentPrompts: (updates) => {
+        for (const update of updates) {
+          if (update.options) {
+            sequentialTitleGeneration(update.paneKey, update.prompt, update.options)
+          } else {
+            sequentialTitleGeneration(update.paneKey, update.prompt)
+          }
+        }
+      }
+    })
     batchStore.setState({
       setGeneratedTabTitlesFromAgentPrompts: batchTitleGenerationBulk
-    } as Partial<AppState>)
+    })
     const updates = makeUpdates()
 
     for (const update of updates) {
@@ -187,15 +199,15 @@ describe('setAgentStatuses', () => {
     const outcomes = batchStore.getState().setAgentStatuses(updates)
 
     expect(outcomes).toEqual([true, true, true, true, false, true, true])
-    expect(selectBatchState(batchStore.getState())).toEqual(
-      selectBatchState(sequentialStore.getState())
+    expect(selectBatchState(getAgentStatusOwner(batchStore).getState())).toEqual(
+      selectBatchState(getAgentStatusOwner(sequentialStore).getState())
     )
     expect(
-      batchStore.getState().agentStatusByPaneKey[FIRST_PANE].stateHistory.at(-1)
+      getAgentStatusOwner(batchStore).getSnapshot()[FIRST_PANE].stateHistory.at(-1)
     ).toMatchObject({ state: 'done' })
     // The swallowed `done`'s output survives on the entry, not on the history row.
     expect(
-      batchStore.getState().agentStatusByPaneKey[FIRST_PANE].lastCompletedAssistantMessage
+      getAgentStatusOwner(batchStore).getSnapshot()[FIRST_PANE].lastCompletedAssistantMessage
     ).toBe('Finished.')
     expect(batchTitleGeneration.mock.calls).toEqual(sequentialTitleGeneration.mock.calls)
     expect(batchTitleGeneration).toHaveBeenCalledTimes(5)
@@ -205,8 +217,8 @@ describe('setAgentStatuses', () => {
     expect(sequentialStore.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-    expect(selectBatchState(batchStore.getState())).toEqual(
-      selectBatchState(sequentialStore.getState())
+    expect(selectBatchState(getAgentStatusOwner(batchStore).getState())).toEqual(
+      selectBatchState(getAgentStatusOwner(sequentialStore).getState())
     )
   })
 
@@ -248,11 +260,14 @@ describe('setAgentStatuses', () => {
         return [worktreeId, [makeUnifiedTab({ id: `tab-${index}`, worktreeId, groupId: 'g' })]]
       })
     )
-    store.setState({
-      settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
+    applyAgentStatusPatch(store, {
+      settings: {
+        ...(store.getState().settings ?? getDefaultSettings('/tmp')),
+        tabAutoGenerateTitle: true
+      },
       tabsByWorktree
-    } as Partial<AppState>)
-    store.setState({ unifiedTabsByWorktree })
+    })
+    applyAgentStatusPatch(store, { unifiedTabsByWorktree })
     const updates: AgentStatusBatchUpdate[] = Array.from({ length: paneCount }, (_, index) => ({
       paneKey: `tab-${index}:11111111-1111-4111-8111-111111111111`,
       payload: {
@@ -385,8 +400,12 @@ describe('setAgentStatuses', () => {
 
     expect(publications).toBe(3)
     expect(queueMicrotaskSpy).toHaveBeenCalledTimes(2)
-    expect(store.getState().agentStatusByPaneKey[FIRST_PANE]?.updatedAt).toBe(BASE_TIME + 2)
-    expect(store.getState().agentStatusByPaneKey[SECOND_PANE]?.updatedAt).toBe(BASE_TIME + 3)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[FIRST_PANE]?.updatedAt).toBe(
+      BASE_TIME + 2
+    )
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[SECOND_PANE]?.updatedAt).toBe(
+      BASE_TIME + 3
+    )
     unsubscribeReentrant()
     await flushMicrotasks()
   })
@@ -411,7 +430,7 @@ describe('setAgentStatuses', () => {
         ]
       })
     )
-    store.setState({ agentStatusByPaneKey: entries } as Partial<AppState>)
+    applyAgentStatusPatch(store, { agentStatusByPaneKey: entries })
     let publications = 0
     const unsubscribe = store.subscribe(() => {
       publications += 1
@@ -433,7 +452,7 @@ describe('setAgentStatuses', () => {
     })
 
     expect(outcomes).toEqual([true, true])
-    expect(store.getState().agentStatusByPaneKey[firstPane]).toMatchObject({
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[firstPane]).toMatchObject({
       agentType: 'claude',
       state: 'done'
     })
@@ -452,13 +471,17 @@ describe('setAgentStatuses', () => {
       })
       // Any slice action reached through get() writes straight to the real store — a
       // REPLACE commit of the fold's snapshot would silently revert it.
-      store.setState({ worktreesByRepo: { 'repo-late': [] } } as Partial<AppState>)
+      applyAgentStatusPatch(store, {
+        worktreesByRepo: { 'repo-late': [] }
+      })
       return applied
     })
 
     expect(outcome).toBe(true)
     expect(store.getState().worktreesByRepo).toEqual({ 'repo-late': [] })
-    expect(store.getState().agentStatusByPaneKey[FIRST_PANE]).toMatchObject({ state: 'working' })
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[FIRST_PANE]).toMatchObject({
+      state: 'working'
+    })
   })
 
   it('keeps one completed-turn message per entry instead of one per history row', () => {
@@ -483,7 +506,7 @@ describe('setAgentStatuses', () => {
     }
     store.getState().setAgentStatuses(turns)
 
-    const entry = store.getState().agentStatusByPaneKey[FIRST_PANE]
+    const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey[FIRST_PANE]
     expect(entry.stateHistory.length).toBeGreaterThan(1)
     expect(entry.stateHistory.some((row) => 'lastAssistantMessage' in row)).toBe(false)
     // Only the newest done that rolled into history is retained, so memory is O(1) per pane.
@@ -528,7 +551,8 @@ describe('setAgentStatuses', () => {
 
     // The second turn finished silently; leaking turn one's output would misreport the run.
     expect(
-      store.getState().agentStatusByPaneKey[FIRST_PANE].lastCompletedAssistantMessage
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[FIRST_PANE]
+        .lastCompletedAssistantMessage
     ).toBeUndefined()
   })
 })

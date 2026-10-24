@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -134,7 +135,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
   })
 

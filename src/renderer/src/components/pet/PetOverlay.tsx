@@ -1,3 +1,4 @@
+import { useAgentStatusSnapshot } from '@/store/agent-status'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
@@ -21,7 +22,7 @@ function usePetAnimationName(
   dragAnimation: PetDragAnimation,
   hovering: boolean
 ): PetAnimationName {
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAgentStatusSnapshot()
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   // Re-render when the freshness scheduler ticks so stale live states stop

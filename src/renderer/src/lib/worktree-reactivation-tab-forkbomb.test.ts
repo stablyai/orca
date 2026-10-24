@@ -1,7 +1,10 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
@@ -35,7 +38,7 @@ vi.mock('@/runtime/runtime-layout-client', () => ({
   }
 }))
 
-const initialAppStoreState = useAppStore.getState()
+const initialAppStoreState = getAgentStatusOwner(useAppStore).getState()
 
 /**
  * A `session.tabs.list` answer holding no agent-session tab. The gate asks the host for one
@@ -54,7 +57,7 @@ function emptySessionTabsSnapshot(worktreeId: string): RuntimeMobileSessionTabsR
   }
 }
 
-function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
+function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AgentStatusReadState> {
   return {
     repos: [
       {
@@ -119,13 +122,13 @@ afterEach(() => {
   sync = null
   provideLayoutFrameTerminalPanes({ holdsTerminalPane: () => false, terminalTab: () => undefined })
   vi.unstubAllGlobals()
-  useAppStore.setState(initialAppStoreState, true)
+  applyAgentStatusPatch(useAppStore, initialAppStoreState)
 })
 
 describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
   it('defers packaged-startup resume until restored PTYs finish reconnecting', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       ...baseState(worktree),
       workspaceSessionReady: false,
       terminalStartupRestorationReady: false
@@ -133,7 +136,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = `packaged-restart-pane:${leafId}`
     const livePtyId = `${worktree.id}@@daemon-live`
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         [paneKey]: {
           paneKey,
@@ -207,7 +210,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     })
 
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      useAppStore.setState({ unifiedTabsByWorktree: { [worktree.id]: [] } })
+      applyAgentStatusPatch(useAppStore, { unifiedTabsByWorktree: { [worktree.id]: [] } })
       sync = openWorkspaceLayoutFrameSync(useAppStore)
       provideLayoutFrameTerminalPanes(sync)
       frames.onFrame!(mainSnapshot(worktree.id, 'packaged-restart-pane', leafId, livePtyId))
@@ -218,7 +221,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     await Promise.resolve()
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
 
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       workspaceSessionReady: true,
       terminalStartupRestorationReady: true
     })
@@ -229,7 +232,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
       sync.start()
       await new Promise<void>((resolve) => setTimeout(resolve, 0))
     }
-    const restored = useAppStore.getState()
+    const restored = getAgentStatusOwner(useAppStore).getState()
     expect(restored.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(restored.terminalLayoutsByTabId['packaged-restart-pane']?.ptyIdsByLeafId?.[leafId]).toBe(
       livePtyId
@@ -246,7 +249,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
 
   it('re-captured sleeping codex session resumes once, not once per reopen', async () => {
     const worktree = { ...makeWorktree(), createdWithAgent: undefined }
-    useAppStore.setState(baseState(worktree))
+    applyAgentStatusPatch(useAppStore, baseState(worktree))
     const layoutApply = layoutApplyTestDouble()
     vi.stubGlobal('window', {
       api: {
@@ -265,7 +268,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
 
     for (let reopen = 0; reopen < 4; reopen++) {
       const paneKey = `slept-pane-${reopen}:0`
-      useAppStore.setState((s) => ({
+      applyAgentStatusPatch(useAppStore, (s) => ({
         sleepingAgentSessionsByPaneKey: {
           ...s.sleepingAgentSessionsByPaneKey,
           [paneKey]: {
@@ -286,7 +289,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
 
       activateAndRevealWorktree(worktree.id)
       await waitForWorktreeAgentActivationGateForTests(worktree.id)
-      const state = useAppStore.getState()
+      const state = getAgentStatusOwner(useAppStore).getState()
       const tabs = state.tabsByWorktree[worktree.id] ?? []
 
       expect(tabs).toHaveLength(1)

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '../../../agent-status-observers'
 import type { AppState } from '../../../types'
 import { removeTabsAttention } from '../../workspace-attention/subject-attention-transitions'
 import type { createWorktreePurgeOmitters } from './worktree-purge-omitters'
@@ -12,11 +13,11 @@ export type WorktreePurgeSleepingMaps = Pick<
 
 /** Tab-, PTY-, pane-, page- and file-keyed state of purged surfaces; never a worktree-keyed bucket. */
 export function buildWorktreePurgeSurfacePatch(
-  s: AppState,
+  s: AgentStatusReadState,
   omitters: WorktreePurgeOmitters,
   doomedTabIds: ReadonlySet<string>,
   sleeping: WorktreePurgeSleepingMaps
-): Partial<AppState> {
+): Partial<AgentStatusReadState> {
   const {
     omitByTabId,
     omitByPtyId,

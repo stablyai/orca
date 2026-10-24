@@ -1,3 +1,5 @@
+import { useAgentStatusSelector, getAgentStatusState } from '@/store/agent-status'
+
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -50,12 +52,15 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
-  const tabAgentTypeByLeaf = useAppStore((store) =>
-    selectTerminalTabAgentTypesByLeaf(
-      store.agentStatusByPaneKey,
-      tabId,
-      store.paneForegroundAgentByPaneKey
-    )
+  const tabAgentTypeByLeaf = useAgentStatusSelector(
+    (store) =>
+      selectTerminalTabAgentTypesByLeaf(
+        store.agentStatusByPaneKey,
+        tabId,
+        store.paneForegroundAgentByPaneKey
+      ),
+    undefined,
+    tabId
   )
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
@@ -145,7 +150,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       const currentMode = selectUnifiedTerminalTabFields(
         state.unifiedTabsByWorktree,
         worktreeId,
@@ -158,7 +163,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       if (route.chatLeafId !== chatLeafId) {
         setChatLeafId(route.chatLeafId)
       }
-      const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const existingLayout = getAgentStatusState().terminalLayoutsByTabId[tabId]
       if (existingLayout && existingLayout.chatLeafId !== (route.chatLeafId ?? undefined)) {
         if (route.chatLeafId) {
           setTabLayout(tabId, { ...existingLayout, chatLeafId: route.chatLeafId })

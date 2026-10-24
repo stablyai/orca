@@ -1,3 +1,6 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { getTabAgentExitOwner } from './tab-agent-exit-owner'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -14,11 +17,12 @@ import {
 } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
+let stopEvidence = () => {}
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestHookAgent = useTabAgent(tab)
@@ -26,11 +30,14 @@ function HookProbe({ tab }: { tab: TerminalTab }): null {
 }
 
 async function renderHookProbe(tab: TerminalTab): Promise<Root> {
+  stopEvidence()
+  stopEvidence = getTabAgentExitOwner(getAgentStatusOwner(useAppStore)).start()
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   hookRoots.push(root)
   await act(async () => {
+    useAppStore.setState({ tabsByWorktree: { [tab.worktreeId]: [tab] } })
     root.render(createElement(HookProbe, { tab }))
   })
   return root
@@ -163,8 +170,8 @@ describe('useTabAgent process signals', () => {
   beforeEach(() => {
     latestHookAgent = undefined
     clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, initialAppState)
+    applyAgentStatusPatch(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -180,11 +187,12 @@ describe('useTabAgent process signals', () => {
   })
 
   afterEach(() => {
+    stopEvidence()
     hookRoots.splice(0).forEach((root) => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
   })
 
   it('shows the recognized foreground agent for a manual launch with no hooks or titles', async () => {

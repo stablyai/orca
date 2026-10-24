@@ -1,9 +1,11 @@
-import type { AppState } from '../../../types'
+import { afterPurgeAcceptance, preparePurgeOwnership } from './worktree-purge-preparation'
+import type { AgentStatusReadState } from '../../../agent-status-observers'
+
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
+import { prepareHostedReviewMutationRemoval } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
@@ -11,7 +13,7 @@ import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
-import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { prepareWorktreeSleepIntentRemoval } from '@/lib/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import {
   cancelStructuredLaunchesForWorktrees,
@@ -29,9 +31,9 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
  * attributable state; everything else purges every bucket under the id.
  */
 export function buildWorktreePurgeState(
-  s: AppState,
+  s: AgentStatusReadState,
   worktreeTargets: WorktreePurgeTargets
-): Partial<AppState> {
+): Partial<AgentStatusReadState> {
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
@@ -76,13 +78,13 @@ export function buildWorktreePurgeState(
 
 /** Drops every bucket under the targets' ids; visit recency alone stays host-scoped. */
 export function buildFullWorktreePurgeState(
-  s: AppState,
+  s: AgentStatusReadState,
   normalizedTargets: readonly WorktreePurgeTarget[]
-): Partial<AppState> {
+): Partial<AgentStatusReadState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
-  forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
+  afterPurgeAcceptance(s, () => forgetCombinedDiffViewsForWorktrees(worktreeIdSet))
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
-  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
+  const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(s, worktreeIdSet)
   for (const worktreeId of worktreeIdSet) {
     retirePurgedTabLaunches(
       s,
@@ -92,14 +94,17 @@ export function buildFullWorktreePurgeState(
       cancelledSessionIds
     )
   }
-  pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+  preparePurgeOwnership(s, {
+    install: prepareHostedReviewMutationRemoval(worktreeIdSet),
+    effects: []
+  })
   // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
   for (const id of worktreeIdSet) {
-    forgetWorktreeSleepIntent(id)
+    preparePurgeOwnership(s, { install: prepareWorktreeSleepIntentRemoval(id), effects: [] })
   }
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
-  forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
-  forgetAmbiguousOwnerWarnings(worktreeIdSet)
+  afterPurgeAcceptance(s, () => forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet))
+  afterPurgeAcceptance(s, () => forgetAmbiguousOwnerWarnings(worktreeIdSet))
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
   const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)

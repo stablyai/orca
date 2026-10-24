@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 
@@ -20,7 +22,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
       .getState()
       .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
     store.getState().acknowledgeAgents(['tab-1:0'])
-    store.setState({
+    applyAgentStatusPatch(store, {
       activityClearedAtByPaneKey: { 'tab-1:0': 100 },
       manuallyUnreadTurnsByPaneKey: { 'tab-1:0': 200 }
     })
@@ -46,7 +48,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
       .getState()
       .setAgentStatus('tab-10:0', { state: 'working', prompt: 'p', agentType: 'claude' })
     store.getState().acknowledgeAgents(['tab-1:0', 'tab-1:1', 'tab-10:0'])
-    store.setState({
+    applyAgentStatusPatch(store, {
       activityClearedAtByPaneKey: { 'tab-1:0': 100, 'tab-10:0': 300 },
       manuallyUnreadTurnsByPaneKey: { 'tab-1:1': 200, 'tab-10:0': 400 }
     })
@@ -59,8 +61,12 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     // Why: the ":" delimiter on the prefix guards against false-prefix matches
     // across tab ids that share a leading substring (tab-1 vs tab-10).
     expect(ack['tab-10:0']).toBeGreaterThan(0)
-    expect(store.getState().activityClearedAtByPaneKey).toEqual({ 'tab-10:0': 300 })
-    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ 'tab-10:0': 400 })
+    expect(store.getState().activityClearedAtByPaneKey).toEqual({
+      'tab-10:0': 300
+    })
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({
+      'tab-10:0': 400
+    })
   })
 
   it('removeAgentStatus leaves read state alone for a retained-only pane (unverified SSH exit)', () => {
@@ -70,7 +76,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     // lost SSH link. The live row is already gone; the retained/persisted read state must
     // survive so acked rows do not re-bold and cleared history does not replay on reconnect.
     store.getState().acknowledgeAgents(['tab-6:0'])
-    store.setState({
+    applyAgentStatusPatch(store, {
       activityClearedAtByPaneKey: { 'tab-6:0': 100 },
       manuallyUnreadTurnsByPaneKey: { 'tab-6:0': 200 }
     })
@@ -117,7 +123,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
   it('dropAgentStatusByTabPrefix clears pane-keyed activity maps without live rows', () => {
     vi.useFakeTimers()
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       activityClearedAtByPaneKey: { 'tab-4:0': 100 },
       manuallyUnreadTurnsByPaneKey: { 'tab-4:0': 200 }
     })
@@ -131,7 +137,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
   it('dropHibernatedAgentStatusPane clears pane-keyed activity maps without completion evidence', () => {
     vi.useFakeTimers()
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       activityClearedAtByPaneKey: { 'tab-5:0': 100 },
       manuallyUnreadTurnsByPaneKey: { 'tab-5:0': 200 }
     })
@@ -166,7 +172,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     store
       .getState()
       .setAgentStatus('tab-1:0', { state: 'working', prompt: 'second', agentType: 'codex' })
-    const newEntry = store.getState().agentStatusByPaneKey['tab-1:0']
+    const newEntry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:0']
     const ackAt = store.getState().acknowledgedAgentsByPaneKey['tab-1:0'] ?? 0
 
     // Why: the unvisited rule (WorktreeCardAgents' unvisitedByPaneKey) is
@@ -185,7 +191,7 @@ describe('acknowledgeAgents clears the unread agent-completion marker', () => {
   it('drops the pane from unreadAgentCompletionPanes', () => {
     const store = createTestStore()
     store.getState().setAgentStatus('tab-1:0', { state: 'done', prompt: 'p', agentType: 'claude' })
-    store.setState({ unreadAgentCompletionPanes: { 'tab-1:0': 'agent-completion' } })
+    applyAgentStatusPatch(store, { unreadAgentCompletionPanes: { 'tab-1:0': 'agent-completion' } })
     expect(store.getState().unreadAgentCompletionPanes['tab-1:0']).toBe('agent-completion')
 
     store.getState().acknowledgeAgents(['tab-1:0'])
@@ -195,7 +201,7 @@ describe('acknowledgeAgents clears the unread agent-completion marker', () => {
 
   it('leaves other panes and the terminal-bell unread map untouched', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       unreadAgentCompletionPanes: { 'tab-1:0': 'agent-completion', 'tab-2:0': 'agent-completion' },
       unreadTerminalPanes: { 'tab-1:0': 'terminal-bell' }
     })

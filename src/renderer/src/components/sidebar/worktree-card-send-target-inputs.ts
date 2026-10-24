@@ -1,8 +1,9 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '@/store/types'
 import type { RunningAgentTargetState } from '@/lib/running-agent-targets'
 
 export type SendTargetInputsState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentSendPopoverTargetMode'
   | 'agentStatusByPaneKey'
   | 'tabsByWorktree'

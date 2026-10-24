@@ -39,13 +39,12 @@ import {
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    // Snapshot receipt reads the held paired-tab closes; none here.
-    getState: () => ({})
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()

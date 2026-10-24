@@ -3,16 +3,13 @@ import {
   selectAutomationRunOutputSnapshot
 } from '@/components/automations/automation-run-output-snapshot'
 import { useAppStore } from '@/store'
+import { getAgentStatusOwner, type AgentStatusOwner } from '@/store/agent-status-commit'
 import type {
   AutomationDispatchResult,
   AutomationPrecheckResult,
   AutomationRun
 } from '../../../shared/automations-types'
 import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
-import {
-  selectAutomationAgentStatusEntryChange,
-  UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
-} from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
@@ -20,6 +17,7 @@ import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-owne
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
 export function createAutomationDispatchCompletion(args: {
+  statusOwner?: AgentStatusOwner
   run: AutomationRun
   worktree: Worktree
   precheckResult: AutomationPrecheckResult | null
@@ -177,16 +175,11 @@ export function createAutomationDispatchCompletion(args: {
     let sawWorkingAfterStart = false
     let observedStateHistory: AgentStateHistoryEntry[] = []
     let observedEntry: AgentStatusEntry | undefined
-    const checkCurrentStatus = (): void => {
-      const entryChange = selectAutomationAgentStatusEntryChange(
-        useAppStore.getState().agentStatusByPaneKey,
-        targetPaneKey,
-        observedEntry
-      )
-      if (entryChange === UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY) {
+    const status = args.statusOwner ?? getAgentStatusOwner(useAppStore)
+    const consumeEntry = (entry: AgentStatusEntry | undefined): void => {
+      if (entry === observedEntry) {
         return
       }
-      const entry = entryChange
       observedEntry = entry
       if (!entry || entry.updatedAt < startedAfter) {
         return
@@ -233,8 +226,11 @@ export function createAutomationDispatchCompletion(args: {
     }
     // Why: Codex/Claude completion normally arrives through the global
     // hook IPC listener, not the hidden PTY OSC fallback.
-    unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
-    checkCurrentStatus()
+    unsubscribeAgentStatus = status.subscribeTransitions(
+      (transition) => consumeEntry(transition.next.agentStatusByPaneKey[targetPaneKey]),
+      targetPaneKey
+    )
+    consumeEntry(status.getEntry(targetPaneKey))
   }
 
   return {

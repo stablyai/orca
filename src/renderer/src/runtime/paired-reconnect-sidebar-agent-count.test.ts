@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 /**
  * STA-3107: a paired client working against a remote Orca host is slept
  * (laptop closed), then woken. Every terminal tab is still open and still has a
@@ -25,7 +27,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { AppState } from '../store/types'
+
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import {
   markRendererOwnedAgentStatusWrite,
@@ -43,16 +45,6 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../components/sidebar/worktree-card-status-inputs'
-
-// Why: web-session-tabs-sync imports the app-level store singleton; this
-// harness drives a createTestStore instance instead, like its sibling suites.
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
-  }
-}))
 
 const WT = 'repo1::/path/wt1'
 const ENV = 'web-env-1'
@@ -186,11 +178,12 @@ function applyHostSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   now: number
 ): void {
-  vi.setSystemTime(now)
-  const state = store.getState()
-  const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
-  expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
-  store.setState(patch as Partial<AppState>)
+  applyAgentStatusPatch(store, (state) => {
+    vi.setSystemTime(now)
+    const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
+    expect(patch, 'host snapshot must pass the freshness gate').not.toBe(state)
+    return patch
+  })
 }
 
 /**
@@ -222,7 +215,7 @@ function seedPairedClientStore(): TestStore {
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -234,7 +227,7 @@ type SidebarObservation = {
 
 /** Byte-identical to useWorktreeAgentRows' inputs, minus React. */
 function observeSidebar(store: TestStore, now: number): SidebarObservation {
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   const tabs = state.tabsByWorktree[WT] ?? []
   const rows = buildWorktreeAgentRows({
     tabs,
@@ -332,7 +325,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
       wakeAt
     )
 
-    expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(unwritten)]).toBeUndefined()
+    expect(getAgentStatusOwner(store).getSnapshot()[mirrorPaneKey(unwritten)]).toBeUndefined()
   })
 
   it('releases authority on pane teardown so the host can retire the row', () => {
@@ -351,7 +344,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     )
 
     for (const pane of CLIENT_OWNED_PANES) {
-      expect(store.getState().agentStatusByPaneKey[mirrorPaneKey(pane)]).toBeUndefined()
+      expect(getAgentStatusOwner(store).getSnapshot()[mirrorPaneKey(pane)]).toBeUndefined()
     }
   })
 })

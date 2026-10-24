@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -109,7 +110,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       origin: 'worktree-sleep',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 
@@ -172,7 +173,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
@@ -231,7 +232,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
@@ -455,7 +456,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     store.getState().updateTabPtyId('tab-1', scopedPtyId)
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
 
     expect(state.ptyIdsByTabId['tab-1']).toEqual([scopedPtyId])
     expect(state.tabsByWorktree[wt][0]?.ptyId).toBe(scopedPtyId)
@@ -582,7 +583,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       expectedRuntimePtyIds: ['pty-1']
     })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
     expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toMatchObject({
       worktreeId: wt,
       entry: {
@@ -657,7 +658,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       expectedRuntimePtyIds: ['pty-1']
     })
 
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
     expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toBeUndefined()
     expect(store.getState().retentionSuppressedPaneKeys['tab-1:live']).toBe(true)
   })
@@ -718,7 +719,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'live-session' }
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(mockUnregisterPtyDataHandlers).not.toHaveBeenCalledWith(['pty-1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
@@ -769,7 +770,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ).rejects.toThrow('exact_terminal_stop_mismatch')
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 })

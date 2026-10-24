@@ -32,7 +32,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -48,17 +48,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -123,16 +130,17 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function writtenData(pane: ReturnType<typeof createPane>): string {
@@ -149,11 +157,13 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     dataCallback: (data: string, meta?: { seq?: number; rawLength?: number }) => void
     getMainBufferSnapshot: ReturnType<typeof vi.fn>
   }> {
-    mockStoreState.settings = {
-      ...mockStoreState.settings,
-      terminalMainSideEffectAuthority: true
-    } as StoreState['settings']
-    const { connectPanePty } = await import('./pty-connection')
+    storeFixture.patch({
+      settings: {
+        ...storeFixture.read().settings,
+        terminalMainSideEffectAuthority: true
+      }
+    })
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

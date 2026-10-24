@@ -42,7 +42,7 @@ const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
 const toastInfo = vi.fn()
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -51,17 +51,24 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -160,7 +167,7 @@ function stubMainBufferSnapshot(
 }
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
   const transport = createMockTransport(SSH_PTY_ID)
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -172,7 +179,7 @@ async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
   const manager = createManager(1)
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
+  const deps = buildPaneConnectionDeps(storeFixture, {
     isVisibleRef: { current: false }
   })
   const disposable = connectPanePty(pane as never, manager as never, deps as never)
@@ -231,7 +238,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
     // The reporter's client is WSL2, but the banner path is platform-independent;
     // pin darwin so the Windows synchronized-output scan stays out of the writes.
@@ -242,6 +249,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 

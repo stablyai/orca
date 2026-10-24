@@ -1,3 +1,7 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
@@ -8,10 +12,10 @@ import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+
 import { useOpenTabSearch } from './use-open-tab-search'
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -133,77 +137,74 @@ const browserPage: BrowserPage = {
 
 // wt-1 spans two columns: group-1 shows tab-a, group-2 shows tab-c.
 function seedStore(
-  overrides: Partial<AppState> = {},
+  overrides: Partial<AgentStatusReadState> = {},
   executionHostId?: Tab['executionHostId']
 ): void {
-  useAppStore.setState(
-    {
-      ...initialAppState,
-      repos: [repo],
-      worktreesByRepo: {
-        'repo-1': [makeWorktree('wt-1', 'Aurora Workspace'), makeWorktree('wt-2', 'Nebula')]
-      },
-      unifiedTabsByWorktree: {
-        'wt-1': [
-          makeUnifiedTab({ id: 'tab-a', entityId: 'term-a', groupId: 'group-1' }),
-          makeUnifiedTab({ id: 'tab-b', entityId: 'term-b', groupId: 'group-1' }),
-          makeUnifiedTab({ id: 'tab-c', entityId: 'term-c', groupId: 'group-2' }),
-          makeUnifiedTab({
-            id: 'tab-browser',
-            entityId: 'ws-1',
-            groupId: 'group-2',
-            contentType: 'browser',
-            label: 'zebra page'
-          }),
-          makeUnifiedTab({
-            id: 'tab-sim',
-            entityId: 'sim-1',
-            groupId: 'group-2',
-            contentType: 'simulator',
-            label: 'zebra sim'
-          })
-        ].map((tab) => (executionHostId ? { ...tab, executionHostId } : tab)),
-        'wt-2': [
-          makeUnifiedTab({
-            id: 'tab-d',
-            entityId: 'term-d',
-            groupId: 'group-3',
-            worktreeId: 'wt-2'
-          })
-        ]
-      },
-      tabsByWorktree: {
-        'wt-1': [
-          makeTerminalTab({ id: 'term-a', title: 'zebra alpha' }),
-          makeTerminalTab({ id: 'term-b', title: 'zebra beta' }),
-          makeTerminalTab({ id: 'term-c', title: 'zebra gamma' })
-        ],
-        'wt-2': [makeTerminalTab({ id: 'term-d', title: 'zebra delta', worktreeId: 'wt-2' })]
-      },
-      groupsByWorktree: {
-        'wt-1': [
-          makeGroup('group-1', 'tab-a', ['tab-a', 'tab-b']),
-          makeGroup('group-2', 'tab-c', ['tab-c', 'tab-browser', 'tab-sim'])
-        ],
-        'wt-2': [{ id: 'group-3', worktreeId: 'wt-2', activeTabId: 'tab-d', tabOrder: ['tab-d'] }]
-      },
-      browserTabsByWorktree: { 'wt-1': [browserWorkspace] },
-      browserPagesByWorkspace: { 'ws-1': [browserPage] },
-      activeGroupIdByWorktree: { 'wt-1': 'group-1', 'wt-2': 'group-3' },
-      activeWorktreeId: 'wt-1',
-      // Focus really sits on tab-a, so the engines mark it isCurrentTab.
-      activeTabType: 'terminal',
-      activeTabTypeByWorktree: { 'wt-1': 'terminal' },
-      activeTabId: 'term-a',
-      activeTabIdByWorktree: { 'wt-1': 'term-a' },
-      settings: {
-        ...initialAppState.settings,
-        tabAutoGenerateTitle: false
-      } as AppState['settings'],
-      ...overrides
-    } as AppState,
-    true
-  )
+  applyAgentStatusPatch(useAppStore, {
+    ...initialAppState,
+    repos: [repo],
+    worktreesByRepo: {
+      'repo-1': [makeWorktree('wt-1', 'Aurora Workspace'), makeWorktree('wt-2', 'Nebula')]
+    },
+    unifiedTabsByWorktree: {
+      'wt-1': [
+        makeUnifiedTab({ id: 'tab-a', entityId: 'term-a', groupId: 'group-1' }),
+        makeUnifiedTab({ id: 'tab-b', entityId: 'term-b', groupId: 'group-1' }),
+        makeUnifiedTab({ id: 'tab-c', entityId: 'term-c', groupId: 'group-2' }),
+        makeUnifiedTab({
+          id: 'tab-browser',
+          entityId: 'ws-1',
+          groupId: 'group-2',
+          contentType: 'browser',
+          label: 'zebra page'
+        }),
+        makeUnifiedTab({
+          id: 'tab-sim',
+          entityId: 'sim-1',
+          groupId: 'group-2',
+          contentType: 'simulator',
+          label: 'zebra sim'
+        })
+      ].map((tab) => (executionHostId ? { ...tab, executionHostId } : tab)),
+      'wt-2': [
+        makeUnifiedTab({
+          id: 'tab-d',
+          entityId: 'term-d',
+          groupId: 'group-3',
+          worktreeId: 'wt-2'
+        })
+      ]
+    },
+    tabsByWorktree: {
+      'wt-1': [
+        makeTerminalTab({ id: 'term-a', title: 'zebra alpha' }),
+        makeTerminalTab({ id: 'term-b', title: 'zebra beta' }),
+        makeTerminalTab({ id: 'term-c', title: 'zebra gamma' })
+      ],
+      'wt-2': [makeTerminalTab({ id: 'term-d', title: 'zebra delta', worktreeId: 'wt-2' })]
+    },
+    groupsByWorktree: {
+      'wt-1': [
+        makeGroup('group-1', 'tab-a', ['tab-a', 'tab-b']),
+        makeGroup('group-2', 'tab-c', ['tab-c', 'tab-browser', 'tab-sim'])
+      ],
+      'wt-2': [{ id: 'group-3', worktreeId: 'wt-2', activeTabId: 'tab-d', tabOrder: ['tab-d'] }]
+    },
+    browserTabsByWorktree: { 'wt-1': [browserWorkspace] },
+    browserPagesByWorkspace: { 'ws-1': [browserPage] },
+    activeGroupIdByWorktree: { 'wt-1': 'group-1', 'wt-2': 'group-3' },
+    activeWorktreeId: 'wt-1',
+    // Focus really sits on tab-a, so the engines mark it isCurrentTab.
+    activeTabType: 'terminal',
+    activeTabTypeByWorktree: { 'wt-1': 'terminal' },
+    activeTabId: 'term-a',
+    activeTabIdByWorktree: { 'wt-1': 'term-a' },
+    settings: {
+      ...initialAppState.settings,
+      tabAutoGenerateTitle: false
+    } as AppState['settings'],
+    ...overrides
+  })
 }
 
 function renderSearch(options: { enabled?: boolean; query?: string } = {}) {
@@ -333,10 +334,12 @@ describe('useOpenTabSearch', () => {
   it('does not rebuild results for agent-status heartbeats while open', () => {
     const { result } = renderSearch()
     const initialResults = result.current.results
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
 
     act(() => {
-      useAppStore.setState({ agentStatusByPaneKey: { ...state.agentStatusByPaneKey } })
+      applyAgentStatusPatch(useAppStore, {
+        agentStatusByPaneKey: { ...state.agentStatusByPaneKey }
+      })
     })
 
     expect(result.current.results).toBe(initialResults)
@@ -359,9 +362,9 @@ describe('useOpenTabSearch', () => {
     const { result } = renderSearch({ query: 'epsilon' })
     expect(result.current.results).toEqual([])
 
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     act(() => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
           'wt-1': [
@@ -394,9 +397,9 @@ describe('useOpenTabSearch', () => {
     const { result } = renderSearch()
 
     clock.mockReturnValue(2_000)
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     act(() => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         unifiedTabsByWorktree: {
           ...state.unifiedTabsByWorktree,
           'wt-1': (state.unifiedTabsByWorktree['wt-1'] ?? []).map((tab) =>

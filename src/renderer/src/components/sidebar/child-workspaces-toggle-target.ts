@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import {
   getAllWorktreesFromState,
   getRepoMapFromState,
@@ -84,7 +85,7 @@ export function resolveChildWorkspacesToggleGroupKey(
 }
 
 /** Uses mounted rows so temporary reveal and drag policies match the existing chip. */
-export function getRenderedLineageChipKeys(state: AppState): Set<string> {
+export function getRenderedLineageChipKeys(state: AgentStatusReadState): Set<string> {
   const publishedTargets = getPublishedVisibleWorktreeShortcutTargets()
   if (publishedTargets !== null) {
     return new Set(

@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 /** The sidebar row model golden suite; each build switch runs it into its own directory. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
@@ -314,7 +315,7 @@ export function defineSidebarListGoldens(goldenDir: string): void {
         collapsedGroups: new Set()
       })
       useAppStore.setState(state)
-      const fullState = useAppStore.getState()
+      const fullState = getAgentStatusState()
       const repoMap = getRepoMapFromState(fullState)
       const options = buildVisibleWorktreeOptionsFromState(fullState, repoMap)
       const lines = [

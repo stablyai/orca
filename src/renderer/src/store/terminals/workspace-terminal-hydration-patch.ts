@@ -1,7 +1,7 @@
 import type { AppState } from '../types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
+import { findAgentStatusOwner } from '@/store/agent-status-commit'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
@@ -81,7 +81,10 @@ export function transferNormalizedTerminalLayoutPtyOwnership(
       continue
     }
     const fromPaneKey = makePaneKey(tabId, removedLeafId)
-    const currentOwner = parsePaneKey(resolveAgentPaneAuthorityKey(fromPaneKey))
+    const currentOwner = parsePaneKey(
+      findAgentStatusOwner(state)?.authority().resolveAgentPaneAuthorityKey(fromPaneKey) ??
+        fromPaneKey
+    )
     if (currentOwner && currentOwner.tabId !== tabId) {
       continue
     }

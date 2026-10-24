@@ -20,13 +20,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionHiddenOutputRestoreTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -36,9 +36,10 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -50,6 +51,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -73,7 +75,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         removeEventListener: vi.fn()
       } as unknown as Document
 
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -164,7 +166,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('restores hidden Codex output after a suppressed exit revives the same ptyId with a restarted seq counter', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -260,7 +262,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('restores hidden Codex output when the pty seq counter restarts without an observed exit', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -333,7 +335,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('writes ordinary hidden output live instead of proactively restoring a snapshot', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -381,7 +383,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('pauses capable paired output while hidden and restores exactly on reveal', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
@@ -404,10 +406,12 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         source: 'headless'
       })
       transportFactoryQueue.push(transport)
-      mockStoreState.repos = [
-        { id: 'repo1', connectionId: null, displayName: 'orca', executionHostId: 'runtime:env-1' }
-      ]
-      mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
+      storeFixture.patch({
+        repos: [
+          { id: 'repo1', connectionId: null, displayName: 'orca', executionHostId: 'runtime:env-1' }
+        ]
+      })
+      storeFixture.read().worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -433,8 +437,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       const factsHandler = await import('./terminal-side-effect-facts-handler')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
-      mockStoreState.ptyIdsByTabId = { 'tab-1': [remotePtyId] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = {
+      storeFixture.patch({ ptyIdsByTabId: { 'tab-1': [remotePtyId] } })
+      storeFixture.read().terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = {
         [LEAF_1]: remotePtyId
       }
       const visibleStatusHandler = createdTransportOptions[0]?.onAgentStatus as
@@ -446,8 +450,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         prompt: 'visible control',
         agentType: 'claude'
       })
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
-      mockStoreState.setAgentStatus.mockClear()
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledTimes(1)
+      vi.mocked(storeFixture.read().setAgentStatus).mockClear()
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: remotePtyId,
         seq: hidden.length,
@@ -461,8 +465,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         ]
       })
       expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'remote working')
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledWith(
         makePaneKey('tab-1', LEAF_1),
         {
           state: 'working',
@@ -522,7 +526,7 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
     })
 
     it('locally gates hidden paired output when a legacy host cannot pause it', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const remotePtyId = 'remote:legacy-env@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
@@ -545,15 +549,17 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         source: 'headless'
       })
       transportFactoryQueue.push(transport)
-      mockStoreState.repos = [
-        {
-          id: 'repo1',
-          connectionId: null,
-          displayName: 'orca',
-          executionHostId: 'runtime:legacy-env'
-        }
-      ]
-      mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'legacy-env'
+      storeFixture.patch({
+        repos: [
+          {
+            id: 'repo1',
+            connectionId: null,
+            displayName: 'orca',
+            executionHostId: 'runtime:legacy-env'
+          }
+        ]
+      })
+      storeFixture.read().worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'legacy-env'
 
       const pane = createPane(1)
       const deps = createDeps({ isVisibleRef: { current: false } })

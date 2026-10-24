@@ -18,13 +18,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionVisibilityResumeSizeTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -34,9 +34,10 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -48,6 +49,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -59,7 +61,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         deps: ReturnType<typeof createDeps>
         pane: ReturnType<typeof createPane>
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -174,7 +176,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
-          const { connectPanePty } = await import('./pty-connection')
+          const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -201,7 +203,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
       })
 
       it('repairs stale xterm grid drift on foreground output even without a pane resize', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -248,7 +250,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
 
       it('skips foreground grid drift repair while mobile owns the PTY without a fit override', async () => {
         const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -302,7 +304,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const pane = createPane(2)
         const observer = installObservedPane(pane)
         try {
-          const { connectPanePty } = await import('./pty-connection')
+          const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -348,7 +350,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const pane = createPane(2)
         const observer = installObservedPane(pane)
         try {
-          const { connectPanePty } = await import('./pty-connection')
+          const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -400,7 +402,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const pane = createPane(2)
         const observer = installObservedPane(pane)
         try {
-          const { connectPanePty } = await import('./pty-connection')
+          const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -444,7 +446,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const pane = createPane(2)
         const observer = installObservedPane(pane)
         try {
-          const { connectPanePty } = await import('./pty-connection')
+          const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -549,7 +551,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
       it.each([true, false])('reasserts a remote grid only when visible (%s)', async (visible) => {
         const getSize = vi.mocked(window.api.pty.getSize)
         getSize.mockClear()
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('remote:env-1@@terminal-2')
         transport.getConnectionId.mockReturnValue(null)
         transportFactoryQueue.push(transport)
@@ -588,7 +590,7 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
           hasFocus: vi.fn(() => documentFocused)
         } as unknown as Document
         const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const ptyId = 'remote:env-1@@terminal-visible'
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)

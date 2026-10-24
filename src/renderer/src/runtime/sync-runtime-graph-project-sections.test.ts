@@ -1,10 +1,11 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
-import type { AppState } from '../store/types'
+
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 
@@ -68,7 +69,7 @@ describe("the sidebar's Project catalog in the window graph", () => {
     vi.stubGlobal('HTMLElement', class HTMLElement {})
     let state = BASE_STATE
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graph sync reads only these members of the store.
-    setRuntimeGraphStoreStateGetter(() => state as unknown as AppState)
+    setRuntimeGraphStoreStateGetter(() => state as unknown as AgentStatusReadState)
     setRuntimeGraphSyncEnabled(true)
     await flushSync()
 

@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: mocks.getState } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import { worktreePassesSidebarFilters } from './worktree-filter-visibility'
 

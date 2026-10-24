@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { useAppStore } from '@/store'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  getState: vi.fn(() => ({ revision: 1 })),
-  subscribe: vi.fn((_listener: (next: unknown, previous: unknown) => void) => vi.fn()),
   publishWindowState: vi.fn(async () => undefined),
   onWindowStateRequested: vi.fn((_callback: () => void) => vi.fn()),
   onWindowClosed: vi.fn((_callback: () => void) => vi.fn()),
@@ -18,9 +18,6 @@ const mocks = vi.hoisted(() => ({
   onWindowAnalysis: vi.fn(() => vi.fn())
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: mocks.getState, subscribe: mocks.subscribe }
-}))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
@@ -56,26 +53,31 @@ describe('SpaceWindowStatePublisher', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('publishes only while Space is open and stops watching on close', async () => {
+    const owner = getAgentStatusOwner(useAppStore),
+      watch = owner.subscribeTransitions
+    const subscribe = vi
+      .spyOn(owner, 'subscribeTransitions')
+      .mockImplementation((listener) => vi.fn(watch(listener)))
     await act(async () => root.render(<SpaceWindowStatePublisher />))
-    expect(mocks.subscribe).not.toHaveBeenCalled()
+    expect(subscribe).not.toHaveBeenCalled()
     expect(mocks.publishWindowState).not.toHaveBeenCalled()
 
     await act(async () => mocks.onWindowStateRequested.mock.calls[0][0]())
-    expect(mocks.subscribe).toHaveBeenCalledOnce()
+    expect(subscribe).toHaveBeenCalledOnce()
     expect(mocks.publishWindowState).toHaveBeenCalledOnce()
 
-    const onStoreChange = mocks.subscribe.mock.calls[0][0]
-    const offStore = mocks.subscribe.mock.results[0].value
-    await act(async () => onStoreChange({ revision: 2 }, { revision: 1 }))
+    const offStore = subscribe.mock.results[0].value
+    await act(async () => useAppStore.setState({ sortEpoch: useAppStore.getState().sortEpoch + 1 }))
     await act(async () => vi.advanceTimersByTime(100))
     expect(mocks.publishWindowState).toHaveBeenCalledTimes(2)
 
     await act(async () => mocks.onWindowClosed.mock.calls[0][0]())
     expect(offStore).toHaveBeenCalledOnce()
-    await act(async () => onStoreChange({ revision: 3 }, { revision: 2 }))
+    await act(async () => useAppStore.setState({ sortEpoch: useAppStore.getState().sortEpoch + 1 }))
     await act(async () => vi.advanceTimersByTime(100))
     expect(mocks.publishWindowState).toHaveBeenCalledTimes(2)
   })

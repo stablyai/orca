@@ -1,7 +1,10 @@
+import { getDefaultSettings } from '../../../../shared/constants'
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
+
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import {
   createDefaultWorkspaceCleanupFilterState,
@@ -12,11 +15,11 @@ import type * as FacetModule from './workspace-cleanup-facets'
 import type * as QueryModule from './workspace-cleanup-query'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
 
-const holders = vi.hoisted(() => ({ state: null as AppState | null }))
+const holders = vi.hoisted<{ state: AgentStatusReadState | null }>(() => ({ state: null }))
 const counts = vi.hoisted(() => ({ facetCounts: 0, measured: 0, queries: 0 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: <T,>(selector: (state: AppState) => T): T => {
+vi.mock('@/store/agent-status', () => ({
+  useAgentStatusSelector: <T,>(selector: (state: AgentStatusReadState) => T): T => {
     if (!holders.state) {
       throw new Error('Missing test state')
     }
@@ -56,12 +59,12 @@ vi.mock('./workspace-cleanup-query', async (importOriginal) => {
 
 import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
 
-function makeState(): AppState {
-  return {
+function makeState(): AgentStatusReadState {
+  return makeAgentStatusReadState({
     worktreesByRepo: {},
     hostedReviewCache: {},
     repos: [],
-    settings: {},
+    settings: getDefaultSettings('/tmp'),
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     lastVisitedAtByWorktreeId: {},
     agentStatusByPaneKey: {},
@@ -69,7 +72,7 @@ function makeState(): AppState {
     workspaceCleanupDismissals: {},
     workspaceSpaceAnalysis: null,
     workspaceSpaceMeasurements: []
-  } as unknown as AppState
+  })
 }
 
 describe('useWorkspaceCleanupFacetRows hot paths', () => {

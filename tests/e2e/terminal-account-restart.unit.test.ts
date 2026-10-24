@@ -225,14 +225,27 @@ import {
 import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
 import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
 import type * as React from 'react'
+import type * as AgentStatusModule from '../../src/renderer/src/store/agent-status'
 import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
 
-let rendererState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
+const rendererState = () => storeFixture.read()
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: StoreState) => unknown) => selector(rendererState),
-    { getState: () => rendererState, subscribe: () => () => {} }
-  )
+  useAppStore: {
+    get getState() {
+      return storeFixture.store.getState
+    },
+    get setState() {
+      return storeFixture.store.setState
+    },
+    get subscribe() {
+      return storeFixture.store.subscribe
+    }
+  }
+}))
+vi.mock('@/store/agent-status', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentStatusModule>()),
+  useAgentStatusSelector: (selector: (state: StoreState) => unknown) => selector(rendererState())
 }))
 vi.mock('zustand/react/shallow', () => ({ useShallow: (selector: unknown) => selector }))
 vi.mock('react', async (importOriginal) => ({
@@ -257,16 +270,17 @@ vi.mock(
 describe('account restart through renderer connection and host spawn', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
   afterEach(async () => {
+    storeFixture?.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('replaces a tombstoned owner while its persisted pane binding has not yet been cleared', async () => {
     const host = installRestartHarness()
     registerWithFakes(mainWindow, host.runtime, host.store)
-    rendererState = createInitialStoreState(() => rendererState)
-    rendererState.tabsByWorktree[worktreeId][0].ptyId = 'pty-old'
-    rendererState.ptyIdsByTabId = { ...rendererState.ptyIdsByTabId, [tabId]: ['pty-old'] }
-    rendererState.sleepingAgentSessionsByPaneKey[paneKey] = {
+    storeFixture = await createInitialStoreState()
+    rendererState().tabsByWorktree[worktreeId][0].ptyId = 'pty-old'
+    rendererState().ptyIdsByTabId = { ...rendererState().ptyIdsByTabId, [tabId]: ['pty-old'] }
+    rendererState().sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
       tabId,
       worktreeId,
@@ -277,9 +291,9 @@ describe('account restart through renderer connection and host spawn', () => {
       capturedAt: 1,
       updatedAt: 1
     }
-    const layouts = rendererState.terminalLayoutsByTabId ?? {}
+    const layouts = rendererState().terminalLayoutsByTabId ?? {}
     const layout = layouts[tabId]!
-    rendererState.terminalLayoutsByTabId = {
+    rendererState().terminalLayoutsByTabId = {
       ...layouts,
       [tabId]: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: 'pty-old' } }
     }
@@ -309,17 +323,17 @@ describe('account restart through renderer connection and host spawn', () => {
     manager.getPanes.mockReturnValue([pane])
     const transports = new Map<number, PtyTransport>([[1, oldTransport]])
     const bindings = new Map<number, { dispose: () => void }>()
-    const deps = buildPaneConnectionDeps(() => rendererState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       tabId,
       worktreeId,
       cwd,
       paneTransportsRef: { current: transports },
       clearTabPtyId: vi.fn(() => {
-        rendererState.tabsByWorktree[worktreeId][0].ptyId = null
-        rendererState.ptyIdsByTabId = { ...rendererState.ptyIdsByTabId, [tabId]: [] }
+        rendererState().tabsByWorktree[worktreeId][0].ptyId = null
+        rendererState().ptyIdsByTabId = { ...rendererState().ptyIdsByTabId, [tabId]: [] }
       })
     })
-    rendererState.pendingPaneAccountRestarts = { 'pty-old': 'codex' }
+    rendererState().pendingPaneAccountRestarts = { 'pty-old': 'codex' }
     const controller = {
       ...deps,
       managerRef: { current: manager },
@@ -382,7 +396,7 @@ describe('account restart through renderer connection and host spawn', () => {
     async (hostAuthority) => {
       const host = installRestartHarness()
       registerWithFakes(mainWindow, host.runtime, host.store)
-      rendererState = createInitialStoreState(() => rendererState)
+      storeFixture = await createInitialStoreState()
       await installTerminalTestGlobals()
       const runtimeCall = vi.fn(
         async (args: { method: string; params?: Record<string, unknown> }) => {

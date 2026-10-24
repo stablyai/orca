@@ -1,10 +1,11 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   scheduleRuntimeGraphSyncIfGroupGridSizesChanged,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
-import type { AppState } from '../store/types'
+
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 
 type GridSizes =
@@ -58,7 +59,7 @@ describe('terminal group grid sizes in the window graph', () => {
     vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graph sync reads only these collections of the store.
-    setRuntimeGraphStoreStateGetter(() => EMPTY_STATE as unknown as AppState)
+    setRuntimeGraphStoreStateGetter(() => EMPTY_STATE as unknown as AgentStatusReadState)
     measured.sizes = {
       groups: { 'group-a': { cols: 63, rows: 60 } },
       singleGroupWorkspace: { cols: 130, rows: 60 }
@@ -94,7 +95,7 @@ describe('terminal group grid sizes in the window graph', () => {
     vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: graph sync reads only these collections of the store.
-    setRuntimeGraphStoreStateGetter(() => EMPTY_STATE as unknown as AppState)
+    setRuntimeGraphStoreStateGetter(() => EMPTY_STATE as unknown as AgentStatusReadState)
     measured.sizes = undefined
     setRuntimeGraphSyncEnabled(true)
     await flushSync()

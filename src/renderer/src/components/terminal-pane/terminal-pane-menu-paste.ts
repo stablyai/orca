@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
@@ -13,7 +14,7 @@ import {
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from './terminal-pane-paste-dispatch'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
-import { useAppStore } from '@/store'
+import '@/store'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -96,7 +97,7 @@ export const pasteTerminalPaneMenuClipboard = async (
   }
   const { tabId, worktreeId, forceBracketedMultilineTextPaste, onPasteError } = context
   const connectionId = getConnectionId(worktreeId) ?? null
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
   const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
     state,

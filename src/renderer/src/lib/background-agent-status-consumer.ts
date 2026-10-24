@@ -5,7 +5,7 @@ import {
   resolveLiveAgentStatusConnectionRouting,
   type AgentStatusConnectionRouting
 } from './agent-status-connection-ownership'
-import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 
 export function createBackgroundAgentStatusConsumer(args: {
@@ -48,7 +48,7 @@ export function createBackgroundAgentStatusConsumer(args: {
             args.paneKey,
             {
               ...payload,
-              observation: rendererAgentStatusObservations.observe(args.paneKey, {
+              observation: getAgentStatusOwner(useAppStore).observations().observe(args.paneKey, {
                 origin: 'osc',
                 observedAt: Date.now(),
                 kind: 'snapshot'
@@ -65,7 +65,7 @@ export function createBackgroundAgentStatusConsumer(args: {
     }
   }
   const observeLaunchIngress = (): AgentStatusObservation =>
-    rendererAgentStatusObservations.observe(args.paneKey, {
+    getAgentStatusOwner(useAppStore).observations().observe(args.paneKey, {
       origin: 'launch',
       observedAt: Date.now(),
       kind: 'transition'

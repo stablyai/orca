@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
@@ -36,7 +37,10 @@ function setNotifyHiddenWorkspaces(notifyHiddenWorkspaces: boolean): void {
 }
 
 function muted(workspaceId: string): boolean {
-  return isWorkspaceNotificationMutedBySidebarFilters(store.getState(), workspaceId)
+  return isWorkspaceNotificationMutedBySidebarFilters(
+    getAgentStatusOwner(store).getState(),
+    workspaceId
+  )
 }
 
 beforeEach(() => {
@@ -149,10 +153,14 @@ describe('muted workspace attention', () => {
         settlesTurn: true,
         hasFreshActivityEvidence: true
       },
-      createTerminalAttentionSurface(store.getState())
+      createTerminalAttentionSurface(getAgentStatusOwner(store).getState())
     )
     expect(decision).toEqual({ admitted: false, cause: 'muted-workspace' })
-    expect(createStructuredAttentionSurface(store.getState()).isWorkspaceMuted(CLI_ID)).toBe(true)
+    expect(
+      createStructuredAttentionSurface(getAgentStatusOwner(store).getState()).isWorkspaceMuted(
+        CLI_ID
+      )
+    ).toBe(true)
   })
 
   it('writes no bell marker for a muted workspace, and still does for a visible one', () => {

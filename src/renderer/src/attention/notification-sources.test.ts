@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NotificationDispatchRequest } from '../../../shared/notification-settings-types'
@@ -17,7 +18,11 @@ import type { StructuredTab } from '@/components/native-chat/structured-agent-se
 import { buildNotificationSourceOptions } from './notification-sources'
 import { resolveNotificationTabOwner } from './notification-subject-owner'
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
+vi.mock('@/store', () => ({
+  get useAppStore() {
+    return store
+  }
+}))
 vi.mock('@/lib/desktop-notification-sound', () => ({ playDesktopNotificationSound: vi.fn() }))
 vi.mock('@/lib/blocked-notification-fallback', () => ({
   showBlockedNotificationFallbackToast: vi.fn()
@@ -78,7 +83,7 @@ function seed(
     createdAt: 0,
     updatedAt: 0
   }
-  store.setState({
+  applyAgentStatusPatch(store, {
     settings: createGlobalSettingsFixture(),
     repos: [{ ...TEST_REPO, executionHostId: hostId }],
     worktreesByRepo: {
@@ -210,7 +215,7 @@ it.each([false, true])(
   'a local daemon PTY keeps local ownership when its SSH sibling is selected=%s',
   (selected) => {
     const tab = seed('ssh:qa', 'repo1::/tmp/wt@@12345678', false, true)
-    store.setState({
+    applyAgentStatusPatch(store, {
       activeWorktreeId: selected ? tab.worktreeId : 'another-workspace',
       activeWorkspaceExecutionHostId: selected ? 'ssh:qa' : null
     })
@@ -223,7 +228,7 @@ it.each([false, true])(
 it('keeps direct SSH independent from the same target name inside a paired server', () => {
   const tab = seed('ssh:qa', 'remote:hub@@pty-1', false)
   const state = store.getState()
-  store.setState({
+  applyAgentStatusPatch(store, {
     worktreesByRepo: {
       repo1: [
         ...state.worktreesByRepo.repo1,
@@ -242,7 +247,7 @@ it('keeps direct SSH independent from the same target name inside a paired serve
 
 it('uses the captured transport owner while catalogs and bindings hydrate', () => {
   const tab = seed('ssh:qa', 'ssh:qa@@pty-1', false)
-  store.setState({
+  applyAgentStatusPatch(store, {
     worktreesByRepo: {},
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {}
@@ -265,7 +270,7 @@ it('does not invent an owner for an opaque remote PTY', () => {
 
 it('does not list removed SSH targets or recipe VMs from leftover workspace records', () => {
   seed('ssh:qa', 'ssh:qa@@pty-1', false)
-  store.setState({
+  applyAgentStatusPatch(store, {
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
@@ -286,7 +291,7 @@ it('does not list removed SSH targets or recipe VMs from leftover workspace reco
 
 it('folds an automatically paired recipe VM into this computer', () => {
   const tab = seed('runtime:hub', 'remote:hub@@pty-1', false)
-  store.setState({
+  applyAgentStatusPatch(store, {
     runtimeEnvironments: store
       .getState()
       .runtimeEnvironments.map((environment) => ({ ...environment, source: 'ephemeral-vm' }))
@@ -302,7 +307,7 @@ it('folds an automatically paired recipe VM into this computer', () => {
 
 it('omits a removed source even when its live binding and catalog record remain', () => {
   const tab = seed('ssh:qa', 'ssh:qa@@pty-1', false)
-  store.setState({ sshTargetLabels: new Map() })
+  applyAgentStatusPatch(store, { sshTargetLabels: new Map() })
   dispatchTerminalNotification(tab.worktreeId, { source: 'terminal-bell', paneKey })
   dispatchChat(tab)
   expect(sent).toHaveLength(2)

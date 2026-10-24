@@ -24,11 +24,12 @@ import {
 // Why: a server's file is named by its owned id from the first open, as restore names it.
 const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn()
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)

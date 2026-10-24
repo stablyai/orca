@@ -1,3 +1,6 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getRuntimeMobileSessionSyncKey,
@@ -12,11 +15,11 @@ import {
   hasRegisteredRuntimeTerminalTab,
   registerRuntimeTerminalTab
 } from './mounted-terminal-tab-registry'
-import type { AppState } from '../store/types'
+
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
-function makeState(overrides: Partial<AppState> = {}): AppState {
-  return {
+function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
+  return makeAgentStatusReadState({
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -31,7 +34,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     editorDrafts: {},
     activeTabId: null,
     ...overrides
-  } as AppState
+  })
 }
 
 function makeTerminalTab(): TerminalTab {

@@ -16,36 +16,43 @@ function workspaceWithTerminal(worktreeId: string) {
 }
 
 const state = vi.hoisted(() => ({ activeWorktreeId: 'wt-main' }))
-vi.mock('../../store', () => {
-  const main = workspaceWithTerminal('wt-main')
-  const floating = workspaceWithTerminal(FLOATING_TERMINAL_WORKTREE_ID)
-  return {
-    useAppStore: {
-      getState: () => ({
-        activeWorktreeId: state.activeWorktreeId,
-        activeGroupIdByWorktree: {
-          'wt-main': main.groups[0].id,
-          [FLOATING_TERMINAL_WORKTREE_ID]: floating.groups[0].id
-        },
-        groupsByWorktree: {
-          'wt-main': main.groups,
-          [FLOATING_TERMINAL_WORKTREE_ID]: floating.groups
-        },
-        unifiedTabsByWorktree: {
-          'wt-main': main.tabs,
-          [FLOATING_TERMINAL_WORKTREE_ID]: floating.tabs
-        },
-        tabsByWorktree: {
-          'wt-main': main.terminals,
-          [FLOATING_TERMINAL_WORKTREE_ID]: floating.terminals
-        },
-        terminalLayoutsByTabId: {},
-        agentStatusByPaneKey: {},
-        settings: { experimentalNativeChat: true },
-        toggleTabViewMode
-      })
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const main = workspaceWithTerminal('wt-main')
+    const floating = workspaceWithTerminal(FLOATING_TERMINAL_WORKTREE_ID)
+    return {
+      useAppStore: {
+        getState: () => ({
+          activeWorktreeId: state.activeWorktreeId,
+          activeGroupIdByWorktree: {
+            'wt-main': main.groups[0].id,
+            [FLOATING_TERMINAL_WORKTREE_ID]: floating.groups[0].id
+          },
+          groupsByWorktree: {
+            'wt-main': main.groups,
+            [FLOATING_TERMINAL_WORKTREE_ID]: floating.groups
+          },
+          unifiedTabsByWorktree: {
+            'wt-main': main.tabs,
+            [FLOATING_TERMINAL_WORKTREE_ID]: floating.tabs
+          },
+          tabsByWorktree: {
+            'wt-main': main.terminals,
+            [FLOATING_TERMINAL_WORKTREE_ID]: floating.terminals
+          },
+          terminalLayoutsByTabId: {},
+          agentStatusByPaneKey: {},
+          settings: { experimentalNativeChat: true },
+          toggleTabViewMode
+        })
+      }
     }
-  }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 vi.mock('./native-chat-shortcut', () => ({
   isMacPlatform: () => true,

@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
@@ -5,7 +6,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
-import { useAppStore } from '@/store'
+import '@/store'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
 import type {
   AutomationDispatchRequest,
@@ -38,7 +39,7 @@ export async function handleAutomationDispatchRequest({
     // here would arrive second and invalidate every host in the catalog.
     await window.api.automations.markDispatchResult(result)
   }
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
@@ -103,7 +104,7 @@ export async function handleAutomationDispatchRequest({
         // Why: the dispatch loop only ever executes for the desktop authority,
         // so its history read addresses the local runtime explicitly.
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
-        state: useAppStore.getState()
+        state: getAgentStatusState()
       })
       if (reusableSession) {
         const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
@@ -215,7 +216,7 @@ export async function handleAutomationDispatchRequest({
       completion.cleanupRunObservers()
       throw error
     }
-    const currentState = useAppStore.getState()
+    const currentState = getAgentStatusState()
     // Why: Run Now and scheduled dispatches should create workspaces/tabs in
     // the background; only an explicit row click should navigate there.
     if (

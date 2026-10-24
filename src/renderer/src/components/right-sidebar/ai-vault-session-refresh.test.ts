@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -46,7 +47,7 @@ async function fireWindowFocused(): Promise<void> {
   await flushMicrotasks()
 }
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 
 describe('isAiVaultScanCancellation', () => {
   it('recognises a cancellation through the IPC error wrapper', () => {
@@ -177,7 +178,7 @@ function makeVaultSession(index: number): AiVaultSession {
 
 async function setAgentStatuses(entries: Record<string, AgentStatusEntry>): Promise<void> {
   await act(async () => {
-    useAppStore.setState({ agentStatusByPaneKey: entries })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: entries })
   })
   await flushMicrotasks()
 }
@@ -199,13 +200,13 @@ beforeEach(() => {
     }
   }
   resetAiVaultForcedRescanThrottleForTest()
-  useAppStore.setState(initialAppState, true)
+  applyAgentStatusPatch(useAppStore, initialAppState)
 })
 
 afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
-  useAppStore.setState(initialAppState, true)
+  applyAgentStatusPatch(useAppStore, initialAppState)
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -823,7 +824,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
 
     listSessionsMock.mockResolvedValue(EMPTY_RESULT)
     await act(async () => {
-      useAppStore.setState({ sshConnectedGeneration: 1 })
+      applyAgentStatusPatch(useAppStore, { sshConnectedGeneration: 1 })
     })
     await flushMicrotasks()
 
@@ -845,7 +846,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     const callsWhileHealthy = listSessionsMock.mock.calls.length
 
     await act(async () => {
-      useAppStore.setState({ sshConnectedGeneration: 1 })
+      applyAgentStatusPatch(useAppStore, { sshConnectedGeneration: 1 })
     })
     await flushMicrotasks()
 

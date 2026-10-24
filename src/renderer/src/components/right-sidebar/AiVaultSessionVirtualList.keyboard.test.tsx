@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render } from '@testing-library/react'
@@ -297,8 +299,11 @@ describe('Session History keyboard selection', () => {
   it('Enter replaces the chat: an idle one at once, a busy one only after Replace', async () => {
     const workspaceId = 'repo-1::/repo'
     const store = useAppStore.getState
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({ activeWorktreeId: workspaceId })
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
+    applyAgentStatusPatch(useAppStore, { activeWorktreeId: workspaceId })
     for (const id of ['old', 'other']) {
       store().createUnifiedTab(workspaceId, 'agent-session', {
         id,
@@ -341,7 +346,7 @@ describe('Session History keyboard selection', () => {
     // A chat still replying asks first: Cancel changes nothing, Replace replaces it.
     const paneKey = structuredAgentSessionPaneKey('old', 'old')
     const working = { state: 'working', prompt: '', updatedAt: 0, stateStartedAt: 0 } as const
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: { [paneKey]: { ...working, paneKey, stateHistory: [] } }
     })
     confirm.mockResolvedValueOnce(false)
@@ -368,8 +373,11 @@ describe('Session History keyboard selection', () => {
 
   it('follows the chat the host says holds the row: this one, another open one, or a closed one', async () => {
     const workspaceId = 'repo-1::/repo'
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({ activeWorktreeId: workspaceId })
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
+    applyAgentStatusPatch(useAppStore, { activeWorktreeId: workspaceId })
     for (const id of ['old', 'other']) {
       useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
         id,

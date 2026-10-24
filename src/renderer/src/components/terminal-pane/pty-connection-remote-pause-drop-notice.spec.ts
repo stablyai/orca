@@ -18,7 +18,7 @@ import {
 
 // Why: switching back to a remote pane cost a 5000-row snapshot even when the host dropped nothing (#24863).
 export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -30,9 +30,10 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -44,11 +45,12 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     async function connectRemotePane(dropsReported: boolean) {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       const callbacks: { current: ConnectCallbacks } = { current: {} }
@@ -68,12 +70,14 @@ export function registerPtyConnectionRemotePauseDropNoticeTests(): void {
         source: 'headless'
       })
       transportFactoryQueue.push(transport)
-      mockStoreState.repos = [
-        { id: 'repo1', connectionId: null, displayName: 'orca', executionHostId: 'runtime:env-1' }
-      ]
-      mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
+      storeFixture.patch({
+        repos: [
+          { id: 'repo1', connectionId: null, displayName: 'orca', executionHostId: 'runtime:env-1' }
+        ]
+      })
+      storeFixture.read().worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
       const pane = createPane(1)
-      const deps = buildPaneConnectionDeps(() => mockStoreState, {
+      const deps = buildPaneConnectionDeps(storeFixture, {
         isVisibleRef: { current: true }
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures model the pane, manager and deps surface connectPanePty reads.

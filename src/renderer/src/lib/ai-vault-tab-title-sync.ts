@@ -2,7 +2,7 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../shared/ai-vault-session-title'
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
@@ -18,9 +18,11 @@ function requestIdentity(request: AiVaultTitleRequest): string {
 }
 
 type SyncDependencies = {
-  getState: () => AppState
+  getState: () => AgentStatusReadState
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
-  subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
+  subscribe: (
+    listener: (state: AgentStatusReadState, previous: AgentStatusReadState) => void
+  ) => () => void
   scheduleReconcile?: (callback: () => void) => () => void
   setTimer?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout> | number
   clearTimer?: (timer: ReturnType<typeof setTimeout> | number) => void
@@ -38,7 +40,10 @@ function scheduleMicrotask(callback: () => void): () => void {
   }
 }
 
-function nextLiveRefreshDelay(state: AppState, requests: AiVaultTitleRequest[]): number | null {
+function nextLiveRefreshDelay(
+  state: AgentStatusReadState,
+  requests: AiVaultTitleRequest[]
+): number | null {
   const liveRequests = requests.filter((request) => request.refresh)
   if (liveRequests.length === 0) {
     return null

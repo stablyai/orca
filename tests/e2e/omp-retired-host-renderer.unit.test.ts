@@ -1,4 +1,4 @@
-import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/store/slices/agent-pane-authority'
+import { getAgentStatusOwner } from '../../src/renderer/src/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../src/main/agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/server-status-identity'
@@ -10,14 +10,12 @@ import { createTestStore } from '../../src/renderer/src/store/slices/store-test-
 vi.mock('../../src/main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../src/main/telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 afterEach(() => {
-  resetAgentPaneAuthorityAliasesForTests()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 const paneKey = makePaneKey('tab-omp', '11111111-1111-4111-8111-111111111111')
 
 function fixture() {
-  resetAgentPaneAuthorityAliasesForTests()
   vi.useFakeTimers()
   const server = new AgentHookServer()
   const store = createTestStore()
@@ -64,7 +62,9 @@ function fixture() {
     )
   const apply = (data: AgentStatusIpcPayload, replay = false, batch = false) => {
     const id = replay ? undefined : data.authorityRestartId
-    if (isAgentStatusForRecentlyClosedTab(store.getState(), data.paneKey, id)) {
+    if (
+      isAgentStatusForRecentlyClosedTab(getAgentStatusOwner(store).getState(), data.paneKey, id)
+    ) {
       return
     }
     const update = {
@@ -103,7 +103,9 @@ describe('OMP host-authorized renderer retirement recovery', () => {
         f.store.getState().recentlyRetiredAgentStatusPaneKeys[paneKey]
       )
       f.apply(f.emitted[0], false, batch)
-      expect(f.store.getState().agentStatusByPaneKey[paneKey]?.state).toBe('working')
+      expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]?.state).toBe(
+        'working'
+      )
       expect(f.store.getState().recentlyRetiredAgentStatusPaneKeys[paneKey]).toBeUndefined()
       expect(f.server.getStatusSnapshot()[0]).not.toHaveProperty('authorityRestartId')
       const replay = vi.fn()
@@ -123,10 +125,12 @@ describe('OMP host-authorized renderer retirement recovery', () => {
       old.authorityRestartId
     )
     f.apply(old)
-    expect(f.store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     f.restart()
     f.apply(f.emitted[1])
-    expect(f.store.getState().agentStatusByPaneKey[paneKey]?.state).toBe('working')
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]?.state).toBe(
+      'working'
+    )
     f.server.stop()
   })
 
@@ -141,7 +145,7 @@ describe('OMP host-authorized renderer retirement recovery', () => {
       f.store.setState({ tabsByWorktree: {} })
     }
     f.apply(f.emitted[0], reason === 'replay')
-    expect(f.store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(f.store.getState().recentlyRetiredAgentStatusPaneKeys[paneKey]).toBeDefined()
     f.server.stop()
   })
@@ -182,8 +186,10 @@ it.each([false, true])(
     f.restart()
     expect(f.emitted[0]).toMatchObject({ paneKey: owner, tabId: 'tab-owner' })
     f.apply(f.emitted[0])
-    expect(f.store.getState().agentStatusByPaneKey[owner]?.state).toBe('working')
-    expect(f.store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[owner]?.state).toBe(
+      'working'
+    )
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     f.server.stop()
   }
 )
@@ -202,7 +208,7 @@ it('keeps explicit closure after tab-LRU eviction and repeated retirement', () =
   f.apply(f.emitted[0])
   f.restart()
   expect(f.emitted).toHaveLength(1)
-  expect(f.store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+  expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
   f.server.stop()
 })
 
@@ -234,12 +240,14 @@ it.each([false, true])(
     f.store.getState().retireAgentPaneAuthority(owner)
     f.restart()
     f.apply(f.emitted[0], false, batch)
-    expect(f.store.getState().agentStatusByPaneKey[owner]?.state).toBe('working')
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[owner]?.state).toBe(
+      'working'
+    )
     f.store.getState().retireAgentPaneAuthority(owner)
     f.restart()
     f.store.getState().dropAgentStatusByTabPrefix('tab-omp')
     f.apply(f.emitted[1], false, batch)
-    expect(f.store.getState().agentStatusByPaneKey[owner]).toBeUndefined()
+    expect(getAgentStatusOwner(f.store).getState().agentStatusByPaneKey[owner]).toBeUndefined()
     f.server.stop()
   }
 )

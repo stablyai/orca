@@ -383,5 +383,35 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
     resolveFocusedTabAgent(replacement.source, undefined, 'tab-1')
     resolveFocusedCompletedTabAgent(replacement.source, undefined, 'tab-2')
     expect(replacement.scans()).toBe(1)
+    const third = countEntryScans({ ...replacement.source })
+    const retainedSecond = countEntryScans({ ...retained.source })
+    const retainedThird = countEntryScans({ ...retainedSecond.source })
+    const statusBefore = status.scans()
+    const retainedBefore = retained.scans()
+    for (const source of [
+      status.source,
+      replacement.source,
+      status.source,
+      third.source,
+      status.source
+    ]) {
+      expect(resolveFocusedTabAgent(source, undefined, 'tab-1')).toBe('claude')
+      expect(resolveFocusedCompletedTabAgent(source, undefined, 'tab-2')).toBe('codex')
+    }
+    for (const source of [
+      retained.source,
+      retainedSecond.source,
+      retained.source,
+      retainedThird.source,
+      retained.source
+    ]) {
+      expect(resolveFocusedRetainedTabAgent(source, undefined, 'tab-1')).toBe('claude')
+    }
+    expect(status.scans()).toBe(statusBefore)
+    expect(retained.scans()).toBe(retainedBefore)
+    expect(replacement.scans()).toBe(2) // One explicit spread above, no derivation on reuse.
+    expect(third.scans()).toBe(1)
+    expect(retainedSecond.scans()).toBe(2)
+    expect(retainedThird.scans()).toBe(1)
   })
 })

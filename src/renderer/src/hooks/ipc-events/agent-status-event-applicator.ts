@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
@@ -10,10 +11,10 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { normalizeProgramStatusFacet } from '../../../../shared/program-status/facet'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { findAgentStatusOwner } from '@/store/agent-status-commit'
 import type { AgentStatusUpdate } from '@/store/slices/agent-status'
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
-import { useAppStore } from '../../store'
+
 import {
   applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,
@@ -52,20 +53,21 @@ export function createAgentStatusEventApplicator(args: {
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   } = args
-  const applyAgentStatus = (
-    data: AgentStatusIpcPayload,
-    options?: AgentStatusApplyOptions
-  ): AgentStatusApplyResult => {
-    const store = options?.batch?.transaction.getState() ?? useAppStore.getState()
+  return (data, options) => {
+    const store = options?.batch?.transaction.getState() ?? getAgentStatusState()
     if (!store.workspaceSessionReady) {
       return 'dropped'
     }
     const authorityRestartId =
       options?.replay !== true && data.agentType === 'omp' ? data.authorityRestartId : undefined
-    if (isAgentStatusForRecentlyClosedTab(store, data.paneKey, authorityRestartId)) {
+    const resolveAuthority = (key: string) =>
+      findAgentStatusOwner(store)?.authority().resolveAgentPaneAuthorityKey(key) ?? key
+    if (
+      isAgentStatusForRecentlyClosedTab(store, data.paneKey, authorityRestartId, resolveAuthority)
+    ) {
       return 'dropped'
     }
-    const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
+    const paneKey = resolveAuthority(data.paneKey)
     const ownerTabId = parsePaneKey(paneKey)?.tabId ?? data.tabId
     const payload = normalizeAgentStatusEvent(data)
     if (!payload) {
@@ -256,15 +258,14 @@ export function createAgentStatusEventApplicator(args: {
       options?.replay === true || isSeenHostReplay(data, resolvedPayload.state, existingStatus)
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (!replayed || resolvedPayload.state === 'working')) {
-        const notificationPayload = {
-          ...resolvedPayload,
-          stateStartedAt: data.stateStartedAt,
-          ...pickHostTurnEnd(data)
-        }
         observeAgentHookCompletionForNotification({
           paneKey,
           worktreeId: statusWorktreeId,
-          payload: notificationPayload,
+          payload: {
+            ...resolvedPayload,
+            stateStartedAt: data.stateStartedAt,
+            ...pickHostTurnEnd(data)
+          },
           ...(replayed ? { seedOnly: true } : {})
         })
       }
@@ -298,11 +299,9 @@ export function createAgentStatusEventApplicator(args: {
         update.routing,
         update.metadata
       )
-      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, tabTitle, terminalTitle)
+      applyResolvedAgentTerminalTitleToTab(getAgentStatusState(), paneKey, tabTitle, terminalTitle)
       applyPostCommitNotification()
     }
     return 'applied'
   }
-
-  return applyAgentStatus
 }

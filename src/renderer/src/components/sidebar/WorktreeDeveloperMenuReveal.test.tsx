@@ -10,31 +10,38 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 
-vi.mock('@/store', () => {
-  const state = {
-    unifiedTabsByWorktree: {},
-    tabsByWorktree: {},
-    ptyIdsByTabId: {},
-    browserTabsByWorktree: {},
-    deleteStateByWorktreeId: {},
-    worktreeLineageById: {},
-    workspaceLineageByChildKey: {},
-    workspaceStatuses: [],
-    projectGroups: [],
-    settings: null,
-    updateWorktreeMeta: vi.fn(),
-    setWorktreesPinnedAndReveal: vi.fn(),
-    openModal: vi.fn(),
-    createProjectGroup: vi.fn(),
-    moveProjectToGroup: vi.fn(),
-    deleteFolderWorkspace: vi.fn(),
-    setActiveWorktree: vi.fn()
-  }
-  return {
-    useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
-      getState: () => state
-    })
-  }
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const state = {
+      unifiedTabsByWorktree: {},
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      browserTabsByWorktree: {},
+      deleteStateByWorktreeId: {},
+      worktreeLineageById: {},
+      workspaceLineageByChildKey: {},
+      workspaceStatuses: [],
+      projectGroups: [],
+      settings: null,
+      updateWorktreeMeta: vi.fn(),
+      setWorktreesPinnedAndReveal: vi.fn(),
+      openModal: vi.fn(),
+      createProjectGroup: vi.fn(),
+      moveProjectToGroup: vi.fn(),
+      deleteFolderWorkspace: vi.fn(),
+      setActiveWorktree: vi.fn()
+    }
+    return {
+      useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+        getState: () => state
+      })
+    }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@/store/selectors', () => ({

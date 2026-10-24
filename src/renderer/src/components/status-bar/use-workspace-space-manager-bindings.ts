@@ -1,3 +1,4 @@
+import { useAgentStatusSnapshot } from '@/store/agent-status'
 import { useRef, useState } from 'react'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { useAppStore } from '../../store'
@@ -25,7 +26,7 @@ export function useWorkspaceSpaceManagerBindings() {
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((state) => state.ptyIdsByTabId)
-  const agentStatusByPaneKey = useAppStore((state) => state.agentStatusByPaneKey)
+  const agentStatusByPaneKey = useAgentStatusSnapshot()
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)

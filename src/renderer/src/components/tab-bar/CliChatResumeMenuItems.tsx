@@ -1,5 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useState } from 'react'
-import { useAppStore } from '@/store'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
@@ -15,7 +15,7 @@ export function CliChatResumeMenuItems({
   leadingSeparator: boolean
   onComplete?: () => void
 }): React.JSX.Element | null {
-  const [source] = useState(() => resolveCliChatResumeSource(useAppStore.getState(), { tab }))
+  const [source] = useState(() => resolveCliChatResumeSource(getAgentStatusState(), { tab }))
   const pending = useCliChatResumePending(source)
   if (!source) {
     return null

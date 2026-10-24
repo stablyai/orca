@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -114,7 +116,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   }
 
   beforeEach(() => {
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
   })
 
   afterEach(() => {
@@ -437,7 +439,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it("self-heals a stale 'working' hook once the turn-complete marker lands", async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
       }
@@ -457,7 +459,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('stops foreground working UI when Claude enters monitoring', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
       }
@@ -474,7 +476,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.status).toBe('working')
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: {
           [PANE]: {
             state: 'working',
@@ -490,7 +492,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('applies a lifecycle-only append after the final message frame', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
       }
@@ -519,7 +521,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('applies a terminal-side interruption frame without a local Stop action', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
       }
@@ -552,11 +554,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
   it('ends a hook wait once the transcript records the turn interrupted', async () => {
     const waitStartedAt = Date.now() - 1_000
     useAppStore.getState().setAgentStatus(PANE, { state: 'waiting', prompt: '', agentType: AGENT })
-    const row = useAppStore.getState().agentStatusByPaneKey[PANE]
+    const row = getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[PANE]
     if (!row) {
       throw new Error('the store dropped the status row this test depends on')
     }
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: { [PANE]: { ...row, stateStartedAt: waitStartedAt } }
     })
     const transport = getMockTransport('env-1')
@@ -584,7 +586,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('does not let an older pagination read rewind a live completion', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() } as never
       }
@@ -634,7 +636,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('reconciles completion from a reconnect snapshot', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 10, updatedAt: Date.now() } as never
       }
@@ -664,7 +666,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
   })
 
   it('reconciles interruption from a reconnect snapshot', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [PANE]: { state: 'working', stateStartedAt: 10, updatedAt: Date.now() } as never
       }
@@ -723,7 +725,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
   }
 
   beforeEach(() => {
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
   })
 
   afterEach(() => {
@@ -817,11 +819,19 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     vi.useFakeTimers()
     const transport = getMockTransport('env-1', { autoSnapshot: false })
     transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
-        [PANE]: { state: 'working', stateStartedAt: 1, updatedAt: Date.now() }
+        [PANE]: {
+          paneKey: PANE,
+          agentType: 'codex',
+          state: 'working',
+          prompt: '',
+          stateHistory: [],
+          stateStartedAt: 1,
+          updatedAt: Date.now()
+        }
       }
-    } as never)
+    })
 
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
 

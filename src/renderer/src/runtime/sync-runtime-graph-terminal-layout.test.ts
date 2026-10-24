@@ -1,9 +1,11 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
-import type { AppState } from '../store/types'
 
-function makeState(overrides: Partial<AppState> = {}): AppState {
-  return {
+function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
+  return makeAgentStatusReadState({
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -21,7 +23,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     editorDrafts: {},
     activeTabId: null,
     ...overrides
-  } as AppState
+  })
 }
 
 describe('terminal mobile session layout publication', () => {

@@ -1,5 +1,5 @@
 import { sameAgentStatusTerminalOwner } from '../../../../shared/agent-status-terminal-owner'
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '../agent-status-observers'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../shared/agent-status-live-entry-state-history'
 import {
@@ -41,7 +41,7 @@ export type AgentStatusLiveEntryBuild = {
   existingSleepingRecord: SleepingAgentSessionRecord | undefined
   liveRecoveryRecord: SleepingAgentSessionRecord | null
   launchConfigSource: SleepingAgentLaunchConfig | undefined
-  registryEntry: AppState['agentLaunchConfigByPaneKey'][string] | undefined
+  registryEntry: AgentStatusReadState['agentLaunchConfigByPaneKey'][string] | undefined
   registryMatched: boolean
   providerSession: AgentProviderSessionMetadata | undefined
   providerSessionChanged: boolean
@@ -63,7 +63,7 @@ export type AgentStatusLiveEntryRejection = {
 }
 
 export type AgentStatusLiveEntryArgs = {
-  state: AppState
+  state: AgentStatusReadState
   paneKey: string
   payload: AgentStatusPayload
   terminalTitle?: string

@@ -1,3 +1,4 @@
+import type { AgentStatusSnapshot } from '@/store/agent-status-observers'
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -94,7 +95,7 @@ export type EditorDraftHashCache = {
 }
 export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
-  ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  ReadonlyMap<string, AgentStatusSnapshot[string]>
 >
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
@@ -146,7 +147,7 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
   >
-  agentStatusByPaneKey: ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusSnapshot[string]>
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   pagesByBrowserWorkspaceId: ReadonlyMap<
     string,

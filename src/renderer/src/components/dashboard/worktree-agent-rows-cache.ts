@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -82,7 +83,7 @@ export function finishWorktreeAgentRowsCachePass(cache: WorktreeAgentRowsCache):
 }
 
 export type WorktreeAgentRowsState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'

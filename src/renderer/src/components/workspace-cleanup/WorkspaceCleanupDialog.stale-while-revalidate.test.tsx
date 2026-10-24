@@ -28,7 +28,7 @@ const holders = vi.hoisted(() => ({
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (s: unknown) => unknown): unknown => holders.store(selector)
-  useAppStore.getState = () => holders.store.getState()
+  Object.defineProperty(useAppStore, 'getState', { get: () => holders.store.getState })
   useAppStore.setState = (partial: unknown) => holders.store.setState(partial)
   useAppStore.subscribe = (listener: (state: unknown, previous: unknown) => void) =>
     holders.store.subscribe(listener)

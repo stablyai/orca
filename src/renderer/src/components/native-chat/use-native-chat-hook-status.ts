@@ -1,3 +1,4 @@
+import { useAgentStatusField } from '@/store/agent-status'
 import { useAppStore } from '../../store'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
@@ -5,6 +6,10 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../../shared/agent-status-types'
+
+export function selectHookPreviewIsToolOutput(entry: AgentStatusEntry | undefined): boolean {
+  return entry?.lastAssistantMessageIsToolOutput === true
+}
 
 /**
  * Hydrated nonterminal rows are only recovery evidence until a live hook event
@@ -31,18 +36,14 @@ export function useNativeChatHookStatus(
   void agentStatusEpoch
   // Why: primitive selectors keep unrelated pane/status updates from rerendering
   // native chat while still exposing the three fields used for reconciliation.
-  const state = useAppStore((store) => {
-    const entry = store.agentStatusByPaneKey[paneKey]
+  const state = useAgentStatusField(paneKey, (entry) => {
     return resolveNativeChatHookState(entry)
   })
-  const stateStartedAt = useAppStore(
-    (store) => store.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
-  )
+  const stateStartedAt = useAgentStatusField(paneKey, (entry) => entry?.stateStartedAt ?? null)
   // Why: only children that started during the current parent working epoch can
   // keep the session working after lead completion. Prior-turn roster leftovers
   // (missed SubagentStop, pane reuse) must not veto settle forever.
-  const hasWorkingSubagents = useAppStore((store) => {
-    const entry = store.agentStatusByPaneKey[paneKey]
+  const hasWorkingSubagents = useAgentStatusField(paneKey, (entry) => {
     const epochStart = entry?.stateStartedAt
     return (
       entry?.subagents?.some(

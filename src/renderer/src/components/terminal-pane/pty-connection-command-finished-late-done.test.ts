@@ -35,7 +35,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -53,17 +53,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -127,7 +134,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 // A process-lifetime producer (OpenCode 2 `opencode run`) posts the run's Done after the
@@ -139,11 +146,12 @@ describe('command-finished drop and a Done that lands after it', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -156,8 +164,9 @@ describe('command-finished drop and a Done that lands after it', () => {
     paneKey: string
   }> {
     vi.useFakeTimers()
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const transport = createMockTransport('pty-opencode-run')
@@ -178,8 +187,8 @@ describe('command-finished drop and a Done that lands after it', () => {
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
     const realStore = createTestStore()
-    mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-      delete mockStoreState.agentStatusByPaneKey[key]
+    vi.mocked(storeFixture.read().dropAgentStatus).mockImplementation((key: string) => {
+      storeFixture.setStatus(key, undefined)
     })
     return {
       paneKey,
@@ -191,7 +200,7 @@ describe('command-finished drop and a Done that lands after it', () => {
         }
       },
       setEntry: (entry) => {
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
+        storeFixture.setStatus(paneKey, {
           state: 'done',
           prompt: '',
           agentType: 'brew',
@@ -200,12 +209,11 @@ describe('command-finished drop and a Done that lands after it', () => {
           stateStartedAt: 2_000,
           stateHistory: [],
           ...entry
-        }
+        })
       },
       setStatus: (state) => {
         realStore.getState().setAgentStatus(paneKey, { state, prompt: '', agentType: 'opencode' })
-        mockStoreState.agentStatusByPaneKey[paneKey] =
-          realStore.getState().agentStatusByPaneKey[paneKey]
+        storeFixture.setStatus(paneKey, getAgentStatusOwner(realStore).getSnapshot()[paneKey])
       }
     }
   }
@@ -218,8 +226,8 @@ describe('command-finished drop and a Done that lands after it', () => {
     pane.setStatus('done')
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
+    expect(storeFixture.read().dropAgentStatus).not.toHaveBeenCalled()
+    expect(storeFixture.read().agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
   })
 
   it('drops a Done that landed before the command-finished fact', async () => {
@@ -230,7 +238,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+    expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
   })
 
   // OSC 7501: a finished program's result outlives its exit until the user comes back to it.
@@ -244,8 +252,10 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-      expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
+      expect(storeFixture.read().dropAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().agentStatusByPaneKey[pane.paneKey]).toMatchObject({
+        state: 'done'
+      })
     })
 
     it('dismisses the kept result on the next keypress in the pane', async () => {
@@ -255,9 +265,9 @@ describe('command-finished drop and a Done that lands after it', () => {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
       pane.typeKey('\x1b[I')
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().dropAgentStatus).not.toHaveBeenCalled()
       pane.typeKey('l')
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+      expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
 
     it('dismisses the kept result when the next command starts', async () => {
@@ -267,7 +277,7 @@ describe('command-finished drop and a Done that lands after it', () => {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
       pane.startCommand()
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+      expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
 
     it('dismisses a program Done that lands after the command-finished fact on the next key', async () => {
@@ -275,11 +285,11 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.setEntry({ state: 'working', programStatus: { state: 'working', observedAt: 1_000 } })
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-      mockStoreState.dropAgentStatus.mockClear()
+      vi.mocked(storeFixture.read().dropAgentStatus).mockClear()
       pane.setEntry({ ...brewDone, updatedAt: 3_000, stateStartedAt: 3_000 })
 
       pane.typeKey('l')
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+      expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
 
     it('leaves an agent Done that lands after the command-finished fact to the agent rules', async () => {
@@ -290,8 +300,10 @@ describe('command-finished drop and a Done that lands after it', () => {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
       pane.typeKey('l')
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-      expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
+      expect(storeFixture.read().dropAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().agentStatusByPaneKey[pane.paneKey]).toMatchObject({
+        state: 'done'
+      })
     })
 
     it('keeps a facet-less OSC Done from a non-agent program', async () => {
@@ -309,7 +321,7 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().dropAgentStatus).not.toHaveBeenCalled()
     })
 
     it('still drops a real agent Done', async () => {
@@ -319,7 +331,7 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+      expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
 
     it('still drops an interrupted program Done', async () => {
@@ -329,7 +341,7 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
+      expect(storeFixture.read().dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
   })
 })

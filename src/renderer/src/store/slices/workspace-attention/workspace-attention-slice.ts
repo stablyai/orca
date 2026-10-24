@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../../agent-status-commit'
 import type { StateCreator } from 'zustand'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { AppState } from '../../types'
@@ -86,7 +87,12 @@ export const createWorkspaceAttentionSlice: StateCreator<
         return
       }
       // Why here too: the bell's marker is written before its delayed banner reaches the attention policy.
-      if (isWorkspaceNotificationMutedBySidebarFilters(get(), worktreeId)) {
+      if (
+        isWorkspaceNotificationMutedBySidebarFilters(
+          getAgentStatusOwner({ getState: get }).getState(),
+          worktreeId
+        )
+      ) {
         return
       }
       markWorkspaceUnreadFlag(set, get, worktreeId)

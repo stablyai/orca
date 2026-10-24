@@ -5,9 +5,16 @@ const { getStateMock, inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
   inspectRuntimeTerminalProcessMock: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: getStateMock }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: getStateMock }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock

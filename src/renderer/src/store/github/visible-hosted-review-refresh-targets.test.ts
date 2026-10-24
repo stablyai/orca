@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '../agent-status-commit'
+import { subscribeAgentStatusState } from '../agent-status'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -279,11 +281,11 @@ describe('visible hosted review refresh targets', () => {
     mockApi.hostedReview.forBranch.mockRejectedValue(new Error('temporary failure'))
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     const scheduler = createVisibleHostedReviewRefreshScheduler()
-    const unsubscribe = store.subscribe((state, previous) => {
+    const unsubscribe = subscribeAgentStatusState((state, previous) => {
       if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
         scheduler.update(targets(store))
       }
-    })
+    }, store)
     scheduler.update(targets(store))
     scheduler.setVisible(true)
     await vi.advanceTimersByTimeAsync(0)
@@ -300,7 +302,7 @@ describe('visible hosted review refresh targets', () => {
 
   it('ignores unrelated store writes and includes every projection input', () => {
     const store = setup()
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(
       visibleHostedReviewRefreshInputsChanged({ ...state, prVisibleRefreshGeneration: 5 }, state)
     ).toBe(false)
@@ -439,7 +441,7 @@ describe('visible hosted review refresh targets', () => {
     { workspaceHostScope: 'local' }
   ])('updates reference demand when owner visibility changes: %j', (patch) => {
     const store = setup()
-    const previous = store.getState()
+    const previous = getAgentStatusOwner(store).getState()
     const next = { ...previous, ...patch }
     expect(visibleHostedReviewRefreshInputsChanged(next, previous)).toBe(true)
   })

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '../types'
 import {
   applyWorkspaceCleanupPolicy,
@@ -42,7 +43,7 @@ const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 
 export async function enrichWorkspaceCleanupCandidates(
   candidates: readonly WorkspaceCleanupCandidate[],
-  state: AppState,
+  state: AgentStatusReadState,
   options: WorkspaceCleanupEnrichOptions = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
   const projection = buildWorkspaceCleanupEnrichmentProjection(candidates, state)
@@ -53,7 +54,7 @@ export async function enrichWorkspaceCleanupCandidates(
 
 export async function enrichWorkspaceCleanupCandidatesWithCache(
   candidates: readonly WorkspaceCleanupCandidate[],
-  state: AppState,
+  state: AgentStatusReadState,
   cache: Map<string, WorkspaceCleanupEnrichmentCacheEntry>,
   options: WorkspaceCleanupEnrichOptions & { localStateUnchanged?: boolean } = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
@@ -93,7 +94,7 @@ export async function enrichWorkspaceCleanupCandidatesWithCache(
 
 function buildWorkspaceCleanupEnrichmentProjection(
   candidates: readonly WorkspaceCleanupCandidate[],
-  state: AppState
+  state: AgentStatusReadState
 ): WorkspaceCleanupEnrichmentProjection {
   const worktreeIds = new Set(candidates.map((candidate) => candidate.worktreeId))
 
@@ -139,7 +140,7 @@ function getWorkspaceCleanupCandidateInputSignature(candidate: WorkspaceCleanupC
 
 function getWorkspaceCleanupLocalStateSignature(
   candidate: WorkspaceCleanupCandidate,
-  state: AppState,
+  state: AgentStatusReadState,
   projection: WorkspaceCleanupEnrichmentProjection,
   options: WorkspaceCleanupEnrichOptions
 ): string {
@@ -191,7 +192,7 @@ function getWorkspaceCleanupLocalStateSignature(
 
 async function enrichWorkspaceCleanupCandidate(
   candidate: WorkspaceCleanupCandidate,
-  state: AppState,
+  state: AgentStatusReadState,
   projection: WorkspaceCleanupEnrichmentProjection,
   options: WorkspaceCleanupEnrichOptions
 ): Promise<WorkspaceCleanupCandidate> {

@@ -67,3 +67,14 @@ export function onWorktreeSleepIntentCleared(worktreeId: string, listener: () =>
     }
   }
 }
+
+export function prepareWorktreeSleepIntentRemoval(worktreeId: string) {
+  const listeners = wakeListenersByWorktreeId.get(worktreeId)
+  return () => {
+    sleepingWorktreeIds.delete(worktreeId)
+    tearingDownWorktreeIds.delete(worktreeId)
+    if (wakeListenersByWorktreeId.get(worktreeId) === listeners) {
+      wakeListenersByWorktreeId.delete(worktreeId)
+    }
+  }
+}

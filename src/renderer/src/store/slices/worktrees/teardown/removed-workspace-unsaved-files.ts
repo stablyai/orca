@@ -1,3 +1,5 @@
+import { findAgentStatusOwner } from '../../../agent-status-commit'
+import { preparePurgeOwnership } from './worktree-purge-preparation'
 import type { AppState } from '../../../types'
 import type { WorktreePurgeTarget } from '../../worktree-helpers'
 import {
@@ -20,14 +22,54 @@ export type ClosedUnsavedFile = { fileId: string; filePath: string; content: str
 /** File id -> the exact text a removal dialog listed when the user confirmed discarding it. */
 export type ConfirmedUnsavedDiscards = ReadonlyMap<string, string>
 
-let pendingNotice: {
+type RemovalNotice = {
   token: number
   /** A closing write may have kept records under this token. */
   keeps: boolean
   files: Map<string, { file: ClosedUnsavedFile; workspace: string }>
   discarded: Set<string>
-} | null = null
-let lastNoticeToken = 0
+}
+export type RemovalNoticeRoot = {
+  pendingNotice: RemovalNotice | null
+  lastNoticeToken: number
+  release: AppState['releaseKeptEditorBuffers']
+}
+const notices = new WeakMap<AppState['releaseKeptEditorBuffers'], RemovalNoticeRoot>()
+function removalNoticeRoot(state: AppState): RemovalNoticeRoot {
+  let root = notices.get(state.releaseKeptEditorBuffers)
+  if (!root) {
+    root = { pendingNotice: null, lastNoticeToken: 0, release: state.releaseKeptEditorBuffers }
+    notices.set(state.releaseKeptEditorBuffers, root)
+  }
+  const owner = findAgentStatusOwner(state)
+  if (!owner?.isPreparing()) {
+    return root
+  }
+  const committed = root
+  return owner.purgeNotice(() => {
+    const pending = committed.pendingNotice
+    const candidate = {
+      ...committed,
+      pendingNotice: pending
+        ? { ...pending, files: new Map(pending.files), discarded: new Set(pending.discarded) }
+        : null
+    }
+    preparePurgeOwnership(state, {
+      install: () => {
+        committed.pendingNotice = candidate.pendingNotice
+        committed.lastNoticeToken = candidate.lastNoticeToken
+      },
+      effects: [
+        () => {
+          if (!pending && candidate.pendingNotice) {
+            queueMicrotask(() => showPendingNotice(committed))
+          }
+        }
+      ]
+    })
+    return candidate
+  })
+}
 
 /** Snapshots the listed text; only the confirmed removal's own teardown may discard it. */
 export function confirmUnsavedDiscard(
@@ -92,8 +134,9 @@ export function noticeRemovedUnsavedFiles(
   removedFileIds: ReadonlySet<string>,
   confirmed?: ConfirmedUnsavedDiscards
 ): EditorBufferKeepRequest | undefined {
+  const root = removalNoticeRoot(s)
   const keep = new Set<string>()
-  let notice: NonNullable<typeof pendingNotice> | null = null
+  let notice: RemovalNotice | null = null
   try {
     for (const file of removedFileIds.size > 0 ? lastViewUnsavedFiles(s, removedFileIds) : []) {
       const content = currentUnsavedText(s, file)
@@ -103,7 +146,7 @@ export function noticeRemovedUnsavedFiles(
         })
         continue
       }
-      notice = pendingNotice ??= startNotice()
+      notice = root.pendingNotice ??= startNotice(root, !findAgentStatusOwner(s)?.isPreparing())
       if (confirmed?.get(file.id) === content) {
         notice.files.delete(file.id)
         notice.discarded.add(file.id)
@@ -133,15 +176,17 @@ export function noticeRemovedUnsavedFiles(
   return { viewIds: keep, notice: notice.token }
 }
 
-function startNotice(): NonNullable<typeof pendingNotice> {
-  queueMicrotask(showPendingNotice)
-  lastNoticeToken += 1
-  return { token: lastNoticeToken, keeps: false, files: new Map(), discarded: new Set() }
+function startNotice(root: RemovalNoticeRoot, schedule: boolean): RemovalNotice {
+  if (schedule) {
+    queueMicrotask(() => showPendingNotice(root))
+  }
+  root.lastNoticeToken += 1
+  return { token: root.lastNoticeToken, keeps: false, files: new Map(), discarded: new Set() }
 }
 
-function showPendingNotice(): void {
-  const notice = pendingNotice
-  pendingNotice = null
+function showPendingNotice(root: RemovalNoticeRoot): void {
+  const notice = root.pendingNotice
+  root.pendingNotice = null
   if (!notice) {
     return
   }
@@ -149,7 +194,7 @@ function showPendingNotice(): void {
   const entries = [...notice.files.values()]
   if (entries.length === 0) {
     if (notice.keeps) {
-      releaseNotice(token)
+      root.release(token)
     }
     return
   }
@@ -165,12 +210,6 @@ function showPendingNotice(): void {
     .catch((error) => {
       console.error('[editor] showing the unsaved edits notice failed', error)
       // Why: with no notice to dismiss, nothing else would ever release the kept records.
-      releaseNotice(token)
+      root.release(token)
     })
-}
-
-function releaseNotice(token: number): void {
-  void import('@/store').then(({ useAppStore }) =>
-    useAppStore.getState().releaseKeptEditorBuffers(token)
-  )
 }

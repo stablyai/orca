@@ -1,3 +1,4 @@
+import type { AgentStatusSnapshot, AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '../../store/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getTabIdToWorktreeId } from '../sidebar/worktree-agent-row-selectors'
@@ -8,13 +9,13 @@ export type ProjectRuntimeSessionSummary = {
 }
 
 type RuntimeSessionSummaryState = Pick<
-  AppState,
+  AgentStatusReadState,
   'tabsByWorktree' | 'ptyIdsByTabId' | 'agentStatusByPaneKey'
 >
 
 type SessionSummaryCache = {
   ptyIdsByTabId: AppState['ptyIdsByTabId']
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  agentStatusByPaneKey: AgentStatusSnapshot
   byRepoId: Map<string, ProjectRuntimeSessionSummary>
 }
 

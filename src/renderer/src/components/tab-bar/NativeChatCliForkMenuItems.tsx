@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useState } from 'react'
 import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
@@ -21,7 +22,7 @@ export function NativeChatCliForkMenuItems({
   onComplete?: () => void
 }): React.JSX.Element | null {
   const [subject] = useState(() =>
-    resolveTabSessionHistorySubject(useAppStore.getState(), { tab, nativeChat })
+    resolveTabSessionHistorySubject(getAgentStatusState(), { tab, nativeChat })
   )
   const chat = subject?.kind === 'chat' ? subject : null
   const pending = useNativeChatCliForkPending(

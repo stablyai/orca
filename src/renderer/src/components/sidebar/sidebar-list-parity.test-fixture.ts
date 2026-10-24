@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import { getAllWorktreesFromState } from '@/store/selectors'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import {
@@ -81,10 +82,12 @@ const STAMPS: Record<string, SmartStampFields & { lastActivityAt?: number; isUnr
  * a nested workspace and a folder workspace, an SSH connection, a saved host order and a creation
  * this host runs.
  */
-export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState> {
+export function parityWorldOverrides(
+  base: Partial<AgentStatusReadState>
+): Partial<AgentStatusReadState> {
   const repos = [...(base.repos ?? []), ...GROUPED_REPOS]
   const repoById = new Map(repos.map((entry) => [entry.id, entry]))
-  const worktreesByRepo: AppState['worktreesByRepo'] = {}
+  const worktreesByRepo: AgentStatusReadState['worktreesByRepo'] = {}
   for (const [repoId, worktrees] of Object.entries({
     ...base.worktreesByRepo,
     ...GROUPED_WORKTREES
@@ -136,15 +139,15 @@ export function parityWorldOverrides(base: Partial<AppState>): Partial<AppState>
 /** The occurrence the parity suite opens; a pinned duplicate highlights in both places. */
 export function parityActiveState(
   worktreeId: string,
-  hostId: AppState['activeWorkspaceExecutionHostId']
-): Partial<AppState> {
+  hostId: AgentStatusReadState['activeWorkspaceExecutionHostId']
+): Partial<AgentStatusReadState> {
   return { activeWorktreeId: worktreeId, activeWorkspaceExecutionHostId: hostId }
 }
 
 const SERVER_WORKTREE_ID = 'api::/w/api-y'
 
 /** A desktop terminal in a server workspace: the PTY is the server's, which reports it. */
-export function parityServerTerminalState(): Partial<AppState> {
+export function parityServerTerminalState(): Partial<AgentStatusReadState> {
   return {
     tabsByWorktree: {
       [SERVER_WORKTREE_ID]: [
@@ -165,7 +168,7 @@ export function parityServerTerminalState(): Partial<AppState> {
 }
 
 /** A desktop browser tab in a server workspace: the server never sees it. */
-export function parityServerBrowserTabState(): Partial<AppState> {
+export function parityServerBrowserTabState(): Partial<AgentStatusReadState> {
   return {
     browserTabsByWorktree: {
       [SERVER_WORKTREE_ID]: [
@@ -191,7 +194,7 @@ export function parityServerBrowserTabState(): Partial<AppState> {
  * the shadow comparison held equal to main's producers before the window read main's feed.
  */
 export function feedDomainsFromWindowState(
-  state: AppState,
+  state: AgentStatusReadState,
   serverHostIds: ReadonlySet<string> = new Set([SERVER_HOST_ID])
 ): SidebarInputsFeedDomain[] {
   const worktrees = getAllWorktreesFromState(state)
@@ -275,7 +278,7 @@ export function feedDomainsFromWindowState(
 
 /** What the host's own phone reads: the feed's catalog, and ui.get/settings.get for its view. */
 export function phoneInputsFromWindowState(
-  state: AppState,
+  state: AgentStatusReadState,
   domains: SidebarFeedDomains
 ): {
   catalog: SidebarFeedCatalog

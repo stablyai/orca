@@ -1,3 +1,5 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState } from '@/store/agent-status'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -8,7 +10,7 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { readLastTerminalInputAt } from './terminal-input-activity-coalescing'
 
 export type AutomationTerminalOwnershipStore = {
-  getState: () => AppState
+  getState: () => AgentStatusReadState
   subscribe: (listener: (state: AppState, previousState: AppState) => void) => () => void
 }
 
@@ -76,7 +78,7 @@ function isOwnedTabIdentityCurrent(
 }
 
 function canHibernateOwnedPane(
-  state: AppState,
+  state: AgentStatusReadState,
   args: Pick<CreateAutomationTerminalOwnershipArgs, 'worktreeId' | 'tabId' | 'paneKey' | 'ptyId'>
 ): boolean {
   // Why: a run that ended by exiting has no process left to stop in place.
@@ -186,7 +188,7 @@ export function bindAutomationTerminal(
   if (!parsedPane || parsedPane.tabId !== tab.id) {
     throw new Error('Automation terminal pane identity is invalid.')
   }
-  const store = useAppStore.getState()
+  const store = getAgentStatusState()
   if (title) {
     store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
@@ -195,7 +197,7 @@ export function bindAutomationTerminal(
   const ownership =
     runtimeKind === 'local'
       ? createAutomationTerminalOwnership({
-          store: useAppStore,
+          store: { getState: getAgentStatusState, subscribe: useAppStore.subscribe },
           worktreeId: tab.worktreeId,
           tabId: tab.id,
           paneKey,

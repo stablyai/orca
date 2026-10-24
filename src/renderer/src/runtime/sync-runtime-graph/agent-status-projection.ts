@@ -1,15 +1,16 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusSnapshot } from '@/store/agent-status-observers'
+
 import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
 import { programStatusFacetContent } from '../../../../shared/program-status/facet'
 
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 
 type AgentStatusProjectionCacheEntry = {
-  entry: AppState['agentStatusByPaneKey'][string]
+  entry: AgentStatusSnapshot[string]
   projection: string
 }
 type AgentStatusProjectionCache = {
-  source: AppState['agentStatusByPaneKey']
+  source: AgentStatusSnapshot
   entries: Map<string, AgentStatusProjectionCacheEntry>
   projection: string
 }
@@ -20,10 +21,7 @@ function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
   return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
 }
 
-function serializeAgentStatusEntry(
-  paneKey: string,
-  entry: AppState['agentStatusByPaneKey'][string]
-): string {
+function serializeAgentStatusEntry(paneKey: string, entry: AgentStatusSnapshot[string]): string {
   return JSON.stringify({
     paneKey,
     entryPaneKey: entry.paneKey,
@@ -58,7 +56,7 @@ function serializeAgentStatusEntry(
 }
 
 export function buildRuntimeMobileAgentStatusProjection(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  agentStatusByPaneKey: AgentStatusSnapshot
 ): string {
   const cached = cachedAgentStatusProjection
   if (cached?.source === agentStatusByPaneKey) {
@@ -110,7 +108,7 @@ export function buildRuntimeMobileAgentStatusProjection(
 }
 
 export function buildRuntimeMobileAgentStatusProjectionForTests(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  agentStatusByPaneKey: AgentStatusSnapshot
 ): string {
   return buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey)
 }

@@ -1,3 +1,5 @@
+import { useAgentStatusField } from '@/store/agent-status'
+import { selectHookPreviewIsToolOutput } from './use-native-chat-hook-status'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -108,14 +110,12 @@ export function NativeChatResolvedView({
   const liveWorking = session.status === 'working'
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const hookPreview = useAgentStatusField(paneKey, (entry) => entry?.lastAssistantMessage)
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
-  const hookPreviewIsToolOutput = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
-  )
+  const hookPreviewIsToolOutput = useAgentStatusField(paneKey, selectHookPreviewIsToolOutput)
   // Why: Stop suppression must clear on a newer working epoch even when status
   // never leaves 'working' (interrupt + immediate next turn coalesced).
-  const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
+  const workingEpoch = useAgentStatusField(paneKey, (entry) => entry?.stateStartedAt ?? null)
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).

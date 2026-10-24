@@ -3,14 +3,14 @@
    stubs cannot move back into it without a max-lines disable. */
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
+import type { AppState } from '@/store/types'
 import { buildTerminalCreateWindow } from './ipc-events-terminal-create-window-test-fixtures'
 import type {
   FocusTerminalListenerPayload,
   ListenerRef,
   RequestTerminalCreateListenerPayload,
   TerminalCreateListenerPayload,
-  TerminalCreateSurfacingScenario,
-  TerminalCreateSurfacingStore
+  TerminalCreateSurfacingScenario
 } from './ipc-events-terminal-create-scenario-types'
 
 // Why: the terminal-create surfacing scenario is one long ordered assertion run;
@@ -18,9 +18,15 @@ import type {
 export async function setupTerminalCreateSurfacing(
   isFloatingPanelFocused: () => boolean
 ): Promise<TerminalCreateSurfacingScenario> {
+  vi.resetModules()
+  vi.unstubAllGlobals()
+  const { createTestStore, makeTab, makeWorktree, TEST_REPO } =
+    await import('@/store/slices/store-test-helpers')
+  const { getDefaultSettings } = await import('../../../shared/constants')
+  const store = createTestStore()
   const createTab = vi.fn(
     (_worktreeId: string, _groupId?: string, _tabType?: string, options?: { id?: string }) => ({
-      id: options?.id ?? 'tab-new'
+      ...makeTab({ id: options?.id ?? 'tab-new', worktreeId: _worktreeId })
     })
   )
   const setActiveView = vi.fn()
@@ -35,7 +41,7 @@ export async function setupTerminalCreateSurfacing(
   const registerAgentLaunchConfig = vi.fn()
   const clearAgentLaunchConfig = vi.fn()
   const updateTabPtyId = vi.fn()
-  const setTabLayout = vi.fn()
+  const setTabLayout = vi.fn<AppState['setTabLayout']>()
   const setTabBarOrder = vi.fn()
   const replyTerminalCreate = vi.fn()
   const dispatchEvent = vi.fn()
@@ -46,7 +52,8 @@ export async function setupTerminalCreateSurfacing(
   })
   const focusRuntimeTerminalSurface = vi.fn(() => false)
   const focusTerminalTabSurface = vi.fn()
-  const storeState: TerminalCreateSurfacingStore = {
+  const storeState = {
+    ...store.getState(),
     setUpdateStatus: vi.fn(),
     createTab,
     setActiveView,
@@ -63,26 +70,24 @@ export async function setupTerminalCreateSurfacing(
     clearAgentLaunchConfig,
     updateTabPtyId,
     setTabLayout,
-    tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
+    tabsByWorktree: store.getState().tabsByWorktree,
     folderWorkspaces: [],
     sleepingAgentSessionsByPaneKey: {},
     projectGroups: [],
-    repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
+    repos: [{ ...TEST_REPO, id: 'repo-1', connectionId: null, executionHostId: 'local' }],
     worktreesByRepo: {
-      'repo-1': ['wt-1', 'wt-2', 'wt-3', 'wt-4', 'wt-history'].map((id) => ({
-        id,
-        repoId: 'repo-1'
-      }))
-    } as Record<string, { id: string; repoId: string }[]>,
+      'repo-1': ['wt-1', 'wt-2', 'wt-3', 'wt-4', 'wt-history'].map((id) =>
+        makeWorktree({ id, repoId: 'repo-1' })
+      )
+    },
     openFiles: [],
     browserTabsByWorktree: {},
     tabBarOrderByWorktree: {},
     setTabBarOrder,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    terminalLayoutsByTabId: {} as Record<string, unknown>,
+    ptyIdsByTabId: store.getState().ptyIdsByTabId,
+    terminalLayoutsByTabId: store.getState().terminalLayoutsByTabId,
     fetchRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
-    activeModal: null,
     closeModal: vi.fn(),
     openModal: vi.fn(),
     activeWorktreeId: 'wt-1',
@@ -103,24 +108,30 @@ export async function setupTerminalCreateSurfacing(
     removeSshCredentialRequest: vi.fn(),
     clearTabPtyId: vi.fn(),
     settings: {
+      ...getDefaultSettings('/tmp'),
       terminalFontSize: 13,
       experimentalNativeChat: false,
       activeRuntimeEnvironmentId: undefined as string | undefined
     }
-  }
+  } satisfies AppState
+  store.setState(storeState, true)
   updateTabPtyId.mockImplementation((tabId: string, ptyId: string) => {
-    storeState.ptyIdsByTabId[tabId] = [
-      ...new Set([...(storeState.ptyIdsByTabId[tabId] ?? []), ptyId])
+    store.getState().ptyIdsByTabId[tabId] = [
+      ...new Set([...(store.getState().ptyIdsByTabId[tabId] ?? []), ptyId])
     ]
-    for (const tabs of Object.values(storeState.tabsByWorktree)) {
+    for (const tabs of Object.values(store.getState().tabsByWorktree)) {
       const tab = tabs.find((candidate) => candidate.id === tabId)
       if (tab) {
         tab.ptyId = ptyId
       }
     }
   })
-  setTabLayout.mockImplementation((tabId: string, layout: unknown) => {
-    storeState.terminalLayoutsByTabId[tabId] = layout
+  setTabLayout.mockImplementation((tabId, layout) => {
+    if (layout) {
+      store.getState().terminalLayoutsByTabId[tabId] = layout
+    } else {
+      delete store.getState().terminalLayoutsByTabId[tabId]
+    }
   })
   const createTerminalListenerRef: ListenerRef<(data: TerminalCreateListenerPayload) => void> = {
     current: null
@@ -133,9 +144,6 @@ export async function setupTerminalCreateSurfacing(
   }
   const newTerminalTabListenerRef: ListenerRef<() => void> = { current: null }
 
-  vi.resetModules()
-  vi.unstubAllGlobals()
-
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
     return {
@@ -146,12 +154,7 @@ export async function setupTerminalCreateSurfacing(
     }
   })
 
-  vi.doMock('../store', () => ({
-    useAppStore: {
-      subscribe: vi.fn(() => () => {}),
-      getState: () => storeState
-    }
-  }))
+  vi.doMock('../store', () => ({ useAppStore: store }))
 
   vi.doMock('@/lib/ui-zoom', () => ({
     applyUIZoom: vi.fn()
@@ -194,7 +197,8 @@ export async function setupTerminalCreateSurfacing(
     focusTerminalTabSurface
   }))
   vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
-    focusRuntimeTerminalSurface
+    focusRuntimeTerminalSurface,
+    subscribeMountedTerminalTabChanges: vi.fn(() => () => {})
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({
     activateTabAndFocusPane: vi.fn()
@@ -241,7 +245,9 @@ export async function setupTerminalCreateSurfacing(
     createWebRuntimeSessionTerminal,
     focusRuntimeTerminalSurface,
     focusTerminalTabSurface,
-    storeState,
+    get storeState() {
+      return store.getState()
+    },
     createTerminalListenerRef,
     requestTerminalCreateListenerRef,
     focusTerminalListenerRef,

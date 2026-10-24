@@ -1,5 +1,5 @@
+import { useAgentStatusField } from '@/store/agent-status'
 import { useMemo } from 'react'
-import { useAppStore } from '../../store'
 import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
@@ -23,17 +23,17 @@ export function useNativeChatInteractivePromptCard({
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
 }): InteractivePromptCard {
-  const interactivePrompt = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
+  const interactivePrompt = useAgentStatusField(
+    paneKey,
+    (entry) => entry?.interactivePrompt ?? null
   )
   // The sibling `toolName` lets the question parser dispatch through the tool's
   // registered parser (mobile parity). Read only beside a prompt: it changes on
   // every tool call, and this hook re-renders the whole pane.
-  const interactiveToolName = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
+  const interactiveToolName = useAgentStatusField(paneKey, (entry) => {
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null
   })
-  const agent = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.agentType)
+  const agent = useAgentStatusField(paneKey, (entry) => entry?.agentType)
   return useMemo(() => {
     const statusCard = parseInteractivePrompt(
       interactivePrompt,

@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
@@ -62,11 +63,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       prompt: 'p',
       agentType: 'claude'
     })
-    expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
-    const s = store.getState()
+    const s = getAgentStatusOwner(store).getState()
     expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
   })
 
@@ -100,7 +101,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toMatchObject({
       paneKey: 'tab-1:0',
@@ -164,7 +165,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       sleepingPaneKeys: ['tab-1:live']
     })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
       origin: 'worktree-sleep',
       state: 'done',
@@ -284,7 +285,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       sleepingPaneKeys: ['tab-1:live']
     })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey['tab-1:live']).toBeUndefined()
     expect(state.retainedAgentsByPaneKey['tab-1:live']).toMatchObject({
       worktreeId: wt,
@@ -361,7 +362,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       sleepingPaneKeys: ['tab-1:interrupted', 'tab-1:working', 'tab-1:retained-only']
     })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:interrupted']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:working']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained-only']).toBeUndefined()
@@ -415,13 +416,13 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       { tabId: 'tab-1', worktreeId: wt }
     )
 
-    const liveEntry = store.getState().agentStatusByPaneKey['tab-1:0']
+    const liveEntry = getAgentStatusOwner(store).getState().agentStatusByPaneKey['tab-1:0']
     expect(liveEntry?.agentType).toBe('claude')
     expect(liveEntry?.providerSession).toBeUndefined()
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toBeUndefined()
   })
@@ -635,7 +636,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     // Default opts (no keepIdentifiers) => remove-worktree path.
     await store.getState().shutdownWorktreeTerminals(wt)
 
-    const s = store.getState()
+    const s = getAgentStatusOwner(store).getState()
     expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()

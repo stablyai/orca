@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 import React from 'react'
 import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -41,9 +42,7 @@ vi.mock('react', async () => {
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
       return callback
     },
-    useMemo<T>(factory: () => T): T {
-      return factory()
-    },
+    useMemo: <T,>(factory: () => T): T => factory(),
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
       if (typeof cleanup === 'function') {
@@ -67,14 +66,21 @@ vi.mock('react', async () => {
   }
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector(harness.storeState),
-    {
-      getState: () => harness.storeState
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { createStaticAgentStatusStoreFixture } = await import('@/store/slices/store-test-helpers')
+
+  return createStaticAgentStatusStoreFixture(() => harness.storeState)
+})
+
+vi.mock('@/store/agent-status', async () => {
+  const actual = await vi.importActual<typeof AgentStatusModule>('@/store/agent-status')
+  return {
+    ...actual,
+    useAgentStatusSelector: (
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => unknown
+    ) => selector(actual.getAgentStatusState())
+  }
+})
 
 vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector

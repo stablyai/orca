@@ -35,18 +35,25 @@ const petUrlMock = vi.hoisted(() => ({
 // Why: keep the render focused on the overlay's layout structure — the real
 // store + pet-url resolution pull in IPC/asset loading we don't need to assert
 // the hit-area invariant.
-vi.mock('../../store', () => {
-  const storeState = {
-    petSize: 180,
-    agentStatusByPaneKey: {},
-    agentStatusEpoch: 0,
-    retainedAgentsByPaneKey: {}
-  }
-  const useAppStore = Object.assign(
-    (selector: (state: unknown) => unknown) => selector(storeState),
-    { getState: () => storeState }
-  )
-  return { useAppStore }
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const storeState = {
+      petSize: 180,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      retainedAgentsByPaneKey: {}
+    }
+    const useAppStore = Object.assign(
+      (selector: (state: unknown) => unknown) => selector(storeState),
+      { getState: () => storeState }
+    )
+    return { useAppStore }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('./usePetUrl', () => ({

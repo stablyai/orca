@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type {
   AgentStatusClearIpcPayload,
@@ -7,7 +8,7 @@ import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
-import { useAppStore } from '../../store'
+
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -66,7 +67,7 @@ export function registerAgentStatusListeners(args: {
             liveAgentStatusBurstQueue.splice(index, 1)
           }
         }
-        useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
+        getAgentStatusState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
         return
       }
       if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
@@ -81,7 +82,7 @@ export function registerAgentStatusListeners(args: {
           pendingAgentStatusEvents.splice(index, 1)
         }
       }
-      const store = useAppStore.getState()
+      const store = getAgentStatusState()
       if (
         data.statusUnavailable !== true &&
         data.programStatusRemoved !== true &&
@@ -97,7 +98,7 @@ export function registerAgentStatusListeners(args: {
   }
   const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
     (entry) => {
-      const store = useAppStore.getState()
+      const store = getAgentStatusState()
       if (!store.workspaceSessionReady) {
         return
       }
@@ -111,7 +112,7 @@ export function registerAgentStatusListeners(args: {
   }
   const unsubscribeMigrationUnsupportedClear = window.api.agentStatus.onMigrationUnsupportedClear?.(
     ({ ptyId }) => {
-      useAppStore.getState().clearMigrationUnsupportedPty(ptyId)
+      getAgentStatusState().clearMigrationUnsupportedPty(ptyId)
     }
   )
   if (unsubscribeMigrationUnsupportedClear) {
@@ -122,9 +123,9 @@ export function registerAgentStatusListeners(args: {
       const action = resolveLegacyWorkerTerminalRecoveryAction(event)
       if (action.kind === 'rollback-surface') {
         window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail: action.detail }))
-        rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), action.detail)
+        rollbackLegacyWorkerTerminalSurfaceInStore(getAgentStatusState(), action.detail)
       } else if (action.kind === 'clear-sleeping') {
-        useAppStore.getState().clearSleepingAgentSession(action.paneKey)
+        getAgentStatusState().clearSleepingAgentSession(action.paneKey)
       }
     })
   if (unsubscribeLegacyWorkerTerminalRecovery) {

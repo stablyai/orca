@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -64,7 +65,7 @@ function activeAgent(paneKey: string, worktreeId: string): AgentStatusEntry {
 }
 
 beforeEach(() => {
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  applyAgentStatusPatch(useAppStore, { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -82,7 +83,7 @@ afterEach(() => {
   })
   container.remove()
   delete (window as unknown as { api?: unknown }).api
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  applyAgentStatusPatch(useAppStore, { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} })
 })
 
 describe('RepositoryPane search entries', () => {
@@ -136,7 +137,7 @@ describe('RepositoryPane search entries', () => {
   })
 
   it('renders full hook controls when search matches the project name', () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       settingsSearchQuery: 'Example Repo',
       settingsSearchInputQuery: 'Example Repo'
     })
@@ -163,7 +164,7 @@ describe('RepositoryPane search entries', () => {
       expect(html).toContain('Archive Script')
       expect(html).toContain('Custom GitHub Issue Command')
     } finally {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         settingsSearchQuery: '',
         settingsSearchInputQuery: ''
       })
@@ -172,7 +173,7 @@ describe('RepositoryPane search entries', () => {
 
   it('warns about live terminals and active tasks before project runtime changes', () => {
     const worktreeId = 'repo-1::/tmp/repo'
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       settingsSearchQuery: 'Example Repo',
       settingsSearchInputQuery: 'Example Repo',
       settings: getDefaultSettings('/tmp'),

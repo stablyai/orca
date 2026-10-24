@@ -56,14 +56,21 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: <T>(selector: T) => selector
 }))
 
-vi.mock('../../store', () => {
-  const useAppStore = Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector(storeBox.state ?? {}),
-    {
-      getState: () => storeBox.state ?? {}
-    }
-  )
-  return { useAppStore }
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const useAppStore = Object.assign(
+      (selector: (state: Record<string, unknown>) => unknown) => selector(storeBox.state ?? {}),
+      {
+        getState: () => storeBox.state ?? {}
+      }
+    )
+    return { useAppStore }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('../../store/selectors', () => ({
@@ -611,6 +618,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com', {
       title: 'Example',
+      browserRuntimeEnvironmentId: null,
       sessionProfileId: 'profile-1',
       sessionPartition: 'persist:orca-browser-session-profile-1',
       afterTabId: 'browser-unified-1'

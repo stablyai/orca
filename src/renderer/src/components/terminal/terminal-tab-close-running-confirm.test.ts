@@ -20,9 +20,16 @@ const {
   resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null)
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: getStateMock }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: getStateMock }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),

@@ -259,3 +259,27 @@ export function resetStructuredAgentLaunchPersistenceForTests(): void {
   remoteTombstoneCancelledAt.clear()
   loaded = false
 }
+
+export function prepareStructuredAgentLaunchCancellationPersistence(
+  sessionId: string,
+  executionHostId: ExecutionHostId,
+  tombstone: boolean
+) {
+  load()
+  const record = records.get(sessionId)
+  const cancelledAt = Date.now()
+  return {
+    install: () => {
+      if (records.get(sessionId) === record) {
+        records.delete(sessionId)
+      }
+      if (tombstone && !tombstones.has(sessionId)) {
+        tombstones.set(sessionId, executionHostId)
+        if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+          remoteTombstoneCancelledAt.set(sessionId, cancelledAt)
+        }
+      }
+    },
+    effects: [writeRecords, ...(tombstone ? [writeTombstones] : [])]
+  }
+}

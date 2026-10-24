@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   type AgentStatusEntry,
@@ -40,7 +42,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         taskTitle: 'Checkout race',
@@ -70,13 +74,13 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         prompt: 'worker prompt',
         agentType: 'codex'
       })
-      store.setState({
+      applyAgentStatusPatch(store, {
         unreadAgentCompletionPanes: { [paneKey]: true },
         unreadTerminalPanes: { [paneKey]: true },
         activeTabId: 'tab-compose',
         newWorkspaceDraft: draft
       })
-      const before = store.getState()
+      const before = getAgentStatusOwner(store).getState()
 
       store.getState().setRuntimeAgentOrchestrationByPaneKey({
         [paneKey]: {
@@ -86,7 +90,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      const after = store.getState()
+      const after = getAgentStatusOwner(store).getState()
       expect(after.agentStatusByPaneKey[paneKey].orchestration?.attention).toEqual({
         categories: ['input', 'approval'],
         requiresAction: true
@@ -124,7 +128,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toEqual({
         taskId: 'task-2',
         dispatchId: 'ctx-2',
         parentPaneKey: currentParentPaneKey,
@@ -157,7 +163,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentPaneKey,
@@ -193,7 +201,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         dispatchStatus: 'dispatched',
@@ -224,7 +234,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         dispatchStatus: 'completed'
@@ -254,7 +266,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         }
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toEqual({
         taskId: 'task-2',
         dispatchId: 'ctx-2',
         parentTerminalHandle: 'term-current'
@@ -280,7 +294,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         agentType: 'codex'
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toMatchObject({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentPaneKey
@@ -309,7 +325,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         agentType: 'codex'
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toBeUndefined()
     })
 
     it('preserves stale live orchestration for final done rows', () => {
@@ -334,7 +352,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
         agentType: 'codex'
       })
 
-      expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[childPaneKey].orchestration
+      ).toEqual({
         taskId: 'task-1',
         dispatchId: 'ctx-1',
         parentTerminalHandle: 'term-parent'
@@ -426,7 +446,7 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
       lastAssistantMessage: state === 'done' ? 'all set' : undefined,
       ...(observation ? { observation } : {})
     })
-    const snapshot = store.getState()
+    const snapshot = getAgentStatusOwner(store).getState()
     const entry = snapshot.agentStatusByPaneKey[PANE_KEY]
     if (!entry) {
       throw new Error(`expected a live entry for ${state}`)
@@ -542,7 +562,9 @@ import { resolveAttention } from '../../../../shared/sidebar-list/smart-attentio
       store.getState().setAgentStatus(PANE_KEY, { state: 'done', prompt: 'p', agentType: 'claude' })
 
       // Why: inheriting it would let a stale authority claim ordering over a row it never observed.
-      expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.observation).toBeUndefined()
+      expect(
+        getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE_KEY]?.observation
+      ).toBeUndefined()
     })
   })
 }

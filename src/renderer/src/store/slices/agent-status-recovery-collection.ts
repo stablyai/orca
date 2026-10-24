@@ -1,4 +1,4 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '../agent-status-observers'
 import {
   getAgentResumeArgv,
   type SleepingAgentSessionRecord
@@ -22,7 +22,7 @@ import { agentTurnEndedOnPurpose } from '../../../../shared/agent-main-agent-ver
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../shared/live-resume-anchor-record'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
-  state: AppState,
+  state: AgentStatusReadState,
   worktreeId: string,
   options?: readonly string[] | CollectSleepingAgentSessionRecordsOptions
 ): Record<string, SleepingAgentSessionRecord> {
@@ -138,7 +138,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
 }
 
 export function collectHibernatedCompletionEvidenceForWorktree(
-  state: AppState,
+  state: AgentStatusReadState,
   worktreeId: string,
   paneKeys?: readonly string[]
 ): RetainedAgentEntry[] {

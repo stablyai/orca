@@ -1,69 +1,17 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { renderToStaticMarkup as renderMarkup } from 'react-dom/server'
+import { useAppStore } from '@/store'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import type { ReactNode } from 'react'
+import type { AppState } from '@/store/types'
+import type * as StoreModule from '@/store'
+import { mockAgent } from './worktree-card-agents.test-fixture'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
-
-type MockAgentOptions = {
-  paneKey?: string
-  tabId?: string
-  agentType?: string
-  rowSource?: DashboardAgentRowData['rowSource']
-  state?: string
-  startedAt?: number
-  prompt?: string
-  lastAssistantMessage?: string
-  stateStartedAt?: number
-  terminalHandle?: string
-  orchestration?: {
-    parentPaneKey?: string
-    parentTerminalHandle?: string
-    coordinatorHandle?: string
-  }
-  lineage?: {
-    depth: number
-    isFirstSibling: boolean
-    isLastSibling: boolean
-    childCount: number
-  }
-}
-
-function mockAgent({
-  paneKey = 'tab-1:1',
-  tabId = paneKey.split(':')[0],
-  agentType,
-  rowSource,
-  state = 'working',
-  startedAt,
-  prompt,
-  lastAssistantMessage,
-  stateStartedAt = 1000,
-  terminalHandle,
-  orchestration,
-  lineage
-}: MockAgentOptions = {}): unknown {
-  return {
-    paneKey,
-    tab: { id: tabId },
-    agentType,
-    rowSource,
-    state,
-    startedAt,
-    entry: {
-      prompt,
-      lastAssistantMessage,
-      state,
-      stateStartedAt,
-      stateHistory: prompt === undefined ? undefined : [],
-      terminalHandle,
-      orchestration
-    },
-    lineage
-  }
-}
 
 let mockAgents: unknown[] = [mockAgent()]
 // The hook records behind mockAgents; the unread (bold) rule reads them.
@@ -83,27 +31,48 @@ const activationMocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      agentActivityDisplayMode: mockAgentActivityDisplayMode,
-      acknowledgedAgentsByPaneKey: {},
-      retainedAgentsByPaneKey: {},
-      cacheTimerByKey: mockCacheTimerByKey,
-      dropAgentStatus: vi.fn(),
-      dismissRetainedAgent: vi.fn(),
-      acknowledgeAgents: vi.fn(),
-      agentSendPopoverTargetMode: null,
-      agentStatusByPaneKey: mockAgentStatusByPaneKey,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      sendPromptToSidebarAgentTarget: vi.fn(),
-      settings: {
-        promptCacheTimerEnabled: mockPromptCacheTimerEnabled,
-        promptCacheTtlMs: mockPromptCacheTtlMs
-      }
-    })
-}))
+function renderToStaticMarkup(element: Parameters<typeof renderMarkup>[0]): string {
+  applyAgentStatusPatch(useAppStore, {
+    agentActivityDisplayMode: mockAgentActivityDisplayMode ?? 'compact',
+    acknowledgedAgentsByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    cacheTimerByKey: mockCacheTimerByKey,
+    agentSendPopoverTargetMode: null,
+    agentStatusByPaneKey: Object.fromEntries(
+      Object.entries(mockAgentStatusByPaneKey).map(([paneKey, entry]) => [
+        paneKey,
+        {
+          ...entry,
+          paneKey,
+          agentType: 'codex',
+          state: 'working' as const,
+          updatedAt: 1000,
+          prompt: '',
+          stateHistory: []
+        }
+      ])
+    ),
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    settings: {
+      ...(useAppStore.getState().settings ?? getDefaultSettings('/tmp')),
+      promptCacheTimerEnabled: mockPromptCacheTimerEnabled,
+      promptCacheTtlMs: mockPromptCacheTtlMs
+    }
+  })
+  return renderMarkup(element)
+}
+
+vi.mock('@/store', async (importOriginal) => {
+  const actual = await importOriginal<typeof StoreModule>()
+  return {
+    ...actual,
+    useAppStore: Object.assign(
+      (selector: (state: AppState) => unknown) => selector(actual.useAppStore.getState()),
+      actual.useAppStore
+    )
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: activationMocks.activateAndRevealWorktree

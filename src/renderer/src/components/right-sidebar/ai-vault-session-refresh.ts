@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   isAiVaultScanCancelledError,
@@ -10,7 +11,7 @@ import {
   requestedExecutionHostScope,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import { useAppStore } from '@/store'
+
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
@@ -338,10 +339,10 @@ export function useAiVaultSessionRefresh(
   // can't surface them. Agent hooks already report provider sessions; re-scan
   // only when a session id we haven't seen appears — state transitions are
   // deliberately ignored, they fire constantly while agents work.
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
+  const sessionIdsKey = useAgentStatusSelector((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
-    const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')
+    const ids = sessionIdsKey === '' ? [] : sessionIdsKey.split('\n')
     // The mount refresh already covers sessions live at mount time.
     if (seenAgentSessionIdsRef.current === null) {
       seenAgentSessionIdsRef.current = new Set(ids)
@@ -356,7 +357,7 @@ export function useAiVaultSessionRefresh(
       seen.add(id)
     }
     requestForcedRescan()
-  }, [agentSessionIdsKey, requestForcedRescan])
+  }, [sessionIdsKey, requestForcedRescan])
 
   const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
   return {

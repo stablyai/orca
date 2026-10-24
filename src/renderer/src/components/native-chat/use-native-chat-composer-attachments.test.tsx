@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
@@ -18,7 +20,7 @@ import { useAppStore } from '@/store'
 import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
 import type { Tab } from '../../../../shared/tab-types'
 
-const initialStoreState = useAppStore.getInitialState()
+const initialStoreState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 function publishOwner(
   scopeKey: string,
   owner: draftStorage.NativeChatComposerDraftOwner | undefined
@@ -36,7 +38,7 @@ function publishOwner(
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     unifiedTabsByWorktree: owner ? { [owner.workspaceId]: [tab] } : {},
     activeWorktreeId: owner?.workspaceId ?? null,
     activeWorkspaceExecutionHostId: owner?.executionHostId ?? null
@@ -59,13 +61,13 @@ vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
 
 function publishUnrelatedStatuses(): void {
   for (let tick = 1; tick <= 24; tick += 1) {
-    useAppStore.setState((state) => ({
+    applyAgentStatusPatch(useAppStore, (state) => ({
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set('other-host', {
         status: null,
         checkedAt: tick
       })
     }))
-    useAppStore.setState((state) => ({
+    applyAgentStatusPatch(useAppStore, (state) => ({
       agentStatusByPaneKey: {
         ...state.agentStatusByPaneKey,
         'other-tab:other-pane': {
@@ -83,7 +85,7 @@ function publishUnrelatedStatuses(): void {
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
-    useAppStore.setState(initialStoreState, true)
+    applyAgentStatusPatch(useAppStore, initialStoreState)
     runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
@@ -153,7 +155,7 @@ describe('useNativeChatComposerAttachments', () => {
         return images.map(({ path }) => ({ path, kept: true, exists }))
       })
       const originalApi = window.api
-      const originalState = useAppStore.getState()
+      const originalState = getAgentStatusOwner(useAppStore).getState()
       let probe: Awaited<ReturnType<typeof renderProbe>> | undefined
       Object.assign(window, { api: { fs: { pathExists }, ui: { restoreNativeChatPastes } } })
       try {
@@ -177,7 +179,7 @@ describe('useNativeChatComposerAttachments', () => {
         expect(restoreNativeChatPastes).toHaveBeenCalledTimes(check === 'paste' ? 1 : 0)
       } finally {
         act(() => probe?.root.unmount())
-        useAppStore.setState({
+        applyAgentStatusPatch(useAppStore, {
           runtimeStatusByEnvironmentId: originalState.runtimeStatusByEnvironmentId,
           agentStatusByPaneKey: originalState.agentStatusByPaneKey
         })
@@ -198,7 +200,7 @@ describe('useNativeChatComposerAttachments', () => {
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
     publishOwner(scope, storedOwner)
     const resolveOwner = vi.fn((key: string) =>
-      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+      resolveNativeChatDraftOwner(getAgentStatusOwner(useAppStore).getState(), key)
     )
     draftStore.setNativeChatComposerDraftOwnerResolver(resolveOwner)
     const old = Promise.withResolvers<boolean>()
@@ -207,7 +209,7 @@ describe('useNativeChatComposerAttachments', () => {
     const originalApi = window.api
     Object.assign(window, { api: { fs: { pathExists } } })
     let probe: Awaited<ReturnType<typeof renderProbe>> | undefined
-    const originalState = useAppStore.getState()
+    const originalState = getAgentStatusOwner(useAppStore).getState()
     try {
       await draftStore.hydrateNativeChatComposerDrafts()
       probe = await renderProbe(scope, true)
@@ -216,10 +218,10 @@ describe('useNativeChatComposerAttachments', () => {
       publishOwner(scope, { ...storedOwner, executionHostId: 'runtime:remote' })
       await act(async () => old.resolve(false))
       expect(draftStore.readNativeChatComposerDraft(scope).images).toEqual([image])
-      await act(async () => useAppStore.setState({}))
+      await act(async () => applyAgentStatusPatch(useAppStore, {}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
       publishOwner(scope, storedOwner)
-      await act(async () => useAppStore.setState({}))
+      await act(async () => applyAgentStatusPatch(useAppStore, {}))
       expect(pathExists).toHaveBeenCalledTimes(2)
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
       await act(async () => next.resolve(false))
@@ -232,7 +234,7 @@ describe('useNativeChatComposerAttachments', () => {
       expect(resolveOwner).not.toHaveBeenCalled()
     } finally {
       act(() => probe?.root.unmount())
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         runtimeStatusByEnvironmentId: originalState.runtimeStatusByEnvironmentId,
         agentStatusByPaneKey: originalState.agentStatusByPaneKey
       })
@@ -250,7 +252,7 @@ describe('useNativeChatComposerAttachments', () => {
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
     publishOwner(scope, undefined)
     draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
-      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+      resolveNativeChatDraftOwner(getAgentStatusOwner(useAppStore).getState(), key)
     )
     const exists = Promise.withResolvers<boolean>()
     const pathExists = vi.fn(() => exists.promise)
@@ -270,17 +272,17 @@ describe('useNativeChatComposerAttachments', () => {
       expect(nativeChatImagesHoldSend(terminal.latest().imageAttachments)).toBe(false)
       act(() => terminal.root.unmount())
       const probe = await renderProbe(scope, true)
-      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
-      act(() => useAppStore.setState({}))
+      await act(async () =>
+        publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
+      )
       expect(pathExists).not.toHaveBeenCalled()
-      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
-      act(() => useAppStore.setState({}))
+      await act(async () => publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' }))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
-      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
-      await act(async () => useAppStore.setState({}))
+      await act(async () =>
+        publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
+      )
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
-      act(() => useAppStore.setState({}))
+      await act(async () => publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' }))
       const newer = { id: 'edit', path: '/repo/new.png' }
       await act(async () => {
         draftStore.updateNativeChatComposerDraft(scope, { images: [image, newer] }, 'immediate')
@@ -307,7 +309,7 @@ describe('useNativeChatComposerAttachments', () => {
       draftStorage.setNativeChatComposerDraftStorageForTests(storage)
       publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
-        resolveNativeChatDraftOwner(useAppStore.getState(), key)
+        resolveNativeChatDraftOwner(getAgentStatusOwner(useAppStore).getState(), key)
       )
       let present = true
       const pathExists = vi.fn(async () => present)
@@ -538,7 +540,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
-    useAppStore.setState(initialStoreState, true)
+    applyAgentStatusPatch(useAppStore, initialStoreState)
     runtimeTarget.remote = false
     act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
     composing = false

@@ -26,13 +26,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -42,9 +42,10 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -57,11 +58,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
     it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -74,13 +76,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       })
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {
@@ -99,7 +100,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             }
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -114,7 +115,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, storeFixture.read(), 'lost-pty')
         return
       }
 
@@ -149,7 +150,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
     it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -162,19 +163,23 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       })
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {},
           localWindowsRuntimeDefault: { kind: 'windows-host' }
         },
         projects: [
           {
             id: 'repo1',
+            displayName: 'repo1',
+            badgeColor: '#737373',
+            sourceRepoIds: ['repo1'],
+            createdAt: 1,
+            updatedAt: 1,
             localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
           }
         ],
@@ -200,7 +205,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             providerSession: { key: 'session_id', id: "codex-session-1's" }
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -215,7 +220,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, storeFixture.read(), 'lost-pty')
         return
       }
 
@@ -241,7 +246,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
     it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -257,13 +262,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       const transcriptPath =
         '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-codex-session-1.jsonl'
       // Why: after restart agentStatusByPaneKey is empty — the persisted sleeping record is the only provider session id source (#5232).
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -284,7 +288,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -299,7 +303,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, storeFixture.read(), 'lost-pty')
         return
       }
 
@@ -335,12 +339,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         })
       )
       // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
     it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -356,13 +360,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       })
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -379,7 +382,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -394,7 +397,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, storeFixture.read(), 'lost-pty')
         return
       }
 
@@ -404,7 +407,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
     it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -418,13 +421,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       transportFactoryQueue.push(transport)
       const legacyPaneKey = 'tab-1:2'
       const duplicateLegacyPaneKey = 'tab-1:3'
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -452,7 +454,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 2
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -467,7 +469,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+        expectWindowPaintsColdRestoreOnly(pane, transport, deps, storeFixture.read(), 'lost-pty')
         return
       }
 
@@ -483,15 +485,19 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           command: "codex 'resume' 'codex-session-1'"
         })
       )
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(duplicateLegacyPaneKey)
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[legacyPaneKey]).toBeUndefined()
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[duplicateLegacyPaneKey]).toBeUndefined()
+      expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)
+      expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledWith(
+        duplicateLegacyPaneKey
+      )
+      expect(storeFixture.read().sleepingAgentSessionsByPaneKey[legacyPaneKey]).toBeUndefined()
+      expect(
+        storeFixture.read().sleepingAgentSessionsByPaneKey[duplicateLegacyPaneKey]
+      ).toBeUndefined()
     })
 
     it('does not choose a non-exact legacy record when same-tab provider sessions differ', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -505,13 +511,12 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       transportFactoryQueue.push(transport)
       const firstLegacyPaneKey = 'tab-1:2'
       const secondLegacyPaneKey = 'tab-1:3'
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
         },
         settings: {
-          ...mockStoreState.settings,
+          ...storeFixture.read().settings,
           agentCmdOverrides: {}
         },
         agentStatusByPaneKey: {},
@@ -539,7 +544,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 2
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -560,7 +565,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).not.toHaveBeenCalledWith(
         expect.objectContaining({ command: expect.stringContaining('resume') })
       )
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
     })
   })
 }

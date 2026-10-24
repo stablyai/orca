@@ -1,8 +1,8 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { StoreApi } from 'zustand/vanilla'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/update-status-types'
-import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
 import {
   getUpdateCardAriaLabel,
@@ -11,15 +11,6 @@ import {
 } from './maintenance/update-card/update-card-visibility'
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function createTestStore(): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createStore<any>()((...args: any[]) => ({
-    repos: [],
-    rightSidebarWidth: 280,
-    ...createUISlice(...(args as Parameters<typeof createUISlice>))
-  })) as unknown as StoreApi<AppState>
-}
 
 const RICH_CHANGELOG: ChangelogData = {
   release: {

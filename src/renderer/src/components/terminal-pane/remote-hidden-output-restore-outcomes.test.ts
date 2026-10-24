@@ -52,10 +52,10 @@ type MockTransport = {
   serializeBufferOutcome?: ReturnType<typeof vi.fn>
 }
 
-const scheduleRuntimeGraphSync = vi.fn()
-const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
-const toastInfo = vi.fn()
-const notifyCodexPaneBoundForStaleSweep = vi.fn()
+const scheduleRuntimeGraphSync = vi.hoisted(() => vi.fn())
+const shouldSeedCacheTimerOnInitialTitle = vi.hoisted(() => vi.fn(() => false))
+const toastInfo = vi.hoisted(() => vi.fn())
+const notifyCodexPaneBoundForStaleSweep = vi.hoisted(() => vi.fn())
 
 let mockStoreState: Record<string, unknown>
 let transportFactoryQueue: MockTransport[] = []
@@ -66,17 +66,26 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: Record<string, unknown>) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+function mockCanonicalFixtureStore(): void {
+  vi.doMock('@/store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixture = {
+      useAppStore: {
+        getState: () => mockStoreState,
+        subscribe: (listener: (state: Record<string, unknown>) => void) => {
+          storeSubscribers.push(listener)
+          return () => {
+            storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+          }
+        }
       }
     }
-  }
-}))
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
+}
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -441,6 +450,7 @@ async function advanceModernRetryProbe(): Promise<void> {
 describe('remote hidden-output restore outcomes', () => {
   beforeEach(async () => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     vi.clearAllMocks()
     await installTerminalTestGlobals()
     transportFactoryQueue = []
@@ -448,6 +458,7 @@ describe('remote hidden-output restore outcomes', () => {
     storeSubscribers = []
     mockStoreState = {
       activeWorktreeId: 'wt-1',
+      runtimeEnvironmentCatalogHydrated: true,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },
@@ -470,7 +481,7 @@ describe('remote hidden-output restore outcomes', () => {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
       },
       runtimeStatusByEnvironmentId: new Map(),
-      repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local', displayName: 'orca' }],
       projects: [],
       sshConnectionStates: new Map(),
       transientClearedAgentStatusConnectionIds: {},

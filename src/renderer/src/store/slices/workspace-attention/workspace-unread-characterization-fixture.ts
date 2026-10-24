@@ -1,3 +1,6 @@
+import { getAgentStatusOwner } from '../../agent-status-commit'
+import { subscribeAgentStatusState } from '../../agent-status'
+import type { AgentStatusReadState } from '../../agent-status-observers'
 import { vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { AppState } from '../../types'
@@ -75,18 +78,24 @@ export function installAttentionScreen(
   })
   let rescan = (): void => {}
   let input = (): void => {}
-  startOnScreenAttentionScan(store, {
-    readDesktopAway:
-      desktopAway === undefined
-        ? null
-        : async () => (typeof desktopAway === 'function' ? desktopAway() : desktopAway),
-    subscribeStructuredViews: () => () => {},
-    subscribePresenceSignals: (onRescan, onInput) => {
-      rescan = onRescan
-      input = onInput
-      return () => {}
+  startOnScreenAttentionScan(
+    {
+      getState: () => getAgentStatusOwner(store).getState(),
+      subscribe: (listener) => subscribeAgentStatusState(listener, store)
+    },
+    {
+      readDesktopAway:
+        desktopAway === undefined
+          ? null
+          : async () => (typeof desktopAway === 'function' ? desktopAway() : desktopAway),
+      subscribeStructuredViews: () => () => {},
+      subscribePresenceSignals: (onRescan, onInput) => {
+        rescan = onRescan
+        input = onInput
+        return () => {}
+      }
     }
-  })
+  )
   screens.set(store, {
     setWindowOnScreen: (next) => {
       windowOnScreen = next
@@ -168,7 +177,7 @@ export function addLiveTerminalTab(
     ...(targetGroupId ? { targetGroupId } : {})
   })
   const ptyId = `pty-${tabId}`
-  const s = store.getState()
+  const s = getAgentStatusOwner(store).getState()
   store.setState({
     tabsByWorktree: {
       ...s.tabsByWorktree,
@@ -200,11 +209,11 @@ const markers = (record: Record<string, unknown>): string =>
     .join(' ') || '-'
 
 // dockCount stays unexported; check-focus-read-ratchet counts exported readers named observe.
-const dockCount = (s: AppState): number => createUnreadBadgeCountSelector()(s)
+const dockCount = (s: AgentStatusReadState): number => createUnreadBadgeCountSelector()(s)
 
 /** One compact line per observable, so a scenario step reads as a diffable block. */
 export function observe(store: AttentionStore, persists: () => PersistCall[]): string[] {
-  const s = store.getState()
+  const s = getAgentStatusOwner(store).getState()
   resetFloatingWorkspaceUnreadSelectorCacheForTest()
   const rows = Object.values(s.worktreesByRepo)
     .flat()

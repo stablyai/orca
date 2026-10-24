@@ -2,6 +2,7 @@ import type { AppState } from '../../../types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '../../../../runtime/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status-connection-generation'
+import { findAgentStatusOwnerByReader } from '../../../agent-status-commit'
 
 type LineageStoreReader = () => Pick<AppState, 'worktreeLineageById' | 'workspaceLineageByChildKey'>
 type LineageReadiness = {
@@ -12,12 +13,13 @@ type LineageReadiness = {
   hydrated: boolean
 }
 
-const readinessByStore = new WeakMap<LineageStoreReader, Map<string, LineageReadiness>>()
+const readinessByStore = new WeakMap<object, Map<string, LineageReadiness>>()
 const MAX_READINESS_ENVIRONMENTS = 256
 
 function getReadiness(getState: LineageStoreReader, environmentId: string): LineageReadiness {
-  const byEnvironment = readinessByStore.get(getState) ?? new Map<string, LineageReadiness>()
-  readinessByStore.set(getState, byEnvironment)
+  const identity = findAgentStatusOwnerByReader(getState) ?? getState
+  const byEnvironment = readinessByStore.get(identity) ?? new Map<string, LineageReadiness>()
+  readinessByStore.set(identity, byEnvironment)
   const revision = getRuntimeEnvironmentRevision(environmentId)
   const connectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
   let readiness = byEnvironment.get(environmentId)

@@ -1,5 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useCallback, useState } from 'react'
-import { useAppStore } from '@/store'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import { getWorkspaceCleanupAgentEvidence } from '@/store/slices/workspace-cleanup-agent-evidence'
@@ -31,7 +31,7 @@ export function useWorkspaceCleanupAgentStopGate(): WorkspaceCleanupAgentStopGat
   const approve = useCallback<WorkspaceCleanupAgentStopGate['approve']>(
     (candidates, unverifiedCandidate) => {
       // Why: the scan snapshot can be minutes old; an agent may have started since.
-      const agentEvidence = getWorkspaceCleanupAgentEvidence(useAppStore.getState(), candidates)
+      const agentEvidence = getWorkspaceCleanupAgentEvidence(getAgentStatusState(), candidates)
       const approvedIdentities = new Set(
         request && isSameAction(request, unverifiedCandidate)
           ? request.candidates.map(getWorkspaceCleanupCandidateIdentity)

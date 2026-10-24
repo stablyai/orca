@@ -1,15 +1,15 @@
+import {
+  prepareStructuredAgentLaunchCancellationPersistence,
+  hasStructuredAgentLaunchCancellationTombstonePersisted,
+  readStructuredAgentLaunchCancellationTombstoneSessionIds,
+  retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
+  retireStructuredAgentLaunchCancellationTombstonePersisted
+} from '../structured-agent-session-launch-persistence'
 // The window's cancel tombstones: a chat cancelled before its create landed is hidden and closed when
 // its host later lists it. Kept for paired hosts, which may not refuse a create whose close came
 // first; the remote-server project sets their floor. Local chats need them only in window-owned
 // builds (ORCA_LAYOUT_OWNER), until phase F.
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  hasStructuredAgentLaunchCancellationTombstonePersisted,
-  markStructuredAgentLaunchCancelledPersisted,
-  readStructuredAgentLaunchCancellationTombstoneSessionIds,
-  retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted,
-  retireStructuredAgentLaunchCancellationTombstonePersisted
-} from '../structured-agent-session-launch-persistence'
 
 type CancellationRetirement = {
   retireAfterInventory: number | null
@@ -100,28 +100,57 @@ export function markStructuredAgentLaunchCancellation(
   alreadyCancelled: boolean,
   launchPromise?: Promise<unknown>
 ): void {
-  markStructuredAgentLaunchCancelledPersisted(sessionId, executionHostId)
-  if (launchPromise) {
-    const retirement: CancellationRetirement = {
-      retireAfterInventory: null,
-      cleanupStarted: false,
-      restored: false
-    }
-    cancellationRetirementBySessionId.set(sessionId, retirement)
-    const armRetirement = (): void => {
-      if (cancellationRetirementBySessionId.get(sessionId) === retirement) {
-        // Inventories started before the create settled cannot prove that it will not publish.
-        retirement.retireAfterInventory = authoritativeInventorySequence + 1
+  const prepared = prepareStructuredAgentLaunchCancellation(
+    sessionId,
+    executionHostId,
+    alreadyCancelled,
+    launchPromise
+  )
+  prepared.install()
+  for (const effect of prepared.effects) {
+    effect()
+  }
+}
+
+export function prepareStructuredAgentLaunchCancellation(
+  sessionId: string,
+  executionHostId: ExecutionHostId,
+  alreadyCancelled: boolean,
+  launchPromise?: Promise<unknown>
+) {
+  const persistence = prepareStructuredAgentLaunchCancellationPersistence(
+    sessionId,
+    executionHostId,
+    true
+  )
+  const retirement: CancellationRetirement | undefined =
+    launchPromise || !alreadyCancelled
+      ? {
+          retireAfterInventory: launchPromise ? null : authoritativeInventorySequence + 1,
+          cleanupStarted: false,
+          restored: false
+        }
+      : undefined
+  return {
+    install: () => {
+      persistence.install()
+      if (retirement) {
+        cancellationRetirementBySessionId.set(sessionId, retirement)
       }
-    }
-    void launchPromise.then(armRetirement, armRetirement)
-  } else if (!alreadyCancelled) {
-    // No in-memory launch remains; the user close already issued best-effort host cleanup.
-    cancellationRetirementBySessionId.set(sessionId, {
-      retireAfterInventory: authoritativeInventorySequence + 1,
-      cleanupStarted: false,
-      restored: false
-    })
+    },
+    effects: [
+      ...persistence.effects,
+      () => {
+        if (launchPromise && retirement) {
+          const arm = () => {
+            if (cancellationRetirementBySessionId.get(sessionId) === retirement) {
+              retirement.retireAfterInventory = authoritativeInventorySequence + 1
+            }
+          }
+          void launchPromise.then(arm, arm)
+        }
+      }
+    ]
   }
 }
 

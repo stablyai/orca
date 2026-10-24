@@ -11,9 +11,16 @@ const mocks = vi.hoisted(() => {
   return { observe: vi.fn(), state }
 })
 
-vi.mock('../../store', () => ({
-  useAppStore: { getState: () => mocks.state.current }
-}))
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: () => mocks.state.current }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('../agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: mocks.observe
 }))

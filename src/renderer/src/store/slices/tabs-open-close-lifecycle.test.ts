@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultUIState } from '../../../../shared/constants'
@@ -76,7 +78,7 @@ describe('TabsSlice', () => {
       expect(tab.worktreeId).toBe(WT)
       expect(tab.label).toMatch(/^Terminal/)
 
-      const state = store.getState()
+      const state = getAgentStatusOwner(store).getState()
       expect(state.unifiedTabsByWorktree[WT]).toHaveLength(1)
       expect(state.groupsByWorktree[WT]).toHaveLength(1)
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe(tab.id)
@@ -95,7 +97,7 @@ describe('TabsSlice', () => {
     })
 
     it('stamps tabs with the active execution host', () => {
-      store.setState({
+      applyAgentStatusPatch(store, {
         activeWorktreeId: WT,
         activeWorkspaceExecutionHostId: 'runtime:host-b'
       })
@@ -106,13 +108,13 @@ describe('TabsSlice', () => {
     })
 
     it('stamps active local tabs when the local host field is null', () => {
-      store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
+      applyAgentStatusPatch(store, { activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
 
       expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
     })
 
     it("stamps an SSH worktree's own host when activation passed none", () => {
-      store.setState({
+      applyAgentStatusPatch(store, {
         repos: [
           { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
         ],
@@ -227,7 +229,7 @@ describe('TabsSlice', () => {
       const result = store.getState().closeUnifiedTab(t2.id)
 
       expect(result).toEqual({ closedTabId: t2.id, wasLastTab: false, worktreeId: WT })
-      const state = store.getState()
+      const state = getAgentStatusOwner(store).getState()
       expect(state.unifiedTabsByWorktree[WT]).toHaveLength(2)
       // Right neighbor (t3) should be active
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe(t3.id)
@@ -287,7 +289,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
-      store.setState({
+      applyAgentStatusPatch(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
         groupsByWorktree: {
@@ -309,18 +311,22 @@ describe('TabsSlice', () => {
         activeTabTypeByWorktree: { [WT]: 'editor' }
       })
 
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
-        { id: tab.id, type: 'markdown', filePath: file.filePath }
-      ])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs
+      ).toMatchObject([{ id: tab.id, type: 'markdown', filePath: file.filePath }])
 
       const main = await drawTabsFromMain(store)
-      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(getAgentStatusOwner(store).getState(), WT, tab.id)).toBe(
+        true
+      )
       // A layout-owner build closes the tab in main; the file goes after its frame drops the tab.
       await main.settle()
       main.close()
 
       expect(store.getState().openFiles).toEqual([])
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs ?? []
+      ).toEqual([])
     })
 
     it('removes a mobile-closed regular file tab from open files so fallback closes do not resurrect', async () => {
@@ -340,7 +346,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
-      store.setState({
+      applyAgentStatusPatch(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
         groupsByWorktree: {
@@ -362,18 +368,22 @@ describe('TabsSlice', () => {
         activeTabTypeByWorktree: { [WT]: 'editor' }
       })
 
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
-        { id: tab.id, type: 'file', filePath: file.filePath }
-      ])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs
+      ).toMatchObject([{ id: tab.id, type: 'file', filePath: file.filePath }])
 
       const main = await drawTabsFromMain(store)
-      expect(closeMobileSessionTabInStore(store.getState(), WT, tab.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(getAgentStatusOwner(store).getState(), WT, tab.id)).toBe(
+        true
+      )
       // A layout-owner build closes the tab in main; the file goes after its frame drops the tab.
       await main.settle()
       main.close()
 
       expect(store.getState().openFiles).toEqual([])
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs ?? []
+      ).toEqual([])
     })
 
     it('closes a mobile fallback file-id tab after the unified wrapper is already gone', () => {
@@ -384,7 +394,7 @@ describe('TabsSlice', () => {
         language: 'typescript',
         worktreeId: WT
       })
-      store.setState({
+      applyAgentStatusPatch(store, {
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [] },
         groupsByWorktree: { [WT]: [] },
@@ -395,14 +405,18 @@ describe('TabsSlice', () => {
         activeTabTypeByWorktree: { [WT]: 'editor' }
       })
 
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs).toMatchObject([
-        { id: file.id, type: 'file', filePath: file.filePath }
-      ])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs
+      ).toMatchObject([{ id: file.id, type: 'file', filePath: file.filePath }])
 
-      expect(closeMobileSessionTabInStore(store.getState(), WT, file.id)).toBe(true)
+      expect(closeMobileSessionTabInStore(getAgentStatusOwner(store).getState(), WT, file.id)).toBe(
+        true
+      )
 
       expect(store.getState().openFiles).toEqual([])
-      expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
+      expect(
+        buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState())[0]?.tabs ?? []
+      ).toEqual([])
     })
 
     it('activates the previously-active tab across content types', async () => {
@@ -433,7 +447,7 @@ describe('TabsSlice', () => {
     it('falls back to neighbor selection when the MRU stack has no prior tab', () => {
       // Build state manually (no prior activations) — mirrors a freshly-hydrated session with only an active tab known.
       const groupId = 'mru-fallback-group'
-      store.setState({
+      applyAgentStatusPatch(store, {
         unifiedTabsByWorktree: {
           [WT]: [
             {

@@ -35,7 +35,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -53,17 +53,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -127,7 +134,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 // A hibernation kill ends the agent before the PTY, so the pane sees its own shell for a moment.
@@ -138,11 +145,12 @@ describe('shell showing through a hibernation kill', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -154,7 +162,7 @@ describe('shell showing through a hibernation kill', () => {
     record: SleepingAgentSessionRecord
   }> {
     vi.useFakeTimers()
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'
@@ -172,8 +180,8 @@ describe('shell showing through a hibernation kill', () => {
       createDeps({
         isVisibleRef: { current: false },
         consumeSuppressedPtyExit: vi.fn((id: string) => {
-          const suppressed = mockStoreState.suppressedPtyExitIds[id] === true
-          delete mockStoreState.suppressedPtyExitIds[id]
+          const suppressed = storeFixture.read().suppressedPtyExitIds[id] === true
+          delete storeFixture.read().suppressedPtyExitIds[id]
           return suppressed
         })
       })
@@ -181,7 +189,8 @@ describe('shell showing through a hibernation kill', () => {
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
-    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+    storeFixture.read().agentLaunchConfigByPaneKey[paneKey] = {
+      registeredAt: Date.now(),
       launchConfig: { agentArgs: '', agentEnv: {} },
       identity: { agentType: 'claude' }
     }
@@ -198,14 +207,24 @@ describe('shell showing through a hibernation kill', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
-    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = record
+    storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = record
     if (suppressExit) {
-      mockStoreState.suppressedPtyExitIds[ptyId] = true
+      storeFixture.read().suppressedPtyExitIds[ptyId] = true
     }
     return {
       paneKey,
       record,
-      finishCommand: () => dataCallbackRef.current?.('\x1b]133;D;0\x07'),
+      finishCommand: () => {
+        storeFixture.patch({
+          agentLaunchConfigByPaneKey: {
+            [paneKey]: {
+              launchConfig: { agentArgs: '', agentEnv: {} },
+              identity: { agentType: 'claude' }
+            }
+          }
+        })
+        dataCallbackRef.current?.('\x1b]133;D;0\x07')
+      },
       rebindPty: (id: string | null) => transport.getPtyId.mockReturnValue(id),
       exitPty: () => {
         const onPtyExit = createdTransportOptions[0]?.onPtyExit
@@ -222,12 +241,12 @@ describe('shell showing through a hibernation kill', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]).toEqual({
+    expect(storeFixture.read().paneForegroundAgentByPaneKey[pane.paneKey]).toEqual({
       agent: null,
       shellForeground: true
     })
-    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
+    expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(storeFixture.read().sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
       providerSession: { id: 'sess-hibernating' }
     })
   })
@@ -247,16 +266,16 @@ describe('shell showing through a hibernation kill', () => {
       pane.exitPty()
       pane.rebindPty(boundPtyId)
       await flushAsyncTicks()
-      expect(mockStoreState.suppressedPtyExitIds).toEqual({})
+      expect(storeFixture.read().suppressedPtyExitIds).toEqual({})
       foreground.resolve('zsh')
       await flushAsyncTicks()
 
       // A detached transport rejects the stale read; a retained binding reaches shell cleanup.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]?.shellForeground).toBe(
+      expect(storeFixture.read().paneForegroundAgentByPaneKey[pane.paneKey]?.shellForeground).toBe(
         boundPtyId === null ? undefined : true
       )
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-      expect(mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
+      expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(storeFixture.read().sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
         providerSession: { id: 'sess-hibernating' }
       })
     }
@@ -267,13 +286,15 @@ describe('shell showing through a hibernation kill', () => {
 
     pane.exitPty()
     await flushAsyncTicks()
-    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
     // A restart binds a new PTY without consuming the armed wake.
     pane.rebindPty('pty-restarted')
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(
+      pane.paneKey
+    )
   })
 
   it('still clears a record beside a PTY that is not being hibernated', async () => {
@@ -282,7 +303,9 @@ describe('shell showing through a hibernation kill', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(
+      pane.paneKey
+    )
   })
 
   it('does not protect a replacement record with the old wake target', async () => {
@@ -290,13 +313,15 @@ describe('shell showing through a hibernation kill', () => {
 
     pane.exitPty()
     await flushAsyncTicks()
-    mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey] = {
+    storeFixture.read().sleepingAgentSessionsByPaneKey[pane.paneKey] = {
       ...pane.record,
       updatedAt: 2
     }
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(storeFixture.read().clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(
+      pane.paneKey
+    )
   })
 })

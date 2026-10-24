@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 // @vitest-environment happy-dom
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -19,19 +20,35 @@ let acknowledgements: Record<string, number> = {}
 let liveTurns: Record<string, DashboardAgentRow['entry']> = {}
 let focusedPaneKey: string | null = null
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      agentActivityDisplayMode: 'compact',
-      acknowledgedAgentsByPaneKey: acknowledgements,
-      agentStatusByPaneKey: liveTurns,
-      retainedAgentsByPaneKey: {},
-      agentSendPopoverTargetMode: null,
-      dropAgentStatus: vi.fn(),
-      dismissRetainedAgent: vi.fn(),
-      sendPromptToSidebarAgentTarget: vi.fn()
-    })
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: unknown) => unknown) =>
+      selector({
+        agentActivityDisplayMode: 'compact',
+        acknowledgedAgentsByPaneKey: acknowledgements,
+        agentStatusByPaneKey: liveTurns,
+        retainedAgentsByPaneKey: {},
+        agentSendPopoverTargetMode: null,
+        dropAgentStatus: vi.fn(),
+        dismissRetainedAgent: vi.fn(),
+        sendPromptToSidebarAgentTarget: vi.fn()
+      })
+  }
+  const readFixture = () => ({
+    agentActivityDisplayMode: 'compact',
+    acknowledgedAgentsByPaneKey: acknowledgements,
+    agentStatusByPaneKey: liveTurns,
+    retainedAgentsByPaneKey: {},
+    agentSendPopoverTargetMode: null,
+    dropAgentStatus: vi.fn(),
+    dismissRetainedAgent: vi.fn(),
+    sendPromptToSidebarAgentTarget: vi.fn()
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('./useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
 vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
@@ -205,4 +222,14 @@ describe('compact acknowledgement emphasis through WorktreeCardAgents', () => {
     )
     expectEmphasis(renderLabels([agentRow(PANE_A, 'done', { stateStartedAt: 3000 })])[0], true)
   })
+})
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
 })

@@ -35,12 +35,19 @@ const state = createAgentBackgroundSessionTestState({
   registerAgentLaunchConfig: mockRegisterAgentLaunchConfig
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => state,
-    subscribe: vi.fn(() => () => {})
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      getState: () => state,
+      subscribe: vi.fn(() => () => {})
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 // Why: the background mount's sleeping-agent scan reads store state these launches never seed.
 vi.mock('@/lib/sleeping-agent-wake-requests', () => ({ requestSleepingAgentWakeOnMount: vi.fn() }))

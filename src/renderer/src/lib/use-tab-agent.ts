@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { isShellProcess } from '../../../shared/agent-detection'
+import { useAgentStatusSelector } from '@/store/agent-status'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { getTabAgentExitOwner } from './tab-agent-exit-owner'
 import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
 import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -24,40 +26,8 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { agentTypeToIconAgent } from './agent-status'
 
-// A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
-function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
-  const trimmed = title.trim()
-  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
-}
-
-/**
- * Probe-free evidence a launched agent exited: title shows no agent, no live
- * hook remains, and either the hook completed or observed activity vanished.
- * Vanished-activity is local-only — remote rows also drop on transport blips.
- */
-export function resolveLaunchedAgentExitEvidence(args: {
-  title: string
-  defaultTitle?: string
-  isRemote: boolean
-  hasObservedAgentSignal: boolean
-  hookAgent: TerminalAgent | null
-  siblingHookAgent?: TerminalAgent | null
-  hasCompletedHook: boolean
-  processAgent?: TerminalAgent | null
-  processShellForeground?: boolean
-}): boolean {
-  if (args.hookAgent || args.siblingHookAgent || args.processAgent) {
-    return false
-  }
-  // Why: OSC 133;D (foreground back at shell) is title-independent exit evidence; local-only — remote panes have no shell-foreground producer.
-  if (!args.isRemote && args.processShellForeground && args.hasObservedAgentSignal) {
-    return true
-  }
-  if (!titleShowsNoAgent(args.title, args.defaultTitle)) {
-    return false
-  }
-  return args.hasCompletedHook || (!args.isRemote && args.hasObservedAgentSignal)
-}
+import { titleShowsNoAgent, resolveLaunchedAgentExitEvidence } from './tab-agent-exit-evidence'
+export { resolveLaunchedAgentExitEvidence } from './tab-agent-exit-evidence'
 
 export function resolveTabAgentFromSignals(args: {
   hasObservedAgentSignal: boolean
@@ -174,14 +144,18 @@ export function resolveTabAgentFromSignals(args: {
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
  * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
  */
-export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
-  const focusedHookAgent = useAppStore((s) =>
-    resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
+export function useTabAgent(tab: TerminalTab, groupId?: string): TerminalAgent | null {
+  const focusedHookAgent = useAgentStatusSelector(
+    (s) => resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id),
+    undefined,
+    tab.id
   )
-  const siblingHookAgent = useAppStore((s) =>
-    resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
+  const siblingHookAgent = useAgentStatusSelector(
+    (s) => resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id),
+    undefined,
+    tab.id
   )
-  const focusedCompletedHookAgent = useAppStore(
+  const focusedCompletedHookAgent = useAgentStatusSelector(
     (s) =>
       resolveFocusedCompletedTabAgent(
         s.agentStatusByPaneKey,
@@ -192,9 +166,11 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
         s.retainedAgentsByPaneKey,
         s.terminalLayoutsByTabId[tab.id],
         tab.id
-      )
+      ),
+    undefined,
+    tab.id
   )
-  const siblingCompletedHookAgent = useAppStore(
+  const siblingCompletedHookAgent = useAgentStatusSelector(
     (s) =>
       resolveSiblingCompletedTabAgent(
         s.agentStatusByPaneKey,
@@ -205,10 +181,10 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
         s.retainedAgentsByPaneKey,
         s.terminalLayoutsByTabId[tab.id],
         tab.id
-      )
+      ),
+    undefined,
+    tab.id
   )
-  const hasCompletedHook = focusedCompletedHookAgent !== null
-  const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
   const focusedPaneKey = useAppStore((s) => {
     const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
@@ -226,25 +202,6 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
 
-  // Focused pane's PTY; only used to reset per-process-generation signals on respawn.
-  const ptyId = useAppStore((s) => {
-    const layout = s.terminalLayoutsByTabId[tab.id]
-    const activeLeafId = layout?.activeLeafId
-    const leafPty = activeLeafId ? layout?.ptyIdsByLeafId?.[activeLeafId] : undefined
-    if (leafPty) {
-      return leafPty
-    }
-    const ptyIds = s.ptyIdsByTabId[tab.id] ?? []
-    return ptyIds.length === 1 ? ptyIds[0]! : null
-  })
-  // Why: with no layout to place a completed row, only a single-pane tab may treat it as focused-pane exit evidence.
-  const completedHookScopeKnown = useAppStore((s) => {
-    const layout = s.terminalLayoutsByTabId[tab.id]
-    if (layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
-      return true
-    }
-    return (s.ptyIdsByTabId[tab.id] ?? []).length <= 1
-  })
   const hasRemoteRuntimePty = useAppStore((s) =>
     hasRemoteRuntimePtyForTab(
       s.ptyIdsByTabId[tab.id],
@@ -253,80 +210,16 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   )
   const isRemoteWorktree = useAppStore((s) => worktreeUsesRemoteConnection(s, tab.worktreeId))
   const isRemoteLike = isRemoteWorktree || hasRemoteRuntimePty
-
-  const [hasObservedAgentSignal, setHasObservedAgentSignal] = useState(false)
-  const hasObservedAgentSignalRef = useRef(false)
-  const signalGenerationRef = useRef<string | null>(null)
-  const completedHookEvidence = hasCompletedHook && completedHookScopeKnown
-
-  useEffect(() => {
-    // Why: reset+re-seed in one effect so a respawn drops the stale-generation signal yet re-observes a still-live hook, not left stuck false.
-    const generation = `${ptyId ?? ''}|${String(isRemoteLike)}`
-    if (signalGenerationRef.current !== generation) {
-      signalGenerationRef.current = generation
-      hasObservedAgentSignalRef.current = false
-      setHasObservedAgentSignal(false)
-    }
-    const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(tab.title)
-    // Why: only a title naming the launched agent arms its exit clearing — sibling/other-agent evidence must not.
-    const fallbackAgentSignal = tab.launchAgent
-      ? explicitTitleAgent === tab.launchAgent
-      : Boolean(explicitTitleAgent || siblingHookAgent)
-    // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
-    // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
-    // already-true flag costs SortableTab a second commit each time — and names its fiber
-    // in #185 stacks driven elsewhere (see shared/react-update-depth-attribution.ts).
-    if (
-      !hasObservedAgentSignalRef.current &&
-      (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal)
-    ) {
-      hasObservedAgentSignalRef.current = true
-      setHasObservedAgentSignal(true)
-    }
-  }, [
-    ptyId,
-    isRemoteLike,
-    focusedHookAgent,
-    completedHookEvidence,
-    processAgent,
-    siblingHookAgent,
-    tab.launchAgent,
-    tab.title
-  ])
-
-  useEffect(() => {
-    if (!tab.launchAgent) {
-      return
-    }
-    // Why: AND ref with state — the ref is generation-safe this commit while state can lag one render behind a respawn.
-    const launchedAgentExited = resolveLaunchedAgentExitEvidence({
-      title: tab.title,
-      defaultTitle: tab.defaultTitle,
-      isRemote: isRemoteLike,
-      hasObservedAgentSignal: hasObservedAgentSignal && hasObservedAgentSignalRef.current,
-      hookAgent: focusedHookAgent,
-      siblingHookAgent,
-      hasCompletedHook: completedHookEvidence,
-      processAgent,
-      processShellForeground
-    })
-    if (launchedAgentExited) {
-      clearTabLaunchAgent(tab.id)
-    }
-  }, [
-    clearTabLaunchAgent,
-    completedHookEvidence,
-    focusedHookAgent,
-    siblingHookAgent,
-    hasObservedAgentSignal,
-    isRemoteLike,
-    processAgent,
-    processShellForeground,
-    tab.defaultTitle,
-    tab.id,
-    tab.launchAgent,
-    tab.title
-  ])
+  const service = getTabAgentExitOwner(getAgentStatusOwner(useAppStore))
+  const subscribe = useCallback(
+    (listener: () => void) => service.subscribe(tab.id, listener),
+    [service, tab.id]
+  )
+  const read = useCallback(
+    () => service.getObservation(tab.worktreeId, tab.id, groupId),
+    [service, tab.worktreeId, tab.id, groupId]
+  )
+  const hasObservedAgentSignal = useSyncExternalStore(subscribe, read, read)
 
   return resolveTabAgentFromSignals({
     hasObservedAgentSignal,

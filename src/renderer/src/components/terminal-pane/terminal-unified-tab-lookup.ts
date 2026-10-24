@@ -7,7 +7,7 @@ export type UnifiedTerminalTabFields = {
   isTabPinned: boolean
 }
 
-const terminalTabLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, Tab>>()
+const terminalTabLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, Tab[]>>()
 
 export function getCachedUnifiedTerminalTabForWorktree(
   unifiedTabsByWorktree: Record<string, Tab[]>,
@@ -26,13 +26,15 @@ export function getCachedUnifiedTerminalTabForWorktree(
     lookup = new Map()
     for (const tab of unifiedTabs) {
       if (tab.contentType === 'terminal') {
-        lookup.set(tab.entityId, tab)
+        const items = lookup.get(tab.entityId) ?? []
+        items.push(tab)
+        lookup.set(tab.entityId, items)
       }
     }
     terminalTabLookupByUnifiedTabs.set(unifiedTabs, lookup)
   }
 
-  return lookup.get(terminalTabId) ?? null
+  return lookup.get(terminalTabId)?.at(-1) ?? null
 }
 
 export function getCachedTerminalGroupIdForWorktree(
@@ -68,4 +70,13 @@ export function selectUnifiedTerminalTabFields(
     unifiedTabLabel: tab?.label,
     isTabPinned: tab?.isPinned === true
   }
+}
+
+export function getCachedUnifiedTerminalTabCandidates(
+  source: Record<string, Tab[]>,
+  worktreeId: string,
+  terminalTabId: string
+): readonly Tab[] {
+  getCachedUnifiedTerminalTabForWorktree(source, worktreeId, terminalTabId)
+  return terminalTabLookupByUnifiedTabs.get(source[worktreeId])?.get(terminalTabId) ?? []
 }

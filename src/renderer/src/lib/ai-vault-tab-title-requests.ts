@@ -1,12 +1,16 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
-import type { AiVaultSessionTitle } from '../../../shared/ai-vault-session-title'
-import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
+import {
+  type AiVaultSessionTitle,
+  isAiVaultTitleAgent
+} from '../../../shared/ai-vault-session-title'
+
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { AppState } from '@/store/types'
 
 /** The conversation a tab's pane runs, for an agent `isAgent` accepts. */
 export type AgentPaneConversation<Agent extends AgentType> = {
@@ -32,13 +36,13 @@ function tabIdFromPaneKey(paneKey: string, tabId?: string): string | null {
   return tabId?.trim() || parsePaneKey(paneKey)?.tabId || null
 }
 
-function activePaneKey(state: AppState, tabId: string): string | null {
+function activePaneKey(state: AgentStatusReadState, tabId: string): string | null {
   const activeLeafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
   return activeLeafId ? `${tabId}:${activeLeafId}` : null
 }
 
 function registerCandidate<Agent extends AgentType>(
-  state: AppState,
+  state: AgentStatusReadState,
   tabsById: ReadonlyMap<string, TerminalTab>,
   candidates: Map<string, RequestCandidate<Agent>>,
   isAgent: (agent: AgentType | null | undefined) => agent is Agent,
@@ -90,7 +94,7 @@ function liveCandidate(entry: AgentStatusEntry): Parameters<typeof registerCandi
   }
 }
 
-export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleRequest[] {
+export function collectAiVaultTitleRequests(state: AgentStatusReadState): AiVaultTitleRequest[] {
   return collectAgentPaneConversations(state, isAiVaultTitleAgent).map(
     ({ paneKey: _paneKey, ...request }) => request
   )
@@ -98,7 +102,7 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
 
 /** Each tab's conversation of an agent `isAgent` accepts: live agent, then sleeping, then retained. */
 export function collectAgentPaneConversations<Agent extends AgentType>(
-  state: AppState,
+  state: AgentStatusReadState,
   isAgent: (agent: AgentType | null | undefined) => agent is Agent,
   options: {
     /** Skip retained and sleeping records: those remember a conversation after its agent exited. */
@@ -147,7 +151,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
 
 /** One pane's running agent, mapped as above, so a pane's action finds that pane's own conversation. */
 export function resolvePaneAgentConversation<Agent extends AgentType>(
-  state: AppState,
+  state: AgentStatusReadState,
   pane: { worktreeId: string; paneKey: string },
   isAgent: (agent: AgentType | null | undefined) => agent is Agent
 ): AgentPaneConversation<Agent> | null {

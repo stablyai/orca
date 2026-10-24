@@ -1,15 +1,17 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
 
 type ActivityUnreadCountSource = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'acknowledgedAgentsByPaneKey'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
@@ -97,7 +99,7 @@ export function useActivityUnreadCount(): number {
   return useMemo(() => {
     void agentStatusEpoch
     return countActivityUnread({
-      agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+      agentStatusByPaneKey: getAgentStatusState().agentStatusByPaneKey,
       migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey,
       acknowledgedAgentsByPaneKey,

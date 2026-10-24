@@ -1,3 +1,5 @@
+import { getAgentStatusState } from '@/store/agent-status'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -16,7 +18,7 @@ export function SpaceWindowStatePublisher(): null {
     const publish = (): void => {
       timer = null
       if (windowOpen) {
-        void api.publishWindowState?.(pickSpaceWindowState(useAppStore.getState()))
+        void api.publishWindowState?.(pickSpaceWindowState(getAgentStatusState()))
       }
     }
     const queuePublish = (): void => {
@@ -26,7 +28,7 @@ export function SpaceWindowStatePublisher(): null {
     }
     const offRequest = api.onWindowStateRequested(() => {
       windowOpen = true
-      offStore ??= useAppStore.subscribe((next, previous) => {
+      offStore ??= getAgentStatusOwner(useAppStore).subscribeTransitions(({ next, previous }) => {
         if (spaceWindowStateChanged(previous, next)) {
           queuePublish()
         }

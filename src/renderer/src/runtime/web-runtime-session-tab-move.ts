@@ -1,9 +1,10 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult
 } from '../../../shared/runtime-types'
-import { useAppStore } from '../store'
+import '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
@@ -25,7 +26,7 @@ export async function moveWebRuntimeSessionTab(
 ): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
+    getAgentStatusState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
@@ -47,7 +48,7 @@ export async function moveWebRuntimeSessionTab(
   try {
     const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
       await import('./web-session-tabs-sync/tracking-mappings')
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const groups = state.groupsByWorktree?.[args.worktreeId] ?? []
     const targetGroup = groups.find((group) => group.id === args.targetGroupId)
     const recordedHostGroupId = (tabId: string): string | null =>

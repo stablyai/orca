@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { Repo } from '../../../shared/repo-types'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -128,7 +129,9 @@ export function makeAgentEntry(
 }
 
 /** Two worktrees, one terminal tab each, none of them current. */
-export function makeRecentTabState(overrides: Partial<AppState> = {}): Partial<AppState> {
+export function makeRecentTabState(
+  overrides: Partial<AgentStatusReadState> = {}
+): Partial<AgentStatusReadState> {
   const alpha = makeWorktree('wt-alpha', 'Alpha workspace')
   const beta = makeWorktree('wt-beta', 'Beta workspace')
   return {

@@ -1,7 +1,8 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
-import { useAppStore } from '../../store'
+import '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import {
@@ -89,13 +90,13 @@ export function handleGlobalSessionInventoryEvent({
       unchanged[index]
         ? Promise.resolve(snapshot)
         : recoverMirroredTerminalOrphansBeforeApply(
-            useAppStore.getState(),
+            getAgentStatusState(),
             snapshot,
             environmentId,
             {
               expectedEnvironmentPairingRevision,
               expectedRuntimeId: runtimeId,
-              getCurrentState: () => useAppStore.getState()
+              getCurrentState: () => getAgentStatusState()
             }
           )
     )

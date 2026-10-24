@@ -47,15 +47,22 @@ type WorktreeListComponent = React.ComponentType<{
 
 let WorktreeList: WorktreeListComponent
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
-    {
-      getState: () => mockStore.state,
-      subscribe: () => () => {}
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+      {
+        getState: () => mockStore.state,
+        subscribe: () => () => {}
+      }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 // Why: honor the real getItemKey so each virtual row's React key equals
 // getRenderRowKey(row). This is what makes the parent card remount when it

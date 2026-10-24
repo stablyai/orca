@@ -1,9 +1,10 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { createPortal } from 'react-dom'
 import NativeChatView from '../native-chat/NativeChatView'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
-import { useAppStore } from '@/store'
+import '@/store'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { NativeChatPaneCover } from './NativeChatPaneCover'
 
@@ -31,10 +32,13 @@ export function TerminalPaneNativeChatPortal({
     switchNativeChatToTerminal,
     tabId
   } = controller
-  const chatPaneSessionId = useAppStore((state) =>
-    effectiveChatViewMode && chatPane
-      ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
-      : null
+  const chatPaneSessionId = useAgentStatusSelector(
+    (state) =>
+      effectiveChatViewMode && chatPane
+        ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
+        : null,
+    undefined,
+    tabId
   )
   if (!effectiveChatViewMode || !chatPane?.container) {
     return null

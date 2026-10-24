@@ -27,7 +27,7 @@ export function createAgentStatusOrchestrationActions(
           s.runtimeAgentOrchestrationByPaneKey,
           entries
         )
-        let nextLive = s.agentStatusByPaneKey
+        let nextLive: Record<string, AgentStatusEntry> = s.agentStatusByPaneKey
         let liveChanged = false
         let nextRetained = s.retainedAgentsByPaneKey
         let retainedChanged = false

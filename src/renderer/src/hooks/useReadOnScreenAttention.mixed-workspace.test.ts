@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
@@ -33,7 +35,7 @@ function seedMixedWorkspace(seed: {
   unreadSubjectKeys: readonly string[]
 }): { store: TestStore } {
   const store = createTestStore()
-  store.setState({
+  applyAgentStatusPatch(store, {
     activeView: 'terminal',
     activeWorktreeId: WORKSPACE,
     activeTabId: TERMINAL_TAB,
@@ -81,9 +83,9 @@ function seedMixedWorkspace(seed: {
 
 /** The hook's scan: acknowledge each target on screen, then read their markers. */
 function runAutoAckScan(store: TestStore): void {
-  const targets = resolveAutoAckTabTargets(store.getState())
+  const targets = resolveAutoAckTabTargets(getAgentStatusOwner(store).getState())
   for (const target of targets) {
-    acknowledgeViewedAutoAckTarget(store.getState(), target)
+    acknowledgeViewedAutoAckTarget(getAgentStatusOwner(store).getState(), target)
   }
   store
     .getState()
@@ -92,7 +94,7 @@ function runAutoAckScan(store: TestStore): void {
 
 /** Whether the workspace flag survives the scan's settle. */
 const workspaceStillHeld = (store: TestStore): boolean =>
-  workspaceHasLiveMarker(store.getState(), WORKSPACE)
+  workspaceHasLiveMarker(getAgentStatusOwner(store).getState(), WORKSPACE)
 
 describe('the on-screen read in a workspace holding both a terminal and a structured chat', () => {
   it('sends the visible surface to the adapter that owns its address', () => {
@@ -162,7 +164,7 @@ describe('the on-screen read in a workspace holding both a terminal and a struct
       visible: 'terminal',
       unreadSubjectKeys: [TERMINAL_SUBJECT]
     })
-    store.setState({ unreadTerminalTabs: { [CHAT_TAB]: 'agent-completion' } })
+    applyAgentStatusPatch(store, { unreadTerminalTabs: { [CHAT_TAB]: 'agent-completion' } })
 
     runAutoAckScan(store)
 
@@ -173,7 +175,7 @@ describe('the on-screen read in a workspace holding both a terminal and a struct
 
 function markChatGroupUnread(store: TestStore, groupId: string): void {
   // Why: tab markers for completions sit behind the experimental attention setting.
-  store.setState({
+  applyAgentStatusPatch(store, {
     settings: { ...getDefaultSettings('/home/test'), experimentalTerminalAttention: true }
   })
   store.getState().markAgentAttentionUnread({

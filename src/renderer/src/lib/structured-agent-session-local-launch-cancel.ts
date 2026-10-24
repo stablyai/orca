@@ -24,8 +24,11 @@ export function cancelStructuredAgentLaunchOnLocalHost(
   sessionId: string
 ): void {
   deleteStructuredAgentLaunchRecord(sessionId)
-  // Why: main answers a create for a chat closed meanwhile as ok, and no tombstone is written.
   closedByLocalCancel.add(sessionId)
+  closeLocalLaunch(worktreeId, sessionId)
+}
+
+function closeLocalLaunch(worktreeId: string, sessionId: string): void {
   void retireStructuredAgentSessionTab({
     target: { kind: 'local' },
     worktreeId,
@@ -37,4 +40,16 @@ export function cancelStructuredAgentLaunchOnLocalHost(
       }
     }
   })
+}
+
+export function prepareStructuredAgentLocalLaunchCancellation(
+  worktreeId: string,
+  sessionId: string
+) {
+  return {
+    install: () => {
+      closedByLocalCancel.add(sessionId)
+    },
+    effects: [() => closeLocalLaunch(worktreeId, sessionId)]
+  }
 }

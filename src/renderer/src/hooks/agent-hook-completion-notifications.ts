@@ -1,3 +1,4 @@
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion-coordinator'
@@ -321,8 +322,7 @@ export function hookLaneCanAnnouncePaneTurnEnd(paneKey: string): boolean {
 export function hasPendingHookLaneCompletion(paneKey: string, ptyId: string | null): boolean {
   return (
     coordinatorsByPaneKey.get(paneKey)?.coordinator.hasPendingHookDoneCompletion() === true &&
-    hookTurnEndEvidence(ptyId, useAppStore.getState().agentStatusByPaneKey[paneKey]) ===
-      'identified'
+    hookTurnEndEvidence(ptyId, getAgentStatusEntry(paneKey)) === 'identified'
   )
 }
 

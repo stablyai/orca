@@ -38,11 +38,11 @@ async function seedActivity(
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
-      const tab = store.getState().tabsByWorktree[worktreeId]?.[0]
+      const tab = window.__agentStatus!.getState().tabsByWorktree[worktreeId]?.[0]
       if (!tab) {
         throw new Error('The seeded workspace needs a terminal tab')
       }
-      store.setState({
+      window.__setStorePatch!({
         agentStatusByPaneKey: {},
         retainedAgentsByPaneKey: {},
         acknowledgedAgentsByPaneKey: {}
@@ -53,8 +53,8 @@ async function seedActivity(
       const now = Date.now()
       for (let index = 0; index < count; index += 1) {
         const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
-        store
-          .getState()
+        window
+          .__agentStatus!.getState()
           .setAgentStatus(
             `${tab.id}:${leafId}`,
             { state, prompt: `Activity layout ${index}`, agentType: 'codex' },
@@ -191,25 +191,29 @@ for (const theme of ['dark', 'light'] as const) {
         if (!store) {
           throw new Error('window.__store is unavailable')
         }
-        await store.getState().updateSettings({ theme, agentsSidebarIntroShown: true })
-        store.getState().setSidebarBody('workspaces')
+        await window
+          .__agentStatus!.getState()
+          .updateSettings({ theme, agentsSidebarIntroShown: true })
+        window.__agentStatus!.getState().setSidebarBody('workspaces')
         store.setState({
           worktreesByRepo: Object.fromEntries(
-            Object.entries(store.getState().worktreesByRepo).map(([repoId, worktrees]) => [
-              repoId,
-              worktrees.map((worktree) =>
-                worktree.id === worktreeId
-                  ? {
-                      ...worktree,
-                      linkedItems: Array.from({ length: 12 }, (_, index) => ({
-                        provider: 'github' as const,
-                        type: 'pr' as const,
-                        number: index + 1
-                      }))
-                    }
-                  : worktree
-              )
-            ])
+            Object.entries(window.__agentStatus!.getState().worktreesByRepo).map(
+              ([repoId, worktrees]) => [
+                repoId,
+                worktrees.map((worktree) =>
+                  worktree.id === worktreeId
+                    ? {
+                        ...worktree,
+                        linkedItems: Array.from({ length: 12 }, (_, index) => ({
+                          provider: 'github' as const,
+                          type: 'pr' as const,
+                          number: index + 1
+                        }))
+                      }
+                    : worktree
+                )
+              ]
+            )
           )
         })
         await document.fonts.ready

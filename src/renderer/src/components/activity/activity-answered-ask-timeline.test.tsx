@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 // A settled parent whose subagent asks and is answered. Its done keeps the turn's own end time,
@@ -11,7 +12,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '@/store/types'
+
 import { makeRepo, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import { activityThreadRowCopy, activityThreadStatusId } from './activity-thread-presentation'
 import { clearActivityThread } from './activity-clear-completed'
@@ -19,8 +20,8 @@ import { countActivityUnread } from './useActivityUnreadCount'
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState> & { testRuntimeOwner?: string | null }) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState> & { testRuntimeOwner?: string | null }) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -35,7 +36,12 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   const useAppStore = createTestStore()
-  mocks.store = useAppStore
+  const { getAgentStatusOwner } = await import('@/store/agent-status-commit')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  mocks.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 

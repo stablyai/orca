@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../../agent-status-commit'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
@@ -20,6 +21,7 @@ type ActivityActions = Pick<
 >
 
 export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
+  const statusState = getAgentStatusOwner({ getState: _get }).getTransactionState
   return {
     acknowledgedAgentsByPaneKey: {},
     acknowledgeAgents: (paneKeys, reads, intent) => {
@@ -40,7 +42,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           let stamp = now
-          const liveEntry = s.agentStatusByPaneKey?.[key]
+          const liveEntry = statusState().agentStatusByPaneKey?.[key]
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               ids: notificationIdsToDismiss,
@@ -107,7 +109,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             delete next[key]
           }
           const turnTimestamp =
-            s.agentStatusByPaneKey?.[key]?.stateStartedAt ??
+            statusState().agentStatusByPaneKey?.[key]?.stateStartedAt ??
             s.retainedAgentsByPaneKey?.[key]?.entry.stateStartedAt
           if (
             turnTimestamp !== undefined &&

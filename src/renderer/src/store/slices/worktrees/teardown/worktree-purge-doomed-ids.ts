@@ -1,8 +1,9 @@
+import { afterPurgeAcceptance, preparePurgeOwnership } from './worktree-purge-preparation'
+import { findAgentStatusOwner } from '../../../agent-status-commit'
 import type { AppState } from '../../../types'
-import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { prepareAgentHibernationOutputRemoval } from '@/lib/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
-import { forgetAgentPaneAuthorityAliasesByTabIds } from '../../agent-pane-authority'
+import { prepareAgentStartupDeliveriesRemoval } from '@/lib/agent-startup-delivery-guards'
 import { forgetDetachedHeadAutoDerivedDisplayName } from '../metadata/detached-head-display-name'
 
 export type WorktreePurgeDoomedIds = {
@@ -26,7 +27,7 @@ export function collectWorktreePurgeDoomedIds(
       browserWorkspaceIds.push(workspace.id)
     }
     // Why: drop the auto-derived detached-HEAD display name so the module-level map doesn't retain removed worktrees for the session.
-    forgetDetachedHeadAutoDerivedDisplayName(id)
+    afterPurgeAcceptance(s, () => forgetDetachedHeadAutoDerivedDisplayName(id))
   }
   for (const file of s.openFiles) {
     if (worktreeIdSet.has(file.worktreeId)) {
@@ -76,14 +77,20 @@ export function collectSurfacePurgeDoomedIds(
     // Null-tolerant like the omit* helpers below: some callers pass partial state omitting this slice (production store always inits to {}).
     addDoomedTabPtyIds(tab.id, tab.ptyId)
     // Why: a removed worktree's panes are gone, so drop their hibernation output epochs from the module-level map (a future pane mints a fresh leafId at epoch 0).
-    forgetAgentHibernationTabOutput(tab.id)
   }
   // Why: same rationale for doomed tabs' foreground last-seen timestamps and agent-startup delivery guards — retired tab ids never recur.
-  forgetForegroundTerminalTabs(doomedTabIds)
-  forgetAgentStartupDeliveriesForTabs(doomedTabIds)
+  afterPurgeAcceptance(s, () => forgetForegroundTerminalTabs(doomedTabIds))
+  preparePurgeOwnership(s, {
+    install: prepareAgentStartupDeliveriesRemoval(doomedTabIds),
+    effects: []
+  })
+  preparePurgeOwnership(s, {
+    install: prepareAgentHibernationOutputRemoval(doomedTabIds),
+    effects: []
+  })
   // Why: pane-authority aliases outlive the store maps they route to, so a purged
   // tab would leave a permanent entry pointing at a pane that no longer exists.
-  forgetAgentPaneAuthorityAliasesByTabIds(doomedTabIds)
+  findAgentStatusOwner(s)?.authority().forgetAgentPaneAuthorityAliasesByTabIds(doomedTabIds)
   // Why: per-page browser maps are keyed by page id, so collect every page of a doomed workspace to evict here (the authoritative-scan reconcile skips closeBrowserTab's cleanup).
   for (const workspaceId of doomedBrowserWorkspaceIds) {
     for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {

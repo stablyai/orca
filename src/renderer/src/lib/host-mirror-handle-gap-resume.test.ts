@@ -1,3 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import path from 'node:path'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
@@ -5,7 +8,7 @@ import {
   resetWebSessionTabsSyncTestState
 } from '@/runtime/web-session-tabs-sync-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -38,7 +41,7 @@ import {
 // budget — so the assertion has to advance the clock: park, advance part of the budget, do the
 // thing, then advance to the ORIGINAL deadline and require the pane to decide on schedule.
 
-const initialAppStoreState = useAppStore.getState()
+const initialAppStoreState = getAgentStatusOwner(useAppStore).getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
@@ -57,7 +60,7 @@ function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree>
 
 /** A published mirrored row: tab, layout leaf, and the leaf's host PTY binding. */
 function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorktree>): void {
-  const state: Partial<AppState> = {
+  const state: Partial<AgentStatusReadState> = {
     repos: [
       {
         id: 'repo-1',
@@ -92,7 +95,7 @@ function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorkt
     agentStatusByPaneKey: {}
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-  useAppStore.setState(state as AppState)
+  applyAgentStatusPatch(useAppStore, state as AgentStatusReadState)
 }
 
 /** A cold split mirror whose sibling is ready before this leaf has ever held a binding. */
@@ -101,7 +104,7 @@ function seedSplitTabWithOnlySiblingReady(
 ): void {
   seedMirroredWorkspace(worktree)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     terminalLayoutsByTabId: {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
       [WEB_TAB_ID]: {
@@ -123,9 +126,9 @@ function seedSplitTabWithOnlySiblingReady(
 
 /** A second published mirrored row in the same environment, with its own leaf binding. */
 function seedSecondMirroredPane(worktreeId: string): void {
-  const before = useAppStore.getState()
+  const before = getAgentStatusOwner(useAppStore).getState()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     tabsByWorktree: {
       [worktreeId]: [
         ...(before.tabsByWorktree[worktreeId] ?? []),
@@ -155,7 +158,7 @@ function seedActiveSleepingRecordFor(
 ): string {
   const paneKey = makePaneKey(tabId, leafId)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     sleepingAgentSessionsByPaneKey: {
       ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -185,7 +188,7 @@ function setRuntimeEnvironmentStatusEntryForTests(
   environmentId: string,
   entry: RuntimeEnvironmentStatus
 ): void {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     runtimeStatusByEnvironmentId: new Map(useAppStore.getState().runtimeStatusByEnvironmentId).set(
       environmentId,
       entry
@@ -239,13 +242,13 @@ function setRuntimeEnvironmentReconnectedForTests(environmentId: string): void {
 function clearRuntimeEnvironmentStatusEntryForTests(environmentId: string): void {
   const next = new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
   next.delete(environmentId)
-  useAppStore.setState({ runtimeStatusByEnvironmentId: next })
+  applyAgentStatusPatch(useAppStore, { runtimeStatusByEnvironmentId: next })
 }
 
 describe('resume across the mirror handle gap', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    useAppStore.setState(initialAppStoreState, true)
+    applyAgentStatusPatch(useAppStore, initialAppStoreState)
     resetHostSessionMirrorHydrationForTests()
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
@@ -254,7 +257,7 @@ describe('resume across the mirror handle gap', () => {
   afterEach(() => {
     // Why first: the store reset below retracts every row, which would replay a still-parked wait.
     resetHostMirrorHandleGapWaitsForTests()
-    useAppStore.setState(initialAppStoreState, true)
+    applyAgentStatusPatch(useAppStore, initialAppStoreState)
     resetHostSessionMirrorHydrationForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
     vi.useRealTimers()
@@ -269,7 +272,7 @@ describe('resume across the mirror handle gap', () => {
 
     const launched = resumeSleepingAgentSessionsForWorktree(worktree.id)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(launched).toBe(0)
     expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(Object.keys(after.pendingStartupByTabId)).toHaveLength(0)
@@ -300,8 +303,14 @@ describe('resume across the mirror handle gap', () => {
       ],
       { worktree: worktree.id }
     )
-    useAppStore.setState(
-      applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, RUNTIME_ENV_ID, Date.now())
+    applyAgentStatusPatch(
+      useAppStore,
+      applyWebSessionTabsSnapshot(
+        getAgentStatusOwner(useAppStore).getState(),
+        snapshot,
+        RUNTIME_ENV_ID,
+        Date.now()
+      )
     )
 
     expect(
@@ -325,7 +334,7 @@ describe('resume across the mirror handle gap', () => {
     seedMirroredWorkspace(worktree)
     seedActiveSleepingRecord(worktree.id)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       terminalLayoutsByTabId: {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture carries the fields this suite drives; the cast only supplies the rest of the declared shape.
         [WEB_TAB_ID]: {
@@ -352,12 +361,14 @@ describe('resume across the mirror handle gap', () => {
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
 
-    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_1'] } })
+    applyAgentStatusPatch(useAppStore, {
+      ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_1'] }
+    })
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
     // The released waiter must not fire again at the deadline.
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
@@ -373,7 +384,7 @@ describe('resume across the mirror handle gap', () => {
     // A sibling handle does not authorize a second writer for this leaf.
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     const resumeTabIds = (after.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== WEB_TAB_ID)
@@ -391,11 +402,11 @@ describe('resume across the mirror handle gap', () => {
       expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
     }
 
-    useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] } })
+    applyAgentStatusPatch(useAppStore, { tabsByWorktree: { [worktree.id]: [] } })
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS * 2)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.tabsByWorktree[worktree.id]).toEqual([])
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
@@ -414,7 +425,7 @@ describe('resume across the mirror handle gap', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     vi.advanceTimersByTime(1)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     const resumeTabIds = (after.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== WEB_TAB_ID)
@@ -504,7 +515,7 @@ describe('resume across the mirror handle gap', () => {
     setRuntimeEnvironmentDisconnectedForTests(RUNTIME_ENV_ID)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
-    const during = useAppStore.getState()
+    const during = getAgentStatusOwner(useAppStore).getState()
     expect(during.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(during.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     expect((during.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
@@ -517,7 +528,7 @@ describe('resume across the mirror handle gap', () => {
     clearRuntimeEnvironmentStatusEntryForTests(RUNTIME_ENV_ID)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
@@ -536,7 +547,7 @@ describe('resume across the mirror handle gap', () => {
     setRuntimeEnvironmentTransportDownForTests(RUNTIME_ENV_ID)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
-    const during = useAppStore.getState()
+    const during = getAgentStatusOwner(useAppStore).getState()
     expect(during.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(during.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
@@ -559,14 +570,14 @@ describe('resume across the mirror handle gap', () => {
     setRuntimeEnvironmentReconnectedForTests(RUNTIME_ENV_ID)
     vi.advanceTimersByTime(1)
 
-    const during = useAppStore.getState()
+    const during = getAgentStatusOwner(useAppStore).getState()
     expect(during.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(during.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
     // Re-armed on the regained contact; the next full budget of real silence decides.
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
@@ -587,11 +598,13 @@ describe('resume across the mirror handle gap', () => {
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(2)
 
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
-    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_1'] } })
+    applyAgentStatusPatch(useAppStore, {
+      ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_1'] }
+    })
 
     // The first pane owns its live PTY; the second is still undecided, not resumed.
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect(after.sleepingAgentSessionsByPaneKey[firstPaneKey]).toBeDefined()
     expect(after.sleepingAgentSessionsByPaneKey[secondPaneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
@@ -612,7 +625,7 @@ describe('resume across the mirror handle gap', () => {
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
 
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       ptyIdsByTabId: { 'web-terminal-other-env-tab': ['remote:env-other@@term_1'] }
     })
 
@@ -634,7 +647,7 @@ describe('resume across the mirror handle gap', () => {
 
     // Teardown drops every row the environment owned.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seeded slice names only the store fields this suite drives; the rest of AppState keeps its defaults.
-    useAppStore.setState({ tabsByWorktree: {}, terminalLayoutsByTabId: {} } as never)
+    applyAgentStatusPatch(useAppStore, { tabsByWorktree: {}, terminalLayoutsByTabId: {} } as never)
 
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
     // Nothing may still be scheduled against the torn-down environment.

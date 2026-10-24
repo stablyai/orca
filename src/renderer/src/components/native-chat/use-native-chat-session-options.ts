@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../shared/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-import { useAppStore } from '../../store'
+import { useAgentStatusField } from '@/store/agent-status'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
@@ -79,11 +79,10 @@ export function useNativeChatSessionOptions(args: {
     paneKey
   } = args
   // Why: a primitive selector, so unrelated status pings on the pane rerender nothing.
-  const reportedModel = useAppStore((state) =>
-    paneKey ? (state.agentStatusByPaneKey[paneKey]?.model ?? null) : null
-  )
-  const canSwitchOmpModel = useAppStore((state) =>
-    paneKey ? state.agentStatusByPaneKey[paneKey]?.modelSwitchCommand === 'orca-model' : false
+  const reportedModel = useAgentStatusField(paneKey, (entry) => entry?.model ?? null)
+  const canSwitchOmpModel = useAgentStatusField(
+    paneKey,
+    (entry) => entry?.modelSwitchCommand === 'orca-model'
   )
   // The hook-reported model this surface last applied. Only a report that CHANGES
   // is evidence: the same value is re-delivered on every status ping, and a

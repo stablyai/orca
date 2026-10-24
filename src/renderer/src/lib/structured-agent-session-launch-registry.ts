@@ -1,8 +1,9 @@
+import { prepareStructuredAgentSessionLaunchCancellation } from './structured-agent-session-launch-cancel-preparation'
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
 import type {
@@ -22,16 +23,11 @@ import {
   type StructuredLaunchSlotOwner
 } from './structured-agent-session-launch-slot'
 import {
-  markStructuredAgentLaunchCancellation,
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
 } from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import {
-  cancelStructuredAgentLaunchOnLocalHost,
-  resetStructuredAgentLocalLaunchCancelsForTests
-} from './structured-agent-session-local-launch-cancel'
+import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -101,11 +97,18 @@ export function setStructuredLaunchState(state: StructuredLaunchState): void {
   persistStructuredLaunchState(state)
 }
 
-export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
+export function detachStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
   if (structuredLaunchesBySessionId.get(state.intent.sessionId) !== state) {
     return false
   }
   structuredLaunchesBySessionId.delete(state.intent.sessionId)
+  return true
+}
+
+export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchState): boolean {
+  if (!detachStructuredLaunchStateIfCurrent(state)) {
+    return false
+  }
   deleteStructuredAgentLaunchRecord(state.intent.sessionId)
   return true
 }
@@ -240,31 +243,14 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   const surfaceAddress =
     state?.intent.surfaceAddress ??
     getPersistedStructuredAgentLaunchRecord(sessionId)?.surfaceAddress
-  if (matchesLaunchWorktree(state, worktreeId) && state) {
-    // The launch's own owner outranks the caller's: it is the host the create was sent to.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN && state.intent.executionHostId === LOCAL_EXECUTION_HOST_ID) {
-      cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
-    } else {
-      markStructuredAgentLaunchCancellation(
-        sessionId,
-        state.intent.executionHostId,
-        alreadyCancelled,
-        state.promise
-      )
-    }
-    state.cancelled = true
-    state.callers.outcome = 'cancelled'
-    // The tombstone is the durable authority; drop the in-memory launch so bulk closes cannot
-    // retain a dead promise for the lifetime of the renderer.
-    deleteStructuredLaunchStateIfCurrent(state)
-  } else if (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    !alreadyCancelled &&
-    executionHostId === LOCAL_EXECUTION_HOST_ID
-  ) {
-    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
-  } else if (!alreadyCancelled) {
-    markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
+  const prepared = prepareStructuredAgentSessionLaunchCancellation(
+    worktreeId,
+    sessionId,
+    executionHostId
+  )
+  prepared.install()
+  for (const effect of prepared.effects) {
+    effect()
   }
   if (owner && surfaceAddress) {
     removeStructuredLaunchSlot(owner, worktreeId, sessionId)
@@ -338,3 +324,5 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   }
   return changed
 }
+
+export { prepareStructuredAgentSessionLaunchCancellation } from './structured-agent-session-launch-cancel-preparation'

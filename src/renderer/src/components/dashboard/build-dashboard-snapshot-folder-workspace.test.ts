@@ -177,7 +177,8 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     mixedState.ptyIdsByTabId[localTabId] = ['pty-local']
     mixedState.ptyIdsByTabId['title-tab'] = ['pty-title']
     mixedState.runtimePaneTitlesByTabId['title-tab'] = { 1: '✦ Claude Code' }
-    mixedState.agentStatusByPaneKey[localPaneKey] = {
+    const live = { ...mixedState.agentStatusByPaneKey }
+    live[localPaneKey] = {
       paneKey: localPaneKey,
       state: 'done',
       prompt: 'Review complete',
@@ -190,7 +191,7 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     }
     mixedState.acknowledgedAgentsByPaneKey[localPaneKey] = NOW
 
-    const snapshot = buildDashboardSnapshot(mixedState, NOW)
+    const snapshot = buildDashboardSnapshot({ ...mixedState, agentStatusByPaneKey: live }, NOW)
     const expected = { attention: 0, working: 0, done: 0, idle: 0 }
     for (const card of snapshot.cards) {
       expected[card.bucket] += 1
@@ -203,7 +204,9 @@ describe('buildDashboardSnapshot folder workspaces', () => {
       startedAt: 0
     })
 
-    expect(buildDashboardBucketCounts(mixedState, NOW)).toEqual(expected)
+    expect(buildDashboardBucketCounts({ ...mixedState, agentStatusByPaneKey: live }, NOW)).toEqual(
+      expected
+    )
   })
 
   it('keeps done structured sessions visible when their tab exists only in unified tabs', () => {

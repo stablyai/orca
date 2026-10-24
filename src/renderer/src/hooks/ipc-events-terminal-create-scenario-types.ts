@@ -1,3 +1,4 @@
+import type { AppState } from '@/store/types'
 import type { Mock } from 'vitest'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -78,7 +79,7 @@ export type TerminalCreateSurfacingStore = {
   registerAgentLaunchConfig: SpyMock
   clearAgentLaunchConfig: SpyMock
   updateTabPtyId: Mock<(tabId: string, ptyId: string) => void>
-  setTabLayout: Mock<(tabId: string, layout: unknown) => void>
+  setTabLayout: Mock<AppState['setTabLayout']>
   tabsByWorktree: Record<
     string,
     { id: string; ptyId?: string | null; title?: string; agentLaunchPane?: { leafId: string } }[]
@@ -147,7 +148,7 @@ export type TerminalCreateSurfacingScenario = Pick<
   >
   focusRuntimeTerminalSurface: Mock<() => boolean>
   focusTerminalTabSurface: SpyMock
-  storeState: TerminalCreateSurfacingStore
+  storeState: AppState
   createTerminalListenerRef: ListenerRef<(data: TerminalCreateListenerPayload) => void>
   requestTerminalCreateListenerRef: ListenerRef<
     (data: RequestTerminalCreateListenerPayload) => void

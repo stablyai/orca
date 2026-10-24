@@ -1,3 +1,4 @@
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -33,7 +34,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -58,17 +59,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -160,7 +168,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 const RESUME = { key: 'session_id', id: 'provider-session-1' } as const
@@ -216,22 +224,25 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     drain.queued.clear()
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
-    mockStoreState.rememberSleepingAgentSession = vi.fn((record: { paneKey: string }) => {
-      mockStoreState.sleepingAgentSessionsByPaneKey[record.paneKey] ??= record
+    storeFixture = await createInitialStoreState()
+    storeFixture.patch({
+      rememberSleepingAgentSession: vi.fn((record: SleepingAgentSessionRecord) => {
+        storeFixture.read().sleepingAgentSessionsByPaneKey[record.paneKey] ??= record
+      })
     })
-    mockStoreState.pendingStartupByTabId = {}
-    mockStoreState.automaticAgentResumeClaimsByTabId = {}
+    storeFixture.patch({ pendingStartupByTabId: {} })
+    storeFixture.patch({ automaticAgentResumeClaimsByTabId: {} })
     await installTerminalTestGlobals()
     ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('keeps the pane sleeping with its resume handle and resumes it when opened', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -260,7 +271,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       expect.objectContaining({ resumeSpawnIntent: 'automatic-restore' })
     ])
     expect(getPaneSpawnDeferral(paneKey)?.reason).toBe('live_cap')
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+    expect(storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
       paneKey,
       agent: 'claude',
       providerSession: RESUME,
@@ -281,7 +292,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('resumes a hidden pane in the background once the host has room, as an automatic restore', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -323,7 +334,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('stops the background retry when the pane is opened or closed', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -351,7 +362,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('does not remount a deferred pane, which would only be deferred again', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const { requestTerminalPaneRecovery } = await import('./terminal-pane-recovery')
     const transport = deferringTransport()
@@ -383,7 +394,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('does not resume a session that meanwhile started in another tab', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
@@ -409,24 +420,24 @@ describe('connectPanePty: a restore the host kept asleep', () => {
     expect(getPaneSpawnDeferral(paneKey)).toBeDefined()
 
     const otherLeaf = '22222222-2222-4222-8222-222222222222'
-    mockStoreState.agentStatusByPaneKey[makePaneKey('tab-2', otherLeaf)] = {
+    storeFixture.setStatus(makePaneKey('tab-2', otherLeaf), {
       paneKey: makePaneKey('tab-2', otherLeaf),
       agentType: 'claude',
       providerSession: RESUME,
       state: 'working'
-    }
-    mockStoreState = {
-      ...mockStoreState,
-      ptyIdsByTabId: { ...mockStoreState.ptyIdsByTabId, 'tab-2': ['pty-elsewhere'] },
+    })
+    storeFixture.patch({
+      ...storeFixture.read(),
+      ptyIdsByTabId: { ...storeFixture.read().ptyIdsByTabId, 'tab-2': ['pty-elsewhere'] },
       terminalLayoutsByTabId: {
-        ...mockStoreState.terminalLayoutsByTabId,
+        ...storeFixture.read().terminalLayoutsByTabId,
         'tab-2': {
           root: { type: 'leaf', leafId: otherLeaf },
           activeLeafId: otherLeaf,
           expandedLeafId: null
         }
       }
-    }
+    })
     deps.isVisibleRef.current = true
     binding.noteVisibilityResume()
     await flushAsyncTicks(20)
@@ -437,7 +448,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('stays the owner while its retry is in flight, then hands over to the PTY', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral, isPaneSpawnDeferred } =
       await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport()
@@ -482,7 +493,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('does not resume a session another tab has already queued', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = deferringTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -503,9 +514,11 @@ describe('connectPanePty: a restore the host kept asleep', () => {
       binding.dispose()
       return
     }
-    mockStoreState.pendingStartupByTabId = {
-      'tab-9': { command: 'claude', launchAgent: 'claude', resumeProviderSession: RESUME }
-    }
+    storeFixture.patch({
+      pendingStartupByTabId: {
+        'tab-9': { command: 'claude', launchAgent: 'claude', resumeProviderSession: RESUME }
+      }
+    })
     deps.isVisibleRef.current = true
     binding.noteVisibilityResume()
     await flushAsyncTicks(20)
@@ -515,7 +528,7 @@ describe('connectPanePty: a restore the host kept asleep', () => {
   })
 
   it('offers to clear a crash pause on the host, then resumes the pane', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const { getPaneSpawnDeferral } = await import('@/lib/pane-spawn-deferral-registry')
     const transport = deferringTransport('paused')
     transportFactoryQueue.push(transport)

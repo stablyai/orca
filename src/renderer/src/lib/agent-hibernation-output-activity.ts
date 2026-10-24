@@ -42,3 +42,16 @@ export function getAgentHibernationOutputSignature(paneKeys: readonly string[]):
 export function resetAgentHibernationOutputActivityForTests(): void {
   outputEpochByPaneKey.clear()
 }
+
+export function prepareAgentHibernationOutputRemoval(tabIds: ReadonlySet<string>): () => void {
+  const captured = [...outputEpochByPaneKey].filter(([key]) =>
+    [...tabIds].some((id) => key.startsWith(`${id}:`))
+  )
+  return () => {
+    for (const [key, epoch] of captured) {
+      if (outputEpochByPaneKey.get(key) === epoch) {
+        outputEpochByPaneKey.delete(key)
+      }
+    }
+  }
+}

@@ -31,10 +31,8 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
     return holder.store
   }
   return {
-    useAppStore: {
-      getState: () => live().getState(),
-      setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
-      subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
+    get useAppStore() {
+      return live()
     }
   }
 }

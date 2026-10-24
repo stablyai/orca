@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '../../src/renderer/src/store/agent-status-commit'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
 import { sleepingRecordFromEntry } from '../../src/renderer/src/store/slices/agent-status-sleeping-records'
@@ -44,7 +45,7 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
           )
         )
       }
-      expect(store.getState().agentStatusByPaneKey[PANE].state).toBe('done')
+      expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].state).toBe('done')
       for (const hook_event_name of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
         await postHookEvent(
           server,
@@ -52,8 +53,8 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
           '/hook/codex'
         )
         const record = sleepingRecordFromEntry({
-          state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey[PANE],
+          state: getAgentStatusOwner(store).getState(),
+          entry: getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE],
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

@@ -1,10 +1,11 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toast } from 'sonner'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
-import { useAppStore } from '../store'
+import '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -214,7 +215,7 @@ export async function updateWebRuntimePaneLayout(args: {
 }): Promise<boolean> {
   // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
   const environmentId = runtimeEnvironmentIdUnlessTwin(
-    useAppStore.getState(),
+    getAgentStatusState(),
     args.worktreeId,
     'push a pane layout to its host'
   )
@@ -265,7 +266,7 @@ export function setWebRuntimeTabProps(args: {
   customTitle?: string | null
 }): boolean {
   const environmentId = runtimeEnvironmentIdUnlessTwin(
-    useAppStore.getState(),
+    getAgentStatusState(),
     args.worktreeId,
     'push tab props to its host'
   )
@@ -273,7 +274,7 @@ export function setWebRuntimeTabProps(args: {
     return false
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   void import('./web-session-tabs-sync/tracking-mappings')
     .then(({ resolveHostSessionTabIdForWebSessionTab }) => {
       const hostTabId =

@@ -27,13 +27,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionForegroundRoutingConfirmationTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -43,9 +43,10 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -57,6 +58,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -84,7 +86,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         transport: MockTransport
         cacheKey: string
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const ptyId = args.ptyId ?? 'tab-pty'
         const tabId = args.tabId ?? `tab-${ptyId}`
         const hasReattachMetadata =
@@ -138,7 +140,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           tabId,
           isVisibleRef
         })
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        storeFixture.read().paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
           routingTrusted: true,
           shellForeground: false
@@ -150,12 +152,14 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(storeFixture.read().paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'pi',
           routingRevoked: true,
           shellForeground: false
         })
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+        expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
+          'alt-enter'
+        )
       })
 
       it('does not let a pending confirmation re-arm itself', async () => {
@@ -168,7 +172,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           ptyId,
           tabId
         })
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        storeFixture.read().paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
           routingTrusted: true,
           shellForeground: false
@@ -178,9 +182,10 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
         expect(
-          mockStoreState.paneForegroundAgentByPaneKey[cacheKey]?.routingConfirmationPending
+          storeFixture.read().paneForegroundAgentByPaneKey[cacheKey]?.routingConfirmationPending
         ).toBe(true)
-        const publishesAfterFirst = mockStoreState.setPaneForegroundAgent.mock.calls.length
+        const publishesAfterFirst = vi.mocked(storeFixture.read().setPaneForegroundAgent).mock.calls
+          .length
 
         // A pending entry is not trusted evidence: further requests must not republish it.
         binding.requestWindowsShiftEnterReconfirmation()
@@ -188,7 +193,9 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         await vi.advanceTimersByTimeAsync(1_000)
         await flushAsyncTicks()
 
-        expect(mockStoreState.setPaneForegroundAgent.mock.calls.length).toBe(publishesAfterFirst)
+        expect(vi.mocked(storeFixture.read().setPaneForegroundAgent).mock.calls.length).toBe(
+          publishesAfterFirst
+        )
       })
 
       it('does not reauthorize explicitly revoked routing before confirmation', async () => {
@@ -199,7 +206,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           ptyId,
           tabId
         })
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        storeFixture.read().paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
           routingRevoked: true,
           shellForeground: false
@@ -207,12 +214,14 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
 
         binding.sampleForegroundAgentOnFocus()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(storeFixture.read().paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'pi',
           routingRevoked: true,
           shellForeground: false
         })
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+        expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
+          'alt-enter'
+        )
       })
 
       it.each(['null result', 'provider rejection'] as const)(
@@ -232,26 +241,28 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
             ptyId,
             tabId
           })
-          mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+          storeFixture.read().paneForegroundAgentByPaneKey[cacheKey] = {
             agent: 'pi',
             routingTrusted: true,
             shellForeground: false
           }
 
           binding.sampleForegroundAgentOnFocus()
-          expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
+          expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
+            'csi-u'
+          )
 
           await vi.advanceTimersByTimeAsync(
             VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
           )
           await flushAsyncTicks()
 
-          expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          expect(storeFixture.read().paneForegroundAgentByPaneKey[cacheKey]).toEqual({
             agent: 'pi',
             routingRevoked: true,
             shellForeground: false
           })
-          expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe(
+          expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
             'alt-enter'
           )
         }
@@ -266,24 +277,28 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
           ptyId,
           tabId
         })
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        storeFixture.read().paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
           routingTrusted: true,
           shellForeground: false
         }
 
         binding.sampleForegroundAgentOnFocus()
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
+        expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
+          'csi-u'
+        )
 
         await advanceVisibleForegroundRead()
 
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        expect(storeFixture.read().paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'codex',
           agentEvidence: 'process-read',
           routingTrusted: true,
           shellForeground: false
         })
-        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+        expect(resolveMockPaneWindowsShiftEnterEncoding(storeFixture.read(), cacheKey)).toBe(
+          'alt-enter'
+        )
       })
     })
   })

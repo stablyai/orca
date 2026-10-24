@@ -25,13 +25,13 @@ import {
 const ABANDONED_RESTORE_GAP = `${RESET_AFTER_BYTE_GAP}${buildKittyKeyboardRestore(0)}`
 
 export function registerPtyConnectionStalledHiddenRestoreTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -41,9 +41,10 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -55,11 +56,12 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('abandons a stalled hidden restore with reset, warning, then pending foreground', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -151,7 +153,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     // drained and subsequent cell inherits bold — the "regular text renders bold"
     // field report.
     it('clears the SGR pen before draining abandoned foreground chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -205,7 +207,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('grounds byte-gap state before a remote restore re-arms', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const remotePtyId = 'remote:env-1@@terminal-rearm'
       const transport = createMockTransport(remotePtyId)
       const capturedDataCallback: {
@@ -254,7 +256,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('falls back after repeated null hidden restore retries and drains blocked foreground', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -315,7 +317,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('drops pending foreground overflow when a stalled hidden restore falls back', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -367,7 +369,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('coalesces tiny pending foreground chunks when stalled hidden restore falls back', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -473,7 +475,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
 
       let disposable: { dispose: () => void } | null = null
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -538,7 +540,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('keeps a newer same-PTY hidden restore after a timed-out snapshot resolves late', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -640,7 +642,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('ignores an async hidden-backlog snapshot if the pane changes PTYs first', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('old-pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -694,7 +696,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
     })
 
     it('does not recover stale hidden backlog state after the pane switches PTYs', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('old-pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -742,7 +744,7 @@ export function registerPtyConnectionStalledHiddenRestoreTests(): void {
         clearBufferCallback.current = callback as (request: { ptyId: string }) => void
         return vi.fn()
       })
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

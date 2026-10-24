@@ -1,5 +1,9 @@
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { AppState } from '../types'
+
 import { createTestStore, makeTab } from './store-test-helpers'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
@@ -18,7 +22,7 @@ const ROUTING = { tabId: 'tab-1', worktreeId: 'wt-bg', connectionId: null }
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'claude-session-1' }
 
 function seedWorkspace(store: ReturnType<typeof createTestStore>): void {
-  store.setState({
+  applyAgentStatusPatch(store, {
     activeWorktreeId: 'wt-active',
     tabsByWorktree: { 'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })] },
     terminalLayoutsByTabId: {
@@ -31,13 +35,14 @@ function seedWorkspace(store: ReturnType<typeof createTestStore>): void {
     },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     settings: {
+      ...(store.getState().settings ?? getDefaultSettings('/tmp')),
       experimentalAgentHibernation: true,
       agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS
     }
-  } as unknown as Partial<AppState>)
+  })
 }
 
-function planFrom(state: AppState, ptyBindingFirstSeenAt: number): string[] {
+function planFrom(state: AgentStatusReadState, ptyBindingFirstSeenAt: number): string[] {
   return planAgentHibernationCandidates({
     settings: state.settings,
     activeWorktreeId: state.activeWorktreeId,
@@ -88,7 +93,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
         { providerSession: PROVIDER_SESSION }
       )
 
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey[PANE]?.state).toBe('done')
     expect(state.sleepingAgentSessionsByPaneKey[PANE]).toMatchObject({
       agent: 'claude',
@@ -128,7 +133,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
         { updatedAt: NOW - 1_000, stateStartedAt: DONE_AT },
         ROUTING
       )
-    const state = store.getState()
+    const state = getAgentStatusOwner(store).getState()
     expect(state.agentStatusByPaneKey[PANE]?.updatedAt).toBe(NOW - 1_000)
     expect(state.agentStatusByPaneKey[PANE]?.stateStartedAt).toBe(DONE_AT)
     expect(planFrom(state, DONE_AT)).toEqual([PANE])
@@ -169,6 +174,6 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
     )
     expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBe(NOW - 1_000)
     // Ancient stateStartedAt, but the completion just happened — must not sleep yet.
-    expect(planFrom(store.getState(), DONE_AT)).toEqual([])
+    expect(planFrom(getAgentStatusOwner(store).getState(), DONE_AT)).toEqual([])
   })
 })

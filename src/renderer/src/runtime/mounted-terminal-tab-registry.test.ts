@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
@@ -7,7 +9,6 @@ import {
   registerRuntimeTerminalTab
 } from './mounted-terminal-tab-registry'
 import { makeState } from './sync-runtime-graph-test-harness'
-import type { AppState } from '../store/types'
 
 const TAB_ID = 'duplicate-tab'
 const WORKTREE_A = 'registry-worktree-a'
@@ -34,7 +35,7 @@ function registerSurface(worktreeId: string, leafId: string, ptyId: string): () 
   })
 }
 
-function duplicateTabState(): AppState {
+function duplicateTabState(): AgentStatusReadState {
   return makeState({
     tabsByWorktree: {
       [WORKTREE_A]: [{ id: TAB_ID, worktreeId: WORKTREE_A, title: 'A', ptyId: 'pty-a' }],

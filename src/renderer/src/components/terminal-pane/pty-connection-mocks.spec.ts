@@ -4,10 +4,12 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+import type { createInitialStoreState } from './pty-connection-test-store-fixtures'
 
 type StoreSubscriber = (state: StoreState) => void
 
 type PtyConnectionTestBindings = {
+  getStore: () => Awaited<ReturnType<typeof createInitialStoreState>>['store']
   getState: () => StoreState
   getTransportQueue: () => MockTransport[]
   getTransportOptions: () => Record<string, unknown>[]
@@ -78,7 +80,12 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => fixture.current().getState(),
+    get getState() {
+      return fixture.current().getStore().getState
+    },
+    get setState() {
+      return fixture.current().getStore().setState
+    },
     subscribe: (listener: StoreSubscriber) => {
       // Unsubscribe must keep the suite that created the subscription.
       const bindings = fixture.current()

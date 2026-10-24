@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +49,7 @@ function installThreads(count: number, prompt = 'Task PROJECT ☃ progress'): st
       stateHistory: []
     }
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     agentStatusByPaneKey: entries,
     retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
@@ -98,7 +100,7 @@ describe('Activity search query in the real hook', () => {
 
   it('excludes acknowledged rows from an unread search', () => {
     const panes = installThreads(12)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
     })
     const activity = renderHook(() =>
@@ -112,7 +114,7 @@ describe('Activity search query in the real hook', () => {
     const panes = installThreads(8)
     const parent = panes[0]
     const child = panes[1]
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       runtimeAgentOrchestrationByPaneKey: {
         [child]: { parentPaneKey: parent, taskId: 'task', dispatchId: 'dispatch' }
       },
@@ -127,7 +129,9 @@ describe('Activity search query in the real hook', () => {
       }
     })
     expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual(panes)
-    act(() => useAppStore.setState({ agentsVisibleHostIds: [toSshExecutionHostId('other')] }))
+    act(() =>
+      applyAgentStatusPatch(useAppStore, { agentsVisibleHostIds: [toSshExecutionHostId('other')] })
+    )
     expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([child])
     activity.rerender({
       ...options('NO MATCH'),
@@ -148,8 +152,8 @@ describe('Activity search query in the real hook', () => {
     activity.rerender('second')
     expect(activity.result.current.visibleThreads).toEqual([])
     act(() => {
-      const entries = useAppStore.getState().agentStatusByPaneKey
-      useAppStore.setState({
+      const entries = getAgentStatusOwner(useAppStore).getSnapshot()
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: {
           ...entries,
           [panes[2]]: { ...entries[panes[2]], prompt: 'second prompt' }

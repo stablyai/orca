@@ -115,7 +115,7 @@ export function createAgentStatusWorktreeDropActions(
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         hadLive = liveKeys.length > 0
-        const nextLive =
+        const nextLive: Record<string, (typeof s.agentStatusByPaneKey)[string]> =
           liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         for (const key of liveKeys) {
           delete nextLive[key]
@@ -172,7 +172,7 @@ export function createAgentStatusWorktreeDropActions(
         }
       })
       if (hadLive) {
-        freshness.scheduleDeferred()
+        runtime.runAfterCommit(freshness.scheduleDeferred)
       }
     }
   }

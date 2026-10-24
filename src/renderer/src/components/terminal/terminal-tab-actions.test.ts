@@ -24,11 +24,23 @@ const {
   toHostSessionTabIdMock: vi.fn((tabId: string) => tabId)
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: getStateMock
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  const canonical = createTestStore()
+  return {
+    useAppStore: {
+      get getState() {
+        applyAgentStatusPatch(canonical, {
+          ...canonical.getInitialState(),
+          runtimeEnvironmentCatalogHydrated: true,
+          ...getStateMock()
+        })
+        return canonical.getState
+      }
+    }
   }
-}))
+})
 
 vi.mock('@/lib/browser-uuid', () => ({
   createBrowserUuid: createBrowserUuidMock

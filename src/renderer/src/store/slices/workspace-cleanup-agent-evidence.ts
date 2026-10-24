@@ -1,4 +1,5 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -24,7 +25,7 @@ import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-pref
 import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function assertWorkspaceCleanupAgentStopApproved(
-  state: AppState,
+  state: AgentStatusReadState,
   candidate: WorkspaceCleanupCandidate,
   approvedCandidate: WorkspaceCleanupCandidate | undefined
 ): void {
@@ -54,7 +55,7 @@ export function assertWorkspaceCleanupAgentStopApproved(
 
 /** Missing ownership remains a refusal, rather than becoming another host's agent or idle. */
 export function getWorkspaceCleanupAgentEvidence(
-  state: AppState,
+  state: AgentStatusReadState,
   candidates: readonly WorkspaceCleanupCandidate[]
 ): Map<string, 'live' | 'unknown'> {
   const evidence = new Map<string, 'live' | 'unknown'>()

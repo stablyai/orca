@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
-import { applyWorktreeUpdates } from '../../worktree-helpers'
+import { type WorktreeSlice, applyWorktreeUpdates } from '../../worktree-helpers'
+
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
@@ -280,4 +280,33 @@ export function encodePushTargetClearForRuntimeRpc(
   }
   // Why: remote runtime RPC is JSON-shaped and drops undefined, so null is the wire signal for clearing persisted pushTarget metadata.
   return { ...updates, pushTarget: null }
+}
+
+export function prepareHostedReviewMutationRemoval(worktreeIds: ReadonlySet<string>): () => void {
+  const generations = [...hostedReviewLinkMutationGenerationByWorktreeId].filter(([key]) =>
+    worktreeIds.has(key)
+  )
+  const tombstones = [...hostedReviewLinkClearTombstonesByWorktreeId].filter(([key]) =>
+    worktreeIds.has(key)
+  )
+  const aliases = [...hostedReviewLinkWorktreeIdAliases].filter(
+    ([key, value]) => worktreeIds.has(key) || worktreeIds.has(value)
+  )
+  return () => {
+    for (const [key, value] of generations) {
+      if (hostedReviewLinkMutationGenerationByWorktreeId.get(key) === value) {
+        hostedReviewLinkMutationGenerationByWorktreeId.delete(key)
+      }
+    }
+    for (const [key, value] of tombstones) {
+      if (hostedReviewLinkClearTombstonesByWorktreeId.get(key) === value) {
+        hostedReviewLinkClearTombstonesByWorktreeId.delete(key)
+      }
+    }
+    for (const [key, value] of aliases) {
+      if (hostedReviewLinkWorktreeIdAliases.get(key) === value) {
+        hostedReviewLinkWorktreeIdAliases.delete(key)
+      }
+    }
+  }
 }

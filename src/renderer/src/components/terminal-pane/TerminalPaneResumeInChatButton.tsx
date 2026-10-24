@@ -1,9 +1,9 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useShallow } from 'zustand/react/shallow'
 import { MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { resolveCliChatResumeSource } from '../tab-bar/cli-chat-resume-source'
 import { runCliChatResume, useCliChatResumePending } from '../tab-bar/cli-chat-resume-run'
 
@@ -16,13 +16,15 @@ export function TerminalPaneResumeInChatButton({
   worktreeId: string
   paneKey: string
 }): React.JSX.Element {
-  const source = useAppStore(
+  const source = useAgentStatusSelector(
     useShallow((state) =>
       resolveCliChatResumeSource(state, {
         tab: { id: tabId, worktreeId },
         paneKey
       })
-    )
+    ),
+    undefined,
+    tabId
   )
   const pending = useCliChatResumePending(source)
   const label = translate(

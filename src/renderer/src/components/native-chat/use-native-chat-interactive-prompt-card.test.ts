@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,7 +22,7 @@ function setStatus(payload: Omit<AgentStatusPayload, 'prompt' | 'agentType'>): v
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState({ agentStatusByPaneKey: {} })
+  applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
 })
 
 describe('useNativeChatInteractivePromptCard', () => {

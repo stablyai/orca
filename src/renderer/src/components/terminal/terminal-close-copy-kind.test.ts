@@ -6,7 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: getStateMock } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: getStateMock } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import { resolveBusyPtyCloseCopyKind, resolveLeafCloseCopyKind } from './terminal-close-copy-kind'
 

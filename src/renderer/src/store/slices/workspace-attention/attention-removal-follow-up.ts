@@ -1,3 +1,4 @@
+import { afterStoreAcceptance } from '../../agent-status-commit'
 import { isTerminalLeafId, makePaneKey } from '../../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
 import { collectLeafIds } from '../../../../../shared/terminal-pane-layout-tree'
@@ -143,5 +144,5 @@ export function settleAttentionRemovedBy(
       settleWorkspaceUnreadFlag(set, get, workspaceId)
     }
   }
-  dismissReadNotifications(removed.paneKeys)
+  afterStoreAcceptance({ getState: get }, () => dismissReadNotifications(removed.paneKeys))
 }

@@ -1,7 +1,7 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
-import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
 import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
@@ -93,7 +93,7 @@ export function installActiveSessionTabsSubscription({
   // Why: a warm stream keeps running after the user switches away; only the selected worktree on
   // this host may seed (one worktree id can exist on two hosts).
   const isSelected = (): boolean => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     return (
       state.activeWorktreeId === activeWorktreeId &&
       mirroredRuntimeEnvironmentIdForWorkspace(state, activeWorktreeId) === environmentId
@@ -111,12 +111,12 @@ export function installActiveSessionTabsSubscription({
     runtimeId?: string
   ): Promise<HostSessionMirrorSettle | null> => {
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
-      useAppStore.getState(),
+      getAgentStatusState(),
       event,
       environmentId,
       {
         expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
-        getCurrentState: () => useAppStore.getState()
+        getCurrentState: () => getAgentStatusState()
       }
     )
     if (
@@ -137,7 +137,7 @@ export function installActiveSessionTabsSubscription({
     }
     const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
     const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
-    const syncState = useAppStore.getState()
+    const syncState = getAgentStatusState()
     const localTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
     const hasLiveLocalPty = localTabs.some(
       (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0

@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -69,10 +70,11 @@ export function ClaudeOldTerminalBanner({
   const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
   const selectionKey = useAppStore(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
-  const claudeInPane = useAppStore(
+  const claudeInPane = useAgentStatusSelector(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'claude'
+      state.agentStatusByPaneKey[paneKey]?.agentType === 'claude',
+    [paneKey]
   )
   const openedBefore = useOpenedBeforeClaudeAccounts(
     ptyId,

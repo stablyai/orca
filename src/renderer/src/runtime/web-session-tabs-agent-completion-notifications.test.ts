@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -27,12 +29,18 @@ import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-pat
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 
+import * as launchPublication from '@/lib/structured-agent-session-launch-publication'
+import {
+  parkUntilHostSessionMirrorHydrates,
+  resetHostSessionMirrorHydrationForTests
+} from './host-session-mirror-hydration'
+
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'
 const HOST_TAB_ID = 'host-tab-1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const NOW = 1_700_000_000_000
-const initialState = useAppStore.getInitialState()
+const initialState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 
 function makeAgentSnapshot(
   snapshotVersion: number,
@@ -93,11 +101,11 @@ describe('paired session-tab agent completion notifications', () => {
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetRendererOwnedAgentStatusPanesForTests()
     resetAgentCompletionCoordinatorIdentitiesForTest()
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
   })
 
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetRendererOwnedAgentStatusPanesForTests()
     vi.unstubAllGlobals()
@@ -134,6 +142,7 @@ describe('paired session-tab agent completion notifications', () => {
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      usesHookTurnEnds: () => true,
       isLive: () => true
     })
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
@@ -150,7 +159,7 @@ describe('paired session-tab agent completion notifications', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
     registerRendererOwnedAgentStatusPane(paneKey, ENVIRONMENT_ID)
     markRendererOwnedAgentStatusWrite(paneKey)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [paneKey]: {
           state: 'working',
@@ -171,6 +180,7 @@ describe('paired session-tab agent completion notifications', () => {
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      usesHookTurnEnds: () => true,
       isLive: () => true
     })
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
@@ -182,7 +192,9 @@ describe('paired session-tab agent completion notifications', () => {
     applySnapshot(makeAgentSnapshot(2, NOW - 1_000, turnCompletedAt), true)
     applySnapshot(makeAgentSnapshot(3, NOW, turnCompletedAt, 'done'), true)
 
-    expect(useAppStore.getState().agentStatusByPaneKey[paneKey]?.state).toBe('working')
+    expect(getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[paneKey]?.state).toBe(
+      'working'
+    )
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(3)
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenNthCalledWith(
       2,
@@ -208,12 +220,100 @@ describe('paired session-tab agent completion notifications', () => {
     )
   })
 
+  it.each([false, true])(
+    'accepts patchless OSC host evidence with zero publications (stale fence=%s)',
+    (stale) => {
+      resetHostSessionMirrorHydrationForTests()
+      const owner = getAgentStatusOwner(useAppStore)
+      const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      registerRendererOwnedAgentStatusPane(paneKey, ENVIRONMENT_ID)
+      markRendererOwnedAgentStatusWrite(paneKey)
+      applyAgentStatusPatch(useAppStore, {
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            state: 'working',
+            prompt: 'client turn',
+            updatedAt: NOW,
+            stateStartedAt: NOW,
+            agentType: 'claude',
+            paneKey,
+            stateHistory: []
+          }
+        }
+      })
+      const app = useAppStore.getState(),
+        live = owner.getSnapshot()
+      const appChanged = vi.fn(),
+        pointChanged = vi.fn(),
+        aggregateChanged = vi.fn(),
+        completed = vi.fn()
+      const stops = [
+        useAppStore.subscribe(appChanged),
+        owner.subscribeEntry(paneKey, pointChanged),
+        owner.subscribeAggregate(aggregateChanged)
+      ]
+      const coordinator = createAgentCompletionCoordinator({
+        paneKey,
+        getPtyId: () => 'pty-1',
+        inspectProcess: vi.fn(),
+        dispatchCompletion: completed,
+        usesHookTurnEnds: () => true,
+        isLive: () => true
+      })
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
+        seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
+      )
+      const published = vi.spyOn(launchPublication, 'markStructuredAgentSessionLaunchesPublished')
+      const hydrated = vi.fn()
+      parkUntilHostSessionMirrorHydrates(ENVIRONMENT_ID, WORKTREE_ID, hydrated)
+      const apply = (snapshot: RuntimeMobileSessionTabsResult) =>
+        applyWebSessionTabsStorePatch(
+          (state) => state,
+          {
+            frames: [
+              {
+                environmentId: ENVIRONMENT_ID,
+                worktreeId: WORKTREE_ID,
+                source: snapshot,
+                decision: { apply: true, settlesHostMirror: true },
+                ...(stale ? { expectedTrackingGeneration: -1 } : {})
+              }
+            ]
+          },
+          snapshot,
+          true
+        )
+      try {
+        apply(makeAgentSnapshot(1, NOW))()
+        const stamped = makeAgentSnapshot(2, NOW + 1_000, NOW + 1_000)
+        apply(stamped)()
+        apply(stamped)()
+        expect(owner.mirrorBoundaries().get(paneKey)).toMatchObject({
+          clientStateStartedAt: NOW,
+          stamped: true
+        })
+        expect(completed).toHaveBeenCalledTimes(1)
+        expect(published).toHaveBeenCalledTimes(3)
+        expect(hydrated).toHaveBeenCalledTimes(stale ? 0 : 1)
+        expect(useAppStore.getState()).toBe(app)
+        expect(owner.getSnapshot()).toBe(live)
+        expect(appChanged).not.toHaveBeenCalled()
+        expect(pointChanged).not.toHaveBeenCalled()
+        expect(aggregateChanged).not.toHaveBeenCalled()
+      } finally {
+        stops.forEach((stop) => stop())
+        published.mockRestore()
+        resetHostSessionMirrorHydrationForTests()
+      }
+    }
+  )
+
   it('keeps a delayed host stamp bound to the prior client turn', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
     registerRendererOwnedAgentStatusPane(paneKey, ENVIRONMENT_ID)
     markRendererOwnedAgentStatusWrite(paneKey)
     const setClientTurn = (stateStartedAt: number, prompt: string): void => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: {
           [paneKey]: {
             state: 'working',
@@ -264,6 +364,7 @@ describe('paired session-tab agent completion notifications', () => {
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      usesHookTurnEnds: () => true,
       isLive: () => true
     })
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
@@ -285,6 +386,7 @@ describe('paired session-tab agent completion notifications', () => {
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(),
       dispatchCompletion,
+      usesHookTurnEnds: () => true,
       isLive: () => true
     })
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
@@ -332,6 +434,7 @@ describe('paired session-tab agent completion notifications', () => {
         getPtyId: () => 'pty-1',
         inspectProcess: vi.fn(),
         dispatchCompletion,
+        usesHookTurnEnds: () => true,
         isLive: () => true
       })
       mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>

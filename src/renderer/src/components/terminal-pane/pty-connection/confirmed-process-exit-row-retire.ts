@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusEntry } from '@/store/agent-status'
+
 import type { RecognizedAgentProcess } from '../../../../../shared/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
@@ -16,7 +17,7 @@ export function retireLiveAgentRowOnConfirmedProcessExit(
   if (session.deferredCommandFinishedStatusDrop || !ptyId || isRemoteExecutionHostPtyId(ptyId)) {
     return
   }
-  const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+  const entry = getAgentStatusEntry(session.cacheKey)
   if (
     !entry ||
     resolveCompatibleAgentTypeForOwner(entry.agentType, exited.agent) !== exited.agent

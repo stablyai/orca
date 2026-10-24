@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '../../store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -119,7 +119,7 @@ export function useNativeChatInteractiveSend(
       // question's wait. The server re-validates this captured baseline and
       // rejects a changed status, matching the terminal keystroke path.
       const questionStatusBaseline = stepsAnswer
-        ? useAppStore.getState().agentStatusByPaneKey[paneKey]
+        ? getAgentStatusState().agentStatusByPaneKey[paneKey]
         : undefined
       let settledHandle: NativeChatSendHandle | null = null
       const onSettled = (delivered: boolean): void => {

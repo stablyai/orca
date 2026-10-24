@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '../types'
 import type {
   WorkspaceCleanupScanArgs,
@@ -30,7 +31,7 @@ type SetState = (
 ) => void
 
 export async function scanWorkspaceCleanup(
-  get: () => AppState,
+  get: () => AgentStatusReadState,
   set: SetState,
   args?: WorkspaceCleanupScanArgs
 ): Promise<WorkspaceCleanupScanResult> {

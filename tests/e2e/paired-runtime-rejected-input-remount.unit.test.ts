@@ -54,17 +54,26 @@ const remountTerminalTabForRecovery = vi.fn<(tabId: string, request?: unknown) =
   () => REMOUNTED
 )
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+function mockCanonicalFixtureStore(): void {
+  vi.doMock('@/store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixture = {
+      useAppStore: {
+        getState: () => mockStoreState,
+        subscribe: (listener: (state: StoreState) => void) => {
+          storeSubscribers.push(listener)
+          return () => {
+            storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+          }
+        }
       }
     }
-  }
-}))
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
+}
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
@@ -295,6 +304,7 @@ const LIVENESS_ANSWERS: [string, () => Promise<boolean | null>][] = [
 describe('host-rejected paired-runtime input reaches a pane remount', () => {
   beforeEach(() => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     vi.clearAllMocks()
     storeSubscribers = []
     remountTerminalTabForRecovery.mockReturnValue(REMOUNTED)

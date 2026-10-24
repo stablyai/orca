@@ -1,11 +1,13 @@
-import { create } from 'zustand'
+import type { AgentStatusReadState } from '../agent-status-observers'
+import { createTestStore, seedStore } from './store-test-helpers'
+import 'zustand'
 import { vi } from 'vitest'
-import type { AppState } from '../types'
+
 import {
   applyWorkspaceCleanupPolicy,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
-import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import './workspace-cleanup'
 
 export const WORKTREE_ID = 'repo1::/tmp/old-workspace'
 export const NOW = 1_700_000_000_000
@@ -45,7 +47,7 @@ export function makeCandidate(
   })
 }
 
-export function makeState(overrides: Partial<AppState> = {}): AppState {
+export function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
@@ -60,27 +62,17 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     workspaceCleanupDismissals: {},
     workspaceCleanupViewedCandidates: {},
     ...overrides
-  } as AppState
+  } as AgentStatusReadState
 }
 
-export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        openFiles: [],
-        editorDrafts: {},
-        browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
-        activeWorktreeId: null,
-        agentStatusByPaneKey: {},
-        runtimePaneTitlesByTabId: {},
-        lastVisitedAtByWorktreeId: {},
-        removeWorktree,
-        ...createWorkspaceCleanupSlice(...a)
-      }) as unknown as AppState
-  )
+export function createCleanupTestStore(
+  removeWorktree: AgentStatusReadState['removeWorktree'] = vi.fn<
+    AgentStatusReadState['removeWorktree']
+  >()
+) {
+  const store = createTestStore()
+  seedStore(store, { removeWorktree })
+  return store
 }
 
 export function installWorkspaceCleanupApi(

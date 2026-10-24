@@ -1,8 +1,9 @@
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+export { resolveTerminalItemTab } from '@/lib/terminal-tab-item-projection'
 import type { OpenFile } from '../../store/slices/editor'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { normalizeRelativePath } from '@/lib/path'
@@ -49,14 +50,6 @@ export type TabBarItem =
       isPinned: boolean
       data: Tab & { contentType: 'agent-session' }
     }
-
-/** The terminal tab as the strip shows it: its title resolved against the generated-titles setting. */
-export function resolveTerminalItemTab(
-  tab: TerminalTab & { unifiedTabId?: string },
-  generatedTitlesEnabled: boolean
-): TerminalTab & { unifiedTabId?: string } {
-  return { ...tab, title: resolveTerminalTabTitle(tab, generatedTitlesEnabled, tab.title) }
-}
 
 export function resolveEditorTabGitStatus(
   file: Pick<OpenFile, 'mode' | 'relativePath'>,

@@ -1,10 +1,10 @@
+import { useAgentStatusSnapshot } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
-const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
@@ -16,9 +16,7 @@ const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] 
 export function useAgentSendTargetWorktreeId(): string | null {
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   // Why: eligibility only matters while the picker is open; when closed, don't subscribe to wake-time layout churn.
-  const agentTargetStatusByPaneKey = useAppStore((s) =>
-    agentSendPopoverTargetMode ? s.agentStatusByPaneKey : EMPTY_AGENT_STATUS_BY_PANE_KEY
-  )
+  const agentTargetStatusByPaneKey = useAgentStatusSnapshot(Boolean(agentSendPopoverTargetMode))
   const agentTargetStatusEpoch = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.agentStatusEpoch : 0
   )

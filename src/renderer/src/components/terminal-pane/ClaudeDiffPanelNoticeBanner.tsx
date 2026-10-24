@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -75,10 +76,11 @@ export function ClaudeDiffPanelNoticeBanner({
   const seen = useAppStore((state) => state.claudeDiffPanelNoticeSeen)
   const markSeen = useAppStore((state) => state.markClaudeDiffPanelNoticeSeen)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
-  const claudeInPane = useAppStore(
+  const claudeInPane = useAgentStatusSelector(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
-      state.agentStatusByPaneKey[paneKey]?.agentType === 'claude'
+      state.agentStatusByPaneKey[paneKey]?.agentType === 'claude',
+    [paneKey]
   )
   const mayAutoOpen = useClaudeDiffPanelMayAutoOpen(ptyId, tabId, container, claudeInPane && !seen)
   if (seen || !mayAutoOpen) {

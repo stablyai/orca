@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 /**
  * Detached executor for accepted account-switch restarts (Codex and Claude).
  *
@@ -11,7 +12,7 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
@@ -48,7 +49,7 @@ export function resetDetachedCodexPaneRestartClaimsForTests(): void {
 
 export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
   const restarts: Promise<void>[] = []
-  for (const ptyId of Object.keys(useAppStore.getState().pendingPaneAccountRestarts)) {
+  for (const ptyId of Object.keys(getAgentStatusState().pendingPaneAccountRestarts)) {
     if (!hasFreeDetachedRestartSlot()) {
       break
     }
@@ -72,7 +73,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (ptyDataHandlers.has(ptyId) || inFlightPtyIds.has(ptyId)) {
       return
     }
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     located = locateCodexPane(state, ptyId)
     if (!located) {
       // Why not consume: a sleep-retained pending id is unbound on purpose and
@@ -99,7 +100,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     ) {
       return
     }
-    const agent = useAppStore.getState().consumePendingPaneAccountRestart(ptyId)
+    const agent = getAgentStatusState().consumePendingPaneAccountRestart(ptyId)
     if (!agent) {
       return
     }
@@ -119,7 +120,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (located) {
       reopenCurrentCodexRestartPrompt(located, ptyId)
     } else {
-      useAppStore.getState().reopenCodexRestartPrompt(ptyId)
+      getAgentStatusState().reopenCodexRestartPrompt(ptyId)
     }
   } finally {
     if (releaseSlot) {
@@ -165,7 +166,7 @@ async function executeDetachedCodexPaneRestart(
   ptyId: string,
   agent: AccountRestartAgent
 ): Promise<void> {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   if (!located.leafId) {
     // Why: Claude cannot resume without a leaf's session, and a fresh Claude would lose the conversation.
     if (agent === 'claude') {
@@ -177,7 +178,7 @@ async function executeDetachedCodexPaneRestart(
       reopenCurrentCodexRestartPrompt(located, ptyId)
       return
     }
-    const store = useAppStore.getState()
+    const store = getAgentStatusState()
     store.suppressPtyExit(ptyId)
     store.clearTabPtyId(located.tab.id, ptyId)
     store.consumeSuppressedPtyExit(ptyId)
@@ -209,7 +210,7 @@ async function executeDetachedCodexPaneRestart(
     availableWslDistros: capabilities?.wslDistros ?? null
   })
 
-  const currentState = useAppStore.getState()
+  const currentState = getAgentStatusState()
   if (!isLocatedCodexPaneCurrent(currentState, located, ptyId)) {
     reopenCurrentCodexRestartPrompt(located, ptyId)
     return
@@ -249,14 +250,14 @@ async function executeDetachedCodexPaneRestart(
 
   // Why adopt rather than stand down: main stopped `ptyId` before replying, so the replacement is
   // the pane's only process — even if that exit already cleared the old binding or a pane mounted.
-  const store = useAppStore.getState()
+  const store = getAgentStatusState()
   if (!isLocatedCodexPaneLeafAdoptable(store, located, ptyId, spawned.id)) {
     reopenCurrentCodexRestartPrompt(located, ptyId)
     reapUnboundCodexPty(spawned.id, 'stale detached spawn')
     return
   }
   store.updateTabPtyId(tab.id, spawned.id, ptyId)
-  if (!useAppStore.getState().ptyIdsByTabId[tab.id]?.includes(spawned.id)) {
+  if (!getAgentStatusState().ptyIdsByTabId[tab.id]?.includes(spawned.id)) {
     // Why: the tab was retired while the spawn was in flight; without a binding
     // the fresh PTY would idle in the daemon forever, so reap it and stand down.
     store.clearCodexRestartNotice(ptyId)
@@ -312,7 +313,7 @@ function isLocatedCodexPaneLeafAdoptable(
 }
 
 function reopenCurrentCodexRestartPrompt(located: LocatedCodexPane, replacedPtyId: string): void {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const currentTab = state.tabsByWorktree[located.worktreeId]?.find(
     (candidate) => candidate.id === located.tab.id
   )
@@ -341,7 +342,7 @@ function restartReplacesLayoutRoot(
 }
 
 function rebindCodexPaneLayoutLeaf(tabId: string, leafId: string, newPtyId: string): void {
-  const store = useAppStore.getState()
+  const store = getAgentStatusState()
   const layout = store.terminalLayoutsByTabId[tabId]
   if (restartReplacesLayoutRoot(layout, leafId)) {
     store.setTabLayout(

@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
@@ -43,7 +44,7 @@ export function repoIconsUnchanged(
   return nextIds.every((id) => id in previous && next[id] === previous[id])
 }
 
-type DashboardSnapshotWatchState = DashboardSnapshotState &
+type DashboardSnapshotWatchState = Omit<DashboardSnapshotState, 'agentStatusByPaneKey'> &
   Pick<AppState, 'agentStatusEpoch'> &
   AgentLaunchRouteView
 
@@ -167,7 +168,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     const rowsCache = createWorktreeAgentRowsCache()
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
-      const state = useAppStore.getState()
+      const state = getAgentStatusState()
       chatOwners.reconcile(state)
       const snapshot = buildDashboardSnapshot(state, lastPublishAt, {
         launchRouteStore: selectAgentLaunchRouteView(state),

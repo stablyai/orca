@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -14,7 +15,7 @@ import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
-const initialAppState = useAppStore.getInitialState()
+const initialAppState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
@@ -173,8 +174,8 @@ describe('useTabAgent sleeping-session', () => {
     latestHookAgent = undefined
     getForegroundProcess.mockReset()
     clearTabLaunchAgent.mockReset()
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, initialAppState)
+    applyAgentStatusPatch(useAppStore, {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       agentStatusByPaneKey: {},
       terminalLayoutsByTabId: {},
@@ -194,7 +195,7 @@ describe('useTabAgent sleeping-session', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, initialAppState)
     window.api = originalApi
   })
 
@@ -203,7 +204,7 @@ describe('useTabAgent sleeping-session', () => {
     // Why: the pane was launched as codex, then reused for claude and hibernated.
     // No live hook/process remains and the frozen title names no agent, so the
     // persisted session record is the only proof the launch identity went stale.
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_ID },

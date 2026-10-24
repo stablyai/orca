@@ -1,11 +1,12 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 
-export function pickSpaceWindowState(state: AppState) {
+export function pickSpaceWindowState(state: AgentStatusReadState) {
   return {
     workspaceSpaceAnalysis: state.workspaceSpaceAnalysis,
     workspaceSpaceScanError: state.workspaceSpaceScanError,
@@ -79,7 +80,7 @@ export function isSpaceWindowState(value: unknown): value is SpaceWindowState {
   )
 }
 
-export function spaceWindowStateChanged(a: AppState, b: AppState): boolean {
+export function spaceWindowStateChanged(a: AgentStatusReadState, b: AgentStatusReadState): boolean {
   const before = Object.values(pickSpaceWindowState(a))
   const after = Object.values(pickSpaceWindowState(b))
   return before.some((value, index) => value !== after[index])

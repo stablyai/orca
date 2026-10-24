@@ -15,7 +15,12 @@ import {
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'setState')
+  return { useAppStore }
+})
 
 const ENV = 'web-env-1'
 const NOW = 1_700_000_000_000

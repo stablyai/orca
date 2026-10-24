@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
@@ -95,7 +95,7 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
 }
 
 export function useIsSleepingWorktree(worktreeId: string): boolean {
-  return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
+  return useAgentStatusSelector((state) => selectIsSleepingWorktree(state, worktreeId))
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {

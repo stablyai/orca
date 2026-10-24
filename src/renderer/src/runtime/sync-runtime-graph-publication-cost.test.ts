@@ -1,12 +1,12 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
-import type { AppState } from '../store/types'
 
 // Why: getBrowserTabsByWorktree reads this slice once per worktree inside the build loop,
 // so a counting accessor measures per-worktree work deterministically (no timing flake).
 function makeCountingState(worktreeCount: number): {
-  state: AppState
+  state: AgentStatusReadState
   reads: () => number
   resetReads: () => void
 } {
@@ -36,7 +36,7 @@ function makeCountingState(worktreeCount: number): {
       reads++
       return {}
     }
-  } as unknown as AppState
+  } as unknown as AgentStatusReadState
 
   return {
     state,
@@ -50,10 +50,10 @@ function makeCountingState(worktreeCount: number): {
 // Why: tab.title is read only while a worktree's snapshot content is built, so a counting
 // getter measures rebuilds rather than reads — the reads above survive a cheap hoist alone.
 function makeTitleCountingState(worktreeCount: number): {
-  state: AppState
+  state: AgentStatusReadState
   titleReads: () => number
   resetTitleReads: () => void
-  withOneAgentStatusChanged: () => AppState
+  withOneAgentStatusChanged: () => AgentStatusReadState
 } {
   let titleReads = 0
   const leafIdFor = (index: number): string =>
@@ -79,7 +79,7 @@ function makeTitleCountingState(worktreeCount: number): {
     }
   }
   const changedPaneKey = `title-term-7:${leafIdFor(7)}`
-  const agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = {
+  const agentStatusByPaneKey: AgentStatusReadState['agentStatusByPaneKey'] = {
     [changedPaneKey]: {
       state: 'working',
       prompt: 'Investigate publication pressure',
@@ -107,7 +107,7 @@ function makeTitleCountingState(worktreeCount: number): {
     activeTabId: null,
     agentStatusByPaneKey,
     browserTabsByWorktree: {}
-  } as unknown as AppState
+  } as unknown as AgentStatusReadState
 
   return {
     state,
@@ -126,7 +126,7 @@ function makeTitleCountingState(worktreeCount: number): {
             updatedAt: 1_700_000_001_000
           }
         }
-      }) as unknown as AppState
+      }) as unknown as AgentStatusReadState
   }
 }
 
@@ -163,7 +163,7 @@ describe('mobile session publication cost', () => {
       get browserTabsByWorktree() {
         return (state as unknown as { browserTabsByWorktree: unknown }).browserTabsByWorktree
       }
-    } as unknown as AppState
+    } as unknown as AgentStatusReadState
 
     buildMobileSessionTabSnapshots(next)
 
@@ -216,7 +216,7 @@ const MOUNTED_LEAF_ID = 'aaaaaaaa-1111-4111-8111-111111111111'
 const SPLIT_LEAF_ID = 'bbbbbbbb-1111-4111-8111-111111111111'
 
 function makeMountedState(tabIdPrefix: string): {
-  state: AppState
+  state: AgentStatusReadState
   mountedTabId: string
   titleReads: () => number
   resetTitleReads: () => void
@@ -260,7 +260,7 @@ function makeMountedState(tabIdPrefix: string): {
     activeTabId: null,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {}
-  } as unknown as AppState
+  } as unknown as AgentStatusReadState
   return {
     state,
     mountedTabId,
@@ -306,7 +306,7 @@ function makeLiveSurface(tabId: string): {
 }
 
 function snapshotsByWorktree(
-  state: AppState
+  state: AgentStatusReadState
 ): Map<string, ReturnType<typeof buildMobileSessionTabSnapshots>[number]> {
   return new Map(
     buildMobileSessionTabSnapshots(state).map((snapshot) => [snapshot.worktree, snapshot])

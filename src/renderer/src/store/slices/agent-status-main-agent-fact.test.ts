@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { describe, expect, it } from 'vitest'
 import { normalizeAgentStatusEvent } from '../../hooks/ipc-events/normalize-agent-status-event'
 import { createTestStore } from './store-test-helpers'
@@ -22,7 +24,7 @@ describe('the main agent fact on a renderer status entry', () => {
     store
       .getState()
       .setAgentStatus(PANE, { state: 'working', prompt: 'go', agentType: 'claude', mainAgent })
-    const first = store.getState().agentStatusByPaneKey[PANE]
+    const first = getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]
     expect(first.mainAgent).toEqual(mainAgent)
 
     store.getState().setAgentStatus(PANE, {
@@ -32,7 +34,9 @@ describe('the main agent fact on a renderer status entry', () => {
       toolName: 'Read',
       mainAgent: { ...mainAgent }
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toBe(first.mainAgent)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].mainAgent).toBe(
+      first.mainAgent
+    )
   })
 
   it('keeps the main agent behind an unchanged state when a writer carries none, and drops it on a state edge', () => {
@@ -49,7 +53,9 @@ describe('the main agent fact on a renderer status entry', () => {
       toolName: 'Bash',
       observation: osc(1)
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toEqual(mainAgent)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].mainAgent).toEqual(
+      mainAgent
+    )
 
     store.getState().setAgentStatus(PANE, {
       state: 'done',
@@ -57,7 +63,9 @@ describe('the main agent fact on a renderer status entry', () => {
       agentType: 'claude',
       observation: osc(2)
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].mainAgent
+    ).toBeUndefined()
   })
 
   it('drops the main agent when a hook row carries none, matching the host snapshot', () => {
@@ -75,7 +83,9 @@ describe('the main agent fact on a renderer status entry', () => {
       agentType: 'claude',
       toolName: 'Bash'
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].mainAgent
+    ).toBeUndefined()
   })
 
   it('survives the IPC event normalizer', () => {
@@ -104,7 +114,9 @@ describe("the host's turn start on a renderer status entry", () => {
         stateStartedAt: 1_000,
         turnStartedAt: 900
       })
-    expect(store.getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(900)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(
+      900
+    )
 
     // The same prompt sent again: the state never left working, the host stamped a new turn.
     store
@@ -114,7 +126,9 @@ describe("the host's turn start on a renderer status entry", () => {
         stateStartedAt: 1_000,
         turnStartedAt: 1_900
       })
-    expect(store.getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(1_900)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(
+      1_900
+    )
   })
 
   it('keeps the stamp behind an unchanged state when a writer carries none, and drops it on a state edge', () => {
@@ -133,10 +147,14 @@ describe("the host's turn start on a renderer status entry", () => {
       agentType: 'claude',
       toolName: 'Bash'
     })
-    expect(store.getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(900)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBe(
+      900
+    )
 
     store.getState().setAgentStatus(PANE, { state: 'done', prompt: 'go', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey[PANE]?.turnStartedAt).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]?.turnStartedAt
+    ).toBeUndefined()
   })
 })
 
@@ -145,7 +163,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
 
   it('keeps the launch config registry entry alive across a session-boundary done', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentLaunchConfigByPaneKey: {
         [PANE]: {
           launchConfig: { agentArgs: '', agentEnv: {} },
@@ -193,7 +211,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
       sessionBoundary: true
     })
 
-    const entry = store.getState().agentStatusByPaneKey[PANE]
+    const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]
     expect(entry.sessionBoundary).toBe(true)
     // Why: the finished timestamp and unread badge fall through to history for boundary
     // entries — losing the real done here erases an unacknowledged completion.
@@ -212,7 +230,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
       .getState()
       .setAgentStatus(PANE, { state: 'working', prompt: 'fix bug', agentType: 'claude' })
 
-    const entry = store.getState().agentStatusByPaneKey[PANE]
+    const entry = getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE]
     expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(false)
   })
 
@@ -227,7 +245,9 @@ describe('session-boundary done semantics (STA-3386)', () => {
 
     // Why: OSC 9999 repaints and reconnect replays re-deliver a metadata-less done.
     store.getState().setAgentStatus(PANE, { state: 'done', prompt: '', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBe(true)
+    expect(getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].sessionBoundary).toBe(
+      true
+    )
 
     // Why: an assistant message proves a REAL completion — the flag must not suppress it.
     store.getState().setAgentStatus(PANE, {
@@ -236,6 +256,8 @@ describe('session-boundary done semantics (STA-3386)', () => {
       agentType: 'claude',
       lastAssistantMessage: 'Done.'
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBeUndefined()
+    expect(
+      getAgentStatusOwner(store).getState().agentStatusByPaneKey[PANE].sessionBoundary
+    ).toBeUndefined()
   })
 })

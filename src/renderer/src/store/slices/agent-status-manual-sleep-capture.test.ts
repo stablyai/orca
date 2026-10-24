@@ -1,10 +1,12 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
+
 import { createTestStore, makeTab } from './store-test-helpers'
 
 const NOW = 1_800_000_000_000
@@ -31,11 +33,11 @@ function makeAgentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusE
 }
 
 function seedTabs(store: ReturnType<typeof createTestStore>): void {
-  store.setState({
+  applyAgentStatusPatch(store, {
     tabsByWorktree: {
       'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
     }
-  } as Partial<AppState>)
+  })
 }
 
 function makeSleepingRecord(
@@ -63,7 +65,7 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         'tab-1:fresh': makeAgentEntry({ paneKey: 'tab-1:fresh' }),
         'tab-1:stale': makeAgentEntry({
@@ -82,7 +84,7 @@ describe('manual sleep agent session capture', () => {
         })
       },
       lastTerminalInputAtByPaneKey: { 'tab-1:post-input': NOW }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -116,7 +118,7 @@ describe('manual sleep agent session capture', () => {
     const store = createTestStore()
     seedTabs(store)
     const retainedEntry = makeAgentEntry({ paneKey: 'tab-1:retained', state: 'done' })
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         'tab-1:done': makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' }),
         'tab-1:working': makeAgentEntry({ paneKey: 'tab-1:working' })
@@ -130,7 +132,7 @@ describe('manual sleep agent session capture', () => {
           startedAt: retainedEntry.stateStartedAt
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -148,7 +150,7 @@ describe('manual sleep agent session capture', () => {
     seedTabs(store)
     const entry = makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' })
     const tab = makeTab({ id: 'tab-1', worktreeId: 'wt-1' })
-    store.setState({
+    applyAgentStatusPatch(store, {
       retainedAgentsByPaneKey: {
         'tab-1:done': {
           entry,
@@ -158,7 +160,7 @@ describe('manual sleep agent session capture', () => {
           startedAt: entry.stateStartedAt
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -181,7 +183,7 @@ describe('manual sleep agent session capture', () => {
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       interrupted: true
     })
-    store.setState({
+    applyAgentStatusPatch(store, {
       retainedAgentsByPaneKey: {
         'tab-1:retained': {
           entry,
@@ -191,7 +193,7 @@ describe('manual sleep agent session capture', () => {
           startedAt: entry.stateStartedAt
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -210,7 +212,7 @@ describe('manual sleep agent session capture', () => {
     seedTabs(store)
     const providerSession = { key: 'session_id', id: 'codex-shared' } as const
     const entry = makeAgentEntry({ paneKey: 'tab-1:leaf-1', state: 'done', providerSession })
-    store.setState({
+    applyAgentStatusPatch(store, {
       sleepingAgentSessionsByPaneKey: {
         'tab-1:leaf-1': makeSleepingRecord({ providerSession, connectionId: 'conn-1' })
       },
@@ -223,7 +225,7 @@ describe('manual sleep agent session capture', () => {
           startedAt: entry.stateStartedAt
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -241,7 +243,7 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         'tab-1:stale': makeAgentEntry({
           paneKey: 'tab-1:stale',
@@ -251,7 +253,7 @@ describe('manual sleep agent session capture', () => {
       sleepingAgentSessionsByPaneKey: {
         'tab-1:stale': makeSleepingRecord({ paneKey: 'tab-1:stale' })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -297,7 +299,7 @@ describe('manual sleep agent session capture', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-1': [
           makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
@@ -316,7 +318,7 @@ describe('manual sleep agent session capture', () => {
           origin: 'worktree-sleep'
         })
       }
-    } as Partial<AppState>)
+    })
 
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
@@ -335,14 +337,14 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       sleepingAgentSessionsByPaneKey: {
         'tab-1:leaf-1': makeSleepingRecord({
           agent: 'pi',
           providerSession: { key: 'session_id', id: 'pi-session-1' }
         })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -354,12 +356,12 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         'tab-1:fresh': makeAgentEntry({ paneKey: 'tab-1:fresh' }),
         'tab-1:done': makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' })
       }
-    } as Partial<AppState>)
+    })
 
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
@@ -382,7 +384,7 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       activeWorktreeId: 'wt-1',
       agentStatusByPaneKey: {
         'tab-1:done': makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' }),
@@ -392,7 +394,7 @@ describe('manual sleep agent session capture', () => {
           interrupted: true
         })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().setActiveWorktree(null)
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
@@ -410,7 +412,7 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       ptyIdsByTabId: { 'tab-1': [] },
       agentStatusByPaneKey: {
         'tab-1:stale': makeAgentEntry({
@@ -421,7 +423,7 @@ describe('manual sleep agent session capture', () => {
       sleepingAgentSessionsByPaneKey: {
         'tab-1:stale': makeSleepingRecord({ paneKey: 'tab-1:stale' })
       }
-    } as Partial<AppState>)
+    })
 
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
@@ -437,7 +439,7 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: { 'tab-1:fresh': makeAgentEntry({ paneKey: 'tab-1:fresh' }) }
     })
     const mains = makeSleepingRecord({ paneKey: 'tab-1:leaf-9', origin: 'worktree-sleep' })
@@ -447,6 +449,8 @@ describe('manual sleep agent session capture', () => {
       hostStop: Promise.resolve({ failed: false, records: [mains] })
     })
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({ 'tab-1:leaf-9': mains })
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({
+      'tab-1:leaf-9': mains
+    })
   })
 })

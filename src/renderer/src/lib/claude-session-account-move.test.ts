@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
@@ -113,7 +115,7 @@ function seedPanes(panes: SeededPane[]): void {
       ...(pane.sessionId === null ? {} : { providerSession: providerSession(pane) })
     }
   }
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     settings: {
       ...getDefaultSettings('/home/dev'),
       claudeManagedAccounts: [account('acct-a', FOLDER_A), account('acct-b', FOLDER_B)]
@@ -241,7 +243,7 @@ describe('findMovableClaudeSessions', () => {
     ])
     laneByPtyId[ptyId(1)] = 'wsl:Ubuntu-24.04'
     laneByPtyId[ptyId(2)] = 'wsl:Ubuntu-24.04'
-    useAppStore.setState((state) => ({
+    applyAgentStatusPatch(useAppStore, (state) => ({
       settings: {
         ...state.settings!,
         claudeManagedAccounts: [wslAccount('acct-a'), wslAccount('acct-b')]
@@ -306,7 +308,7 @@ describe('isClaudePaneMidTurn', () => {
       { n: 3, agentType: 'claude', state: 'waiting' },
       { n: 4, agentType: 'claude', state: 'done' }
     ])
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const midTurn = [1, 2, 3, 4].map((n) =>
       isClaudePaneMidTurn(state, makePaneKey(tabId(n), leafId(n)))
     )
@@ -324,7 +326,7 @@ describe('findQueuedClaudeRestartsOnAccount', () => {
       { n: 4, agentType: 'claude', configDir: FOLDER_B }
     ])
     laneByPtyId[ptyId(4)] = 'wsl:Ubuntu'
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       pendingPaneAccountRestarts: {
         [ptyId(1)]: 'claude',
         [ptyId(2)]: 'claude',

@@ -1,7 +1,10 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -24,7 +27,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 //
 // The resume fallback stays correct for LOCAL worktrees (control below).
 
-const initialAppStoreState = useAppStore.getState()
+const initialAppStoreState = getAgentStatusOwner(useAppStore).getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
@@ -40,7 +43,9 @@ function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree>
   }
 }
 
-function baseState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): Partial<AppState> {
+function baseState(
+  worktree: ReturnType<typeof makeCreatedAgentWorktree>
+): Partial<AgentStatusReadState> {
   return {
     repos: [
       {
@@ -112,7 +117,7 @@ function baseState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): Parti
 
 function seedSleepingRecord(worktreeId: string, sessionId: string): string {
   const paneKey = makePaneKey(WEB_TAB_ID, LEAF_ID)
-  useAppStore.setState((s) => ({
+  applyAgentStatusPatch(useAppStore, (s) => ({
     sleepingAgentSessionsByPaneKey: {
       ...s.sleepingAgentSessionsByPaneKey,
       [paneKey]: {
@@ -135,18 +140,18 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
 }
 
 afterEach(() => {
-  useAppStore.setState(initialAppStoreState, true)
+  applyAgentStatusPatch(useAppStore, initialAppStoreState)
 })
 
 describe('runtime-owned worktree activation with an unhydrated host mirror', () => {
   it('does not relaunch a resume tab while remote PTY liveness is unknown', () => {
     const worktree = makeRuntimeOwnedWorktree()
-    useAppStore.setState(baseState(worktree))
+    applyAgentStatusPatch(useAppStore, baseState(worktree))
     const paneKey = seedSleepingRecord(worktree.id, 'codex-session-live-1')
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     const tabs = after.tabsByWorktree[worktree.id] ?? []
     // RED on main: a replacement `codex resume` tab is appended even though the
     // host PTY may be (and in the incident, was) alive.
@@ -160,12 +165,12 @@ describe('runtime-owned worktree activation with an unhydrated host mirror', () 
     const worktree = makeRuntimeOwnedWorktree()
     const state = baseState(worktree)
     state.ptyIdsByTabId = { [WEB_TAB_ID]: ['pty-host-old-1'] }
-    useAppStore.setState(state)
+    applyAgentStatusPatch(useAppStore, state)
     const paneKey = seedSleepingRecord(worktree.id, 'codex-session-live-2')
 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     expect((after.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
@@ -211,9 +216,9 @@ describe('runtime-owned worktree activation with an unhydrated host mirror', () 
         activeLeafId: LEAF_ID
       } as never
     }
-    useAppStore.setState(state)
+    applyAgentStatusPatch(useAppStore, state)
     const paneKey = makePaneKey(localTabId, LEAF_ID)
-    useAppStore.setState((s) => ({
+    applyAgentStatusPatch(useAppStore, (s) => ({
       sleepingAgentSessionsByPaneKey: {
         ...s.sleepingAgentSessionsByPaneKey,
         [paneKey]: {
@@ -235,7 +240,7 @@ describe('runtime-owned worktree activation with an unhydrated host mirror', () 
     activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
-    const after = useAppStore.getState()
+    const after = getAgentStatusOwner(useAppStore).getState()
     const tabs = after.tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(2)
     const replacement = tabs.find((tab) => tab.id !== localTabId)!

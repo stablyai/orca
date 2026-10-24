@@ -32,30 +32,69 @@ async function terminalLinkPoint(
   tabId: string,
   link: string
 ): Promise<{ x: number; y: number }> {
-  return page.evaluate(
-    ({ tabId, link }) => {
-      const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()
-      const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
-      const cell = pane?.terminal.dimensions?.css.cell
-      if (!pane || !screen || !cell?.width || !cell.height) {
-        throw new Error('terminal screen unavailable')
-      }
-      const buffer = pane.terminal.buffer.active
-      for (let row = pane.terminal.rows - 1; row >= 0; row -= 1) {
-        const text = buffer.getLine(buffer.viewportY + row)?.translateToString(false) ?? ''
-        const column = text.indexOf(link)
-        if (column !== -1) {
-          const rect = screen.getBoundingClientRect()
-          return {
-            x: rect.left + (column + link.length / 2) * cell.width,
-            y: rect.top + (row + 0.5) * cell.height
-          }
-        }
-      }
-      throw new Error(`terminal link ${link} not on screen`)
-    },
-    { tabId, link }
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
   )
+  let point: { x: number; y: number } | null = null
+  await expect
+    .poll(
+      async () => {
+        point = await page.evaluate(
+          ({ tabId, link }) => {
+            const pane = window.__paneManagers?.get(tabId)?.getActivePane?.()
+            const terminal = pane?.terminal
+            const screen = terminal?.element?.querySelector<HTMLElement>('.xterm-screen')
+            if (!terminal || !screen || terminal.cols <= 0 || terminal.rows <= 0) {
+              return null
+            }
+            const rect = screen.getBoundingClientRect()
+            const cell = terminal.dimensions?.css.cell
+            const width = rect.width / terminal.cols
+            const height = rect.height / terminal.rows
+            if (!cell || Math.abs(width - cell.width) > 1 || Math.abs(height - cell.height) > 1) {
+              return null
+            }
+            const buffer = terminal.buffer.active
+            for (let start = 0; start < buffer.length; start += 1) {
+              let text = buffer.getLine(start)?.translateToString(false) ?? ''
+              let end = start + 1
+              while (buffer.getLine(end)?.isWrapped) {
+                text += buffer.getLine(end)?.translateToString(false) ?? ''
+                end += 1
+              }
+              const column = text.indexOf(link)
+              if (column !== -1) {
+                const offset = column + Math.min(7, link.length - 1)
+                const row = start + Math.floor(offset / terminal.cols) - buffer.viewportY
+                if (row < 0 || row >= terminal.rows) {
+                  return null
+                }
+                const x = rect.left + ((offset % terminal.cols) + 0.5) * width
+                const y = rect.top + (row + 0.5) * height
+                const hit = document.elementFromPoint(x, y)
+                if (!hit || !terminal.element?.contains(hit)) {
+                  return null
+                }
+                return { x, y }
+              }
+              start = end - 1
+            }
+            return null
+          },
+          { tabId, link }
+        )
+        return point
+      },
+      { message: `terminal link ${link} has no rendered hit cell` }
+    )
+    .not.toBeNull()
+  if (!point) {
+    throw new Error(`terminal link ${link} not on screen`)
+  }
+  return point
 }
 
 /** Prints origin+path as one link; split apart so the typed command never shows the whole URL. */

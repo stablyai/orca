@@ -1,3 +1,7 @@
+import type { AppState } from '../store/types'
+import { makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { useAppStore } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
@@ -40,13 +44,14 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'subscribe').mockImplementation(mocks.subscribe)
+  return { useAppStore }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
@@ -93,16 +98,37 @@ const CLIENT_HOSTING_CAPABILITIES = [
 ]
 
 const UNIFIED_TABS = [
-  { id: OTHER_TAB_ID, entityId: 'other-entity', contentType: 'terminal', groupId: GROUP_ID },
-  { id: STAGED_TAB_ID, entityId: 'staged-workspace', contentType: 'browser', groupId: GROUP_ID }
+  makeUnifiedTab({
+    id: OTHER_TAB_ID,
+    worktreeId: WORKTREE_ID,
+    entityId: 'other-entity',
+    contentType: 'terminal',
+    groupId: GROUP_ID
+  }),
+  makeUnifiedTab({
+    id: STAGED_TAB_ID,
+    worktreeId: WORKTREE_ID,
+    entityId: 'staged-workspace',
+    contentType: 'browser',
+    groupId: GROUP_ID
+  })
 ]
 
 /** The strip with `visibleTabId` on screen. A fresh groups array so the guard re-evaluates. */
-function stateWithVisibleTab(base: Record<string, unknown>, visibleTabId: string): typeof base {
+function stateWithVisibleTab(base: AppState, visibleTabId: string): AppState {
   return {
     ...base,
     runtimeStatusByEnvironmentId: new Map([
-      [ENVIRONMENT_ID, { status: { capabilities: CLIENT_HOSTING_CAPABILITIES }, checkedAt: 1 }]
+      [
+        ENVIRONMENT_ID,
+        {
+          status: {
+            ...createCompatibleRuntimeStatusResponse().result,
+            capabilities: CLIENT_HOSTING_CAPABILITIES
+          },
+          checkedAt: 1
+        }
+      ]
     ]),
     activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
     groupsByWorktree: {
@@ -120,7 +146,7 @@ function stateWithVisibleTab(base: Record<string, unknown>, visibleTabId: string
 }
 
 describe('browser create focus intent across the client-host preparation await', () => {
-  beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
+  beforeEach(() => stubBrowserTabCreateEnvironment(mocks, useAppStore))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
   /**
@@ -130,11 +156,11 @@ describe('browser create focus intent across the client-host preparation await',
   async function runCreateSwitchingDuringPreparation(options: {
     switchTab: boolean
   }): Promise<{ hostTabId: string } | null | undefined> {
-    const base = mocks.getState() as Record<string, unknown>
+    const base = useAppStore.getState()
     const stagedState = stateWithVisibleTab(base, STAGED_TAB_ID)
     const switchedState = stateWithVisibleTab(base, OTHER_TAB_ID)
     let currentState = stagedState
-    mocks.getState.mockImplementation(() => currentState)
+    useAppStore.setState(currentState)
 
     let guardListener:
       | ((state: typeof stagedState, previous: typeof stagedState) => void)
@@ -181,6 +207,7 @@ describe('browser create focus intent across the client-host preparation await',
     if (options.switchTab) {
       // The user clicks another tab while the desktop host is still being prepared.
       currentState = switchedState
+      useAppStore.setState(currentState)
       guardListener?.(switchedState, stagedState)
     }
     releasePreparation()

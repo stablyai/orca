@@ -130,7 +130,7 @@ export function buildMirroredAgentStatusPatch(
     )
   }
 
-  let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
+  let nextAgentStatusByPaneKey: Record<string, AgentStatusEntry> = state.agentStatusByPaneKey
   let changed = false
   let aggregateRelevantChange = false
   let sortRelevantChange = false

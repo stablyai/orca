@@ -1,4 +1,9 @@
-import { vi } from 'vitest'
+import type { StoreApi } from 'zustand'
+import type { AppState } from '../store/types'
+import { getDefaultSettings } from '../../../shared/constants'
+import { makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { vi, type Mock } from 'vitest'
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
@@ -11,7 +16,7 @@ export const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID
 export const WORKTREE_ID = 'repo::/worktree'
 export const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
-type SessionMock = ReturnType<typeof vi.fn>
+type SessionMock = Mock
 
 /** Mock surface every web-runtime-session test file declares via `vi.hoisted`. */
 export type WebRuntimeSessionMocks = {
@@ -123,14 +128,27 @@ export function makeSnapshot(): RuntimeMobileSessionTabsResult {
   }
 }
 
-export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): void {
+export function stubBrowserTabCreateEnvironment(
+  mocks: WebRuntimeSessionMocks,
+  store: StoreApi<AppState>
+): void {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-  mocks.getState.mockReturnValue({
+  store.setState({
     settings: {
+      ...getDefaultSettings('/tmp'),
       activeRuntimeEnvironmentId: ENVIRONMENT_ID
     },
     runtimeStatusByEnvironmentId: new Map([
-      [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+      [
+        ENVIRONMENT_ID,
+        {
+          status: {
+            ...createCompatibleRuntimeStatusResponse().result,
+            capabilities: ['browser.screencast.v1']
+          },
+          checkedAt: 1
+        }
+      ]
     ]),
     activeWorktreeId: WORKTREE_ID,
     activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID,
@@ -146,11 +164,13 @@ export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): 
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {
       [WORKTREE_ID]: [
-        {
+        makeUnifiedTab({
           id: 'local-editor-tab',
+          worktreeId: WORKTREE_ID,
+          groupId: 'group-1',
           entityId: '/worktree/index.html',
           contentType: 'editor'
-        }
+        })
       ]
     },
     createBrowserTab: mocks.createBrowserTab,
@@ -162,6 +182,7 @@ export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): 
     focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
     setActiveWorktree: mocks.setActiveWorktree
   })
+  mocks.getState.mockImplementation(store.getState)
   mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
     updater({
       state: 'before',

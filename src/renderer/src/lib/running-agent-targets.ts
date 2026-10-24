@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -11,7 +12,7 @@ import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../shared/runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'

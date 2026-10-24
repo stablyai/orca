@@ -53,3 +53,22 @@ export function forgetUnlistedCreatedChat(
   clearTimeout(record.timer)
   unlistedCreatedChats.delete(key)
 }
+
+export function prepareUnlistedCreatedChatRemoval(worktreeId: string, sessionId: string) {
+  const key = chatKey(worktreeId, sessionId)
+  const record = unlistedCreatedChats.get(key)
+  return {
+    install: () => {
+      if (unlistedCreatedChats.get(key) === record) {
+        unlistedCreatedChats.delete(key)
+      }
+    },
+    effects: [
+      () => {
+        if (record) {
+          clearTimeout(record.timer)
+        }
+      }
+    ]
+  }
+}

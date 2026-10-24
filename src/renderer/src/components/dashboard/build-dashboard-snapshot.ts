@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
@@ -51,7 +52,7 @@ import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboa
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
 export type DashboardSnapshotState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'repos'
   | 'worktreesByRepo'
   | 'tabsByWorktree'

@@ -17,13 +17,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -33,9 +33,10 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -47,11 +48,12 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('keeps all visible bytes after a pending hidden ESC becomes non-query output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -97,7 +99,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('repaints from the main-owned snapshot when main drops pending output at the cap', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
@@ -145,7 +147,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('keeps split stateful Codex queries live after becoming visible', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -191,7 +193,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('drops pending hidden Codex query prefixes when the PTY changes', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -231,7 +233,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('does not live-render split hidden Codex non-query CSI output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -268,7 +270,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('answers split hidden Codex OSC color queries directly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -305,7 +307,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('answers hidden Codex OSC color queries split before the prefix directly', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -342,7 +344,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('keeps later hidden Codex stateless terminal queries on the live xterm path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -380,7 +382,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('keeps clean hidden Codex stateful cursor-position queries on the live xterm path', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -412,7 +414,7 @@ export function registerPtyConnectionHiddenQuerySnapshotRestoreTests(): void {
     })
 
     it('does not answer dirty hidden Codex stateful queries from stale xterm state', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(

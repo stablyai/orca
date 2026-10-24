@@ -24,18 +24,18 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionSessionLivenessTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   function seedUnverifiableRestoredPane() {
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'unverifiable-pty' }] },
       ptyIdsByTabId: { 'tab-1': ['unverifiable-pty'] },
       terminalLayoutsByTabId: {
@@ -46,7 +46,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           ptyIdsByLeafId: { [LEAF_2]: 'unverifiable-pty' }
         }
       }
-    } as StoreState
+    })
     return createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'unverifiable-pty' }
@@ -55,7 +55,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
   // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.
   function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
-    mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, environmentId)
+    storeFixture.patch(buildActiveRuntimeEnvironmentState(storeFixture.read(), environmentId))
   }
 
   describe('connectPanePty', () => {
@@ -65,9 +65,10 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -79,12 +80,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     describe('reconcileIfSessionMissing', () => {
       it('closes a split pane when targeted liveness says its local session is missing', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -117,7 +119,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('does not close when targeted liveness is live or unknown', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -137,7 +139,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('does not apply a stale targeted liveness result after reattach', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         let resolveHasPty: (value: boolean) => void = () => {
           throw new Error('hasPty promise resolver was not initialized')
         }
@@ -167,7 +169,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('does NOT tear down a newborn pane when liveness was requested before it bound', async () => {
         // Why (regression): a liveness request made before the spawn bound cannot prove the fresh ptyId dead (boundAt wiring).
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -204,7 +206,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('tears down the pane when liveness was requested after it bound', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -243,7 +245,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('routes the last pane through onPtyExitRef when its session is dead', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-1')
         transportFactoryQueue.push(transport)
         const manager = createManager(1)
@@ -261,7 +263,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('is a no-op for remote: web-runtime ids', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         enableActiveRuntimeEnvironment('env-1')
         const transport = createMockTransport('remote:env-1:pane-2')
         transport.getConnectionId.mockReturnValue(null)
@@ -282,7 +284,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('is a no-op for SSH/non-local ids (non-null connectionId)', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         transport.getConnectionId.mockReturnValue('ssh-target-1')
         transportFactoryQueue.push(transport)
@@ -302,7 +304,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('respects suppression: a suppressed dead session keeps the pane mounted', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -324,7 +326,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('still closes the replacement PTY after a suppressed restart rebinds the pane', async () => {
         // Why (regression): the exit guard is scoped to the exiting ptyId, not a one-shot boolean, so a rebound replacement's later real exit still tears down.
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -369,7 +371,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('closes a split pane exactly once across reconcile + a racing real exit', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -408,7 +410,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       })
 
       it('closes a genuinely-dead non-suppressed pane once (not misread as suppressed)', async () => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -448,7 +450,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
     })
 
     it('preserves an owner-unverified restored pane after an empty reattach result', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
         opts.callbacks?.onError?.('terminal_pane_owner_unverified')
@@ -464,16 +466,16 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, 'terminal_pane_owner_unverified')
       expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
       expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(mockStoreState.tabsByWorktree['wt-1'][0]?.ptyId).toBe('unverifiable-pty')
-      expect(mockStoreState.ptyIdsByTabId?.['tab-1']).toEqual(['unverifiable-pty'])
-      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      expect(storeFixture.read().tabsByWorktree['wt-1'][0]?.ptyId).toBe('unverifiable-pty')
+      expect(storeFixture.read().ptyIdsByTabId?.['tab-1']).toEqual(['unverifiable-pty'])
+      expect(storeFixture.read().terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
         [LEAF_2]: 'unverifiable-pty'
       })
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
     })
 
     it('preserves an owner-unverified restored pane after a rejected reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport()
       transport.connect.mockRejectedValueOnce(new Error('terminal_pane_owner_unverified'))
       transportFactoryQueue.push(transport)
@@ -486,7 +488,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(2, 'terminal_pane_owner_unverified')
       expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
       expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+      expect(storeFixture.read().terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
         [LEAF_2]: 'unverifiable-pty'
       })
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
@@ -495,7 +497,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
     it.each([false, true])(
       'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
       async (fresh) => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport()
         transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
           opts.callbacks?.onError?.('terminal_pane_owner_changed')
@@ -517,7 +519,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
         expect(deps.clearTabPtyId).not.toHaveBeenCalled()
         if (!fresh) {
-          expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+          expect(storeFixture.read().terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
             [LEAF_2]: 'unverifiable-pty'
           })
         }
@@ -548,7 +550,7 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         transport: MockTransport
         typeKeystroke: (data?: string) => void
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)

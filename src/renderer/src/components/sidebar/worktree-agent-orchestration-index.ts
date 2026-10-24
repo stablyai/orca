@@ -1,9 +1,10 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 type OrchestrationIndexState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'

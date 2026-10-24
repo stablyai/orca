@@ -134,6 +134,16 @@ export class AgentStatusObservationSequencer {
 
   constructor(private readonly authorityId: string) {}
 
+  fork(): AgentStatusObservationSequencer {
+    const next = new AgentStatusObservationSequencer(this.authorityId)
+    next.revision = this.revision
+    next.incarnationFloor = this.incarnationFloor
+    for (const [key, value] of this.incarnationByPaneKey) {
+      next.incarnationByPaneKey.set(key, value)
+    }
+    return next
+  }
+
   getAuthorityId(): string {
     return this.authorityId
   }

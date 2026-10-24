@@ -23,13 +23,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   // Why: xterm and the pane mirror must end every restore on the same kitty flags.
@@ -40,9 +40,10 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -54,11 +55,12 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     async function reattachWithSnapshotFlags(kittyKeyboard: boolean) {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -105,7 +107,7 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
     })
 
     it('grounds xterm and the mirror with one scanned write before a restart-in-place spawns', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       transportFactoryQueue.push(createMockTransport())
       const pane = createPane(91)
       // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.

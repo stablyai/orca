@@ -103,14 +103,21 @@ const defaultStoreState = {
   repos: []
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: typeof defaultStoreState) => unknown) => selector(defaultStoreState),
-    {
-      getState: () => defaultStoreState
-    }
-  )
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: typeof defaultStoreState) => unknown) => selector(defaultStoreState),
+      {
+        getState: () => defaultStoreState
+      }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => [],

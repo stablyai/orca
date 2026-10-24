@@ -32,15 +32,22 @@ type WorktreeListComponent = React.ComponentType<{
 
 let WorktreeList: WorktreeListComponent
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = (() => {
+    const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
+      selector(mockStore.state)) as ((
+      selector: (state: Record<string, unknown>) => unknown
+    ) => unknown) & {
+      getState: () => Record<string, unknown>
+    }
+    useAppStore.getState = () => mockStore.state
+    return { useAppStore }
+  })()
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
 })
 
 vi.mock('@tanstack/react-virtual', () => ({

@@ -17,13 +17,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionMode2031SubscriptionsTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -33,9 +33,10 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -47,6 +48,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -57,7 +59,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         emit: (data: string, meta?: { droppedOutput?: boolean }) => void
         dispose: () => void
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-id')
         const captured: {
           current: ((data: string, meta?: { droppedOutput?: boolean }) => void) | null
@@ -69,10 +71,10 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
           }
         )
         transportFactoryQueue.push(transport)
-        mockStoreState = {
-          ...mockStoreState,
-          settings: { ...mockStoreState.settings, theme: 'light' }
-        }
+        storeFixture.patch({
+          ...storeFixture.read(),
+          settings: { ...storeFixture.read().settings, theme: 'light' }
+        })
         const pane = createPane(1)
         const manager = createManager(1)
         const deps = createDeps({ isVisibleRef: { current: true } })
@@ -206,7 +208,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
     })
 
     it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -216,10 +218,10 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         }
       )
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        settings: { ...mockStoreState.settings, theme: 'light' }
-      }
+      storeFixture.patch({
+        ...storeFixture.read(),
+        settings: { ...storeFixture.read().settings, theme: 'light' }
+      })
 
       const isVisibleRef = { current: false }
       const paneMode2031Ref = { current: new Map<number, boolean>() }
@@ -252,7 +254,7 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
     })
 
     it('does not keep mode 2031 subscribed when a skipped hidden chunk unsubscribes last', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(

@@ -70,6 +70,8 @@ vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
 }))
 
 const load = perClientLoader(async () => ({
+  status: await import('@/store/agent-status-commit'),
+  statusPatch: await import('@/store/agent-status-patch'),
   launch: await import('@/lib/launch-agent-in-new-tab'),
   quick: await import('@/lib/run-quick-command-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
@@ -165,13 +167,18 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     tab.startupCwd ?? c.workspace.path
   ).startupCwd
   const startup = store.getState().pendingStartupByTabId[tab.id]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store state includes every StoreState member the pane reads.
-  const deps = buildPaneConnectionDeps(() => store.getState() as never, {
-    tabId: tab.id,
-    worktreeId,
-    cwd,
-    startup
-  })
+  const deps = buildPaneConnectionDeps(
+    {
+      read: () => modules.status.getAgentStatusOwner(store).getState(),
+      patch: (patch) => modules.statusPatch.applyAgentStatusPatch(store, patch)
+    },
+    {
+      tabId: tab.id,
+      worktreeId,
+      cwd,
+      startup
+    }
+  )
   const pane = createPane(1)
   // A measured grid no lane defaults to, so the request shows the pane's size reached it.
   Object.assign(pane.terminal, PANE_GRID)

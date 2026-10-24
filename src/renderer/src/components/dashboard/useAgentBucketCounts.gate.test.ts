@@ -1,6 +1,8 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
-import type { AppState } from '@/store/types'
+
 import {
   resetAgentBucketCountStateForTests,
   selectAgentBucketCountState
@@ -10,9 +12,9 @@ vi.mock('@/store', () => ({ useAppStore: () => undefined }))
 
 const STORE_WRITES = 2_000
 
-function storeState(): AppState {
+function storeState(): AgentStatusReadState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only the slices listed here; the rest of AppState is never touched in this test.
-  return {
+  return makeAgentStatusReadState({
     repos: [],
     worktreesByRepo: {},
     tabsByWorktree: {},
@@ -29,15 +31,15 @@ function storeState(): AppState {
     acknowledgedAgentsByPaneKey: {},
     agentStatusEpoch: 0,
     // A slice the counts never read: writing it is what "unrelated store write" means.
-    unreadCountsByWorktree: {}
-  } as unknown as AppState
+    unreadTerminalTabs: {}
+  })
 }
 
 // What `useShallow` did before the gate, unwrapped from the hook so it can be
 // driven directly: allocate the 15-key object, then `shallow()` it against the
 // previous one. Kept here as the comparison baseline.
 let previousShallow: Record<string, unknown> | null = null
-const shallowInputs = (s: AppState): Record<string, unknown> => ({
+const shallowInputs = (s: AgentStatusReadState): Record<string, unknown> => ({
   repos: s.repos,
   worktreesByRepo: s.worktreesByRepo,
   tabsByWorktree: s.tabsByWorktree,
@@ -54,7 +56,7 @@ const shallowInputs = (s: AppState): Record<string, unknown> => ({
   acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
   agentStatusEpoch: s.agentStatusEpoch
 })
-const shallowSelector = (s: AppState): Record<string, unknown> => {
+const shallowSelector = (s: AgentStatusReadState): Record<string, unknown> => {
   const next = shallowInputs(s)
   if (previousShallow !== null && shallow(previousShallow, next)) {
     return previousShallow
@@ -126,11 +128,11 @@ describe('agent bucket count input gate', () => {
 
     const unrelated = {
       ...state,
-      unreadCountsByWorktree: {}
-    } as unknown as AppState
+      unreadTerminalTabs: {}
+    }
     expect(selectAgentBucketCountState(unrelated)).toBe(first)
 
-    const moved = { ...state, agentStatusEpoch: 1 } as unknown as AppState
+    const moved = { ...state, agentStatusEpoch: 1 }
     const second = selectAgentBucketCountState(moved)
     expect(second).not.toBe(first)
     expect(second.agentStatusEpoch).toBe(1)

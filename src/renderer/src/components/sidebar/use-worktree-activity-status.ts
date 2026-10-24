@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -34,7 +35,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasRetainedFailed,
     agentStatusPaneIdsByTabId,
     stalePaneIdsByTabId
-  } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+  } = useAgentStatusSelector(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
 
   // Why: compact and detailed cards need the same status-dot semantics:
   // runtime liveness gates title-derived states, then explicit agent rows can

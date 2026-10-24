@@ -1,7 +1,7 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 
 export type PaletteStatusInputsState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'agentStatusByPaneKey'
   | 'runtimePaneTitlesByTabId'
   | 'ptyIdsByTabId'
@@ -67,7 +67,7 @@ export const EMPTY_PALETTE_STATUS_INPUTS: PaletteStatusInputs = Object.freeze({
  * The two hot maps are deliberately absent — see `selectPaletteIndexStatusSnapshot`.
  */
 export function selectPaletteStatusInputs(
-  s: PaletteStatusInputsState,
+  s: PaletteStatusInputs,
   active: boolean
 ): PaletteStatusInputs {
   if (!active) {

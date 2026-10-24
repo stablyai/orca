@@ -28,24 +28,31 @@ const {
   toastInfo: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -83,11 +90,12 @@ describe('connectPanePty split cwd resolution', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -99,7 +107,7 @@ describe('connectPanePty split cwd resolution', () => {
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
+      buildPaneConnectionDeps(storeFixture, { cwdPromise: cwd.promise })
     )
     await flushAsyncTicks(20)
 
@@ -122,7 +130,7 @@ describe('connectPanePty split cwd resolution', () => {
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
-      buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
+      buildPaneConnectionDeps(storeFixture, { cwdPromise: cwd.promise })
     )
     await flushAsyncTicks(20)
     binding.dispose()

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
@@ -25,7 +26,7 @@ export type WorkspaceReferenceObservationContext =
   | WorkspaceReferenceAgentSessionContext
 
 type ObservationState = Parameters<typeof resolveTerminalNotificationOwner>[0] &
-  Pick<AppState, 'tabsByWorktree' | 'agentStatusByPaneKey' | 'terminalLayoutsByTabId'>
+  Pick<AgentStatusReadState, 'tabsByWorktree' | 'agentStatusByPaneKey' | 'terminalLayoutsByTabId'>
 
 function findAgentSessionTab(
   state: Partial<Pick<AppState, 'unifiedTabsByWorktree'>>,
@@ -73,7 +74,10 @@ export function getWorkspaceAttachmentObservedOrigin(
 }
 
 export function getWorkspaceAttachmentTerminalOrigin(
-  state: Pick<AppState, 'tabsByWorktree' | 'agentStatusByPaneKey' | 'terminalLayoutsByTabId'>,
+  state: Pick<
+    AgentStatusReadState,
+    'tabsByWorktree' | 'agentStatusByPaneKey' | 'terminalLayoutsByTabId'
+  >,
   worktreeId: string,
   context: WorkspaceReferenceTerminalContext,
   hostId: ExecutionHostId | undefined

@@ -44,7 +44,7 @@ export async function seedAccumulatedWorkspaceFixture(
         throw new Error('store unavailable')
       }
       const target: FixtureWindow = window
-      const before = store.getState()
+      const before = window.__agentStatus!.getState()
       const settings = before.settings
       if (!settings) {
         throw new Error('settings unavailable')
@@ -88,7 +88,7 @@ export async function seedAccumulatedWorkspaceFixture(
       for (const status of seed.liveStatuses) {
         for (let historyIndex = 0; historyIndex < config.statusHistoryEntries; historyIndex += 1) {
           const historyRemaining = config.statusHistoryEntries - historyIndex
-          store.getState().setAgentStatus(
+          window.__agentStatus!.getState().setAgentStatus(
             status.paneKey,
             {
               state: historyRemaining % 2 ? 'working' : 'waiting',
@@ -105,7 +105,7 @@ export async function seedAccumulatedWorkspaceFixture(
         }
       }
       const syntheticStatuses = Object.fromEntries(
-        Object.entries(store.getState().agentStatusByPaneKey).filter(([paneKey]) =>
+        Object.entries(window.__agentStatus!.getState().agentStatusByPaneKey).filter(([paneKey]) =>
           paneKey.startsWith('synthetic-tab-')
         )
       )
@@ -125,7 +125,7 @@ export async function seedAccumulatedWorkspaceFixture(
       )
       serializedBytes.total = byteLength(serializedSlices)
       target.__accumulatedFixtureCleanup = () => {
-        store.setState({
+        window.__setStorePatch!({
           repos: before.repos,
           worktreesByRepo: before.worktreesByRepo,
           tabsByWorktree: before.tabsByWorktree,

@@ -4,7 +4,8 @@ import {
   structuredChatTabById,
   structuredChatTabBySessionId,
   structuredChatWorkspacesBySessionId,
-  chatWorkspaceByTabId
+  chatWorkspaceByTabId,
+  ownSourceKeys
 } from './structured-chat-tab-index'
 
 function tab(id: string, contentType: Tab['contentType'] = 'agent-session'): Tab {
@@ -82,4 +83,28 @@ it('keeps own-key order, prototype-named ids, and separate session and tab keys 
     'constructor',
     'second'
   ])
+})
+
+it('shares lazy own-enumerable keys without reading workspace rows', () => {
+  let walks = 0,
+    buckets = 0
+  const source = Object.create({ inherited: [] })
+  Object.defineProperty(source, '__proto__', { enumerable: true, value: [tab('chat')] })
+  Object.defineProperty(source, 'hidden', { enumerable: false, value: [] })
+  const tracked = new Proxy(source, {
+    ownKeys(target) {
+      walks++
+      return Reflect.ownKeys(target)
+    },
+    get(target, key) {
+      buckets++
+      return Reflect.get(target, key)
+    }
+  })
+  expect(ownSourceKeys(tracked)).toEqual(['__proto__'])
+  expect(ownSourceKeys(tracked)).toBe(ownSourceKeys(tracked))
+  expect(walks).toBe(1)
+  expect(buckets).toBe(0)
+  expect(chatWorkspaceByTabId(tracked, 'chat')).toBe('__proto__')
+  expect(walks).toBe(1)
 })

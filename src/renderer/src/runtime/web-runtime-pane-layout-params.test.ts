@@ -9,7 +9,14 @@ const store = vi.hoisted(() => {
   const state: Record<string, unknown> = {}
   return { state }
 })
-vi.mock('../store', () => ({ useAppStore: { getState: () => store.state } }))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: () => store.state } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 function ownedBy(...hostIds: ('local' | `runtime:${string}`)[]): Record<string, unknown> {
   return {

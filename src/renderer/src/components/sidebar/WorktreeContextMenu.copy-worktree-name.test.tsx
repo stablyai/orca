@@ -33,11 +33,18 @@ const state = {
   openSettingsTarget: vi.fn()
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
-    getState: () => state
-  })
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {
+      getState: () => state
+    })
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => [],

@@ -1,5 +1,6 @@
+import type { AgentStatusEntry } from '@/store/slices/agent-status-contract'
 import { describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
+
 import {
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
   buildRuntimeMobileAgentStatusProjectionForTests,
@@ -13,11 +14,11 @@ import {
 // under test so a drifted constant cannot make this reference silently disagree for a reason
 // unrelated to the change.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
-type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+type MainAgentStatus = Record<string, AgentStatusEntry>[string]['mainAgent']
 function mainAgentKey(mainAgent: MainAgentStatus) {
   return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
 }
-function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
+function referenceProjection(map: Record<string, AgentStatusEntry>): string {
   return JSON.stringify(
     Object.entries(map)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -85,12 +86,12 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
 describe('mobile agent-status projection equivalence', () => {
   it('matches the whole-array serialization across status maps and cache reuse', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const statusMaps: AppState['agentStatusByPaneKey'][] = []
+    const statusMaps: Record<string, AgentStatusEntry>[] = []
     statusMaps.push({})
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { turnStartedAt: 1740000000500 }) })
-    const many: AppState['agentStatusByPaneKey'] = {}
+    const many: Record<string, AgentStatusEntry> = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
     }
@@ -147,7 +148,7 @@ describe('mobile agent-status projection equivalence', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
     // Keys where locale and code-unit order disagree: 'tab-1:' sorts after 'tab-10:' by code unit
     // (':' > '0') and before it by locale, and case/accent handling differs too.
-    const map: AppState['agentStatusByPaneKey'] = {}
+    const map: Record<string, AgentStatusEntry> = {}
     for (const paneKey of ['tab-1:leaf-0', 'tab-10:leaf-0', 'B:leaf-0', 'a:leaf-0', 'á:leaf-0']) {
       map[paneKey] = makeEntry(0, { paneKey })
     }

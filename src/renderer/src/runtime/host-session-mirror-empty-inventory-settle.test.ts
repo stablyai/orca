@@ -17,13 +17,20 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 // Why: web-session-tabs-sync imports the app-level store singleton, and this
 // suite drives only the settle receipt — no store patch is exercised.
-vi.mock('../store', () => ({
-  useAppStore: {
-    setState: vi.fn(),
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(() => () => {})
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      setState: vi.fn(),
+      getState: vi.fn(() => ({})),
+      subscribe: vi.fn(() => () => {})
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,

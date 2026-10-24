@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
@@ -48,7 +49,7 @@ function seedChatTab(overrides?: { sessionId?: string; activeTabId?: string | nu
 }
 
 function surfaceFor(store: TestStore): ReturnType<typeof createStructuredAttentionSurface> {
-  return createStructuredAttentionSurface(store.getState())
+  return createStructuredAttentionSurface(getAgentStatusOwner(store).getState())
 }
 
 describe('createStructuredAttentionSurface', () => {

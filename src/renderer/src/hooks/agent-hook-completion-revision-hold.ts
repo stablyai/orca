@@ -1,4 +1,5 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusEntry } from '@/store/agent-status'
+
 import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion-coordinator-types'
 import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notification-burst-cooldown'
 import type { NotificationDispatchResult } from '../../../shared/notification-settings-types'
@@ -120,7 +121,7 @@ export function submitHookLaneCompletion(
   const segment = done?.stateStartedAt
   // Why: sent only while the pane still shows this end and the lane keeps hook authority.
   const isCurrent = (): boolean => {
-    const row = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    const row = getAgentStatusEntry(paneKey)
     return (
       row?.state === 'done' &&
       row.stateStartedAt === segment &&

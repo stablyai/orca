@@ -17,7 +17,14 @@ import {
 } from './web-session-terminal-orphan-recovery'
 
 // getState: snapshot receipt reads the held paired-tab closes; none here.
-vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))
+vi.mock('../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { setState: vi.fn(), getState: () => ({}) } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))

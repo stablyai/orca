@@ -1,3 +1,6 @@
+import { measureMembership } from './structured-status-feed-membership.test-fixture'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -12,7 +15,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '@/store/types'
+
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import * as statusOwner from '@/runtime/structured-agent-session-owner'
 import * as statusProjection from './structured-agent-session-status-projection'
@@ -20,8 +23,8 @@ import { tabActivationPatch } from '@/store/slices/tabs/tabs-focus-actions'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
 type TestStore = {
-  getState: () => AppState
-  setState: (state: Partial<AppState>) => void
+  getState: () => AgentStatusReadState
+  setState: (state: Partial<AgentStatusReadState>) => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -43,6 +46,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const [{ getAgentStatusOwner }, { applyAgentStatusPatch }] = await Promise.all([
+    import('@/store/agent-status-commit'),
+    import('@/store/agent-status-patch')
+  ])
   const useAppStore = createTestStore()
   const { transactAgentStatuses } = useAppStore.getState()
   useAppStore.setState({
@@ -57,7 +64,10 @@ vi.mock('@/store', async () => {
         })
       )
   })
-  mocks.store = useAppStore
+  mocks.store = {
+    getState: getAgentStatusOwner(useAppStore).getState,
+    setState: (patch) => applyAgentStatusPatch(useAppStore, patch)
+  }
   return { useAppStore }
 })
 
@@ -121,58 +131,16 @@ function emit(event: AgentSessionStatusEvent): void {
   act(() => send(event))
 }
 
-function pins(): AppState['structuredSessionLaunchDirectoryByTabId'] {
+function pins(): AgentStatusReadState['structuredSessionLaunchDirectoryByTabId'] {
   return mocks.store?.getState().structuredSessionLaunchDirectoryByTabId ?? {}
 }
 
 function statuses() {
-  return Object.values(useAppStore.getState().agentStatusByPaneKey)
+  return Object.values(getAgentStatusOwner(useAppStore).getSnapshot())
 }
 function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEvent) => void } {
   const call = mocks.subscribeStatus.mock.calls[index]
   return { target: call[0], emit: call[1] }
-}
-
-// Observe actual collection work without replacing the private members or groups.
-function measureMembership(trigger: () => void) {
-  const work = { members: 0, groups: 0 }
-  function observe<T>(iterator: MapIterator<T>): MapIterator<T> {
-    const next = iterator.next.bind(iterator)
-    iterator.next = () => {
-      const item = next()
-      const value: unknown = Array.isArray(item.value) ? item.value[1] : item.value
-      if (!item.done && value && typeof value === 'object') {
-        if ('paneKey' in value && 'group' in value && 'tab' in value) {
-          work.members += 1
-        }
-        if ('feed' in value && 'unsubscribe' in value) {
-          work.groups += 1
-        }
-      }
-      return item
-    }
-    return iterator
-  }
-  const values = Map.prototype.values
-  const entries = Map.prototype[Symbol.iterator]
-  const spies = [
-    vi.spyOn(Map.prototype, 'values').mockImplementation(function (this: Map<unknown, unknown>) {
-      return observe(values.call(this))
-    }),
-    vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function (
-      this: Map<unknown, unknown>
-    ) {
-      return observe(entries.call(this))
-    })
-  ]
-  try {
-    act(trigger)
-    return work
-  } finally {
-    for (const spy of spies) {
-      spy.mockRestore()
-    }
-  }
 }
 
 describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
@@ -241,7 +209,10 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       let publications = 0
       let sleepWrites = 0
       let directoryWrites = 0
-      const stop = useAppStore.subscribe((state, previous) => {
+      const stopStatus = getAgentStatusOwner(useAppStore).subscribeAggregate(() => {
+        commits += 1
+      })
+      const stopApp = useAppStore.subscribe((state, previous) => {
         publications += 1
         sleepWrites += Number(
           state.structuredChatSleptAtByPaneKey !== previous.structuredChatSleptAtByPaneKey
@@ -250,10 +221,11 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
           state.structuredSessionLaunchDirectoryByTabId !==
             previous.structuredSessionLaunchDirectoryByTabId
         )
-        if (state.agentStatusByPaneKey !== previous.agentStatusByPaneKey) {
-          commits += 1
-        }
       })
+      const stop = () => {
+        stopApp()
+        stopStatus()
+      }
       const view = render(<StructuredAgentSessionStatusBridge />)
       await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledTimes(hostCount))
       const rows = tabs.map((tab, i) =>
@@ -294,7 +266,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         expect(spy).toHaveBeenCalledOnce()
       }
       expect(statuses()).toHaveLength(count)
-      const before = useAppStore.getState().agentStatusByPaneKey
+      const before = getAgentStatusOwner(useAppStore).getSnapshot()
       resetWork()
       act(() => {
         feed(0).emit({ type: 'snapshot', sessions: rows })
@@ -303,7 +275,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       expect(commits).toBe(0)
       expect(projects).not.toHaveBeenCalled()
       expect(mocks.applyStatus).not.toHaveBeenCalled()
-      expect(useAppStore.getState().agentStatusByPaneKey).toBe(before)
+      expect(getAgentStatusOwner(useAppStore).getSnapshot()).toBe(before)
       linearWork()
       resetWork()
       const statusWork = measureMembership(() =>
@@ -461,8 +433,8 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         const paneKey = statuses()[0].paneKey
         let threw = false
         if (failure === 'publication') {
-          stop = useAppStore.subscribe((state) => {
-            if (!threw && !state.agentStatusByPaneKey[paneKey]) {
+          stop = useAppStore.subscribe(() => {
+            if (!threw && !getAgentStatusOwner(useAppStore).getEntry(paneKey)) {
               threw = true
               throw new Error('removal subscriber failed once')
             }
@@ -484,13 +456,14 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         )
         expect(threw).toBe(true)
         expect(warning).toHaveBeenCalled()
-        // A subscriber throws after installation; a release throw happens before projection.
-        expect(Boolean(useAppStore.getState().agentStatusByPaneKey[paneKey])).toBe(
+        expect(Boolean(getAgentStatusOwner(useAppStore).getSnapshot()[paneKey])).toBe(
           failure === 'release'
         )
-        expect(pins()[floatingTab.id]?.sessionId).toBe(floatingTab.entityId)
+        expect(pins()[floatingTab.id]?.sessionId).toBe(
+          failure === 'release' ? floatingTab.entityId : undefined
+        )
         act(() => notifyStructuredLaunchListeners())
-        expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(getAgentStatusOwner(useAppStore).getSnapshot()[paneKey]).toBeUndefined()
         expect(useAppStore.getState().structuredChatSleptAtByPaneKey[paneKey]).toBeUndefined()
         expect(pins()).toEqual({})
         await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2))
@@ -560,7 +533,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
     })
   })
 
-  it('isolates an installed revocation failure and still reconnects and projects', async () => {
+  it('isolates a throwing status observer after revocation and still reconnects and projects', async () => {
     vi.useFakeTimers()
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let stop = () => {}
@@ -578,8 +551,8 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       const afterBridge = vi.fn()
       later = getStructuredAgentSessionStatusFeed({ kind: 'local' }).subscribe(afterBridge)
       let threw = false
-      stop = useAppStore.subscribe((state) => {
-        if (!threw && !Object.values(state.agentStatusByPaneKey)[0]?.structuredHostOwned) {
+      stop = getAgentStatusOwner(useAppStore).subscribeAggregate(() => {
+        if (!threw && !statuses()[0]?.structuredHostOwned) {
           threw = true
           throw new Error('revocation subscriber failed')
         }
@@ -588,8 +561,8 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       expect(statuses()[0].structuredHostOwned).toBeUndefined()
       expect(warning).toHaveBeenCalled()
       expect(afterBridge).toHaveBeenCalledTimes(2)
-      // The second disconnect emission retries the unconsumed input even though the row installed.
-      expect(projection).toHaveBeenCalledTimes(2)
+      expect(threw).toBe(true)
+      expect(projection).toHaveBeenCalledTimes(1)
       await act(() => vi.advanceTimersByTimeAsync(300))
       expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
       act(() =>
@@ -789,7 +762,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
         }
       })
     )
-    expect(Object.values(useAppStore.getState().agentStatusByPaneKey)[0]).toMatchObject({
+    expect(Object.values(getAgentStatusOwner(useAppStore).getSnapshot())[0]).toMatchObject({
       terminalTitle: metadata.label ?? floatingTab.label,
       agentType: metadata.agentSessionAgent ?? floatingTab.agentSessionAgent,
       worktreeId: metadata.worktreeId ?? floatingTab.worktreeId

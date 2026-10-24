@@ -89,6 +89,7 @@ export async function installTerminalTestGlobals(): Promise<void> {
       runtime: {
         restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
       },
+      gh: { enqueuePRRefresh: vi.fn().mockResolvedValue(undefined) },
       agentStatus: {
         inferInterrupt: vi.fn().mockResolvedValue(false),
         reconcileEndedProcess: vi.fn()

@@ -1,4 +1,5 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 import type {
@@ -10,7 +11,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function sleepingRecordFromEntry(args: {
-  state: AppState
+  state: AgentStatusReadState
   entry: AgentStatusEntry
   worktreeId: string
   tab?: TerminalTab

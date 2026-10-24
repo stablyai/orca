@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
@@ -34,7 +35,7 @@ import { suppressCancelledStructuredSessionTabs } from '../structured-agent-sess
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { useAppStore } from '../../store'
+import '../../store'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
@@ -89,7 +90,7 @@ export function applyStructuredSessionTabSnapshots(
     { frames: [] }
   )
   settleStructuredSessionMirror()
-  const { setTabLabel } = useAppStore.getState()
+  const { setTabLabel } = getAgentStatusState()
   for (const { tabId, label } of drawnChatLabels) {
     setTabLabel(tabId, label)
   }

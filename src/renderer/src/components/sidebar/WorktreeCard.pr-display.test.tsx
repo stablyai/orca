@@ -23,8 +23,10 @@ let prCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
 let settings: Partial<GlobalSettings> | null = null
 
-vi.mock('@/store', () => {
-  const getState = () => ({
+vi.mock('@/store', async () => {
+  const { createStaticAgentStatusStoreFixture } = await import('@/store/slices/store-test-helpers')
+
+  return createStaticAgentStatusStoreFixture(() => ({
     deleteStateByWorktreeId: {},
     fetchHostedReviewForBranch,
     fetchIssue,
@@ -43,12 +45,7 @@ vi.mock('@/store', () => {
     updateWorktreeMeta,
     workspacePortScan,
     worktreeCardProperties
-  })
-  return {
-    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
-      getState
-    })
-  }
+  }))
 })
 
 vi.mock('@/lib/worktree-activation', () => ({

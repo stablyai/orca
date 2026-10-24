@@ -162,3 +162,18 @@ export function clearStructuredAgentSessionPendingSends(sessionId: string): void
 export function structuredAgentSessionsWithPendingSends(): string[] {
   return [...sessions.keys()]
 }
+
+export function prepareStructuredAgentSessionPendingSendRemoval(sessionId: string) {
+  const state = sessions.get(sessionId)
+  const entries = state?.entries
+  const listeners = [...(state?.listeners ?? [])]
+  return {
+    install: () => {
+      if (state && sessions.get(sessionId) === state && state.entries === entries) {
+        state.entries = EMPTY_STRUCTURED_AGENT_SESSION_SENDS
+        state.notice = null
+      }
+    },
+    effects: listeners
+  }
+}

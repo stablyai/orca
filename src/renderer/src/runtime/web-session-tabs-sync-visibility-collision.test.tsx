@@ -1,3 +1,7 @@
+import type { AppState } from '@/store/types'
+
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -39,7 +43,7 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
-import type { AppState } from '@/store/types'
+
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
@@ -60,7 +64,7 @@ const REVISION_B = 201
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 const MIRROR_KEY = `${ENV_A}\u0001runtime-a\u00011\u0001${REVISION_A}\u0000${ENV_B}\u0001runtime-b\u00012\u0001${REVISION_B}`
-const initialState = useAppStore.getInitialState()
+const initialState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 
 type RuntimeSubscribe = typeof window.api.runtimeEnvironments.subscribe
 type RuntimeSubscription = {
@@ -224,19 +228,16 @@ function seedRemoteMirrorState(): void {
     { id: ENV_B, createdAt: 200, pairingRevision: REVISION_B }
   ] as PublicKnownRuntimeEnvironment[]
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
-  useAppStore.setState(
-    {
-      ...initialState,
-      activeWorktreeId: WORKTREE,
-      workspaceSessionReady: true,
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId: new Map([
-        [ENV_A, { status: { runtimeId: 'runtime-a' }, connectionGeneration: 1 }],
-        [ENV_B, { status: { runtimeId: 'runtime-b' }, connectionGeneration: 2 }]
-      ]) as AppState['runtimeStatusByEnvironmentId']
-    },
-    true
-  )
+  applyAgentStatusPatch(useAppStore, {
+    ...initialState,
+    activeWorktreeId: WORKTREE,
+    workspaceSessionReady: true,
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId: new Map([
+      [ENV_A, { status: { runtimeId: 'runtime-a' }, connectionGeneration: 1 }],
+      [ENV_B, { status: { runtimeId: 'runtime-b' }, connectionGeneration: 2 }]
+    ]) as AppState['runtimeStatusByEnvironmentId']
+  })
 }
 
 describe('useWebSessionTabsSync visibility collision recovery', () => {
@@ -260,7 +261,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
 
   afterEach(() => {
     cleanup()
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetStaleDocumentVisibilityForTesting()
@@ -319,7 +320,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
 
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const tabId = toWebTerminalSurfaceTabId('host-tab-b')
     const paneKey = makePaneKey(tabId, LEAF_B)
     expect(state.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([tabId])
@@ -391,7 +392,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       authoritative: true
     })
 
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     const fileId = buildOwnedEditorFileId('/repo-b/README.md', WORKTREE, ENV_B)
     expect(
       state.openFiles

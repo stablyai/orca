@@ -53,9 +53,16 @@ const mockStore = vi.hoisted(() => {
 
 const toastSpy = vi.hoisted(() => vi.fn())
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mockStore }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: { getState: () => mockStore }
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('sonner', () => ({ toast: toastSpy }))
 
 import {

@@ -1,3 +1,7 @@
+import type { AppState } from '@/store/types'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { StoreApi } from 'zustand/vanilla'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -5,7 +9,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
-import type { AppState } from '../types'
+
 import { createUIStore } from './ui-slice-test-harness'
 
 const mocks = vi.hoisted(() => ({
@@ -107,11 +111,8 @@ function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
   }
 }
 
-// Why: send targets list structured chats from the tabs slice, which the UI harness omits.
 function createAgentSendStore(): StoreApi<AppState> {
-  const store = createUIStore()
-  store.setState({ unifiedTabsByWorktree: {} })
-  return store
+  return createUIStore()
 }
 
 function deferred<T>() {
@@ -132,7 +133,7 @@ describe('createUISlice agent send target mode', () => {
 
   function seedAgentSendState(store: StoreApi<AppState>): void {
     const now = Date.now()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         [worktreeId]: [
           {
@@ -186,7 +187,7 @@ describe('createUISlice agent send target mode', () => {
           stateHistory: []
         }
       }
-    } as Partial<AppState>)
+    })
   }
 
   it('opens target mode with derived eligible and disabled pane keys', () => {
@@ -236,8 +237,8 @@ describe('createUISlice agent send target mode', () => {
   it('disables sidebar target rows that need permission', async () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)
-    const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
-    store.setState({
+    const agentStatusByPaneKey = getAgentStatusOwner(store).getSnapshot()
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         ...agentStatusByPaneKey,
         [workingPaneKey]: {
@@ -245,7 +246,7 @@ describe('createUISlice agent send target mode', () => {
           state: 'blocked'
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().openAgentSendPopoverTargetMode({
       id: 'send-1',
@@ -273,7 +274,7 @@ describe('createUISlice agent send target mode', () => {
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
     const store = createAgentSendStore()
     seedAgentSendState(store)
-    store.setState({
+    applyAgentStatusPatch(store, {
       terminalLayoutsByTabId: {
         [tabId]: {
           root: {
@@ -357,9 +358,9 @@ describe('createUISlice agent send target mode', () => {
 
   function seedChatState(
     store: StoreApi<AppState>,
-    agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+    agentStatusByPaneKey: AgentStatusReadState['agentStatusByPaneKey']
   ): void {
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
@@ -694,7 +695,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
       },
@@ -714,7 +715,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
       acknowledgedAgentsByPaneKey: {
         [skippedPaneKey]: 4_000
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
 
@@ -747,7 +748,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
     const fallbackPaneKey = makePaneKey('tab-fallback', '44444444-4444-4444-8444-444444444444')
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {},
       agentStatusByPaneKey: {
         [fallbackPaneKey]: {
@@ -757,7 +758,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
         [livePaneKey]: makeAgentEntry(livePaneKey, 2_000)
       },
       retainedAgentsByPaneKey: {}
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([fallbackPaneKey, livePaneKey])
 
@@ -777,7 +778,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
     const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
     vi.stubGlobal('window', { api: { notifications: { dismiss } } })
     const store = createAgentSendStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: {
         'wt-live': [makeTerminalTab(tabId, 'wt-live')]
       },
@@ -793,7 +794,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
           startedAt: 1_000
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([livePaneKey])
 
@@ -817,12 +818,22 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
   ): { store: StoreApi<AppState>; setRightSidebarTab: ReturnType<typeof vi.fn> } {
     const store = createAgentSendStore()
     const setRightSidebarTab = vi.fn()
-    store.setState({
+    applyAgentStatusPatch(store, {
       activeWorktreeId,
-      getDiffComments: () => comments,
+      getDiffComments: () =>
+        comments.map((comment, index) => ({
+          id: `comment-${index}`,
+          worktreeId: activeWorktreeId ?? 'wt-1',
+          filePath: '/repo/file.ts',
+          lineNumber: 1,
+          body: 'review note',
+          createdAt: 1,
+          side: 'modified',
+          ...comment
+        })),
       setRightSidebarTab,
       setRightSidebarOpen: vi.fn()
-    } as unknown as Partial<AppState>)
+    })
     return { store, setRightSidebarTab }
   }
 

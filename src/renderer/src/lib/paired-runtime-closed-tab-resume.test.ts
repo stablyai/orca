@@ -1,3 +1,6 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
@@ -9,7 +12,7 @@ import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { Worktree } from '../../../shared/worktree/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -21,7 +24,7 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 // closed this tab" from a re-key or a pending handle. Whatever shape the record's pane key has, the
 // sweep must not start a second writer on the host for it.
 
-const initialState = useAppStore.getState()
+const initialState = getAgentStatusOwner(useAppStore).getState()
 const ENV_ID = 'env-closed-elsewhere'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const CLIENT_TAB_ID = 'client-created-tab'
@@ -32,7 +35,7 @@ function seedPairedWorkspace(paired = true): string {
     createdWithAgent: undefined,
     ...(paired ? { hostId: `runtime:${encodeURIComponent(ENV_ID)}` } : {})
   }
-  const seed: Partial<AppState> = {
+  const seed: Partial<AgentStatusReadState> = {
     repos: [
       {
         id: worktree.repoId,
@@ -54,7 +57,7 @@ function seedPairedWorkspace(paired = true): string {
     automaticAgentResumeClaimsByTabId: {},
     agentStatusByPaneKey: {}
   }
-  useAppStore.setState(seed)
+  applyAgentStatusPatch(useAppStore, seed)
   markHostSessionMirrorHydrated(ENV_ID)
   return worktree.id
 }
@@ -75,7 +78,7 @@ function makeRecord(worktreeId: string, tabId: string): SleepingAgentSessionReco
 }
 
 function seedRecord(record: SleepingAgentSessionRecord): void {
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     sleepingAgentSessionsByPaneKey: {
       ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
       [record.paneKey]: record
@@ -97,14 +100,20 @@ function applyHostTabs(worktreeId: string, hostTabIds: readonly string[], versio
     })),
     { worktree: worktreeId, snapshotVersion: version }
   )
-  useAppStore.setState(
-    applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, ENV_ID, Date.now())
+  applyAgentStatusPatch(
+    useAppStore,
+    applyWebSessionTabsSnapshot(
+      getAgentStatusOwner(useAppStore).getState(),
+      snapshot,
+      ENV_ID,
+      Date.now()
+    )
   )
 }
 
 function expectNoAutomaticResume(worktreeId: string): void {
   expect(resumeSleepingAgentSessionsForWorktree(worktreeId)).toBe(0)
-  const state = useAppStore.getState()
+  const state = getAgentStatusOwner(useAppStore).getState()
   expect(state.tabsByWorktree[worktreeId] ?? []).toEqual([])
   expect(state.pendingStartupByTabId).toEqual({})
   expect(state.automaticAgentResumeClaimsByTabId).toEqual({})
@@ -112,20 +121,20 @@ function expectNoAutomaticResume(worktreeId: string): void {
 
 describe('a tab closed on another paired client', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
     resetWebSessionTabsSyncTestState()
     resetHostSessionMirrorHydrationForTests()
   })
 
   afterEach(() => {
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
     resetWebSessionTabsSyncTestState()
     resetHostSessionMirrorHydrationForTests()
   })
 
   it('is not resumed from a record keyed by the tab id this client created it under', () => {
     const worktreeId = seedPairedWorkspace()
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: {
         [worktreeId]: [
           {

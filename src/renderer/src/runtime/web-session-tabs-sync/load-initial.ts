@@ -1,6 +1,7 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { useAppStore } from '../../store'
+import '../../store'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
@@ -89,13 +90,13 @@ export function loadInitialWebSessionTabs({
       const recovered = await Promise.all(
         result.snapshots.map((snapshot) =>
           recoverMirroredTerminalOrphansBeforeApply(
-            useAppStore.getState(),
+            getAgentStatusState(),
             snapshot,
             environmentId,
             {
               expectedEnvironmentPairingRevision,
               expectedRuntimeId: runtimeId,
-              getCurrentState: () => useAppStore.getState()
+              getCurrentState: () => getAgentStatusState()
             }
           )
         )

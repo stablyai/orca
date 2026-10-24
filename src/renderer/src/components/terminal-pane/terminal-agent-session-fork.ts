@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -8,7 +9,7 @@ import {
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { useAppStore } from '@/store'
+
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
@@ -95,7 +96,7 @@ export function prepareAgentSessionForkFromPane({
   worktreeId
 }: ForkAgentSessionFromPaneArgs): PreparedAgentSessionFork | null {
   const paneKey = makePaneKey(tabId, pane.leafId)
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey[paneKey]?.agentType)
   const tabAgent = resolveTuiAgent(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
@@ -189,7 +190,7 @@ function forkCreationHostId(
 }
 
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
-  const store = useAppStore.getState()
+  const store = getAgentStatusState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
   if (!sourceWorktree) {
     toast.error(
@@ -261,7 +262,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
-  const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
+  const agentSessionLaunchPlan = planAgentSessionLaunch(getAgentStatusState(), {
     requestId: newAgentLaunchRequestId(),
     agent: fork.agent,
     workspace: { kind: 'git-worktree', worktreeId: forkWorktreeId },

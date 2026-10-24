@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { getAgentStatusState } from '@/store/agent-status'
 import { getRepoMapFromState } from '@/store/selectors'
 import {
   getSettingsFocusedExecutionHostId,
@@ -24,7 +24,7 @@ export function worktreePassesSidebarFilters(
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const repoMap = getRepoMapFromState(state)
   const requestedHostId = executionHostId ? normalizeExecutionHostId(executionHostId) : null
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)

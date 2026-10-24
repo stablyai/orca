@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 // Feeds the open-tab search module from the store for a single worktree.
 
 import { useDeferredValue, useMemo } from 'react'
@@ -47,7 +48,7 @@ export function useOpenTabSearch({
   // Why snapshot: agent status is a high-frequency stream; tab search metadata
   // stays stable while the menu is open and refreshes when its tab set changes.
   const agentState = useMemo(
-    () => (enabled ? selectOpenTabSearchAgentState(useAppStore.getState()) : null),
+    () => (enabled ? selectOpenTabSearchAgentState(getAgentStatusState()) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refresh on open or tab-set changes, never agent-status churn.
     [enabled, state?.tabsByWorktree, state?.unifiedTabsByWorktree, worktreeId]
   )

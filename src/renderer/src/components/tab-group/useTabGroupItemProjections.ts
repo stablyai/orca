@@ -3,7 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { projectGroupedTerminalTab } from '@/lib/terminal-tab-item-projection'
 import type { useAppStore } from '../../store'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
@@ -70,34 +70,12 @@ export function useTabGroupItemProjections({
         .filter((item) => item.contentType === 'terminal')
         .map((item) => {
           const terminalTab = terminalTabById.get(item.entityId)
-          return {
-            id: item.entityId,
-            unifiedTabId: item.id,
-            ptyId: terminalTab?.ptyId ?? null,
+          return projectGroupedTerminalTab(
+            item,
+            terminalTab,
             worktreeId,
-            title: resolveUnifiedTabLabel(
-              {
-                ...item,
-                quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
-              },
-              worktreeState.generatedTabTitlesEnabled,
-              item.label
-            ),
-            defaultTitle: terminalTab?.defaultTitle,
-            quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
-            generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
-            customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
-            color: item.color ?? terminalTab?.color ?? null,
-            sortOrder: item.sortOrder,
-            createdAt: item.createdAt,
-            generation: terminalTab?.generation,
-            shellOverride: terminalTab?.shellOverride,
-            startupCwd: terminalTab?.startupCwd,
-            // Why: rebuilt from the unified-tab model, so copy store-only launchAgent or the provider icon is missing until the first hook.
-            launchAgent: terminalTab?.launchAgent,
-            pendingActivationSpawn: terminalTab?.pendingActivationSpawn
-          }
+            worktreeState.generatedTabTitlesEnabled
+          )
         }),
     [groupTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
   )

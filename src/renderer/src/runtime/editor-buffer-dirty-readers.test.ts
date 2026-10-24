@@ -1,6 +1,9 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
-import type { AppState } from '../store/types'
+
 import { buildEditorSessionData } from '../lib/workspace-session'
 import { sameOpenFiles } from './web-session-tabs-sync/state-equality-files'
 import { buildRuntimeMobileOpenFilesProjection } from './sync-runtime-graph/sync-projections'
@@ -15,7 +18,7 @@ vi.mock('@/lib/connection-context', () => ({
 const FILE_ID = '/repo/README.md'
 
 function resetEditorState(): void {
-  useAppStore.setState({ openFiles: [], editorDrafts: {} })
+  applyAgentStatusPatch(useAppStore, { openFiles: [], editorDrafts: {} })
   const tab: Tab = {
     id: 'tab-md',
     entityId: FILE_ID,
@@ -28,7 +31,7 @@ function resetEditorState(): void {
     sortOrder: 0,
     createdAt: 0
   }
-  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': [tab] } })
+  applyAgentStatusPatch(useAppStore, { unifiedTabsByWorktree: { 'wt-1': [tab] } })
 }
 
 function openMarkdownFile(): void {
@@ -42,10 +45,10 @@ function openMarkdownFile(): void {
 }
 
 /** Dirties the tab through its buffer record and returns the store on either side. */
-function dirtyThroughRecord(): { before: AppState; after: AppState } {
-  const before = useAppStore.getState()
+function dirtyThroughRecord(): { before: AgentStatusReadState; after: AgentStatusReadState } {
+  const before = getAgentStatusOwner(useAppStore).getState()
   before.markFileDirty(FILE_ID, true)
-  const after = useAppStore.getState()
+  const after = getAgentStatusOwner(useAppStore).getState()
   expect(after.editorBuffers[FILE_ID]?.isDirty).toBe(true)
   return { before, after }
 }
@@ -64,7 +67,7 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
 
   it('session save persists the draft of the now-dirty tab', () => {
     useAppStore.getState().setEditorDraft(FILE_ID, '# edited\n')
-    const save = (state: AppState) =>
+    const save = (state: AgentStatusReadState) =>
       buildEditorSessionData(
         state.openFiles,
         state.editorDrafts,
@@ -81,7 +84,7 @@ describe('a dirty change on the buffer record reaches every openFiles reader', (
 
   it('mobile session projections publish the dirty flag', () => {
     const { before, after } = dirtyThroughRecord()
-    const markdownTab = (state: AppState) =>
+    const markdownTab = (state: AgentStatusReadState) =>
       buildMobileSessionTabSnapshots(
         makeState({
           openFiles: state.openFiles,

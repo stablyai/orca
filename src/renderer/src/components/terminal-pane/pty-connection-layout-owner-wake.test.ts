@@ -52,7 +52,7 @@ function sleepingRecord(paneKey: string, id: string): SleepingAgentSessionRecord
 }
 
 describe('wake through main in a layout-owner build', () => {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -63,9 +63,10 @@ describe('wake through main in a layout-owner build', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     bindPtyConnectionTestMocks({
-      getState: () => mockStoreState,
+      getState: () => storeFixture.read(),
+      getStore: () => storeFixture.store,
       getTransportQueue: () => transportFactoryQueue,
       getTransportOptions: () => createdTransportOptions,
       getStoreSubscribers: () => storeSubscribers,
@@ -78,26 +79,30 @@ describe('wake through main in a layout-owner build', () => {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   // Main's start of the revealed pane is its wake: the window records none of its own.
   it('asks main to start the revealed pane alone, and records no wake itself', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
-    const deps = buildPaneConnectionDeps(() => mockStoreState, {
+    const deps = buildPaneConnectionDeps(storeFixture, {
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
     const paneKey = `tab-1:${leafIdForPane(2)}`
     const otherPaneKey = `tab-1:${leafIdForPane(3)}`
-    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = sleepingRecord(paneKey, 'sess-shown')
-    mockStoreState.sleepingAgentSessionsByPaneKey[otherPaneKey] = sleepingRecord(
+    storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = sleepingRecord(
+      paneKey,
+      'sess-shown'
+    )
+    storeFixture.read().sleepingAgentSessionsByPaneKey[otherPaneKey] = sleepingRecord(
       otherPaneKey,
       'sess-other'
     )
-    mockStoreState.suppressedPtyExitIds['tab-pty'] = true
+    storeFixture.read().suppressedPtyExitIds['tab-pty'] = true
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
     const args = [createPane(2), createManager(1), deps] as unknown as Parameters<
       typeof connectPanePty
@@ -105,11 +110,11 @@ describe('wake through main in a layout-owner build', () => {
     // Main's real wake must find the pane still sleeping: the window's record drop follows it.
     let recordHeldAtWake: boolean | undefined
     mocks.wake.mockImplementation(() => {
-      recordHeldAtWake = paneKey in mockStoreState.sleepingAgentSessionsByPaneKey
+      recordHeldAtWake = paneKey in storeFixture.read().sleepingAgentSessionsByPaneKey
     })
     await mainStartsPaneAs({
       ptyId: 'pty-main',
-      bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+      bind: bindsPaneInStore(storeFixture.store, 'tab-1', leafIdForPane(2))
     })
     const binding = connectPanePty(...args)
     await flushAsyncTicks()
@@ -125,7 +130,7 @@ describe('wake through main in a layout-owner build', () => {
     await flushAsyncTicks()
 
     // The revealed pane alone asks main to start it, then attaches to main's terminal.
-    await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+    await expectWindowStartAskedMain(transport, paneKey, storeFixture.read())
     expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toEqual([
       expect.objectContaining({ paneKey })
     ])
@@ -135,7 +140,7 @@ describe('wake through main in a layout-owner build', () => {
     expect(mocks.wake).not.toHaveBeenCalled()
     expect(recordHeldAtWake).toBeUndefined()
     // Main keeps the pane's record; the other pane's record is untouched.
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey).toHaveProperty(paneKey)
-    expect(mockStoreState.sleepingAgentSessionsByPaneKey).toHaveProperty(otherPaneKey)
+    expect(storeFixture.read().sleepingAgentSessionsByPaneKey).toHaveProperty(paneKey)
+    expect(storeFixture.read().sleepingAgentSessionsByPaneKey).toHaveProperty(otherPaneKey)
   })
 })

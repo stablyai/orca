@@ -1,6 +1,7 @@
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // Resolves a tab to its Agent Session History row so both menus offer the same surface switches.
 
-import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   collectAgentPaneConversations,
@@ -80,7 +81,7 @@ function canHostOfferTabSessionMove(
 
 /** The pane's known identity and launch route, without a History request. */
 export function canPaneOfferResumeInNewChat(
-  state: AppState,
+  state: AgentStatusReadState,
   pane: { worktreeId: string; paneKey: string }
 ): boolean {
   const conversation = resolvePaneAgentConversation(state, pane, adoptsCliConversations)
@@ -141,7 +142,7 @@ export function resolveNativeChatCliForkIdentity(
 }
 
 export function resolveTabSessionHistorySubject(
-  state: AppState,
+  state: AgentStatusReadState,
   args: {
     tab: Pick<TerminalTab, 'id' | 'worktreeId'>
     /** Set only for a native chat tab. */
@@ -223,7 +224,7 @@ export function findTabSessionHistoryRow(
 /** The row's move under the Session History gate, with the tab's own workspace standing in for the
  *  active one. A chat tab only forks into a CLI; a CLI tab only resumes into a chat. */
 export function resolveTabSessionSwitch(
-  state: AppState,
+  state: AgentStatusReadState,
   session: AiVaultSession,
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {

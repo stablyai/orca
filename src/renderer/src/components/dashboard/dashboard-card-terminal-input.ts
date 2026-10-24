@@ -1,4 +1,5 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -15,7 +16,7 @@ import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/compone
 
 /** Store slices the pane's own input helpers read. */
 export type DashboardCardTerminalInputState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'

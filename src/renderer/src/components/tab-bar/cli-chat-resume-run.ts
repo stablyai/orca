@@ -1,3 +1,4 @@
+import { subscribeAgentStatusState, getAgentStatusState } from '@/store/agent-status'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -50,7 +51,7 @@ export async function runCliChatResume(
     if (controller.signal.aborted) {
       return false
     }
-    const current = resolveCliChatResumeSource(useAppStore.getState(), {
+    const current = resolveCliChatResumeSource(getAgentStatusState(), {
       tab: { id: source.tabId, worktreeId: source.workspaceId },
       paneKey: source.paneKey
     })
@@ -73,12 +74,16 @@ export async function runCliChatResume(
   }
   pending.set(key, controller)
   changed()
-  const stopSource = useAppStore.subscribe(() => {
-    if (!isCurrent()) {
-      controller.abort()
-      release()
-    }
-  })
+  const stopSource = subscribeAgentStatusState(
+    () => {
+      if (!isCurrent()) {
+        controller.abort()
+        release()
+      }
+    },
+    useAppStore,
+    source.paneKey
+  )
   const timer = setTimeout(
     () => controller.abort(new Error('Conversation preparation timed out.')),
     30_000

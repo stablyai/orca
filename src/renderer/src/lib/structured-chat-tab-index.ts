@@ -1,5 +1,15 @@
 import type { Tab } from '../../../shared/tab-types'
 
+const sourceKeys = new WeakMap<object, readonly string[]>()
+export function ownSourceKeys(source: object): readonly string[] {
+  let keys = sourceKeys.get(source)
+  if (!keys) {
+    keys = Object.keys(source)
+    sourceKeys.set(source, keys)
+  }
+  return keys
+}
+
 type StructuredTabIndex = {
   byId: ReadonlyMap<string, Tab>
   bySessionId: ReadonlyMap<string, Tab>
@@ -61,6 +71,7 @@ const workspaceIndexes = new WeakMap<
   {
     byTabId: Map<string, string>
     bySessionId: Map<string, string[]>
+    structuredTabs: { workspaceId: string; tabIndex: number }[]
   }
 >()
 
@@ -72,8 +83,13 @@ function indexWorkspaces(tabsByWorkspace: WorkspaceTabMap | undefined) {
   if (!index) {
     const byTabId = new Map<string, string>()
     const bySessionId = new Map<string, string[]>()
-    for (const [workspaceId, tabs] of Object.entries(tabsByWorkspace)) {
-      for (const { id, contentType, entityId } of tabs ?? []) {
+    const structuredTabs: { workspaceId: string; tabIndex: number }[] = []
+    for (const workspaceId of ownSourceKeys(tabsByWorkspace)) {
+      const tabs = tabsByWorkspace[workspaceId]
+      for (const [tabIndex, { id, contentType, entityId }] of (tabs ?? []).entries()) {
+        if (contentType === 'agent-session') {
+          structuredTabs.push({ workspaceId, tabIndex })
+        }
         if (contentType && contentType !== 'agent-session') {
           continue
         }
@@ -90,10 +106,16 @@ function indexWorkspaces(tabsByWorkspace: WorkspaceTabMap | undefined) {
         bySessionId.set(entityId, candidates)
       }
     }
-    index = { byTabId, bySessionId }
+    index = { byTabId, bySessionId, structuredTabs }
     workspaceIndexes.set(tabsByWorkspace, index)
   }
   return index
+}
+
+export function structuredChatTabs(tabsByWorkspace: NonNullable<TabsByWorkspace>): Tab[] {
+  return (indexWorkspaces(tabsByWorkspace)?.structuredTabs ?? []).flatMap(
+    ({ workspaceId, tabIndex }) => tabsByWorkspace[workspaceId]?.[tabIndex] ?? []
+  )
 }
 
 export function structuredChatWorkspacesBySessionId(

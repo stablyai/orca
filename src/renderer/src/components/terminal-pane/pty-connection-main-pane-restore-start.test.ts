@@ -46,14 +46,14 @@ const TAB = 'tab-restore-start'
 const LEAF = leafIdForPane(1)
 const PANE_KEY = `${TAB}:${LEAF}`
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-function setStore(patch: Partial<StoreState>): void {
-  mockStoreState = { ...mockStoreState, ...patch }
+function setStore(patch: Parameters<typeof storeFixture.patch>[0]): void {
+  storeFixture.patch({ ...storeFixture.read(), ...patch })
   for (const listener of storeSubscribers) {
-    listener(mockStoreState)
+    listener(storeFixture.read())
   }
 }
 
@@ -75,14 +75,14 @@ async function connectBound(
   visible = true,
   transport = createMockTransport()
 ) {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
   transportFactoryQueue.push(transport)
   setStore({
     tabsByWorktree: { 'wt-1': [{ id: TAB, ptyId: 'pty-old' }] },
     ...layoutBoundTo('pty-old'),
     terminalPaneStartsByPaneKey: start ? { [PANE_KEY]: start } : {}
   })
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
+  const deps = buildPaneConnectionDeps(storeFixture, {
     tabId: TAB,
     restoredLeafId: LEAF,
     restoredPtyIdByLeafId: { [LEAF]: 'pty-old' },
@@ -116,9 +116,10 @@ describe('a restored pane main starts (layout-owner build)', () => {
     sent.length = 0
     transportFactoryQueue = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     bindPtyConnectionTestMocks({
-      getState: () => mockStoreState,
+      getState: () => storeFixture.read(),
+      getStore: () => storeFixture.store,
       getTransportQueue: () => transportFactoryQueue,
       getTransportOptions: () => [],
       getStoreSubscribers: () => storeSubscribers,
@@ -130,6 +131,7 @@ describe('a restored pane main starts (layout-owner build)', () => {
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 

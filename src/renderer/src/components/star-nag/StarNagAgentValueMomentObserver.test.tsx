@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, Profiler } from 'react'
@@ -61,7 +62,7 @@ function renderObserverWithProfiler(): {
 
 function setAgentEntries(entries: Record<string, AgentStatusEntry>): void {
   act(() => {
-    useAppStore.setState((state) => ({
+    applyAgentStatusPatch(useAppStore, (state) => ({
       agentStatusByPaneKey: entries,
       agentStatusEpoch: state.agentStatusEpoch + 1
     }))
@@ -87,8 +88,11 @@ describe('StarNagAgentValueMomentObserver', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    useAppStore.setState(useAppStore.getInitialState(), true)
-    useAppStore.setState({ agentStatusByPaneKey: {}, agentStatusEpoch: 0 })
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {}, agentStatusEpoch: 0 })
     agentValueMoment = vi.fn().mockResolvedValue({ status: 'ready', mode: 'gh' })
     showAgentValueMoment = vi.fn().mockResolvedValue(undefined)
     setStarNagApi({ agentValueMoment, showAgentValueMoment })
@@ -101,7 +105,10 @@ describe('StarNagAgentValueMomentObserver', () => {
     container?.remove()
     root = null
     container = null
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
     vi.useRealTimers()
   })
 
@@ -125,7 +132,7 @@ describe('StarNagAgentValueMomentObserver', () => {
         entry({ paneKey: `tab-${index}:leaf-1` })
       ])
     )
-    useAppStore.setState({ agentStatusByPaneKey: entries, agentStatusEpoch: 1 })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: entries, agentStatusEpoch: 1 })
     const rendered = renderObserverWithProfiler()
     root = rendered.root
     container = rendered.container
@@ -135,7 +142,7 @@ describe('StarNagAgentValueMomentObserver', () => {
     // 25,000 completion-scan entry visits for this exact 500 x 50 scenario.
     for (let ping = 0; ping < 50; ping += 1) {
       act(() => {
-        useAppStore.setState((state) => ({
+        applyAgentStatusPatch(useAppStore, (state) => ({
           agentStatusByPaneKey: {
             ...state.agentStatusByPaneKey,
             'pane-0': entry({ paneKey: 'tab-0:leaf-1', updatedAt: ping + 2 })

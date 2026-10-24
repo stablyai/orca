@@ -1,3 +1,4 @@
+import { coordinatedPurgeSet } from '../teardown/worktree-purge-preparation'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
@@ -8,12 +9,11 @@ import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
   nextTerminalRecoveryLedger,
-  settledTerminalRecoveryLedger
+  settledTerminalRecoveryLedger,
+  type TerminalRecoveryRemountRequest,
+  type TerminalRecoveryRemountResult
 } from '../../../terminals/terminal-tab-recovery-ledger'
-import type {
-  TerminalRecoveryRemountRequest,
-  TerminalRecoveryRemountResult
-} from '../../../terminals/terminal-tab-recovery-ledger'
+
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
@@ -142,9 +142,10 @@ export function createGetKnownWorktreeById(
 }
 
 export function createPurgeWorktreeTerminalState(
-  set: WorktreeSliceSet,
+  storeSet: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
+  const set = coordinatedPurgeSet(storeSet, get)
   return (worktreeTargets) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
       const worktreeId = typeof target === 'string' ? target : target.id

@@ -39,7 +39,7 @@ test('Quick Open finds a file in a monorepo-sized managed workspace', async (// 
       ].join(' && ')
     )
     const { page } = await launchManagedWorkspace(fixture)
-    await page.evaluate(() => window.__store?.getState().openModal('quick-open'))
+    await page.evaluate(() => window.__agentStatus?.getState().openModal('quick-open'))
     const dialog = page.getByRole('dialog', { name: 'Go to file' })
     await expect(dialog).toBeVisible()
     const input = dialog.getByPlaceholder('Go to file...')
@@ -159,7 +159,7 @@ test('a managed terminal reports agent status from hooks and from Pi-style title
         () =>
           page.evaluate(
             (prompt) =>
-              Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).some(
+              Object.values(window.__agentStatus?.getState().agentStatusByPaneKey ?? {}).some(
                 (entry) =>
                   entry.prompt === prompt &&
                   entry.agentType === 'codex' &&

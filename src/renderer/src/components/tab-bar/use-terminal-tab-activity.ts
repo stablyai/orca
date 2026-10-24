@@ -1,4 +1,5 @@
-import { useAppStore } from '../../store'
+import { useAgentStatusSelector } from '@/store/agent-status'
+import '../../store'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   resolveTerminalTabActivityStatus,
@@ -17,23 +18,29 @@ export function useTerminalTabActivity(
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
 ): TerminalTabActivity {
   // Pane bucketing is memoized per snapshot, so every mounted tab shares one pass.
-  const activityStatus = useAppStore((s) =>
-    resolveTerminalTabActivityStatus({
-      tab,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentStatusEpoch: s.agentStatusEpoch,
-      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
-    })
+  const activityStatus = useAgentStatusSelector(
+    (s) =>
+      resolveTerminalTabActivityStatus({
+        tab,
+        agentStatusByPaneKey: s.agentStatusByPaneKey,
+        agentStatusEpoch: s.agentStatusEpoch,
+        runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
+      }),
+    undefined,
+    tab.id
   )
-  const programProgress = useAppStore((s) =>
-    resolveTerminalTabProgramProgress({
-      tabId: tab.id,
-      status: activityStatus,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentStatusEpoch: s.agentStatusEpoch
-    })
+  const programProgress = useAgentStatusSelector(
+    (s) =>
+      resolveTerminalTabProgramProgress({
+        tabId: tab.id,
+        status: activityStatus,
+        agentStatusByPaneKey: s.agentStatusByPaneKey,
+        agentStatusEpoch: s.agentStatusEpoch
+      }),
+    undefined,
+    tab.id
   )
   return { activityStatus, programProgress }
 }

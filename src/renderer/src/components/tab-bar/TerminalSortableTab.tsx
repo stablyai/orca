@@ -6,6 +6,6 @@ type TerminalSortableTabProps = Omit<SortableTabProps, 'tab' | 'agent'> & { tab:
 
 /** A terminal pane can change agents, so its identity is inferred from live pane signals. */
 export default function TerminalSortableTab(props: TerminalSortableTabProps): React.JSX.Element {
-  const agent = useTabAgent(props.tab)
+  const agent = useTabAgent(props.tab, props.groupId)
   return <SortableTab {...props} agent={agent} />
 }

@@ -21,13 +21,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionStartupCommandDeliveryTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -37,9 +37,10 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -51,12 +52,13 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not send startup command via sendInput for local connections', async () => {
       // Why: the local PTY provider already writes the command via writeStartupCommandWhenShellReady; re-sending from the renderer would double it in the terminal.
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport()
@@ -69,11 +71,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       transportFactoryQueue.push(transport)
 
       // Local connection: no connectionId
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        repos: [{ id: 'repo1', connectionId: null }]
-      }
+        repos: storeFixture.read().repos.map((repo) => ({ ...repo, connectionId: null }))
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -92,14 +94,14 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     it('seeds a working status for Command Code startup prompts after spawn', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
-      }
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -118,7 +120,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       expect(onPtySpawn).toBeTypeOf('function')
       onPtySpawn?.(ptyId)
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledWith(
         makePaneKey('tab-1', LEAF_1),
         {
           state: 'working',
@@ -134,7 +136,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
@@ -161,7 +163,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
       capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledWith(
         makePaneKey('tab-1', LEAF_1),
         {
           state: 'working',
@@ -177,7 +179,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     it('ignores delayed Command Code output after the leaf rebinds to another SSH host', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const oldPtyId = toAppSshPtyId('ssh-a', 'pty-command-code')
       const newPtyId = toAppSshPtyId('ssh-b', 'pty-command-code')
@@ -190,8 +192,12 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
       )
       transportFactoryQueue.push(transport)
-      mockStoreState.repos = [{ id: 'repo1', connectionId: 'ssh-a' }]
-      mockStoreState.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
+      storeFixture.patch({ repos: [{ id: 'repo1', connectionId: 'ssh-a' }] })
+      storeFixture.patch({
+        sshConnectionStates: new Map([
+          ['ssh-a', { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }]
+        ])
+      })
 
       connectPanePty(
         createPane(1) as never,
@@ -199,18 +205,18 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         createDeps({ startup: { command: 'command-code --trust' } }) as never
       )
       await flushAsyncTicks()
-      mockStoreState.setAgentStatus.mockClear()
-      mockStoreState.ptyIdsByTabId = { 'tab-1': [oldPtyId, newPtyId] }
-      mockStoreState.terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: newPtyId }
+      vi.mocked(storeFixture.read().setAgentStatus).mockClear()
+      storeFixture.patch({ ptyIdsByTabId: { 'tab-1': [oldPtyId, newPtyId] } })
+      storeFixture.read().terminalLayoutsByTabId!['tab-1'].ptyIdsByLeafId = { [LEAF_1]: newPtyId }
 
       capturedDataCallback.current?.('❯ stale prompt\r\n\x1b[35m✻ Thinking...\x1b[0m')
 
-      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().setAgentStatus).not.toHaveBeenCalled()
     })
 
     it('marks a Command Code no-tool turn done after the idle prompt settles', async () => {
       vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -236,7 +242,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       expect(capturedDataCallback.current).not.toBeNull()
 
       capturedDataCallback.current?.('❯ say hi\r\n✻ Thinking...')
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      expect(storeFixture.read().agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'working',
         prompt: 'say hi',
         agentType: 'command-code'
@@ -246,14 +252,14 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         '\r\n✻ Thought for 1 second\r\n:: Hi! How can I help you today?\r\n❯ Ask your question...'
       )
       vi.advanceTimersByTime(1499)
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      expect(storeFixture.read().agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'working',
         prompt: 'say hi',
         agentType: 'command-code'
       })
 
       vi.advanceTimersByTime(1)
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      expect(storeFixture.read().agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
         prompt: 'say hi',
         agentType: 'command-code'
@@ -262,7 +268,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('keeps Command Code working when an active repaint follows the idle prompt before settle', async () => {
       vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -293,7 +299,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       capturedDataCallback.current?.('\r\n✧ Investigating... esc to interrupt')
       vi.advanceTimersByTime(500)
 
-      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+      expect(storeFixture.read().agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'working',
         prompt: 'Run a slow command',
         agentType: 'command-code'
@@ -301,7 +307,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     })
 
     it('does not downgrade a completed Command Code turn back to working from stale TUI output', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -320,7 +326,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
       })
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      storeFixture.setStatus(paneKey, {
         paneKey,
         state: 'done',
         prompt: 'Fix the spinner',
@@ -328,7 +334,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         updatedAt: Date.now(),
         stateStartedAt: Date.now(),
         stateHistory: []
-      }
+      })
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks()
@@ -337,14 +343,12 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
       capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Threading...\x1b[0m')
 
-      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-      expect((mockStoreState.agentStatusByPaneKey[paneKey] as { state?: unknown })?.state).toBe(
-        'done'
-      )
+      expect(storeFixture.read().setAgentStatus).not.toHaveBeenCalled()
+      expect(storeFixture.read().agentStatusByPaneKey[paneKey]?.state).toBe('done')
     })
 
     it('starts a new Command Code turn after done when TUI output carries a different prompt', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -363,7 +367,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
       })
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      storeFixture.setStatus(paneKey, {
         paneKey,
         state: 'done',
         prompt: 'Fix the spinner',
@@ -371,7 +375,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         updatedAt: Date.now(),
         stateStartedAt: Date.now(),
         stateHistory: []
-      }
+      })
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks()
@@ -380,7 +384,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
       capturedDataCallback.current?.('❯ Fix the green done state\r\n\x1b[35m✻ Threading...\x1b[0m')
 
-      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      expect(storeFixture.read().setAgentStatus).toHaveBeenCalledWith(
         paneKey,
         {
           state: 'working',
@@ -403,7 +407,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       }) as unknown as typeof setTimeout
 
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
@@ -415,11 +419,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         )
         transportFactoryQueue.push(transport)
 
-        mockStoreState = {
-          ...mockStoreState,
+        storeFixture.patch({
+          ...storeFixture.read(),
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-          repos: [{ id: 'repo1', connectionId: null }]
-        }
+          repos: storeFixture.read().repos.map((repo) => ({ ...repo, connectionId: null }))
+        })
 
         const pane = createPane(1)
         pane.terminal.write.mockImplementation(
@@ -459,7 +463,7 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       }) as unknown as typeof setTimeout
 
       try {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
@@ -479,11 +483,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         )
         transportFactoryQueue.push(transport)
 
-        mockStoreState = {
-          ...mockStoreState,
+        storeFixture.patch({
+          ...storeFixture.read(),
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-          repos: [{ id: 'repo1', connectionId: null }]
-        }
+          repos: storeFixture.read().repos.map((repo) => ({ ...repo, connectionId: null }))
+        })
 
         const pane = createPane(1)
         pane.terminal.write.mockImplementation(

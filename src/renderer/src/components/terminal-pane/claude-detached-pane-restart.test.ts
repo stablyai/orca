@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
@@ -18,7 +20,7 @@ function seedClaudePane(
   overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
 ): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     tabsByWorktree: {
       wt1: [
         {
@@ -61,8 +63,8 @@ function seedClaudePane(
 
 function setPaneState(state: AgentStatusEntry['state']): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
-  const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
+  const entry = getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[paneKey]
+  applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
 }
 
 /** Lets a queued sweep run to completion. */
@@ -77,7 +79,10 @@ describe('detached Claude account-move restart', () => {
 
   beforeEach(() => {
     resetCodexDetachedPaneRestartExecutorForTests()
-    useAppStore.setState(useAppStore.getInitialState(), true)
+    applyAgentStatusPatch(useAppStore, {
+      ...useAppStore.getInitialState(),
+      agentStatusByPaneKey: {}
+    })
     // Why: switch on, a restart binds only into a pane main's layout holds.
     provideLayoutFrameTerminalPanes({
       holdsTerminalPane: () => false,
@@ -136,7 +141,7 @@ describe('detached Claude account-move restart', () => {
       })
     )
     expect(spawnArgs?.command).toMatch(new RegExp(`^claude .*'--resume' '${SESSION_ID}'$`))
-    const state = useAppStore.getState()
+    const state = getAgentStatusOwner(useAppStore).getState()
     expect(state.pendingPaneAccountRestarts).toEqual({})
     expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: NEW_PTY })
   })
@@ -151,7 +156,9 @@ describe('detached Claude account-move restart', () => {
       setPaneState('waiting')
       await settle()
       expect(window.api.pty.spawn).not.toHaveBeenCalled()
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({
+        [OLD_PTY]: 'claude'
+      })
 
       setPaneState('done')
 

@@ -1,3 +1,4 @@
+import { useAgentStatusField } from '@/store/agent-status'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -21,11 +22,8 @@ export function useNativeChatTerminalTurnTiming(
   // Freshness is time-based: re-read when the scheduler says a silent row aged out.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   void agentStatusEpoch
-  const turnStartedAt = useAppStore((s) =>
-    nativeChatHookTurnStartedAt(s.agentStatusByPaneKey[paneKey])
-  )
-  const latestWorkedSeconds = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
+  const turnStartedAt = useAgentStatusField(paneKey, nativeChatHookTurnStartedAt)
+  const latestWorkedSeconds = useAgentStatusField(paneKey, (entry) => {
     return nativeChatHookLatestTurnWorkedSeconds(entry, resolveNativeChatHookState(entry) === null)
   })
   const transcriptSettled = useMemo(() => nativeChatTranscriptSettledTurns(messages), [messages])

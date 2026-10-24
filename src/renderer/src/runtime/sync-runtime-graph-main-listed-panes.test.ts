@@ -1,8 +1,9 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // Layout-owner builds: main lists the panes of a workspace this app owns, so the window's graph
 // says only which of them it shows or parks.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
-import type { AppState } from '../store/types'
+
 import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
@@ -12,8 +13,10 @@ const LEAF = '22222222-2222-4222-8222-222222222222'
 const PARKED_PTY = 'wt-1::/tmp/wt@@parked-pty'
 const TAB_ID = 'parked-tab-1'
 
-function parkedState(paneTitles: AppState['runtimePaneTitlesByTabId'] = {}): AppState {
-  const partial: Partial<AppState> = {
+function parkedState(
+  paneTitles: AgentStatusReadState['runtimePaneTitlesByTabId'] = {}
+): AgentStatusReadState {
+  const partial: Partial<AgentStatusReadState> = {
     tabsByWorktree: {
       'wt-1': [
         {
@@ -49,7 +52,7 @@ function parkedState(paneTitles: AppState['runtimePaneTitlesByTabId'] = {}): App
     activeTabId: null
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the graph sync reads only the slices set above.
-  return partial as AppState
+  return partial as AgentStatusReadState
 }
 
 afterEach(() => {
@@ -60,7 +63,9 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function publish(state: () => AppState): Promise<RuntimeSyncWindowGraph | undefined> {
+async function publish(
+  state: () => AgentStatusReadState
+): Promise<RuntimeSyncWindowGraph | undefined> {
   vi.useFakeTimers()
   const syncWindowGraph = vi.fn(async (_graph: RuntimeSyncWindowGraph) => undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })

@@ -1,3 +1,4 @@
+import type * as AgentStatusModule from '@/store/agent-status'
 // @vitest-environment happy-dom
 
 import { act, type ReactNode } from 'react'
@@ -33,25 +34,47 @@ function mockAgent(paneKey: string, prompt: string): unknown {
   }
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      agentActivityDisplayMode: 'compact',
-      acknowledgedAgentsByPaneKey: {},
-      retainedAgentsByPaneKey: {},
-      cacheTimerByKey: {},
-      dropAgentStatus: vi.fn(),
-      dismissRetainedAgent: vi.fn(),
-      agentSendPopoverTargetMode: null,
-      agentStatusByPaneKey: {},
-      agentStatusEpoch: 0,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      runtimePaneTitlesByTabId: {},
-      sendPromptToSidebarAgentTarget: vi.fn(),
-      settings: { promptCacheTimerEnabled: false, promptCacheTtlMs: 60_000 }
-    })
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: (selector: (state: unknown) => unknown) =>
+      selector({
+        agentActivityDisplayMode: 'compact',
+        acknowledgedAgentsByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        cacheTimerByKey: {},
+        dropAgentStatus: vi.fn(),
+        dismissRetainedAgent: vi.fn(),
+        agentSendPopoverTargetMode: null,
+        agentStatusByPaneKey: {},
+        agentStatusEpoch: 0,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        runtimePaneTitlesByTabId: {},
+        sendPromptToSidebarAgentTarget: vi.fn(),
+        settings: { promptCacheTimerEnabled: false, promptCacheTtlMs: 60_000 }
+      })
+  }
+  const readFixture = () => ({
+    agentActivityDisplayMode: 'compact',
+    acknowledgedAgentsByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    cacheTimerByKey: {},
+    dropAgentStatus: vi.fn(),
+    dismissRetainedAgent: vi.fn(),
+    agentSendPopoverTargetMode: null,
+    agentStatusByPaneKey: {},
+    agentStatusEpoch: 0,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    runtimePaneTitlesByTabId: {},
+    sendPromptToSidebarAgentTarget: vi.fn(),
+    settings: { promptCacheTimerEnabled: false, promptCacheTtlMs: 60_000 }
+  })
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('./useWorktreeAgentRows', () => ({
   useWorktreeAgentRows: vi.fn(() => mockAgents)
@@ -221,4 +244,14 @@ describe('worktree-card-agents-expansion-state module cache', () => {
     }
     expect(getWorktreeAgentExpansionCountForTests()).toBe(MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS)
   })
+})
+
+vi.mock('@/store/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    useAgentStatusSelector: <T,>(
+      selector: (state: ReturnType<typeof actual.getAgentStatusState>) => T
+    ): T => selector(actual.getAgentStatusState())
+  }
 })

@@ -1,3 +1,5 @@
+import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { useAppStore } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
@@ -39,13 +41,14 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('../store', () => ({
-  useAppStore: {
-    getState: mocks.getState,
-    setState: mocks.setState,
-    subscribe: mocks.subscribe
-  }
-}))
+vi.mock('../store', async () => {
+  const { createTestStore } = await import('../store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  vi.spyOn(useAppStore, 'subscribe').mockImplementation(mocks.subscribe)
+  return { useAppStore }
+})
+
+beforeEach(() => useAppStore.setState(useAppStore.getInitialState(), true))
 vi.mock('./web-session-tabs-sync/tracking-lifecycle', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
@@ -96,9 +99,12 @@ const PRE_UPGRADE_CAPABILITIES = [
 ]
 
 function cacheCapabilities(capabilities: string[]): void {
-  const state = mocks.getState() as Record<string, unknown>
+  const state = useAppStore.getState()
   state.runtimeStatusByEnvironmentId = new Map([
-    [ENVIRONMENT_ID, { status: { capabilities }, checkedAt: 1 }]
+    [
+      ENVIRONMENT_ID,
+      { status: { ...createCompatibleRuntimeStatusResponse().result, capabilities }, checkedAt: 1 }
+    ]
   ])
 }
 
@@ -121,7 +127,7 @@ function lastStagedHandle(): Record<string, unknown> | undefined {
 }
 
 describe('browser placement against a stale capability cache', () => {
-  beforeEach(() => stubBrowserTabCreateEnvironment(mocks))
+  beforeEach(() => stubBrowserTabCreateEnvironment(mocks, useAppStore))
   afterEach(() => resetBrowserTabCreateEnvironment())
 
   it('consults the live placement check even when the cached catalog shows no client hosting', async () => {

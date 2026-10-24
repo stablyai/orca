@@ -25,12 +25,19 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../store', () => ({
-  useAppStore: Object.assign(
-    (selector: (state: unknown) => unknown) => selector(mocks.storeState),
-    { getState: () => mocks.storeState }
-  )
-}))
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: Object.assign(
+      (selector: (state: unknown) => unknown) => selector(mocks.storeState),
+      { getState: () => mocks.storeState }
+    )
+  }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('./pty-connection', () => ({ connectPanePty: mocks.connectPanePty }))
 vi.mock('@/lib/agent-account-restart-startup', () => ({
   buildPaneAccountRestartStartup: mocks.buildPaneAccountRestartStartup

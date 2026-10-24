@@ -30,7 +30,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
-      const state = store.getState()
+      const state = window.__agentStatus!.getState()
       const tab =
         state.tabsByWorktree[worktreeId]?.[0] ??
         state.createTab(worktreeId, undefined, undefined, {
@@ -40,7 +40,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       store.setState({
         agentDashboardDrawerOpen: false,
         settings: {
-          ...store.getState().settings,
+          ...window.__agentStatus!.getState().settings,
           experimentalAgentDashboardPopout: true,
           experimentalAgentDashboardMode: 'drawer',
           experimentalAgentDashboardShowIdle: true,
@@ -52,8 +52,8 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
         const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
         const paneKey = `${tab.id}:${leafId}`
         const terminalHandle = `agent-dashboard-burst-${index}`
-        store
-          .getState()
+        window
+          .__agentStatus!.getState()
           .setAgentStatus(
             paneKey,
             { state: 'working', prompt: `Baseline task ${index}`, agentType: 'codex' },
@@ -67,7 +67,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       ;(window as typeof window & { __agentDashboardBurstProbe?: typeof probe })[
         '__agentDashboardBurstProbe'
       ] = probe
-      store.subscribe((next, previous) => {
+      window.__agentStatus!.subscribeTransitions(({ next, previous }) => {
         if (next.agentStatusByPaneKey !== previous.agentStatusByPaneKey) {
           probe.statusPublications += 1
         }
@@ -121,7 +121,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       () =>
         orcaPage.evaluate(
           (paneKeys) => {
-            const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
+            const statuses = window.__agentStatus?.getState().agentStatusByPaneKey ?? {}
             return paneKeys.every((paneKey) => statuses[paneKey]?.state === 'done')
           },
           panes.map(({ paneKey }) => paneKey)
@@ -132,7 +132,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
 
   const evidence = await orcaPage.evaluate(
     ({ paneKeys, statusPublicationsAtVisible }): BurstEvidence => {
-      const state = window.__store?.getState()
+      const state = window.__agentStatus?.getState()
       const probe = (
         window as typeof window & { __agentDashboardBurstProbe?: { statusPublications: number } }
       ).__agentDashboardBurstProbe

@@ -1,4 +1,5 @@
-import type { AppState } from '../types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
@@ -33,7 +34,7 @@ const AGENT_PROCESS_NAMES = new Set([
 
 export function shouldPreserveCleanupInspection(
   candidate: WorkspaceCleanupCandidate,
-  state: AppState
+  state: AgentStatusReadState
 ): boolean {
   const viewed = state.workspaceCleanupViewedCandidates[candidate.worktreeId]
   if (!viewed || viewed.fingerprint !== candidate.fingerprint) {
@@ -42,7 +43,7 @@ export function shouldPreserveCleanupInspection(
   return Date.now() - viewed.viewedAt <= VIEWED_FROM_CLEANUP_MS
 }
 
-export function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[] {
+export function getInitialWorkspaceCleanupGitDeferrals(state: AgentStatusReadState): string[] {
   const ids = new Set<string>()
   if (state.activeWorktreeId) {
     ids.add(state.activeWorktreeId)
@@ -93,12 +94,14 @@ export function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[
 }
 
 /** Workspaces with a live agent session, attributed like the sidebar so structured chats count too. */
-export function getWorkspaceCleanupLiveAgentSessionWorktreeIds(state: AppState): Set<string> {
+export function getWorkspaceCleanupLiveAgentSessionWorktreeIds(
+  state: AgentStatusReadState
+): Set<string> {
   return getWorktreeIdsWithLiveAgent(state.agentStatusByPaneKey, state.tabsByWorktree, Date.now())
 }
 
 export async function probeTerminalLiveness(
-  state: AppState,
+  state: AgentStatusReadState,
   tabs: { id: string; title: string }[]
 ): Promise<'idle' | 'running' | 'unknown'> {
   const ptyChecks = tabs.flatMap((tab) =>
@@ -136,7 +139,7 @@ export async function probeTerminalLiveness(
 }
 
 function hasIdleAgentTitleForPty(
-  state: AppState,
+  state: AgentStatusReadState,
   tab: { id: string; title: string },
   ptyId: string
 ): boolean {

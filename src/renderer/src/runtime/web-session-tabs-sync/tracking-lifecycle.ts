@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
@@ -13,7 +15,6 @@ import {
   sessionTabsInventoryOmissionsByWorktree,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
-  hostWorkingClientBoundaryByPaneKey,
   resetReceivedSessionTabsFrameSequence
 } from './state'
 import {
@@ -97,7 +98,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   sessionTabsInventoryOmissionsByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
-  hostWorkingClientBoundaryByPaneKey.clear()
+  getAgentStatusOwner(useAppStore).mirrorBoundaries().clear()
   sessionTabsTrackingGenerations.reset()
   resetWebSessionBrowserPlacementsForTests()
   resetRetiredEpochCensusesForTests()

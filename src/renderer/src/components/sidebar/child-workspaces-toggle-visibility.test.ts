@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -40,7 +42,7 @@ const noHover = {
   querySelectorAll: () => ({ length: 0, item: () => null })
 } as unknown as HoverDocument
 
-function seed(overrides: Partial<AppState> = {}): AppState {
+function seed(overrides: Partial<AppState> = {}): AgentStatusReadState {
   useAppStore.setState(
     {
       ...initialState,
@@ -55,10 +57,10 @@ function seed(overrides: Partial<AppState> = {}): AppState {
     },
     true
   )
-  return useAppStore.getState()
+  return getAgentStatusOwner(useAppStore).getState()
 }
 
-function target(state: AppState): string | null {
+function target(state: AgentStatusReadState): string | null {
   return resolveChildWorkspacesToggleGroupKey(state, getRenderedLineageChipKeys(state), noHover)
 }
 

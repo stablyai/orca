@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as intent from '@/lib/worktree-sleep-intent'
 import { buildWorktreePurgeState } from './worktrees/teardown/worktree-purge-state'
@@ -40,7 +42,7 @@ describe('worktree sleep intent lifecycle', () => {
     seedWorktree(store)
     markWorktreeSleepIntent(WORKTREE_ID)
 
-    store.getState().setActiveWorktree(WORKTREE_ID)
+    getAgentStatusOwner(store).getState().setActiveWorktree(WORKTREE_ID)
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
   })
@@ -50,14 +52,14 @@ describe('worktree sleep intent lifecycle', () => {
     seedWorktree(store)
     markWorktreeSleepIntent(WORKTREE_ID)
 
-    store.getState().setActiveWorktree(null)
+    getAgentStatusOwner(store).getState().setActiveWorktree(null)
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(true)
   })
 
   it('is released by activating a folder workspace', () => {
     const store = createTestStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       folderWorkspaces: [
         {
           id: 'folder-1',
@@ -79,7 +81,7 @@ describe('worktree sleep intent lifecycle', () => {
     })
     markWorktreeSleepIntent(FOLDER_KEY)
 
-    store.getState().setActiveFolderWorkspace('folder-1')
+    getAgentStatusOwner(store).getState().setActiveFolderWorkspace('folder-1')
 
     expect(hasWorktreeSleepIntent(FOLDER_KEY)).toBe(false)
   })
@@ -87,10 +89,12 @@ describe('worktree sleep intent lifecycle', () => {
   it('is released when any PTY binds to a tab in the worktree', () => {
     const store = createTestStore()
     seedWorktree(store)
-    const tab = store.getState().createTab(WORKTREE_ID, undefined, undefined, { activate: false })
+    const tab = getAgentStatusOwner(store)
+      .getState()
+      .createTab(WORKTREE_ID, undefined, undefined, { activate: false })
     markWorktreeSleepIntent(WORKTREE_ID)
 
-    store.getState().updateTabPtyId(tab.id, 'pty-cli-created')
+    getAgentStatusOwner(store).getState().updateTabPtyId(tab.id, 'pty-cli-created')
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
   })
@@ -100,7 +104,7 @@ describe('worktree sleep intent lifecycle', () => {
     seedWorktree(store)
     markWorktreeSleepIntent(WORKTREE_ID)
 
-    store.getState().createTab(WORKTREE_ID, undefined, undefined, {
+    getAgentStatusOwner(store).getState().createTab(WORKTREE_ID, undefined, undefined, {
       activate: false,
       initialPtyId: 'pty-cli-created'
     })
@@ -129,18 +133,20 @@ describe('worktree sleep intent lifecycle', () => {
   it('ignores a PTY bind that lands while the sleep teardown is in flight', async () => {
     const store = createTestStore()
     seedWorktree(store)
-    const tab = store.getState().createTab(WORKTREE_ID, undefined, undefined, { activate: false })
+    const tab = getAgentStatusOwner(store)
+      .getState()
+      .createTab(WORKTREE_ID, undefined, undefined, { activate: false })
     markWorktreeSleepIntent(WORKTREE_ID)
     const woke = vi.fn()
     intent.onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
 
     await intent.withWorktreeSleepTeardown(WORKTREE_ID, async () => {
-      store.getState().updateTabPtyId(tab.id, 'pty-late-spawn')
+      getAgentStatusOwner(store).getState().updateTabPtyId(tab.id, 'pty-late-spawn')
     })
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(true)
     expect(woke).not.toHaveBeenCalled()
-    store.getState().updateTabPtyId(tab.id, 'pty-after-teardown')
+    getAgentStatusOwner(store).getState().updateTabPtyId(tab.id, 'pty-after-teardown')
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
   })
 
@@ -165,7 +171,10 @@ describe('worktree sleep intent lifecycle', () => {
     const woke = vi.fn()
     intent.onWorktreeSleepIntentCleared(WORKTREE_ID, woke)
 
-    store.setState(buildWorktreePurgeState(store.getState(), [WORKTREE_ID]))
+    applyAgentStatusPatch(
+      store,
+      buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [WORKTREE_ID])
+    )
 
     expect(hasWorktreeSleepIntent(WORKTREE_ID)).toBe(false)
     expect(woke).not.toHaveBeenCalled()
@@ -179,13 +188,16 @@ describe('worktree sleep intent lifecycle', () => {
       const target = { kind: 'environment', environmentId: 'server-1' } as const
       const owner = getStructuredAgentSessionReadOwner('created-chat', target)
       const local = getStructuredAgentSessionReadOwner('created-chat', { kind: 'local' })
-      store.getState().createUnifiedTab(workspaceId, 'agent-session', {
+      getAgentStatusOwner(store).getState().createUnifiedTab(workspaceId, 'agent-session', {
         entityId: 'created-chat',
         executionHostId: 'runtime:server-1',
         activate: false
       })
       const dispose = vi.spyOn(owner, 'dispose')
-      store.setState(buildWorktreePurgeState(store.getState(), [workspaceId]))
+      applyAgentStatusPatch(
+        store,
+        buildWorktreePurgeState(getAgentStatusOwner(store).getState(), [workspaceId])
+      )
       expect(findStructuredAgentSessionReadOwner('created-chat', target)).toBeUndefined()
       expect(findStructuredAgentSessionReadOwner('created-chat', { kind: 'local' })).toBe(local)
       expect(dispose).toHaveBeenCalledOnce()

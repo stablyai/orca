@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '../lib/agent-status'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
@@ -50,7 +52,7 @@ async function settled(): Promise<void> {
 
 async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
-  store.setState({
+  applyAgentStatusPatch(store, {
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
     worktreesByRepo: {
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
@@ -64,7 +66,7 @@ async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestSt
 function worktreeSnapshot(
   store: ReturnType<typeof createTestStore>
 ): ReturnType<typeof buildMobileSessionTabSnapshots>[number] | undefined {
-  return buildMobileSessionTabSnapshots(store.getState()).find(
+  return buildMobileSessionTabSnapshots(getAgentStatusOwner(store).getState()).find(
     (entry) => entry.worktree === WORKTREE_ID
   )
 }

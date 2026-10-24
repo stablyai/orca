@@ -161,8 +161,19 @@ export function getLastNotificationDispatchArg(): Record<string, unknown> | unde
 }
 
 /** Shared `vi.mock` factories; hoisted factories must import this module lazily. */
-export function createNotificationDispatchStoreModuleMock(): Record<string, unknown> {
-  return { useAppStore: { getState: () => getNotificationDispatchMockState() } }
+export async function createNotificationDispatchStoreModuleMock() {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  const store = createTestStore()
+  return {
+    useAppStore: {
+      get getState() {
+        const fixture: Record<string, unknown> = getNotificationDispatchMockState()
+        applyAgentStatusPatch(store, fixture)
+        return store.getState
+      }
+    }
+  }
 }
 
 export function createDesktopNotificationSoundModuleMock(): Record<string, unknown> {

@@ -3,7 +3,10 @@ import { createTestStore } from '../slices/store-test-helpers'
 import { closeRemovedHostTwinState, type RemovedHostTwins } from './repo-removal-host-twin-teardown'
 
 const cancel = vi.hoisted(() =>
-  vi.fn((_worktreeIds: ReadonlySet<string>, _ownedByHost?: unknown) => new Set<string>())
+  vi.fn(
+    (_state: unknown, _worktreeIds: ReadonlySet<string>, _ownedByHost?: unknown) =>
+      new Set<string>()
+  )
 )
 vi.mock('../slices/worktrees/teardown/purged-structured-launch-retirement', () => ({
   cancelStructuredLaunchesForWorktrees: cancel
@@ -43,6 +46,6 @@ describe('closeRemovedHostTwinState', () => {
 
     closeRemovedHostTwinState(store.getState, store.setState, twins, { ...twins, byHost: [] })
 
-    expect(cancel.mock.calls.map(([ids]) => [...ids])).toEqual([['repo::/a'], ['repo::/b']])
+    expect(cancel.mock.calls.map(([, ids]) => [...ids])).toEqual([['repo::/a'], ['repo::/b']])
   })
 })

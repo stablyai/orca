@@ -1,3 +1,4 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
@@ -118,7 +119,7 @@ export function RepositoryPane({
       }
     : null
   const fetchWorktrees = useAppStore((state) => state.fetchWorktrees)
-  const runtimeSessionSummary = useAppStore(
+  const runtimeSessionSummary = useAgentStatusSelector(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
   const [copiedTemplate, setCopiedTemplate] = useState(false)

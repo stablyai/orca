@@ -24,13 +24,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionRestartReplacementTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -40,9 +40,10 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -55,21 +56,22 @@ export function registerPtyConnectionRestartReplacementTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
     /** A pane running an agent, with the live recovery record the app keeps for every agent turn. */
     async function connectWithAgent(opts: { visible: boolean; turnDone?: boolean }) {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { deliverPtyExitToHandlers } = await import('./pty-exit-delivery')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const deps = createDeps({ isVisibleRef: { current: opts.visible } })
       const pane = createPane(2)
       const paneKey = `tab-1:${leafIdForPane(2)}`
-      mockStoreState.removeAgentStatus.mockImplementation((key: string) => {
-        delete mockStoreState.agentStatusByPaneKey[key]
+      vi.mocked(storeFixture.read().removeAgentStatus).mockImplementation((key: string) => {
+        storeFixture.setStatus(key, undefined)
       })
-      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      storeFixture.read().sleepingAgentSessionsByPaneKey[paneKey] = {
         paneKey,
         tabId: 'tab-1',
         worktreeId: 'wt-1',
@@ -84,7 +86,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       // Switch on: main's start of the replacement binds the pane to `pty-main`.
       await mainStartsPaneAs({
         ptyId: 'pty-main',
-        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', leafIdForPane(2))
+        bind: bindsPaneInStore(storeFixture.store, 'tab-1', leafIdForPane(2))
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
       const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
@@ -113,7 +115,7 @@ export function registerPtyConnectionRestartReplacementTests(): void {
           expect(lastCommand()).toContain('sess-1')
           return
         }
-        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        await expectWindowStartAskedMain(transport, paneKey, storeFixture.read())
         expect(transport.connect).toHaveBeenLastCalledWith(
           expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
         )
@@ -165,15 +167,17 @@ export function registerPtyConnectionRestartReplacementTests(): void {
       const pane = await connectWithAgent({ visible: false })
       await pane.exit(true)
       const before = pane.connects()
-      mockStoreState.terminalLayoutsByTabId = {
-        ...mockStoreState.terminalLayoutsByTabId,
-        'tab-1': {
-          root: { type: 'leaf', leafId: leafIdForPane(2) },
-          activeLeafId: leafIdForPane(2),
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [leafIdForPane(2)]: 'pty-replacement' }
+      storeFixture.patch({
+        terminalLayoutsByTabId: {
+          ...storeFixture.read().terminalLayoutsByTabId,
+          'tab-1': {
+            root: { type: 'leaf', leafId: leafIdForPane(2) },
+            activeLeafId: leafIdForPane(2),
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leafIdForPane(2)]: 'pty-replacement' }
+          }
         }
-      }
+      })
 
       pane.binding.noteVisibilityResume()
       await flushAsyncTicks()

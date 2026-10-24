@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import {
   resolveTerminalNotificationOwner,
   type TerminalNotificationBinding
@@ -7,7 +8,7 @@ import {
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import { useCallback } from 'react'
-import { useAppStore } from '@/store'
+import '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
@@ -77,7 +78,7 @@ export function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
 ): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
   // not lend its prompt/agentType or timing id to this notification.

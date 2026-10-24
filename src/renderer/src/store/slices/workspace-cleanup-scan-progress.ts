@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import type { AppState } from '../types'
 import type {
   WorkspaceCleanupCandidate,
@@ -58,7 +59,7 @@ export function invalidateWorkspaceCleanupScanProgress(): void {
 export function enqueueWorkspaceCleanupProgress(
   progress: WorkspaceCleanupScanProgress,
   scanToken: number,
-  getState: () => AppState,
+  getState: () => AgentStatusReadState,
   setState: (
     partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
     replace?: false
@@ -97,7 +98,7 @@ export async function drainWorkspaceCleanupProgressQueue(scanToken: number): Pro
 async function applyWorkspaceCleanupProgress(
   progress: WorkspaceCleanupScanProgress,
   scanToken: number,
-  getState: () => AppState,
+  getState: () => AgentStatusReadState,
   setState: (
     partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
     replace?: false
@@ -175,7 +176,7 @@ async function applyWorkspaceCleanupProgress(
 
 export async function enrichWorkspaceCleanupCandidatesForScan(
   candidates: readonly WorkspaceCleanupCandidate[],
-  state: AppState,
+  state: AgentStatusReadState,
   scanToken: number
 ): Promise<WorkspaceCleanupCandidate[]> {
   if (workspaceCleanupEnrichmentCache?.scanToken !== scanToken) {
@@ -198,7 +199,7 @@ export async function enrichWorkspaceCleanupCandidatesForScan(
  * strict superset of getWorkspaceCleanupLocalStateSignature's inputs, so an
  * unchanged token guarantees an unchanged signature without stringifying.
  */
-function buildWorkspaceCleanupLocalStateToken(state: AppState): readonly unknown[] {
+function buildWorkspaceCleanupLocalStateToken(state: AgentStatusReadState): readonly unknown[] {
   return [
     state.activeWorktreeId,
     state.tabsByWorktree,

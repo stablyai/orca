@@ -1,3 +1,4 @@
+import { getAgentStatusState, useAgentStatusSelector } from '@/store/agent-status'
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -231,8 +232,10 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
 
   // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
-  const readyRestartPtyIds = useAppStore(
-    useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
+  const readyRestartPtyIds = useAgentStatusSelector(
+    useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId)),
+    undefined,
+    tabId
   )
   useEffect(() => {
     const manager = managerRef.current
@@ -244,7 +247,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       if (
         !ptyId ||
         !readyRestartPtyIds.includes(ptyId) ||
-        !isAccountRestartReady(useAppStore.getState(), tabId, pane.leafId, ptyId)
+        !isAccountRestartReady(getAgentStatusState(), tabId, pane.leafId, ptyId)
       ) {
         continue
       }

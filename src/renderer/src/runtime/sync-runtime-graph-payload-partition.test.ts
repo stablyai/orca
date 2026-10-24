@@ -1,10 +1,11 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './sync-runtime-graph'
-import type { AppState } from '../store/types'
+
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 
 function leafIdFor(index: number): string {
@@ -12,7 +13,11 @@ function leafIdFor(index: number): string {
 }
 
 /** Distinct ids per test: the publication memo is module state shared in this file. */
-function makeState(prefix: string, worktreeCount: number, titles: string[] = []): AppState {
+function makeState(
+  prefix: string,
+  worktreeCount: number,
+  titles: string[] = []
+): AgentStatusReadState {
   const tabsByWorktree: Record<string, unknown[]> = {}
   const terminalLayoutsByTabId: Record<string, unknown> = {}
   for (let i = 0; i < worktreeCount; i++) {
@@ -42,7 +47,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
     activeTabId: null,
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {}
-  } as unknown as AppState
+  } as unknown as AgentStatusReadState
 }
 
 function graphOf(call: unknown[] | undefined): RuntimeSyncWindowGraph {
@@ -71,9 +76,9 @@ afterEach(() => {
 })
 
 function startSync(
-  state: AppState,
+  state: AgentStatusReadState,
   syncWindowGraph: ReturnType<typeof vi.fn>
-): { setState: (next: AppState) => void } {
+): { setState: (next: AgentStatusReadState) => void } {
   let current = state
   vi.useFakeTimers()
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
@@ -81,7 +86,7 @@ function startSync(
   setRuntimeGraphStoreStateGetter(() => current)
   setRuntimeGraphSyncEnabled(true)
   return {
-    setState: (next: AppState) => {
+    setState: (next: AgentStatusReadState) => {
       current = next
     }
   }

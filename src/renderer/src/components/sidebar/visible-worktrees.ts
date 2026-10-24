@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 export type { SidebarFilterState } from './sidebar-filter-actions'
 export {
   computeVisibleWorktreeIds,
@@ -21,7 +22,7 @@ export {
 } from './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { useAppStore } from '@/store'
+import '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -73,7 +74,7 @@ export function getVisibleWorktreeIds(): string[] {
     return _publishedVisibleIds
   }
 
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
   // Hoist repoMap so it's built once and reused across all branches below.
@@ -125,7 +126,7 @@ export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarg
   if (_publishedVisibleShortcutTargets) {
     return _publishedVisibleShortcutTargets
   }
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const visibleIds = getVisibleWorktreeIds()
   const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
   const repoMap = getRepoMapFromState(state)

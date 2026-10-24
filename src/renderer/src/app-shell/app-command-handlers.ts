@@ -1,3 +1,4 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 import { useShallow } from 'zustand/react/shallow'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
@@ -200,7 +201,7 @@ export function createAppCommandHandlers(
         }
         const groupKey = resolveChildWorkspacesToggleGroupKey(
           store,
-          getRenderedLineageChipKeys(store)
+          getRenderedLineageChipKeys(getAgentStatusOwner(useAppStore).getState())
         )
         if (!groupKey) {
           return false

@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -50,7 +51,7 @@ const ROOT = testOrcaSessionId('root-chat')
 const RECIPIENT = 'recipient'
 const SENDER = 'sender'
 const PANE = 'terminal:11111111-1111-4111-8111-111111111111'
-const initial = useAppStore.getInitialState()
+const initial = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const providerA = { key: 'session_id' as const, id: 'provider-a' }
 
 function summary(sessionId: string): AgentSessionStatusSummary {
@@ -126,21 +127,22 @@ beforeEach(() => {
     activations: 0
   })
   feeds.set('remote', { snapshot: new Map(), listeners: new Set(), live: true, activations: 0 })
-  useAppStore.setState(
-    { ...initial, activeWorktreeId: RECIPIENT, activeWorkspaceExecutionHostId: 'local' },
-    true
-  )
+  applyAgentStatusPatch(useAppStore, {
+    ...initial,
+    activeWorktreeId: RECIPIENT,
+    activeWorkspaceExecutionHostId: 'local'
+  })
 })
 afterEach(() => {
   cleanup()
-  useAppStore.setState(initial, true)
+  applyAgentStatusPatch(useAppStore, initial)
   feeds.clear()
 })
 
 it('uses the recipient host when identical session text is published by two hosts', () => {
   publish('local', [summary(ROOT)])
   publish('remote', [summary(ROOT)])
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     activeWorkspaceExecutionHostId: 'runtime:remote',
     unifiedTabsByWorktree: {
       [SENDER]: [tab(ROOT, 'Remote sender', 'runtime:remote'), tab(ROOT, 'Wrong host')]
@@ -151,7 +153,9 @@ it('uses the recipient host when identical session text is published by two host
 })
 
 it('shows a chat sender by its current rename', () => {
-  useAppStore.setState({ unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, 'Renamed sender')] } })
+  applyAgentStatusPatch(useAppStore, {
+    unifiedTabsByWorktree: { [SENDER]: [tab(ROOT, 'Renamed sender')] }
+  })
   render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
   expect(screen.getByRole('button', { name: 'Renamed sender' })).toBeInTheDocument()
 })
@@ -169,7 +173,7 @@ it.each([false, true])(
       sortOrder: 0,
       createdAt: 0
     }
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: { [PANE]: row() },
       tabsByWorktree: { [SENDER]: [terminal] }
     })
@@ -177,7 +181,7 @@ it.each([false, true])(
     render(<NativeChatAgentMessageSenders from={from} chatWorktreeId={RECIPIENT} queued={queued} />)
     expect(screen.getByRole('button', { name: 'Original sender' })).toBeInTheDocument()
     act(() => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         agentStatusByPaneKey: { [PANE]: row({ key: 'session_id', id: 'provider-b' }) },
         tabsByWorktree: { [SENDER]: [{ ...terminal, customTitle: 'Renamed B' }] }
       })

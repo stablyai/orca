@@ -7,7 +7,14 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => true)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = { useAppStore: { getState: mocks.getState } }
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab

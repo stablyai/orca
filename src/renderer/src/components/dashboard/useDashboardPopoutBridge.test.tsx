@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
+import { useAppStore } from '@/store'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -26,16 +28,15 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      ...makeSnapshotWatchState(),
-      acknowledgeAgents: mocks.acknowledgeAgents,
-      setActiveWorktree: mocks.setActiveWorktree
-    }),
-    subscribe: mocks.subscribeStore
-  }
-}))
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const useAppStore = createTestStore()
+  useAppStore.setState({
+    acknowledgeAgents: mocks.acknowledgeAgents,
+    setActiveWorktree: mocks.setActiveWorktree
+  })
+  return { useAppStore: { getState: useAppStore.getState, subscribe: mocks.subscribeStore } }
+})
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
@@ -65,7 +66,6 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
     worktreesByRepo: {},
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
-    agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
@@ -258,12 +258,8 @@ describe('useDashboardPopoutBridge', () => {
         key
       ).toBe(true)
     }
-    expect(
-      dashboardSnapshotInputsChanged(
-        { ...previousState, agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey } },
-        previousState
-      )
-    ).toBe(false)
+    const statusRead = { ...previousState, agentStatusByPaneKey: {} }
+    expect(dashboardSnapshotInputsChanged(statusRead, previousState)).toBe(false)
     expect(
       dashboardSnapshotInputsChanged({ ...previousState, agentStatusEpoch: 1 }, previousState)
     ).toBe(false)
@@ -412,7 +408,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
       mocks.subscribeStore.mock.calls[0][0](
         {
           ...previousState,
-          agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey },
+          agentStatusByPaneKey: { ...getAgentStatusOwner(useAppStore).getSnapshot() },
           agentStatusEpoch: previousState.agentStatusEpoch + 1
         },
         previousState

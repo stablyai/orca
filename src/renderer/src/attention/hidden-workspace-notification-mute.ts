@@ -1,4 +1,4 @@
-import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { getIndexedAllWorktrees, getIndexedRepoMap } from '@/store/worktree-repo-index'
 import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -18,7 +18,7 @@ import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace
  * workspace would read as sleeping), or a workspace this store has no record of, notify.
  */
 export function isWorkspaceNotificationMutedBySidebarFilters(
-  state: AppState,
+  state: AgentStatusReadState,
   workspaceId: string
 ): boolean {
   if (

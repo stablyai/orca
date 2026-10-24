@@ -1,6 +1,6 @@
+import { applyAgentStatusPatch } from '../agent-status-patch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUIStore } from './ui-slice-test-harness'
-import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -53,12 +53,12 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
   it('clears unread for a live turn stamped ahead of the local clock in one acknowledge', () => {
     const store = createUIStore()
     const futureStartedAt = NOW + SKEW_MS
-    store.setState({
+    applyAgentStatusPatch(store, {
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentEntry({ stateStartedAt: futureStartedAt, updatedAt: futureStartedAt })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([PANE_KEY])
 
@@ -70,11 +70,11 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
   it('stops rewriting the ack map once a future-stamped turn is acknowledged', () => {
     const store = createUIStore()
     const futureStartedAt = NOW + SKEW_MS
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentEntry({ stateStartedAt: futureStartedAt, updatedAt: futureStartedAt })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([PANE_KEY])
     const firstMap = store.getState().acknowledgedAgentsByPaneKey
@@ -89,7 +89,7 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
   it('covers a retained row and a future history event on the same pane', () => {
     const store = createUIStore()
     const futureHistoryAt = NOW + SKEW_MS
-    store.setState({
+    applyAgentStatusPatch(store, {
       retainedAgentsByPaneKey: {
         [PANE_KEY]: {
           entry: makeAgentEntry({
@@ -102,7 +102,7 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
           startedAt: NOW + 1_000
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([PANE_KEY])
 
@@ -112,7 +112,7 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
   it('covers a future-stamped migration-unsupported row, which Activity renders as a blocked event', () => {
     const store = createUIStore()
     const futureUpdatedAt = NOW + SKEW_MS
-    store.setState({
+    applyAgentStatusPatch(store, {
       migrationUnsupportedByPtyId: {
         'pty-1': {
           ptyId: 'pty-1',
@@ -122,7 +122,7 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
           updatedAt: futureUpdatedAt
         }
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([PANE_KEY])
 
@@ -131,11 +131,11 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
 
   it('still stamps the local clock when the turn is not ahead of it', () => {
     const store = createUIStore()
-    store.setState({
+    applyAgentStatusPatch(store, {
       agentStatusByPaneKey: {
         [PANE_KEY]: makeAgentEntry({ stateStartedAt: NOW - 5_000, updatedAt: NOW - 5_000 })
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().acknowledgeAgents([PANE_KEY])
 

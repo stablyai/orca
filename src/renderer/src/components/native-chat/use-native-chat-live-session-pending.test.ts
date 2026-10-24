@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -84,7 +85,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
     root = createRoot(document.createElement('div'))
     latest = null
     resetTransport()
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
   })
 
   afterEach(() => {
@@ -210,7 +211,7 @@ describe('useNativeChatRetainedSession — unflushed transcript', () => {
     root = createRoot(document.createElement('div'))
     latest = null
     resetTransport()
-    useAppStore.setState({ agentStatusByPaneKey: {} })
+    applyAgentStatusPatch(useAppStore, { agentStatusByPaneKey: {} })
   })
 
   afterEach(() => {

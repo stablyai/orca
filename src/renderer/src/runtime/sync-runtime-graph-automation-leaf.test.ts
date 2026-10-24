@@ -1,7 +1,10 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AppState } from '@/store/types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { AppState } from '../store/types'
+
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 // Why: Part B publishes never-mounted background automation tabs into the
@@ -28,8 +31,8 @@ import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './s
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const AUTO_PTY = 'auto-bg-pty'
 
-function makeState(overrides: Partial<AppState> = {}): AppState {
-  return {
+function makeState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
+  return makeAgentStatusReadState({
     tabsByWorktree: {},
     terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
     runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
@@ -44,7 +47,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     editorDrafts: {},
     activeTabId: null,
     ...overrides
-  } as AppState
+  })
 }
 
 function makeAutomationTab(): TerminalTab {
@@ -60,7 +63,7 @@ function makeAutomationTab(): TerminalTab {
   }
 }
 
-function automationState(): AppState {
+function automationState(): AgentStatusReadState {
   return makeState({
     tabsByWorktree: { 'wt-1': [makeAutomationTab()] } as AppState['tabsByWorktree'],
     terminalLayoutsByTabId: {

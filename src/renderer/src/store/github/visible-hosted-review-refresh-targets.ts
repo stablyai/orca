@@ -1,5 +1,7 @@
-import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-detached-review-request'
 import type { AppState } from '../types'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getDetachedWorkspaceReviewRequest } from '@/components/sidebar/workspace-detached-review-request'
+
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey
@@ -208,8 +210,8 @@ export function getVisibleHostedReviewRefreshTargets(
 }
 
 export function visibleHostedReviewRefreshInputsChanged(
-  state: AppState,
-  previous: AppState
+  state: AgentStatusReadState,
+  previous: AgentStatusReadState
 ): boolean {
   return (
     state.visibleReviewWorktreeIds !== previous.visibleReviewWorktreeIds ||

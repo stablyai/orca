@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 /**
  * A paired client mirrors a remote host's agent-status rows verbatim, host wall clock and all.
  * The staleness gate then computed `rendererNow - hostStamp`, so the effective window was
@@ -21,7 +23,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { isExplicitAgentStatusFresh } from '../lib/pane-agent-evidence'
-import type { AppState } from '../store/types'
+
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
@@ -84,7 +86,7 @@ function seedPairedClientStore(): TestStore {
     settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
-  } as Partial<AppState>)
+  })
   return store
 }
 
@@ -96,7 +98,7 @@ function applyHostSnapshot(
   version = 1
 ): boolean {
   vi.setSystemTime(clientNow)
-  const state = store.getState()
+  const state = getAgentStatusOwner(store).getState()
   const patch = applyFreshWebSessionTabsSnapshot(
     state,
     hostSnapshot({ snapshotVersion: version, hostNow }),
@@ -106,7 +108,7 @@ function applyHostSnapshot(
   if (patch === state) {
     return false
   }
-  store.setState(patch as Partial<AppState>)
+  applyAgentStatusPatch(store, patch)
   return true
 }
 
@@ -123,7 +125,7 @@ function applyChangedHostSnapshot(
 }
 
 function mirroredRowIsFreshAt(store: TestStore, clientNow: number): boolean {
-  const row = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+  const row = getAgentStatusOwner(store).getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
   expect(row, 'the mirrored row must exist for freshness to mean anything').toBeDefined()
   return isExplicitAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
 }

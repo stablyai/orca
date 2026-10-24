@@ -70,52 +70,53 @@ export async function useIpcEventsForCloseRouting({
     }
   })
 
-  const appStoreModule = {
-    useAppStore: {
-      subscribe: vi.fn(() => () => {}),
-      getState: () => ({
-        getActiveTab: () => null,
-        closeUnifiedTab: vi.fn(),
-        reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
-        setUpdateStatus: vi.fn(),
-        fetchRepos: vi.fn(),
-        fetchWorktrees: vi.fn(),
-        setActiveView: vi.fn(),
-        activeModal: null,
-        closeModal: vi.fn(),
-        openModal: vi.fn(),
-        activeWorktreeId: 'wt-1',
-        activeView: 'terminal',
-        setActiveRepo: vi.fn(),
-        setActiveWorktree: vi.fn(),
-        revealWorktreeInSidebar: vi.fn(),
-        setIsFullScreen: vi.fn(),
-        updateBrowserTabPageState: vi.fn(),
-        activeTabType: 'browser',
-        editorFontZoomLevel: 0,
-        setEditorFontZoomLevel: vi.fn(),
-        setRateLimitsFromPush: vi.fn(),
-        setSshConnectionState: vi.fn(),
-        setSshTargetLabels: vi.fn(),
-        setPortForwards: vi.fn(),
-        clearPortForwards: vi.fn(),
-        setDetectedPorts: vi.fn(),
-        enqueueSshCredentialRequest: vi.fn(),
-        removeSshCredentialRequest: vi.fn(),
-        settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
-        activeBrowserTabId: 'workspace-1',
-        activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
-        browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
-        browserPagesByWorkspace: {},
-        openFiles: [],
-        unifiedTabsByWorktree: {},
-        closeBrowserTab: vi.fn(),
-        closeBrowserPage: vi.fn(),
-        requestPinnedTabCloseConfirm: vi.fn(),
-        ...getState()
-      })
-    }
+  const fixture: Record<string, unknown> = {
+    getActiveTab: () => null,
+    closeUnifiedTab: vi.fn(),
+    reconcileWorktreeTabModel: () => ({ renderableTabCount: 1 }),
+    setUpdateStatus: vi.fn(),
+    fetchRepos: vi.fn(),
+    fetchWorktrees: vi.fn(),
+    setActiveView: vi.fn(),
+    activeModal: null,
+    closeModal: vi.fn(),
+    openModal: vi.fn(),
+    activeWorktreeId: 'wt-1',
+    activeView: 'terminal',
+    setActiveRepo: vi.fn(),
+    setActiveWorktree: vi.fn(),
+    revealWorktreeInSidebar: vi.fn(),
+    setIsFullScreen: vi.fn(),
+    updateBrowserTabPageState: vi.fn(),
+    activeTabType: 'browser',
+    editorFontZoomLevel: 0,
+    setEditorFontZoomLevel: vi.fn(),
+    setRateLimitsFromPush: vi.fn(),
+    setSshConnectionState: vi.fn(),
+    setSshTargetLabels: vi.fn(),
+    setPortForwards: vi.fn(),
+    clearPortForwards: vi.fn(),
+    setDetectedPorts: vi.fn(),
+    enqueueSshCredentialRequest: vi.fn(),
+    removeSshCredentialRequest: vi.fn(),
+    settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
+    activeBrowserTabId: 'workspace-1',
+    activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
+    browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
+    browserPagesByWorkspace: {},
+    openFiles: [],
+    unifiedTabsByWorktree: {},
+    closeBrowserTab: vi.fn(),
+    closeBrowserPage: vi.fn(),
+    requestPinnedTabCloseConfirm: vi.fn(),
+    ...getState()
   }
+
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { applyAgentStatusPatch } = await import('@/store/agent-status-patch')
+  const store = createTestStore()
+  applyAgentStatusPatch(store, fixture)
+  const appStoreModule = { useAppStore: store }
 
   vi.doMock('../store', () => appStoreModule)
   vi.doMock('@/store', () => appStoreModule)

@@ -1,7 +1,8 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
-import { useAppStore } from '../../store'
+import '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   recordReceivedWebSessionTabsSnapshot,
@@ -117,10 +118,10 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     )
   }
   let settleHydration: HostSessionMirrorSettle | null = null
-  void recoverMirroredTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
+  void recoverMirroredTerminalOrphansBeforeApply(getAgentStatusState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
     expectedRuntimeId: runtimeId,
-    getCurrentState: () => useAppStore.getState()
+    getCurrentState: () => getAgentStatusState()
   })
     .then((recovered) => {
       if (

@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '../agent-status-observers'
 /**
  * Host-qualified removal identity for workspace cleanup (STA-4343).
  *
@@ -171,10 +172,10 @@ export function resolveWorkspaceCleanupRemovalTargets(
 
 export async function preflightWorkspaceCleanupCandidates(
   targets: readonly WorkspaceCleanupRemovalTarget[],
-  getState: () => AppState,
+  getState: () => AgentStatusReadState,
   enrich: (
     candidates: readonly WorkspaceCleanupCandidate[],
-    state: AppState
+    state: AgentStatusReadState
   ) => Promise<WorkspaceCleanupCandidate[]>,
   options: {
     unverifiedRemovalConsent?: WorkspaceCleanupUnverifiedRemovalConsent

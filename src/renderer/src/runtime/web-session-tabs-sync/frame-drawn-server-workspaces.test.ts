@@ -43,7 +43,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return hoisted.layoutOwnerIsMain
   }
 }))
-vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('../../store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 vi.mock('../web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: hoisted.refresh
 }))

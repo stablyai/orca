@@ -1,5 +1,6 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+
 import { translate } from '@/i18n/i18n'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AgentStatusCacheIdentity } from '../../../../shared/agent-status-types'
@@ -120,7 +121,7 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
 
 /** Clear one completed thread immediately; bulk clearing owns the undo toast. */
 export function clearActivityThread(thread: AgentPaneThread): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const plan = planClearCompletedActivity([thread], state)
   if (plan.clearedThreadCount === 0) {
     return false
@@ -140,7 +141,7 @@ export function clearActivityThread(thread: AgentPaneThread): boolean {
  * the undo toast closes so Undo can restore everything losslessly.
  */
 export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boolean {
-  const state = useAppStore.getState()
+  const state = getAgentStatusState()
   const plan = planClearCompletedActivity(threads, state)
   if (plan.clearedThreadCount === 0) {
     return false
@@ -199,7 +200,7 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
             clearTimeout(fallbackTimer)
             fallbackTimer = null
           }
-          const current = useAppStore.getState()
+          const current = getAgentStatusState()
           const retainedByPaneKey = new Map(
             plan.retainedSnapshots.map((retained) => [retained.entry.paneKey, retained])
           )

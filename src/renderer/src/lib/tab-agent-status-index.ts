@@ -17,7 +17,6 @@ export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAg
 type TabAgentPanesByTabId = ReadonlyMap<string, readonly TabAgentPane[]>
 
 const NO_PANES: readonly TabAgentPane[] = Object.freeze([])
-const EMPTY_INDEX: TabAgentPanesByTabId = new Map()
 
 function appendPane(index: Map<string, TabAgentPane[]>, tabId: string, pane: TabAgentPane): void {
   const panes = index.get(tabId)
@@ -30,13 +29,15 @@ function appendPane(index: Map<string, TabAgentPane[]>, tabId: string, pane: Tab
 
 // Why: the store replaces these maps on every write, so identity is an exact
 // invalidation signal — one scan per write instead of one per tab per render.
-let cachedStatusSource: Record<string, AgentStatusEntry> | null = null
-let cachedLiveIndex: TabAgentPanesByTabId = EMPTY_INDEX
-let cachedCompletedIndex: TabAgentPanesByTabId = EMPTY_INDEX
+const statusIndexes = new WeakMap<
+  object,
+  { live: TabAgentPanesByTabId; completed: TabAgentPanesByTabId }
+>()
 
-function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
-  if (source === cachedStatusSource) {
-    return
+function indexAgentStatus(source: Record<string, AgentStatusEntry>) {
+  const cached = statusIndexes.get(source)
+  if (cached) {
+    return cached
   }
   const live = new Map<string, TabAgentPane[]>()
   const completed = new Map<string, TabAgentPane[]>()
@@ -54,9 +55,9 @@ function indexAgentStatus(source: Record<string, AgentStatusEntry>): void {
       agent
     })
   }
-  cachedLiveIndex = live
-  cachedCompletedIndex = completed
-  cachedStatusSource = source
+  const result = { live, completed }
+  statusIndexes.set(source, result)
+  return result
 }
 
 /** Panes of `tabId` whose agent is still running (any non-`done` state). */
@@ -64,8 +65,7 @@ export function selectLiveTabAgentPanes(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string
 ): readonly TabAgentPane[] {
-  indexAgentStatus(agentStatusByPaneKey)
-  return cachedLiveIndex.get(tabId) ?? NO_PANES
+  return indexAgentStatus(agentStatusByPaneKey).live.get(tabId) ?? NO_PANES
 }
 
 /** Panes of `tabId` whose agent reported `done`. */
@@ -73,20 +73,19 @@ export function selectCompletedTabAgentPanes(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   tabId: string
 ): readonly TabAgentPane[] {
-  indexAgentStatus(agentStatusByPaneKey)
-  return cachedCompletedIndex.get(tabId) ?? NO_PANES
+  return indexAgentStatus(agentStatusByPaneKey).completed.get(tabId) ?? NO_PANES
 }
 
-let cachedRetainedSource: Record<string, RetainedAgentEntry> | null = null
-let cachedRetainedIndex: TabAgentPanesByTabId = EMPTY_INDEX
+const retainedIndexes = new WeakMap<object, TabAgentPanesByTabId>()
 
 /** Panes of `tabId` kept as sidebar completion evidence after the row went away. */
 export function selectRetainedTabAgentPanes(
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
   tabId: string
 ): readonly TabAgentPane[] {
-  if (retainedAgentsByPaneKey !== cachedRetainedSource) {
-    const retainedIndex = new Map<string, TabAgentPane[]>()
+  let retainedIndex = retainedIndexes.get(retainedAgentsByPaneKey)
+  if (!retainedIndex) {
+    const built = new Map<string, TabAgentPane[]>()
     for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
       const agent = agentTypeToIconAgent(retained?.agentType)
       if (!agent) {
@@ -96,12 +95,12 @@ export function selectRetainedTabAgentPanes(
       if (!parsed) {
         continue
       }
-      appendPane(retainedIndex, parsed.tabId, { leafId: parsed.leafId, agent })
+      appendPane(built, parsed.tabId, { leafId: parsed.leafId, agent })
     }
-    cachedRetainedIndex = retainedIndex
-    cachedRetainedSource = retainedAgentsByPaneKey
+    retainedIndex = built
+    retainedIndexes.set(retainedAgentsByPaneKey, retainedIndex)
   }
-  return cachedRetainedIndex.get(tabId) ?? NO_PANES
+  return retainedIndex.get(tabId) ?? NO_PANES
 }
 
 export function firstTabAgentExcludingLeaf(

@@ -539,3 +539,332 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     expect(result.current.state.epoch).toBeNull()
   })
 })
+
+describe('review: terminal lifetime before deferred disposal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+  afterEach(() => {
+    cleanup()
+    resetStructuredAgentSessionReadOwnersForTests()
+  })
+  it('does not start older-page work after accepted silent retirement', async () => {
+    const { createStore } = await import('zustand/vanilla')
+    const { createAppState } = await import('@/store')
+    const { getStructuredAgentSessionReadOwner } =
+      await import('./structured-agent-session-read-owner')
+    mocks.call.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        page: page(
+          'tail',
+          Array.from({ length: 300 }, (_, i) => message(`m${i}`, i + 100, 'assistant')),
+          true
+        )
+      })
+    )
+    const reader = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const release = reader.activate()
+    await waitFor(() => expect(reader.getSnapshot().state.status).toBe('ready'))
+    expect(reader.getSnapshot().state.hasOlder).toBe(true)
+    const store = createStore(createAppState)
+    store.setState({
+      unifiedTabsByWorktree: {
+        wt: [
+          {
+            id: 'agent-session:session-a',
+            entityId: 'session-a',
+            worktreeId: 'wt',
+            executionHostId: 'local',
+            contentType: 'agent-session',
+            groupId: 'g',
+            label: 'chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const callsBefore = mocks.call.mock.calls.length
+    let callsDuring = -1
+    let result: Promise<unknown> | undefined
+    const unsub = store.subscribe(() => {
+      result = reader.loadOlder()
+      callsDuring = mocks.call.mock.calls.length - callsBefore
+    })
+    store.setState({ unifiedTabsByWorktree: {} })
+    unsub()
+    await result
+    release()
+    console.log('REVIEW_OLDER_RPC_AFTER_RETIREMENT', callsDuring)
+    expect(callsDuring).toBe(0)
+  })
+  it('does not accept a create page through a forcibly retired object', async () => {
+    const { createStore } = await import('zustand/vanilla')
+    const { createAppState } = await import('@/store')
+    const { getStructuredAgentSessionReadOwner } =
+      await import('./structured-agent-session-read-owner')
+    const reader = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const before = reader.getSnapshot()
+    const store = createStore(createAppState)
+    store.setState({
+      unifiedTabsByWorktree: {
+        wt: [
+          {
+            id: 'agent-session:session-a',
+            entityId: 'session-a',
+            worktreeId: 'wt',
+            executionHostId: 'local',
+            contentType: 'agent-session',
+            groupId: 'g',
+            label: 'chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const unsub = store.subscribe(() =>
+      reader.publishCreated(page('tail', [message('late-create', 1, 'assistant')], false))
+    )
+    store.setState({ unifiedTabsByWorktree: {} })
+    unsub()
+    console.log('REVIEW_RETIRED_CREATE_EPOCH', reader.getSnapshot().state.epoch)
+    expect(reader.getSnapshot()).toBe(before)
+  })
+})
+
+describe('pending reader work belongs to its terminal lifetime', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+  afterEach(() => {
+    cleanup()
+    resetStructuredAgentSessionReadOwnersForTests()
+    vi.useRealTimers()
+  })
+
+  it.each(['hydrate', 'older', 'chunk', 'restart', 'request-error'] as const)(
+    'cancels pending %s before deferred transport teardown',
+    async (phase) => {
+      const { createStore } = await import('zustand/vanilla')
+      const { createAppState } = await import('@/store')
+      const { getStructuredAgentSessionReadOwner } =
+        await import('./structured-agent-session-read-owner')
+      const { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } =
+        await import('../../../../shared/agent-session-current-requests-capability')
+      const pending = Promise.withResolvers<unknown>()
+      const tail = page(
+        'tail',
+        Array.from({ length: 300 }, (_, i) => message(`m${i}`, i + 100, 'assistant')),
+        true
+      )
+      const marker = {
+        contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+        sessionId: 'session-a',
+        epoch: 'epoch-a',
+        publisher: 'publisher',
+        revision: 1,
+        owner: 'owner',
+        version: 'v1'
+      }
+      mocks.call.mockImplementation((_target, method, params) => {
+        if (
+          phase === 'hydrate' ||
+          method === 'agentSession.currentRequests' ||
+          params.direction === 'before'
+        ) {
+          return pending.promise
+        }
+        return Promise.resolve({ ok: true, page: tail })
+      })
+      const reader = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+      const release = reader.activate()
+      if (phase !== 'hydrate') {
+        await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+      }
+      let older: Promise<unknown> | undefined
+      if (phase === 'older') {
+        older = reader.loadOlder()
+      }
+      if (phase === 'chunk' || phase === 'restart' || phase === 'request-error') {
+        mocks.subscribe.mock.calls[0][2]({
+          type: 'snapshot',
+          sessionId: 'session-a',
+          page: tail,
+          fence: 1,
+          currentRequests: marker
+        })
+        expect(mocks.call.mock.calls.at(-1)?.[1]).toBe('agentSession.currentRequests')
+      }
+      const store = createStore(createAppState)
+      store.setState({
+        unifiedTabsByWorktree: {
+          wt: [
+            {
+              id: 'agent-session:session-a',
+              entityId: 'session-a',
+              worktreeId: 'wt',
+              executionHostId: 'local',
+              contentType: 'agent-session',
+              groupId: 'g',
+              label: 'chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+      const dispose = reader.dispose
+      const deferredDisposal = vi.spyOn(reader, 'dispose').mockImplementation(() => {})
+      const before = reader.getSnapshot()
+      const calls = mocks.call.mock.calls.length
+      const subscriptions = mocks.subscribe.mock.calls.length
+      store.setState({ unifiedTabsByWorktree: {} })
+      expect(deferredDisposal).toHaveBeenCalledTimes(1)
+      const successor = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+      expect(successor).not.toBe(reader)
+      vi.useFakeTimers()
+      if (phase === 'request-error') {
+        pending.reject(new Error('late request failure'))
+      } else if (phase === 'restart') {
+        pending.resolve({ restart: true, marker: { ...marker, version: 'v2', revision: 2 } })
+      } else if (phase === 'chunk') {
+        pending.resolve({ marker, json: '[', nextCursor: 1 })
+      } else {
+        pending.resolve({
+          ok: true,
+          page: page('before', [message('late', 1, 'assistant')], false)
+        })
+      }
+      await Promise.resolve()
+      await Promise.resolve()
+      const olderResult = await older
+      if (phase === 'older') {
+        expect(olderResult).toBe('superseded')
+      }
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(mocks.subscribe).toHaveBeenCalledTimes(subscriptions)
+      expect(reader.getSnapshot()).toBe(before)
+      expect(mocks.call).toHaveBeenCalledTimes(calls)
+      if (phase === 'hydrate') {
+        expect(mocks.subscribe).not.toHaveBeenCalled()
+      }
+      dispose()
+      release()
+      expect(deferredDisposal).toHaveBeenCalledTimes(1)
+      successor.publishCreated(page('tail', [message('successor', 1, 'assistant')], false))
+      expect(successor.getSnapshot().state.items[0]?.itemId).toBe('successor')
+      vi.useRealTimers()
+    }
+  )
+
+  it('suppresses stream/error/retry and PR-link work after a callback retires its reader', async () => {
+    const { useAppStore } = await import('@/store')
+    const { getStructuredAgentSessionReadOwner } =
+      await import('./structured-agent-session-read-owner')
+    const initial = useAppStore.getState()
+    const tab = {
+      id: 'agent-session:session-a',
+      entityId: 'session-a',
+      worktreeId: 'wt',
+      executionHostId: 'local' as const,
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'codex' as const,
+      groupId: 'g',
+      label: 'chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const observe = vi.fn()
+    useAppStore.setState({
+      unifiedTabsByWorktree: { wt: [tab] },
+      observeTerminalGitHubPullRequestLink: observe
+    })
+    mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
+    const reader = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const release = reader.activate()
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    const dispose = reader.dispose
+    const deferredDisposal = vi.spyOn(reader, 'dispose').mockImplementation(() => {})
+    const stop = reader.subscribe(() => {
+      useAppStore.setState({ unifiedTabsByWorktree: {} })
+      useAppStore.setState({ unifiedTabsByWorktree: { wt: [tab] } })
+      getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    })
+    const event = mocks.subscribe.mock.calls[0][2],
+      error = mocks.subscribe.mock.calls[0][3],
+      close = mocks.subscribe.mock.calls[0][4]
+    vi.useFakeTimers()
+    try {
+      const frame: AgentSessionSubscribeEvent = {
+        type: 'batch',
+        sessionId: 'session-a',
+        fence: 1,
+        batch: {
+          items: [
+            {
+              itemId: 'tool',
+              revision: 1,
+              sequence: 1,
+              observedAt: 1,
+              body: {
+                kind: 'tool-call',
+                state: 'completed',
+                callId: 'tool',
+                name: 'shell',
+                input: '',
+                output: {
+                  head: 'https://github.com/stablyai/orca/pull/32936',
+                  byteLength: 50,
+                  digest: 'test-digest',
+                  truncated: false
+                }
+              }
+            }
+          ],
+          removedItemIds: [],
+          submissions: [],
+          cursor: { epoch: 'epoch-a', sequence: 1 }
+        }
+      }
+      const { createStructuredAgentSessionPRLinkObserver } =
+        await import('./structured-agent-session-pr-link-observer')
+      createStructuredAgentSessionPRLinkObserver('session-a', LOCAL_TARGET)(frame)
+      expect(observe).toHaveBeenCalledTimes(1)
+      observe.mockClear()
+      event(frame)
+      expect(deferredDisposal).toHaveBeenCalledTimes(1)
+      const before = reader.getSnapshot()
+      event({
+        type: 'snapshot',
+        sessionId: 'session-a',
+        page: page('tail', [message('late', 2, 'assistant')], false),
+        fence: 2
+      })
+      error(new Error('late stream failure'))
+      close()
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(reader.getSnapshot()).toBe(before)
+      expect(mocks.subscribe).toHaveBeenCalledTimes(1)
+      expect(observe).not.toHaveBeenCalled()
+    } finally {
+      stop()
+      dispose()
+      release()
+      useAppStore.setState(initial, true)
+    }
+  })
+})

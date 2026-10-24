@@ -1,3 +1,4 @@
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import {
   onScreenWorkspaceIds,
   resolveAutoAckTabTargets,
@@ -35,7 +36,7 @@ import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/termin
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
 
 type ScanStore = {
-  getState: () => AppState
+  getState: () => AgentStatusReadState
   subscribe: (listener: () => void) => () => void
 }
 

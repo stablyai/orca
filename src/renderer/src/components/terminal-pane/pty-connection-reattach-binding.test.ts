@@ -42,7 +42,7 @@ const {
   notifyCodexPaneBoundForStaleSweep: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -67,17 +67,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -141,7 +148,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 describe('connectPanePty', () => {
@@ -151,25 +158,26 @@ describe('connectPanePty', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
     ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('reattaches a remounted split pane to its restored leaf PTY instead of the tab-level PTY', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       settings: {
-        ...mockStoreState.settings
+        ...storeFixture.read().settings
       }
-    } as StoreState
+    })
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
@@ -193,7 +201,7 @@ describe('connectPanePty', () => {
   })
 
   it('publishes async layout bindings by the pane leaf, not a remapped numeric id', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const syncPanePtyLayoutBindingForLeaf = vi.fn()
@@ -212,7 +220,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not publish a stale layout callback after a successor transport takes the pane slot', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const staleTransport = createMockTransport('terminal-old')
     staleTransport.connect.mockImplementation(async () => reattach.promise)
@@ -240,7 +248,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not clear a successor pane error from a stale stream callback', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const staleTransport = createMockTransport('terminal-old')
     let callbacks: ConnectCallbacks | undefined
     staleTransport.connect.mockImplementation(async (options) => {
@@ -266,7 +274,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not clear a successor pane error when a stale binding is disposed', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const staleTransport = createMockTransport('terminal-old')
     transportFactoryQueue.push(staleTransport)
     const paneTransportsRef = { current: new Map<number, MockTransport>() }
@@ -286,7 +294,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not spend queued startup from a stale spawn callback', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const staleTransport = createMockTransport()
     transportFactoryQueue.push(staleTransport)
     const paneTransportsRef = { current: new Map<number, MockTransport>() }
@@ -307,7 +315,7 @@ describe('connectPanePty', () => {
   })
 
   it('resizes a reattached PTY to the current grid when the pane narrows before reattach resolves', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const reattach = createDeferred<void>()
     let currentPtyId: string | null = null
     const transport = createMockTransport()
@@ -351,7 +359,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not let a stale pane transport publish a completed reattach', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const staleTransport = createMockTransport()
     let stalePtyId: string | null = 'terminal-old'
@@ -388,7 +396,7 @@ describe('connectPanePty', () => {
   })
 
   it('accepts an explicit reattach id before the transport publishes its id', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const transport = createMockTransport()
     let transportPtyId: string | null = null
@@ -413,7 +421,7 @@ describe('connectPanePty', () => {
   })
 
   it('does not replace a split sibling with the tab-level source PTY', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     // The source pane is still mounted while the parked tab's new split leaf
     // is hydrated. The daemon may report the split spawn as a reattach even
     // though this pane has no stale session id of its own.
@@ -424,8 +432,8 @@ describe('connectPanePty', () => {
       current: new Map<number, MockTransport>([[1, sourceTransport]])
     }
     transportFactoryQueue.push(splitTransport)
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] },
       ptyIdsByTabId: { 'tab-1': ['tab-pty'] },
       terminalLayoutsByTabId: {
@@ -442,7 +450,7 @@ describe('connectPanePty', () => {
           ptyIdsByLeafId: { [LEAF_1]: 'tab-pty' }
         }
       }
-    } as StoreState
+    })
     const deps = createDeps({ paneTransportsRef })
 
     connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
@@ -453,14 +461,14 @@ describe('connectPanePty', () => {
     )
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'split-pty')
     expect(deps.updateTabPtyId).not.toHaveBeenCalledWith('tab-1', 'split-pty', 'tab-pty')
-    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+    expect(storeFixture.read().terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
       [LEAF_1]: 'tab-pty',
       [LEAF_2]: 'split-pty'
     })
   })
 
   it('infers a replacement when the tab PTY is bound to this leaf', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const splitTransport = createMockTransport('replacement-pty')
     splitTransport.connect.mockResolvedValue({ id: 'replacement-pty', isReattach: true })
     transportFactoryQueue.push(splitTransport)
@@ -469,8 +477,8 @@ describe('connectPanePty', () => {
     const paneTransportsRef = {
       current: new Map<number, MockTransport>([[1, createMockTransport()]])
     }
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'terminal-old' }] },
       ptyIdsByTabId: { 'tab-1': ['terminal-old'] },
       terminalLayoutsByTabId: {
@@ -481,14 +489,14 @@ describe('connectPanePty', () => {
           ptyIdsByLeafId: { [LEAF_2]: 'terminal-old' }
         }
       }
-    } as StoreState
+    })
     const deps = createDeps({ paneTransportsRef })
 
     connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
     await flushAsyncTicks(20)
 
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'replacement-pty', 'terminal-old')
-    expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+    expect(storeFixture.read().terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
       [LEAF_2]: 'replacement-pty'
     })
   })
@@ -499,7 +507,7 @@ describe('connectPanePty', () => {
   ] as const)(
     'does not let a stale pane transport clear ownership on %s',
     async (_label, result) => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const reattach = createDeferred<
         { id: string; isReattach: true; sessionExpired?: boolean } | undefined
       >()
@@ -544,11 +552,11 @@ describe('connectPanePty', () => {
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
       ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
     )
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: eagerPtyId }] },
       ptyIdsByTabId: { 'tab-1': [eagerPtyId] },
       terminalLayoutsByTabId: {
@@ -559,7 +567,7 @@ describe('connectPanePty', () => {
           ptyIdsByLeafId: { [LEAF_1]: eagerPtyId }
         }
       }
-    } as StoreState
+    })
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: eagerPtyId }
@@ -599,7 +607,7 @@ describe('connectPanePty', () => {
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
       ptyId === otherTabPtyId ? { flush: () => '', dispose: () => {} } : undefined
     )
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
@@ -608,8 +616,8 @@ describe('connectPanePty', () => {
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: {
         'wt-1': [
           { id: 'tab-1', ptyId: 'tab-pty' },
@@ -620,7 +628,7 @@ describe('connectPanePty', () => {
         'tab-1': ['tab-pty'],
         'tab-2': [otherTabPtyId]
       }
-    } as StoreState
+    })
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: otherTabPtyId }
@@ -640,7 +648,7 @@ describe('connectPanePty', () => {
 
   it('fresh-spawns a shell into any PTY-less tab, so agent launches must never publish one', async () => {
     // Why: #2989 depends on PTY-less tabs taking this legitimate fresh-shell path.
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
@@ -654,8 +662,8 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     // Reproduce the pre-fix gap between createTab and PTY binding.
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
       ptyIdsByTabId: { 'tab-1': [] },
       terminalLayoutsByTabId: {
@@ -671,7 +679,7 @@ describe('connectPanePty', () => {
           identity: { agentType: 'claude' }
         }
       }
-    } as StoreState
+    })
     const deps = createDeps()
 
     const pane = createPane(1)
@@ -686,7 +694,7 @@ describe('connectPanePty', () => {
   })
 
   it('spawns a fresh PTY when a restored daemon split session cannot reattach', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
@@ -699,12 +707,12 @@ describe('connectPanePty', () => {
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
-    mockStoreState = {
-      ...mockStoreState,
+    storeFixture.patch({
+      ...storeFixture.read(),
       settings: {
-        ...mockStoreState.settings
+        ...storeFixture.read().settings
       }
-    } as StoreState
+    })
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
@@ -714,7 +722,7 @@ describe('connectPanePty', () => {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       await mainStartsPaneAs({
         ptyId: 'pty-main',
-        bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+        bind: bindsPaneInStore(storeFixture.store, 'tab-1', LEAF_2),
         transport
       })
     }

@@ -1,7 +1,11 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { PtyTransport } from './pty-transport-types'
+import type { PtyPaneStartup } from './pty-connection-types'
+import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import { leafIdForPane } from './pty-connection-test-pane-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import type { AgentStatusPatch } from '@/store/agent-status-patch'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 
 type MockRef = { current: Mock }
@@ -11,15 +15,16 @@ export type PaneConnectionDeps = {
   tabId: string
   worktreeId: string
   cwd: string
-  startup: null
+  cwdPromise?: Promise<string>
+  startup: PtyPaneStartup
   restoredLeafId: string | null
   restoredPtyIdByLeafId: Record<string, string>
   mountFollowsTerminalPark: boolean
-  paneTransportsRef: { current: Map<number, unknown> }
-  paneMode2031Ref: { current: Map<number, unknown> }
+  paneTransportsRef: { current: Map<number, PtyTransport> }
+  paneMode2031Ref: { current: Map<number, boolean> }
   paneKittyKeyboardModesRef: { current: Map<number, TerminalKittyKeyboardModeTracker> }
-  paneLastThemeModeRef: { current: Map<number, unknown> }
-  replayingPanesRef: { current: Map<number, unknown> }
+  paneLastThemeModeRef: { current: Map<number, TerminalColorSchemeMode> }
+  replayingPanesRef: { current: Map<number, number> }
   isActiveRef: { current: boolean }
   isVisibleRef: { current: boolean }
   onPtyExitRef: MockRef
@@ -36,13 +41,13 @@ export type PaneConnectionDeps = {
   dispatchNotification: Mock
   onShowSessionRestoredBanner: Mock
   setCacheTimerStartedAt: Mock
-  syncPanePtyLayoutBinding: Mock<(paneId: number, ptyId: string) => void>
+  syncPanePtyLayoutBinding: Mock<(paneId: number, ptyId: string | null) => void>
   clearExitedPanePtyLayoutBinding: Mock
   [key: string]: unknown
 }
 
 export function buildPaneConnectionDeps(
-  getState: () => StoreState,
+  fixture: { read: () => AgentStatusReadState; patch: (patch: AgentStatusPatch) => void },
   overrides: Record<string, unknown> = {}
 ): PaneConnectionDeps {
   return {
@@ -70,23 +75,29 @@ export function buildPaneConnectionDeps(
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn((tabId: string, ptyId: string, replacedPtyId?: string) => {
-      const current = getState().ptyIdsByTabId?.[tabId] ?? []
+      const current = fixture.read().ptyIdsByTabId?.[tabId] ?? []
       const next =
         replacedPtyId && current.includes(replacedPtyId)
           ? current.map((candidate) => (candidate === replacedPtyId ? ptyId : candidate))
           : current.includes(ptyId)
             ? current
             : [...current, ptyId]
-      getState().ptyIdsByTabId = { ...getState().ptyIdsByTabId, [tabId]: next }
+      fixture.patch({ ptyIdsByTabId: { ...fixture.read().ptyIdsByTabId, [tabId]: next } })
     }),
     markTerminalBell: vi.fn(),
     dispatchNotification: vi.fn(),
     onShowSessionRestoredBanner: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
-    syncPanePtyLayoutBinding: vi.fn((paneId: number, ptyId: string) => {
-      const layout = getState().terminalLayoutsByTabId?.['tab-1']
+    syncPanePtyLayoutBinding: vi.fn((paneId: number, ptyId: string | null) => {
+      const layout = fixture.read().terminalLayoutsByTabId?.['tab-1']
       if (layout) {
-        layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [leafIdForPane(paneId)]: ptyId }
+        const bindings = { ...layout.ptyIdsByLeafId }
+        if (ptyId === null) {
+          delete bindings[leafIdForPane(paneId)]
+        } else {
+          bindings[leafIdForPane(paneId)] = ptyId
+        }
+        layout.ptyIdsByLeafId = bindings
       }
     }),
     clearExitedPanePtyLayoutBinding: vi.fn(),

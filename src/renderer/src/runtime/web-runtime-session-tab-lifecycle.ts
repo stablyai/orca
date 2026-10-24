@@ -1,9 +1,10 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabCloseResult,
   RuntimeSessionTabCloseReason
 } from '../../../shared/runtime-types'
-import { useAppStore } from '../store'
+import '../store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -55,7 +56,7 @@ export async function activateWebRuntimeSessionTab(args: {
   const leafId =
     args.leafId ??
     (hasLegacyRelayBridgedPane(args.tabId)
-      ? useAppStore.getState().terminalLayoutsByTabId?.[args.tabId]?.activeLeafId
+      ? getAgentStatusState().terminalLayoutsByTabId?.[args.tabId]?.activeLeafId
       : null)
   if (isLegacyRelayBridgedTab(args.tabId, leafId)) {
     // This gesture still supersedes an earlier tab's pending focus, as recording its own would.
@@ -141,7 +142,7 @@ export async function replayWebSessionTabCloses(
 function resolveTabEnvironmentId(environmentId: string | null | undefined): string | null {
   return (
     environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
+    getAgentStatusState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
   )
 }
@@ -211,7 +212,7 @@ async function callWebRuntimeSessionTabMethod(
   try {
     const { resolveHostSessionTabIdForWebSessionTab } =
       await import('./web-session-tabs-sync/tracking-mappings')
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const hostTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId,

@@ -12,9 +12,10 @@ import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
 
-vi.mock('../../src/renderer/src/store', () => ({
-  useAppStore: { setState: vi.fn() }
-}))
+vi.mock('../../src/renderer/src/store', async () => {
+  const { createTestStore } = await import('../../src/renderer/src/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 const WORKTREE_ID = 'repo::/remote-worktree'
 const TAB_ID = 'host-terminal'

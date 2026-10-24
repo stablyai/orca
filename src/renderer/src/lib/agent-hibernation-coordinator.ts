@@ -1,4 +1,6 @@
-import { useAppStore } from '@/store'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
+import { getAgentStatusState } from '@/store/agent-status'
+
 import {
   getEffectiveAgentHibernationIdleMs,
   planAgentHibernationCandidates,
@@ -9,7 +11,7 @@ import {
   confirmAgentHibernationCandidates,
   type AgentHibernationConfirmationState
 } from './agent-hibernation-confirmation'
-import type { AppState } from '@/store/types'
+
 import { getAllDrivers } from './pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
@@ -66,7 +68,7 @@ type RuntimePtyLivenessSample = {
 }
 
 function snapshotFromState(
-  state: AppState,
+  state: AgentStatusReadState,
   now: number,
   runtimeLiveness: RuntimePtyLivenessSample,
   targetWorktreeId?: string
@@ -108,7 +110,7 @@ function snapshotFromState(
   }
 }
 
-function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string) {
+function resolveAgentHibernationRuntimeOwner(state: AgentStatusReadState, worktreeId: string) {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const ptyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
   return toAgentHibernationRuntimeOwner(resolveTerminalPtyOwner(state, worktreeId), ptyIds)
@@ -116,7 +118,7 @@ function resolveAgentHibernationRuntimeOwner(state: AppState, worktreeId: string
 
 /** Worktree → owning runtime; `null` means liveness is required but no host can be asked. */
 function getRuntimeLivenessTargetWorktrees(
-  state: AppState,
+  state: AgentStatusReadState,
   targetWorktreeId?: string
 ): Map<string, string | null> {
   const targets = new Map<string, string | null>()
@@ -145,7 +147,7 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
 }
 
 async function collectRuntimePtyLiveness(
-  state: AppState,
+  state: AgentStatusReadState,
   targetWorktreeId?: string
 ): Promise<RuntimePtyLivenessSample> {
   const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
@@ -207,8 +209,8 @@ async function collectRuntimePtyLiveness(
 }
 
 async function currentCandidates(now: number, targetWorktreeId?: string) {
-  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState(), targetWorktreeId)
-  const freshState = useAppStore.getState()
+  const runtimeLiveness = await collectRuntimePtyLiveness(getAgentStatusState(), targetWorktreeId)
+  const freshState = getAgentStatusState()
   // Why: age the PTY bindings from the same state the plan is built from, so a pane
   // observed for the first time this pass cannot also be judged long-idle in it.
   observeHibernationPtyBindings({
@@ -254,7 +256,7 @@ async function hibernatePaneIfStillEligible(
   }
   coordinator.shuttingDownCandidateIds.add(id)
   try {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const owner = resolveAgentHibernationRuntimeOwner(state, worktreeId)
     await state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
       paneKey: confirmedCandidate.paneKey,

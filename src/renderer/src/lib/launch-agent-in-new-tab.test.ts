@@ -90,11 +90,11 @@ const store = {
   markNativeChatLaunchPromptFailed: mockMarkNativeChatLaunchPromptFailed
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => store
-  }
-}))
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  return withAgentStatusFixture({ useAppStore: {} }, () => store)
+})
 
 const mockToastError = vi.fn()
 

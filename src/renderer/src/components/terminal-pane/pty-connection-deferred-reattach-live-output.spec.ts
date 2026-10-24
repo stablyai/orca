@@ -22,13 +22,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -38,9 +38,10 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -52,11 +53,12 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     it('does not consume the sleeping record when daemon reattach returns a live snapshot', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -66,8 +68,8 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       })
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -81,7 +83,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -95,11 +97,11 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       await new Promise((resolve) => setTimeout(resolve, 70))
 
       expect(transport.sendInput).not.toHaveBeenCalled()
-      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(storeFixture.read().clearSleepingAgentSession).not.toHaveBeenCalled()
     })
 
     it('does not resume the provider session when daemon reattach returns a live snapshot', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -109,8 +111,8 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
       })
       transportFactoryQueue.push(transport)
       const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         agentStatusByPaneKey: {
           [paneKey]: {
             state: 'working',
@@ -123,7 +125,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
             providerSession: { key: 'session_id', id: 'codex-session-1' }
           }
         }
-      } as StoreState
+      })
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -147,7 +149,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     ])(
       'preserves output while reconciling $kind on daemon adoption',
       async ({ snapshot, seq, count }) => {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('tab-pty')
         transport.connect.mockImplementation(
           async ({
@@ -182,7 +184,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     )
 
     it('drains live bytes after transport confirms an explicit reattach', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { deliverTerminalDataWithDeferredCredit } =
         await import('@/lib/pane-manager/terminal-delivery-credit')
       const transport = createMockTransport('tab-pty')
@@ -225,7 +227,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     })
 
     it('re-enforces follow intent after deferred reattach live output parses', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(
@@ -272,7 +274,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     })
 
     it('does not steal a newer user pin while deferred reattach output settles', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markTerminalFollowOutput, markTerminalPinnedViewport } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('tab-pty')
@@ -328,7 +330,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     })
 
     it('does not enforce a deferred viewport after the pane becomes hidden', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(
@@ -383,7 +385,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
     })
 
     it('does not fresh-spawn after a dead deferred session delivers its buffered exit', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(
         async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
@@ -412,7 +414,7 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
 
     // Why: Phase 6 deleted the hidden-skip grammar — every hidden chunk rides the background scheduler, none content-scanned.
     it('queues hidden PTY bytes on the background scheduler without per-chunk scanning', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(

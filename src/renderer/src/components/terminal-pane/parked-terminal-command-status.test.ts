@@ -31,9 +31,18 @@ const dispatchTerminalCommandFinishedEvent = vi.fn()
 const resolveLiveAgentStatusConnectionRouting = vi.fn()
 const getConnectionIdFromState = vi.fn()
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mockStoreState }
-}))
+function mockCanonicalFixtureStore(): void {
+  vi.doMock('@/store', async () => {
+    const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+    const fixture = {
+      useAppStore: { getState: () => mockStoreState }
+    }
+    const readFixture = fixture.useAppStore.getState
+
+    return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+  })
+}
 vi.mock('@/hooks/terminal-command-finished-event', () => ({
   dispatchTerminalCommandFinishedEvent
 }))
@@ -85,6 +94,7 @@ async function createPolicy(ptyId: string) {
 describe('createParkedTerminalCommandStatusPolicy', () => {
   beforeEach(() => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     vi.useFakeTimers()
     dispatchTerminalCommandFinishedEvent.mockClear()
     resolveLiveAgentStatusConnectionRouting.mockReset().mockReturnValue(ROUTING)
@@ -520,6 +530,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 describe('readInFlightCommandCodeTurn', () => {
   beforeEach(() => {
     vi.resetModules()
+    mockCanonicalFixtureStore()
     mockStoreState = makeMockStoreState()
   })
 

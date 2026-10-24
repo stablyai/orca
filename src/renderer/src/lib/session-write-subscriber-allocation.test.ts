@@ -1,5 +1,7 @@
+import { makeAgentStatusReadState } from '@/store/slices/store-test-helpers'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { SESSION_RELEVANT_FIELDS } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
@@ -10,7 +12,7 @@ import { buildWorkspaceSessionPatch } from './workspace-session-patch'
  * injected store lets `Array.prototype.filter` stand in as the allocation counter — the changed
  * list is built 1:1 with the snapshot, in the same block, so one count measures both.
  */
-function makeSessionState(overrides: Partial<AppState> = {}): AppState {
+function makeSessionState(overrides: Partial<AgentStatusReadState> = {}): AgentStatusReadState {
   const base: Record<string, unknown> = {
     workspaceSessionReady: true,
     hydrationSucceeded: true,
@@ -33,12 +35,12 @@ function makeSessionState(overrides: Partial<AppState> = {}): AppState {
   base.activeWorktreeId = null
   base.activeTabId = null
   base.activeWorkspaceExecutionHostId = null
-  return { ...base, ...overrides } as AppState
+  return makeAgentStatusReadState({ ...base, ...overrides })
 }
 
 function createHarness() {
   let state = makeSessionState()
-  const listeners: ((next: AppState) => void)[] = []
+  const listeners: ((next: AgentStatusReadState) => void)[] = []
   const persisted: unknown[] = []
   const dispose = createSessionWriteSubscriber({
     store: {
@@ -57,8 +59,8 @@ function createHarness() {
   return {
     dispose,
     persisted,
-    write(mutate?: (previous: AppState) => Partial<AppState>) {
-      state = { ...state, ...mutate?.(state) } as AppState
+    write(mutate?: (previous: AgentStatusReadState) => Partial<AgentStatusReadState>) {
+      state = { ...state, ...mutate?.(state) }
       for (const listener of listeners.slice()) {
         listener(state)
       }
@@ -165,7 +167,7 @@ describe('session write subscriber allocation', () => {
 
   it('still wakes a deferred write when an unrelated field changes', () => {
     let state = makeSessionState()
-    const listeners: ((next: AppState) => void)[] = []
+    const listeners: ((next: AgentStatusReadState) => void)[] = []
     const persisted: unknown[] = []
     let refuse = true
     const dispose = createSessionWriteSubscriber({
@@ -183,8 +185,8 @@ describe('session write subscriber allocation', () => {
         persisted.push(payload)
       }
     })
-    const write = (patch: Partial<AppState>): void => {
-      state = { ...state, ...patch } as AppState
+    const write = (patch: Partial<AgentStatusReadState>): void => {
+      state = { ...state, ...patch }
       for (const listener of listeners.slice()) {
         listener(state)
       }

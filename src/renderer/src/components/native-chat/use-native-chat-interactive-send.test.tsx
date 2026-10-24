@@ -26,11 +26,18 @@ const waitingQuestion = {
   toolName: 'AskUserQuestion'
 }
 
-vi.mock('../../store', () => ({
-  useAppStore: {
-    getState: () => mocks.storeState
+vi.mock('../../store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      getState: () => mocks.storeState
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args)

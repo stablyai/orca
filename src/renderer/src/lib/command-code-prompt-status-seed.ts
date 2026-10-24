@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import { resolveLiveAgentStatusConnectionRouting } from './agent-status-connection-ownership'
-import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
+import { getAgentStatusOwner } from '@/store/agent-status-commit'
 
 /**
  * Why: Command Code has no prompt-submit hook, so when Orca submits a generated
@@ -40,7 +40,7 @@ export function seedCommandCodeSubmittedPromptStatus(
         state: 'working',
         prompt,
         agentType: 'command-code',
-        observation: rendererAgentStatusObservations.observe(paneKey, {
+        observation: getAgentStatusOwner(useAppStore).observations().observe(paneKey, {
           origin: 'process',
           observedAt: Date.now(),
           kind: 'transition'

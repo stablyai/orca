@@ -40,9 +40,13 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
   // white-screened the whole Remote Web client before anything painted.
   it('loads the renderer agent-status authority and its store slice', async () => {
     vi.resetModules()
-    const { rendererAgentStatusObservations } = await import('./renderer-agent-status-observations')
+    const { AgentStatusObservationSequencer, createAgentStatusAuthorityId } =
+      await import('../../../shared/agent-status-observation')
+    const observations = new AgentStatusObservationSequencer(
+      createAgentStatusAuthorityId('renderer')
+    )
     await import('../store/slices/agent-status-authority-actions')
-    expect(rendererAgentStatusObservations.getAuthorityId()).toMatch(
+    expect(observations.getAuthorityId()).toMatch(
       /^renderer:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     )
   })

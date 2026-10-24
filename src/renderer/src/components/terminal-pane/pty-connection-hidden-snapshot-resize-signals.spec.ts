@@ -19,13 +19,13 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -35,9 +35,10 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -49,6 +50,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
@@ -75,7 +77,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
         removeEventListener: vi.fn()
       } as unknown as Document
 
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -162,7 +164,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     it('does not signal SIGWINCH after hidden-backlog snapshot replay when dimensions are unchanged', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -212,7 +214,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     it('writes a background-origin alternate-screen repaint that arrives after the reveal restore', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -300,7 +302,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     it('re-restores a skipped alt frame from the model when the fit lands back on the capture grid', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -372,7 +374,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     it('restores a dropped daemon alt frame from the model when the fit lands back on the capture grid', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -389,10 +391,10 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
           : null
       )
       transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
+      storeFixture.patch({
+        ...storeFixture.read(),
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
-      }
+      })
       const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
       getMainBufferSnapshot.mockResolvedValue({
         data: '\x1b[?1049hMODEL-FRAME',
@@ -430,7 +432,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
     })
 
     it('does not forward terminal resizes while the pane is hidden', async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)

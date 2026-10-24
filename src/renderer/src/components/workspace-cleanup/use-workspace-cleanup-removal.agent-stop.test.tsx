@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 // @vitest-environment happy-dom
 
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -20,7 +22,7 @@ import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
 import { useWorkspaceCleanupDialogLifecycle } from './use-workspace-cleanup-dialog-lifecycle'
 
-const initialState = useAppStore.getInitialState()
+const initialState = { ...useAppStore.getInitialState(), agentStatusByPaneKey: {} }
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function worktreeId(name: string): string {
@@ -50,7 +52,7 @@ function startAgent(name: string): void {
     stateStartedAt: updatedAt,
     stateHistory: []
   }
-  useAppStore.setState((state) => ({
+  applyAgentStatusPatch(useAppStore, (state) => ({
     tabsByWorktree: {
       ...state.tabsByWorktree,
       [worktreeId(name)]: [makeTab({ id: `tab-${name}`, worktreeId: worktreeId(name) })]
@@ -63,7 +65,7 @@ type RemoveCall = { ids: readonly string[]; options: WorkspaceCleanupRemoveOptio
 
 function installRemoval(): RemoveCall[] {
   const calls: RemoveCall[] = []
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     removeWorkspaceCleanupCandidates: vi.fn(
       async (ids: readonly string[], options?: WorkspaceCleanupRemoveOptions) => {
         calls.push({ ids, options })
@@ -99,7 +101,7 @@ function renderAtConfirm(candidates: WorkspaceCleanupCandidate[]) {
 
 describe('workspace cleanup removal of workspaces with a running agent', () => {
   beforeEach(() => {
-    useAppStore.setState(initialState, true)
+    applyAgentStatusPatch(useAppStore, initialState)
     Object.assign(window, { api: { workspaceCleanup: {} } })
   })
 
@@ -157,7 +159,7 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     const calls = installRemoval()
     const updatedAt = Date.now()
     const chatPaneKey = makePaneKey('chat-a', LEAF_ID)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       agentStatusByPaneKey: {
         [chatPaneKey]: {
           paneKey: chatPaneKey,
@@ -207,7 +209,7 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
   })
 
   it('drops an open stop step when the dialog is reopened mid-batch', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       scanWorkspaceCleanup: vi.fn(() => new Promise<never>(() => {})),
       hydrateWorkspaceCleanupFromCache: vi.fn(async () => false),
       hydrateWorkspaceSpaceFromCache: vi.fn(async () => false),

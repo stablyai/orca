@@ -27,23 +27,30 @@ const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo 
   })
 )
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -125,16 +132,17 @@ function untouchedPane(events: PaneEvent[]): Promise<Terminal> {
 }
 
 describe('remote snapshot replay onto a live alt screen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
     transportFactoryQueue = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
@@ -145,7 +153,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     // 'alternate-queued': the TUI's ?1049h is still queued and parses with the first write.
     paneBuffer: 'normal' | 'alternate' | 'alternate-queued' = 'alternate'
   ): Promise<PaneEvent[]> {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -173,7 +181,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
       pane.terminal.rows = rows
       events.push({ cols, rows })
     })
-    const deps = buildPaneConnectionDeps(() => mockStoreState)
+    const deps = buildPaneConnectionDeps(storeFixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
     const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(8)

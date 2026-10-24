@@ -179,3 +179,12 @@ export async function attemptStructuredAgentSessionSend(args: {
         : null
   }
 }
+
+export function prepareStructuredAgentSessionFenceRemoval(sessionId: string): () => void {
+  const fence = fences.get(sessionId)
+  return () => {
+    if (fences.get(sessionId) === fence) {
+      fences.delete(sessionId)
+    }
+  }
+}

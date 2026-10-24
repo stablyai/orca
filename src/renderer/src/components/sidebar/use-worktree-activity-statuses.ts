@@ -1,6 +1,8 @@
+import { useAgentStatusSelector } from '@/store/agent-status'
+import type { AgentStatusReadState } from '@/store/agent-status-observers'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore, type AppState } from '@/store'
+
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './WorktreeCardHelpers'
 import {
@@ -11,7 +13,7 @@ import {
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 
 type WorktreeActivityStatusState = Pick<
-  AppState,
+  AgentStatusReadState,
   | 'tabsByWorktree'
   | 'browserTabsByWorktree'
   | 'runtimePaneTitlesByTabId'
@@ -77,5 +79,5 @@ export function useWorktreeActivityStatuses(
     (state: WorktreeActivityStatusState) => selectWorktreeActivityStatuses(state, worktreeIds),
     [worktreeIds]
   )
-  return useAppStore(useShallow(selectStatuses))
+  return useAgentStatusSelector(useShallow(selectStatuses))
 }

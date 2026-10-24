@@ -43,11 +43,18 @@ const store = {
   createWorktree: mockCreateWorktree
 }
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => store
+vi.mock('@/store', async () => {
+  const { withAgentStatusFixture } = await import('@/store/slices/store-test-helpers')
+
+  const fixture = {
+    useAppStore: {
+      getState: () => store
+    }
   }
-}))
+  const readFixture = fixture.useAppStore.getState
+
+  return withAgentStatusFixture(fixture, () => readFixture() ?? {})
+})
 
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mockLaunchAgentInNewTab

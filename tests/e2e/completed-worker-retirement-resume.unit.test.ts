@@ -1,3 +1,5 @@
+import { getAgentStatusOwner } from '../../src/renderer/src/store/agent-status-commit'
+import { applyAgentStatusPatch } from '../../src/renderer/src/store/agent-status-patch'
 import { getDefaultSettings } from '../../src/shared/constants'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -98,7 +100,7 @@ function seedWorkspace(options: { helper?: boolean } = {}): void {
   )
   const unrelated = makeTab(CANARY_TAB_ID, CANARY_WORKTREE_ID, CANARY_PTY_ID, 'Unrelated')
   const helper = makeTab(HELPER_TAB_ID, WORKTREE_ID, 'pty-worker-child', 'Worker child')
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     repos: [
       {
         id: REPO_ID,
@@ -196,7 +198,9 @@ function completeRecordedWorker(
       { tabId: ORIGINAL_TAB_ID, worktreeId: WORKTREE_ID, terminalHandle: TERMINAL_HANDLE },
       { providerSession }
     )
-  expect(useAppStore.getState().agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+  expect(
+    getAgentStatusOwner(useAppStore).getState().agentStatusByPaneKey[ORIGINAL_PANE_KEY]
+  ).toMatchObject({
     state: 'done',
     providerSession
   })
@@ -546,7 +550,7 @@ describe('completed background-worker retirement resume matrix', () => {
     await hydrateSession(restartAfterRetirement)
 
     // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
-    const beforeActivation = useAppStore.getState()
+    const beforeActivation = getAgentStatusOwner(useAppStore).getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()

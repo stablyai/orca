@@ -46,7 +46,7 @@ const {
   presentPaneViewport: vi.fn()
 }))
 
-let mockStoreState: StoreState
+let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
@@ -69,17 +69,24 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+vi.mock('@/store', () => {
+  return {
+    useAppStore: {
+      get getState() {
+        return storeFixture.store.getState
+      },
+      get setState() {
+        return storeFixture.store.setState
+      },
+      subscribe: (listener: (state: StoreState) => void) => {
+        storeSubscribers.push(listener)
+        return () => {
+          storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
+        }
       }
     }
   }
-}))
+})
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
@@ -143,7 +150,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  return buildPaneConnectionDeps(() => mockStoreState, overrides)
+  return buildPaneConnectionDeps(storeFixture, overrides)
 }
 
 describe('connectPanePty', () => {
@@ -153,16 +160,17 @@ describe('connectPanePty', () => {
     transportFactoryQueue = []
     createdTransportOptions = []
     storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
+    storeFixture = await createInitialStoreState()
     await installTerminalTestGlobals()
   })
 
   afterEach(async () => {
+    storeFixture.dispose()
     await restoreTerminalTestGlobals()
   })
 
   it('restores overflowed hidden remote runtime output from its serialized snapshot', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -217,7 +225,7 @@ describe('connectPanePty', () => {
   })
 
   it('preserves the painted normal buffer when a successful hidden restore has no image', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -282,7 +290,7 @@ describe('connectPanePty', () => {
       await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
     try {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -346,7 +354,7 @@ describe('connectPanePty', () => {
       await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
     try {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -401,7 +409,7 @@ describe('connectPanePty', () => {
   })
 
   it('retries null remote snapshots for overflowed hidden runtime output', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('remote:env-1@@terminal-1')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -463,7 +471,7 @@ describe('connectPanePty', () => {
   // `() => false` would pass the whole suite. Put the pane on the alt screen and
   // pin that a normal-buffer snapshot really does emit the `?1049l` unstick.
   it('emits the alt-screen unstick when the pane is on alt and the model is not', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -510,7 +518,7 @@ describe('connectPanePty', () => {
 
   // Why: pins the switch-off hidden fallback chain — 2MB lossy cap drops the backlog, latches restore, and reveal repaints from the model snapshot.
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -559,7 +567,7 @@ describe('connectPanePty', () => {
   })
 
   it('rebuilds normal and alternate buffers from an authoritative alternate snapshot', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -629,7 +637,7 @@ describe('connectPanePty', () => {
   })
 
   it('keeps a hidden-output alt frame at the capture grid below the fit floor', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     let onData: ConnectCallbacks['onData']
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -685,7 +693,7 @@ describe('connectPanePty', () => {
   })
 
   it('drains foreground output after a renderer-sourced hidden-backlog snapshot without seq', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -732,7 +740,7 @@ describe('connectPanePty', () => {
   })
 
   it('slices abandoned pending chunks against a replay that already painted', async () => {
-    const { connectPanePty } = await import('./pty-connection')
+    const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

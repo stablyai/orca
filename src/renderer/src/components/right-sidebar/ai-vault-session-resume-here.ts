@@ -1,3 +1,4 @@
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { useAppStore } from '@/store'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
@@ -206,7 +207,7 @@ function closeReplacedChat(here: AiVaultResumeHere): void {
  *  unobservable: a host that can't be seen live may still be running the chat's agent. */
 function isChatBusy(workspaceId: string, tab: Tab): boolean {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-  const status = useAppStore.getState().agentStatusByPaneKey[paneKey]?.state
+  const status = getAgentStatusEntry(paneKey)?.state
   if (
     (status && status !== 'done') ||
     getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId) === 'pending'

@@ -49,7 +49,8 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 const load = perClientLoader(async () => ({
   launch: await import('./launch-agent-background-session'),
   phone: await import('@/runtime/sync-runtime-graph/mobile-session-snapshots'),
-  switch: await import('../../../shared/layout-owner-switch')
+  switch: await import('../../../shared/layout-owner-switch'),
+  status: await import('@/store/agent-status-commit')
 }))
 
 /** Runs one automation in a local workspace. */
@@ -73,10 +74,15 @@ async function runAutomation(c: AutomationLaunchCase) {
     launchSource: 'unknown',
     title: c.title
   })
-  const phone = modules.phone.buildMobileSessionTabSnapshots(store.getState(), false)
+  const phone = modules.phone.buildMobileSessionTabSnapshots(
+    modules.status.getAgentStatusOwner(store).getState(),
+    false
+  )
   if (modules.switch.ORCA_LAYOUT_OWNER_IS_MAIN) {
     // Main takes the run title by tab-bar id, and its frame (not modelled here) draws it.
-    const tabBarId = store.getState().unifiedTabsByWorktree[launchWorkspaceId(c.workspace)]![0]!.id
+    const tabBarId = modules.status.getAgentStatusOwner(store).getState().unifiedTabsByWorktree[
+      launchWorkspaceId(c.workspace)
+    ]![0]!.id
     expect(main.transport?.sentOfType('renameTab').at(-1)).toEqual(
       expect.objectContaining({ tabId: tabBarId, kind: 'custom', title: c.title })
     )

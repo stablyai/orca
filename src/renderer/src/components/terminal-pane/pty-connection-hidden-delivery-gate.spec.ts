@@ -23,13 +23,13 @@ const TAB_MISSING = { remounted: false as const, declinedBy: 'tab-missing' as co
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 export function registerPtyConnectionHiddenDeliveryGateTests(): void {
-  let mockStoreState: StoreState
+  let storeFixture: Awaited<ReturnType<typeof createInitialStoreState>>
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(storeFixture, overrides)
   }
 
   describe('connectPanePty', () => {
@@ -39,9 +39,10 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
       transportFactoryQueue = []
       createdTransportOptions = []
       storeSubscribers = []
-      mockStoreState = createInitialStoreState(() => mockStoreState)
+      storeFixture = await createInitialStoreState()
       bindPtyConnectionTestMocks({
-        getState: () => mockStoreState,
+        getState: () => storeFixture.read(),
+        getStore: () => storeFixture.store,
         getTransportQueue: () => transportFactoryQueue,
         getTransportOptions: () => createdTransportOptions,
         getStoreSubscribers: () => storeSubscribers,
@@ -53,15 +54,18 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
     })
 
     afterEach(async () => {
+      storeFixture.dispose()
       await restoreTerminalTestGlobals()
     })
 
     describe('hidden-delivery gate', () => {
       function enableMainAuthority(): void {
-        mockStoreState.settings = {
-          ...mockStoreState.settings,
-          terminalMainSideEffectAuthority: true
-        } as StoreState['settings']
+        storeFixture.patch({
+          settings: {
+            ...storeFixture.read().settings,
+            terminalMainSideEffectAuthority: true
+          }
+        })
       }
 
       function getSetHiddenRendererPtyMock(): ReturnType<typeof vi.fn> {
@@ -77,7 +81,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         ) => void
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
-        const { connectPanePty } = await import('./pty-connection')
+        const { connectPanePty } = storeFixture.own(await import('./pty-connection'))
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -231,7 +235,7 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         // 2026-07-13 fossil-pane incident: bytes drop while hidden, pipeline certified dead, cert recovery empty — reveal must re-kick it.
         enableMainAuthority()
         const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
-        mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+        storeFixture.patch({ ...storeFixture.read(), remountTerminalTabForRecovery })
         const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
         _resetTerminalPaneRecoveryForTests()
         const deps = createDeps({ isVisibleRef: { current: false } })
@@ -482,10 +486,12 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
 
       it('does not gate or fact-reply when the hidden-delivery kill switch is off', async () => {
         enableMainAuthority()
-        mockStoreState.settings = {
-          ...mockStoreState.settings,
-          terminalHiddenDeliveryGate: false
-        } as StoreState['settings']
+        storeFixture.patch({
+          settings: {
+            ...storeFixture.read().settings,
+            terminalHiddenDeliveryGate: false
+          }
+        })
         const deps = createDeps({ isVisibleRef: { current: false } })
         const { transport, dataCallback } = await connectHiddenPane(deps)
         const transportOptions = createdTransportOptions.at(-1) as {

@@ -1,12 +1,18 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
-import { createStore } from 'zustand/vanilla'
+import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 
 type NoticeTestState = Record<string, unknown>
 
 /** Stands in for `@/store`: a real zustand store, so selectors re-render and subscribe fires. */
-export const noticeTestStore = createStore<NoticeTestState>()(() => ({}))
+const fixture = await createInitialStoreState()
+export const noticeTestStore = {
+  ...fixture.store,
+  setState: (patch: NoticeTestState, replace = false): void => {
+    fixture.patch({ ...(replace ? fixture.store.getInitialState() : {}), ...patch })
+  }
+}
 
 export const useAppStore = Object.assign(
   <T>(selector: (state: NoticeTestState) => T): T => useStore(noticeTestStore, selector),

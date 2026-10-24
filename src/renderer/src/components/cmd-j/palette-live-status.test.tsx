@@ -1,3 +1,4 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
@@ -5,7 +6,6 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AppState } from '@/store/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -69,7 +69,7 @@ function makeAgentEntry(
 }
 
 function setAgentState(state: AgentStatusState, overrides: Partial<AgentStatusEntry> = {}): void {
-  useAppStore.setState((s) => ({
+  applyAgentStatusPatch(useAppStore, (s) => ({
     agentStatusByPaneKey: {
       [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', state, overrides)
     },
@@ -105,12 +105,12 @@ describe('palette live status', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     bodyRenderCount = 0
-    useAppStore.setState(initialAppState, true)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, { ...initialAppState, agentStatusByPaneKey: {} })
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: { 'wt-a': [makeTerminalTab('term-a', 'wt-a')] },
       ptyIdsByTabId: { 'term-a': ['pty-term-a'] },
       browserTabsByWorktree: {}
-    } as Partial<AppState>)
+    })
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
     testRoot = createRoot(testContainer)
@@ -121,7 +121,7 @@ describe('palette live status', () => {
       testRoot.unmount()
     })
     document.body.replaceChildren()
-    useAppStore.setState(initialAppState, true)
+    applyAgentStatusPatch(useAppStore, { ...initialAppState, agentStatusByPaneKey: {} })
   })
 
   async function render(active = true): Promise<void> {
@@ -144,7 +144,7 @@ describe('palette live status', () => {
     'does not paint a stale self-authored title as a live %s question',
     async (surface) => {
       const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
-      useAppStore.setState((s) => ({
+      applyAgentStatusPatch(useAppStore, (s) => ({
         tabsByWorktree: {
           'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'Codex - action required' }]
         },
@@ -199,7 +199,7 @@ describe('palette live status', () => {
     const otherLeaf = '22222222-2222-4222-8222-222222222222'
     const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
     setAgentState('done', { updatedAt: staleAt, stateStartedAt: staleAt })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       terminalLayoutsByTabId: {
         'term-a': {
           root: {
@@ -221,14 +221,14 @@ describe('palette live status', () => {
     expect(dotLabels()).toEqual(['Active'])
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         runtimePaneTitlesByTabId: { 'term-a': { 2: 'Codex - action required' } }
       })
     })
     expect(dotLabels()).toEqual(['Needs permission'])
 
     await act(async () => {
-      useAppStore.setState({
+      applyAgentStatusPatch(useAppStore, {
         runtimePaneTitlesByTabId: {
           'term-a': { 1: 'Codex - action required', 2: '⠹ codex working' }
         }
@@ -244,11 +244,11 @@ describe('palette live status', () => {
 
   it('shows monitoring when a covered pane retains a working title', async () => {
     setAgentState('working', { workingMode: 'monitoring' })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       tabsByWorktree: {
         'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'claude [working]' }]
       }
-    } as Partial<AppState>)
+    })
 
     await render()
 
@@ -298,7 +298,9 @@ describe('palette live status', () => {
     const rendersAfterMount = bodyRenderCount
 
     await act(async () => {
-      useAppStore.setState({ unreadTerminalTabs: { 'term-a': true } } as Partial<AppState>)
+      applyAgentStatusPatch(useAppStore, {
+        unreadTerminalTabs: { 'term-a': true }
+      })
     })
 
     expect(dotLabels()).toEqual(['Unread agent completion'])
@@ -402,9 +404,9 @@ describe('palette live status', () => {
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       ptyIdsByTabId: {}
-    } as Partial<AppState>)
+    })
     await act(async () => {
       testRoot.render(
         <PaletteLiveStatusProvider active>
@@ -427,11 +429,11 @@ describe('palette live status', () => {
   })
 
   it('badges unread agent completion when the agent is quiet', async () => {
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       unreadAgentCompletionPanes: {
         [makePaneKey('term-a', LEAF)]: true
       }
-    } as Partial<AppState>)
+    })
     await act(async () => {
       testRoot.render(
         <PaletteLiveStatusProvider active>
@@ -456,9 +458,9 @@ describe('palette live status', () => {
 
   it('prefers working over unread on the same row', async () => {
     setAgentState('working')
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
-    } as Partial<AppState>)
+    })
     await act(async () => {
       testRoot.render(
         <PaletteLiveStatusProvider active>
@@ -506,9 +508,9 @@ describe('palette live status', () => {
 
   it('prefers unread over freshly done on the same row', async () => {
     setAgentState('done')
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
-    } as Partial<AppState>)
+    })
     await act(async () => {
       testRoot.render(
         <PaletteLiveStatusProvider active>
@@ -531,9 +533,9 @@ describe('palette live status', () => {
 
   it('prefers permission over unread on the same row', async () => {
     setAgentState('blocked')
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       unreadTerminalTabs: { 'term-a': true }
-    } as Partial<AppState>)
+    })
     await act(async () => {
       testRoot.render(
         <PaletteLiveStatusProvider active>

@@ -1,3 +1,4 @@
+import { getAgentStatusEntry } from '@/store/agent-status'
 import { detectAgentStatusFromTitle, isClaudeAgent } from '@/lib/agent-status'
 import { useAppStore } from '@/store'
 import {
@@ -259,7 +260,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     session.handleAgentHookTerminalLifecycle
   )
   session.hasFreshPaneAgentSurface = (): boolean => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const entry = getAgentStatusEntry(session.cacheKey)
     if (session.isFreshActivePaneAgentEntry(entry)) {
       return true
     }

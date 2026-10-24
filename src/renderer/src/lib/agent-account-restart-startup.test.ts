@@ -1,3 +1,5 @@
+import { applyAgentStatusPatch } from '@/store/agent-status-patch'
+import '@/store/agent-status-commit'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
@@ -30,7 +32,7 @@ const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 
 function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
   const paneKey = makePaneKey(TAB_ID, LEAF_ID)
-  useAppStore.setState({
+  applyAgentStatusPatch(useAppStore, {
     agentStatusByPaneKey: entry
       ? {
           [paneKey]: {
@@ -104,7 +106,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
 
   it('uses the persisted record when the live status entry is gone', () => {
     seedAgentStatus(null)
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         [makePaneKey(TAB_ID, LEAF_ID)]: {
           paneKey: makePaneKey(TAB_ID, LEAF_ID),
@@ -160,7 +162,7 @@ describe('buildPaneAccountRestartStartup for Codex', () => {
   })
   it('does not resume another agent’s sleeping session when Codex has no session yet', () => {
     seedAgentStatus({ agentType: 'codex' })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       sleepingAgentSessionsByPaneKey: {
         [makePaneKey(TAB_ID, LEAF_ID)]: {
           paneKey: makePaneKey(TAB_ID, LEAF_ID),
@@ -209,7 +211,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'done',
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       settings: {
         ...getDefaultSettings('/home/dev'),
         agentDefaultArgs: { claude: '--dangerously-skip-permissions' },
@@ -229,7 +231,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'done',
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
-    useAppStore.setState({
+    applyAgentStatusPatch(useAppStore, {
       settings: { ...getDefaultSettings('/home/dev'), agentDefaultArgs: { codex: '--search' } }
     })
 

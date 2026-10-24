@@ -1,3 +1,4 @@
+import { getAgentStatusState } from '@/store/agent-status'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
@@ -40,7 +41,7 @@ function useSettledSidebarWorktreeSortOrder(args: {
   const persistedRankTrigger = followsPersistedRanks ? sortOrderEpoch : 0
 
   const recomputedSort = useMemo(() => {
-    const state = useAppStore.getState()
+    const state = getAgentStatusState()
     const ranking = rankWorktreesForSort({
       worktrees: getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived),
       sortBy,
@@ -78,7 +79,7 @@ function useSettledSidebarWorktreeSortOrder(args: {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
-    persistWorktreeSortOrderByHost(useAppStore.getState(), sortedIds)
+    persistWorktreeSortOrderByHost(getAgentStatusState(), sortedIds)
   }, [sortedIds, sortBy])
 
   return sortedIds
