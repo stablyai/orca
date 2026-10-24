@@ -90,8 +90,10 @@ let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
 let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
-// Cache answers so a transcript that does not exist yet does not spawn wsl.exe on every poll.
-const guestRealDirs = new Map<string, { realDir: string | null; expiresAt: number }>()
+// Share in-flight and recent answers so polling a missing transcript does not spawn wsl.exe every tick.
+const guestRealDirs = new Map<string, { realDir: Promise<string | null>; expiresAt: number }>()
+// Also bounds how long a retargeted symlink keeps resolving to its former directory.
+const GUEST_REAL_DIR_TTL_MS = 30_000
 
 export function configureHostReadableTranscriptPathSources(options: {
   getAdditionalCodexHomePaths?: () => readonly string[]
@@ -147,18 +149,19 @@ async function guestSymlinkTarget(
 ): Promise<string | null> {
   const dir = posix.dirname(guestPath)
   const key = `${distro}\0${dir}`
-  let realDir = guestRealDirs.get(key)
-  if (!realDir || Date.now() >= realDir.expiresAt) {
-    const resolved = await (deps.resolveGuestRealDir ?? resolveWslGuestRealDirAsync)(distro, dir)
-    realDir = {
-      realDir: resolved,
-      expiresAt: Date.now() + (resolved ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
+  let entry = guestRealDirs.get(key)
+  if (!entry || Date.now() >= entry.expiresAt) {
+    const resolve = deps.resolveGuestRealDir ?? resolveWslGuestRealDirAsync
+    entry = {
+      realDir: resolve(distro, dir).catch(() => null),
+      expiresAt: Date.now() + GUEST_REAL_DIR_TTL_MS
     }
-    guestRealDirs.set(key, realDir)
+    guestRealDirs.set(key, entry)
   }
-  return !realDir.realDir || realDir.realDir === dir
+  const realDir = await entry.realDir
+  return !realDir || realDir === dir
     ? null
-    : toWindowsWslPath(posix.join(realDir.realDir, posix.basename(guestPath)), distro)
+    : toWindowsWslPath(posix.join(realDir, posix.basename(guestPath)), distro)
 }
 
 async function probeGuestPath(

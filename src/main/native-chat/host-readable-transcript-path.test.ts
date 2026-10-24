@@ -382,6 +382,42 @@ describe('toHostReadableTranscriptPath through guest symlinks', () => {
     expect(pathExists).toHaveBeenCalledTimes(1)
   })
 
+  it('shares one guest resolution between concurrent lookups of the same directory', async () => {
+    const resolver = vi.fn(resolveGuestRealDir)
+    const lookups = Array.from({ length: 3 }, () =>
+      toHostReadableTranscriptPath(LINKED_PATH, {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async (candidate) => candidate === REAL_UNC,
+        resolveGuestRealDir: resolver
+      })
+    )
+    await expect(Promise.all(lookups)).resolves.toEqual([REAL_UNC, REAL_UNC, REAL_UNC])
+    expect(resolver).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows a retargeted symlink within 30 seconds', async () => {
+    vi.useFakeTimers()
+    try {
+      const MOVED_UNC = REAL_UNC.replace('.claude', '.claude-moved')
+      let target = REAL_DIR
+      const call = (): Promise<string | null> =>
+        toHostReadableTranscriptPath(LINKED_PATH, {
+          platform: 'win32',
+          wslDistro: 'Ubuntu',
+          pathExists: async (candidate) => candidate === REAL_UNC || candidate === MOVED_UNC,
+          resolveGuestRealDir: async () => target
+        })
+
+      await expect(call()).resolves.toBe(REAL_UNC)
+      target = REAL_DIR.replace('.claude', '.claude-moved')
+      vi.setSystemTime(Date.now() + 31_000)
+      await expect(call()).resolves.toBe(MOVED_UNC)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('retries a directory the guest could not resolve only after a short delay', async () => {
     // The project directory may not exist until Claude writes the first turn.
     vi.useFakeTimers()
