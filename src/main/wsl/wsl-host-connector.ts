@@ -177,6 +177,12 @@ export function createWslHostConnector(options: {
     adoptHolders: async () => {
       await holder.adoptHolders()
     },
+    confirmedStoppedDistros: async (distros) => {
+      const running = await readConfirmedRunningWslDistros()
+      return running.status === 'confirmed'
+        ? distros.filter((distro) => !confirmsRunning(running, wslDistroHolderKey(distro)))
+        : []
+    },
     dispose: () => liveness.dispose()
   }
 }

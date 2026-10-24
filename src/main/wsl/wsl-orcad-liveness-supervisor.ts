@@ -156,6 +156,8 @@ export class WslOrcadLivenessSupervisor {
       }
       return
     }
+    // A holder that took the previous orcad's idle release just before this launch is gone now.
+    await ensureHolderQuietly(this.deps.ensureHolder, entry.distro)
     // A later connect owns the timer now; this arm must not replace it.
     if (entry.generation === generation) {
       this.scheduleHeartbeat(entry)

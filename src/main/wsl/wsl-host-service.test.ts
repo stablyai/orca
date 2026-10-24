@@ -533,6 +533,26 @@ describe('WslHostService', () => {
   })
 
   it.each([
+    ['confirmed stopped', ['Ubuntu'], [expect.objectContaining({ state: 'distro-stopped' })]],
+    ['running or unconfirmed', [], []]
+  ])(
+    'reports a host whose distro is %s at startup without booting it',
+    async (_n, stopped, out) => {
+      await makeService(makeConnector([UBUNTU])).add({ distro: 'Ubuntu' })
+      const connector = {
+        ...makeConnector([UBUNTU]),
+        confirmedStoppedDistros: vi.fn(async (_distros: readonly string[]) => stopped)
+      }
+      published = []
+      await makeService(connector).start()
+
+      expect(connector.confirmedStoppedDistros).toHaveBeenCalledExactlyOnceWith(['Ubuntu'])
+      expect(connector.connect).not.toHaveBeenCalled()
+      expect(published).toEqual(out)
+    }
+  )
+
+  it.each([
     [
       'unsupported-wsl1',
       () => new OrcadHostUnsupportedError('WSL 1 cannot run the Orca server.'),

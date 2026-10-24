@@ -46,6 +46,8 @@ export type WslHostConnector = {
   stopServer(distro: string, environmentId: string): Promise<WslHostServerStop>
   releaseHolder(distro: string): Promise<void>
   adoptHolders(): Promise<void>
+  /** Of these, the distros WSL confirms are not running; an unreadable list confirms none. */
+  confirmedStoppedDistros?(distros: readonly string[]): Promise<string[]>
   dispose(): Promise<void>
 }
 
@@ -276,6 +278,21 @@ export class WslHostService {
       return
     }
     await this.connector.adoptHolders()
+    await this.reportStoppedDistros(this.connector)
+  }
+
+  /** A host whose distro idle-stopped reads as off until the user needs it, not as unreachable. */
+  private async reportStoppedDistros(connector: WslHostConnector): Promise<void> {
+    const records = this.records()
+    const stopped = await connector.confirmedStoppedDistros?.(records.map((r) => r.distro))
+    for (const record of records) {
+      if (
+        stopped?.some((distro) => sameWslDistro(distro, record.distro)) &&
+        !this.statuses.has(record.environmentId)
+      ) {
+        this.setStatus(record, { state: 'distro-stopped', terminals: 'exited', recovering: false })
+      }
+    }
   }
 
   /** What the UI shows before offering any WSL host action. */

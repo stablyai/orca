@@ -190,9 +190,17 @@ describe('WslOrcadLivenessSupervisor', () => {
     expect(h.watches).toHaveLength(2)
   })
 
+  it('re-ensures the holder once a connect is armed', async () => {
+    const h = harness()
+    await h.supervisor.connect('Ubuntu')
+    // An earlier orcad's idle release may have ended the holder the launch adopted.
+    expect(h.ensureHolder).toHaveBeenCalledExactlyOnceWith('Ubuntu')
+  })
+
   it('never boots a stopped distro for background work; the gate resumes it once running', async () => {
     const h = harness({ visible: false })
     await h.supervisor.connect('Ubuntu')
+    h.ensureHolder.mockClear()
     h.state.running = { status: 'confirmed', distros: [] }
     h.lastWatch().exit(1)
     await h.advance(60_000)
