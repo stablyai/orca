@@ -7058,6 +7058,12 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
+        "ProjectKindChoiceDialog": {
+          "title": "Add as Git Project or Folder?",
+          "description": "This folder is inside a Git repository. A Git project opens the repository root with worktrees and source control. A folder project opens only this folder, with the editor, terminal, and search.",
+          "folder": "Add as Folder",
+          "git": "Add as Git Project"
         }
       },
       "shared": {
@@ -8000,7 +8006,10 @@
           "externalWorktrees": "External worktrees",
           "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
           "show": "Show",
-          "hide": "Hide"
+          "hide": "Hide",
+          "askProjectKindOnAdd": "Ask Git or Folder When Adding Projects",
+          "askProjectKindOnAddDescription": "Choose Git or folder mode when a picked folder is inside a Git repository.",
+          "askProjectKindOnAddDetail": "When a picked folder is inside a Git repository, ask whether to add it as a Git project or as a plain folder. Folder mode lets you add monorepo subfolders as separate projects, without worktrees or source control."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -10574,7 +10583,13 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "askProjectKindOnAdd": "Ask Git or Folder When Adding Projects",
+            "askProjectKindOnAddDescription": "Choose Git or folder mode when a picked folder is inside a Git repository.",
+            "projectKindProject": "project",
+            "projectKindFolder": "folder",
+            "projectKindGit": "git",
+            "projectKindMonorepo": "monorepo"
           }
         },
         "git": {

@@ -21,6 +21,7 @@ import {
 import { routeAddRepoBrowse } from './add-repo-browse-authority'
 import { readDroppedHostPath } from './add-repo-wsl-host-folder-picker'
 import { useAddRepoWslHostPaths } from './use-add-repo-wsl-host-paths'
+import { ProjectKindChoiceDialog } from './ProjectKindChoiceDialog'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -172,7 +173,7 @@ export default React.memo(function AddRepoDialog({
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
-  const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
+  const { handleBrowse, resetLocalFolderFlow, projectKindChoice } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
@@ -410,6 +411,7 @@ export default React.memo(function AddRepoDialog({
         }}
         onCreate={handleCreate}
       />
+      <ProjectKindChoiceDialog choice={projectKindChoice} />
     </AddRepoDialogChrome>
   )
 })
