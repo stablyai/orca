@@ -3,6 +3,12 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const isMacPortsPortExecutablePresent = vi.hoisted(() => vi.fn(() => false))
+
+vi.mock('../../shared/macports-port-executable', () => ({
+  isMacPortsPortExecutablePresent
+}))
+
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
   return {
@@ -41,6 +47,7 @@ describe('patchPackagedProcessPath', () => {
   }
 
   afterEach(() => {
+    isMacPortsPortExecutablePresent.mockReturnValue(false)
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -96,6 +103,29 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain('/nix/var/nix/profiles/default/bin')
     expect(segments).toContain('/opt/homebrew/bin')
     expect(segments).toContain('/usr/local/bin')
+    expect(segments).not.toContain('/opt/local/bin')
+    expect(segments).not.toContain('/opt/local/sbin')
+  })
+
+  it('seeds MacPorts dirs on packaged darwin runs only when port is executable', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+    isMacPortsPortExecutablePresent.mockReturnValue(true)
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).toContain('/opt/local/bin')
+    expect(segments).toContain('/opt/local/sbin')
+    expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/opt/local/bin'))
+    expect(segments.indexOf('/opt/local/sbin')).toBeLessThan(
+      segments.indexOf('/nix/var/nix/profiles/default/bin')
+    )
   })
 
   it('keeps snap, Linuxbrew, and Nix dirs for packaged linux runs', async () => {
@@ -113,6 +143,8 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain('/snap/bin')
     expect(segments).toContain('/home/linuxbrew/.linuxbrew/bin')
     expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).not.toContain('/opt/local/bin')
+    expect(segments).not.toContain('/opt/local/sbin')
     expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/snap/bin'))
     expect(segments.indexOf('/home/linuxbrew/.linuxbrew/bin')).toBeLessThan(
       segments.indexOf('/nix/var/nix/profiles/default/bin')
@@ -133,6 +165,8 @@ describe('patchPackagedProcessPath', () => {
     const segments = (process.env.PATH ?? '').split(':')
     expect(segments).not.toContain('/snap/bin')
     expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).not.toContain('/opt/local/bin')
+    expect(segments).not.toContain('/opt/local/sbin')
     expect(segments).toContain('/nix/var/nix/profiles/default/bin')
     expect(segments).toContain('/usr/local/bin')
   })
@@ -140,25 +174,33 @@ describe('patchPackagedProcessPath', () => {
   // Why derived, not a second literal: system-cli-install-dirs.ts documents its
   // order as matching this seed's system block, and hardcoding the order in the
   // fallback's own test lets a reorder here break that parity while both stay green.
-  it('seeds the system block in the order the install-dir fallback expects', async () => {
-    const { app } = await import('electron')
-    const { patchPackagedProcessPath } = await import('./configure-process')
-    const { getSystemCliInstallDirectories } = await import('../../shared/system-cli-install-dirs')
+  it.each([
+    { platform: 'linux' as const, home: '/home/tester' },
+    { platform: 'darwin' as const, home: '/Users/tester' }
+  ])(
+    'seeds the system block in the order the install-dir fallback expects on $platform',
+    async ({ platform, home }) => {
+      const { app } = await import('electron')
+      const { patchPackagedProcessPath } = await import('./configure-process')
+      const { getSystemCliInstallDirectories } =
+        await import('../../shared/system-cli-install-dirs')
 
-    setPlatform('linux')
-    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
-    process.env.HOME = '/home/tester'
-    process.env.PATH = '/usr/bin:/bin'
+      setPlatform(platform)
+      Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+      process.env.HOME = home
+      process.env.PATH = '/usr/bin:/bin'
+      isMacPortsPortExecutablePresent.mockReturnValue(platform === 'darwin')
 
-    patchPackagedProcessPath()
+      patchPackagedProcessPath()
 
-    const segments = (process.env.PATH ?? '').split(':')
-    const offsets = getSystemCliInstallDirectories('linux', '/home/tester').map((directory) =>
-      segments.indexOf(directory)
-    )
-    expect(offsets.every((offset) => offset >= 0)).toBe(true)
-    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
-  })
+      const segments = (process.env.PATH ?? '').split(':')
+      const offsets = getSystemCliInstallDirectories(platform, home).map((directory) =>
+        segments.indexOf(directory)
+      )
+      expect(offsets.every((offset) => offset >= 0)).toBe(true)
+      expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
+    }
+  )
 
   // Why this ordering is load-bearing (#18234): a seed exists so a GUI-launched
   // Electron can *find* a tool, not to re-rank tools the user already has.
