@@ -4,11 +4,26 @@ import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import {
+  getSessionSourceControlHistoryExpanded,
+  setSessionSourceControlHistoryExpanded
+} from '../../source-control-history-layout'
 
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
+}
+
+function createCollapsedSectionsFromSession(): Set<string> {
+  const next = createDefaultCollapsedSections()
+  // Why: worktree switches used to re-collapse COMMITS; restore the session choice.
+  if (getSessionSourceControlHistoryExpanded()) {
+    next.delete('history')
+  } else {
+    next.add('history')
+  }
+  return next
 }
 
 /**
@@ -31,7 +46,7 @@ export function useSourceControlPanelViewState({
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    createDefaultCollapsedSections
+    createCollapsedSectionsFromSession
   )
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
@@ -57,7 +72,8 @@ export function useSourceControlPanelViewState({
   if (viewStateWorktreeId !== activeWorktreeId) {
     setViewStateWorktreeId(activeWorktreeId)
     setFilterExpanded(false)
-    setCollapsedSections(createDefaultCollapsedSections())
+    // Why: COMMITS expand is a user layout preference, not worktree-local draft state.
+    setCollapsedSections(createCollapsedSectionsFromSession())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
@@ -72,6 +88,9 @@ export function useSourceControlPanelViewState({
         next.delete(section)
       } else {
         next.add(section)
+      }
+      if (section === 'history') {
+        setSessionSourceControlHistoryExpanded(!next.has('history'))
       }
       return next
     })
