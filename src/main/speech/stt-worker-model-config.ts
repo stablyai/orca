@@ -77,3 +77,142 @@ export function buildHotwordsConfig(opts: {
     modelingUnit: unit
   }
 }
+
+export type RecognizerInit = {
+  modelDir: string
+  modelType: string
+  streaming: boolean
+  sampleRate: number
+  files: string[]
+  hotwordsFilePath?: string
+  modelingUnit?: string
+}
+
+const ENDPOINT_RULES = {
+  enableEndpoint: 1,
+  rule1MinTrailingSilence: 2.4,
+  rule2MinTrailingSilence: 1.2,
+  rule3MinUtteranceLength: 20
+}
+
+// Why: each sherpa model family takes a differently shaped modelConfig, and only
+// transducer/paraformer have an online recognizer — the caller picks the API from `online`.
+export function buildRecognizerConfig(msg: RecognizerInit): {
+  online: boolean
+  config: Record<string, unknown>
+} {
+  const { modelDir, modelType, streaming, sampleRate, files } = msg
+  // Why: Qwen3-ASR carries a BPE tokenizer directory instead of a tokens.txt.
+  const tokens = modelType === 'qwen3-asr' ? '' : resolveTokens(files, modelDir)
+  const featConfig = { sampleRate, featureDim: 80 }
+  const shared = { tokens, provider: 'cpu', debug: 0 }
+
+  if (streaming && modelType === 'transducer') {
+    return {
+      online: true,
+      config: {
+        featConfig,
+        modelConfig: {
+          transducer: {
+            encoder: resolveFile(files, 'encoder', modelDir),
+            decoder: resolveFile(files, 'decoder', modelDir),
+            joiner: resolveFile(files, 'joiner', modelDir)
+          },
+          ...shared,
+          numThreads: 1
+        },
+        ...buildHotwordsConfig(msg),
+        ...ENDPOINT_RULES
+      }
+    }
+  }
+
+  if (streaming && modelType === 'paraformer') {
+    return {
+      online: true,
+      config: {
+        featConfig,
+        modelConfig: {
+          paraformer: {
+            encoder: resolveFile(files, 'encoder', modelDir),
+            decoder: resolveFile(files, 'decoder', modelDir)
+          },
+          ...shared,
+          numThreads: 1
+        },
+        decodingMethod: 'greedy_search',
+        ...ENDPOINT_RULES
+      }
+    }
+  }
+
+  const offline = (modelConfig: Record<string, unknown>, rest: Record<string, unknown>) => ({
+    online: false,
+    config: {
+      featConfig,
+      modelConfig: { ...modelConfig, ...shared, numThreads: 2 },
+      ...rest
+    }
+  })
+
+  if (modelType === 'whisper') {
+    return offline(
+      {
+        whisper: {
+          encoder: resolveFile(files, 'encoder', modelDir),
+          decoder: resolveFile(files, 'decoder', modelDir)
+        }
+      },
+      { decodingMethod: 'greedy_search' }
+    )
+  }
+
+  if (modelType === 'nemo-ctc') {
+    return offline(
+      { nemoCtc: { model: resolveFile(files, 'model', modelDir) } },
+      { decodingMethod: 'greedy_search' }
+    )
+  }
+
+  if (modelType === 'senseVoice') {
+    return offline(
+      {
+        senseVoice: {
+          model: resolveFile(files, 'model', modelDir),
+          // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
+          language: '',
+          useInverseTextNormalization: 1
+        }
+      },
+      { decodingMethod: 'greedy_search' }
+    )
+  }
+
+  if (modelType === 'qwen3-asr') {
+    return offline(
+      {
+        qwen3Asr: {
+          convFrontend: resolveFile(files, 'conv_frontend', modelDir),
+          encoder: resolveFile(files, 'encoder', modelDir),
+          decoder: resolveFile(files, 'decoder', modelDir),
+          // Why: sherpa reads vocab.json/merges.txt from this directory; the
+          // download layout keeps them flat beside the ONNX files.
+          tokenizer: modelDir,
+          hotwords: ''
+        }
+      },
+      { decodingMethod: 'greedy_search' }
+    )
+  }
+
+  return offline(
+    {
+      transducer: {
+        encoder: resolveFile(files, 'encoder', modelDir),
+        decoder: resolveFile(files, 'decoder', modelDir),
+        joiner: resolveFile(files, 'joiner', modelDir)
+      }
+    },
+    buildHotwordsConfig(msg)
+  )
+}
