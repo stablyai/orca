@@ -4,7 +4,10 @@ import {
   formatAgentLaunch,
   getAgentLaunchCapabilities,
   parseCliAgent,
-  readCliAgentLaunch
+  readCliAgentLaunch,
+  rejectDefaultAgentRetry,
+  resolveCliAgent,
+  withLaunchedAgent
 } from '../agent-launch-request'
 import { getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -14,9 +17,14 @@ import { resolveCurrentAgentWorkspaceSelector } from '../agent-workspace-selecto
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {
-    const launch = readCliAgentLaunch(flags, parseCliAgent(getRequiredStringFlag(flags, 'agent')), {
-      createsWorktree: false
-    })
+    const requestedAgent = parseCliAgent(getRequiredStringFlag(flags, 'agent'))
+    rejectDefaultAgentRetry(flags, requestedAgent)
+    // Read before any request, so a bad prompt, model or effort reaches no host. `default` is read
+    // once the host names the agent, still before anything starts.
+    const explicitLaunch =
+      requestedAgent === 'default'
+        ? undefined
+        : readCliAgentLaunch(flags, requestedAgent, { createsWorktree: false })
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -30,7 +38,7 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
       : await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     const capabilities = await getAgentLaunchCapabilities(client)
     if (!capabilities) {
-      if (launch.operationId) {
+      if (explicitLaunch?.operationId) {
         throw new RuntimeClientError(
           'agent_session_operation_unknown',
           'This host cannot replay the earlier launch. Return to the original execution host; do not retry without --retry-launch.'
@@ -41,6 +49,12 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
         'This Orca host cannot start agents from the CLI. Update Orca on the execution host.'
       )
     }
+    const launchedAgent = await resolveCliAgent(client, requestedAgent, {
+      kind: 'existing',
+      worktree
+    })
+    const launch =
+      explicitLaunch ?? readCliAgentLaunch(flags, launchedAgent.agent, { createsWorktree: false })
     const result = await callAgentLaunch(
       client,
       launch,
@@ -51,6 +65,10 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
       capabilities,
       rawArgs
     )
-    printResult(result, json, formatAgentLaunch)
+    printResult(
+      { ...result, result: withLaunchedAgent(result.result, launchedAgent) },
+      json,
+      formatAgentLaunch
+    )
   }
 }

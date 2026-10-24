@@ -97,7 +97,7 @@ orca worktree ps --json
 orca worktree current --json
 orca worktree show --worktree active --json
 orca worktree create --repo id:<repoId> --name fix-login --json
-orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
+orca worktree create --name child-task --agent default --prompt "Investigate the flaky login test" --json
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
@@ -110,12 +110,13 @@ When `worktree create` runs from inside an Orca-managed worktree, Orca records t
 Agent startup flags:
 
 ```bash
+orca worktree create --name handoff --no-parent --agent default --prompt "Fix the issue" --json
 orca worktree create --name review-api --agent claude --setup run --json
 orca worktree create --name quick-check --agent codex --prompt "Summarize the diff" --setup skip --json
 orca worktree create --name hidden-setup --setup inherit --json
 ```
 
-`--agent` launches the selected agent in the first terminal. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
+`--agent <id>` launches the selected agent in the first terminal. `--agent default` launches your configured default agent, resolved on the execution host; if it is disabled or not installed there, Orca picks another enabled installed agent the way the app does. A plain-terminal default or no available agent is refused before the worktree is created. Without `--agent`, `worktree create` starts no agent. The JSON receipt names the agent that started in `result.launch.receipt.agent`. `--prompt` sends initial work to that agent. `--setup run|skip|inherit` controls repo setup hooks; `inherit` follows the repo policy.
 
 Link issues and reviews using the existing workspace metadata:
 

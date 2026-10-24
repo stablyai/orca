@@ -2,6 +2,11 @@
 
 import { randomUUID } from 'node:crypto'
 import type { AgentLaunchPrompt, AgentLaunchResult } from '../shared/agent-launch-intent'
+import {
+  DEFAULT_LAUNCH_AGENT_SELECTOR,
+  type DefaultLaunchAgentResolution,
+  type DefaultLaunchAgentTarget
+} from '../shared/default-launch-agent'
 import { AGENT_LAUNCH_SURFACES, type AgentLaunchSurface } from '../shared/agent-launch-surface'
 import { checkAgentLaunchModelPreferences } from '../shared/agent-launch-model-preferences'
 import {
@@ -9,7 +14,8 @@ import {
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_DEFAULT_AGENT_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
@@ -52,11 +58,86 @@ function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
   return known
 }
 
-export function parseCliAgent(value: string): TuiAgent {
+/** An explicit agent id, or `default` for the execution host's default-agent rule. */
+export type CliAgentRequest = TuiAgent | typeof DEFAULT_LAUNCH_AGENT_SELECTOR
+
+export function parseCliAgent(value: string): CliAgentRequest {
+  if (value === DEFAULT_LAUNCH_AGENT_SELECTOR) {
+    return value
+  }
   if (!isTuiAgent(value)) {
     throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${value}"`)
   }
   return value
+}
+
+/** A replay must carry the agent the host admitted; `default` could resolve to another one now. */
+export function rejectDefaultAgentRetry(flags: Flags, request: CliAgentRequest): void {
+  if (request === DEFAULT_LAUNCH_AGENT_SELECTOR && flags.has('retry-launch')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--retry-launch cannot use --agent default: the default may now resolve to a different agent than the launch being replayed. Re-issue the recoveryCommand from the error, or, when the error has none, the same command with --agent replaced by the agent in its launchRequest.agent.'
+    )
+  }
+}
+
+/** Which agent a launch started and how it was chosen; the CLI adds it to the launch receipt. */
+export type CliLaunchedAgent = {
+  agent: TuiAgent
+  agentSelection: 'explicit' | 'configured-default' | 'automatic-default'
+  /** The configured default the execution host could not run, so the automatic order replaced it. */
+  unavailableConfiguredAgent?: TuiAgent
+}
+
+function defaultAgentRefusal(
+  resolution: Extract<DefaultLaunchAgentResolution, { agent: null }>
+): RuntimeClientError {
+  return resolution.reason === 'shell_only'
+    ? new RuntimeClientError(
+        'invalid_argument',
+        'The default agent is set to a plain terminal, so --agent default has no agent to start. Name an agent with --agent <id>, or choose a default agent in Orca settings.'
+      )
+    : new RuntimeClientError(
+        'invalid_argument',
+        'No enabled agent is installed on the execution host, so --agent default has no agent to start. Install or enable an agent, or name one with --agent <id>.'
+      )
+}
+
+/**
+ * Turns `--agent` into the agent to launch. `default` is answered by the execution host, from its
+ * settings and the agents installed where the launch runs; the CLI never guesses it. Read-only, so
+ * a refusal here leaves nothing created.
+ */
+export async function resolveCliAgent(
+  client: RuntimeClient,
+  request: CliAgentRequest,
+  target: DefaultLaunchAgentTarget
+): Promise<CliLaunchedAgent> {
+  if (request !== DEFAULT_LAUNCH_AGENT_SELECTOR) {
+    return { agent: request, agentSelection: 'explicit' }
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!(status.result.capabilities ?? []).includes(AGENT_LAUNCH_DEFAULT_AGENT_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot resolve --agent default. Update Orca on the execution host, or name an agent with --agent <id>.'
+    )
+  }
+  const resolved = await client.call<DefaultLaunchAgentResolution>('agent.resolveDefault', {
+    target
+  })
+  const resolution = resolved.result
+  if (resolution.agent === null) {
+    throw defaultAgentRefusal(resolution)
+  }
+  return {
+    agent: resolution.agent,
+    agentSelection:
+      resolution.selection === 'configured' ? 'configured-default' : 'automatic-default',
+    ...(resolution.unavailableConfiguredAgent
+      ? { unavailableConfiguredAgent: resolution.unavailableConfiguredAgent }
+      : {})
+  }
 }
 
 export function readCliAgentLaunch(
@@ -156,10 +237,39 @@ export async function callAgentLaunch(
   return { ...result, result: { ...result.result, ...(operationId ? { operationId } : {}) } }
 }
 
-export function formatAgentLaunch(result: AgentLaunchResult & { operationId?: string }): string {
+export type CliAgentLaunchResult = Omit<AgentLaunchResult, 'receipt'> & {
+  operationId?: string
+  receipt: AgentLaunchResult['receipt'] & Partial<CliLaunchedAgent>
+}
+
+/** The host's receipt says how the agent started; the CLI adds which agent and why that one. */
+export function withLaunchedAgent(
+  result: AgentLaunchResult & { operationId?: string },
+  launched: CliLaunchedAgent
+): CliAgentLaunchResult {
+  return { ...result, receipt: { ...result.receipt, ...launched } }
+}
+
+function formatLaunchedAgent(receipt: CliAgentLaunchResult['receipt']): string[] {
+  if (!receipt.agent) {
+    return []
+  }
+  const how =
+    receipt.agentSelection === 'configured-default'
+      ? 'configured default'
+      : receipt.agentSelection === 'automatic-default'
+        ? receipt.unavailableConfiguredAgent
+          ? `automatic; configured default ${receipt.unavailableConfiguredAgent} is not available on the execution host`
+          : 'automatic; no default configured'
+        : 'requested'
+  return [`agentId: ${receipt.agent} (${how})`]
+}
+
+export function formatAgentLaunch(result: CliAgentLaunchResult): string {
   const { outcome, receipt } = result
   return [
     `agent: ${outcome.kind === 'structured' ? 'chat session' : 'terminal'}`,
+    ...formatLaunchedAgent(receipt),
     `handle: ${outcome.handle}`,
     ...(outcome.kind === 'structured' ? [`sessionId: ${outcome.sessionId}`] : []),
     `worktreeId: ${result.worktreeId}`,

@@ -1,9 +1,34 @@
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { classifyAgentLaunchReplayRefusal } from '../shared/agent-launch-replay-refusal'
+import { DEFAULT_LAUNCH_AGENT_SELECTOR } from '../shared/default-launch-agent'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable
 } from './runtime/orchestration-recovery-command'
+
+function launchedAgentOf(params: unknown): string | undefined {
+  return typeof params === 'object' &&
+    params !== null &&
+    'agent' in params &&
+    typeof params.agent === 'string'
+    ? params.agent
+    : undefined
+}
+
+/** A replay must name the agent the host admitted; `default` could resolve differently later. */
+function pinDefaultAgent(args: string[], agent: string | undefined): boolean {
+  let pinned = false
+  for (let index = 0; index < args.length && agent; index++) {
+    if (args[index] === '--agent' && args[index + 1] === DEFAULT_LAUNCH_AGENT_SELECTOR) {
+      args[index + 1] = agent
+      pinned = true
+    } else if (args[index] === `--agent=${DEFAULT_LAUNCH_AGENT_SELECTOR}`) {
+      args[index] = `--agent=${agent}`
+      pinned = true
+    }
+  }
+  return pinned
+}
 
 /** A lost reply never authorizes a new launch, even on hosts without a replay ledger. */
 export async function withCliAgentLaunchRecovery<T>(
@@ -44,6 +69,11 @@ export async function withCliAgentLaunchRecovery<T>(
         retryArgs.push(arg)
       }
     }
+    const launchedAgent = launchedAgentOf(recovery.params)
+    const pinnedAgent = pinDefaultAgent(retryArgs, launchedAgent)
+    // Why from rawArgs: credential flags suppress `args`, but the default still needs pinning.
+    const usedDefaultAgent =
+      launchedAgent !== undefined && pinDefaultAgent([...(recovery.rawArgs ?? [])], launchedAgent)
     const recoveryCommand =
       args && recovery.operationId
         ? [
@@ -55,7 +85,11 @@ export async function withCliAgentLaunchRecovery<T>(
         : undefined
     const nextSteps = recovery.operationId
       ? [
-          `Re-issue the exact same command from the same directory against the same execution host with --retry-launch ${recovery.operationId}. Keep that ID on every retry; never retry as a fresh launch.`,
+          pinnedAgent
+            ? `Re-issue recoveryCommand from the same directory against the same execution host. It names --agent ${launchedAgent}, the agent --agent default resolved to; keep that agent and --retry-launch ${recovery.operationId} on every retry, and never retry as a fresh launch.`
+            : usedDefaultAgent
+              ? `Re-issue the same command from the same directory against the same execution host, with the same pairing or environment flags, but replace --agent default with --agent ${launchedAgent} (the agent it resolved to, also in launchRequest.agent) and add --retry-launch ${recovery.operationId}. Keep both on every retry; --retry-launch refuses --agent default, and never retry as a fresh launch.`
+              : `Re-issue the exact same command from the same directory against the same execution host with --retry-launch ${recovery.operationId}. Keep that ID on every retry; never retry as a fresh launch.`,
           'If replay reports an unknown or expired outcome, inspect the workspace and agent without sending input before deciding what to do.'
         ]
       : [

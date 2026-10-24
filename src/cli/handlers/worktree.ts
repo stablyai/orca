@@ -27,9 +27,11 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import type { HostScopedWorktreeSelection } from '../caller-host-worktree-selection'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
-import { createWorktreeWithAgent } from './worktree-create-agent-launch'
+import {
+  createWorktreeWithAgent,
+  readWorktreeCreateAgentRequest,
+  resolveWorktreeCreateAgent
+} from './worktree-create-agent-launch'
 import { printLineageSummary } from './worktree-lineage-summary'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -67,20 +69,6 @@ function getPresentStringFlag(
     return value
   }
   throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
-}
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
 }
 
 function getOptionalSetupDecision(
@@ -148,14 +136,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
+    const startupAgent = readWorktreeCreateAgentRequest(flags, getPresentStringFlag(flags, 'agent'))
     const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
     const explicitParentWorktree = explicitParent.parentWorktree
     const explicitParentWorkspace = explicitParent.parentWorkspace
-    const startupAgent = getOptionalStartupAgent(flags)
-    // Read before any request, so a bad prompt, model or effort creates nothing.
-    const agentLaunch = startupAgent
-      ? readCliAgentLaunch(flags, startupAgent, { createsWorktree: true })
-      : undefined
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     const envParentWorkspace =
@@ -179,6 +163,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
     const repoTarget = await getCreateRepoTarget(flags, cwdParentWorktree, client)
+    const agentStart = await resolveWorktreeCreateAgent(client, flags, startupAgent, repoTarget)
     await assertGitLabLinkFlagProjectsMatch(flags, client, repoTarget)
     const linkedItems = referenceInputs
       ? await resolveReferenceInputs(context, referenceInputs)
@@ -211,8 +196,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
     }
-    if (agentLaunch) {
-      await createWorktreeWithAgent({ client, flags, create, launch: agentLaunch, json, rawArgs })
+    if (agentStart) {
+      await createWorktreeWithAgent({ client, flags, create, ...agentStart, json, rawArgs })
       return
     }
     const result = await withSetupDecisionRecovery(

@@ -44,6 +44,7 @@ import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import { RuntimeClientError } from './runtime-client'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -163,6 +164,214 @@ describe('orca cli worktree awareness', () => {
       handle: 'agent_1'
     })
     expect(printed.result.launch.warning).toBe('The inferred parent contexts conflict.')
+  })
+
+  it('starts the agent the host resolves for --agent default, and names it in the receipt', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: 'omp', selection: 'configured' }),
+      agentLaunchHostFixture(),
+      agentLaunchFixture('repo-1::/tmp/repo/agent-task'),
+      okFixture('req_show', {
+        worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1')
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'agent-task',
+        '--agent',
+        'default',
+        '--prompt',
+        'hi',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(3, 'agent.resolveDefault', {
+      target: { kind: 'create-worktree', repo: 'id:repo-1' }
+    })
+    expect(callMock).toHaveBeenNthCalledWith(
+      5,
+      'agent.launchReplay',
+      expect.objectContaining({ agent: 'omp', prompt: { text: 'hi', delivery: 'submit' } })
+    )
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.launch.receipt).toMatchObject({
+      agent: 'omp',
+      agentSelection: 'configured-default'
+    })
+  })
+
+  it.each([
+    {
+      resolution: { agent: null, reason: 'shell_only' },
+      capabilities: undefined,
+      message: 'set to a plain terminal'
+    },
+    {
+      resolution: { agent: null, reason: 'none_available' },
+      capabilities: undefined,
+      message: 'No enabled agent is installed'
+    },
+    {
+      resolution: undefined,
+      capabilities: ['agent.launch.v2'],
+      message: 'cannot resolve --agent default'
+    }
+  ])(
+    'refuses --agent default before creating anything: $message',
+    async ({ resolution, capabilities, message }) => {
+      queueFixtures(
+        callMock,
+        worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+        capabilities ? okFixture('req_status', { capabilities }) : agentLaunchHostFixture(),
+        ...(resolution ? [okFixture('req_default', resolution)] : [])
+      )
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main(
+        [
+          'worktree',
+          'create',
+          '--repo',
+          'id:repo-1',
+          '--name',
+          'agent-task',
+          '--agent',
+          'default',
+          '--prompt',
+          'hi',
+          '--json'
+        ],
+        '/tmp/repo/src'
+      )
+
+      expect(process.exitCode).toBe(1)
+      process.exitCode = priorExitCode
+      expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message).toContain(message)
+      expect(
+        callMock.mock.calls.filter(
+          ([method]) => method === 'worktree.create' || String(method).startsWith('agent.launch')
+        )
+      ).toEqual([])
+    }
+  )
+
+  it('pins the admitted agent in the recovery command for --agent=default', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: 'omp', selection: 'configured' }),
+      agentLaunchHostFixture()
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'The Orca runtime closed the connection.')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 't', '--agent=default', '--json'],
+      '/tmp/repo/src'
+    )
+    process.exitCode = priorExitCode
+    const error = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error
+    expect(error.data.recoveryCommand.slice(1)).toEqual([
+      'worktree',
+      'create',
+      '--repo',
+      'id:repo-1',
+      '--name',
+      't',
+      '--agent=omp',
+      '--json',
+      '--retry-launch',
+      error.data.operationId
+    ])
+  })
+
+  it.each([[['--agent', 'default']], [['--agent=default']]])(
+    'refuses %j with --retry-launch before any request',
+    async (agentArgs) => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+      await main(
+        [
+          'worktree',
+          'create',
+          '--repo',
+          'id:repo-1',
+          '--name',
+          't',
+          ...agentArgs,
+          '--retry-launch',
+          `${Date.now()}-000000000000000000000000000000ee`,
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+      expect(process.exitCode).toBe(1)
+      process.exitCode = priorExitCode
+      expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.message).toContain(
+        '--retry-launch cannot use --agent default'
+      )
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('names the resolved agent when --pairing-code suppresses the --agent default recovery command', async () => {
+    queueFixtures(
+      callMock,
+      agentLaunchHostFixture(),
+      okFixture('req_default', { agent: 'omp', selection: 'configured' }),
+      agentLaunchHostFixture()
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'The Orca runtime closed the connection.')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        't',
+        '--no-parent',
+        '--agent',
+        'default',
+        '--pairing-code',
+        'secret-pairing',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+    process.exitCode = priorExitCode
+    const error = JSON.parse(String(logSpy.mock.calls[0]?.[0])).error
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({ agent: 'omp' })
+    )
+    expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+    expect(error.data.recoveryCommand).toBeUndefined()
+    expect(error.data.launchRequest.agent).toBe('omp')
+    expect(error.data.nextSteps[0]).toContain('same pairing or environment flags')
+    expect(error.data.nextSteps[0]).toContain('replace --agent default with --agent omp')
+    expect(error.data.nextSteps[0]).toContain(`--retry-launch ${error.data.operationId}`)
+    expect(JSON.stringify(error)).not.toContain('secret-pairing')
   })
 
   it('rejects an empty retry identity before creating a worktree', async () => {
