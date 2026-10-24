@@ -19,7 +19,8 @@ import {
   type HTMLAttributes,
   type RefObject
 } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
+import { EditorContent, useEditor, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
@@ -49,6 +50,12 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
 }
 
 const NO_IMAGES: readonly string[] = []
+
+// Why: a commit React delays (a throttled Suspense reveal) can hand the handle an editor useEditor
+// already destroyed for not mounting within 1ms; the next render swaps in a fresh one.
+function liveView(editor: Editor): EditorView | null {
+  return editor.isDestroyed ? null : editor.view
+}
 
 export function NativeChatPromptEditor({
   scopeKey,
@@ -183,6 +190,9 @@ export function NativeChatPromptEditor({
       editor
         ? {
             insertText: (text) => {
+              if (editor.isDestroyed) {
+                return
+              }
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
               editor.view.dispatch(
                 editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
@@ -234,7 +244,7 @@ export function NativeChatPromptEditor({
               })
             },
             get disabled() {
-              return !editor.isEditable
+              return editor.isDestroyed || !editor.isEditable
             },
             set disabled(value: boolean) {
               editor.setEditable(!value)
@@ -248,12 +258,13 @@ export function NativeChatPromptEditor({
             focus: () => {
               // Why: a blurred editor never writes its caret to the page, so focusing the element
               // alone would bring back the stale one and undo a caret moved by an insertion.
-              editor.view.focus()
-              if (!editor.isEditable) {
-                editor.view.dom.focus()
+              const view = liveView(editor)
+              view?.focus()
+              if (view && !editor.isEditable) {
+                view.dom.focus()
               }
             },
-            contains: (node) => editor.view.dom.contains(node),
+            contains: (node) => liveView(editor)?.dom.contains(node) === true,
             isCaretOnVisualEdge: (edge) => {
               const { selection, doc } = editor.state
               if (!selection.empty) {
@@ -269,7 +280,7 @@ export function NativeChatPromptEditor({
               // Why both: the text check covers other paragraphs, the view covers soft wraps.
               return (
                 !beyond.includes('\n') &&
-                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+                liveView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
               )
             },
             select: () => {
@@ -283,6 +294,9 @@ export function NativeChatPromptEditor({
               })
             },
             insertSkill: (from, to, token, path) => {
+              if (editor.isDestroyed) {
+                return
+              }
               const { doc } = editor.state
               const range = { from: promptTextPosition(doc, from), to: promptTextPosition(doc, to) }
               editor.view.dispatch(closeHistory(editor.state.tr))
@@ -296,6 +310,9 @@ export function NativeChatPromptEditor({
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
             removeImageReferences: (attachmentId) => {
+              if (editor.isDestroyed) {
+                return
+              }
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {
                 if (
@@ -322,6 +339,9 @@ export function NativeChatPromptEditor({
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
             insertFileReferences: (paths) => {
+              if (editor.isDestroyed) {
+                return
+              }
               editor.commands.insertContentAt(
                 editor.state.selection.from,
                 paths.flatMap((path) => [fileReferenceContent(path), { type: 'text', text: ' ' }])
