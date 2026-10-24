@@ -43,6 +43,15 @@ async function remoteNames(): Promise<string[]> {
   return (await git(['remote'], repoPath)).split(/\r?\n/).filter(Boolean)
 }
 
+// `git remote -v` started appending the object filter after the direction marker in
+// Git 2.37 (ef6d15ca53). The 2.25 core-workflow baseline predates it, so the
+// annotation assertion is version-gated; the annotation parsing itself is covered
+// by the mocked rows in git-remote-url-index.test.ts on every version.
+async function gitMajorMinor(): Promise<[number, number]> {
+  const match = /git version (\d+)\.(\d+)/.exec(await git(['--version'], repoPath))
+  return match ? [Number(match[1]), Number(match[2])] : [0, 0]
+}
+
 beforeEach(async () => {
   // realpath: macOS hands out /var/... temp paths while Git reports /private/var/...
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-partial-clone-')))
@@ -76,8 +85,11 @@ afterEach(async () => {
 describe('a pre-existing partial-clone fork remote (#32864)', () => {
   it('is parsed out of real `git remote -v` output despite the filter annotation', async () => {
     const stdout = await git(['remote', '-v'], repoPath)
-    // Guard the premise: this Git really does annotate the fetch row.
-    expect(stdout).toContain(`(fetch) [blob:none]`)
+    const [major, minor] = await gitMajorMinor()
+    if (major > 2 || (major === 2 && minor >= 37)) {
+      // Guard the premise: this Git really does annotate the fetch row.
+      expect(stdout).toContain(`(fetch) [blob:none]`)
+    }
     expect([...parseGitRemoteFetchUrls(stdout)]).toEqual([[FORK_REMOTE, forkPath]])
   })
 
@@ -91,8 +103,9 @@ describe('a pre-existing partial-clone fork remote (#32864)', () => {
     const prepared = await prepareWorktreePushTargetWithExec(execGit, repoPath, target, () => false)
 
     expect(prepared.remoteName).toBe(FORK_REMOTE)
-    // No `<name>-2` mint: before the fix the annotated fetch row was dropped, the
-    // existing remote looked absent, and a second remote with the same URL appeared here.
+    // No `<name>-2` mint: on Git >= 2.37 the annotated fetch row used to be dropped,
+    // the existing remote looked absent, and a second remote with the same URL
+    // appeared here. Older Git emits no annotation, so this is the reuse path as-is.
     expect(await remoteNames()).toEqual([FORK_REMOTE])
     // Reuse, not mint: Orca's provenance marker is not written onto the pre-existing remote.
     await expect(
