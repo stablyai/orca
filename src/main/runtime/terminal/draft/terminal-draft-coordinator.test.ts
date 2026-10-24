@@ -56,6 +56,7 @@ function createHarness() {
   const coordinator = new TerminalDraftCoordinator('/tmp/user-data', deps)
   return {
     coordinator,
+    deps,
     replace,
     setNow: (value: number) => {
       now = value
@@ -324,6 +325,42 @@ describe('TerminalDraftCoordinator', () => {
       operationId: 'op-after-takeover'
     })
     expect(stale).toMatchObject({ ok: false, status: 'stale_lease' })
+  })
+
+  it('fences a begin whose PTY was disposed while its capture was pending', async () => {
+    const harness = createHarness()
+    let releaseCapture: (() => void) | undefined
+    let captureCalls = 0
+    const coordinator = new TerminalDraftCoordinator('/tmp/user-data', {
+      ...harness.deps,
+      capture: () => {
+        captureCalls += 1
+        if (captureCalls > 1) {
+          return Promise.resolve(
+            response({ ok: true, text: 'new text', sourceToken: 'token:new text' })
+          )
+        }
+        return new Promise((resolve) => {
+          releaseCapture = () => {
+            resolve(response({ ok: true, text: 'old text', sourceToken: 'token:old text' }))
+          }
+        })
+      }
+    })
+    const first = coordinator.begin({ ptyId: 'pty-1', client: desktop })
+    while (!releaseCapture) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    coordinator.dispose('pty-1')
+    const second = coordinator.begin({ ptyId: 'pty-1', client: mobile })
+    releaseCapture()
+    expect(await first).toMatchObject({ ok: false, supported: false, reason: 'not_live' })
+    const acquired = await second
+    expect(acquired).toMatchObject({ ok: true })
+    if (!acquired.ok) {
+      throw new Error('expected second begin')
+    }
+    expect(coordinator.isCurrentLease('pty-1', acquired.epoch, mobile)).toBe(true)
   })
 
   it('does not reuse an epoch after release', async () => {

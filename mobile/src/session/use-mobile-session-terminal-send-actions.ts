@@ -101,7 +101,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
   const submitBufferedDraft = (): void => {
     void handleSend()
   }
-  const bindCommandField = useTerminalTextFieldSubmitBinding(commandInputRef, submitBufferedDraft)
+  const bindCommandField = useTerminalTextFieldSubmitBinding(
+    commandInputRef,
+    submitBufferedDraft,
+    undefined,
+    () => !remoteDraftSession
+  )
 
   async function handleSend() {
     // Why: the return key still submits while offline; hold the composed text instead of firing a doomed RPC (#6713).
@@ -118,7 +123,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
       showToast('Write the draft before sending', 1600)
       return
     }
-    if (editingTerminalDraft && remoteDraftUncertain) {
+    if (remoteDraftUncertain) {
       sendingRef.current = false
       showToast('Check the terminal before sending again', 2000)
       return

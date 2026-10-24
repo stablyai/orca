@@ -49,6 +49,7 @@ export function TerminalDraftEditor({
   const remoteTextRef = useRef('')
   const textRef = useRef('')
   const dirtyRef = useRef(false)
+  const mountedRef = useRef(true)
   const cleanupRef = useRef<() => void>(() => {})
   dirtyRef.current = dirty
 
@@ -66,12 +67,16 @@ export function TerminalDraftEditor({
   }, [])
 
   cleanupRef.current = () => {
+    mountedRef.current = false
     if (dirtyRef.current) {
       writeRecoveredDraft(recoveryKey, { text: textRef.current, remoteText: remoteTextRef.current })
     }
     releaseLease()
   }
-  useEffect(() => () => cleanupRef.current(), [])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => cleanupRef.current()
+  }, [])
 
   const open = useCallback(
     async (force = false) => {
@@ -102,6 +107,10 @@ export function TerminalDraftEditor({
                 ? 'The agent did not answer its draft bridge.'
                 : 'This agent version cannot read or replace its draft.'
           )
+          return
+        }
+        if (!mountedRef.current) {
+          void releaseDesktopTerminalDraft(ptyId, clientIdRef.current, result.epoch).catch(() => {})
           return
         }
         epochRef.current = result.epoch

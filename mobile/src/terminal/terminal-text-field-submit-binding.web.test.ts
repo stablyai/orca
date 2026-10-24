@@ -65,6 +65,18 @@ describe('the web sibling', () => {
    * The case the brief guards: an IME still choosing a candidate reports its commit as
    * `insertCompositionText`, and Enter there belongs to the keyboard, not to the terminal.
    */
+  it('lets a multiline draft insert the line break when submit is disabled', () => {
+    const onSubmit = vi.fn()
+    const field = document.createElement('textarea')
+    document.body.append(field)
+    bindOnWeb(asField(field), onSubmit, undefined, () => false)
+
+    const event = sendBeforeInput(field, 'insertParagraph')
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
   it('leaves a composition commit alone', () => {
     const onSubmit = vi.fn()
     const field = mountField()

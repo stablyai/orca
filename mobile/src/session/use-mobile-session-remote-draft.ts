@@ -48,6 +48,8 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
   const [conflict, setConflict] = useState<MobileRemoteDraftConflict | null>(null)
   const [uncertain, setUncertain] = useState(false)
   const sessionRef = useRef<MobileRemoteDraftSession | null>(null)
+  const inputRef = useRef(bufferedTerminalDraftState.input)
+  inputRef.current = bufferedTerminalDraftState.input
   const loadSeqRef = useRef(0)
   sessionRef.current = session
 
@@ -185,6 +187,10 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       showToast('Load the terminal draft first', 1600)
       return
     }
+    if (uncertain) {
+      showToast('Result unknown — check the terminal before saving again', 2200)
+      return
+    }
     const sentText = bufferedTerminalDraftState.input
     let result
     try {
@@ -202,8 +208,13 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       )
       result = terminalDraftSave.interpret(response)
     } catch {
-      setUncertain(true)
-      showToast('Result unknown — check the terminal before retrying', 2600)
+      if (
+        activeHandleRef.current === current.handle &&
+        sessionRef.current?.epoch === current.epoch
+      ) {
+        setUncertain(true)
+        showToast('Result unknown — check the terminal before retrying', 2600)
+      }
       return
     }
     if (activeHandleRef.current !== current.handle || sessionRef.current?.epoch !== current.epoch) {
@@ -211,7 +222,8 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     }
     if (result?.ok) {
       const actualText = typeof result.text === 'string' ? result.text : sentText
-      if (bufferedTerminalDraftState.input === sentText && actualText !== sentText) {
+      if (inputRef.current === sentText && actualText !== sentText) {
+        inputRef.current = actualText
         bufferedTerminalDraftState.setInput(actualText)
       }
       const next = {
@@ -220,7 +232,6 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         remoteText: actualText
       }
       setSession(next)
-      setUncertain(false)
       showToast(
         result.normalized
           ? 'Saved; the agent expanded tabs or line endings'
@@ -242,7 +253,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
         : 'Could not save the draft',
       2400
     )
-  }, [bufferedTerminalDraftState.input, client, showToast])
+  }, [bufferedTerminalDraftState.input, client, showToast, uncertain])
 
   const submitRemoteDraft = useMobileRemoteDraftSubmit({
     client,

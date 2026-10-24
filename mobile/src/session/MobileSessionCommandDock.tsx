@@ -31,6 +31,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     bufferedTerminalDraftState,
     remoteDraftSession,
     remoteDraftConflict,
+    remoteDraftUncertain,
     loadRemoteDraft,
     saveRemoteDraft,
     exitRemoteDraft,
@@ -90,7 +91,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         ]}
       >
         <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
-          {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
             <Pressable
               style={({ pressed }) => [
@@ -114,7 +114,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               </View>
             </Pressable>
           )}
-          {/* Why: default tap handling makes the first accessory-key tap dismiss the keyboard and get swallowed (#5106). */}
           <ScrollView
             style={styles.accessoryScroll}
             horizontal
@@ -267,6 +266,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         <MobileRemoteDraftBar
           editing={Boolean(remoteDraftSession)}
           changed={Boolean(remoteDraftConflict)}
+          uncertain={remoteDraftUncertain}
           onReload={reloadConflict}
           onKeepMine={keepConflictMine}
           onExit={exitRemoteDraft}

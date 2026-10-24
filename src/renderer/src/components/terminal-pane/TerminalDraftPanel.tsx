@@ -80,7 +80,7 @@ export function TerminalDraftPanel({
                 disabled={busy || actionsLocked || !dirty}
                 aria-label="Save draft to terminal without submitting"
               >
-                {busy ? <Loader2 className="animate-spin" /> : null}
+                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
                 Save
               </Button>
               <Button
@@ -90,7 +90,7 @@ export function TerminalDraftPanel({
                 disabled={busy || actionsLocked}
                 aria-label="Write draft and press Enter once"
               >
-                {busy ? <Loader2 className="animate-spin" /> : <Send />}
+                {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Send />}
                 Send
               </Button>
             </>
@@ -178,7 +178,7 @@ export function TerminalDraftPanel({
             disabled={phase === 'loading' || busy}
             autoFocus
           />
-          <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-1.5 text-2xs text-muted-foreground">
             <span>
               {dirty ? 'Unsaved local changes' : 'Matches the terminal draft'} · Enter adds a line,{' '}
               {getScreenSubmitShortcutLabel()} sends,{' '}

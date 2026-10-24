@@ -6,18 +6,51 @@ import { styles } from './mobile-session-styles'
 export function MobileRemoteDraftBar({
   editing,
   changed,
+  uncertain,
   onReload,
   onKeepMine,
   onExit
 }: {
   editing: boolean
   changed: boolean
+  uncertain: boolean
   onReload: () => void
   onKeepMine: () => void
   onExit: () => void
 }) {
-  if (!editing && !changed) {
+  if (!editing && !changed && !uncertain) {
     return null
+  }
+  if (uncertain) {
+    return (
+      <View style={styles.remoteDraftBar}>
+        <Text style={styles.remoteDraftLabel} numberOfLines={1}>
+          Result unknown. Check the terminal.
+        </Text>
+        <View style={styles.remoteDraftActions}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.remoteDraftAction,
+              pressed && styles.accessoryKeyPressed
+            ]}
+            onPress={onReload}
+            accessibilityLabel="Reload the terminal draft after an unknown result"
+          >
+            <Text style={styles.remoteDraftActionText}>Reload</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.remoteDraftAction,
+              pressed && styles.accessoryKeyPressed
+            ]}
+            onPress={onExit}
+            accessibilityLabel="Stop editing the terminal draft"
+          >
+            <Text style={styles.remoteDraftActionText}>Exit</Text>
+          </Pressable>
+        </View>
+      </View>
+    )
   }
   return (
     <View style={styles.remoteDraftBar}>

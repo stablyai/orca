@@ -60,8 +60,9 @@ mode it writes `hello.json` (protocol, token, pid, session id, capabilities) and
 `request.json` every 40 ms. It rewrites `hello.json` every 2 s as a heartbeat.
 
 - `capture` returns the exact editor text and an opaque `sourceToken` =
-  `pi:v2:<process instance>:<revision>:<sha256(text)>`. The monotonic revision changes whenever
-  the bridge observes different text, so undo back to earlier content does not revive an old token.
+  `pi:v2:<process instance>:<revision>:<sha256(text)>`. The revision advances on raw terminal
+  input as well as observed text changes, so a change-and-undo between polls still invalidates the
+  old token.
 - `replace` recomputes that token from the current editor text. If it differs from `baseToken`,
   the reply is `conflict` with the current text. Otherwise it calls `setEditorText`, reads the
   editor back, and reports success with the real read-back. Pi normalizes CRLF/CR and tabs inside
@@ -86,7 +87,9 @@ rejected as `stale_lease`. The lease expires after five minutes without use.
 
 All coordinator operations for one PTY are serialized. A takeover therefore waits for an
 in-flight save instead of interleaving with it, overlapping submissions with the same
-`operationId` collapse to one Enter, and epochs are monotonic per PTY even after release.
+`operationId` collapse to one Enter, and epochs are monotonic per PTY even after release. PTY
+disposal advances a generation fence; a capture or replace that finishes after disposal cannot
+install a lease or cache a result for the replacement process.
 
 `terminal.draft.save` writes the whole text and does not press Enter.
 
@@ -110,10 +113,12 @@ obvious retry duplication, but it is not a cross-crash exactly-once promise for 
 - Mobile: the buffered command bar gets a download action that pulls the terminal draft, a save
   action that writes without Enter, and an Exit action that releases the lease while leaving the
   local text in place. While a draft session is active the field becomes multiline and Return
-  inserts a newline; the send arrow is the only submit. Late load/save/submit answers are dropped
-  when the active terminal or edit epoch changed, and a transport rejection marks the draft
-  uncertain so a second tap cannot retry an unknown Enter. Otherwise the existing direct
-  `terminal.send` path is unchanged.
+  inserts a newline — including on the web/PWA binding — and the send arrow is the only submit.
+  Late load/save/submit answers are dropped when the active terminal or edit epoch changed, so one
+  terminal's failure cannot mark another uncertain. A rejected or structured unknown submit keeps
+  the session and marks it uncertain; every send path is blocked until Reload or Exit resolves it.
+  A save response only replaces local text when the field has not changed since the save started.
+  Otherwise the existing direct `terminal.send` path is unchanged.
 
 Neither client polls the host while typing, and neither changes terminal size/mode to "make room".
 
@@ -171,7 +176,8 @@ Added tests cover:
 - host leases, serialized takeover, overlapping same-operation submissions, monotonic epochs,
   operation replay, conflict, and the three submit settlements,
 - desktop recovery/conflict token adoption and the editor's unsupported/locked/save UI states,
-- mobile reply decoding for capture, locked, conflict, and unknown-Enter answers.
+- mobile reply decoding for capture, locked, conflict, and unknown-Enter answers,
+- the mobile web binding leaving a line break to a multiline draft.
 
 The existing Pi extension installation, host environment assembly, and opencode/pty suites were
 rerun after the install and env changes.

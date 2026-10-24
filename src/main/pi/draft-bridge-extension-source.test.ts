@@ -24,6 +24,7 @@ afterEach(() => {
 })
 
 function createExtensionHarness(normalize: (text: string) => string = (text) => text) {
+  const inputHandlers: ((data: string) => undefined)[] = []
   const dir = mkdtempSync(join(tmpdir(), 'orca-draft-extension-'))
   roots.push(dir)
   const token = 'bridge-token'
@@ -61,12 +62,28 @@ function createExtensionHarness(normalize: (text: string) => string = (text) => 
       getEditorText: () => editor.text,
       setEditorText: (text: string) => {
         editor.text = normalize(text)
+      },
+      onTerminalInput: (handler: (data: string) => undefined) => {
+        inputHandlers.push(handler)
+        return () => {
+          const index = inputHandlers.indexOf(handler)
+          if (index !== -1) {
+            inputHandlers.splice(index, 1)
+          }
+        }
       }
     },
     sessionManager: { getSessionId: () => 'session-1' }
   }
 
-  return { dir, token, handlers, editor, contextObject }
+  return {
+    dir,
+    token,
+    handlers,
+    editor,
+    contextObject,
+    inputHandlers
+  }
 }
 
 function sendRequest(dir: string, token: string, request: Record<string, unknown>): { id: string } {
@@ -148,6 +165,20 @@ describe('Pi draft bridge extension', () => {
       normalized: true
     })
     expect(harness.editor.text).toBe('line    with tab')
+
+    harness.editor.text = 'already spaced'
+    const second = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const secondCapture = await waitResponse(harness.dir, second.id)
+    const normalizeToExisting = sendRequest(harness.dir, harness.token, {
+      op: 'replace',
+      text: 'already\tspaced',
+      baseToken: secondCapture!.sourceToken
+    })
+    expect(await waitResponse(harness.dir, normalizeToExisting.id)).toMatchObject({
+      ok: true,
+      text: 'already    spaced',
+      normalized: true
+    })
     await harness.handlers.session_shutdown?.()
   })
 
@@ -161,6 +192,19 @@ describe('Pi draft bridge extension', () => {
     await new Promise((resolve) => setTimeout(resolve, 80))
     harness.editor.text = 'original'
     await new Promise((resolve) => setTimeout(resolve, 80))
+    const second = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const secondToken = (await waitResponse(harness.dir, second.id))!.sourceToken
+    expect(secondToken).not.toBe(firstToken)
+    await harness.handlers.session_shutdown?.()
+  })
+
+  it('invalidates a token on terminal input, including a change undone before the poll', async () => {
+    const harness = createExtensionHarness()
+    await harness.handlers.session_start?.({}, harness.contextObject)
+    harness.editor.text = 'original'
+    const first = sendRequest(harness.dir, harness.token, { op: 'capture' })
+    const firstToken = (await waitResponse(harness.dir, first.id))!.sourceToken
+    harness.inputHandlers[0]?.('x')
     const second = sendRequest(harness.dir, harness.token, { op: 'capture' })
     const secondToken = (await waitResponse(harness.dir, second.id))!.sourceToken
     expect(secondToken).not.toBe(firstToken)

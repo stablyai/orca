@@ -57,8 +57,13 @@ export function useMobileRemoteDraftSubmit({
         )
         result = terminalDraftSubmit.interpret(response)
       } catch {
-        setUncertain(true)
-        showToast('Result unknown — check the terminal before sending again', 2600)
+        if (
+          activeHandleRef.current === current.handle &&
+          sessionRef.current?.epoch === current.epoch
+        ) {
+          setUncertain(true)
+          showToast('Result unknown — check the terminal before sending again', 2600)
+        }
         return { applied: false }
       }
       if (!result) {
@@ -96,9 +101,11 @@ export function useMobileRemoteDraftSubmit({
         return { applied: true, status: 'saved_not_submitted' }
       }
       if (result.ok && result.status === 'submit_unknown') {
-        // Why: an unknown Enter must not be retried by a second tap; drop the lease and leave it there.
-        setSession(null)
-        release(current)
+        // Why: keep the session banner so the user can reload/exit; uncertainty blocks every send path.
+        if (result.sourceToken) {
+          setSession({ ...current, baseToken: result.sourceToken })
+        }
+        setUncertain(true)
         showToast('Result unknown — check the terminal before sending again', 2600)
         return { applied: true, status: 'submit_unknown' }
       }

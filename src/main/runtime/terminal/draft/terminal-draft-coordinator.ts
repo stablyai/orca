@@ -14,6 +14,7 @@ import {
 import { buildSubmitResult } from './terminal-draft-submit-result'
 import { TerminalDraftOperationCache } from './terminal-draft-operation-cache'
 import { settleDraftReplace } from './terminal-draft-settlement'
+import { TerminalDraftOperationGate } from './terminal-draft-operation-gate'
 
 const LEASE_TTL_MS = 5 * 60_000
 
@@ -38,7 +39,7 @@ export class TerminalDraftCoordinator {
   private readonly leases = new Map<string, Lease>()
   private readonly operations = new TerminalDraftOperationCache()
   private readonly epochCounters = new Map<string, number>()
-  private readonly queues = new Map<string, Promise<unknown>>()
+  private readonly gate = new TerminalDraftOperationGate()
   private readonly deps: TerminalDraftBridgeDeps
 
   constructor(userDataPath: string, deps?: Partial<TerminalDraftBridgeDeps>) {
@@ -50,6 +51,7 @@ export class TerminalDraftCoordinator {
     client: TerminalDraftClient
     force?: boolean
   }): Promise<TerminalDraftBeginResult> {
+    const generation = this.gate.generation(input.ptyId)
     const paths = this.deps.readSession(input.ptyId)
     if (!paths) {
       return { ok: false, supported: false, reason: 'no_bridge' }
@@ -83,6 +85,9 @@ export class TerminalDraftCoordinator {
     const sameHolder = active?.clientId === input.client.id
     const epoch = sameHolder && active ? active.epoch : this.nextEpoch(input.ptyId)
     const response = await this.deps.capture(paths)
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, supported: false, reason: 'not_live' }
+    }
     if (!response?.ok || typeof response.text !== 'string' || !response.sourceToken) {
       return {
         ok: false,
@@ -131,7 +136,7 @@ export class TerminalDraftCoordinator {
     client: TerminalDraftClient
     force?: boolean
   }): Promise<TerminalDraftBeginResult> {
-    return this.runExclusive(input.ptyId, () => this.beginLocked(input))
+    return this.gate.runExclusive(input.ptyId, () => this.beginLocked(input))
   }
 
   release(input: {
@@ -139,7 +144,7 @@ export class TerminalDraftCoordinator {
     epoch: number
     client: TerminalDraftClient
   }): Promise<{ ok: boolean }> {
-    return this.runExclusive(input.ptyId, () => this.releaseLocked(input))
+    return this.gate.runExclusive(input.ptyId, () => this.releaseLocked(input))
   }
 
   save(input: {
@@ -150,7 +155,7 @@ export class TerminalDraftCoordinator {
     text: string
     operationId: string
   }): Promise<TerminalDraftSaveResult> {
-    return this.runExclusive(input.ptyId, () => this.saveLocked(input))
+    return this.gate.runExclusive(input.ptyId, () => this.saveLocked(input))
   }
 
   submit(input: {
@@ -162,13 +167,13 @@ export class TerminalDraftCoordinator {
     operationId: string
     submitInput: TerminalDraftSubmitInput
   }): Promise<TerminalDraftSubmitResult> {
-    return this.runExclusive(input.ptyId, () => this.submitLocked(input))
+    return this.gate.runExclusive(input.ptyId, () => this.submitLocked(input))
   }
 
   dispose(ptyId: string): void {
+    this.gate.dispose(ptyId)
     this.leases.delete(ptyId)
     this.epochCounters.delete(ptyId)
-    this.queues.delete(ptyId)
     this.operations.dispose(ptyId)
   }
 
@@ -176,20 +181,6 @@ export class TerminalDraftCoordinator {
     const next = (this.epochCounters.get(ptyId) ?? 0) + 1
     this.epochCounters.set(ptyId, next)
     return next
-  }
-
-  private async runExclusive<T>(ptyId: string, task: () => Promise<T> | T): Promise<T> {
-    const previous = this.queues.get(ptyId) ?? Promise.resolve()
-    const next = previous.then(task, task)
-    const guarded = next.catch(() => {})
-    this.queues.set(ptyId, guarded)
-    try {
-      return await next
-    } finally {
-      if (this.queues.get(ptyId) === guarded) {
-        this.queues.delete(ptyId)
-      }
-    }
   }
 
   isCurrentLease(ptyId: string, epoch: number, client: TerminalDraftClient): boolean {
@@ -210,6 +201,7 @@ export class TerminalDraftCoordinator {
     text: string
     operationId: string
   }): Promise<TerminalDraftSaveResult> {
+    const generation = this.gate.generation(input.ptyId)
     const cached = this.operations.readSave(input.ptyId, input.operationId)
     if (cached) {
       return cached.ok ? { ...cached, replayed: true } : cached
@@ -220,6 +212,9 @@ export class TerminalDraftCoordinator {
       return prepared.result
     }
     const response = await this.deps.replace(prepared.paths, input.text, input.baseToken)
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, status: 'unknown', reason: 'disposed' }
+    }
     const result = settleDraftReplace(response)
     this.operations.rememberSave(input.ptyId, input.operationId, result)
     return result
@@ -234,6 +229,7 @@ export class TerminalDraftCoordinator {
     operationId: string
     submitInput: TerminalDraftSubmitInput
   }): Promise<TerminalDraftSubmitResult> {
+    const generation = this.gate.generation(input.ptyId)
     const cached = this.operations.readSubmit(input.ptyId, input.operationId)
     if (cached) {
       return cached.ok ? { ...cached, replayed: true } : cached
@@ -252,6 +248,9 @@ export class TerminalDraftCoordinator {
       return failure
     }
     const response = await this.deps.replace(prepared.paths, input.text, input.baseToken)
+    if (generation !== this.gate.generation(input.ptyId)) {
+      return { ok: false, status: 'unknown', reason: 'disposed' }
+    }
     const replaced = settleDraftReplace(response)
     if (!replaced.ok) {
       this.operations.rememberSubmit(input.ptyId, input.operationId, replaced)

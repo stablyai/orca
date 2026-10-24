@@ -18,7 +18,8 @@ import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input
 export function bindTerminalTextFieldSubmit(
   node: TextInput | null,
   onSubmit: () => void,
-  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean
+  onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  shouldSubmit?: () => boolean
 ): () => void {
   if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) {
     return () => {}
@@ -29,6 +30,10 @@ export function bindTerminalTextFieldSubmit(
       return
     }
     if (event.inputType !== 'insertLineBreak' && event.inputType !== 'insertParagraph') {
+      return
+    }
+    // A multiline draft owns its line breaks; only the explicit Send action submits it.
+    if (shouldSubmit && !shouldSubmit()) {
       return
     }
     event.preventDefault()
