@@ -133,7 +133,7 @@ describe('PluginConsentDialog', () => {
     )
 
     expect(document.body.textContent).toContain(
-      "These permissions limit how the plugin uses Orca's API. This plugin has no background worker."
+      'No background worker. These permissions limit what it can do in Orca.'
     )
     expect(document.body.textContent).not.toContain('full access to your files')
   })
@@ -153,7 +153,7 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).toContain('Review plugin')
     expect(document.body.textContent).toContain('Declarative')
     expect(document.body.textContent).toContain(
-      "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API."
+      "Content only: no code, no background worker, and no access to Orca's API."
     )
     expect(document.body.textContent).not.toContain('These permissions limit')
   })
@@ -184,7 +184,7 @@ describe('PluginConsentDialog', () => {
     expect(document.body.textContent).toContain('Instructional')
     expect(document.body.textContent).toContain('Review plugin content')
     expect(document.body.textContent).toContain(
-      'Its instructional content can still cause actions when you or an agent use it.'
+      'Its commands and instructions can take actions when you or an agent use them.'
     )
     expect(document.body.textContent).toContain('./scripts/create.sh --exact "$VALUE"')
     expect(document.body.textContent).toContain('./scripts/suspend.sh')
@@ -240,6 +240,12 @@ describe('PluginConsentDialog', () => {
     const onDecision = vi.fn().mockResolvedValue(undefined)
     await renderConsent({ ...plugin, needsReconsent: true }, onDecision)
     expect(document.body.textContent).toContain('This plugin changed since you approved it')
+    // The change note sits under its own heading after the permissions, not above the warning.
+    const headings = Array.from(
+      document.querySelectorAll('[role="dialog"] h3'),
+      (h) => h.textContent
+    )
+    expect(headings.at(-1)).toBe('What changed')
     const enable = Array.from(document.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === 'Enable plugin'
     )
@@ -264,7 +270,7 @@ describe('PluginConsentDialog', () => {
     await act(async () => enable?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     expect(document.body.textContent).toContain(
-      'The plugin changed while you were reviewing it. Close this dialog and review the updated permissions.'
+      'This plugin changed while you were reviewing it. Review it again.'
     )
   })
 })

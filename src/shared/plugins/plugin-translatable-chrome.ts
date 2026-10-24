@@ -16,9 +16,8 @@
 //     `.blocked`, `PluginSettingsRow.blocked`;
 //   - promises about what plugins may do — `PluginsSettingsSection.description`
 //     ("Plugins run on this computer"), `.systemDescription` ("Nothing runs
-//     until you review and enable it"), `.featureOff` ("stays disabled"), and
-//     `PluginDevelopmentSection.help` ("Dev plugins still require permission
-//     review"). Swapping any of these for reassuring text is the attack;
+//     until you review and enable it"), and `PluginDevelopmentSection.help`.
+//     Swapping any of these for reassuring text is the attack;
 //   - failure copy that reports a trust event — `installFailed` ("The reviewed
 //     source may have changed"). Sibling `*Failed` strings stay protected too,
 //     so the boundary is a rule rather than a judgement call per message;

@@ -81,7 +81,7 @@ export function usePluginMarketplaceLifecycle({
         setRollbackError(
           translate(
             'auto.components.settings.PluginsSettingsSection.rollbackFailed',
-            'Could not roll back this plugin. A previous immutable version may not be available.'
+            "Couldn't roll back this plugin."
           )
         )
       }

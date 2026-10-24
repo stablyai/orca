@@ -101,7 +101,8 @@ describe('main-i18n lazy locale loading', () => {
         resourceLanguage: pluginLanguageResourceId(id),
         pluginKey: 'orca-samples.portuguese',
         locale: 'pt-BR',
-        catalog: { menu: { file: 'Arquivo Orca' } }
+        catalog: { menu: { file: 'Arquivo Orca' } },
+        coverage: 100
       }
     ])
 

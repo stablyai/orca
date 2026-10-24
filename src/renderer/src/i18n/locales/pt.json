@@ -7165,7 +7165,6 @@
         "PluginsSettingsSection": {
           "systemLabel": "Sistema de plugins",
           "systemDescription": "Descobre plugins instalados e permite ativá-los individualmente. Nada é executado até que você revise e ative. Os workers sempre são executados neste computador; ações de espaço de trabalho SSH são roteadas através do Orca.",
-          "featureOff": "Ative o sistema de plugins para ver e gerenciar plugins instalados. Tudo o que já está instalado permanece no disco e desativado enquanto o sistema está desligado.",
           "loading": "Carregando plugins…",
           "noInstalledResultsTitle": "Nenhum plugin correspondente",
           "noInstalledResults": "Nenhum plugin instalado corresponde a esta busca.",

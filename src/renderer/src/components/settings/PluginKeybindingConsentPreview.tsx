@@ -7,6 +7,7 @@ import {
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
+import { PluginReviewSection } from './plugin-review-dialog-layout'
 import { useAppStore } from '@/store'
 
 type CommandPreview = PluginHostListEntry['commands'][number]
@@ -43,23 +44,20 @@ export function PluginKeybindingConsentPreview({
   }
 
   return (
-    <section className="space-y-3" aria-labelledby="plugin-keybinding-consent-heading">
-      <h3
-        id="plugin-keybinding-consent-heading"
-        className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground"
-      >
-        {translate(
-          'auto.components.settings.PluginKeybindingConsentPreview.heading',
-          'Keyboard shortcuts'
-        )}
-      </h3>
-      <div className="space-y-2">
+    <PluginReviewSection
+      headingId="plugin-keybinding-consent-heading"
+      title={translate(
+        'auto.components.settings.PluginKeybindingConsentPreview.heading',
+        'Keyboard shortcuts'
+      )}
+    >
+      <div className="divide-y divide-border/60">
         {bindings.map(({ command, keybinding }) => {
           const shadowed = shadowedKeybindingTitles(keybinding.key, platform, overrides)
           return (
             <div
               key={`${command.id}:${keybinding.key}`}
-              className="space-y-1 rounded-md border border-border p-3"
+              className="space-y-1 py-2.5 first:pt-0 last:pb-0"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium">{command.title}</span>
@@ -75,7 +73,7 @@ export function PluginKeybindingConsentPreview({
                     )
                   : translate(
                       'auto.components.settings.PluginKeybindingConsentPreview.global',
-                      'Runs in the app without requiring an active workspace.'
+                      'Works anywhere in Orca.'
                     )}
               </p>
               {shadowed.length > 0 ? (
@@ -94,6 +92,6 @@ export function PluginKeybindingConsentPreview({
           )
         })}
       </div>
-    </section>
+    </PluginReviewSection>
   )
 }

@@ -8,6 +8,7 @@ import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
 import { PluginKeybindingConsentPreview } from './PluginKeybindingConsentPreview'
 import { PluginConsentProvenance } from './PluginConsentProvenance'
 import { pluginCapabilityDescription } from './plugin-capability-presentation'
+import { PluginReviewBody, PluginReviewSection } from './plugin-review-dialog-layout'
 import {
   Dialog,
   DialogContent,
@@ -79,6 +80,31 @@ function trustTierShort(plugin: PluginHostListEntry): string {
   )
 }
 
+function trustWarning(plugin: PluginHostListEntry): string {
+  if (plugin.hasWorker) {
+    return translate(
+      'auto.components.settings.PluginConsentDialog.warning',
+      'Its worker runs as a normal process with full access to your files, network, and other processes.'
+    )
+  }
+  if (hasInstructionalContent(plugin)) {
+    return translate(
+      'auto.components.settings.PluginConsentDialog.instructionalWarning',
+      'Its commands and instructions can take actions when you or an agent use them.'
+    )
+  }
+  if (plugin.capabilities.length > 0 || plugin.panels.length > 0) {
+    return translate(
+      'auto.components.settings.PluginConsentDialog.panelWarning',
+      'No background worker. These permissions limit what it can do in Orca.'
+    )
+  }
+  return translate(
+    'auto.components.settings.PluginConsentDialog.declarativeWarning',
+    "Content only: no code, no background worker, and no access to Orca's API."
+  )
+}
+
 function consentTitle(plugin: PluginHostListEntry): string {
   if (!plugin.hasWorker && plugin.capabilities.length === 0 && !hasInstructionalContent(plugin)) {
     return translate('auto.components.settings.PluginConsentDialog.reviewTitle', 'Review plugin')
@@ -135,8 +161,7 @@ export function PluginConsentDialog({
     >
       <DialogContent
         surface="security"
-        scrollable
-        className="sm:max-w-xl"
+        className="max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl"
         onOpenAutoFocus={(event) => {
           // Why: dismissal is the safety-preserving path, so it receives initial focus.
           event.preventDefault()
@@ -154,37 +179,34 @@ export function PluginConsentDialog({
                   { value0: plugin.name, value1: plugin.version, value2: plugin.publisher }
                 )}
               </DialogDescription>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <PluginConsentProvenance
+                  official={plugin.official}
+                  publisher={plugin.publisher}
+                  source={plugin.source}
+                />
+                <span
+                  className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                  title={trustTier(plugin)}
+                >
+                  {trustTierShort(plugin)}
+                </span>
+              </div>
             </DialogHeader>
-            {plugin.needsReconsent ? (
-              <p className="border-l-2 border-foreground/25 py-0.5 pl-3 text-sm leading-6">
-                {translate(
-                  'auto.components.settings.PluginConsentDialog.reconsent',
-                  'This plugin changed since you approved it. Review it to run it again.'
-                )}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2">
-              <PluginConsentProvenance
-                official={plugin.official}
-                publisher={plugin.publisher}
-                source={plugin.source}
-              />
-              <span
-                className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-                title={trustTier(plugin)}
-              >
-                {trustTierShort(plugin)}
-              </span>
-            </div>
-            {plugin.capabilities.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                  {translate(
+            <PluginReviewBody>
+              <PluginReviewSection>
+                <p className="flex items-start gap-2 text-sm leading-6">
+                  <AlertTriangle className="mt-1 size-4 shrink-0" />
+                  <span>{trustWarning(plugin)}</span>
+                </p>
+              </PluginReviewSection>
+              {plugin.capabilities.length > 0 ? (
+                <PluginReviewSection
+                  title={translate(
                     'auto.components.settings.PluginConsentDialog.capabilities',
                     'This plugin can'
                   )}
-                </p>
-                <div className="space-y-2">
+                >
                   {plugin.capabilities.map((capability) => (
                     <div key={capability.kind} className="flex items-start gap-2 text-sm leading-6">
                       <Check className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
@@ -196,35 +218,26 @@ export function PluginConsentDialog({
                       </span>
                     </div>
                   ))}
-                </div>
-              </div>
-            ) : null}
-            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-3.5 py-3 text-sm leading-6">
-              <AlertTriangle className="mt-1 size-4 shrink-0" />
-              <span>
-                {plugin.hasWorker
-                  ? translate(
-                      'auto.components.settings.PluginConsentDialog.warning',
-                      "These permissions limit how the plugin uses Orca's API. Its worker still runs as a normal process on your computer with full access to your files, network, and other processes."
-                    )
-                  : hasInstructionalContent(plugin)
-                    ? translate(
-                        'auto.components.settings.PluginConsentDialog.instructionalWarning',
-                        'This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.'
-                      )
-                    : plugin.capabilities.length > 0 || plugin.panels.length > 0
-                      ? translate(
-                          'auto.components.settings.PluginConsentDialog.panelWarning',
-                          "These permissions limit how the plugin uses Orca's API. This plugin has no background worker."
-                        )
-                      : translate(
-                          'auto.components.settings.PluginConsentDialog.declarativeWarning',
-                          "This plugin contributes validated content only. It does not run a background worker or receive access to Orca's API."
-                        )}
-              </span>
-            </div>
-            <PluginKeybindingConsentPreview commands={plugin.commands} />
-            <PluginVmRecipeConsentPreview recipes={plugin.vmRecipes ?? []} />
+                </PluginReviewSection>
+              ) : null}
+              <PluginKeybindingConsentPreview commands={plugin.commands} />
+              <PluginVmRecipeConsentPreview recipes={plugin.vmRecipes ?? []} />
+              {plugin.needsReconsent ? (
+                <PluginReviewSection
+                  title={translate(
+                    'auto.components.settings.PluginConsentDialog.whatChanged',
+                    'What changed'
+                  )}
+                >
+                  <p className="text-sm leading-6">
+                    {translate(
+                      'auto.components.settings.PluginConsentDialog.reconsent',
+                      'This plugin changed since you approved it. Review it to run it again.'
+                    )}
+                  </p>
+                </PluginReviewSection>
+              ) : null}
+            </PluginReviewBody>
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             <DialogFooter>
               <Button

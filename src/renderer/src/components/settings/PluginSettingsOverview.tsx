@@ -72,7 +72,7 @@ export function PluginSettingsOverview({
         labelId="plugin-system-label"
         description={translate(
           'auto.components.settings.PluginsSettingsSection.systemDescription',
-          'Discovers installed plugins and lets you enable them individually. Nothing runs until you review and enable it. Workers always run on this computer; SSH workspace actions route through Orca.'
+          'Nothing runs until you review and enable it.'
         )}
         alignTop
         control={
@@ -85,15 +85,8 @@ export function PluginSettingsOverview({
         }
       />
       {settingsError ? <p className="text-xs text-destructive">{settingsError}</p> : null}
-      <div className="my-4 border-t border-border/60" />
-      {!featureEnabled ? (
-        <div className="rounded-lg border border-dashed border-border px-5 py-6 text-center text-[13px] leading-6 text-muted-foreground">
-          {translate(
-            'auto.components.settings.PluginsSettingsSection.featureOff',
-            'Turn on the plugin system to see and manage installed plugins. Anything already installed stays on disk and stays disabled while the system is off.'
-          )}
-        </div>
-      ) : loading ? (
+      {featureEnabled ? <div className="my-4 border-t border-border/60" /> : null}
+      {!featureEnabled ? null : loading ? (
         <div className="flex items-center gap-2 px-4 py-5 text-[13px] text-muted-foreground">
           <Loader2 className="animate-spin" />
           {translate('auto.components.settings.PluginsSettingsSection.loading', 'Loading plugins…')}

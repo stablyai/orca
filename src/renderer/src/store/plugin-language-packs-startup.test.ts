@@ -19,7 +19,8 @@ function pack(name: string): PluginLanguagePackRegistration {
     resourceLanguage: pluginLanguageResourceId(id),
     pluginKey: name,
     locale: 'en',
-    catalog: {}
+    catalog: {},
+    coverage: 100
   }
 }
 
@@ -71,6 +72,19 @@ describe('plugin language-pack startup ownership', () => {
       expect(second.result.current).toBe(first.result.current)
     }
   )
+
+  it('offers only packs above the coverage floor while the store keeps every pack', async () => {
+    const bridge = installBridge()
+    const offered = renderHook(() => languagePacks.usePluginLanguagePacks())
+    const complete = pack('complete')
+    const partial = { ...pack('partial'), coverage: 12 }
+    await act(async () => {
+      bridge.requests[0]?.resolve([complete, partial])
+      await bridge.requests[0]?.promise
+    })
+    expect(offered.result.current).toEqual([complete])
+    expect(languagePacks.usePluginLanguagePackStore.getState().entries).toEqual([complete, partial])
+  })
 
   it.each(['resolve', 'reject'] as const)(
     'keeps a newer refresh pending after an older request %ss',

@@ -16,6 +16,7 @@ import {
 } from '../../shared/plugins/plugin-consent-state'
 import { projectPluginAgentStatusChangedPayload } from '../plugins/plugin-agent-status-event'
 import { setMainPluginLanguagePacks, setMainUiLanguage } from '../i18n/main-i18n'
+import { isUsablePluginLanguagePack } from '../../shared/plugins/plugin-language-pack-coverage'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -140,7 +141,11 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   state.pluginService.onChanged((event) => {
     if (
       event.contentPacksChanged &&
-      setMainPluginLanguagePacks(state.pluginService?.contentPacks.languagePacks.list() ?? [])
+      setMainPluginLanguagePacks(
+        (state.pluginService?.contentPacks.languagePacks.list() ?? []).filter(
+          isUsablePluginLanguagePack
+        )
+      )
     ) {
       void setMainUiLanguage(store.getSettings().uiLanguage).then(() => {
         rebuildAppMenu()

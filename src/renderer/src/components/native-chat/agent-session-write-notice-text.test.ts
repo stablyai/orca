@@ -88,7 +88,8 @@ describe('desktop words for a write that did not happen', () => {
               }
             }
           }
-        }
+        },
+        coverage: 100
       }
     ])
     await i18n.changeLanguage(pluginLanguageResourceId(id))

@@ -1,4 +1,5 @@
 import type { PluginHostListEntry } from '../../../../preload/api-types'
+import { PluginReviewSection } from './plugin-review-dialog-layout'
 import { translate } from '@/i18n/i18n'
 
 type VmRecipePreview = NonNullable<PluginHostListEntry['vmRecipes']>[number]
@@ -25,18 +26,15 @@ export function PluginVmRecipeConsentPreview({
     return null
   }
   return (
-    <section className="space-y-3" aria-labelledby="plugin-vm-recipe-consent-heading">
-      <h3
-        id="plugin-vm-recipe-consent-heading"
-        className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground"
-      >
-        {translate(
-          'auto.components.settings.PluginVmRecipeConsentPreview.heading',
-          'VM recipe commands'
-        )}
-      </h3>
+    <PluginReviewSection
+      headingId="plugin-vm-recipe-consent-heading"
+      title={translate(
+        'auto.components.settings.PluginVmRecipeConsentPreview.heading',
+        'VM recipe commands'
+      )}
+    >
       {recipes.map((recipe) => (
-        <div key={recipe.id} className="space-y-2 rounded-md border border-border p-3">
+        <div key={recipe.id} className="space-y-2 pt-1">
           <div>
             <p className="text-sm font-medium">{recipe.name}</p>
             {recipe.description ? (
@@ -68,6 +66,6 @@ export function PluginVmRecipeConsentPreview({
           </dl>
         </div>
       ))}
-    </section>
+    </PluginReviewSection>
   )
 }

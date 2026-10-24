@@ -67,7 +67,7 @@ export function PluginMarketplaceSourceDialog({
           cause,
           translate(
             'auto.components.settings.PluginMarketplaceSourceDialog.addFailed',
-            'Could not add this marketplace. Check the Git URL, ref, and your Git credentials.'
+            "Couldn't add this marketplace. Check the URL, ref, and Git access."
           )
         )
       )
@@ -88,7 +88,7 @@ export function PluginMarketplaceSourceDialog({
           cause,
           translate(
             'auto.components.settings.PluginMarketplaceSourceDialog.refreshFailed',
-            'Could not refresh this marketplace. Its last valid cached index is still available.'
+            "Couldn't refresh this marketplace. Try again."
           )
         )
       )
@@ -139,7 +139,7 @@ export function PluginMarketplaceSourceDialog({
           <DialogDescription>
             {translate(
               'auto.components.settings.PluginMarketplaceSourceDialog.description',
-              'Marketplaces are pinned Git repositories. Orca uses your existing system Git credentials for private repositories.'
+              'A Git repository that lists plugins. Private ones use your Git credentials.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -179,7 +179,7 @@ export function PluginMarketplaceSourceDialog({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.PluginMarketplaceSourceDialog.refDescription',
-                'Choose a branch, tag, or commit. Every fetched index is recorded at an exact commit.'
+                'A branch, tag, or commit.'
               )}
             </p>
           </div>
@@ -274,7 +274,7 @@ export function PluginMarketplaceSourceDialog({
                         <p className="mt-1 text-xs text-destructive">
                           {translate(
                             'auto.components.settings.PluginMarketplaceSourceDialog.stale',
-                            'Refresh failed. Browsing the last valid cached index.'
+                            "Couldn't refresh. This list may be out of date."
                           )}
                         </p>
                       ) : null}

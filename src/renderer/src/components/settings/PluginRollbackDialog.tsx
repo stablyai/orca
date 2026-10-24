@@ -32,6 +32,7 @@ export function PluginRollbackDialog({
     <Dialog open={Boolean(plugin)} onOpenChange={(open) => !open && !busy && onCancel()}>
       <DialogContent
         surface="security"
+        size="compact"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           cancelRef.current?.focus()
@@ -44,7 +45,7 @@ export function PluginRollbackDialog({
           <DialogDescription>
             {translate(
               'auto.components.settings.PluginRollbackDialog.description',
-              'This deactivates {{value0}} and restores its previous immutable version. If that version requests different access or instructional content, Orca will require another review.',
+              'Restores the previous version of {{value0}}. Changed access needs another review.',
               { value0: plugin?.name ?? '' }
             )}
           </DialogDescription>

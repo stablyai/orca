@@ -31,7 +31,8 @@ describe('rich markdown code block languages', () => {
             editor: { RichMarkdownCodeBlock: { '13822cdfda': plainText } }
           }
         }
-      }
+      },
+      coverage: 100
     })
     setRendererPluginLanguagePacks([pack('Plugin plain text')])
     await i18n.changeLanguage(resourceLanguage)

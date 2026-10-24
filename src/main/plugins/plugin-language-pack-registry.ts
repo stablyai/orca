@@ -3,6 +3,10 @@ import {
   pluginLanguageResourceId,
   type PluginLanguagePackRegistration
 } from '../../shared/plugins/plugin-language-pack-artifact'
+import {
+  pluginLanguagePackCoverage,
+  translatableCatalogPaths
+} from '../../shared/plugins/plugin-language-pack-coverage'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import {
   PLUGIN_LANGUAGE_PACK_MAX_BYTES,
@@ -12,6 +16,16 @@ import { PluginArtifactPackRegistry } from './plugin-artifact-pack-registry'
 import type { PluginContentVerifier } from './plugin-content-integrity'
 
 type LanguagePackContribution = PluginManifest['contributes']['languagePacks'][number]
+
+let englishPaths: Promise<ReadonlySet<string>> | null = null
+
+// Why lazy: the English catalog is ~1 MB and only matters once a language pack loads.
+function translatableEnglishPaths(): Promise<ReadonlySet<string>> {
+  englishPaths ??= import('../../renderer/src/i18n/locales/en.json').then((module) =>
+    translatableCatalogPaths(module.default)
+  )
+  return englishPaths
+}
 
 export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
   LanguagePackContribution,
@@ -37,7 +51,8 @@ export class PluginLanguagePackRegistry extends PluginArtifactPackRegistry<
           resourceLanguage: pluginLanguageResourceId(id),
           pluginKey: plugin.pluginKey,
           locale: contribution.locale,
-          catalog: parsed.catalog
+          catalog: parsed.catalog,
+          coverage: pluginLanguagePackCoverage(parsed.catalog, await translatableEnglishPaths())
         }
       }
     })

@@ -12,6 +12,10 @@ import { promisify } from 'node:util'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from '@stablyai/playwright-test'
 import { createRestartSession } from './helpers/orca-restart'
+import {
+  FIXTURE_LANGUAGE_PLUGIN,
+  writeFixtureLanguagePlugin
+} from './helpers/plugin-language-pack-fixture'
 
 const execFileAsync = promisify(execFile)
 const SSH_SHIM = join(
@@ -23,7 +27,7 @@ const SSH_SHIM = join(
 )
 const FIXTURE_REPOSITORIES = [
   'orca-plugins',
-  'orca-portuguese',
+  FIXTURE_LANGUAGE_PLUGIN.repository,
   'orca-multipass-recipes',
   'orca-navigation-shortcuts'
 ]
@@ -123,12 +127,9 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
   await mkdir(repositories, { recursive: true })
   await mkdir(home, { recursive: true })
   const gitEnvironment = await configureFixtureGit(home, repositories)
-  await copyLaunchPlugin(
-    repositories,
-    'orca-portuguese',
-    'stablyai.orca-portuguese',
-    gitEnvironment
-  )
+  const languageRepository = join(repositories, `${FIXTURE_LANGUAGE_PLUGIN.repository}.git`)
+  await writeFixtureLanguagePlugin(languageRepository)
+  await commitRepository(languageRepository, gitEnvironment)
   await copyLaunchPlugin(
     repositories,
     'orca-multipass-recipes',
@@ -151,7 +152,7 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
         name: 'Orca Plugins',
         owner: 'stablyai',
         plugins: [
-          ['stablyai.orca-portuguese', 'orca-portuguese', 'languages'],
+          [FIXTURE_LANGUAGE_PLUGIN.pluginKey, FIXTURE_LANGUAGE_PLUGIN.repository, 'languages'],
           ['stablyai.orca-multipass-recipes', 'orca-multipass-recipes', 'vm-recipes'],
           ['stablyai.orca-navigation-shortcuts', 'orca-navigation-shortcuts', 'keybindings']
         ].map(([id, repository, category]) => ({
@@ -223,7 +224,7 @@ async function enableInstalledPluginThroughUi(
 }
 
 async function applyInstalledLanguage(page: Page): Promise<void> {
-  const languageId = 'plugin:stablyai.orca-portuguese/pt-BR'
+  const languageId = `plugin:${FIXTURE_LANGUAGE_PLUGIN.pluginKey}/${FIXTURE_LANGUAGE_PLUGIN.locale}`
   await page.evaluate(() => {
     const state = window.__store?.getState()
     if (!state) {
@@ -234,7 +235,12 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
   await expect(page.locator('[data-settings-section="appearance"]')).toBeVisible()
   await page.evaluate(() => window.__store?.setState({ settingsSearchQuery: 'Language' }))
   await page.getByRole('combobox', { name: 'Language' }).click()
-  await page.getByRole('option', { name: 'pt-BR — stablyai.orca-portuguese', exact: true }).click()
+  await page
+    .getByRole('option', {
+      name: `${FIXTURE_LANGUAGE_PLUGIN.locale} — ${FIXTURE_LANGUAGE_PLUGIN.pluginKey}`,
+      exact: true
+    })
+    .click()
   await expect
     .poll(() => page.evaluate(() => window.__store?.getState().settings?.uiLanguage))
     .toBe(languageId)
@@ -258,7 +264,7 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
     .toMatchObject({
       sources: [expect.objectContaining({ official: true, stale: false })],
       listings: expect.arrayContaining([
-        expect.objectContaining({ pluginKey: 'stablyai.orca-portuguese', official: true }),
+        expect.objectContaining({ pluginKey: FIXTURE_LANGUAGE_PLUGIN.pluginKey, official: true }),
         expect.objectContaining({ pluginKey: 'stablyai.orca-multipass-recipes', official: true }),
         expect.objectContaining({
           pluginKey: 'stablyai.orca-navigation-shortcuts',
@@ -269,8 +275,8 @@ async function runMarketplaceJourney(page: Page): Promise<void> {
 
   await installMarketplacePluginThroughUi(
     page,
-    'stablyai.orca-portuguese',
-    'Português do Brasil',
+    FIXTURE_LANGUAGE_PLUGIN.pluginKey,
+    FIXTURE_LANGUAGE_PLUGIN.name,
     'Review plugin'
   )
   await installMarketplacePluginThroughUi(

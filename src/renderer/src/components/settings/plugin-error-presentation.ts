@@ -39,7 +39,7 @@ export function pluginInstallErrorMessage(cause: unknown): string {
   if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
     return translate(
       'auto.components.settings.pluginError.installGit',
-      'Orca could not fetch the pinned Git revision. Check the URL, #ref, access, and system Git setup.'
+      "Couldn't fetch this Git revision. Check the URL, #ref, and access."
     )
   }
   return translate(
@@ -65,7 +65,7 @@ export function invalidPluginErrorMessage(detailValue: string): string {
   if (detail.includes('artifact')) {
     return translate(
       'auto.components.settings.pluginError.invalidArtifact',
-      'A declared worker or panel file is missing or unsafe. Fix the plugin files, then refresh.'
+      'A worker or panel file is missing or unsafe. Fix it, then refresh.'
     )
   }
   if (detail.includes('requires orca')) {
@@ -76,7 +76,7 @@ export function invalidPluginErrorMessage(detailValue: string): string {
   }
   return translate(
     'auto.components.settings.PluginSettingsRow.invalidPluginError',
-    'The plugin manifest or installed files are invalid. Fix the plugin, then refresh.'
+    "This plugin's files are invalid. Fix them, then refresh."
   )
 }
 
@@ -85,7 +85,7 @@ export function pluginConsentErrorMessage(cause: unknown): string {
   if (/(changed|fingerprint|current|stale|review)/.test(detail)) {
     return translate(
       'auto.components.settings.pluginError.consentChanged',
-      'The plugin changed while you were reviewing it. Close this dialog and review the updated permissions.'
+      'This plugin changed while you were reviewing it. Review it again.'
     )
   }
   return translate(

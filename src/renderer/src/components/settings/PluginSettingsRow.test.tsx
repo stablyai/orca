@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
+import { pluginLanguageResourceId } from '../../../../shared/plugins/plugin-language-pack-artifact'
+import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { PluginSettingsRow } from './PluginSettingsRow'
 
 vi.mock('../ui/dropdown-menu', () => ({
@@ -49,6 +51,7 @@ const plugin: PluginHostListEntry = {
 
 afterEach(() => {
   document.body.innerHTML = ''
+  usePluginLanguagePackStore.setState({ entries: [], loaded: false })
 })
 
 describe('PluginSettingsRow', () => {
@@ -80,6 +83,42 @@ describe('PluginSettingsRow', () => {
     expect(
       container.querySelector<HTMLButtonElement>('[aria-label="Enable Orca Skills"]')?.disabled
     ).toBe(true)
+    act(() => root.unmount())
+  })
+
+  it('shows how much of Orca each of its language packs translates', async () => {
+    const id = `plugin:${plugin.pluginKey}/pt-BR` as const
+    usePluginLanguagePackStore.setState({
+      loaded: true,
+      entries: [
+        {
+          id,
+          resourceLanguage: pluginLanguageResourceId(id),
+          pluginKey: plugin.pluginKey,
+          locale: 'pt-BR',
+          catalog: {},
+          coverage: 42
+        }
+      ]
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <PluginSettingsRow
+          plugin={plugin}
+          busy={false}
+          logsOpen={false}
+          onReview={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          onToggleLogs={vi.fn()}
+          onRollbackRequest={vi.fn()}
+          onRemoveRequest={vi.fn()}
+        />
+      )
+    })
+    expect(container.textContent).toContain('pt-BR 42% translated')
     act(() => root.unmount())
   })
 })

@@ -129,7 +129,7 @@ export function PluginMarketplaceBrowser({
             cause,
             translate(
               'auto.components.settings.PluginMarketplaceBrowser.refreshFailed',
-              'Could not refresh marketplaces. Cached listings remain available.'
+              "Couldn't refresh marketplaces. Try again."
             )
           )
         )
@@ -167,7 +167,7 @@ export function PluginMarketplaceBrowser({
             cause,
             translate(
               'auto.components.settings.PluginMarketplaceBrowser.previewFailed',
-              'Could not prepare this plugin for review. Refresh the marketplace and try again.'
+              "Couldn't load this plugin. Refresh and try again."
             )
           )
         )

@@ -56,7 +56,9 @@ describe('PluginLanguagePackRegistry', () => {
           'plugin0070006c007500670069006e003a006f007200630061002d00730061006d0070006c00650073002e0070006f00720074007500670075006500730065002f00700074002d00420052',
         pluginKey: 'orca-samples.portuguese',
         locale: 'pt-BR',
-        catalog: { common: { save: 'Salvar' } }
+        catalog: { common: { save: 'Salvar' } },
+        // One string against the whole English catalog.
+        coverage: 0
       }
     ])
     expect(registry.error(plugin.pluginKey)).toBeNull()

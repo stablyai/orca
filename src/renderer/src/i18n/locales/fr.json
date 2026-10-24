@@ -12082,10 +12082,10 @@
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
           "reconsent": "Ce plugin a changé depuis votre approbation. Vérifiez-le pour le relancer.",
           "capabilities": "Ce plugin peut",
-          "warning": "Ces autorisations limitent la façon dont le plugin utilise l'API d'Orca. Son worker s'exécute néanmoins comme un processus normal sur votre ordinateur, avec un accès complet à vos fichiers, votre réseau et vos autres processus.",
-          "instructionalWarning": "Ce plugin n'a pas de processus worker. Son contenu instructif peut malgré tout déclencher des actions quand vous ou un agent l'utilisez. Examinez les instructions et commandes ci-dessous avant de l'activer.",
-          "panelWarning": "Ces autorisations limitent la façon dont le plugin utilise l'API d'Orca. Ce plugin n'a pas de worker en arrière-plan.",
-          "declarativeWarning": "Ce plugin fournit uniquement du contenu validé. Il n'exécute pas de worker en arrière-plan ni ne reçoit d'accès à l'API d'Orca.",
+          "warning": "Son worker s'exécute comme un processus normal avec un accès complet à vos fichiers, au réseau et aux autres processus.",
+          "instructionalWarning": "Ses commandes et instructions peuvent agir lorsque vous ou un agent les utilisez.",
+          "panelWarning": "Aucun worker en arrière-plan. Ces autorisations limitent ce qu'il peut faire dans Orca.",
+          "declarativeWarning": "Contenu uniquement : pas de code, pas de worker en arrière-plan et aucun accès à l'API d'Orca.",
           "keepDisabled": "Garder désactivé",
           "enable": "Activer le plugin",
           "capability": {
@@ -12097,7 +12097,8 @@
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
             "settingsOwn": "Lire et modifier les paramètres propres au plugin"
           },
-          "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
+          "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
+          "whatChanged": "Ce qui a changé"
         },
         "PluginConsentProvenance": {
           "official": "Officiel",
@@ -12114,7 +12115,7 @@
           "saveFailed": "Impossible d'enregistrer les chemins de plugins de développement.",
           "pathRequired": "Saisissez un chemin de dossier de plugin.",
           "title": "Développement",
-          "help": "Chargez les plugins directement depuis des dossiers de cet ordinateur pendant leur développement. Les plugins de développement exigent toujours une revue des autorisations. Les workers s'exécutent sur cet hôte de bureau ; les actions SSH sur les espaces de travail passent par Orca, donc les chemins indiqués ici sont des chemins du bureau.",
+          "help": "Chargez des plugins depuis des dossiers de cet ordinateur.",
           "remove": "Supprimer",
           "pathLabel": "Chemin du dossier de plugin de développement",
           "placeholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
@@ -12124,18 +12125,18 @@
           "localRequired": "Saisissez le chemin du dossier du plugin.",
           "gitUrlRequired": "Saisissez une URL de dépôt.",
           "gitUrlInvalid": "Utilisez une URL Git HTTPS ou SSH. Les protocoles de helper Git exécutables ne sont pas autorisés.",
-          "gitRefRequired": "Ajoutez une #ref explicite (tag ou commit) pour épingler l'installation — par exemple #v0.1.0.",
+          "gitRefRequired": "Ajoutez un #ref (tag ou commit), par exemple #v0.1.0.",
           "title": "Installer le plugin",
-          "description": "L'installation copie le plugin dans Orca et affiche ses autorisations pour revue. Aucun code de plugin ne s'exécute tant que vous ne l'activez pas.",
+          "description": "Aucun code du plugin ne s'exécute avant que vous l'ayez examiné et activé.",
           "source": "Source d'installation",
           "localTab": "Dossier local",
           "gitTab": "URL Git",
           "localLabel": "Chemin du dossier du plugin",
           "localPlaceholder": "/Users/you/plugins/my-plugin or C:\\Users\\you\\plugins\\my-plugin",
-          "localHelp": "Chemin complet vers un dossier contenant orca-plugin.json sur cet ordinateur. Le chemin est utilisé exactement tel que saisi.",
+          "localHelp": "Le dossier qui contient orca-plugin.json.",
           "gitLabel": "URL de dépôt avec #ref",
           "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Ajoutez une #ref explicite — un tag ou un commit — pour épingler l'installation. Fonctionne avec GitHub, GitLab et tout hôte git.",
+          "gitHelp": "Terminez l'URL par #tag ou #commit pour figer la version.",
           "cancel": "Annuler",
           "installing": "Installation…",
           "install": "Installer",
@@ -12144,13 +12145,13 @@
         "PluginKeybindingConsentPreview": {
           "heading": "Raccourcis clavier",
           "worktree": "Ne fonctionne que lorsqu'un espace de travail est actif.",
-          "global": "Fonctionne dans l'app sans espace de travail actif requis.",
+          "global": "Fonctionne partout dans Orca.",
           "shadows": "Remplace : {{value0}}"
         },
         "PluginMarketplaceBrowser": {
           "loadFailed": "Impossible de charger les plugins du marketplace.",
-          "refreshFailed": "Impossible d'actualiser les marketplaces. Les listes en cache restent disponibles.",
-          "previewFailed": "Impossible de préparer ce plugin pour revue. Actualisez le marketplace et réessayez.",
+          "refreshFailed": "Impossible d'actualiser les marketplaces. Réessayez.",
+          "previewFailed": "Impossible de charger ce plugin. Actualisez et réessayez.",
           "installFailed": "Impossible d'installer ce plugin. La source examinée a peut-être changé.",
           "manageSources": "Gérer les sources",
           "refreshing": "Actualisation…",
@@ -12195,7 +12196,7 @@
           "includes": "Inclut",
           "noContributions": "Métadonnées du manifeste uniquement",
           "capabilities": "Accès demandé",
-          "workerWarning": "Les capabilities limitent la façon dont ce plugin utilise l'API d'Orca. Son worker s'exécute toujours comme un processus normal sur cet ordinateur, avec un accès complet à vos fichiers, au réseau et aux autres processus.",
+          "workerWarning": "Son worker s'exécute comme un processus normal avec un accès complet à vos fichiers, au réseau et aux autres processus.",
           "blocked": "La liste de sécurité d'Orca bloque ce plugin : {{value0}}",
           "current": "Ce contenu exact de plugin est déjà installé.",
           "close": "Fermer",
@@ -12204,16 +12205,16 @@
           "install": "Installer le plugin"
         },
         "PluginMarketplaceSourceDialog": {
-          "addFailed": "Impossible d'ajouter ce marketplace. Vérifiez l'URL Git, la ref et vos identifiants Git.",
-          "refreshFailed": "Impossible d'actualiser ce marketplace. Son dernier index valide en cache reste disponible.",
+          "addFailed": "Impossible d'ajouter ce marketplace. Vérifiez l'URL, la ref et l'accès Git.",
+          "refreshFailed": "Impossible d'actualiser ce marketplace. Réessayez.",
           "removeFailed": "Impossible de supprimer ce marketplace.",
           "title": "Sources du marketplace",
-          "description": "Les marketplaces sont des dépôts Git épinglés. Orca utilise vos identifiants Git système existants pour les dépôts privés.",
+          "description": "Un dépôt Git qui liste des plugins. Les dépôts privés utilisent vos identifiants Git.",
           "urlLabel": "URL Git",
           "urlDescription": "Utilisez une URL de dépôt HTTPS ou SSH contenant orca-marketplace.json.",
           "urlPlaceholder": "https://git.example.com/team/plugins.git",
           "refLabel": "Ref Git",
-          "refDescription": "Choisissez une branche, un tag ou un commit. Chaque index récupéré est enregistré à un commit précis.",
+          "refDescription": "Une branche, un tag ou un commit.",
           "adding": "Ajout…",
           "add": "Ajouter une source",
           "configured": "Sources configurées",
@@ -12221,27 +12222,26 @@
           "official": "Officiel",
           "owner": "Propriétaire : {{value0}}",
           "pinnedCommit": "Épinglé à {{value0}}",
-          "stale": "Échec de l'actualisation. Navigation dans le dernier index valide en cache.",
+          "stale": "Actualisation impossible. Cette liste n'est peut-être pas à jour.",
           "refreshLabel": "Actualiser {{value0}}",
           "removeLabel": "Supprimer {{value0}}",
           "done": "Terminé"
         },
         "PluginRemoveDialog": {
           "title": "Supprimer le plugin ?",
-          "description": "Ceci supprime {{value0}} et ses données de plugin stockées de cet ordinateur. Vous pourrez le réinstaller plus tard.",
+          "description": "Supprime {{value0}} et ses données de cet ordinateur.",
           "cancel": "Annuler",
           "remove": "Supprimer le plugin"
         },
         "PluginRollbackDialog": {
           "title": "Restaurer le plugin ?",
-          "description": "Ceci désactive {{value0}} et restaure sa version immuable précédente. Si cette version demande un accès ou un contenu d'instructions différents, Orca exigera une nouvelle revue.",
+          "description": "Restaure la version précédente de {{value0}}. Un accès modifié nécessite un nouvel examen.",
           "cancel": "Annuler",
           "confirm": "Restaurer le plugin"
         },
         "PluginsSettingsSection": {
           "systemLabel": "Système de plugins",
-          "systemDescription": "Détecte les plugins installés et permet de les activer individuellement. Rien ne s'exécute avant examen et activation. Les workers s'exécutent toujours sur cet ordinateur ; les actions sur les espaces de travail SSH passent par Orca.",
-          "featureOff": "Activez le système de plugins pour voir et gérer les plugins installés. Tout ce qui est déjà installé reste sur disque et désactivé tant que le système est coupé.",
+          "systemDescription": "Rien ne s'exécute avant votre examen et votre activation.",
           "loading": "Chargement des plugins…",
           "noInstalledResultsTitle": "Aucun plugin correspondant",
           "noInstalledResults": "Aucun plugin installé ne correspond à cette recherche.",
@@ -12252,9 +12252,9 @@
           "install": "Installer le plugin",
           "title": "Plugins",
           "experimental": "Expérimental",
-          "description": "Installez et gérez les plugins Orca. Les plugins s'exécutent sur cet ordinateur, même pour les espaces de travail SSH.",
+          "description": "Thèmes, langues, commandes et plus encore. Les plugins s'exécutent sur cet ordinateur.",
           "logsFailed": "Impossible de charger les logs du plugin.",
-          "rollbackFailed": "Impossible de restaurer ce plugin. Une version immuable précédente n'est peut-être pas disponible."
+          "rollbackFailed": "Impossible de restaurer la version précédente de ce plugin."
         },
         "PluginSettingsRow": {
           "blocked": "Bloquée",
@@ -12275,7 +12275,7 @@
           "noDescription": "Aucune description fournie.",
           "killListMessage": "La liste de sécurité d'Orca a désactivé ce plugin : {{value0}}",
           "viewAdvisory": "Consulter l'avis de sécurité",
-          "runtimeError": "Le plugin s'est arrêté après une erreur d'activation ou de worker.",
+          "runtimeError": "Arrêté après une erreur. Consultez les journaux pour plus de détails.",
           "restartCount": " · {{value0}} redémarrages",
           "moreActions": "Plus d'actions pour {{value0}}",
           "hideLogs": "Masquer les logs",
@@ -12284,7 +12284,8 @@
           "remove": "Supprimer",
           "disableLabel": "Désactiver {{value0}}",
           "enableLabel": "Activer {{value0}}",
-          "invalidPluginError": "Le manifeste du plugin ou les fichiers installés sont non valides. Corrigez le plugin, puis actualisez."
+          "invalidPluginError": "Les fichiers de ce plugin ne sont pas valides. Corrigez-les, puis actualisez.",
+          "languageCoverage": "{{value0}} traduit à {{value1}} %"
         },
         "PluginVmRecipeConsentPreview": {
           "create": "Créer",
@@ -12300,11 +12301,11 @@
           "incompatible": "Ce plugin nécessite une autre version d'Orca.",
           "installUnsafePath": "Le plugin contient un chemin de fichier ou un symlink dangereux et n'a pas été installé.",
           "installLimit": "Le plugin dépasse les limites d'installation d'Orca en taille ou en nombre de fichiers.",
-          "installGit": "Orca n'a pas pu récupérer la révision Git épinglée. Vérifiez l'URL, la #ref, l'accès et la configuration Git du système.",
+          "installGit": "Impossible de récupérer cette révision Git. Vérifiez l'URL, le #ref et l'accès.",
           "invalidManifestMissing": "orca-plugin.json manque à la racine du plugin. Ajoutez-le, puis actualisez les plugins.",
           "invalidManifest": "orca-plugin.json est non valide. Corrigez-le, puis actualisez les plugins.",
-          "invalidArtifact": "Un fichier worker ou panneau déclaré est manquant ou dangereux. Corrigez les fichiers du plugin, puis actualisez.",
-          "consentChanged": "Le plugin a changé pendant votre examen. Fermez cette boîte de dialogue et examinez les permissions mises à jour."
+          "invalidArtifact": "Un fichier de worker ou de panneau est manquant ou dangereux. Corrigez-le, puis actualisez.",
+          "consentChanged": "Ce plugin a changé pendant votre examen. Examinez-le à nouveau."
         },
         "plugins": {
           "search": {

@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { PluginCatalogAvatar } from '../plugin-catalog/PluginCatalogAvatar'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
 import { cn } from '@/lib/utils'
+import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -139,6 +140,10 @@ export function PluginSettingsRow({
   onRemoveRequest
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
+  // Why the raw store: I18nProvider already loads language packs; a row must not start a load.
+  const languagePacks = usePluginLanguagePackStore((state) => state.entries).filter(
+    (pack) => pack.pluginKey === plugin.pluginKey
+  )
   const needsReview = plugin.needsReconsent || plugin.status === 'pending'
   const enabled =
     plugin.status === 'running' ||
@@ -206,6 +211,16 @@ export function PluginSettingsRow({
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {plugin.publisher ? `${plugin.publisher} · ` : null}v{plugin.version}
+            {languagePacks.map((pack) => (
+              <span key={pack.id}>
+                {' · '}
+                {translate(
+                  'auto.components.settings.PluginSettingsRow.languageCoverage',
+                  '{{value0}} {{value1}}% translated',
+                  { value0: pack.locale, value1: pack.coverage }
+                )}
+              </span>
+            ))}
           </p>
           <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">
             {plugin.description ??
@@ -250,7 +265,7 @@ export function PluginSettingsRow({
                   ? invalidPluginErrorMessage(plugin.error)
                   : translate(
                       'auto.components.settings.PluginSettingsRow.runtimeError',
-                      'The plugin stopped after an activation or worker error.'
+                      'Stopped after an error. View logs for details.'
                     )}
                 {plugin.restarts > 0
                   ? translate(

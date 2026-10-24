@@ -13,6 +13,7 @@ const PACK = {
   resourceLanguage: pluginLanguageResourceId(PACK_ID),
   pluginKey: 'orca-test.traditional-chinese',
   locale: 'zh-TW',
+  coverage: 100,
   catalog: {}
 }
 

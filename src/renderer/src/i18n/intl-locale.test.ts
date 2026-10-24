@@ -19,7 +19,8 @@ const PACK = {
   resourceLanguage: PACK_RESOURCE,
   pluginKey: 'smwbev.russian',
   locale: 'ru-RU',
-  catalog: {}
+  catalog: {},
+  coverage: 100
 }
 
 type Packs = Parameters<typeof setRendererPluginLanguagePacks>[0]

@@ -27,7 +27,7 @@ export function getPluginsSectionPresentation() {
     ),
     description: translate(
       'auto.components.settings.PluginsSettingsSection.description',
-      'Install and manage Orca plugins. Plugins run on this computer, even for SSH workspaces.'
+      'Themes, languages, commands, and more. Plugins run on this computer.'
     ),
     searchEntries: getPluginsPaneSearchEntries()
   }

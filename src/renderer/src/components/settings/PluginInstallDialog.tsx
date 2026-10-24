@@ -43,7 +43,7 @@ function installValidationMessage(reason: string): string {
     default:
       return translate(
         'auto.components.settings.PluginInstallDialog.gitRefRequired',
-        'Add an explicit #ref (tag or commit) so the install is pinned — for example #v0.1.0.'
+        'Add a #ref (tag or commit), for example #v0.1.0.'
       )
   }
 }
@@ -79,7 +79,7 @@ export function PluginInstallDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !installing && onOpenChange(nextOpen)}>
-      <DialogContent surface="security" scrollable className="sm:max-w-lg">
+      <DialogContent surface="security" scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
             {translate('auto.components.settings.PluginInstallDialog.title', 'Install plugin')}
@@ -87,7 +87,7 @@ export function PluginInstallDialog({
           <DialogDescription>
             {translate(
               'auto.components.settings.PluginInstallDialog.description',
-              'Installing copies the plugin into Orca and shows its permissions for review. No plugin code runs until you enable it.'
+              'No plugin code runs until you review and enable it.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -142,7 +142,7 @@ export function PluginInstallDialog({
               <p className="text-xs leading-5 text-muted-foreground">
                 {translate(
                   'auto.components.settings.PluginInstallDialog.localHelp',
-                  'Full path to a folder containing orca-plugin.json on this computer. The path is used exactly as entered.'
+                  'The folder that contains orca-plugin.json.'
                 )}
               </p>
             </TabsContent>
@@ -169,7 +169,7 @@ export function PluginInstallDialog({
               <p className="text-xs leading-5 text-muted-foreground">
                 {translate(
                   'auto.components.settings.PluginInstallDialog.gitHelp',
-                  'Append an explicit #ref — a tag or commit — so the install is pinned. Works with GitHub, GitLab, and any git host.'
+                  'End the URL with #tag or #commit to pin the version.'
                 )}
               </p>
             </TabsContent>
