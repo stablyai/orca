@@ -11,9 +11,13 @@ import { PROTOCOL_VERSION } from './types'
 
 const {
   probeSocketExistsMock,
+  checkDaemonHealthMock,
   listProcessesControl,
+  spawnerInstances,
   adapterInstances,
   ensureRunningOverrides,
+  adoptionLeaseReleases,
+  lifecycleLeaseErrors,
   localFallbackProvider,
   setLocalPtyProviderMock,
   rebindLocalProviderListenersMock,
@@ -208,6 +212,57 @@ describe('initDaemonPtyProvider legacy fallback', () => {
     expect(localFallbackProvider.spawn).toHaveBeenCalledOnce()
     expect(current.listProcesses).not.toHaveBeenCalled()
     await expect(provider.listProcesses()).resolves.toEqual([legacySession])
+
+    expect(current.options.respawn).toEqual(expect.any(Function))
+    const releaseRespawnLease = await current.options.respawn!('daemon_died')
+    expect(spawnerInstances[0].resetHandle).toHaveBeenCalledOnce()
+    expect(spawnerInstances[0].ensureRunning).toHaveBeenCalledTimes(2)
+    expect(releaseRespawnLease).toBe(adoptionLeaseReleases[0])
+  })
+
+  it('preserves host-image-severed quarantine during legacy fallback', async () => {
+    const mod = await importFresh()
+    const state = await import('./daemon-host-image-state')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    state.noteSeveredDaemon({
+      verdict: 'severed',
+      pid: 4288,
+      linuxStartTicks: '777',
+      bootId: 'boot-1'
+    })
+    probeSocketExistsMock.mockImplementation(
+      (socketPath?: string) => socketPath?.endsWith('daemon-v49.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v49.sock')
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/severed-socket',
+      tokenPath: '/fake/severed-token',
+      mode: 'degraded-new-pty-fallback',
+      quarantine: 'host-image-severed'
+    }))
+    lifecycleLeaseErrors.push(new Error('lease failed'))
+
+    try {
+      await mod.initDaemonPtyProvider()
+      checkDaemonHealthMock.mockResolvedValue('healthy')
+
+      expect(state.getSeveredDaemon()).toEqual({
+        pid: 4288,
+        linuxStartTicks: '777',
+        bootId: 'boot-1'
+      })
+      const { DegradedDaemonPtyProvider: InstalledDegradedDaemonPtyProvider } =
+        await import('./degraded-daemon-pty-provider')
+      const provider = mod.getDaemonProvider()
+      expect(provider).toBeInstanceOf(InstalledDegradedDaemonPtyProvider)
+      if (!(provider instanceof InstalledDegradedDaemonPtyProvider)) {
+        throw new Error('expected DegradedDaemonPtyProvider')
+      }
+      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
+    } finally {
+      state.clearSeveredDaemon()
+      warn.mockRestore()
+    }
   })
 
   it('rethrows the current startup error when no legacy daemon is alive', async () => {

@@ -61,6 +61,39 @@ function probeCurrentDaemonCanSpawn(
     (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
 }
 
+function createCurrentDaemonAdapter(
+  runtimeDir: string,
+  newSpawner: DaemonSpawner,
+  socketPath = getDaemonSocketPath(runtimeDir),
+  tokenPath = getDaemonTokenPath(runtimeDir)
+): DaemonPtyAdapter {
+  return new DaemonPtyAdapter({
+    socketPath,
+    tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
+    historyPath: getHistoryDir(),
+    respawn: async (reason: DaemonRespawnReason) => {
+      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
+      if (reason === 'daemon_died') {
+        console.warn('[daemon] Daemon process died — respawning')
+        // Synthetic exits during manual restart must not enter the crash bucket.
+        if (!isDaemonRestartInFlight()) {
+          trackDaemonRetired('died_respawn')
+        }
+      } else {
+        // Must reach the launcher below without an await in between; see the consume site.
+        attributeNextDaemonReplacement(reason)
+      }
+      newSpawner.resetHandle()
+      await newSpawner.ensureRunning()
+      return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
+    }
+  })
+}
+
 // Use in-process timestamps: daemon init overlaps window loading and harness stderr can arrive late.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
   if (isStartupDiagnosticsEnabled()) {
@@ -96,25 +129,19 @@ export async function initDaemonPtyProvider(
   try {
     info = await newSpawner.ensureRunning()
   } catch (error) {
+    const quarantine = newSpawner.getHandle()?.quarantine
     await tryInstallLegacyFallbackOnCurrentFailure({
       error,
       signal,
       runtimeDir,
       newSpawner,
-      newAdapter: new DaemonPtyAdapter({
-        socketPath: getDaemonSocketPath(runtimeDir),
-        tokenPath: getDaemonTokenPath(runtimeDir),
-        pidPath: getDaemonPidPath(runtimeDir),
-        profileScope: runtimeDir,
-        runtimeDir,
-        packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
-        historyPath: getHistoryDir()
-      }),
+      newAdapter: createCurrentDaemonAdapter(runtimeDir, newSpawner),
+      quarantine,
       probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
         getDaemonSocketPath(runtimeDir),
         getDaemonTokenPath(runtimeDir),
         runtimeDir,
-        newSpawner.getHandle()?.quarantine
+        quarantine
       )
     })
     return
@@ -138,31 +165,12 @@ export async function initDaemonPtyProvider(
     return
   }
 
-  const newAdapter = new DaemonPtyAdapter({
-    socketPath: info.socketPath,
-    tokenPath: info.tokenPath,
-    pidPath: getDaemonPidPath(runtimeDir),
-    profileScope: runtimeDir,
+  const newAdapter = createCurrentDaemonAdapter(
     runtimeDir,
-    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
-    historyPath: getHistoryDir(),
-    respawn: async (reason: DaemonRespawnReason) => {
-      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
-      if (reason === 'daemon_died') {
-        console.warn('[daemon] Daemon process died — respawning')
-        // Synthetic exits during manual restart must not enter the crash bucket.
-        if (!isDaemonRestartInFlight()) {
-          trackDaemonRetired('died_respawn')
-        }
-      } else {
-        // Must reach the launcher below without an await in between; see the consume site.
-        attributeNextDaemonReplacement(reason)
-      }
-      newSpawner.resetHandle()
-      await newSpawner.ensureRunning()
-      return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
-    }
-  })
+    newSpawner,
+    info.socketPath,
+    info.tokenPath
+  )
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
   try {
@@ -175,6 +183,7 @@ export async function initDaemonPtyProvider(
       runtimeDir,
       newSpawner,
       newAdapter,
+      quarantine,
       probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
         info.socketPath,
         info.tokenPath,

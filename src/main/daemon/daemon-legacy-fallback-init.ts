@@ -9,7 +9,7 @@ import {
 } from './daemon-newer-protocol-hold'
 import { installDaemonProvider } from './daemon-provider-state'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { DaemonSpawner } from './daemon-spawner'
+import type { DaemonProcessHandle, DaemonSpawner } from './daemon-spawner'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { createSeveredDaemonController } from './daemon-severed-restart'
 
@@ -19,6 +19,7 @@ export type TryInstallLegacyFallbackOnCurrentFailureInput = {
   runtimeDir: string
   newSpawner: DaemonSpawner
   newAdapter: DaemonPtyAdapter
+  quarantine?: DaemonProcessHandle['quarantine']
   probeCurrentDaemonSpawn: () => Promise<boolean>
 }
 
@@ -63,7 +64,9 @@ export async function tryInstallLegacyFallbackOnCurrentFailure(
   }
   installDaemonProvider(input.newSpawner, degradedProvider)
   installSeveredDaemonController(createSeveredDaemonController())
-  clearSeveredDaemon()
+  if (input.quarantine !== 'host-image-severed') {
+    clearSeveredDaemon()
+  }
   rebindLocalProviderListeners()
   return true
 }
