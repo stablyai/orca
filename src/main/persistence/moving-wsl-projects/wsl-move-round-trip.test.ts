@@ -139,8 +139,27 @@ function persistedState(dir: string): PersistedState {
   return JSON.parse(readWslMoveRoundTripStoreJson(dir)) as PersistedState
 }
 
-async function moveFixture(name: WslMoverProfileName): Promise<RoundTrip> {
+async function moveFixture(
+  name: WslMoverProfileName,
+  options: {
+    /** What the host's own window focuses on before the move. */
+    hostFocus?: Pick<WorkspaceSessionState, 'activeRepoId' | 'activeWorktreeId' | 'activeTabId'>
+    /** Focus this desktop on the moving project, as when the user moves the one they have open. */
+    focusMovedProject?: boolean
+  } = {}
+): Promise<RoundTrip> {
   const source = wslMoverProfile(name, 'source')
+  if (options.focusMovedProject) {
+    const movedRepoId = [...wslMoverProfileScope(name, 'source').repoIds][0]
+    const movedWorktree = Object.keys(source.session.tabsByWorktree ?? {}).find((id) =>
+      id.startsWith(`${movedRepoId}::`)
+    )
+    source.session = {
+      ...source.session,
+      activeRepoId: movedRepoId ?? null,
+      activeWorktreeId: movedWorktree ?? null
+    }
+  }
   // Non-default repo settings, so a move that drops or changes them cannot pass as a default.
   const [first, ...rest] = source.state.repos
   source.state.repos = [
@@ -172,7 +191,18 @@ async function moveFixture(name: WslMoverProfileName): Promise<RoundTrip> {
   const before = persistedState(desktopDir)
   const sourceSession = structuredClone(desktop.getWorkspaceSession())
   const hostDir = tempDir('wsl-round-trip-host-')
-  const host = openWslMoveRoundTripStore(hostDir)
+  const host = openWslMoveRoundTripStore(
+    hostDir,
+    options.hostFocus
+      ? {
+          ...getDefaultPersistedState(hostDir),
+          workspaceSession: {
+            ...getDefaultPersistedState(hostDir).workspaceSession,
+            ...options.hostFocus
+          }
+        }
+      : undefined
+  )
   const userDataPath = desktopDir
   loadWslMoveFence(userDataPath)
   registerWslMoveMainRewriteStores(desktop)
@@ -268,6 +298,24 @@ describe('WSL move round trip on every fixture', () => {
       expect(sourceBytes(persistedState(trip.desktopDir))).toEqual(sourceBytes(trip.before))
     }
   )
+
+  // awin verify-7, N1: the project the user had open could not move into a host with its own focus.
+  it('moves the focused project into a host that already has an active project, keeping its focus', async () => {
+    const hostFocus = {
+      activeRepoId: 'repo-already-on-host',
+      activeWorktreeId: 'repo-already-on-host::/home/dev/other',
+      activeTabId: 'host-tab'
+    }
+    const trip = await moveFixture('heavy-wsl', { hostFocus, focusMovedProject: true })
+    expect(trip.sourceSession.activeRepoId).toBe(
+      [...wslMoverProfileScope('heavy-wsl', 'source').repoIds][0]
+    )
+    // The host keeps its own focus (its unknown worktree id is dropped on load either way).
+    expect(persistedState(trip.hostDir).workspaceSession).toMatchObject({
+      activeRepoId: hostFocus.activeRepoId,
+      activeTabId: hostFocus.activeTabId
+    })
+  })
 
   it('knows each listed gap still differs, so a fix must remove it from the list', async () => {
     const trip = await moveFixture('heavy-wsl')
