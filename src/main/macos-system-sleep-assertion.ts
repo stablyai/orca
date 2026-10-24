@@ -1,6 +1,9 @@
 import { spawn as nodeSpawn } from 'node:child_process'
 
 export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
+// Why: a killed or reaped caffeinate can leave `child` set with no exit event, and the
+// service stops the Electron blocker on that word — so the belief must be re-verified.
+export const MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS = 30_000
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
@@ -28,6 +31,8 @@ type MacosSystemSleepAssertionOptions = {
   onUnexpectedFailure?: (reason: string) => void
   platform?: NodeJS.Platform
   spawn?: CaffeinateSpawn
+  isProcessAlive?: (pid: number) => boolean
+  watchdogIntervalMs?: number
 }
 
 export class MacosSystemSleepAssertion {
@@ -36,7 +41,11 @@ export class MacosSystemSleepAssertion {
   private readonly onUnexpectedFailure: (reason: string) => void
   private readonly platform: NodeJS.Platform
   private readonly spawn: CaffeinateSpawn
+  private readonly isProcessAlive: (pid: number) => boolean
+  private readonly watchdogIntervalMs: number
   private child: CaffeinateProcess | null = null
+  private childPid: number | null = null
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null
   private retryNotBefore: number | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private lastFailureKey: string | null = null
@@ -51,6 +60,8 @@ export class MacosSystemSleepAssertion {
     this.onUnexpectedFailure = options.onUnexpectedFailure ?? (() => {})
     this.platform = options.platform ?? process.platform
     this.spawn = options.spawn ?? nodeSpawn
+    this.isProcessAlive = options.isProcessAlive ?? processIsAlive
+    this.watchdogIntervalMs = options.watchdogIntervalMs ?? MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS
   }
 
   start(reason: string): boolean {
@@ -58,7 +69,10 @@ export class MacosSystemSleepAssertion {
       return false
     }
     if (this.child) {
-      return true
+      if (this.isChildAlive()) {
+        return true
+      }
+      this.forgetChild()
     }
     if (this.retryNotBefore !== null && this.now() < this.retryNotBefore) {
       this.scheduleRetry()
@@ -77,6 +91,7 @@ export class MacosSystemSleepAssertion {
     }
 
     this.child = child
+    this.childPid = typeof child.pid === 'number' ? child.pid : null
     const onError: CaffeinateErrorListener = (error) => {
       this.handleChildFailure(child, `error:${String(error.message)}`, 'error', reason, error)
     }
@@ -92,6 +107,7 @@ export class MacosSystemSleepAssertion {
     })
     child.on('error', onError)
     child.on('exit', onExit)
+    this.armWatchdog()
     this.resetRetrySuppression()
     this.resetFailureStreak()
     return true
@@ -105,6 +121,8 @@ export class MacosSystemSleepAssertion {
     }
     const child = this.child
     this.child = null
+    this.childPid = null
+    this.clearWatchdog()
     this.intentionalStops.add(child)
     this.detachChildListeners(child)
     try {
@@ -139,7 +157,7 @@ export class MacosSystemSleepAssertion {
     }
     this.reportedFailures.add(child)
     if (this.child === child) {
-      this.child = null
+      this.forgetChild()
     }
     this.handleFailure(failureKey, startReason, details, failureType)
   }
@@ -185,6 +203,44 @@ export class MacosSystemSleepAssertion {
     this.logger.warn('[agent-awake] macOS system sleep assertion failed', payload)
   }
 
+  private isChildAlive(): boolean {
+    // No pid means an injected test double; there is nothing to verify against.
+    return this.childPid === null ? true : this.isProcessAlive(this.childPid)
+  }
+
+  private forgetChild(): void {
+    const child = this.child
+    this.child = null
+    this.childPid = null
+    this.clearWatchdog()
+    if (child) {
+      this.detachChildListeners(child)
+    }
+  }
+
+  private armWatchdog(): void {
+    this.clearWatchdog()
+    this.watchdogTimer = setInterval(() => {
+      if (this.isChildAlive()) {
+        return
+      }
+      this.logger.warn('[agent-awake] macOS system sleep assertion vanished without an exit event')
+      this.forgetChild()
+      this.onUnexpectedFailure('macos-assertion-vanished')
+    }, this.watchdogIntervalMs)
+    if (typeof this.watchdogTimer.unref === 'function') {
+      this.watchdogTimer.unref()
+    }
+  }
+
+  private clearWatchdog(): void {
+    if (!this.watchdogTimer) {
+      return
+    }
+    clearInterval(this.watchdogTimer)
+    this.watchdogTimer = null
+  }
+
   private scheduleRetry(): void {
     if (this.retryNotBefore === null || this.retryTimer) {
       return
@@ -211,6 +267,16 @@ export class MacosSystemSleepAssertion {
   private resetFailureStreak(): void {
     this.lastFailureKey = null
     this.warnedForLastFailure = false
+  }
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM means the pid is live but not ours; only ESRCH proves it is gone.
+    return !isEsrchError(error)
   }
 }
 
