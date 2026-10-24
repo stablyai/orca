@@ -10,6 +10,7 @@ import {
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
+import type { PtyTransportRecoveryState } from './pty-transport-types'
 
 // These transport fixtures never read abandoned-launch ownership from the app store.
 const appStore = vi.hoisted(() => ({
@@ -570,6 +571,42 @@ describe('createRemoteRuntimePtyTransport', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('says a shared connection drop caused the recovery, and forgets it once healthy', async () => {
+    const callbacksByConnection: NonNullable<typeof subscriptionCallbacks>[] = []
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        callbacksByConnection.push(callbacks)
+        subscriptionCallbacks = callbacks
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const recoveryStates: PtyTransportRecoveryState[] = []
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: { onRecoveryStateChange: (state) => recoveryStates.push(state) }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    emitSnapshot(latestSubscribePayload().streamId, 'before drop')
+
+    callbacksByConnection[0].onClose?.()
+
+    await vi.waitFor(() =>
+      expect(recoveryStates.some((state) => state.cause === 'connection')).toBe(true)
+    )
+    await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
+    emitSnapshot(latestSubscribePayload().streamId, 'after drop')
+    await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
+    expect(transport.getRecoveryState?.().cause).toBeUndefined()
+    transport.destroy?.()
   })
 
   // #25783/#9092: a route returning without `online` (Tailscale, VPN) left a latched pane dead.

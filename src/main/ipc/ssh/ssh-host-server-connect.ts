@@ -1,4 +1,3 @@
-/** The connect path's managed-server step: decide the host's server, and publish a managed connect. */
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type {
   SshConnectionState,
@@ -20,7 +19,7 @@ import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
 import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
-  // Why lazy: the managed-server graph (deploy, migration, tunnel) loads only when a host connects.
+  // Load managed-server deploy/migration/tunnel dependencies only when connecting.
   const [{ resolveHostServerOnConnect }, { hostServerOnConnectDeps }] = await Promise.all([
     import('../../ssh/ssh-host-server-on-connect'),
     import('./ssh-host-server-on-connect-wiring')
@@ -54,10 +53,7 @@ export function recheckWhenManagedFenceClears(target: SshTarget, environmentId: 
   })
 }
 
-/**
- * A host only its managed server reaches failed to set up: leave 'connecting' and the 'setting
- * up' status for the error, as a failed transport connect does.
- */
+/** Failed server setup must leave connecting/setting-up state and publish the actionable error. */
 export function publishHostServerDecisionFailure(targetId: string, error: unknown): void {
   const failure = error instanceof Error ? error : new Error(String(error))
   clearSshHostServerStatus(targetId)
@@ -117,10 +113,7 @@ export function publishBridgedUnservedHostServer(
   return getPublicSshState(target.id) ?? state
 }
 
-/**
- * A host the managed server doesn't serve: publish why and fail the connect. There is no fallback;
- * the renderer translates the status, and this message is only its untranslated twin.
- */
+/** Publish the unserved status for renderer translation and fail the connect without a fallback. */
 export function publishUnservedHostServer(
   target: SshTarget,
   decision: Extract<HostServerOnConnectResult, { route: 'unserved' }>

@@ -156,12 +156,17 @@ export function ClosedReviewActions({
 }
 
 export function MergedReviewActions({
+  isMainWorktree,
   isDeletingWorktree,
   onDeleteWorktree
 }: {
+  isMainWorktree: boolean
   isDeletingWorktree: boolean
   onDeleteWorktree: () => void
 }): React.JSX.Element {
+  const deleteLabel = isMainWorktree
+    ? translate('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')
+    : translate('auto.components.right.sidebar.HostedReviewActions.e4aca40024', 'Delete Workspace')
   return (
     <Button
       type="button"
@@ -180,10 +185,7 @@ export function MergedReviewActions({
       )}
       {isDeletingWorktree
         ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
-        : translate(
-            'auto.components.right.sidebar.HostedReviewActions.e4aca40024',
-            'Delete Workspace'
-          )}
+        : deleteLabel}
     </Button>
   )
 }

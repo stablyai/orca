@@ -27,7 +27,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
 import { RuntimeClientError } from './runtime/types'
 
 const site = {

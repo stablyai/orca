@@ -2,20 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { isENOENT, isPathAbsentError } from './filesystem-path-containment'
 
-/**
- * Creating a worktree over SSH failed with a raw
- * `ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234'`.
- *
- * The path was the one about to be created, so its absence was correct and expected — the caller
- * (`remotePathExists`) asks exactly that question and returns false on ENOENT. It could not: the
- * error was raised on the SSH host, crossed the relay as JSON-RPC, and
- * `ssh-channel-multiplexer.handleResponse` rebuilds it with the TRANSPORT's numeric code. Node's
- * 'ENOENT' string code is gone by construction, so the check never matched and the error was
- * rethrown at the user.
- *
- * The stack in the trace log is what settles it — the throw originates in `handleResponse`, not in
- * any local fs call, which is why hunting for a local `lstat` found nothing.
- */
+/** Relay JSON-RPC preserves Node ENOENT messages but replaces string codes; remote creation must still recognize expected absence. */
 describe('isENOENT across the SSH relay boundary', () => {
   it('recognises a local Node error by its code', () => {
     const local = new Error(
@@ -27,7 +14,7 @@ describe('isENOENT across the SSH relay boundary', () => {
   })
 
   it('recognises an error rebuilt from the relay with a numeric transport code', () => {
-    // Exactly what handleResponse produces: message preserved, code replaced by the JSON-RPC code.
+    // Relay response reconstruction preserves the message and replaces the code.
     const fromRelay = new Error(
       "ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234'"
     )
@@ -54,9 +41,7 @@ describe('isENOENT across the SSH relay boundary', () => {
   })
 
   it('does not match a message that merely mentions the word', () => {
-    // The full canonical phrase is required, so a branch name, a log line, or a user's commit
-    // message cannot make an existing path look missing — which would silently skip collision
-    // checks rather than report them.
+    // Match the canonical phrase so unrelated ENOENT mentions cannot bypass collision checks.
     expect(isENOENT(new Error('fix: handle ENOENT better'))).toBe(false)
     expect(isENOENT(new Error('branch enoent-handling created'))).toBe(false)
   })
@@ -70,7 +55,7 @@ describe('isENOENT across the SSH relay boundary', () => {
 
 describe('isPathAbsentError', () => {
   it('treats a path under a file as absent, but not a denied one', () => {
-    // Why: `a.txt/b.txt` is the hard-wrap guess a terminal link click probes (#32128).
+    // Terminal hard-wrap guesses may probe a child under a file (#32128).
     const underFile = Object.assign(new Error("ENOTDIR: not a directory, stat '/r/a.txt/b.txt'"), {
       code: 'ENOTDIR'
     })

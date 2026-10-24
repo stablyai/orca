@@ -209,5 +209,7 @@ async function expectDeliveredAfterStop(
   ])
   await host.flushStreamedEvents(SESSION)
   const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
-  expect(rows.filter((row) => row.body.kind === 'status')).toEqual([])
+  expect(rows.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))).toEqual([
+    'Cancellation requested.'
+  ])
 }

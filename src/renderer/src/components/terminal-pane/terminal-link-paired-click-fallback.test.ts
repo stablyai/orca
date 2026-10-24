@@ -6,7 +6,11 @@ import { openDetectedFilePath } from './terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { makeBuffer, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
+import {
+  makeBuffer,
+  makeBufferLine,
+  makeExistsCache
+} from './terminal-link-provider-buffer-fixtures'
 import {
   createDeferred,
   flushAsyncWork,
@@ -77,7 +81,7 @@ function hostAnswers(answer: (relativePath: string) => HostAnswer): void {
 
 function clickPairedPath(
   buffer: ReturnType<typeof makeBuffer>,
-  pathExistsCache = new Map<string, boolean>()
+  pathExistsCache = makeExistsCache()
 ): boolean {
   return openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 1 }, 80, {
     startupCwd: '/srv/repo',
@@ -89,10 +93,7 @@ function clickPairedPath(
   })
 }
 
-function clickFirstPath(
-  onOpenFailure = vi.fn(),
-  pathExistsCache = new Map<string, boolean>()
-): boolean {
+function clickFirstPath(onOpenFailure = vi.fn(), pathExistsCache = makeExistsCache()): boolean {
   return openFilePathLinkAtBufferPosition(BUFFER, { x: 4, y: 1 }, 80, {
     startupCwd: '/srv/repo',
     worktreeId: 'wt-1',
@@ -126,7 +127,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     setPlatform('Macintosh')
     hostAnswers((path) => (path === 'a.txt' ? { exists: true } : { error: OLD_HOST_ENOTDIR }))
     // Why: hovering underlined a.txt, so only the longer joined guesses are unchecked.
-    const pathExistsCache = new Map([[runtimeKey('/srv/repo/a.txt'), true]])
+    const pathExistsCache = makeExistsCache([[runtimeKey('/srv/repo/a.txt'), true]])
 
     clickFirstPath(vi.fn(), pathExistsCache)
     await flushDoubleRaf()
@@ -148,7 +149,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     setPlatform('Macintosh')
     hostAnswers(() => ({ error: 'host unreachable' }))
     const onOpenFailure = vi.fn()
-    const pathExistsCache = new Map([
+    const pathExistsCache = makeExistsCache([
       [runtimeKey('/srv/repo/a.txt'), false],
       [runtimeKey('/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'), false]
     ])
@@ -250,7 +251,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
       async (path: string) => path === '/repo/foo.ts.map'
     )
     const buffer = makeBuffer([makeBufferLine('/repo/foo.ts'), makeBufferLine('.map')])
-    const pathExistsCache = new Map([
+    const pathExistsCache = makeExistsCache([
       [getTerminalPathExistsCacheKey({ absolutePath: '/repo/foo.ts' }), true]
     ])
     const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', pathExistsCache }
@@ -349,7 +350,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
       _meta: { runtimeId: 'remote-runtime' }
     })
     const buffer = makeBuffer([makeBufferLine('//server/share/report'), makeBufferLine('.txt')])
-    const pathExistsCache = new Map([[runtimeKey('//server/share/report'), true]])
+    const pathExistsCache = makeExistsCache([[runtimeKey('//server/share/report'), true]])
 
     clickPairedPath(buffer, pathExistsCache)
     await flushDoubleRaf()
@@ -410,12 +411,12 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     setPlatform('Macintosh')
     hostAnswers(() => ({ exists: false }))
     const onOpenFailure = vi.fn()
-    const pathExistsCache = new Map(
+    const pathExistsCache = makeExistsCache(
       [
         '/srv/repo/a.txt',
         '/srv/repo/a.txt/srv/repo/b.txt',
         '/srv/repo/a.txt/srv/repo/b.txt/srv/repo/c.txt'
-      ].map((path) => [runtimeKey(path), false])
+      ].map((path): [string, boolean] => [runtimeKey(path), false])
     )
 
     expect(clickFirstPath(onOpenFailure, pathExistsCache)).toBe(true)
@@ -433,7 +434,7 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
     const linked = Object.assign(label, {
       getCell: () => ({ hasExtendedAttrs: () => true, extended: { urlId: 1 } })
     })
-    const pathExistsCache = new Map([
+    const pathExistsCache = makeExistsCache([
       [getTerminalPathExistsCacheKey({ absolutePath: '/repo/nwparker/fix-123' }), false]
     ])
     const onOpenFailure = vi.fn()

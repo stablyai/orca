@@ -90,15 +90,18 @@ export class AcpTimelineTranslator {
   promptFailed(clientMessageId: string, error: Error, at: number): ProviderTimelineEvent[] {
     const detail =
       error instanceof AcpAgentError ? acpPromptErrorDetail(this.dialect, error) : undefined
+    const failure =
+      error instanceof AcpAgentError ? this.dialect.promptFailure?.(error, at) : undefined
+    const stopReason = failure?.stopReason ?? 'error'
     const ended = this.prompts.last
     const notSignedIn = this.authenticationRequired(error)
     if (this.prompts.current?.clientMessageId !== clientMessageId) {
       // A late prompt answer may supply a failure reason missing from the provider's end.
       return ended?.clientMessageId === clientMessageId && this.failures.has(ended.turn)
-        ? this.failures.row(ended.turn, detail, 'error', notSignedIn)
+        ? this.failures.row(ended.turn, detail, stopReason, notSignedIn, failure?.usageLimit)
         : []
     }
-    const ending = { stopReason: 'error', at, failureDetail: detail, notSignedIn }
+    const ending = { ...failure, stopReason, at, failureDetail: detail, notSignedIn }
     return this.finishPrompt(clientMessageId, ending)
   }
 
@@ -291,9 +294,9 @@ export class AcpTimelineTranslator {
 
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
-    const { stopReason, failureDetail, notSignedIn } = ending
+    const { stopReason, failureDetail, notSignedIn, usageLimit } = ending
     const events = this.prompts.endCompaction(turn, ending) ?? [
-      ...this.failures.ended(turn, stopReason, failureDetail, notSignedIn),
+      ...this.failures.ended(turn, stopReason, failureDetail, notSignedIn, usageLimit),
       ...acpTurnEndEvents(this.options.sessionId, turn, ending)
     ]
     this.end(turn)

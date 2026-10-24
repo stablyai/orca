@@ -6,7 +6,6 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
@@ -26,12 +25,10 @@ export type AcpStructuredSessionAdapterDeps = {
     /** Defaults to ask. */
     permissionMode?: AgentChatPermissionMode
   }) => Promise<AcpStructuredLaunch>
-  /** Recovery reads use the same launch with an unsealed environment. */
+  /** The same launch for a read that starts no child (a conversation copy): the agent's env, unsealed. */
   readLaunch: (identity: AgentSessionJournalIdentity) => Promise<AcpStructuredLaunch>
   /** Current host arguments before protocol-specific filtering; copies open through the CLI. */
   resolveLaunchArgs?: () => Promise<string[]> | string[]
-  /** Reads without opening the journal. */
-  readJournal?: (sessionId: string) => JournalLoad | null
   /** Protected by this host's instance lock. */
   dataDirectory: string
   connect: ConnectAcpAgent

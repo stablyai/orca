@@ -1,15 +1,6 @@
 import { journalItemDeclaresEcho } from './journal-item-echo'
-// THE reducer. One implementation folds rows into the render model, and both
-// the live append path and replay call it — a live-only shortcut is how a
-// reconnect starts disagreeing with the screen it replaced.
-//
-// Rules: highest revision wins, a tombstone removes, a late lower revision is
-// dropped rather than resurrecting stale content, and ordering is by the
-// position (sequence, then place in the row) of the write that CREATED an item
-// (a later revision updates the body, it does not move the bubble) — except a
-// queued message, which sits where its handover put it, and a rejected one, which
-// sits where it was rejected. Producer linkage is likewise the creating write's: a
-// revision naming no producer keeps it, one naming any replaces it.
+// Live append and replay share this fold. Revisions change content, preserving creation position
+// and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
 import type {
   AgentJournalAcceptanceReceipt,
@@ -55,45 +46,39 @@ export type JournalReducerState = {
   epoch: string
   lastSequence: number
   lastActivityAt: number
-  /** Lowest sequence still individually replayable; rows below it were compacted. */
+  /** Earliest individually replayable sequence. */
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
-  /** Each item's execution provenance (`JournalItemRow.ownerFence`): the generation whose work it
-   *  is, which decides whether it is current. */
+  /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: Map<string, number>
-  /** The run executing a reusable child's item now (`JournalItemRow.executionOwner`), when one said. */
+  /** Later runs may explicitly assume execution of reusable child items. */
   itemExecutionOwners: Map<string, number>
-  /** Latest saved output per owner, rebuilt during the existing row fold. */
   providerActivityAt: Map<number, number>
-  /** Revision of a removed item, so a late lower revision cannot resurrect it. */
+  /** Retain removed revisions to prevent stale resurrection. */
   tombstones: Map<string, number>
-  /** Turn ids whose record a tombstone removed, as a rewind does: over, though no row shows it. */
+  /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
   submissions: Map<string, AgentJournalSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
-  /** Provider item id → the submission slot that adopted it. Stops an accepted
-   *  echo from appending a second copy of the user's own message. */
+  /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
   aliases: Map<string, string>
-  /** First declared echo contract per item, rebuilt from rows and kept through tombstones. */
+  /** Preserve the first declared echo contract through tombstones. */
   itemEchoes: Map<string, unknown>
   appliedSettlementIds: Set<string>
-  /** Scope for rows stored without one; rebuilt by replay, never persisted. */
   derivedTurnScope: JournalDerivedTurnScope
-  /** Latest actual acceptance in this epoch, even when its message is rewound away; 0 when none. */
+  /** Acceptance survives visible-message rewind; zero means none in this epoch. */
   latestAcceptedTurnSequence: number
-  /** The latest person's Stop event and Resume, what the queue's pause is derived from. */
   queuePauseMarks: JournalQueuePauseMarks
-  /** Host-only: each handed-over send's stopped-message history, from its latest `pending` row. */
   stoppedHistoryCarried: Map<string, readonly string[]>
-  /** Where each queued card's hand-off was placed when handed over; never stored. */
   queuedHandOffPlaces: Map<
     string,
     Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
   >
+  /** Historical display corrections, rebuilt by the hand-off fold on replay. */
+  normalizedHandOffs: Set<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
-  /** Original adoption evidence, independent of the current epoch's reason/time. */
   historyOrigin: JournalHistoryOrigin | null
 }
 
@@ -121,6 +106,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     queuePauseMarks: createJournalQueuePauseMarks(),
     stoppedHistoryCarried: new Map(),
     queuedHandOffPlaces: new Map(),
+    normalizedHandOffs: new Set(),
     queue: createJournalQueueState(),
     historyOrigin: null
   }
@@ -142,7 +128,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     state.historyOrigin = journalHistoryOrigin(row)
     return
   }
-  // A queued card is never activity: it feeds no working status and no idle sweep.
+  // Queued cards cannot extend working status or postpone idle sweeps.
   if (row.kind === 'queue') {
     return
   }
@@ -200,6 +186,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
+        item.observedAt = mutation.observedAt ?? row.ts
         upsertJournalItem(state, itemId, revision, item, {
           fence: row.fence,
           ownerFence: mutation.ownerFence
@@ -251,7 +238,6 @@ export function resolveJournalItemId(
   return submissionId
 }
 
-/** A user message the provider wrote: the only item a submission's echo can be. */
 export function isProviderUserMessageEcho(
   itemId: string,
   body: AgentJournalRenderItem['body']
@@ -265,8 +251,7 @@ export function isProviderUserMessageEcho(
   )
 }
 
-/** The submission item a provider's echo of a user message would fold into, read without
- *  claiming it; null when the item is not such an echo, or no submission may claim it. */
+/** Find an echo's eligible submission without claiming it. */
 export function journalEchoClaimant(
   state: JournalReducerState,
   itemId: string,
@@ -281,12 +266,7 @@ export function journalEchoClaimant(
   }
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
   const contextSequence = latestAgentSessionContextClearSequence(state.items.values())
-  // Exact payload plus queue order preserves repeated identical sends one-for-one.
-  // A submission an echo may not claim is one that says the message never reached
-  // the provider, so an item resembling it is somebody else's. That is `rejected`
-  // now — and, in journals written before this state moved, an `unknown` carrying
-  // the transport marker. Replaying an older journal must not let such a row alias
-  // the echo of a later, genuinely delivered resend of the same text.
+  // Match equal payloads in send order; proven-undelivered legacy rows cannot claim later resend echoes.
   const submission = [...state.submissions.values()]
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find(
@@ -304,10 +284,8 @@ function resolveItemId(state: JournalReducerState, itemId: string): string {
   return state.aliases.get(itemId) ?? itemId
 }
 
-/** Project the folded state into the client-facing snapshot. */
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
-  // The journal position is the sole ordering key; map insertion order is not,
-  // because a re-created item re-enters the map after the items that followed it.
+  // Map insertion order changes on recreation; journal position alone orders the timeline.
   const items = [...state.items.values()]
     .map((item) => projectJournalStopNote(item, state.items))
     .sort(compareAgentJournalItems)

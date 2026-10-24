@@ -108,7 +108,11 @@ describe('useMobileNativeChatSendError', () => {
     expect(api().message).toBe('a')
 
     await act(async () => {
-      vi.advanceTimersByTime(4000)
+      vi.advanceTimersByTime(3999)
+    })
+    expect(api().message).toBe('a')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
     })
     expect(api().message).toBeNull()
   })
@@ -215,28 +219,12 @@ describe('useMobileNativeChatSendError', () => {
     expect(showToast).toHaveBeenCalledWith('Delivery unconfirmed', 1600)
   })
 
-  it('does not fire the hold timer after unmount', async () => {
+  it('cancels the pending hold timer on unmount', async () => {
     await render()
     await act(async () => api().show('a'))
-
-    const errors: unknown[] = []
-    const original = console.error
-    const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      errors.push(args[0])
-      original(...args)
-    })
-    try {
-      act(() => renderer?.unmount())
-      renderer = null
-      act(() => {
-        vi.advanceTimersByTime(4000)
-      })
-    } finally {
-      spy.mockRestore()
-    }
-    expect(errors).toEqual([])
+    expect(vi.getTimerCount()).toBe(1)
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

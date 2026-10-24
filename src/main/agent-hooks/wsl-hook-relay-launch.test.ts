@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { resetWslInteropSpawnDirectoryCache } from '../wsl-interop-spawn-directory'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn((..._args: unknown[]) => ({ pid: 1 }))
@@ -9,14 +13,30 @@ vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 import { spawnWslRelayProcess } from './wsl-hook-relay-launch'
 
 describe('spawnWslRelayProcess', () => {
-  it('names an explicit Windows directory rather than inheriting one', () => {
-    spawnWslRelayProcess('Ubuntu', {}, '1.2.3')
+  it('launches from the system directory instead of the current worktree', () => {
+    const systemRoot = mkdtempSync(join(tmpdir(), 'wsl-relay-launch-'))
+    const env = { ORCA_AGENT_HOOK_PORT: '1234' }
+    vi.stubEnv('SystemRoot', systemRoot)
+    resetWslInteropSpawnDirectoryCache()
+    try {
+      spawnWslRelayProcess('Ubuntu', env, '1.2.3')
 
-    // A stable Windows cwd prevents deleted WSL worktrees from breaking future CreateProcessW calls.
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      expect.arrayContaining(['-d', 'Ubuntu', '--exec']),
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
+      expect(spawnMock).toHaveBeenCalledExactlyOnceWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--exec',
+          'sh',
+          '-c',
+          'exec sh "$HOME/.orca-wsl/hook-relay/1.2.3/launch.sh"'
+        ],
+        { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, cwd: systemRoot }
+      )
+    } finally {
+      vi.unstubAllEnvs()
+      resetWslInteropSpawnDirectoryCache()
+      rmSync(systemRoot, { recursive: true, force: true })
+    }
   })
 })

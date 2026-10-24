@@ -47,27 +47,19 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
   )
 }
 
-/**
- * Minting never widens what the renderer can already read: an SSH grant reads
- * through the same provider as `fs:readFile`, and a runtime grant through the
- * same worktree-scoped `files.read` RPC the renderer can call directly.
- */
+/** Grants retain existing read scopes: SSH uses the filesystem provider and runtime uses worktree-scoped files.read. */
 export function registerDocPreviewGrantHandlers(): void {
   ipcMain.handle(
     DOC_PREVIEW_MINT_GRANT_CHANNEL,
     (event, request: DocPreviewGrantRequest): DocPreviewGrantResult => {
-      // Why gate a channel guests cannot reach today: this one hands out filesystem-read
-      // authority, so it holds the same sender check its sibling browser channels do rather than
-      // relying on guests never gaining an ipcRenderer.
+      // Granting filesystem-read authority requires a trusted renderer even if guests cannot currently invoke IPC.
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('Untrusted document preview grant request')
       }
       if (!isValidGrantRequest(request)) {
         throw new Error('Invalid document preview grant request')
       }
-      // Why the other half of the registry is consulted here: this is where a page first becomes a
-      // document page, and the two halves must stay disjoint. Naming a page that already hosts a
-      // browsing guest would make one id resolve in both.
+      // A page ID cannot belong to both browser and document registries.
       if (browserManager.getGuestWebContentsId(request.browserPageId) !== null) {
         throw new Error('Document preview grant names a browsing page')
       }
@@ -98,9 +90,7 @@ export function registerDocPreviewGrantHandlers(): void {
       authorizeDocPreviewDirectory(grantId, relativePath)
   )
 
-  // Why no trusted-renderer check here: the sender is a preview guest rendering a workspace
-  // document, which is exactly the untrusted side. `reportDocPreviewLinkClick` is the gate — a
-  // live bound grant and a web URL — and it drops everything else silently.
+  // Guest senders are untrusted; the policy checks a live bound grant and web URL.
   ipcMain.on(DOC_PREVIEW_LINK_CLICK_CHANNEL, (event, url: unknown) => {
     if (typeof url === 'string') {
       reportDocPreviewLinkClick(event.sender, url)

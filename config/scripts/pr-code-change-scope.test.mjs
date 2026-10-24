@@ -489,7 +489,7 @@ describe('per-job path classification', () => {
 
   it('leaves diffs the audits never read out of static analysis', () => {
     expect(classifyPrJobs(['docs/assets/logo.png']).static_analysis).toBe(false)
-    expect(classifyPrJobs(['cloud/apps/relay/src/index.ts']).static_analysis).toBe(false)
+    expect(classifyPrJobs(['cloud/apps/relay/Dockerfile']).static_analysis).toBe(false)
   })
 
   it('keeps unit-test-only diffs out of packaging', () => {

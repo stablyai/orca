@@ -20,12 +20,11 @@ import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
 
 const INSTALL_LOCK_POLL_MS = 1_000
-// Why: a fresh lock can cross the stale threshold during our bounded wait.
-// Recheck infrequently so it becomes recoverable without adding an exec per poll.
+// Fresh locks may become stale during our wait; infrequent rechecks permit recovery without an exec per poll.
 const INSTALL_LOCK_STALE_RECHECK_MS = 60_000
-// Why: a waiter gives the holder at least one full install step's bound before giving up.
+// Give holders at least one full install step before the waiter gives up.
 const INSTALL_LOCK_TIMEOUT_MS = REMOTE_INSTALL_TIMEOUT_MS
-// Why longer: a holder's step can outlive the bound that raced it, so takeover leaves it room.
+// A holder's step may outlive its timeout; leave room before takeover.
 export const INSTALL_LOCK_STALE_MS = 20 * 60_000
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
@@ -40,7 +39,6 @@ export class RemoteInstallLockBusyError extends Error {
   }
 }
 
-// Why: an unconfirmed termination may have run remotely, so it never becomes a fallback.
 async function unlessUnconfirmed<T>(work: Promise<T>, fallback: T): Promise<T> {
   try {
     return await work
@@ -57,8 +55,7 @@ export async function isRelayInstallLockStale(
   lockDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
-  // Why: remote time avoids clock skew between Orca clients making a live
-  // repair lock look old enough for GC or another installer to recover.
+  // Measure remotely to avoid client clock skew making live locks look stale.
   const out = await unlessUnconfirmed(
     execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir)),
     ''
@@ -67,11 +64,7 @@ export async function isRelayInstallLockStale(
   return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
 }
 
-/**
- * Acquire the per-version install lock via a host-native exclusive create.
- * Why: POSIX mkdir and a Windows directory plus atomic owner file each give
- * one winner while keeping the marker visible to older Windows Orca clients.
- */
+/** Exclusive host-native creation preserves lock markers older Windows clients recognize. */
 export async function acquireInstallLock(
   conn: RemoteInstallTransport,
   remoteRelayDir: string,
@@ -84,9 +77,9 @@ export async function acquireInstallLock(
     /** False when a held lock is a fence whose age cannot prove its owner's work is finished. */
     allowStaleTakeover?: boolean
     waitTimeoutMs?: number
-    /** Written in the command that creates the lock, so a holder can prove the lock its own. */
+    /** Atomic owner writes let holders prove continued ownership. */
     owner?: InstallLockOwnerFile
-    /** Names a held lock's owner token this caller proved exited, so the steal may take it early. */
+    /** Proven-exited owner token permits early takeover. */
     exitedOwner?: InstallLockExitedOwnerProof
   }
 ): Promise<void> {
@@ -100,8 +93,7 @@ export async function acquireInstallLock(
     relayGcClaim
       ? isRelayGcClaimed(conn, remoteRelayDir, host, options?.signal)
       : Promise.resolve(false)
-  // Why: GC may claim the sibling path between our probe and taking the lock.
-  // Recheck while holding the in-tree lock; one side backs off.
+  // GC can claim between our probe and lock acquisition; recheck under the lock so one side backs off.
   const keptAfterGcRecheck = async (): Promise<boolean> => {
     if (!(await unlessUnconfirmed(isClaimed(), true)) && !options?.signal?.aborted) {
       return true
@@ -118,8 +110,7 @@ export async function acquireInstallLock(
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   let lastWaitLogAt = Number.NEGATIVE_INFINITY
   while (true) {
-    // Why: a crashed GC can leave the stable sibling claim behind. The shared
-    // waiter recovers stale claims instead of polling that orphan forever.
+    // Recover crashed GC claims rather than polling them forever.
     if (relayGcClaim) {
       await waitForRelayGcClaimRelease(conn, remoteRelayDir, host, options?.signal)
     }
@@ -150,8 +141,7 @@ export async function acquireInstallLock(
     ) {
       lastStaleCheckAt = Date.now()
       const exitedOwner = await exitedOwnerFor(lockDir, options)
-      // Why: recover an already-stale lock immediately, then keep checking in
-      // case a fresh holder crosses the stale threshold while we are waiting.
+      // Recover stale locks immediately, then recheck as fresh locks age.
       const steal = await unlessUnconfirmed(
         execHostCommand(
           conn,

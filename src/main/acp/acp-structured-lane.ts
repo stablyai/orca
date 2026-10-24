@@ -7,6 +7,7 @@ import {
   type ProviderTimelineAssembler
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler'
 import type { AcpTimelineEvent } from './acp-timeline-event'
+import { acpPromptTurnId } from './acp-prompt-turns'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -79,6 +80,23 @@ export class AcpStructuredLane {
       generation: deps.generation,
       namespace: deps.providerSessionId
     })
+  }
+
+  hasPendingDiagnostic(clientMessageId: string): boolean {
+    const turn = acpPromptTurnId(clientMessageId)
+    return (
+      !this.failed &&
+      !this.disposed &&
+      !this.ended &&
+      this.backlog.some(
+        (event) =>
+          event.type === 'item.update' &&
+          event.body.kind === 'status' &&
+          !event.producer &&
+          event.join?.thread === this.deps.providerSessionId &&
+          event.join.turn === turn
+      )
+    )
   }
 
   get openTurnId(): string | null {

@@ -54,6 +54,55 @@ describe('a Codex send answered before its turn opens', () => {
 })
 
 describe("a no-turn Stop in the window between Codex's answer and its turn opening", () => {
+  it.each(['expiry', 'retry', 'replacement'])(
+    'spends only the remaining Stop allowance after a late refusal: %s',
+    async (mode) => {
+      const rig = await codexTurnLifecycleRig()
+      await answeredColdSend(rig)
+      const request = vi.spyOn(rig.adapter['sessions'].get('session-1')!.connection, 'request')
+      const interrupt = rig.codex.routes['turn/interrupt']!
+      let first = true
+      rig.codex.routes['turn/interrupt'] = async (params) => {
+        if (!first) {
+          return interrupt(params)
+        }
+        first = false
+        await new Promise((resolve) => setTimeout(resolve, 4_900))
+        try {
+          return interrupt(params)
+        } finally {
+          if (mode === 'replacement') {
+            rig.turns.start()
+            rig.adapter['sessions'].delete('session-1')
+          }
+        }
+      }
+      vi.useFakeTimers()
+      const stopping = stop(rig)
+      if (mode === 'retry') {
+        setTimeout(() => rig.turns.start(), 4_950)
+      }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(await stopping).toEqual(
+        mode === 'retry'
+          ? { cancelled: true, turnId: 'turn-1' }
+          : mode === 'expiry'
+            ? MAY_OPEN
+            : REFUSED
+      )
+      if (mode === 'expiry') {
+        rig.turns.start()
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      expect(interruptedTurns(rig)).toEqual(mode === 'retry' ? ['turn-1', 'turn-1'] : ['turn-1'])
+      expect(
+        request.mock.calls
+          .filter(([method]) => method === 'turn/interrupt')
+          .map((call) => call[2]?.timeoutMs)
+      ).toEqual(mode === 'retry' ? [5_000, 50] : [5_000])
+    }
+  )
+
   it("is taken at once once Codex's thread runs the turn", async () => {
     const rig = await codexTurnLifecycleRig()
     await answeredColdSend(rig)

@@ -408,7 +408,7 @@ describe('Claude owed task notifications that never arrive', () => {
     wallClock.mockRestore()
   })
 
-  it("restates under the stored row's launch token and owner, as a row with no hook event", () => {
+  it("restates under the stored row's launch token and session, as a row with no hook event", () => {
     const { post, restated } = host()
     const tokened = (payload: Record<string, unknown>) =>
       post(payload, PANE_KEY, { launchToken: 'launch-1' })
@@ -421,7 +421,12 @@ describe('Claude owed task notifications that never arrive', () => {
 
     vi.advanceTimersByTime(LEASE)
 
-    expect(restated[0]).toMatchObject({ launchToken: 'launch-1', payload: { state: 'done' } })
+    expect(restated[0]).toMatchObject({
+      launchToken: 'launch-1',
+      source: 'claude',
+      providerSession: { key: 'session_id', id: SESSION },
+      payload: { state: 'done' }
+    })
     expect(restated[0].hookEventName).toBeUndefined()
   })
 

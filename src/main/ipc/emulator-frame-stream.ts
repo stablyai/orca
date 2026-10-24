@@ -37,8 +37,7 @@ export function registerEmulatorFrameStreamHandlers(): void {
       }
 
       const streamId = randomUUID()
-      // Why: Chromium's NetworkService can restart under long-lived MJPEG loads;
-      // the main process owns the socket so the renderer only receives JPEG bytes.
+      // Main owns MJPEG sockets so Chromium NetworkService restarts cannot interrupt long-lived streams.
       const stream = new MjpegFrameStream(
         args.streamUrl,
         {

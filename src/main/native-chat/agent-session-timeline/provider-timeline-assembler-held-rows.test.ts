@@ -30,7 +30,7 @@ describe('what the journal already holds stands', () => {
     if (!identity) {
       throw new Error('item key did not parse')
     }
-    // Another writer settled one row in the turn; the session end settles only what is still open.
+    // Simulate another writer settling the row before session end.
     await rig.journal.appendItem(
       identity,
       { ...runningTool('grep'), state: 'completed' },
@@ -104,7 +104,6 @@ describe('requests', () => {
     expect(
       rig.assembler.apply({ type: 'request.open', request: 'p1', body: pendingApproval }).dropped
     ).toBeUndefined()
-    // The answered prompt keeps its answer; withdrawing reaches only the new one.
     rig.assembler.apply({ type: 'request.withdrawn', request: 'p1' })
     expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({
       resolution: { state: 'resolved' }
@@ -124,7 +123,7 @@ describe('requests', () => {
     if (!identity) {
       throw new Error('request key did not parse')
     }
-    // Memory still holds it pending; only the journal knows a client answered.
+    // Only the journal knows the client answered; assembler memory still says pending.
     await rig.journal.appendItem(identity, answered, {
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t1') }
@@ -147,7 +146,7 @@ describe('requests', () => {
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t1') }
     })
-    // Another assembler of the same generation, blind to the journal, opens `p1` again.
+    // Simulate a same-generation assembler with no journal view.
     const blind = rig.assemble({ sink: { ...rig.sink, journalItems: () => null } })
     blind.apply({ type: 'request.open', request: 'p1', body: pendingApproval })
     expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({

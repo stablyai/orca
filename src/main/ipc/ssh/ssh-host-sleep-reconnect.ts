@@ -6,14 +6,11 @@ import { errorMessage } from '../../../shared/error-message'
 let powerMonitorUnsubscribe: (() => void) | null = null
 let registeredGetUserDataPath: (() => string) | undefined
 
-// Why: macOS can resume before the network is back, so a failed first probe gets one retry before the link is declared dead (#7773).
+// macOS can wake before networking; allow one retry before declaring a link dead (#7773).
 const RESUME_PROBE_TIMEOUT_MS = 5_000
 const RESUME_PROBE_ATTEMPTS = 2
 
-/**
- * Wake, unlock, or the window's resume/online signal. Why each: the ladder can spend itself in
- * macOS dark wakes, which emit no resume, so only the next real signal can give it a fresh budget.
- */
+/** Real wake/unlock/online signals refresh a reconnect budget spent during silent macOS dark wakes. */
 export function retrySshConnectionsAfterNetworkReturn(): void {
   const restarted = getSshConnectionManager()?.retryStalledReconnects() ?? []
   if (restarted.length > 0) {
@@ -23,7 +20,7 @@ export function retrySshConnectionsAfterNetworkReturn(): void {
   if (!getUserDataPath) {
     return
   }
-  // Why: a transport that still looks connected after wake is found dead by this probe, not by keepalive.
+  // Probe transports that still appear connected after wake; keepalive may not detect them yet.
   void recoverOrcadManagedTunnelsAfterHostResume(getUserDataPath(), {
     attempts: RESUME_PROBE_ATTEMPTS,
     timeoutMs: RESUME_PROBE_TIMEOUT_MS
@@ -39,7 +36,7 @@ export function registerPowerMonitorReconnect(getUserDataPath?: () => string): v
   registeredGetUserDataPath = getUserDataPath
   const onResume = (): void => retrySshConnectionsAfterNetworkReturn()
   powerMonitor.on('resume', onResume)
-  // Why: macOS and Windows only; a lock without sleep can still drop a VPN route such as Tailscale's.
+  // macOS/Windows lock without sleep can still drop VPN routes.
   powerMonitor.on('unlock-screen', onResume)
   powerMonitorUnsubscribe = () => {
     powerMonitor.off('resume', onResume)

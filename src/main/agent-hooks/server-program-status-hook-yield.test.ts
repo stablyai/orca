@@ -195,6 +195,56 @@ describe('OSC 7501 status beside hooks', () => {
     expect(paneRow()?.state).toBe('working')
   })
 
+  describe('a hook question beside a program still reporting working (#32066)', () => {
+    async function piHook(hookEventName: string): Promise<void> {
+      const response = await postHookEvent(
+        server,
+        buildBody({ hook_event_name: hookEventName, prompt: 'fix it' }),
+        '/hook/pi'
+      )
+      expect(response.status).toBe(204)
+    }
+
+    // Pi's program status stays `working` through a `ctx.ui.custom()` dialog such as `ask_user`.
+    function piWorking(): void {
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: { state: 'working', observedAt: Date.now() }
+      })
+      programStatus({ state: 'working', agentType: 'pi' })
+    }
+
+    it("keeps the question through hook silence and the lease renewal's re-sent working", async () => {
+      piWorking()
+      await piHook('agent_start')
+      await piHook('ui_prompt_start')
+      expect(paneRow()?.state).toBe('waiting')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(10 * 60 * 1000)
+      programStatus({ state: 'working', agentType: 'pi' }, { renewsProgramStatusLease: true })
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()?.state).toBe('waiting')
+      vi.useRealTimers()
+      // Answering hands the row on.
+      await piHook('ui_prompt_end')
+      expect(paneRow()?.state).toBe('working')
+    })
+
+    it('lets a working transition after the question take the row once hooks fall silent', async () => {
+      piWorking()
+      await piHook('agent_start')
+      await piHook('ui_prompt_start')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(1_000)
+      programStatus({ state: 'done', agentType: 'pi' })
+      vi.advanceTimersByTime(1_000)
+      programStatus({ state: 'working', agentType: 'pi' })
+      expect(paneRow()?.state).toBe('waiting')
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS)
+      expect(paneRow()?.state).toBe('working')
+    })
+  })
+
   describe('a program block beside a hook row', () => {
     const approvePlan = (): void => {
       server.ingestProgramStatusFacet({

@@ -51,7 +51,6 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
 
-  // Why: daemon resize is fire-and-forget, so pty:getSize must report the APPLIED size, not the requested one (Claude-Code split-pane desync).
   describe('pty:getSize reports applied size, not requested size', () => {
     function setupProviderWithAppliedSize(args: {
       applied: { cols: number; rows: number } | null
@@ -109,7 +108,7 @@ describe('registerPtyHandlers', () => {
     }
 
     it('returns the applied (wide) size after a dropped narrow resize', async () => {
-      // The daemon keeps the PTY at its wide spawn size; the narrow resize is silently dropped (fire-and-forget).
+      // Simulate a daemon silently dropping fire-and-forget resize requests.
       setupProviderWithAppliedSize({ applied: { cols: 200, rows: 50 } })
       handlers.clear()
       registerPtyHandlers(mainWindow as never)
@@ -119,12 +118,12 @@ describe('registerPtyHandlers', () => {
       // Renderer forwards a corrective narrow resize; it is dropped daemon-side.
       resizeListener()(mainWindowIpcEvent, { id, cols: 80, rows: 24 })
 
-      // getSize must surface the applied wide size so the renderer detects drift and re-asserts — NOT requested 80.
+      // Report applied size so the renderer detects drift and retries.
       const reported = await handlers.get('pty:getSize')!(null, { id })
       expect(reported).toEqual({ cols: 200, rows: 50 })
     })
     it('falls back to the requested size when the provider cannot report applied size', async () => {
-      // No getAppliedSize (e.g. SSH relay): requested-size cache is the only signal, so getSize returns it.
+      // Providers without getAppliedSize fall back to the requested-size cache.
       setupProviderWithAppliedSize({ applied: null, getAppliedSize: undefined })
       setLocalPtyProvider({
         spawn: vi.fn(async (opts: { sessionId?: string }) => ({
@@ -294,7 +293,6 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => null),
         registerPty: vi.fn(),
         getDriver: vi.fn(() => ({ kind: 'idle' })),
-        // The fix: a PTY with a remote viewer reports true even though driver state stays idle/desktop.
         isRemoteDesktopResizeDriven: vi.fn(() => true),
         isResizeSuppressed: vi.fn(() => false),
         onPtySpawned: vi.fn(),
@@ -312,7 +310,6 @@ describe('registerPtyHandlers', () => {
       // Host's own safeFit tries to widen the viewed PTY back to its window.
       resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
 
-      // It must not reach the PTY while the viewer owns the width.
       expect(resizeSpy).not.toHaveBeenCalled()
       expect(runtime.recordRemoteDesktopHostReclaimTarget).toHaveBeenCalledWith(id, 125, 48)
       expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()

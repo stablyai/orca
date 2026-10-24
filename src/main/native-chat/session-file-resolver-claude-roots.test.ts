@@ -33,11 +33,6 @@ afterEach(() => {
   }
 })
 
-/**
- * Honouring CLAUDE_CONFIG_DIR fixed new sessions but would otherwise hide every
- * transcript written before the user adopted the variable. The Codex resolver in this
- * same file already searches managed-then-default and de-dupes; Claude does the same.
- */
 describe('claude transcript roots', () => {
   it('searches the config-dir root first, then the default home', async () => {
     process.env.CLAUDE_CONFIG_DIR = CONFIG_DIR
@@ -63,7 +58,6 @@ describe('claude transcript roots', () => {
     await expect(resolveSessionFilePath('claude', 'session-1')).resolves.toBe(
       scanned.hits[CONFIG_ROOT]
     )
-    // The default root is never reached, so the common case pays for one scan.
     expect(scanned.dirs).toEqual([CONFIG_ROOT])
   })
 
@@ -85,9 +79,7 @@ describe('claude transcript roots', () => {
 
   it('honours an explicit root override without adding fallbacks', async () => {
     process.env.CLAUDE_CONFIG_DIR = CONFIG_DIR
-    // The account-home callers (structured-claude-runtime-adapter, the host handoff)
-    // know the exact tree their session pinned; a fallback there could resolve a
-    // different account's transcript.
+    // Pinned account roots must never fall back to a different account’s transcript.
     await resolveSessionFilePath('claude', 'session-1', {
       claudeProjectsDir: '/accounts/pinned/projects'
     })

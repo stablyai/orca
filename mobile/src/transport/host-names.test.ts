@@ -7,13 +7,15 @@ describe('getNextHostNameFromHosts', () => {
       getNextHostNameFromHosts([
         { name: 'Host 2' },
         { name: 'Custom workstation' },
+        { name: 'Host 99 extra' },
+        { name: 'My Host 100' },
         { name: 'Host 7' },
         { name: 'Host 3' }
       ])
     ).toBe('Host 8')
   })
 
-  it('handles very large host lists without spreading number arrays', () => {
+  it('handles 130,000 host names', () => {
     const hosts = Array.from({ length: 130_000 }, (_, index) => ({
       name: `Host ${index + 1}`
     }))

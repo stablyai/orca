@@ -1,5 +1,5 @@
-// Why this file exists: the authoritative missing-metadata prune had exactly one caller,
-// `ipcMain.handle('worktrees:listAll')`. A headless runtime host has no renderer, so it never swept
+// Why this file exists: the authoritative missing-metadata prune once ran only from the since-removed
+// `worktrees:listAll` IPC handler. A headless runtime host has no renderer, so it never swept
 // its own repos and their `worktreeMeta` rows grew without bound (#17776).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'

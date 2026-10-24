@@ -109,23 +109,23 @@ export function WorktreeCardLinkedItemsSection({
                         label={label}
                         provider={workspaceAttachmentProviderLabel(item)}
                         source={source}
+                        stale={detail?.stale}
                         url={url}
                         onOpen={(url, event) => open({ ...item, url }, event)}
                         onManage={onManage ? (event) => open(item, event) : undefined}
+                        origins={
+                          item.origins?.length ? (
+                            <WorkspaceAttachmentOrigins item={item} workspace={workspace} compact />
+                          ) : undefined
+                        }
                         actions={
                           item.type !== 'issue' ? renderReviewActions?.(item, live) : undefined
                         }
                       />
-                      {detail?.stale ||
-                      (live && 'baseRefName' in live && live.baseRefName) ||
+                      {(live && 'baseRefName' in live && live.baseRefName) ||
                       detail?.stateName ||
                       detail?.issueState ? (
                         <div className="flex flex-wrap items-center gap-1 pl-5">
-                          {detail?.stale ? (
-                            <span className="text-2xs text-muted-foreground">
-                              {translate('workspace.links.lastKnownStatus', 'Last known status')}
-                            </span>
-                          ) : null}
                           {live && 'baseRefName' in live && live.baseRefName ? (
                             <span className="text-2xs text-muted-foreground">
                               {translate('workspace.links.reviewTarget', 'Target: {{branch}}', {
@@ -143,9 +143,6 @@ export function WorktreeCardLinkedItemsSection({
                             <IssueStateBadge state={detail.issueState} />
                           ) : null}
                         </div>
-                      ) : null}
-                      {item.origins?.length ? (
-                        <WorkspaceAttachmentOrigins item={item} workspace={workspace} />
                       ) : null}
                     </div>
                   )

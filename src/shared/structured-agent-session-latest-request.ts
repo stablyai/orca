@@ -71,6 +71,13 @@ export function latestStructuredAgentSessionRequest(
     ) {
       continue
     }
+    if (
+      item.body.kind === 'message' &&
+      item.body.role === 'user' &&
+      item.turnScope?.kind === 'unknown'
+    ) {
+      return null
+    }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
       return {

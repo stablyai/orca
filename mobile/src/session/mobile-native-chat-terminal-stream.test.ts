@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   isTerminalCoveredByNativeChat,
   mobileNativeChatSubscribeViewport,
-  mobileNativeChatTerminalCapabilities,
   resolveMobileNativeChatTerminalStreamAction
 } from './mobile-native-chat-terminal-stream'
 
@@ -29,11 +28,9 @@ describe('mobile native-chat terminal stream lifecycle', () => {
       })
     ).toBe('pause')
     expect(isTerminalCoveredByNativeChat(true, 'pty-1', 'pty-1')).toBe(true)
-    expect(mobileNativeChatTerminalCapabilities(true)).toEqual({
-      terminalBinaryStream: 1,
-      mobileInputLeaseOnly: 1
-    })
-    expect(mobileNativeChatTerminalCapabilities(false)).toEqual({ terminalBinaryStream: 1 })
+    expect(isTerminalCoveredByNativeChat(true, 'pty-1', 'pty-2')).toBe(false)
+    expect(isTerminalCoveredByNativeChat(false, 'pty-1', 'pty-1')).toBe(false)
+    expect(isTerminalCoveredByNativeChat(true, null, 'pty-1')).toBe(false)
   })
 
   it('omits the viewport from a covered lease subscribe so the host keeps desktop dims', () => {

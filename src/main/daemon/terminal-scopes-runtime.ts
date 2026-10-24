@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { spawnProcess } from '@orca/process-host'
 import { userManagerEnv } from './daemon-cgroup-scope'
 import { setPtyActiveProcessLimit } from '../windows/windows-pty-job'
 import { resolveTerminalScopes, type TerminalScopeRuntime } from './terminal-scopes'
@@ -21,21 +20,7 @@ export function initializeTerminalScopes(
     setWindowsLimit: setPtyActiveProcessLimit
   })
   active = 'on' in resolved.scopes ? { scopes: resolved.scopes.on, log } : null
-  if (active && daemonScope) {
-    // Prefer losing one terminal to oomd over the daemon holding every scrollback; older systemd may reject this.
-    try {
-      const child = spawnProcess({
-        program: 'systemctl',
-        args: ['--user', 'set-property', '--runtime', daemonScope, 'ManagedOOMPreference=avoid'],
-        env: userManagerEnv(process.env),
-        stdio: 'ignore'
-      })
-      child.on('error', () => {})
-      child.unref()
-    } catch {
-      // Terminal scopes remain usable if this optional preference fails.
-    }
-  }
+  // No ManagedOOMPreference on the daemon scope: uresourced <0.5.5 loops on its xattr rewrites and wedges systemd --user.
   if (process.platform === 'linux') {
     log(
       'terminal-scopes',

@@ -22,6 +22,7 @@ import {
 } from './web-runtime-session'
 import { isMissingPathError, resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { uploadBrowserFilesToWebAgentSessionAttachments } from './web-agent-session-attachment-upload'
 
 export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   const searches = new Map<string, AbortController>()
@@ -169,7 +170,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       throw new Error('Uploading local files is not supported in the web client')
     },
     resolveDroppedPathsForAgent: async () => ({ resolvedPaths: [], skipped: [], failed: [] }),
-    uploadPathsToAgentSessionAttachments: async () => ({ uploaded: [], skipped: [], failed: [] }),
+    uploadPathsToAgentSessionAttachments: uploadBrowserFilesToWebAgentSessionAttachments,
     watchWorktree: () => Promise.resolve(),
     unwatchWorktree: () => Promise.resolve(),
     onFsChanged: () => noopUnsubscribe

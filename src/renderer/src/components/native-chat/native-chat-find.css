@@ -1,3 +1,11 @@
+.native-chat-appearance {
+  --native-chat-find-top-inset: 0px;
+}
+
+.native-chat-appearance:has(> .pane-title-bar) {
+  --native-chat-find-top-inset: var(--orca-pane-title-height);
+}
+
 /* Why: find matches are painted as CSS highlights (Ranges, no DOM mutation), in the
    markdown preview's colors; see use-native-chat-find-matches.ts.
    ::highlight() supports color/background only. */

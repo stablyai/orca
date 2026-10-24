@@ -14,8 +14,6 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  LINUX_REFLINK_ARGS,
-  MACOS_CLONE_ARGS,
   copyPrivateTree,
   hardlinkTree,
   makeTreeReadOnly,
@@ -56,7 +54,7 @@ describe('asynchronous immutable sharing', () => {
     expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
   })
 
-  it('keeps the event loop available while a sharing process is pending', async () => {
+  it('waits for the asynchronous sharing mechanism to finish', async () => {
     const { root, source } = makeTree()
     let finish!: () => void
     const pending = new Promise<void>((resolve) => {
@@ -155,9 +153,48 @@ describe('shareTree', () => {
     )
   })
 
-  it('fails loudly instead of degrading, on both copy-out mechanisms', () => {
-    expect(MACOS_CLONE_ARGS).toContain('-P')
-    expect(LINUX_REFLINK_ARGS).toContain('--reflink=always')
+  it('uses strict native-copy arguments and handles their failures', async () => {
+    const nativeCopy = vi.fn(() => {
+      throw new Error('native storage sharing unavailable')
+    })
+    vi.doMock('node:child_process', () => ({ execFileSync: nativeCopy }))
+    vi.resetModules()
+    try {
+      const { shareTree: shareWithNativeCopy } = await import('./space-sharing-copy.mjs')
+      const { root, source } = makeTree()
+      const cloneDestination = path.join(root, 'clone')
+      expect(() => shareWithNativeCopy(source, cloneDestination, { platform: 'darwin' })).toThrow(
+        /Could not share storage/
+      )
+      expect(existsSync(cloneDestination)).toBe(false)
+      expect(nativeCopy).toHaveBeenNthCalledWith(
+        1,
+        '/bin/cp',
+        ['-c', '-R', '-P', source, cloneDestination],
+        { stdio: 'ignore' }
+      )
+
+      const reflinkDestination = path.join(root, 'reflink')
+      expect(shareWithNativeCopy(source, reflinkDestination, { platform: 'linux' })).toBe(
+        'hardlink'
+      )
+      expect(nativeCopy).toHaveBeenNthCalledWith(
+        2,
+        'cp',
+        ['--reflink=always', '-a', source, reflinkDestination],
+        { stdio: 'ignore' }
+      )
+      expect(statSync(path.join(reflinkDestination, 'nested', 'file')).ino).toBe(
+        statSync(path.join(source, 'nested', 'file')).ino
+      )
+      expect(readFileSync(path.join(reflinkDestination, 'nested', 'file'), 'utf8')).toBe('contents')
+      expect(readlinkSync(path.join(reflinkDestination, 'relative-link'))).toBe(
+        path.join('nested', 'file')
+      )
+    } finally {
+      vi.doUnmock('node:child_process')
+      vi.resetModules()
+    }
   })
 })
 
@@ -217,6 +254,7 @@ describe('makeTreeReadOnly', () => {
       const { source } = makeTree()
       const executable = path.join(source, 'electron')
       writeFileSync(executable, 'binary', { mode: 0o755 })
+      chmodSync(executable, 0o755)
       makeTreeReadOnly(source)
       // Verified on real ext4: 0o555. Windows has no execute bit -- the read-only attribute does
       // not gate execution there, confirmed by running a read-only hardlinked .exe on NTFS.

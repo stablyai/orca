@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { isWslPath } from '../wsl'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
-import { WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { WatcherChildCapacityError } from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   LocalWatcherInstallResult,
@@ -48,7 +48,7 @@ export async function installLocalWatcher(
     }
 
     try {
-      // Why: WSL paths use one snapshot subprocess inside the distro so `wsl --shutdown` can kill it; native Windows uses @parcel/watcher.
+      // Run WSL snapshots inside the distro so shutdown kills them; native Windows uses Parcel.
       root = isWslPath(worktreePath)
         ? await createWslWatcher(
             rootKey,
@@ -62,7 +62,7 @@ export async function installLocalWatcher(
           )
         : await createLocalWatcher(rootKey, rootPath, cancelToken.abortController.signal)
     } catch (error) {
-      // Why: setup can fail after its child misses the exit deadline; retain that owner even when the renderer-facing error is swallowed.
+      // Retain physical ownership if setup failed before the child proved exit.
       retainLocalWatcherPhysicalFailure(rootKey, error)
       if (cancelToken.cancelled) {
         if (isWatcherProcessFailure(error) && error.code === 'process_unavailable') {
@@ -70,13 +70,12 @@ export async function installLocalWatcher(
         }
         return 'cancelled'
       }
-      // Why: capacity is transient — allow retry once another child exits instead of caching this root as permanently failed.
+      // Capacity failures are retryable when a child exits, not permanently unwatchable roots.
       if (error instanceof WatcherChildCapacityError) {
         scheduleCapacityRetry(cancelToken.listeners)
         return 'capacity'
       }
-      // Why: the crash fuse half-opens after its cooldown; caching these would
-      // keep the root unwatched until shutdown.
+      // Crash fuses can half-open after cooldown; do not permanently cache them.
       if (!isCrashFuseFailure(error)) {
         rememberUnwatchableRoot(rootKey)
       }

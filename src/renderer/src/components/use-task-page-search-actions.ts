@@ -1,10 +1,10 @@
-import type { TaskPageGitHubQuietRefreshModel } from './use-task-page-github-quiet-refresh'
+import type { TaskPageGitHubQuietRefreshModel } from './task-page/github/use-task-page-github-quiet-refresh'
 import React, { useCallback, useEffect } from 'react'
 import type { PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import {
   scopeGitHubTaskSearch,
   getDefaultPresetForGitHubTaskKind
-} from '@/components/task-page-github-task-kind'
+} from '../../../shared/task-github-search'
 import { withQualifier } from '../../../shared/task-query'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import { toast } from 'sonner'

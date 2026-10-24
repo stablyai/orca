@@ -14,6 +14,7 @@ import {
   publicKeyToBase64
 } from '../../../shared/e2ee-crypto'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { encodePairingOffer, parsePairingCode } from '../../../shared/pairing'
 import { createPairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/paired-e2ee-node-primitives'
@@ -122,6 +123,11 @@ describe("this client's capabilities as a paired host receives them", () => {
     await expect(host.auth).resolves.toMatchObject({
       type: 'e2ee_auth',
       clientCapabilities: [...pairedHostClientCapabilities()]
+    })
+    await expect(host.auth).resolves.toMatchObject({
+      clientCapabilities: expect.arrayContaining([
+        STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+      ])
     })
   })
 

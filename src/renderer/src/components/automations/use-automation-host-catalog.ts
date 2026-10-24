@@ -24,6 +24,7 @@ import type {
 } from './automation-host-catalog-types'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import {
+  foldDesktopHostFilter,
   resolveAutomationHostFilter,
   type AutomationHostFilterResolution
 } from './automation-host-filter-resolution'
@@ -146,7 +147,11 @@ export function useAutomationHostCatalog(
     desktopSshGenerations,
     runtimeEnvironments
   })
-  const selectedStableKey = automationHostFilterStableKey(automationHostFilter)
+  const hostFilter = useMemo(
+    () => foldDesktopHostFilter(automationHostFilter, sourceState.desktopAliasEnvironmentId),
+    [automationHostFilter, sourceState.desktopAliasEnvironmentId]
+  )
+  const selectedStableKey = automationHostFilterStableKey(hostFilter)
   // The saved selection references itself: without this the catalog would omit a
   // removed host the user is still filtered to, and absence would read as removal.
   const referencedStableKeys = useMemo(
@@ -206,7 +211,7 @@ export function useAutomationHostCatalog(
   const resolution = useMemo(
     () =>
       resolveAutomationHostFilter({
-        filter: automationHostFilter,
+        filter: hostFilter,
         catalog,
         // Deliberately not `referencedStableKeys`: that set includes the saved
         // selection so the catalog still projects it, and a selection that
@@ -219,7 +224,7 @@ export function useAutomationHostCatalog(
         ])
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal; the cache object itself never changes identity.
-    [automationHostFilter, cacheVersion, catalog, controller, options.referencedStableKeys]
+    [cacheVersion, catalog, controller, hostFilter, options.referencedStableKeys]
   )
   const rows = useMemo(
     () =>

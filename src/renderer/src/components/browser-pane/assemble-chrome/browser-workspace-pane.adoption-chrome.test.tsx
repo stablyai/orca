@@ -361,7 +361,9 @@ describe.each([
     })
     mocks.ensureRemotePage.mockClear()
     mocks.callRuntimeRpc.mockClear()
-    installClientHostedPaneApi({ ui: { onFocusBrowserAddressBar: () => () => {} } })
+    installClientHostedPaneApi({
+      ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+    })
     useAppStore.setState({
       browserPagesByWorkspace: { [WORKSPACE_ID]: [browserPage()] },
       browserUrlHistory: [

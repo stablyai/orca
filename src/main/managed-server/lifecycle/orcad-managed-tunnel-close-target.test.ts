@@ -44,7 +44,6 @@ function createEnvironment(): KnownRuntimeEnvironment {
   }
 }
 
-/** A real forward manager over a provider whose forwards stay "listening" until closed. */
 function setup(
   options: { targeting?: OrcadManagedTunnelTargeting; startGate?: Promise<void> } = {}
 ) {

@@ -111,7 +111,7 @@ describe('hidden-output restore unhide coverage (STA-4869)', () => {
     const pendingParses: (() => void)[] = []
     const originalWrite = drive.pane.terminal.write.getMockImplementation()
     drive.pane.terminal.write.mockImplementation((data, callback) => {
-      if ((data === '' || callback?.name === 'runParsedSteps') && callback) {
+      if ((data.length === 0 || callback?.name === 'runParsedSteps') && callback) {
         pendingParses.push(callback)
       }
     })

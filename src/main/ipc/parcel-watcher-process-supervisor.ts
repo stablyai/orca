@@ -1,26 +1,26 @@
 import type { ChildProcess } from 'node:child_process'
-import { restartCancelledWatcherChild } from './parcel-watcher-cancellation-restart'
-import { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
+import { restartCancelledWatcherChild } from './filesystem/watcher-process/parcel-watcher-cancellation-restart'
+import { WatcherCancellationTracker } from './filesystem/watcher-process/parcel-watcher-cancellation-tracker'
 import { getWatcherProcessEntryPath, watcherProcessEntryExists } from './parcel-watcher-entry-path'
-import { WatcherChildSlot } from './parcel-watcher-child-slot'
-import * as termination from './parcel-watcher-child-termination'
-import { launchWatcherChild } from './parcel-watcher-child-launch'
-import { sendToWatcherChild } from './parcel-watcher-child-messaging'
+import { WatcherChildSlot } from './filesystem/watcher-process/parcel-watcher-child-slot'
+import * as termination from './filesystem/watcher-process/parcel-watcher-child-termination'
+import { launchWatcherChild } from './filesystem/watcher-process/parcel-watcher-child-launch'
+import { sendToWatcherChild } from './filesystem/watcher-process/parcel-watcher-child-messaging'
 import {
   recoverWatcherRecordsAfterChildGone,
   terminateDisconnectedWatcherChild
-} from './parcel-watcher-child-recovery'
-import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-recovery'
+import { resetWatcherChildRegistryForTest } from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { WatcherSupervisorCapacityWait } from './parcel-watcher-supervisor-capacity-wait'
 import { WatcherProcessCrashFuse } from './parcel-watcher-crash-fuse'
 import { WatcherDeliveryHealthMonitor } from './parcel-watcher-delivery-health'
-import { cancelInterruptedWatcherSubscribe } from './parcel-watcher-interrupted-cancellation'
+import { cancelInterruptedWatcherSubscribe } from './filesystem/watcher-process/parcel-watcher-interrupted-cancellation'
 import {
   type PendingWatcherUnsubscribe,
   reportWatcherTerminalError,
   resolvePendingWatcherUnsubscribes
 } from './parcel-watcher-host-subscriptions'
-import { cancelPendingWatcherSubscribe } from './parcel-watcher-pending-cancellation'
+import { cancelPendingWatcherSubscribe } from './filesystem/watcher-process/parcel-watcher-pending-cancellation'
 import type { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   WatcherProcessSubscribeOptions,
@@ -39,7 +39,7 @@ import {
 } from './parcel-watcher-supervisor-subscribe'
 import { disposeWatcherSupervisor } from './parcel-watcher-supervisor-disposal'
 import { handleWatcherSupervisorMessage } from './parcel-watcher-supervisor-message'
-import { WatcherOwnedChildren } from './parcel-watcher-owned-children'
+import { WatcherOwnedChildren } from './filesystem/watcher-process/parcel-watcher-owned-children'
 
 export class WatcherProcessSupervisor {
   private nextSubscriptionId = 1

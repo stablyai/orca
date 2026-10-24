@@ -3,7 +3,7 @@ import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   reserveWatcherChild,
   resetWatcherChildRegistryForTest
-} from './parcel-watcher-child-registry'
+} from './filesystem/watcher-process/parcel-watcher-child-registry'
 import { WatcherSupervisorCapacityWait } from './parcel-watcher-supervisor-capacity-wait'
 
 describe('WatcherSupervisorCapacityWait', () => {

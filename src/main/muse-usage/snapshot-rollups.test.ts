@@ -27,7 +27,6 @@ function daily(
   }
 }
 
-// One session that ran model `a` inside the Orca worktree and model `b` outside it.
 const session: MuseUsageSession = {
   sessionId: 's1',
   firstTimestamp: '2026-09-22T10:00:00.000Z',

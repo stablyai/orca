@@ -28,17 +28,14 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 
-// Why: SessionStart is installed (not just listened for) so that resuming a
-// droid session via `droid --resume` resets the per-pane prompt/tool caches
-// without waiting for the next UserPromptSubmit. Mirrors the codex pattern in
-// src/main/codex/hook-service.ts.
+// SessionStart clears prompt/tool caches on resume before the next user prompt.
 const DROID_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: sub-droid completion is mission progress, not parent Droid completion.
-  // The listener intentionally ignores SubagentStop so it cannot notify.
+  // SubagentStop reports mission progress; the listener must not treat it as parent completion.
   { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     eventName: 'PreToolUse',
@@ -48,8 +45,7 @@ const DROID_EVENTS = [
     eventName: 'PostToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
   },
-  // Why: Droid approval prompts are emitted at PermissionRequest, including
-  // low-impact Edit approvals that have no riskLevel marker on PreToolUse.
+  // PermissionRequest covers Edit approvals that have no PreToolUse riskLevel.
   {
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
@@ -70,7 +66,7 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
-  // Why: Factory runs hooks via cmd.exe, which splits a bare path at a profile space (#6078).
+  // Factory runs hooks through cmd.exe, where unquoted profile spaces split the path.
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
@@ -101,11 +97,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/droid" \\',
+    // Bound stalled posts and keep large payloads on stdin to avoid EDR command-line alerts.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/droid" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -121,10 +114,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-// Why: local install() and installRemote() must produce byte-identical Factory
-// settings.json hook trees; sharing this mutation is what keeps the SSH install
-// from drifting off the local one (the exact class of bug that left Droid with
-// no remote installer at all — issue #7253).
+// Keep local and SSH installs on the same hook-tree mutation path.
 function buildInstalledDroidConfig(
   config: HooksConfig,
   command: string,
@@ -134,7 +124,6 @@ function buildInstalledDroidConfig(
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const managedEvents = new Set<string>(DROID_EVENTS.map((event) => event.eventName))
 
-  // Why: sweep managed entries out of events we no longer subscribe to.
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
@@ -198,10 +187,7 @@ export class DroidHookService {
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
-    // Why: surface hooksDisabled across every branch — without this, a
-    // disabled-AND-partially-installed (or disabled-AND-not-installed) state
-    // would silently swallow the disabled flag and the user would think a
-    // re-install fixed it.
+    // Report hooksDisabled even for partial installs so reinstalling cannot appear to fix it.
     if (missing.length === 0) {
       if (config.hooksDisabled === true) {
         state = 'partial'
@@ -248,11 +234,7 @@ export class DroidHookService {
     return this.getStatus()
   }
 
-  // Why: SSH remotes run the Droid CLI on the remote host, so its hook config
-  // and managed script must be written into the remote ~/.factory + ~/.orca via
-  // SFTP. Without this, Droid never fires the managed hook over SSH and its
-  // status row is absent from the task tree (issue #7253). Mirrors the local
-  // install() but always emits POSIX script/paths — even from a Windows host.
+  // Remote installs always use POSIX scripts and paths, including from Windows clients.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.factory/settings.json`
@@ -270,8 +252,7 @@ export class DroidHookService {
       }
 
       buildInstalledDroidConfig(config, wrapPosixHookCommand(remoteScriptPath), 'droid-hook.sh')
-      // Why: script first, config last — a partial config write must never
-      // point Droid at a script that isn't on disk yet.
+      // Publish the script before config so interrupted installs cannot reference a missing file.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, config)
 

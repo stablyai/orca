@@ -58,8 +58,6 @@ import { createGitHubPullRequest } from './client/create/create-github-pull-requ
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// The origin-repository cache is module-level state; reset it so slugs
-// resolved by one test cannot leak into the next.
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
@@ -69,9 +67,7 @@ describe('createGitHubPullRequest', () => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
-    // Why: createGitHubPullRequest resolves its target via the explicit origin
-    // remote (getOwnerRepo became upstream-first in #7331). Delegate the origin
-    // probe to getOwnerRepoMock so existing tests keep defining it there.
+    // Bridge explicit-origin creation to the fixtures that define getOwnerRepoMock.
     getOwnerRepoForRemoteMock.mockImplementation(
       async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
         remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
@@ -139,9 +135,7 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('targets the origin fork (not the upstream parent) on a fork checkout (#7331)', async () => {
-    // Fork checkout: origin is the personal fork, upstream is the parent. The
-    // head branch is unqualified and lives on the fork, so `gh pr create` must
-    // run with --repo <fork> even though PR reads prefer upstream since #7331.
+    // Creation targets the fork holding the unqualified head branch; reads can prefer upstream.
     getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
       remoteName === 'origin'
         ? { owner: 'fsdwen', repo: 'orca' }
@@ -177,15 +171,12 @@ describe('createGitHubPullRequest', () => {
   })
 
   it('routes --repo to the Enterprise server via options.host for a GHES remote (#8312)', async () => {
-    // github.com-only slug parsing misses GHES, so creation comes from the
-    // enterprise resolver, which carries the host.
     getOwnerRepoMock.mockResolvedValueOnce(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
       owner: 'team',
       repo: 'orca',
       host: 'github.acme-corp.com'
     })
-    // gh prints the PR URL (not JSON); the GHES host must still parse directly.
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: 'https://github.acme-corp.com/team/orca/pull/7\n'
     })
@@ -208,8 +199,7 @@ describe('createGitHubPullRequest', () => {
     })
 
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
-    // The runner host-qualifies argv at spawn time from options.host, so the
-    // mocked call sees a bare owner/repo plus the host in exec options.
+    // The real runner qualifies argv from options.host after this mocked boundary.
     expect(args[args.indexOf('--repo') + 1]).toBe('team/orca')
     expect(options).toMatchObject({ host: 'github.acme-corp.com' })
   })
@@ -221,7 +211,6 @@ describe('createGitHubPullRequest', () => {
       repo: 'orca',
       host: 'github.acme-corp.com'
     })
-    // Create reports "already exists", forcing the pr-list fallback.
     ghExecFileAsyncMock
       .mockRejectedValueOnce(
         Object.assign(new Error('exists'), {
@@ -421,8 +410,7 @@ describe('createGitHubPullRequest', () => {
         '--json',
         'number,url'
       ],
-      // Why: dotcom slugs resolve with host:'github.com' so creation stays
-      // pinned against a process-level GH_HOST.
+      // Pin dotcom against process-level GH_HOST.
       { cwd: '/repo-root', host: 'github.com' }
     ])
   })

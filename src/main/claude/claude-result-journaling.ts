@@ -73,6 +73,7 @@ export function journalClaudeResult(
   if (settlesTurn) {
     turn.suppressReopenOnFailure(message.is_error === true)
     corrections.abandon()
+    streamedText.finish({ completedAt: observedAt })
     context.settle(message, commandEnd ?? claudeTurnEndForResult(message, observedAt, leftToStop))
     streamedBlocks.clear()
     streamedText.settle()

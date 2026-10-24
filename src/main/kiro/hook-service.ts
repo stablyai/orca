@@ -40,8 +40,7 @@ import {
   serializeKiroAgentConfig
 } from './hook-settings'
 
-// Why: hook stdout from agentSpawn/userPromptSubmit is injected into Kiro's model context,
-// so every path below must stay silent.
+// Kiro injects hook stdout into model context; every path must stay silent.
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -60,8 +59,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('kiro'),
-    // Why: the endpoint file holds the live port/token; a PTY that outlived an Orca
-    // restart carries stale env, so source it to reach the new server.
+    // Refresh endpoint credentials for PTYs surviving an Orca restart.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -163,7 +161,6 @@ function buildStatus(agentsDir: string, files: AgentFileRead[]): AgentHookInstal
   return status(agentsDir, 'partial', problems.join('; '), managedHooksPresent)
 }
 
-/** Installs Orca's status hooks into every global Kiro agent config. */
 export class KiroHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getKiroManagedScriptPath(), getManagedScript())
@@ -208,7 +205,7 @@ export class KiroHookService {
     return this.getStatus()
   }
 
-  /** Install on an SSH execution host, where Kiro runs hooks through sh. */
+  /** SSH hosts execute hooks through sh. */
   async installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,

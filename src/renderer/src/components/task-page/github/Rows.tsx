@@ -6,7 +6,7 @@ import { formatPRDelta } from '@/components/task-page-pr-delta-summary'
 import {
   isTaskPageGitHubDraftPR,
   getTaskPageGitHubPRIconTone
-} from '@/components/task-page-github-work-item-status'
+} from '@/components/task-page/github/task-page-github-work-item-status'
 import {
   GitPullRequestDraft,
   GitPullRequest,
@@ -28,7 +28,7 @@ import {
 } from '../../task-page-source-context'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-work-item-status-badge'
+import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { GHAssigneesCell } from './AssigneesCell'
 import { PRReviewCell } from './ReviewCell'

@@ -694,6 +694,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
+  WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,

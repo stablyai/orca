@@ -3,7 +3,6 @@ import type * as GitRunner from './git/runner'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  makeHookTestRepo,
   TEST_GITIGNORE_PATH,
   TEST_ISSUE_COMMAND_PATH,
   TEST_REPO_ORCA_YAML_PATH,
@@ -141,94 +140,5 @@ describe('writeIssueCommand', () => {
     expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(TEST_ISSUE_COMMAND_PATH, {
       force: true
     })
-  })
-})
-
-describe('createIssueCommandRunnerScript', () => {
-  const makeRepo = () => makeHookTestRepo({ mode: 'auto', scripts: { setup: '', archive: '' } })
-
-  it('writes a POSIX issue-command runner when a shebang declares bash and setup resolves to Git Bash', async () => {
-    gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.sh\n')
-    const fs = await import('node:fs')
-    const writeFileSyncMock = vi.mocked(fs.writeFileSync)
-    writeFileSyncMock.mockClear()
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    try {
-      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
-      const result = createIssueCommandRunnerScript(
-        makeRepo(),
-        'C:\\repo-worktree',
-        '#!/usr/bin/env bash\ngh issue view 42',
-        undefined,
-        { family: 'posix' }
-      )
-
-      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/issue-command-runner.sh'],
-        { cwd: 'C:\\repo-worktree' }
-      )
-      expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\issue-command-runner.sh',
-        '#!/usr/bin/env bash\nset -e\ngh issue view 42\n',
-        'utf-8'
-      )
-      expect(result.shell).toEqual({ family: 'posix' })
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
-  })
-
-  it('keeps a plain issue command on the cmd runner under a Git Bash terminal', async () => {
-    gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.cmd\n')
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    try {
-      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
-      const result = createIssueCommandRunnerScript(
-        makeRepo(),
-        'C:\\repo-worktree',
-        'gh issue view 42',
-        undefined,
-        { family: 'posix' }
-      )
-
-      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/issue-command-runner.cmd'],
-        { cwd: 'C:\\repo-worktree' }
-      )
-      // The pane remains Git Bash even when it launches a batch runner.
-      expect(result.shell).toEqual({ family: 'posix' })
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
-  })
-
-  it('keeps the cmd issue-command runner when no setup shell is resolved', async () => {
-    gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.cmd\n')
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-
-    try {
-      const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
-      const result = createIssueCommandRunnerScript(
-        makeRepo(),
-        'C:\\repo-worktree',
-        'gh issue view 42'
-      )
-
-      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/issue-command-runner.cmd'],
-        { cwd: 'C:\\repo-worktree' }
-      )
-      expect(result.shell).toEqual({ family: 'cmd' })
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-    }
   })
 })

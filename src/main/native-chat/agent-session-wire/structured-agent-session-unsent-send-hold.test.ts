@@ -1,8 +1,3 @@
-// A message the host accepted while the agent was starting, then Orca quit or crashed, or the chat
-// closed, before handing it over: it is kept as an ordinary card at the head of the queue, never
-// sent on its own; like every card the chat closed with, it follows the chat's next accepted turn
-// (or a Resume, Send now, Edit or Delete). Against the real host, store and journal.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -29,7 +24,6 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 
-/** Orchestration mail as the mailbox sends it: from another agent, naming its sender. */
 const MAIL_SOURCE: AgentMessageSource = {
   kind: 'agent',
   senders: [
@@ -47,7 +41,6 @@ const HOST_RESTARTED = agentSessionFailureWords(agentSessionFailureFact('hostRes
 const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed'), {
   surface: 'rejection'
 })
-/** A kept send: an ordinary waiting card, with no hold of its own. */
 const KEPT = { state: 'waiting' }
 
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
@@ -65,7 +58,6 @@ afterEach(async () => {
   await observationClock.restoreBeforeCleanup(() => rig.dispose())
 })
 
-/** The exact request a client sends, so a test can send the same one again. */
 function sendRequest(text: string, delivery?: 'queue-if-active') {
   const body = hostTestMessage(text)
   const fields = { body, ...(delivery ? { delivery } : {}) }
@@ -77,16 +69,14 @@ function sendRequest(text: string, delivery?: 'queue-if-active') {
   }
 }
 
-/** Lets the spawn `acceptWhileStarting` holds finish; until then the message stays queued. */
+/** Release the held spawn after assertions establish the desired ordering. */
 let releaseStart = (): void => {}
 
-/** Accepted while the agent is starting, and never handed over: Orca stops during its spawn. */
 async function acceptWhileStarting(
   request: Parameters<QueuedMessageTestRig['host']['send']>[1],
-  // Sent with it, so each is accepted before the spawn takes the chat's lane.
+  // Accept all before spawn takes the serialized lane.
   ...alsoQueued: Parameters<QueuedMessageTestRig['host']['send']>[1][]
 ): Promise<string> {
-  // No child, so this send must start one.
   await rig.host.close(SESSION, 'evict')
   const startsBefore = rig.starts.mock.calls.length
   releaseStart = rig.holdNextStart()
@@ -103,7 +93,6 @@ async function acceptWhileStarting(
   return request.envelope.clientOperationId
 }
 
-/** Closes the chat while its spawn is held: the close takes the lane once the spawn returns. */
 async function closeWhileStarting(cause: 'user-close' | 'evict'): Promise<void> {
   const closed = rig.host.close(SESSION, cause)
   releaseStart()
@@ -111,7 +100,7 @@ async function closeWhileStarting(cause: 'user-close' | 'evict'): Promise<void> 
   await closed
 }
 
-/** The app quits: delivery stops first, so the held spawn finishing hands nothing over. */
+// Stop delivery before releasing spawn so quit hands nothing over.
 async function quitRestart(): Promise<void> {
   const quit = rig.quitRestartHostProcess()
   releaseStart()
@@ -144,7 +133,6 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
       await restart()
 
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-      // Nothing runs in the chat, so no paused row: it waits for the chat's next turn.
       expect(await rig.queuePause()).toBeNull()
       expect(await rig.submission(id)).toMatchObject({
         dispatchState: 'rejected',
@@ -159,7 +147,6 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
         body: hostTestMessage('hello after restart'),
         queuedAt: { epoch: journal().epoch, sequence: expect.any(Number) }
       })
-      // Nothing is sent on its own, however many times the chat reopens.
       await rig.host.close(SESSION, 'evict')
       rig.crashRestartHostProcess()
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
@@ -170,7 +157,7 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
   it('quit writes nothing for it: no closed-chat rejection, still queued until the next open', async () => {
     const id = await acceptWhileStarting(sendRequest('kept through quit'))
     await quitRestart()
-    // Read beside the host, without opening the chat through it: the row the quit left.
+    // Inspect persisted state without triggering host reopen/settlement.
     const leftover = await peekSubmission(id)
     expect(leftover).toMatchObject({ dispatchState: 'pending', handoverRecorded: true })
     expect(leftover?.handedOverAt).toBeUndefined()
@@ -188,8 +175,6 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
   })
 })
 
-// R13-1: a kept send waits in order, like every card the chat closed with, and follows the
-// chat's next accepted turn; no "press Send" step.
 describe('the next accepted turn releases a kept card', () => {
   it('a later message runs first, then the card follows it in order', async () => {
     const id = await acceptWhileStarting(sendRequest('the kept words'))
@@ -233,8 +218,6 @@ describe('the next accepted turn releases a kept card', () => {
     expect(await rig.drafts()).toEqual([])
   })
 
-  // Edit is the card's text in the composer, the card's Delete, then a new send. Neither leaves
-  // anything of the original send, even beside the sending desktop's own copy of it.
   it.each(['Edit', 'Delete'] as const)('%s leaves no trace of the kept send', async (action) => {
     const request = sendRequest('the kept words')
     const id = await acceptWhileStarting(request)
@@ -254,7 +237,7 @@ describe('the next accepted turn releases a kept card', () => {
     if (!page.ok) {
       throw new Error('history refused')
     }
-    // The sending desktop's own bubble, had it not settled yet.
+    // Include the desktop’s unconfirmed local echo.
     const lingering = {
       clientMessageId: id,
       body: structuredAgentSessionSendBody('the kept words', []),
@@ -282,8 +265,6 @@ describe('the next accepted turn releases a kept card', () => {
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected', ...HOST_RESTARTED })
   })
 
-  // Another restart before any turn: the card still waits, and the first turn there releases it
-  // ahead of the cards queued behind that turn.
   it('a second restart still holds it; the next turn sends it before the cards queued after', async () => {
     const id = await acceptWhileStarting(sendRequest('kept twice over'))
     await quitRestart()
@@ -312,7 +293,6 @@ describe('the next accepted turn releases a kept card', () => {
     const id = await acceptWhileStarting(sendRequest('the kept words'))
     await quitRestart()
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-    // A /compact runs, so the Send now waits behind it, and Orca quits before it is handed over.
     const fields = { command: 'compact' as const }
     expect(
       await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
@@ -333,8 +313,6 @@ describe('the next accepted turn releases a kept card', () => {
   })
 })
 
-// The queue stops with delivery at quit, so a quit makes no hand-off only the next process could
-// settle: the queued cards come back as a crash leaves them, under the restart's hold.
 describe('cards queued behind a working turn, then Orca stops', () => {
   it.each(['quit', 'crash'] as const)(
     'after a %s they wait under the restart hold, not kept, with no hand-off made',
@@ -360,7 +338,6 @@ describe('cards queued behind a working turn, then Orca stops', () => {
         { messageId: first.id, state: 'waiting' },
         { messageId: second.id, state: 'waiting' }
       ])
-      // The restart's hold is never published; the cards still wait.
       expect(await rig.queuePause()).toBeNull()
       expect(await rig.handoff(first.id)).toBeUndefined()
       expect(journal().queuedMessages.get(first.id)?.holdReason).toBeNull()
@@ -369,7 +346,6 @@ describe('cards queued behind a working turn, then Orca stops', () => {
 })
 
 describe('the queue at a quit', () => {
-  /** A /compact the provider took; its end, written later by `finishCompact`, wakes the drain. */
   async function compactRunning(): Promise<void> {
     const fields = { command: 'compact' as const }
     expect(
@@ -381,7 +357,6 @@ describe('the queue at a quit', () => {
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
   }
 
-  // The card the person pushed ahead comes back at the head; Resume sends it, then the rest.
   it('Send now on an ordinary card, cut short by a quit, returns it to the head; Resume sends both in order', async () => {
     await compactRunning()
     const first = rig.send('first queued', 'queue-if-active')
@@ -405,8 +380,6 @@ describe('the queue at a quit', () => {
   })
 })
 
-// The same rule as a restart: tab close, worktree teardown and an orchestration stop all close the
-// chat, and the chat can be reopened from its history.
 describe('a message accepted while the agent starts, then the chat closes', () => {
   it.each(['user-close', 'evict'] as const)(
     'after a %s it is a waiting card the reopened chat shows, rejected as closed',
@@ -421,7 +394,6 @@ describe('a message accepted while the agent starts, then the chat closes', () =
       if (!page.ok) {
         throw new Error('history refused')
       }
-      // The desktop drops its own copy at tab close; the card is what shows the words.
       const texts = projectStructuredAgentSessionMessages(
         page.page.items,
         [],
@@ -439,8 +411,7 @@ describe('a message accepted while the agent starts, then the chat closes', () =
   )
 })
 
-// The desktop's outbox keeps an unconfirmed send and sends it again, under the same id, once the
-// app is back. That replay meets the card the open made from the same send.
+// Outbox replay after restart must meet the same-ID card created by reopen.
 describe('the same send arriving again after the restart', () => {
   it('a client that never asked to queue is answered from its own record: one card, still waiting, nothing sent', async () => {
     const request = sendRequest('sent again by the outbox')
@@ -451,8 +422,7 @@ describe('the same send arriving again after the restart', () => {
 
     const again = await rig.host.send(QUEUED_RIG_CALLER, request)
 
-    // Never the queued arm, which only a client that sent `delivery` can read; the card it sees
-    // under the same id is what tells it the host holds the message.
+    // Legacy clients cannot read the queued result arm; the same-ID card communicates the hold.
     expect(again).toMatchObject({
       ok: true,
       replayed: true,
@@ -464,8 +434,7 @@ describe('the same send arriving again after the restart', () => {
     await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
 
-    // Retry on such a client sends the words under a new id, and the card follows that turn, as
-    // every card the chat closed with does: the same words twice, by the one rule.
+    // A fresh-ID retry is a new send; the original card still follows it.
     const retried = rig.send('sent again by the outbox')
     await retried.result
     await eventually(async () =>
@@ -492,8 +461,6 @@ describe('the same send arriving again after the restart', () => {
 })
 
 describe('what is not kept', () => {
-  // Mail names its sender on its body (an agent); a dispatch preamble names none. Neither is a
-  // person's, and the submission's kind is read off that.
   it.each([
     { by: 'mail', from: MAIL_SOURCE, recorded: { kind: 'agent' } },
     { by: 'dispatch', from: undefined, recorded: undefined }
@@ -507,7 +474,6 @@ describe('what is not kept', () => {
     expect(submission?.source).toEqual(recorded)
   })
 
-  // Not a client's send, but the person's: the host sends a launch's first prompt for them.
   it("keeps a launch's first prompt, which the host sends for the person", async () => {
     const { userSend: _client, ...sent } = sendRequest('the launch prompt')
     await acceptWhileStarting({ ...sent, personsMessage: true })
@@ -534,7 +500,6 @@ describe('what is not kept', () => {
       })
     )
     expect(await rig.drafts()).toEqual([])
-    // No card holds it, so its rejection names none.
     expect(await rig.submission(id)).not.toHaveProperty('keptAsQueuedMessageId')
     expect(warned).toHaveBeenCalledWith(
       '[journal-hold] keeping an unsent send failed:',
@@ -545,7 +510,7 @@ describe('what is not kept', () => {
   it('the delivery step keeps one the open could not settle, and hands nothing over', async () => {
     const id = await acceptWhileStarting(sendRequest('open write failed'))
     const resolve = AgentSessionJournal.prototype.resolveDispatch
-    // The open's keep and its plain-rejection fallback both fail.
+    // Fail both conversion to a card and its rejection fallback.
     let failures = 2
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(AgentSessionJournal.prototype, 'resolveDispatch').mockImplementation(function (
@@ -559,7 +524,6 @@ describe('what is not kept', () => {
       return resolve.apply(this, args)
     })
     await quitRestart()
-    // The open's write failed; a new send wakes the delivery loop, whose first step settles it.
     const next = rig.send('wakes the loop')
     await next.result
     await eventually(async () => expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }]))
@@ -583,7 +547,6 @@ describe('/clear carries a kept card', () => {
       throw new Error('expected clear to succeed')
     }
     expect(await rig.drafts(replacementId)).toEqual([{ messageId: id, ...KEPT }])
-    // Nothing runs in the fresh conversation, so no paused row.
     expect(await rig.queuePause(replacementId)).toBeNull()
 
     const body = hostTestMessage('first turn after the clear')
@@ -625,8 +588,6 @@ describe('/clear carries a kept card', () => {
   })
 })
 
-// One rule for a chat that was not running: a card queued while it ran drains as its turn ends,
-// and a card it closed with waits for its next accepted turn, written down by the reopen's mark.
 describe("the reopen's mark", () => {
   it('a card queued mid-turn drains when that turn ends, with no reopen and no mark', async () => {
     const marks = vi.spyOn(AgentSessionJournal.prototype, 'appendQueueReopen')
@@ -667,7 +628,6 @@ describe("the reopen's mark", () => {
     }
   )
 
-  // An idle eviction is Orca's own act: the person sees the same rows, and nothing new is held.
   it('an idle-sweep eviction of a stopped chat writes nothing, and its Stop row stays', async () => {
     await observationClock.restoreBeforeCleanup(() => rig.dispose())
     observationClock.start()
@@ -683,18 +643,15 @@ describe("the reopen's mark", () => {
     await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
 
     expect(rig.closeSession).toHaveBeenCalledTimes(1)
-    // A chat with cards waiting keeps its handle, so no reopen can mark them.
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(await rig.handoff(held.id)).toBeUndefined()
     expect(marks).not.toHaveBeenCalled()
-    // Kept only while a card waits: once the last one leaves, the next sweep drops it as usual.
     expect(await rig.deleteQueued(held.id)).toMatchObject({ ok: true, value: { deleted: true } })
     await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(false)
   })
 
-  // The startup restore opens a visible chat through the same open as any reader.
   it('a chat the startup restore reopens after a crash holds its cards', async () => {
     const working = await rig.workingSend()
     const queued = rig.send('queued behind work', 'queue-if-active')
@@ -721,8 +678,6 @@ describe("the reopen's mark", () => {
     expect(marks).not.toHaveBeenCalled()
   })
 
-  // Bookkeeping never gates the person: the open goes on, and the open itself is where the pause
-  // begins, so nothing sends by itself; the next turn releases the card, and the next open marks.
   it('an open whose mark cannot be written still opens, and still holds the card', async () => {
     const id = await acceptWhileStarting(sendRequest('kept, mark failed'))
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -748,7 +703,6 @@ describe("the reopen's mark", () => {
   })
 })
 
-/** The submission as the quit left it, read from a journal opened beside the host's. */
 async function peekSubmission(id: string) {
   const record = rig.store.getRecord(SESSION)!
   const params = attachParamsForRecord(record, {

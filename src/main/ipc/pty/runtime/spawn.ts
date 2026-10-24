@@ -148,12 +148,7 @@ async function spawnFreshPtyFromRuntimeController(
       )
       ctx.pendingRegistrationPtyId = null
     }
-    // Why: once the reservation is created, any later throw — spawn
-    // failure, persist failure, or a post-spawn helper such as
-    // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
-    // it lingers in paneSpawnReservationsByOwnerKey and every future spawn
-    // for this pane awaits a promise that never resolves. reject is a
-    // no-op once the reservation has already resolved.
+    // Settle reservations on every post-reservation failure or future spawns for this pane wait forever.
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
     throw err
   } finally {

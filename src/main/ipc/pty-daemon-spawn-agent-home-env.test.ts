@@ -67,7 +67,7 @@ describe('registerPtyHandlers', () => {
         daemonSpawnAndGetEnv
       } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
+      // Daemon spawns bypass LocalPtyProvider.buildSpawnEnv; main must inject host-local environment.
       it('overrides an unmarked custom home for an authoritative daemon resume', async () => {
         const daemonSpawn = setupDaemonAdapter()
         const selectedHome = vi.fn(() => '/managed/current/home')
@@ -329,9 +329,7 @@ describe('registerPtyHandlers', () => {
           spy.mockRestore()
         }
       })
-      // Why: the guest materializes one overlay per OpenCode major, each holding only its
-      // own plugin file. Asking for the wrong one hands the guest the other variant's
-      // plugin, whose agent gate then registers no hooks at all.
+      // Guest overlays are OpenCode-major-specific; the wrong variant silently disables hooks.
       const guestOverlayCases: {
         launchAgent?: TuiAgent
         expectedAgent: 'opencode' | 'opencode2'
@@ -396,9 +394,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
       it('strips inherited Claude child-session stamps from daemon spawns', async () => {
-        // Why: a daemon forked from inside a Claude Code session inherits these
-        // stamps and would mark every terminal as a nested Claude child, which
-        // silently disables transcript persistence for real user sessions.
+        // Inherited Claude child stamps disable transcript persistence in otherwise independent sessions.
         const spawnOptions = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
           CLAUDE_CODE_CHILD_SESSION: '1',
           CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
@@ -413,8 +409,7 @@ describe('registerPtyHandlers', () => {
         )
       })
       it('strips an inherited agent session id', async () => {
-        // Why: a daemon forked by an Orca launched inside a structured session inherits its id,
-        // and every daemon pane would present that session as its orchestration caller.
+        // Inherited structured-session IDs must not identify independent panes as the parent orchestration caller.
         const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
           ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
           ORCA_STRUCTURED_SESSION: '1'
@@ -424,8 +419,7 @@ describe('registerPtyHandlers', () => {
         )
       })
       it('preserves an explicitly requested Claude child-session stamp', async () => {
-        // Why: only inherited values are poison; a caller deliberately spawning a
-        // nested Claude child passes the stamp in args.env and must keep it.
+        // Preserve child stamps explicitly supplied by a caller creating a nested session.
         const spawnOptions = await daemonSpawnAndGetOptions(
           { CLAUDE_CODE_CHILD_SESSION: '1' },
           undefined,
@@ -444,13 +438,13 @@ describe('registerPtyHandlers', () => {
           value: 'linux'
         })
         try {
-          // Why: overriding process.platform doesn't change the loaded node:path dialect; keep this synthetic PATH consistent.
+          // Mocking process.platform does not change the loaded node:path delimiter.
           const env = await daemonSpawnAndGetEnv({
             PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
           })
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
-          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
+          // Orca terminals must resolve this CLI before the GNOME screen reader (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
           expect(env.ORCA_CLI_COMMAND).toBeUndefined()
@@ -572,9 +566,7 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
       })
       it('strips inherited Claude child-session stamps from runtime-created PTYs', async () => {
-        // Why: the runtime controller is the `orca` CLI / automation spawn path and
-        // assembles envToDelete separately from the renderer's pty:spawn handler;
-        // without its own case the two paths can silently drift apart.
+        // Cover the independent CLI/automation envToDelete path as well as renderer IPC.
         type RuntimeSpawnController = {
           spawn(args: {
             cols: number

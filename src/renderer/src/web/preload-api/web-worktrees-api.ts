@@ -27,11 +27,7 @@ import {
   requireActiveEnvironment,
   assertActiveEnvironment
 } from './web-runtime-session'
-import {
-  WEB_RUNTIME_WORKTREE_LIST_LIMIT,
-  callRuntimeDetectedWorktrees,
-  listAllRuntimeWorktrees
-} from './web-runtime-worktree-catalog'
+import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
@@ -42,15 +38,6 @@ const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    list: async ({ repoId }) => {
-      const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
-        repo: repoId,
-        limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-      })
-      return owned.result.worktrees.map((worktree) =>
-        withRuntimeWorktreeOwner(worktree, owned.hostId)
-      )
-    },
     // Why the catch: a host predating this method answers `method_not_found`, and an empty list
     // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
     listRetiredNames: async ({ repoId }) => {
@@ -64,7 +51,6 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }
     },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
-    listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       if (args.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(args)

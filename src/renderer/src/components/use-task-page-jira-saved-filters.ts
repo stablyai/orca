@@ -9,7 +9,7 @@ import type {
   JiraSavedFilterMutation,
   JiraSavedFilter,
   JiraSavedFilterState
-} from '../../../shared/jira-saved-filters'
+} from '../../../shared/jira/jira-saved-filters'
 import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
 

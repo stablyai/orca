@@ -5,7 +5,8 @@ import {
   findKeybindingActionsForBinding,
   findKeybindingConflicts,
   getEffectiveKeybindingsForAction,
-  keybindingMatchesAction
+  keybindingMatchesAction,
+  KEYBINDING_DEFINITIONS
 } from './keybindings'
 
 describe('keybindings', () => {
@@ -195,5 +196,98 @@ describe('keybindings', () => {
       binding: 'Mod+Shift+E',
       actionIds: expect.arrayContaining(['sidebar.explorer.toggle', 'worktree.palette'])
     })
+  })
+
+  const findInterceptionConflicts = (
+    platform: NodeJS.Platform,
+    overrides?: Parameters<typeof findKeybindingConflicts>[1],
+    options: Parameters<typeof findKeybindingConflicts>[2] = {}
+  ) =>
+    findKeybindingConflicts(platform, overrides, {
+      ...options,
+      includeMainProcessInterception: true
+    })
+
+  it('keeps main-process interception out of the loader and write conflict check', () => {
+    expect(
+      findKeybindingConflicts('darwin', { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] })
+    ).toEqual([])
+  })
+
+  it('reports terminal bindings that lose their chord to main-process shortcuts', () => {
+    expect(
+      findInterceptionConflicts('darwin', { 'terminal.splitRight': ['Mod+Alt+ArrowRight'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowRight',
+      actionIds: expect.arrayContaining(['worktree.history.forward', 'terminal.splitRight'])
+    })
+    expect(
+      findInterceptionConflicts('darwin', { 'terminal.splitDown': ['Mod+Alt+ArrowLeft'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowLeft',
+      actionIds: expect.arrayContaining(['worktree.history.back', 'terminal.splitDown'])
+    })
+    expect(
+      findInterceptionConflicts('darwin', { 'terminal.splitRight': ['Mod+P'] })
+    ).toContainEqual({
+      binding: 'Mod+P',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'terminal.splitRight'])
+    })
+    expect(findInterceptionConflicts('linux', { 'terminal.splitRight': ['Alt+2'] })).toContainEqual(
+      {
+        binding: 'Alt+2',
+        actionIds: expect.arrayContaining(['tab.selectByIndex', 'terminal.splitRight'])
+      }
+    )
+  })
+
+  it('reports main-process shortcuts against renderer actions in other scopes', () => {
+    expect(
+      findInterceptionConflicts('linux', {
+        'workspace.create': ['Mod+Shift+N'],
+        'tab.newTerminal': ['Mod+Shift+N']
+      })
+    ).toContainEqual({
+      binding: 'Mod+Shift+N',
+      actionIds: expect.arrayContaining(['workspace.create', 'tab.newTerminal'])
+    })
+  })
+
+  it('still lets the two digit ranges share a modifier', () => {
+    expect(
+      findInterceptionConflicts('linux', {
+        'workspace.selectByIndex': ['Alt+1'],
+        'tab.selectByIndex': ['Alt+1']
+      })
+    ).toEqual([])
+  })
+
+  it('leaves the dictation chord to other scopes, since main lets it through while voice is off', () => {
+    expect(findInterceptionConflicts('darwin', { 'terminal.splitRight': ['Mod+E'] })).toEqual([])
+  })
+
+  it('checks browser bindings only against main-process shortcuts a focused guest forwards first', () => {
+    expect(
+      findInterceptionConflicts('darwin', { 'browser.back': ['Mod+Alt+ArrowLeft'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+ArrowLeft',
+      actionIds: expect.arrayContaining(['worktree.history.back', 'browser.back'])
+    })
+    expect(
+      findInterceptionConflicts('darwin', {
+        'browser.focusAddressBar': ['Mod+L'],
+        'sidebar.right.toggle': ['Mod+L']
+      })
+    ).toEqual([])
+  })
+
+  it('keeps every default binding conflict-free on all platforms', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(
+        findInterceptionConflicts(platform, undefined, {
+          relevantActionIds: KEYBINDING_DEFINITIONS.map((definition) => definition.id)
+        })
+      ).toEqual([])
+    }
   })
 })

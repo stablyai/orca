@@ -335,7 +335,7 @@ export type AgentSessionAttachResult = {
   sessionId: string
   fence: number
   page: AgentSessionHistoryPage
-  /** Submissions a crash boundary left `unknown` that provider history could not decide. */
+  /** Submissions a crash boundary left `unknown`. No client reads it; kept for older peers. */
   unconfirmedClientMessageIds: string[]
   /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string

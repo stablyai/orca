@@ -11,9 +11,7 @@ import {
   RELATIONS_QUERY
 } from './raw'
 
-// The signed public-file-url client is what body reads must use so Linear
-// rewrites inline uploads.linear.app URLs into temporary signed URLs. The plain
-// entry client is a distinct spy so a regression back to it fails these tests.
+// Separate signed/plain client spies expose body reads that would leave uploads.linear.app media unauthorized.
 const rawRequest = vi.fn()
 const plainRawRequest = vi.fn()
 
@@ -403,8 +401,6 @@ describe('Linear issue context includes', () => {
   })
 
   it('reads comment and child bodies through the signed public-file-url client', async () => {
-    // Guards STA-1246: reverting to the plain entry client would return unsigned
-    // uploads.linear.app URLs that 401 for agents.
     rawRequest.mockResolvedValue({
       data: {
         issue: {

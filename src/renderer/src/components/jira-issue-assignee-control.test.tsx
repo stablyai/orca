@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import type { JiraConnectionStatus, JiraIssue, JiraUser } from '../../../shared/jira-types'
+import type { JiraConnectionStatus, JiraIssue, JiraUser } from '../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { AppState } from '@/store/types'
 import { JiraIssueMetadataBar } from './jira-issue-workspace-chrome'

@@ -15,6 +15,7 @@ import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref
 import { ownerKey } from '../../../../shared/automation-owner-key'
 import { makeAutomation, makeRun } from './automations-page-fixtures'
 import { automationListRowKey, type AutomationListRow } from './automation-list-row-identity'
+import * as automationHostClient from './automation-host-client'
 import {
   useSelectedAutomationRunHistory,
   type SelectedAutomationRunHistoryInput,
@@ -102,6 +103,8 @@ describe('useSelectedAutomationRunHistory', () => {
         automationId: 'a-1',
         rowKey: DESKTOP_ROW.key,
         ownerKey: 'uncaptured',
+        navigation: null,
+        reloadToken: 0,
         runs: [],
         notice: { message: 'web-01 is not connected', recovery: 'reconnect', severity: 'failure' }
       }
@@ -133,7 +136,15 @@ describe('useSelectedAutomationRunHistory', () => {
     await render(input)
 
     expect(settled(input)).toEqual([
-      { automationId: 'a-1', rowKey: DESKTOP_ROW.key, ownerKey: 'uncaptured', runs, notice: null }
+      {
+        automationId: 'a-1',
+        rowKey: DESKTOP_ROW.key,
+        ownerKey: 'uncaptured',
+        navigation: null,
+        reloadToken: 0,
+        runs,
+        notice: null
+      }
     ])
   })
 
@@ -155,6 +166,8 @@ describe('useSelectedAutomationRunHistory', () => {
       automationId: 'a-1',
       rowKey: DESKTOP_ROW.key,
       ownerKey: 'uncaptured',
+      navigation: null,
+      reloadToken: 1,
       runs: [],
       notice: null
     })
@@ -180,14 +193,120 @@ describe('useSelectedAutomationRunHistory', () => {
     expect(settled(input).at(-1)?.ownerKey).toBe(ownerKey(owner))
   })
 
+  it('keeps the requested overview host for a row without a captured owner', async () => {
+    const runs = [makeRun()]
+    const listRuns = vi
+      .spyOn(automationHostClient, 'listAutomationRunsForTarget')
+      .mockResolvedValueOnce(runs)
+    mocks.dispatch.mockImplementationOnce(
+      async (_context: unknown, _row: unknown, legacy: () => Promise<AutomationRun[]>) => ({
+        ok: true,
+        value: await legacy()
+      })
+    )
+    const input = makeInput({
+      navigation: { automationId: 'a-1', runId: null, hostId: 'runtime:gpu' }
+    })
+
+    try {
+      await render(input)
+
+      expect(listRuns).toHaveBeenCalledWith({ kind: 'environment', environmentId: 'gpu' }, 'a-1')
+      expect(settled(input).at(-1)?.runs).toEqual(runs)
+    } finally {
+      listRuns.mockRestore()
+    }
+  })
+
   it('clears the pane when nothing is selected', async () => {
     const input = makeInput({ selected: null })
 
     await render(input)
 
     expect(settled(input)).toEqual([
-      { automationId: null, rowKey: null, ownerKey: null, runs: [], notice: null }
+      {
+        automationId: null,
+        rowKey: null,
+        ownerKey: null,
+        navigation: null,
+        reloadToken: 0,
+        runs: [],
+        notice: null
+      }
     ])
     expect(mocks.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('refreshes each navigation and keeps its answer when navigation is consumed', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const input = makeInput()
+    const rerender = await render(input)
+    const navigation = { automationId: 'a-1', runId: 'run-27' }
+    const runs = [makeRun({ id: navigation.runId })]
+    mocks.dispatch.mockResolvedValue({ ok: true, value: runs })
+
+    await rerender({ ...input, navigation })
+
+    expect(settled(input).at(-1)?.runs).toEqual(runs)
+    expect(settled(input).at(-1)?.navigation).toBe(navigation)
+    expect(mocks.dispatch).toHaveBeenCalledTimes(2)
+
+    await rerender(input)
+    expect(mocks.dispatch).toHaveBeenCalledTimes(2)
+
+    const repeatedNavigation = { ...navigation }
+    await rerender({ ...input, navigation: repeatedNavigation })
+    expect(mocks.dispatch).toHaveBeenCalledTimes(3)
+    expect(settled(input).at(-1)?.navigation).toBe(repeatedNavigation)
+  })
+
+  it('ignores a previous navigation that finishes after a newer navigation', async () => {
+    const obsolete = Promise.withResolvers<{ ok: true; value: AutomationRun[] }>()
+    const current = Promise.withResolvers<{ ok: true; value: AutomationRun[] }>()
+    mocks.dispatch.mockReturnValueOnce(obsolete.promise).mockReturnValueOnce(current.promise)
+    const firstNavigation = { automationId: 'a-1', runId: 'run-26' }
+    const input = makeInput({ navigation: firstNavigation })
+    const rerender = await render(input)
+    const secondNavigation = { automationId: 'a-1', runId: 'run-27' }
+    await rerender({ ...input, navigation: secondNavigation })
+
+    await act(async () => {
+      current.resolve({ ok: true, value: [makeRun({ id: secondNavigation.runId })] })
+    })
+    await act(async () => {
+      obsolete.resolve({ ok: true, value: [makeRun({ id: firstNavigation.runId })] })
+    })
+
+    expect(settled(input)).toHaveLength(1)
+    expect(settled(input)[0]?.navigation).toBe(secondNavigation)
+    expect(settled(input)[0]?.runs[0]?.id).toBe('run-27')
+  })
+
+  it('refreshes a reselected row after an intervening read was cancelled', async () => {
+    const obsolete = Promise.withResolvers<{ ok: true; value: AutomationRun[] }>()
+    const oldRun = makeRun({ id: 'run-26' })
+    const freshRun = makeRun({ id: 'run-27' })
+    mocks.dispatch
+      .mockResolvedValueOnce({ ok: true, value: [oldRun] })
+      .mockReturnValueOnce(obsolete.promise)
+      .mockResolvedValueOnce({ ok: true, value: [freshRun, oldRun] })
+    const input = makeInput()
+    const rerender = await render(input)
+
+    await rerender({
+      ...input,
+      selected: {
+        ...DESKTOP_ROW,
+        key: automationListRowKey('host:desktop|self', 'a-2'),
+        automation: makeAutomation({ id: 'a-2' })
+      }
+    })
+    await rerender(input)
+    await act(async () => {
+      obsolete.resolve({ ok: true, value: [makeRun({ automationId: 'a-2' })] })
+    })
+
+    expect(mocks.dispatch).toHaveBeenCalledTimes(3)
+    expect(settled(input).at(-1)?.runs).toEqual([freshRun, oldRun])
   })
 })

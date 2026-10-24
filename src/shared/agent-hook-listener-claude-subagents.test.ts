@@ -598,10 +598,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('does not resurrect persisted idle child rows after a restart', () => {
-      // Why: the roster tracks only working children now. A persisted idle
-      // snapshot (from a build that kept idle rows) is a finished child, so
-      // hydration must drop it — otherwise restart would re-pile the exact
-      // squatting rows this fix removes.
+      // Idle snapshots have no live confirmation after restart.
       seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
         {
           id: 'aprobe2-6d3cb5b52120b7bf',
@@ -610,7 +607,8 @@ describe('shared agent-hook-listener', () => {
           agentType: 'security-reviewer'
         }
       ])
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const resumed = claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      expect(resumed?.payload.subagents).toBeUndefined()
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [

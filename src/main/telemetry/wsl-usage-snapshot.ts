@@ -30,6 +30,8 @@ export type WslUsageSnapshotInput = {
   wslPackageVersion: string | null
   wslAvailableCached: boolean | null
   projects: readonly WslUsageProject[]
+  /** Of the Windows-drive WSL git repos, those with a linked worktree WSL Git made. */
+  windowsDriveReposWithWslWorktrees: number
   wslHostsGateOpen: boolean
 }
 
@@ -108,6 +110,9 @@ export function buildWslUsageSnapshot(input: WslUsageSnapshotInput): WslUsageSna
     ),
     projects_wsl_git: bucketWslUsageCount(count(projects, (p) => p.kind === 'git')),
     projects_wsl_folder: bucketWslUsageCount(count(projects, (p) => p.kind === 'folder')),
+    projects_wsl_windows_drive_wsl_worktrees: bucketWslUsageCount(
+      input.windowsDriveReposWithWslWorktrees
+    ),
     project_distros_used: bucketWslUsageCount(projectDistros.size),
     wsl_hosts_gate_open: input.wslHostsGateOpen
   }

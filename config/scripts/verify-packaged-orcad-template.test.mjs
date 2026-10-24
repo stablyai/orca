@@ -29,7 +29,7 @@ afterEach(async () => {
 })
 
 describe('verifyPackagedOrcadTemplate', () => {
-  it('accepts the exact six-target packaged template', async () => {
+  it('accepts the complete packaged template', async () => {
     const fixture = await createFixture()
 
     expect(() => verifyPackagedOrcadTemplate(fixture.root)).not.toThrow()

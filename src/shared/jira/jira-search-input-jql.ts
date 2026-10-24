@@ -5,12 +5,12 @@ import { JIRA_ISSUE_KEY_PATTERN } from '../jira-issue-url'
 const JQL_OPERATOR_PATTERN = new RegExp(
   [
     '[=~<>]',
-    String.raw`(?<![\w-])(?:was|changed)(?![\w-])`,
+    String.raw`(?:^|[^\w-])(?:was|changed)(?![\w-])`,
     // IN takes only a list or a function call, so `crash in terminal` cannot parse. The space
     // before a bare function name keeps `input (raw)` from reading as `in` + `put(`.
-    String.raw`(?<![\w-])in(?:\s+[a-z_][\w.]*|\s*"[^"]+"|\s*'[^']+')?\s*\(`,
+    String.raw`(?:^|[^\w-])in(?:\s+[a-z_][\w.]*|\s*"[^"]+"|\s*'[^']+')?\s*\(`,
     // IS takes only EMPTY or NULL, so `login is slow` cannot parse.
-    String.raw`(?<![\w-])is\s+(?:not\s+)?(?:empty|null)(?![\w-])`,
+    String.raw`(?:^|[^\w-])is\s+(?:not\s+)?(?:empty|null)(?![\w-])`,
     String.raw`^order\s+by\b`
   ].join('|'),
   'i'

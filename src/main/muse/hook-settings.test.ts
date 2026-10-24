@@ -25,7 +25,6 @@ describe('Muse hook commands', () => {
     '\\\\server\\share\\.orca\\agent-hooks\\muse-hook.cmd'
   ])('retains the established quoting fallback for %s', (path) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    // Guarded Unicode .cmd paths take the cheaper policy switch (#26382).
     const policy = { useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(path) }
     expect(getMuseManagedCommand(path)).toBe(wrapWindowsHookCommand(path, {}, policy))
   })

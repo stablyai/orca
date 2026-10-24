@@ -9,7 +9,7 @@ import type {
   LinearFilter
 } from './mobile-tasks-view-state-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
-import type { JiraIssue } from '../../../src/shared/jira-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import type {
   GitHubWorkItem,
   GitLabTodo,

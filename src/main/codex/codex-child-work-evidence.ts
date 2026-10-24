@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
@@ -97,7 +98,23 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  clear(commands: readonly CodexBackgroundCommandChange[]): void {
+  clear(
+    commands: readonly CodexBackgroundCommandChange[],
+    processExit?: StructuredAgentSessionEndedEvent['processExit']
+  ): void {
+    if (processExit?.root === 'exited' && processExit.workload === 'exited') {
+      for (const child of this.executions.workingChildren()) {
+        const { agentThreadId, execution } = child
+        if (execution) {
+          this.pending.push((observedAt) => ({
+            type: 'ended',
+            observedAt,
+            handle: { idKind: 'thread_id', id: agentThreadId, runId: execution.turnId },
+            outcome: 'cancelled'
+          }))
+        }
+      }
+    }
     this.facts.clear()
     this.queueCommands(commands)
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))

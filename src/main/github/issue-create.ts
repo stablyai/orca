@@ -15,11 +15,7 @@ function githubIssueErrorMessage(error: unknown): string {
   return stderr.trim() || stdout.trim()
 }
 
-/**
- * Create a new GitHub issue. Uses `gh api` with explicit owner/repo so the
- * call does not depend on the current working directory having a remote that
- * matches the repo the user picked in the tasks page.
- */
+/** Explicit owner/repo preserves the Tasks-selected source independently of cwd remotes. */
 export async function createIssue(
   repoPath: string,
   title: string,
@@ -85,8 +81,7 @@ export async function createIssue(
         return { ok: false, error: message }
       }
 
-      // Why: GitHub rejects oversized bodies on create but accepts the same body
-      // on update, so establish the issue before attaching its body.
+      // GitHub can accept a body on update that it rejects during creation; establish the issue first.
       const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
       data = parseIssue(stdout)
       if (typeof data.number !== 'number') {

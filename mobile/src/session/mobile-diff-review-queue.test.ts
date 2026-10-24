@@ -192,11 +192,18 @@ describe('mobile diff review queue', () => {
       reviewState
     })
 
-    expect(filterMobileDiffReviewQueue(queue, 'unreviewed').map((item) => item.filePath)).toEqual([
-      'a.ts',
-      'b.ts'
-    ])
-    expect(filterMobileDiffReviewQueue(queue, 'notes').map((item) => item.filePath)).toEqual([
+    const reviewedItem: MobileDiffReviewQueueItem = {
+      ...queue[0],
+      key: createMobileDiffReviewFileKey('unstaged', 'unstaged', 'c.ts'),
+      filePath: 'c.ts',
+      isReviewed: true
+    }
+    const filterQueue = [...queue, reviewedItem]
+
+    expect(
+      filterMobileDiffReviewQueue(filterQueue, 'unreviewed').map((item) => item.filePath)
+    ).toEqual(['a.ts', 'b.ts'])
+    expect(filterMobileDiffReviewQueue(filterQueue, 'notes').map((item) => item.filePath)).toEqual([
       'b.ts'
     ])
   })

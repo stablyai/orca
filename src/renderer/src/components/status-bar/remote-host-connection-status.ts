@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
 import {

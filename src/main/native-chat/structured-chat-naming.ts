@@ -22,8 +22,7 @@ import {
   type StructuredAgentSessionLogger
 } from './agent-session-wire/structured-agent-session-logger'
 
-/** `null`: this host cannot run the generation (or it was canceled), so there is nothing to retry
- *  and nothing to show. */
+/** null means unavailable/canceled: no failure to display or retry. */
 export type StructuredChatNameGeneration =
   | { name: string }
   | { error: string; failureOutput?: AgentGenerationFailureOutput }
@@ -36,10 +35,9 @@ export type StructuredChatNamingDeps = {
   > | null
   getSettings: () => Pick<GlobalSettings, 'nativeChatAutoName'>
   readFirstPrompt: (sessionId: string, hostStartedAt: number) => Promise<string>
-  /** The chat's first prompt whenever it was sent, for a name the user asked for again. */
+  /** Explicit regeneration may use prompts predating host startup. */
   readJournalFirstPrompt: (sessionId: string) => Promise<string>
   now?: () => number
-  /** An orchestration worker's chat takes its task's title instead of a generated name. */
   workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
   generate: (
     record: AgentSessionRecord,
@@ -50,7 +48,6 @@ export type StructuredChatNamingDeps = {
   wait?: (ms: number) => Promise<void>
 }
 
-/** Backoff before each retry of a failed first name; the seed stays if every try fails. */
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024
 const FAILURE_OUTPUT_ENTRIES = 32
@@ -62,10 +59,10 @@ type NamingRunFailure = Exclude<StructuredChatNameGeneration, null | { name: str
 
 export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps) {
   const attempted = new Set<string>()
-  // One run per chat: the first name and a regenerate request share it.
+  // Serialize initial naming and explicit regeneration per chat.
   const jobs = new Map<string, Promise<void>>()
   const failures = new Map<string, StructuredChatNamingFailure>()
-  // Local diagnostics only, like the worktree rename's: never published or saved.
+  // Retain diagnostics locally without publishing or persisting them.
   const failureOutputs = new Map<string, AgentGenerationFailureOutput>()
   const now = deps.now ?? Date.now
   const hostStartedAt = now()
@@ -96,7 +93,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       refresh(workspaceId, sessionId)
     }
   }
-  // Distinguish actual failures even when their short messages are identical.
+  // Repeated failures need distinct identities even when their short messages match.
   const failedAt = (sessionId: string) =>
     Math.max(now(), (failures.get(sessionId)?.failedAt ?? 0) + 1)
   const forget = (sessionId: string) => {
@@ -119,7 +116,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     refresh(record.location.workspaceId, record.sessionId)
   }
 
-  /** The generated name, or null after recording why it failed (unless the run was moot). */
   async function generateName(
     record: AgentSessionRecord,
     firstPrompt: string,
@@ -192,7 +188,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     if (!seed || namingOff()) {
       return
     }
-    // The prompt names the chat at once; generation only upgrades it, so its failure keeps a name.
+    // Seed immediately so failed generation still leaves a usable name.
     const seeded = await store.compareAndSetConversationName(summary.sessionId, seed, null)
     if (!seeded?.conversationName) {
       return
@@ -213,7 +209,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     }
   }
 
-  /** The user asked again: one try, replacing whatever name the chat has when it starts. */
   async function rename(store: NamingStore, record: AgentSessionRecord) {
     const current = record.conversationName ?? ''
     const stillCurrent = () =>
@@ -258,7 +253,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       if (!store || !record) {
         return false
       }
-      // A first name still owed must not start after, and replace, the one asked for.
+      // Prevent deferred first naming from overwriting explicit regeneration.
       attempted.add(sessionId)
       run(sessionId, record.location.workspaceId, () => rename(store, record))
       return true

@@ -8,7 +8,7 @@ function forwardKey(forward: SavedPortForward): string {
   return `${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`
 }
 
-// Why: after user add/remove/update the runtime manager is the source of truth — persist exactly its entries (unrestored ones handled by a separate helper).
+// User mutations persist the runtime list; failed restores are retained by the separate restore path.
 export function persistPortForwards(targetId: string): void {
   const active = portForwardManager!.listForwards(targetId)
   const saved: SavedPortForward[] = active.map((f) => ({
@@ -22,7 +22,7 @@ export function persistPortForwards(targetId: string): void {
   })
 }
 
-// Why: keep forwards that failed to restore in the persisted list so they retry on next reconnect instead of being silently dropped.
+// Keep failed restores saved so transient errors can retry on reconnect.
 export function persistPortForwardsWithUnrestored(targetId: string): void {
   const active = portForwardManager!.listForwards(targetId)
   const activeKeys = new Set(active.map(forwardKey))
@@ -56,16 +56,15 @@ export async function restorePortForwards(
   if (!conn) {
     return
   }
-  // Why: a forward bound to the replaced transport still holds its local port but reaches nothing.
+  // Replaced transports can leave forwards holding local ports but reaching nothing.
   await portForwardManager!.closeStaleForwards(targetId, conn)
   const live = new Set(portForwardManager!.listForwards(targetId).map(forwardKey))
 
-  // Why: keep failed restores in persisted state — a failure may be transient (port temporarily busy), so retry on next reconnect.
   for (const saved of target.portForwards) {
     if (live.has(forwardKey(saved))) {
       continue
     }
-    // Why: a reconnect mid-loop swaps the connection object; bail on identity change so we don't add forwards to a stale conn (leaking listeners).
+    // Reconnect can replace the transport mid-loop; stop before adding stale listeners.
     if (connectionManager!.getConnection(targetId) !== conn) {
       return
     }
@@ -78,7 +77,7 @@ export async function restorePortForwards(
         saved.remotePort,
         saved.label
       )
-      // Why: a disconnect during the add already swept this target's forwards; this one came after.
+      // A concurrent disconnect swept older forwards; release this newly completed one too.
       if (connectionManager!.getConnection(targetId) !== conn) {
         await portForwardManager!.removeForwardAndWait(entry.id)
         return

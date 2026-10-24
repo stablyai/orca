@@ -318,6 +318,7 @@ export function scheduleSelfWriteAwareEditorExternalReload(
 }
 
 function hasCleanExternalReloadTarget(notification: EditorExternalWatchNotification): boolean {
-  const matching = getOpenFilesForExternalFileChange(useAppStore.getState().openFiles, notification)
+  const state = useAppStore.getState()
+  const matching = getOpenFilesForExternalFileChange(state.openFiles, notification, state)
   return matching.some((file) => !file.isDirty)
 }

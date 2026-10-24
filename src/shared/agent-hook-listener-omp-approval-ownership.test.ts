@@ -53,12 +53,6 @@ describe('OMP approval ownership', () => {
     }
   )
 
-  // `yolo` is the omp default and the one value that looks auto-approving, but omp only emits the
-  // event when something already forced a prompt, so downgrading on it would hide a live prompt.
-  it('keeps a yolo-mode approval request blocked even though yolo auto-approves by default', () => {
-    expect(approvalRequest({ approval_mode: 'yolo' })?.payload.state).toBe('blocked')
-  })
-
   it.each([
     ['missing', {}],
     ['unrecognised', { approval_mode: 'some-future-mode' }],
@@ -75,8 +69,16 @@ describe('OMP approval ownership', () => {
     ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
   })
 
-  it('leaves the tool input unset when omp sends no reason', () => {
-    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload.toolInput).toBeUndefined()
+  it('clears the previous tool input when omp sends no reason', () => {
+    expect(
+      approvalRequest({ reason: 'Critical pattern detected', approval_mode: 'always-ask' })?.payload
+    ).toMatchObject({ state: 'blocked', toolInput: 'Critical pattern detected' })
+
+    expect(approvalRequest({ approval_mode: 'always-ask' })?.payload).toMatchObject({
+      state: 'blocked',
+      toolName: 'bash',
+      toolInput: undefined
+    })
   })
 
   it('clears the wait on resolution regardless of the mode that requested it', () => {

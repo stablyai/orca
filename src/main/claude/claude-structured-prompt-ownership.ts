@@ -42,7 +42,13 @@ function cancelClaudeConversation(
     session.fence === request.fence &&
     session.acquisitionGeneration === acquisitionGeneration &&
     (claudeLiveTurnId(session, request) !== null || session.dispatchWaiters.length > 0)
-  return cancelClaudeTurn(session, timeoutMs, isCurrent, onDispatchSettledLate)
+  return cancelClaudeTurn(
+    session,
+    timeoutMs,
+    isCurrent,
+    onDispatchSettledLate,
+    request.stoppedAt ?? Date.now()
+  )
 }
 
 export async function cancelClaudeStructuredTurn(input: {
@@ -108,7 +114,8 @@ export async function cancelClaudeStructuredTurn(input: {
       }
       return current
     },
-    input.onDispatchSettledLate
+    input.onDispatchSettledLate,
+    request.stoppedAt ?? Date.now()
   )
 }
 

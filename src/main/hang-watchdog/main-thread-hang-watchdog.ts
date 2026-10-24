@@ -30,7 +30,7 @@ export function installMainThreadHangWatchdog(options: {
   if (!resolveObservabilityConsent().localFileEnabled) {
     return null
   }
-  // Why: dev main threads pause in debuggers routinely; watch packaged builds only unless forced.
+  // Debugger pauses are normal in development; enable only when packaged or explicitly forced.
   if (!app.isPackaged && process.env.ORCA_HANG_WATCHDOG_FORCE !== '1') {
     return null
   }
@@ -46,7 +46,6 @@ export function installMainThreadHangWatchdog(options: {
   }
   let worker: Worker
   try {
-    // The worker observes a blocked main thread without another Electron process.
     worker = new Worker(workerPath, {
       name: 'orca-main-thread-hang-watchdog',
       workerData
@@ -74,8 +73,7 @@ export function installMainThreadHangWatchdog(options: {
       return
     }
     stopped = true
-    // Drop the app-level callback as soon as this watchdog is retired so a
-    // closed worker cannot keep its closure (and worker handle) alive.
+    // Drop the app listener immediately so retired workers are not retained by its closure.
     app.off('will-quit', stop)
     clearInterval(heartbeatTimer)
     postMessage({ type: 'shutdown' })

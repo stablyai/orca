@@ -183,11 +183,13 @@ async function sleepWorkspace(
   deps: WorkspaceSleepDeps,
   target: WorkspaceSleepTarget,
   markAsleep: boolean,
-  batch: { chatsSettled: () => void; batchChatsSettled: Promise<unknown> }
+  batch: { chatsSettled: () => void; batchChatsSettled: Promise<unknown> },
+  projectMovePauseId?: string
 ): Promise<WorkspaceSleepAttempt> {
   const { worktreeId } = target
   const reopened = deps.watchReopen(worktreeId)
-  deps.notify({ worktreeId, phase: 'started' })
+  const move = projectMovePauseId ? { projectMovePauseId } : {}
+  deps.notify({ worktreeId, phase: 'started', ...move })
   let failure: string | undefined
   let vmSuspendFailure: string | undefined
   let unverifiable = false
@@ -224,7 +226,7 @@ async function sleepWorkspace(
     }
   }
   const records = target.terminalHost.kind === 'self' ? deps.ownRecords(worktreeId) : null
-  deps.notify({ worktreeId, phase: 'ended', slept: !failure, stoppedPtyIds, records })
+  deps.notify({ worktreeId, phase: 'ended', slept: !failure, stoppedPtyIds, records, ...move })
   return {
     worktreeId,
     ...(failure ? { failure } : {}),
@@ -261,10 +263,16 @@ export async function sleepWorkspaces(
         const { unverifiable: _unverifiable, ...outcome } = await queue.submit(target, {
           kind: 'sleep',
           run: () =>
-            sleepWorkspace(deps, target, request.markChatsAsleep === true, {
-              chatsSettled,
-              batchChatsSettled
-            }),
+            sleepWorkspace(
+              deps,
+              target,
+              request.markChatsAsleep === true,
+              {
+                chatsSettled,
+                batchChatsSettled
+              },
+              request.projectMovePauseId
+            ),
           outcome: (attempt) => (attempt.unverifiable ? 'unverifiable' : 'settled')
         })
         return outcome

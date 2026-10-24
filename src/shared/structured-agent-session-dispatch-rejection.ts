@@ -37,8 +37,8 @@ export const DISPATCH_REJECTED_HOST_RESTARTED = 'host_restarted_before_delivery'
  *  Read only, like the one above. */
 export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_delivery'
 
-/** Restart reconciliation found the send absent from a provider history it could trust. Rows
- *  written before rows carried a fact hold it as their reason; released clients printed it. */
+/** Legacy marker: an older host's restart guess that the send was absent from provider history.
+ *  Read only, like the ones above; released clients printed it. */
 export const DISPATCH_REJECTED_NOT_DELIVERED = 'not_delivered'
 
 /** True for the internal transport marker, false for a provider's own words. Legacy-reason half

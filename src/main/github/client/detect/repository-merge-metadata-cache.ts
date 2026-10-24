@@ -38,7 +38,7 @@ export function cacheRepositoryMergeMetadata(
 ): void {
   const now = Date.now()
   pruneRepositoryMergeMetadataCache(now)
-  // Why: merge metadata is keyed by user-controlled branch names; keep the cache bounded across many short-lived branches.
+  // User-controlled branch names require a bound independent of expiry.
   repositoryMergeMetadataCache.delete(cacheKey)
   repositoryMergeMetadataCache.set(cacheKey, {
     value,

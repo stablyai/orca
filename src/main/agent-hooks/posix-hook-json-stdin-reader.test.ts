@@ -1,12 +1,12 @@
 // Execute the embedded Python: shape assertions miss chunk-boundary decode failures and cat hangs.
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
   POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS,
-  POSIX_HOOK_JSON_STDIN_PRELUDE,
   POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS
 } from './hook-stdin-contract'
 
@@ -98,23 +98,27 @@ async function resolveDefaultPathPython(): Promise<boolean> {
 
 const hasPython = process.platform === 'win32' ? false : await resolveDefaultPathPython()
 
-describe('POSIX hook JSON stdin reader shape', () => {
-  // An apostrophe would escape the single-quoted shell assignment.
-  it('carries no single quote that would escape its shell quoting', () => {
-    const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
-    expect(prelude.split("'")).toHaveLength(3)
-  })
-
-  it('guards HOME before the interpreter runs', () => {
-    expect(POSIX_HOOK_JSON_STDIN.reader.indexOf('unset HOME')).toBeLessThan(
-      POSIX_HOOK_JSON_STDIN.reader.indexOf('python3')
-    )
-  })
-})
-
 describe.skipIf(process.platform === 'win32')('POSIX hook JSON stdin reader', () => {
   // Without Python the fallback cat cannot finish while the writer keeps stdin open.
   const itWithPython = it.skipIf(!hasPython)
+
+  it('clears invalid HOME for the interpreter and preserves the caller environment', async () => {
+    for (const homeDir of ['/nonexistent/orca-hook-home', tmpdir()]) {
+      const { stdout } = await execFileAsync(
+        '/bin/sh',
+        [
+          '-c',
+          [
+            'command() { printf "%s" "${HOME-unset}"; }',
+            READER_SCRIPT,
+            'printf "\\n%s" "$HOME"'
+          ].join('\n')
+        ],
+        { env: { ...process.env, HOME: homeDir } }
+      )
+      expect(stdout).toBe(`${homeDir === tmpdir() ? homeDir : 'unset'}\n${homeDir}`)
+    }
+  })
 
   itWithPython(
     'keeps a multi-byte character intact when it is split across reads',
@@ -236,6 +240,9 @@ describe.skipIf(process.platform === 'win32')('POSIX hook JSON stdin reader', ()
     async () => {
       const result = await runReader([Buffer.from('{"a":"漢"}\n', 'utf8')])
 
+      expect(result.timedOut, 'reader returned').toBe(false)
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe('{"a":"漢"}')
       expect(result.stderr).toBe('')
     },
     KILL_AFTER_MS + 1_000

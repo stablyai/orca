@@ -12,17 +12,14 @@ import {
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 
-// Why: prove the wiring, not just the helper — an unreachable endpoint exercises
-// the real WebSocket failure → reject → Tailscale-hint join points the settings
-// probe (returned ok:false) and in-use calls (thrown) actually use.
+// Exercise real WebSocket failure paths: status returns ok:false while in-use calls reject.
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 
 let userDataPath: string
 
 function seedEnvironment(name: string, endpoint: string): string {
-  // A valid Curve25519 public key lets the client reach the socket-connect step
-  // (and fail there) instead of bailing out early on key parsing.
+  // Use a valid key so failure occurs at socket connection, not key parsing.
   const keyPair = generateKeyPair()
   const offer: PairingOffer = {
     v: 2,

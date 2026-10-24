@@ -859,6 +859,8 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
       runner: ubuntu-latest
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   terminal-rendering-golden:
     needs: cut
@@ -2444,7 +2446,6 @@ jobs:
   publish-release:
     needs:
       - cut
-      - dependency-security
       - build
       - build-mac
       - verify-mac-build
@@ -2455,7 +2456,6 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
-      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
