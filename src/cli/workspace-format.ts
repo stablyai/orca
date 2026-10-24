@@ -10,6 +10,11 @@ import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-typ
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
 import { formatWorktreePsProgramStatus } from './worktree-ps-program-status'
+import type { EnvironmentReachability } from './runtime/environment-reachability'
+
+type EnvironmentWithReachability = PublicKnownRuntimeEnvironment & {
+  reachability?: EnvironmentReachability
+}
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -106,7 +111,7 @@ function formatByteCount(bytes: number): string {
 }
 
 export function formatEnvironmentList(result: {
-  environments: PublicKnownRuntimeEnvironment[]
+  environments: EnvironmentWithReachability[]
 }): string {
   if (result.environments.length === 0) {
     return 'No saved environments.'
@@ -114,18 +119,37 @@ export function formatEnvironmentList(result: {
   return result.environments
     .map(
       (environment) =>
-        `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}`
+        `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}${environment.reachability ? `  ${formatEnvironmentReachabilitySummary(environment.reachability)}` : ''}`
     )
     .join('\n')
 }
 
-export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): string {
+export function formatEnvironmentReachabilitySummary(
+  reachability: EnvironmentReachability
+): string {
+  return `lastProbe=${reachability.status} checkedAt=${reachability.checkedAt === null ? 'never' : new Date(reachability.checkedAt).toISOString()} lastSeenAt=${reachability.lastSeenAt === null ? 'never verified' : new Date(reachability.lastSeenAt).toISOString()}`
+}
+
+export function formatEnvironment(environment: EnvironmentWithReachability): string {
   return [
     `id: ${environment.id}`,
     `name: ${environment.name}`,
     `runtimeId: ${environment.runtimeId ?? 'unknown'}`,
     `lastUsedAt: ${environment.lastUsedAt ?? 'never'}`,
     `preferredEndpointId: ${environment.preferredEndpointId}`,
+    ...(environment.reachability
+      ? [
+          `lastProbe: ${environment.reachability.status}`,
+          `checkedAt: ${environment.reachability.checkedAt === null ? 'never' : new Date(environment.reachability.checkedAt).toISOString()}`,
+          `lastSeenAt: ${environment.reachability.lastSeenAt === null ? 'never verified' : new Date(environment.reachability.lastSeenAt).toISOString()}`,
+          ...(environment.reachability.failureCode
+            ? [`failureCode: ${environment.reachability.failureCode}`]
+            : []),
+          ...(environment.reachability.historySaved === false
+            ? ['history: could not save the probe history']
+            : [])
+        ]
+      : []),
     ...environment.endpoints.map(
       (endpoint) => `endpoint: ${endpoint.id} ${endpoint.kind} ${endpoint.endpoint}`
     )
