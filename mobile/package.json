@@ -70,6 +70,7 @@
     "react-native-webview": "13.16.2",
     "react-native-worklets": "^0.8.3",
     "remend": "1.4.0",
+    "three": "^0.180.0",
     "tweetnacl": "^1.0.3",
     "zod": "~4.6.7"
   },
@@ -80,6 +81,7 @@
     "@types/mdast": "^4.0.4",
     "@types/react": "~19.2.18",
     "@types/react-test-renderer": "19.1.0",
+    "@types/three": "^0.180.0",
     "@types/ws": "^8.18.2",
     "acorn": "8.18.0",
     "esbuild": "0.28.2",

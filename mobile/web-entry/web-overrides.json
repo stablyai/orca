@@ -192,6 +192,10 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/files/MobileModelPreview.web.tsx",
+      "reason": "The model preview needs a WebGL canvas, which only the page has. The native file preview route mounts the web shell rather than this body, so the native file is a placeholder that keeps three.js out of the native bundle; this file lazily imports three.js and draws the GLB into the div react-native-web renders for its View."
     }
   ]
 }

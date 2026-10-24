@@ -1,4 +1,5 @@
 import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
+import { MODEL_FILE_MIME_TYPES } from '../../../shared/model-file-extensions'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcResultExceedsContentBudget
@@ -51,5 +52,6 @@ export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...MODEL_FILE_MIME_TYPES
 }

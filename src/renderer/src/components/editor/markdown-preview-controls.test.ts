@@ -44,6 +44,14 @@ describe('getMarkdownViewModes', () => {
       })
     ).toEqual(['source', 'rich'])
   })
+
+  it('opens glTF edit tabs in the 3D view but keeps glTF diffs and plain JSON as source', () => {
+    const gltf = { language: 'json', filePath: '/repo/Models/Box.GLTF', mode: 'edit' } as const
+    expect(getEditorToggleModes(gltf)).toEqual(['source', 'rich', 'changes'])
+    expect(getDefaultMarkdownViewMode(gltf)).toBe('rich')
+    expect(getMarkdownViewModes({ ...gltf, mode: 'diff' })).toEqual([])
+    expect(getMarkdownViewModes({ ...gltf, filePath: '/repo/package.json' })).toEqual([])
+  })
 })
 
 describe('markdown preview helpers', () => {

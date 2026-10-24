@@ -21141,5 +21141,22 @@
       "pending": "削除が進行中です。"
     },
     "rowActions": "{{name}} の操作"
+  },
+  "glbPreview": {
+    "loading": "3D モデルを読み込み中…",
+    "contextLost": "グラフィックドライバーにより 3D 表示がリセットされました。ファイルを開き直すと再表示できます。",
+    "parseFailed": "この 3D モデルを表示できません。ファイルが壊れているか、未対応の拡張機能を使っているか、参照先のファイルを読み込めなかった可能性があります。",
+    "resetView": "視点をリセット",
+    "wireframe": "ワイヤーフレーム",
+    "stats": "{{vertices}} 頂点 · {{triangles}} 三角形",
+    "viewMode": "3D",
+    "guides": "グリッドと軸",
+    "playAnimation": "アニメーションを再生",
+    "pauseAnimation": "アニメーションを一時停止",
+    "animation": "アニメーション",
+    "animationFallback": "アニメーション {{index}}",
+    "dimensionsTitle": "幅 × 高さ × 奥行き(メートル)",
+    "dimensions": "{{width}} × {{height}} × {{depth}} m",
+    "gridCell": "グリッド {{size}} m"
   }
 }

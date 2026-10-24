@@ -47,7 +47,11 @@ export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   if (file.readOnly === true) {
     return true
   }
-  const target = { language: detectLanguage(file.filePath), mode: file.mode }
+  const target = {
+    language: detectLanguage(file.filePath),
+    filePath: file.filePath,
+    mode: file.mode
+  }
   const views = getMarkdownViewModes(target)
   const stored = state.markdownViewMode?.[file.id]
   const view =

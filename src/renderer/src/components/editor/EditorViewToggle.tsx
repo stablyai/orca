@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  Box,
   Code,
   Eye,
   FileText,
@@ -82,6 +83,15 @@ export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewM
       return translate('auto.components.editor.EditorViewToggle.b3410cd5e0', 'Notebook')
     },
     icon: NotebookText
+  }
+}
+
+export const GLTF_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: {
+    get label() {
+      return translate('glbPreview.viewMode', '3D')
+    },
+    icon: Box
   }
 }
 

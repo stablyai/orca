@@ -441,9 +441,10 @@ describe('chat-image requests', () => {
     ).toBe('denied')
   })
 
-  it('refuse a relative path, a device and a PDF', async () => {
+  it('refuse a relative path, a device, a PDF and a 3D model', async () => {
     const store = makeStore({})
     await writeFile(join(outside, 'doc.pdf'), '%PDF')
+    await writeFile(join(outside, 'bunny.glb'), 'glTF')
 
     expect(await settles(resolveLocalFileRequestPath('shot.png', CHAT_IMAGE, store))).toBe('denied')
     expect(await settles(resolveLocalFileRequestPath('/dev/zero', CHAT_IMAGE, store))).toBe(
@@ -451,6 +452,9 @@ describe('chat-image requests', () => {
     )
     expect(
       await settles(resolveLocalFileRequestPath(join(outside, 'doc.pdf'), CHAT_IMAGE, store))
+    ).toBe('denied')
+    expect(
+      await settles(resolveLocalFileRequestPath(join(outside, 'bunny.glb'), CHAT_IMAGE, store))
     ).toBe('denied')
   })
 

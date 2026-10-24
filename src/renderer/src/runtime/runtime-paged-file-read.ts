@@ -1,6 +1,7 @@
 import { basename } from '@/lib/path'
 import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
+import { MODEL_FILE_MIME_TYPES } from '../../../shared/model-file-extensions'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
@@ -165,7 +166,9 @@ export function previewableBinaryMimeType(relativePath: string): string | undefi
     return undefined
   }
   const extension = name.slice(dot).toLowerCase()
-  return extension === '.pdf' ? 'application/pdf' : IMAGE_FILE_MIME_TYPES[extension]
+  return extension === '.pdf'
+    ? 'application/pdf'
+    : (IMAGE_FILE_MIME_TYPES[extension] ?? MODEL_FILE_MIME_TYPES[extension])
 }
 
 async function nullWhenUnsupported<TResult>(call: () => Promise<TResult>): Promise<TResult | null> {

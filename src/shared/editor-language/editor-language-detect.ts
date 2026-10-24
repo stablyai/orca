@@ -24,6 +24,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
+  '.gltf': 'json',
   // Why: JSONL is one JSON value per line; a dedicated 'jsonl' language gives
   // JSON-style color without attaching JSON whole-document diagnostics that
   // would flag every record after line one as trailing content.

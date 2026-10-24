@@ -622,6 +622,29 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
+  it('loads GLB models through readPreview as base64 bytes, and only a GLB reply', async () => {
+    const glb = {
+      content: 'Z2xURg==',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'model/gltf-binary'
+    }
+    const client = clientWith(ok(glb))
+
+    await expect(loadMobileFilePreview(client, 'wt-1', 'models/Bunny.GLB')).resolves.toEqual({
+      status: 'ready',
+      kind: 'model',
+      base64: 'Z2xURg=='
+    })
+    expect(client.sendRequest).toHaveBeenCalledWith('files.readPreview', {
+      worktree: 'id:wt-1',
+      relativePath: 'models/Bunny.GLB'
+    })
+    expect(
+      normalizeMobileFilePreviewResult('models/bunny.glb', { ...glb, mimeType: 'image/png' })
+    ).toEqual({ status: 'error', message: 'Binary preview unavailable', reconnect: false })
+  })
+
   it('normalizes markdown, html, text, empty, and truncated reads', () => {
     expect(
       normalizeMobileFilePreviewResult('README.md', {

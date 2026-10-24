@@ -6,6 +6,7 @@ import ImageViewerPopup from './ImageViewerPopup'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { listenForViewerZoomRequests } from './viewer-zoom-request'
 import PdfViewer from './PdfViewer'
+import { GlbViewer } from './editor-lazy-views'
 import {
   type ApplyImageViewerZoomChange,
   applyAnchoredImageViewerZoomChange,
@@ -23,6 +24,7 @@ import {
 } from './image-viewer-zoom'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
+import { GLB_MIME_TYPE } from '../../../../shared/model-file-extensions'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 
@@ -257,6 +259,10 @@ export default function ImageViewer({
         scrollCacheKey={scrollCacheKey}
       />
     )
+  }
+
+  if (mimeType === GLB_MIME_TYPE) {
+    return <GlbViewer content={cleanedContent} format="glb" filePath={filePath} />
   }
 
   if (imageError) {

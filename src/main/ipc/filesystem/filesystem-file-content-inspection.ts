@@ -7,6 +7,7 @@ import {
   readLocalFileBounded,
   readLocalFilePrefix
 } from './local-regular-file-read'
+import { MODEL_FILE_MIME_TYPES } from '../../../shared/model-file-extensions'
 
 // Monaco degrades features on large files; a 5MB cap would reject ordinary logs and JSON.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024
@@ -21,7 +22,8 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  ...MODEL_FILE_MIME_TYPES
 }
 
 export type LocalFileContent = {

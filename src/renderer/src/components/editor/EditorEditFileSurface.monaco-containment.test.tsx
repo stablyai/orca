@@ -101,6 +101,7 @@ function Harness(): ReactElement {
         isMermaid={false}
         isCsv={false}
         isNotebook={false}
+        isGltf={false}
         mdViewMode="source"
         inlineMarkdownRenderState={null}
         isChangesMode={false}

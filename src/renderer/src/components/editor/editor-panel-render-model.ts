@@ -8,6 +8,7 @@ import {
   getEditorToggleModes,
   getMarkdownViewModes
 } from './markdown-preview-controls'
+import { isGltfFilePath } from '../../../../shared/model-file-extensions'
 import { getEditorHeaderOpenFileState } from './editor-header'
 import type { EditorToggleValue } from './EditorViewToggle'
 import type { FileContent } from './editor-panel-content-types'
@@ -66,6 +67,7 @@ export function getEditorPanelRenderModel({
   // to a plain source rendering here.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const viewerFilePath = rawReadOnly ? undefined : activeFile.filePath
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -90,12 +92,14 @@ export function getEditorPanelRenderModel({
   )
   const markdownViewModes = getMarkdownViewModes({
     language: viewerLanguage,
+    filePath: viewerFilePath,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
   const hasViewModeToggle = markdownViewModes.length > 0
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
     language: viewerLanguage,
+    filePath: viewerFilePath,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
@@ -108,6 +112,7 @@ export function getEditorPanelRenderModel({
       : defaultMarkdownViewMode
   const editorToggleModes = getEditorToggleModes({
     language: viewerLanguage,
+    filePath: viewerFilePath,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
@@ -192,6 +197,8 @@ export function getEditorPanelRenderModel({
     isMermaid: viewerLanguage === 'mermaid',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
+    isGltf:
+      activeFile.mode === 'edit' && viewerFilePath !== undefined && isGltfFilePath(viewerFilePath),
     // Why: the preview renders the on-disk file, so diff surfaces only get it
     // when the modified side still exists on disk (canOpen excludes deleted
     // files and commit diffs whose content may not match the working tree).
