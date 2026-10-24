@@ -245,7 +245,8 @@ export function createRemoveWorktree(
         hostId,
         requiredExecutionHostId,
         beforeRemoval,
-        catalogVersion: removalResult?.catalogVersion
+        catalogVersion: removalResult?.catalogVersion,
+        confirmedDiscards: options?.confirmedDiscards
       })
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)

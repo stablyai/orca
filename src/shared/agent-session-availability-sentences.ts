@@ -8,7 +8,7 @@ import type {
 import { joinSentences } from './sentence-joining'
 import { agentSessionSignInFor } from './agent-session-sign-in'
 
-const SENTENCE_END = /[.!?。！？][\p{Pe}\p{Pf}"']*\s*$/u
+const SENTENCE_END = /[.!?\u3002\uFF01\uFF1F][\p{Pe}\p{Pf}"']*\s*$/u
 
 // The sentences for a start no account or CLI on this host can make: also the chat's notice.
 

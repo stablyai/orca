@@ -3,7 +3,11 @@ import {
   normalizeCompatibleAgentTitleForOwner
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import {
+  pickHostTurnEnd,
+  type AgentStatusEntry,
+  type AgentStatusIpcPayload
+} from '../../shared/agent-status-types'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -67,12 +71,7 @@ export function buildRuntimeMobileAgentStatus(
         )
       : null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-  const titleOmitsAgent = ptyTitle !== null && ptyTitleClassification !== 'agent'
-  const oscTitle = pty?.lastOscTitle ?? leaf?.lastOscTitle ?? null
-  // Why: a manual rename is not the shell reclaiming the pane, so the hook session stays addressable (#20626).
-  const manualTitleOverridesAgentOsc =
-    titleOmitsAgent && ptyTitle !== oscTitle && classifyAgentTitle(oscTitle) === 'agent'
-  const nonAgentTitle = titleOmitsAgent && !manualTitleOverridesAgentOsc
+  const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
   if (nonAgentTitle) {
     // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
     const hasLiveHookSignal =
@@ -81,12 +80,13 @@ export function buildRuntimeMobileAgentStatus(
       // Why: a pending question is never inherited across hook events (unlike
       // `toolName`), so it proves the agent is parked on a selector right now.
       hookRow.live?.payload.interactivePrompt != null ||
-      // Why: headless serve has no renderer to retain an OSC row, so a fresh hook
-      // agentType is the only live signal a hook-only pane can offer — and an agent
-      // that reports over HTTP need never set a title this gate would recognize.
-      // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
-      // this branch publishes `done`. It only keeps the transcript addressable.
-      (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
+      // Why: headless serve has no renderer to retain an OSC row, so hook evidence is the
+      // only signal a hook-only pane can offer, and an agent that reports over HTTP need
+      // never set a title this gate would recognize. With PTY status, only a shell or
+      // management title shows the pane was released: Codex's idle title is just its
+      // project name (#31136). The status below still follows the PTY title's state.
+      ((!pty?.lastAgentStatus || !terminalTitleBlocksExplicitAgentStatus(ptyTitle)) &&
+        (hookRow.agentType != null || hookRow.providerSession != null))
     if (!hasLiveHookSignal) {
       return {}
     }
@@ -115,6 +115,7 @@ export function buildRuntimeMobileAgentStatus(
           ? { evidenceObservedAt: liveRow.evidenceObservedAt }
           : {}),
         stateStartedAt: liveRow.stateStartedAt,
+        ...pickHostTurnEnd(liveRow),
         stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),
         ...((pty?.worktreeId ?? liveRow.worktreeId)
@@ -141,7 +142,6 @@ export function buildRuntimeMobileAgentStatus(
   // client's row) and drop the question fields (#12346). Only a later shell title retires it.
   const shellTitleRetiredRestored =
     hookRow.restored !== null &&
-    !manualTitleOverridesAgentOsc &&
     terminalTitleBlocksExplicitAgentStatus(ptyTitle) &&
     (pty?.lastOscTitleEpochMs ?? host.getPtyTitleObservedAtEpochMs?.(leaf?.ptyId ?? null) ?? 0) >=
       hookRow.restored.updatedAt

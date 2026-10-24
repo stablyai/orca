@@ -339,6 +339,7 @@ export function NativeChatQuestionCard({
                   ) : (
                     <ImeInput
                       ref={answerInputRef}
+                      data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                       disabled={isSubmitting}
                       value={otherText[index]}

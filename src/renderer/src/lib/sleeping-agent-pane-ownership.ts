@@ -8,18 +8,14 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { getProviderSessionClaimKey } from '../../../shared/sleeping-record-legacy-pane-key'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { isPaneResumingInPlace, isPaneSpawnDeferred } from './pane-spawn-deferral-registry'
 
-type AppStoreState = ReturnType<typeof useAppStore.getState>
+export { getProviderSessionClaimKey }
 
-export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' || record.agent === 'prime-agent'
-    ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
-    : base
-}
+type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 // Why live+done counts (#16308): workspace activation must not resume a finished turn's idle anchor.
 // Quit asks to keep work resumable and a live stopped or failed turn is unfinished.

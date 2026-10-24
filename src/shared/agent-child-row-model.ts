@@ -143,13 +143,15 @@ type AgentChildRowDetailSource = {
   settled: boolean
 }
 
-// A role that restates the name adds nothing.
+// A default role or one that restates the name adds nothing.
 function roleDetail(source: AgentChildRowDetailSource): AgentChildRowDetail | null {
   if (source.kind !== 'agent') {
     return null
   }
   const agentType = source.agentType ?? 'unknown'
-  return source.name.trim() === agentType.trim() ? null : { kind: 'role', agentType }
+  return agentType.trim() === 'default' || source.name.trim() === agentType.trim()
+    ? null
+    : { kind: 'role', agentType }
 }
 
 function messageOrRole(source: AgentChildRowDetailSource): AgentChildRowDetail | null {

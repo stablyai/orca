@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import {
-  X,
-  ExternalLink,
-  Copy,
-  CopyX,
-  Pin,
-  PinOff,
-  PanelLeftClose,
-  PanelRightClose
-} from 'lucide-react'
+import { X, ExternalLink, Copy, CopyX, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,13 +67,10 @@ export default function BrowserTab({
   isActive,
   isPinned,
   hasTabsToRight,
-  hasTabsToLeft,
   tabCount,
   onActivate,
   onClose,
   onCloseOthers,
-  onCloseToRight,
-  onCloseToLeft,
   onCloseSplitPane,
   onDuplicate,
   onTogglePin,
@@ -296,20 +284,6 @@ export default function BrowserTab({
           <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
             <CopyX className="size-3.5" />
             {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            <PanelRightClose className="size-3.5" />
-            {translate(
-              'auto.components.tab.bar.BrowserTab.9dd880bd56',
-              'Close All Tabs To The Right'
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
-            <PanelLeftClose className="size-3.5" />
-            {translate(
-              'components.tab.bar.BrowserTab.closeTabsToLeft',
-              'Close All Tabs To The Left'
-            )}
           </DropdownMenuItem>
           <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
           <DropdownMenuItem

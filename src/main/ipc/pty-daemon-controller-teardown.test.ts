@@ -3,6 +3,8 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setPtyOwnership } from './pty/provider/ownership-state'
 import { setLocalPtyProvider } from './pty/provider/registry'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
+import type { RuntimePtyController } from '../runtime/runtime-pty-controller-contract'
 import { TerminalIntentionalStops } from '../runtime/terminal-intentional-stops'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 
@@ -55,7 +57,6 @@ describe('registerPtyHandlers', () => {
 
   describe('spawn environment', () => {
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('runtime controller stopAndWait fails when keepHistory allows the PTY to revive', async () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)
@@ -196,7 +197,10 @@ describe('registerPtyHandlers', () => {
           await vi.advanceTimersByTimeAsync(1_000)
           await expect(stopPromise).resolves.toBe(true)
 
-          expect(listProcesses.mock.calls[0]?.[0]).toEqual({ deadlineMs: callerDeadlineMs })
+          expect(listProcesses.mock.calls[0]?.[0]).toEqual({
+            deadlineMs: callerDeadlineMs,
+            ptyIds: ['local-pty']
+          })
           const settlementDeadlines = listProcesses.mock.calls
             .slice(1)
             .map(([opts]) => opts?.deadlineMs)
@@ -258,6 +262,63 @@ describe('registerPtyHandlers', () => {
 
         expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', 0, 'incarnation-live')
       })
+      it('skips the keep-history settle poll once this incarnation exit was observed', async () => {
+        const exitListeners = new Set<
+          (payload: { id: string; code: number; incarnationId?: string }) => void
+        >()
+        const listProcesses = vi.fn(async () => [])
+        const provider: IPtyProvider = {
+          spawn: vi.fn(async () => ({ id: 'local-sleeping', incarnationId: 'incarnation-1' })),
+          write: vi.fn(),
+          writeWithSettlement: vi.fn(),
+          resetInputModes: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(async () => {
+            for (const listener of exitListeners) {
+              listener({ id: 'local-sleeping', code: 0, incarnationId: 'incarnation-1' })
+            }
+          }),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn((listener) => {
+            exitListeners.add(listener)
+            return () => exitListeners.delete(listener)
+          }),
+          listProcesses,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        }
+        setLocalPtyProvider(provider)
+        const runtime = {
+          setPtyController: vi.fn<(controller: RuntimePtyController) => void>(),
+          onPtyExit: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn()
+        }
+        handlers.clear()
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only the stubbed runtime members.
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0]
+
+        await controller?.spawn?.({ cols: 80, rows: 24 })
+        const startedAt = Date.now()
+        await expect(
+          controller?.stopAndWait?.('local-sleeping', { keepHistory: true })
+        ).resolves.toBe(true)
+
+        expect(listProcesses).toHaveBeenCalledTimes(1)
+        expect(Date.now() - startedAt).toBeLessThan(500)
+      })
       it('runtime controller kill tombstones app-scoped SSH ids when ownership and provider are absent', async () => {
         const localShutdown = vi.fn()
         setLocalPtyProvider({
@@ -300,8 +361,7 @@ describe('registerPtyHandlers', () => {
           kill: (ptyId: string) => boolean
         }
 
-        // The lease is tombstoned, but nothing observed the detached relay PTY
-        // stop, so the stop itself is reported as unconfirmed.
+        // Tombstoning the lease does not prove its detached relay PTY stopped.
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(false)
 
         expect(localShutdown).not.toHaveBeenCalled()
@@ -402,7 +462,7 @@ describe('PTY SSH lease lifecycle', () => {
         })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
-        ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0, hostId: 'local' }]])
       })
       it('controller stopAndWait skips the synthetic exit when the provider emitted one', async () => {
         vi.useFakeTimers()
@@ -457,7 +517,7 @@ describe('PTY SSH lease lifecycle', () => {
         })
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
-        ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
+        ).toEqual([['pty:exit', { id: 'local-pty', code: 0, hostId: 'local' }]])
       })
       it('classifies host reversible-stop exits for the attached renderer', async () => {
         vi.useFakeTimers()
@@ -510,15 +570,13 @@ describe('PTY SSH lease lifecycle', () => {
 
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
-        ).toEqual([['pty:exit', { id: 'local-pty', code: 0, preserveRendererBinding: true }]])
+        ).toEqual([
+          ['pty:exit', { id: 'local-pty', code: 0, hostId: 'local', preserveRendererBinding: true }]
+        ])
       })
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
-        // Why: sequential RPCs must share one absolute deadline; otherwise both get
-        // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).
-        // Fake timers freeze Date.now() at entry, then let the shutdown RPC burn a
-        // deterministic slice of the budget so the leaf-observed remainders are provable.
+        // Sequential shutdown/liveness RPCs must share one absolute deadline; freeze time to measure consumed budget.
         vi.useFakeTimers()
-        // Each provider call records the budget an RPC leaf would see at issue time.
         const remainingAtLeaf: number[] = []
         const shutdown = vi.fn(async (_id: string, opts?: { deadlineMs?: number }) => {
           remainingAtLeaf.push((opts?.deadlineMs ?? 0) - Date.now())
@@ -568,14 +626,11 @@ describe('PTY SSH lease lifecycle', () => {
         await vi.advanceTimersByTimeAsync(1000)
         await expect(stopPromise).resolves.toBe(true)
 
-        // Both calls carry the same absolute deadline...
         expect(shutdown).toHaveBeenCalledWith(
           'local-pty',
           expect.objectContaining({ immediate: true, deadlineMs })
         )
-        // ...so at the leaves the shutdown RPC sees the full 4321ms budget, while the
-        // SUBSEQUENT liveness list RPC sees only what shutdown left: the 1000ms it
-        // consumed is gone, so 4321 - 1000 = 3321 remain until the shared deadline.
+        // Liveness receives only the budget remaining after shutdown.
         expect(remainingAtLeaf).toEqual([4321, 3321])
         vi.useRealTimers()
       })

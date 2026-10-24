@@ -9,7 +9,6 @@ import {
   preSpawnFailureInWords
 } from './structured-agent-session-failed-create-refusal'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-// The host supplies owner authority; this flow reserves, proves, and publishes the session.
 
 import type {
   AgentSessionAttachResult,
@@ -64,7 +63,6 @@ export type AttachedOwner = 'acquired' | 'kept' | 'none'
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
-  /** What decides whether this build may start a record's agent at all (`agentDrivesSession`). */
   agents: Pick<StructuredAgentRegistry, 'definition'>
   logger: StructuredAgentSessionLogger
   authority: AgentSessionAttachAuthority
@@ -72,49 +70,40 @@ export type AttachFlowInput = {
   params: AgentSessionAttachParams
   now: () => number
   recordPhase?: AgentSessionCreatePhaseRecorder
-  /** Aborted when a close, or a Stop admitted now, must not wait behind this attach's acquire. */
+  /** Stop/close cancellation must not wait behind acquisition. */
   acquireSignal?: AbortSignal
-  /** How the steps below meet the session's serialize; absent, the caller holds it. */
+  /** Absent means the caller already holds serialization. */
   lock?: StructuredAgentSessionAttachLock
-  /** Saved catalog rows a new chat's options are admitted against; transient. */
+  /** Transient catalog used to validate new-chat choices. */
   models?: Parameters<typeof reserveRequestFor>[0]['models']
-  /** The id the host registered this start under; see `StructuredAgentSessionStartupAttempts`. */
   startupAttemptId?: string
-  /** The attempt this attach's acquire runs under, minted before the adapter is called; what it
-   *  answers learns of the child's spawn. */
+  /** Mint before acquisition so spawn callbacks identify the same registered attempt. */
   onStartupAttempt?: (
     attempt: StructuredAgentSessionStartupAttempt
   ) => StructuredAgentSessionStartupProgress
   startupOptions?: Readonly<Record<string, string>>
-  /** The permission mode a start of this record launches with; absent or undefined for none. */
   launchPermissionMode?: (
     record: AgentSessionRecord
   ) => Promise<AgentChatPermissionMode | undefined>
-  /** Publishes the journal before clients can send against the new owner. `owner` says whether
-   *  this attach spawned the child (then `starting`), kept a live one, or left the chat at rest. */
+  /** Publish journal before new-owner sends; distinguish newly starting, retained live and resting owners. */
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null,
     owner: AttachedOwner
   ) => Promise<void> | void
-  /** The waits the publish needs (the sink's drain, a provider read), outside any commit. */
+  /** Wait outside commits for sink drains/provider reads. */
   beforePublish?: (owner: AttachedOwner) => Promise<void>
-  /** The commit that makes the attach's child the session's; it records the attach's outcome, which
-   *  comes before the child is indexed. */
+  /** Commit outcome before indexing the child as session-owned. */
   onPublish?: (attached: AttachedJournal, recordOutcome: () => Promise<void>) => Promise<void>
-  /** Host-owned provider sink, bound to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
-  /** Stops acquisition-window events targeting the superseded journal. */
+  /** Prevent acquisition-window events from reaching superseded journals. */
   onAcquiring?: () => Promise<void> | void
-  /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** The conversation's own open journal, which the attach adopts: it never opens one itself. */
+  /** Adopt the conversation’s journal; attach never owns its open. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
-  /** A failure after acquisition released the session's acquisition; `cause` is that failure and
-   *  `rootGone` whether the release saw the provider root go. */
+  /** Report release failure cause and whether provider-root exit was observed. */
   onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
-  /** The error an acquisition failed with, for a host-side reader of the provider's words; the
-   *  refusal never carries them. */
+  /** Provider words stay host-side, outside refusals. */
   onAcquisitionFailed?: (error: unknown) => void
 }
 
@@ -135,14 +124,13 @@ export async function performAttach(
   if (!admitted.ok) {
     return admitted
   }
-  // Every start of every agent passes here, so this is where a record this build cannot drive (its
-  // transport or account variable is not its agent's) is refused; reading it never is.
+  // All starts validate agent storage identity; unsupported records remain readable.
   const supported = (record: AgentSessionRecord | null) =>
     record === null
       ? input.agents.definition(params.agent) !== null &&
         adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)
       : hostCanStartRecord(input, record)
-  // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
+  // Ensure/recovery bypass create intent, so recheck before effects.
   if (!supported(store.getRecord(sessionId))) {
     return unsupported()
   }
@@ -179,9 +167,7 @@ export async function performAttach(
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'
-    // Capability can change while the durable reservation is in flight. Recheck
-    // every reservation at its effect boundary so it cannot bypass the support
-    // gate, and release a pending reservation that support drift invalidated.
+    // Recheck support after reservation; settle pending reservations invalidated by drift.
     reservedRecord = record
     if (!supported(record)) {
       if (
@@ -208,9 +194,7 @@ export async function performAttach(
         return { ok: false, refusal: replay.refusal }
       }
     }
-    // Sample provider history before a new child is acquired. Once acquireOwner
-    // starts the child, the adapter's liveness signal intentionally becomes
-    // conservative and an absent prompt can no longer prove non-delivery.
+    // Read history before spawn; a live child makes absent prompts inconclusive for non-delivery.
     providerHistoryWindow = await lock.wait(
       readProviderHistoryWindow({
         adapter: input.adapter,
@@ -220,10 +204,9 @@ export async function performAttach(
       })
     )
     if (agentSessionLeaseAdmitsWriter(record.lease)) {
-      // Kept: re-attached to the live child.
+      // Keep the existing live owner.
     } else if (replayed && reserved.operationRow.outcome.status === 'succeeded') {
-      // A create that succeeded replays its answer; the child it started ended since, so the chat
-      // opens at rest and the next send starts one.
+      // Successful creates replay at rest after their child ends; next send starts another.
       owner = 'none'
     } else {
       const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
@@ -240,7 +223,6 @@ export async function performAttach(
     }
     const spawnToken = reservedRecord?.lease.reservedSpawnToken
     if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
-      // Settle processless proof and failed operation atomically.
       try {
         await store.settleFailedAcquisition({
           sessionId,
@@ -262,7 +244,6 @@ export async function performAttach(
     const failed = failedAcquisitionRefusal(error, wording)
     const thrown = failed ? error : preSpawnFailureInWords(error, wording)
     if (failed || thrown !== error) {
-      // The answer carries only its sentence, so what failed is kept here.
       input.logger.warn('starting the provider failed', {
         scope: 'provider-start',
         sessionId,
@@ -321,7 +302,6 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      // The lease this attach just took is the live generation.
       page: withPublishedWork(
         readAgentSessionHydrationPage(attached.journal, fence),
         heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)

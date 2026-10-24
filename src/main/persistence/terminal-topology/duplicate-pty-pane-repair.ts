@@ -15,7 +15,8 @@ import {
   rekeyPaneProfileRecords,
   writeRekeyedProfileRecords
 } from './terminal-leaf-move'
-import { keepFrozen, type TerminalTopologyCommitContext } from './terminal-topology-commit'
+import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
+import { keepFrozen } from './layout-command-commit'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 
 /** A pane the repair drops, and the pane of the same tab that keeps its terminal. */

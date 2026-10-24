@@ -22,6 +22,7 @@ jobs:
             const superseded = context.payload.action === 'synchronize'
             const targets = [
               ['pr-checks', 'pr.yml'],
+              ['dependency-security', 'dependency-security.yml'],
               ['node-server', 'node-server-tests.yml'],
               ['ssh-windows-hosts', 'ssh-windows-hosts.yml'],
               ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
@@ -39,7 +40,6 @@ jobs:
               ['release-ref-validation', 'release-ref-validation.yml'],
               ['docs-pr', 'docs.yml'],
               ['cloud-verify-refs/pull', 'cloud-verify.yml', '/merge'],
-              ['pnpm-verification-pilot', 'ci-pnpm-verification-pilot.yml'],
               ['win-orcad-serve-switch-e2e', 'win-orcad-serve-switch-e2e.yml'],
               ['pi-provider-runtime', 'pi-provider-runtime.yml'],
               ['coding-plan-contract', 'zcode-credential-contract.yml', '-credentials'],
@@ -47,7 +47,6 @@ jobs:
               ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
               ['pi-owner-runtime', 'pi-owner-runtime.yml'],
               ['git-command-termination', 'git-command-termination-runtime.yml'],
-              ['skill-roundtrip-pull_request', 'skill-update-roundtrip.yml'],
               ['ci-cache-warmup', 'ci-cache-warmup.yml']
             ]
             const stillCurrent = async () => {

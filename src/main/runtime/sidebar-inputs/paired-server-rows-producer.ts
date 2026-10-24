@@ -17,7 +17,6 @@ import {
 } from '../mobile-desktop-relay/mobile-relay-host-descriptions'
 import type { ServerWorktreeRows } from '../mobile-desktop-relay/mobile-relay-host-catalog'
 import {
-  SERVER_FETCH_TIMEOUT_MS,
   SERVER_WORKTREE_LIMIT,
   WorktreePsReplySchema,
   stampServerWorktreeRows
@@ -244,8 +243,8 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     const { contactGeneration } = entry
     const call = async (method: string, params?: unknown) =>
       hosts.call({ environmentId: entry.environmentId }, method, params, {
-        // Why the transport bound too: it ends the hung call, so the next request fetches afresh.
-        timeoutMs: SERVER_FETCH_TIMEOUT_MS,
+        // Why the transport's normal bound: nothing waits on this fetch (readers take the latest
+        // rows), so a slow server's answer must still land; the bound still ends a hung call.
         expected: entry.identity
       })
     // Only on contact, ready, a replay or reposChanged, which every catalog write announces.

@@ -5,13 +5,7 @@ import {
   writeDataFile,
   readDataFile
 } from './persistence-test-harness'
-/**
- * Load-time normalization repairs the in-memory state; without a matching dirty mark the bad value
- * stays on disk and the repair reruns on every launch. Each case here reloads a profile the current
- * build already settled, so the field under test is the only unrepaired key left.
- * Why no flush(): flush() writes unconditionally, so only the debounced load-path save proves the
- * repair marked the state dirty by itself.
- */
+// Settle unrelated migrations first; only a debounced save proves the repair marked its own state dirty.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -49,7 +43,6 @@ vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
 }))
 
-/** A profile this build has already loaded and written, so no unrelated migration is still pending. */
 async function settledProfile(): Promise<PersistedState> {
   writeDataFile({
     schemaVersion: 1,
@@ -65,12 +58,10 @@ async function settledProfile(): Promise<PersistedState> {
   return readDataFile() as PersistedState
 }
 
-/** Reload without mutating, letting only the load-path debounce write. */
 async function reloadAndSettleWrites(): Promise<PersistedState> {
   vi.useFakeTimers()
   try {
     const store = await createStore()
-    // Why over-advance: an exact-fit advance turns a future debounce raise into a confusing no-write.
     vi.advanceTimersByTime(5000)
     await store.waitForPendingWrite()
   } finally {
@@ -94,7 +85,6 @@ describe('load-time normalization durability', () => {
 
   it('persists the legacy search-tab explorer view repair', async () => {
     const settled = await settledProfile()
-    // The legacy shape: Search was a standalone activity tab with no explorer view.
     delete (settled.ui as Record<string, unknown>).rightSidebarExplorerView
     settled.ui.rightSidebarTab = 'search'
     writeDataFile(settled)

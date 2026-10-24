@@ -363,10 +363,12 @@ describe('layout.apply', () => {
 
     expect(
       apply?.params?.parse({
-        command: { ...open, file: { ...file, dirtyDraftContent: 'x' }, view: { mode: 'edit' } }
+        command: { ...open, file: { ...file, dirtyDraftContent: 'x' }, scrollTop: 3 }
       })
     ).toEqual({ command: { ...open, file } })
     expect(parse({ ...open, preview: true, groupId: 'g1' })?.success).toBe(true)
+    expect(parse({ ...open, groupId: 'g1', index: 2 })?.success).toBe(true)
+    expect(parse({ ...open, index: -1 })?.success).toBe(false)
     expect(parse({ ...open, tabId: undefined })?.success).toBe(false)
     expect(parse({ ...open, contentType: 'terminal' })?.success).toBe(false)
     expect(parse({ ...open, preview: false })?.success).toBe(false)

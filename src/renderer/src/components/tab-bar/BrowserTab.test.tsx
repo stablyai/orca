@@ -289,7 +289,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images[0].props.className).toContain('mr-1')
     expect(images[0].props.className).toContain('shrink-0')
     expect(images[0].props.className).toContain('object-contain')
-    expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
+    expect(images[0].props.className).not.toContain('drop-shadow')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
   })
 

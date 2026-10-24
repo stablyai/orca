@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+import type { ComposerAgentRows } from './composer-agent-rows-target'
 
 export type ComposerCardSourceProps = Pick<
   ComposerModel,
@@ -57,6 +58,7 @@ export type ComposerCardSourceProps = Pick<
 >
 
 export type ComposerCardActionProps = {
+  agentRows?: ComposerAgentRows | null
   selectedRepo?: ComposerModel['selectedRepo'] | null
   onRepoChange: ComposerModel['handleRepoChange']
   onProjectChange: ComposerModel['handleProjectChange']

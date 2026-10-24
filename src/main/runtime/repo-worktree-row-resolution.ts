@@ -80,7 +80,7 @@ export type RepoWorktreeRowDeps = {
 
 /**
  * Persisted rows for a repo whose scan is unreachable or stalled, so a degraded host publishes what
- * it last knew instead of an empty catalog. `worktrees:list` does the same for disconnected SSH.
+ * it last knew instead of an empty catalog. `worktrees:listDetected` does the same for disconnected SSH.
  */
 export function listStoredWorktreeRowsForRepo(
   store: RepoWorktreeRowStore,
@@ -116,14 +116,43 @@ export function listStoredWorktreeRowsForRepo(
   return [...byWorktreeId.values()]
 }
 
-/** One repo's worktree rows before lineage projection. Shared by the fleet scan and scoped lookups. */
-export async function resolveRepoWorktreeRows(
-  deps: RepoWorktreeRowDeps,
+/** One git repo's checkouts as its scan saw them; carries no metadata, which is joined at read. */
+export type RepoWorktreeRowsScan = { ok: boolean; worktrees: GitWorktreeInfo[] }
+
+/** The scan half of `resolveRepoWorktreeRows`: slow, and the only part that awaits. */
+export async function scanRepoWorktreeRows(
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'scanRepo'>,
   repo: Repo,
-  metaById: Record<string, WorktreeMeta>,
   projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
-): Promise<RepoWorktreeRow[]> {
+): Promise<RepoWorktreeRowsScan> {
+  const { store } = deps
+  // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed
+  // first for `null` to mean "timed out" only. A stall never reached a verdict, so restore persisted rows
+  // instead of publishing a healthy-looking empty catalog; a rejection is a real answer and keeps its
+  // shipped zero-row semantics.
+  const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
+    deps
+      .scanRepo(repo, projectRuntimeByRepoId)
+      .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
+    RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
+    null
+  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+  const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
+  if (scan.ok) {
+    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+  }
+  return { ok: scan.ok, worktrees: gitWorktrees }
+}
+
+/** The join half: a repo's rows from a scan and the metadata as it is now. Synchronous. */
+export function joinRepoWorktreeRows(
+  deps: Pick<RepoWorktreeRowDeps, 'store' | 'listFolderWorkspaces'>,
+  repo: Repo,
+  scan: RepoWorktreeRowsScan | null,
+  metaById: Record<string, WorktreeMeta>,
+  repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
+): RepoWorktreeRow[] {
   const { store } = deps
   if (isFolderRepo(repo)) {
     return deps.listFolderWorkspaces(repo, repoOwnerCount).map((worktree) => ({
@@ -143,23 +172,8 @@ export async function resolveRepoWorktreeRows(
       comment: worktree.comment
     }))
   }
-  // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed
-  // first for `null` to mean "timed out" only. A stall never reached a verdict, so restore persisted rows
-  // instead of publishing a healthy-looking empty catalog; a rejection is a real answer and keeps its
-  // shipped zero-row semantics.
-  const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
-    deps
-      .scanRepo(repo, projectRuntimeByRepoId)
-      .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
-    RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
-    null
-  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
-  const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
-  if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
-  }
   const expectedHostId = getRepoExecutionHostId(repo)
-  return gitWorktrees.map((gitWorktree) => {
+  return (scan?.worktrees ?? []).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: lineage validation needs a durable instance ID even when the runtime sees a workspace before renderer discovery-stamp.
     const existingMeta = metaById[worktreeId]
@@ -192,6 +206,20 @@ export async function resolveRepoWorktreeRows(
       comment: merged.comment
     }
   })
+}
+
+/** One repo's worktree rows before lineage projection. Shared by the fleet scan and scoped lookups. */
+export async function resolveRepoWorktreeRows(
+  deps: RepoWorktreeRowDeps,
+  repo: Repo,
+  metaById: Record<string, WorktreeMeta>,
+  projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+  repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
+): Promise<RepoWorktreeRow[]> {
+  const scan = isFolderRepo(repo)
+    ? null
+    : await scanRepoWorktreeRows(deps, repo, projectRuntimeByRepoId, repoOwnerCount)
+  return joinRepoWorktreeRows(deps, repo, scan, metaById, repoOwnerCount)
 }
 
 /**

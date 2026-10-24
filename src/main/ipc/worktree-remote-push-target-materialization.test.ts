@@ -46,9 +46,7 @@ describe('materializeWorktreePushTargetRemote', () => {
   })
 
   it('short-circuits the remote probe but still restores upstream and widens the refspec', async () => {
-    // Why (#17828 review follow-up): the short-circuit is the common case for every call
-    // after the first, and for a sibling worktree reusing the same fork remote under a
-    // different branch -- it must still restore the upstream link and widen the refspec.
+    // Existing-remote reuse still needs per-branch refspec and upstream restoration.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
@@ -153,7 +151,6 @@ describe('materializeWorktreePushTargetRemote', () => {
 
     expect(result).toEqual({ ...target, remoteCreated: true })
     const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    // Mint uses the narrow `-t <branch> --no-tags` add form (#17887), not a bare `remote add`.
     expect(calls).toContainEqual([
       'remote',
       'add',
@@ -172,11 +169,7 @@ describe('materializeWorktreePushTargetRemote', () => {
   })
 
   it('fetches the missing tracking ref before restoring upstream on the short-circuit path (#17828 sibling worktree)', async () => {
-    // Why: a sibling worktree short-circuiting onto an already-existing remote under a
-    // *new* branch has a widened refspec but no tracking ref yet -- against real git,
-    // `branch --set-upstream-to` hard-fails with "the requested upstream branch does not
-    // exist" unless something fetches that branch first. Verified against a real git
-    // fixture, not just this mock (see PR discussion).
+    // Config widening imports no refs; a new sibling branch needs fetch before --set-upstream-to can succeed.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
@@ -236,7 +229,6 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
-      // rev-parse succeeds by default (ref already exists) -- no fetch should follow.
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
@@ -250,10 +242,7 @@ describe('materializeWorktreePushTargetRemote', () => {
   })
 
   it("gives a joiner its own branch wiring instead of the minting sibling's target", async () => {
-    // Why (#17828 review): the single flight is keyed on the remote, but the refspec widen,
-    // tracking-ref fetch and upstream link are all per-branch. A sibling worktree joining an
-    // in-flight mint for a *different* branch previously received the minter's target and
-    // skipped all three, leaving its own branch with no upstream.
+    // Remote minting coalesces, but each joiner needs its own branch's refspec, fetch and upstream.
     let remoteExists = false
     let releaseAdd!: () => void
     const addGate = new Promise<void>((resolve) => {
@@ -289,7 +278,6 @@ describe('materializeWorktreePushTargetRemote', () => {
     releaseAdd()
     const [, joined] = await Promise.all([minter, joiner])
 
-    // The joiner keeps its own branch rather than inheriting the minter's.
     expect(joined.branchName).toBe('joiner/branch')
     const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
     expect(calls).toContainEqual([
@@ -298,14 +286,11 @@ describe('materializeWorktreePushTargetRemote', () => {
       `${FORK_REMOTE}/joiner/branch`,
       'joiner/branch'
     ])
-    // Exactly one mint: the joiner must not have raced a second `remote add`.
     expect(calls.filter((call) => call[0] === 'remote' && call[1] === 'add')).toHaveLength(1)
   })
 
   it('propagates a failed mint instead of adopting a remote the rollback removed', async () => {
-    // Why (#17828 review): both mint rollbacks `remote remove`, so adopting after a failed mint
-    // writes `remote.<name>.fetch` with no URL -- a config-only ghost that breaks
-    // `git fetch --all`, forces later mints to a `-2` name, and survives `git remote remove`.
+    // Failed mint removes the remote; adopting afterward would create a URL-less config ghost.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
@@ -326,16 +311,13 @@ describe('materializeWorktreePushTargetRemote', () => {
     await expect(minter).rejects.toThrow()
     await expect(joiner).rejects.toThrow()
     const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
-    // No ghost: nothing wrote refspec or tagOpt config for a remote that does not exist.
     expect(
       calls.filter((call) => call[0] === 'config' && String(call[2] ?? '').includes(FORK_REMOTE))
     ).toHaveLength(0)
   })
 
   it('persists remoteCreated to the store when a worktreeId is provided and the mint succeeds', async () => {
-    // Why (#17828 review follow-up): on-demand materialization never went through the
-    // create-time setWorktreeMeta write, so a lazily-minted remote stayed invisible to
-    // #17842's orphan sweep (which gates solely on the stored remoteCreated flag).
+    // Deferred materialization must persist ownership so orphan reconciliation can reclaim its remote.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
@@ -344,7 +326,6 @@ describe('materializeWorktreePushTargetRemote', () => {
     })
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
-    // The write lands on the id's only repo row.
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
       getRepos: () => [

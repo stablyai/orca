@@ -1,5 +1,9 @@
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
 import type {
   TerminalPaneAdmission,
@@ -8,15 +12,29 @@ import type {
 import type { LayoutRefusalCode } from '../../shared/workspace-layout/workspace-layout-command-types'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeStore } from './runtime-store-contract'
-import { paneStartFailure, type PaneStartStatuses } from './pane-start-statuses'
+import type { PaneResumeOutcome } from '../../shared/workspace-layout/workspace-layout-published'
+import {
+  paneStartFailure,
+  type PaneResumeOutcomes,
+  type PaneStartStatuses
+} from './pane-start-statuses'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>
 /**
  * Layout-owner build: how a start goes, for a pane main already held or one that should stay
- * when its start fails (`keepOnFailure`), so the pane shows the failure.
+ * when its start fails (`keepOnFailure`), so the pane shows the failure. Each start ends the
+ * pane's earlier resume outcome; one that wakes the pane's sleeping record (`resumesSleepingRecord`)
+ * records its own.
  */
-export type PaneStartArgs = { startStatus?: { sink: PaneStartStatusSink; keepOnFailure: boolean } }
+export type PaneStartArgs = {
+  startStatus?: {
+    sink: PaneStartStatusSink
+    keepOnFailure: boolean
+    resumeOutcomes?: Pick<PaneResumeOutcomes, 'set' | 'clear'>
+    resumesSleepingRecord?: boolean
+  }
+}
 type AdmittedSpawnArgs = Parameters<Spawn>[0] & {
   worktreeId: string
   tabId: string
@@ -150,6 +168,25 @@ export async function spawnInAdmittedPane(
   const paneKey = `${args.tabId}:${args.leafId}`
   let admittedAs: TerminalPaneAdmissionOutcome | undefined
   startStatus?.sink.set(paneKey, { status: 'starting' })
+  startStatus?.resumeOutcomes?.clear(paneKey)
+  const resumeOutcomes = startStatus?.resumesSleepingRecord ? startStatus.resumeOutcomes : undefined
+  // A pane never bound in this process is at 0: every bind here is numbered from 1.
+  const generationNow = (): number | undefined =>
+    store?.getPtyBindingGeneration
+      ? (store.getPtyBindingGeneration(
+          normalizeExecutionHostId(hostIdOf(args)) ?? LOCAL_EXECUTION_HOST_ID,
+          args.leafId
+        ) ?? 0)
+      : undefined
+  const afterGeneration = resumeOutcomes ? generationNow() : undefined
+  let reported: { ptyId: string; outcome: PaneResumeOutcome } | undefined
+  if (resumeOutcomes) {
+    // Why the generation now: a respawn may keep the terminal id, so only a later bind is this one.
+    spawnArgs.onResumeOutcome = (ptyId, outcome) => {
+      reported = { ptyId, outcome }
+      resumeOutcomes.set(paneKey, outcome, { ptyId, afterGeneration })
+    }
+  }
   let run: { outcome: TerminalPaneAdmissionOutcome | undefined; result: Awaited<ReturnType<Spawn>> }
   const start = async (
     admitted: TerminalPaneAdmissionOutcome | undefined
@@ -187,6 +224,11 @@ export async function spawnInAdmittedPane(
     } else {
       startStatus?.sink.clear(paneKey)
     }
+    // A start that failed after its spawn reported (a refused bind) resumed nothing here; one that
+    // lost the pane to another owner leaves the winner's outcome alone.
+    if (!(error instanceof PaneOwnerContentionError)) {
+      resumeOutcomes?.clear(paneKey)
+    }
     throw error
   }
   startStatus?.sink.clear(paneKey)
@@ -195,6 +237,13 @@ export async function spawnInAdmittedPane(
   const elsewhere = started && (started.tabId !== args.tabId || started.leafId !== args.leafId)
   if (outcome === 'admitted' && elsewhere) {
     await withdrawRuntimePane(store, args)
+  }
+  if (elsewhere) {
+    resumeOutcomes?.clear(paneKey)
+  } else if (reported && afterGeneration !== undefined && generationNow() === afterGeneration) {
+    // A bind that matched the pane's existing one (an SSH relay's same-id reattach) writes and
+    // publishes nothing new: the outcome holds for the binding the pane already shows.
+    resumeOutcomes?.set(paneKey, reported.outcome, { ptyId: reported.ptyId })
   }
   return result
 }

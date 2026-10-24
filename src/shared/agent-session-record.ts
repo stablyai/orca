@@ -160,6 +160,8 @@ export type AgentSessionRecord = {
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
+  /** When the user's Sleep stopped this chat; the next admitted send clears it. */
+  sleptAt?: number
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number

@@ -60,7 +60,7 @@ export async function dispatchPiRpcMessage(
   const model = input.executionOptions?.model ?? session.initialOptions.model
   if (!input.executionOptions) {
     input.signal?.throwIfAborted()
-    return session.turns.submit(
+    return session.submit(
       input.clientMessageId,
       input.requestedAt ?? Date.now(),
       { ...prompt },
@@ -73,7 +73,8 @@ export async function dispatchPiRpcMessage(
       (key === 'model' || model === session.initialOptions.model
         ? session.initialOptions[key]
         : undefined)
-    if (value === undefined && session.optionProof.writes.has(key)) {
+    const applied = session.selected.get(key)
+    if (value === undefined && applied !== undefined && applied !== session.initialOptions[key]) {
       throw new AgentSessionOptionRejectedError(
         new Error(`The default ${key} for this model is unknown`)
       )
@@ -108,7 +109,7 @@ export async function dispatchPiRpcMessage(
   if (!isCurrent() || session.connection.closed) {
     return exited()
   }
-  return session.turns.submit(
+  return session.submit(
     input.clientMessageId,
     input.requestedAt ?? Date.now(),
     { ...prompt },

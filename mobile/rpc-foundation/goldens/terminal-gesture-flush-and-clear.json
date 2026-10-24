@@ -35,6 +35,48 @@
         "message": "Terminal cleared"
       }
     },
+    "47c387a75ffc": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[<64;10;5M"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
     "77d8a44e0dcc": {
       "name": "orchestration.workerTerminalUserInput#1",
       "ordinal": 3,
@@ -82,15 +124,6 @@
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
-    "93092a2f06c5": {
-      "bucketTokens": 63,
-      "crash": {
-        "$rpc": "null"
-      },
-      "inFlight": false,
-      "queuedBytes": "\u001b[<64;10;5M",
-      "queuedSequences": 1
-    },
     "94ce15ec36dc": {
       "name": "orchestration.workerTerminalUserInput#1",
       "ordinal": 3,
@@ -127,33 +160,7 @@
         }
       }
     },
-    "afb61324f54a": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
-    },
-    "c9e4131930e5": {
+    "9fa6cd0b7fa0": {
       "name": "terminal.send#1",
       "ordinal": 1,
       "args": [
@@ -181,18 +188,34 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "afb61324f54a": {
+      "name": "terminal.clearBuffer#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.clearBuffer"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
           }
         }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 16
       }
     },
     "caa6ece1bdab": {
@@ -249,38 +272,6 @@
           }
         }
       }
-    },
-    "fd81ada317ab": {
-      "name": "terminal.send#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[<64;10;5M"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
-      }
     }
   },
   "recording": {
@@ -289,20 +280,20 @@
       {
         "id": "queued",
         "observation": {
-          "sender": [],
-          "payloads": [],
+          "sender": ["9fa6cd0b7fa0"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
           },
-          "state": "93092a2f06c5",
+          "state": "caa6ece1bdab",
           "effects": []
         }
       },
       {
         "id": "flushing",
         "observation": {
-          "sender": ["fd81ada317ab"],
+          "sender": ["9fa6cd0b7fa0"],
           "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -315,7 +306,7 @@
       {
         "id": "sent",
         "observation": {
-          "sender": ["c9e4131930e5", "77d8a44e0dcc"],
+          "sender": ["47c387a75ffc", "77d8a44e0dcc"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -328,7 +319,7 @@
       {
         "id": "reported",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -341,7 +332,7 @@
       {
         "id": "clearing",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc", "afb61324f54a"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "afb61324f54a"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -355,7 +346,7 @@
       {
         "id": "cleared",
         "observation": {
-          "sender": ["c9e4131930e5", "94ce15ec36dc", "ebaa6b64425b"],
+          "sender": ["47c387a75ffc", "94ce15ec36dc", "ebaa6b64425b"],
           "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
           "settlements": {
             "mount": "eb79a9b3682a",

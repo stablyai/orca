@@ -20,13 +20,28 @@ import type {
 import { patchStoredSession } from '../../../shared/workspace-layout/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import { moveTabToWorkspace } from '../../../shared/workspace-layout/workspace-layout-workspace-move'
+import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
 
-type PartitionSession = { hostId: ExecutionHostId; session: WorkspaceSessionState }
+type PartitionSession = {
+  hostId: ExecutionHostId
+  session: WorkspaceSessionState
+  /** Main's in-memory editor views (layout-editor-views); absent where none are kept. */
+  views?: PartitionEditorViews
+}
 
 export type CrossPartitionTabMove = {
   value: LayoutApplyOutcome
   /** Each partition's session after the move; null when nothing changes. */
   sessions: { from: WorkspaceSessionState; to: WorkspaceSessionState } | null
+  /** Each partition's views after the move, when seeded. */
+  views?: { from: PartitionEditorViews; to: PartitionEditorViews }
+}
+
+function loadContext(partition: PartitionSession) {
+  const { views } = partition
+  return views
+    ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
+    : nameBasedLoadContext()
 }
 
 function withLoadedWorkspace(
@@ -63,8 +78,8 @@ export function moveTabAcrossPartitions(
   to: PartitionSession,
   command: CommandOf<'moveTabToWorkspace'>
 ): CrossPartitionTabMove {
-  const loadedFrom = loadWorkspaceLayout(from.hostId, from.session, nameBasedLoadContext())
-  const loadedTo = loadWorkspaceLayout(to.hostId, to.session, nameBasedLoadContext())
+  const loadedFrom = loadWorkspaceLayout(from.hostId, from.session, loadContext(from))
+  const loadedTo = loadWorkspaceLayout(to.hostId, to.session, loadContext(to))
   if (!loadedFrom.layout.workspaces[command.workspace]) {
     return { value: { ok: false, code: 'workspace_not_found' }, sessions: null }
   }
@@ -89,27 +104,24 @@ export function moveTabAcrossPartitions(
   if (moved.model === joined) {
     return { value, sessions: null }
   }
+  const fromAfter = withLoadedWorkspace(
+    loadedFrom.layout,
+    command.workspace,
+    moved.model.workspaces[command.workspace]
+  )
+  const toAfter = withLoadedWorkspace(
+    loadedTo.layout,
+    command.toWorkspace,
+    moved.model.workspaces[command.toWorkspace]
+  )
   return {
     value,
     sessions: {
-      from: written(
-        from.session,
-        loadedFrom,
-        withLoadedWorkspace(
-          loadedFrom.layout,
-          command.workspace,
-          moved.model.workspaces[command.workspace]
-        )
-      ),
-      to: written(
-        to.session,
-        loadedTo,
-        withLoadedWorkspace(
-          loadedTo.layout,
-          command.toWorkspace,
-          moved.model.workspaces[command.toWorkspace]
-        )
-      )
-    }
+      from: written(from.session, loadedFrom, fromAfter),
+      to: written(to.session, loadedTo, toAfter)
+    },
+    ...(from.views && to.views
+      ? { views: { from: editorViewsOfModel(fromAfter), to: editorViewsOfModel(toAfter) } }
+      : {})
   }
 }

@@ -26,9 +26,12 @@ import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-
 
 import { createHash } from 'node:crypto'
 
-import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentHookTarget } from './agent-hook-types'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -122,6 +125,10 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
+  /** The relay's turn-end stamp (see AgentHookEventPayload.turnEndedAt); older relays omit it. */
+  turnEndedAt?: number
+  /** How the relay identified that end; older relays omit it (legacy). */
+  turnEndDisposition?: TurnEndDisposition
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification), for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -237,19 +244,6 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
  *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
-
-/** JSON-RPC request method that asks the remote relay to install every
- *  managed hook using its local filesystem instead of WAN-bound SFTP. */
-export const AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD = 'agent_hook.installManagedHooks' as const
-
-export type AgentHookInstallManagedHooksParams = {
-  /** SHA-256 fingerprint of the server key negotiated by Orca's SSH transport. */
-  hostKeyFingerprint?: string
-  /** Positively detected and enabled agents allowed to mutate remote config. */
-  agents: readonly AgentHookTarget[]
-  /** Execution-host Claude version; absent means retain the legacy hook set. */
-  claudeVersion?: string
-}
 
 /** Opt-out env var for the Windows WSL agent-hook relay, read on each relay start; set "0" to
  *  disable. */

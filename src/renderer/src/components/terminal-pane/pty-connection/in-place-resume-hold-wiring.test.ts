@@ -36,14 +36,17 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve }
 }
 
-function createSession(connect: () => Promise<unknown>) {
+/** A paired server's pane, which the window still starts itself; main starts every other one. */
+const PAIRED_SERVER = 'env-paired'
+
+function createSession(connect: () => Promise<unknown>, runtimeEnvironmentId: string | null) {
   const transport = { connect: vi.fn(connect), getPtyId: () => null }
   const fixture = {
     pane: { id: 1, leafId: 'leaf' },
     transport,
     disposed: false,
     transportStreamGeneration: 1,
-    runtimeEnvironmentId: null,
+    runtimeEnvironmentId,
     deps: {
       tabId: 'tab',
       worktreeId: 'wt',
@@ -82,7 +85,7 @@ describe('a start that resumes a record marks its pane as resuming in place (lay
 
   it('the reattach that carries the resume holds the mark until it settles', async () => {
     const connected = deferred<unknown>()
-    const session = createSession(() => connected.promise)
+    const session = createSession(() => connected.promise, PAIRED_SERVER)
 
     startDeferredSessionReattach(session, 'restored-pty')
     await vi.waitFor(() => expect(session.transport.connect).toHaveBeenCalled())
@@ -93,7 +96,7 @@ describe('a start that resumes a record marks its pane as resuming in place (lay
   })
 
   it('the fresh start that resumes the record holds the mark until it settles', async () => {
-    const session = createSession(() => Promise.resolve(null))
+    const session = createSession(() => Promise.resolve(null), PAIRED_SERVER)
     bindDeferredColdRestoreAndSnapshot(session)
     const spawned = deferred<string | null>()
     session.startFreshSpawn = vi.fn(() => spawned.promise)
@@ -104,5 +107,23 @@ describe('a start that resumes a record marks its pane as resuming in place (lay
     spawned.resolve('fresh-pty')
     await start
     await vi.waitFor(() => expect(isPaneResumingInPlace(RECORD_PANE_KEY)).toBe(false))
+  })
+  it('a pane main starts: its reattach is a view that carries no resume and holds no mark', async () => {
+    const connected = deferred<unknown>()
+    const session = createSession(() => connected.promise, null)
+
+    startDeferredSessionReattach(session, 'restored-pty')
+    await vi.waitFor(() => expect(session.transport.connect).toHaveBeenCalled())
+    expect(session.transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'restored-pty', attachOnlyView: true })
+    )
+    expect(session.transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({ command: expect.anything() })
+    )
+    expect(isPaneResumingInPlace(RECORD_PANE_KEY)).toBe(false)
+
+    connected.resolve({ id: 'restored-pty' })
+    await vi.waitFor(() => expect(session.handleReattachResult).toHaveBeenCalled())
+    expect(isPaneResumingInPlace(RECORD_PANE_KEY)).toBe(false)
   })
 })

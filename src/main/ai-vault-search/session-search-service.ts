@@ -7,14 +7,7 @@ import type { SessionSearchEngine } from './session-search-engine'
 import type { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchCursorError } from './session-search-page-cursor'
 
-/**
- * What the answering host made of a scope identity; absent searches everything.
- *
- * Beside the request, not in `filters.scopePaths`: that field is capped at 64 for
- * the clients that write it, and the scanner child re-parses the request with the
- * same schema. `unknown` travels here too, because consent and readiness are
- * answered below and owe the reader a verdict first.
- */
+/** Host scope bypasses the client path cap; absent scope leaves request filters unchanged. */
 export type SessionSearchHostScope =
   | { kind: 'resolved'; paths: readonly string[] }
   | { kind: 'unknown' }
@@ -39,7 +32,7 @@ export function createSessionSearchService({
     reconcile: () => indexer.reconcile({ full: true }),
     status: async () => ({ enabled: true, ...indexer.status(), generation: engine.generation() }),
     search: async (request, hostScope) => {
-      // Reached only through a live index, so consent and readiness already answered.
+      // The live-index route has already checked consent and readiness.
       if (hostScope?.kind === 'unknown') {
         return { kind: 'unavailable', reason: 'scope-unknown' }
       }

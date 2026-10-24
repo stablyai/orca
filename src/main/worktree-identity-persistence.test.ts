@@ -22,7 +22,7 @@ describe('host-qualified worktree metadata', () => {
   const worktreeId = 'repo-1::/workspace/feature'
   const ROTATED_INSTANCE_ID = '44444444-4444-4444-8444-444444444444'
 
-  // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+  // Register the repo so load-time orphan cleanup retains its metadata.
   const createStoreWithRepo = (): Store => {
     const store = createStore()
     store.addRepo(makeRepo({ id: 'repo-1', path: '/workspace' }))
@@ -130,8 +130,6 @@ describe('host-qualified worktree metadata', () => {
     expect(migrated.worktreeMeta[worktreeId]?.hostId).toBe('local')
     expect(Object.keys(migrated.worktreeMetaByIdentity ?? {})).toHaveLength(1)
   })
-  // Fails open on purpose: an ambiguous alias used to brick reads and throw out of the worktree
-  // listing loop, taking every workspace in the repo down with it and never self-healing.
   it('collapses an ambiguous locator onto its most recently active instance', () => {
     const seed = createStoreWithRepo()
     const first = seed.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
@@ -268,8 +266,7 @@ describe('host-qualified worktree metadata', () => {
       displayName: 'Feature'
     })
 
-    // worktree-lineage-pruning rotates a proven-missing parent so path reuse cannot
-    // validate old lineage; pinning the existing id silently disarmed that guard.
+    // A proven-missing parent rotates its identity so path reuse cannot validate old lineage.
     const rotated = store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
       instanceId: ROTATED_INSTANCE_ID
     })
@@ -278,7 +275,6 @@ describe('host-qualified worktree metadata', () => {
     expect(store.getWorktreeMetaForHost(worktreeId, 'local')?.instanceId).toBe(ROTATED_INSTANCE_ID)
     store.flush()
     const persisted = readDataFile() as PersistedState
-    // The old identity row goes with the rotation rather than lingering unreachable.
     expect(Object.keys(persisted.worktreeMetaByIdentity ?? {})).toEqual([
       canonicalWorktreeIdentity({
         worktreeId,
@@ -304,13 +300,11 @@ describe('host-qualified worktree metadata', () => {
     )
 
     expect(store.getWorktreeMetaForHost(renamedId, 'local')?.displayName).toBe('Local feature')
-    // The SSH host never moved, so its row must stay reachable at the path it still has.
     expect(store.getWorktreeMetaForHost(worktreeId, 'ssh:build-box')?.displayName).toBe(
       'Remote feature'
     )
   })
 
-  // A stamped locator has no host-blind removal: each host drops its own copy.
   it('drops every host identity row once each host removes its copy', () => {
     const store = createStore()
     store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {

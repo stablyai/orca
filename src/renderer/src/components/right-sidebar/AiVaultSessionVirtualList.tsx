@@ -5,6 +5,7 @@ import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
+import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
@@ -144,6 +145,7 @@ export function AiVaultSessionVirtualList({
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
+    measureElement: measureVirtualRowRetainingHiddenSize,
     estimateSize: (index) => {
       const row = vaultRows[index]
       if (row?.type === 'group') {

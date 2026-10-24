@@ -1,10 +1,8 @@
 import { useAppStore } from '@/store'
+import { openFileOwnerScope } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/editor-external-watch-path-index'
-import {
-  canAutoSaveOpenFile,
-  isExternalReloadableEditorTab
-} from '@/components/editor/editor-autosave'
+import { isExternalReloadableEditorTab } from '@/components/editor/editor-autosave'
 import { forgetCombinedDiffViewBodiesForWorktree } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
@@ -12,7 +10,6 @@ import {
   PATH_EXISTENCE_BATCH_MAX,
   type PathExistenceResult
 } from '../../../shared/path-existence-batch'
-import { requestRestoredTabReverification } from '@/components/editor/editor-restored-tab-conflict-scan'
 import {
   getLocalWindowsWslAliasOption,
   getOpenFileRuntimeOwner,
@@ -20,6 +17,7 @@ import {
 } from './editor-external-watch-targets'
 import {
   scheduleDebouncedEditorExternalReload,
+  scheduleEditorSelfMoveEchoVerification,
   type EditorExternalWatchNotification
 } from './editor-external-watch-disk-verification'
 
@@ -80,8 +78,8 @@ type EditTabProbe = {
 
 /**
  * An overflow names no paths, so every clean tab of the workspace reloads.
- * A resync (the watch was down) also probes clean edit tabs for deletion and gives dirty tabs the restored-tab
- * disk check; an event-storm overflow skips both so it never pauses autosave or fans out per-tab probes.
+ * A resync (the watch was down) also probes clean edit tabs for deletion; an event-storm overflow
+ * skips that so it never fans out per-tab probes.
  */
 export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync: boolean): void {
   if (resync) {
@@ -91,33 +89,34 @@ export function reconcileEditorTabsAfterOverflow(target: OverflowTarget, resync:
   const state = useAppStore.getState()
   const probes: EditTabProbe[] = []
   for (const file of state.openFiles) {
+    const ownerScope = openFileOwnerScope(file, state)
     if (
-      file.worktreeId !== target.worktreeId ||
+      ownerScope.worktreeId !== target.worktreeId ||
       getOpenFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
       !isExternalReloadableEditorTab(file)
     ) {
       continue
     }
+    // Why: compare dirty tabs asynchronously; autosave stays free to run its own guarded check.
     if (file.isDirty) {
-      if (!resync) {
-        continue
-      }
-      // Why: a dirty tab is never reloaded; the restored-tab scan shows the changed-on-disk banner if disk moved.
-      // Mirrors the scan's eligibility so it always resolves the flag.
-      if (
-        file.lastKnownDiskSignature &&
-        file.externalMutation !== 'changed' &&
-        canAutoSaveOpenFile(file)
-      ) {
-        requestRestoredTabReverification(file.id)
-        state.setPendingDiskBaselineVerification(file.id, true)
+      if (resync) {
+        scheduleEditorSelfMoveEchoVerification(
+          {
+            ...target,
+            connectionId: target.connectionId,
+            runtimeEnvironmentId: target.runtimeEnvironmentId ?? null
+          },
+          [file.id],
+          false,
+          true
+        )
       }
       continue
     }
     const notification: EditorExternalWatchNotification = {
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
-      relativePath: file.relativePath,
+      relativePath: ownerScope.relativePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
       ...getLocalWindowsWslAliasOption(target)
     }

@@ -83,7 +83,7 @@ describe('openBrowserTab under the window’s ids', () => {
     ])
   })
 
-  it('places a tab whose group main lacks beside its anchor', () => {
+  it('places a tab whose group main lacks in the workspace’s first group', () => {
     const { ctx, model } = setup()
     const split = build(
       ctx,
@@ -107,8 +107,8 @@ describe('openBrowserTab under the window’s ids', () => {
       model
     ).model
     expect(split.workspaces[WS]!.groups.map((group) => group.tabOrder)).toEqual([
-      [expect.any(String)],
-      ['entry-1', 'entry-2']
+      [expect.any(String), 'entry-2'],
+      ['entry-1']
     ])
   })
 

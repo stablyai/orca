@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 
-// Signed identities revalidate Git config instead of re-spawning Git every 30 seconds.
-
 const { gitExecFileAsyncMock, readLocalGitConfigSignatureMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   readLocalGitConfigSignatureMock: vi.fn<() => Promise<string | undefined>>(async () => 'sig-1')
@@ -47,7 +45,7 @@ describe('owner/repo identity cache', () => {
     })
     expect(remoteGetUrlCalls()).toBe(1)
 
-    // Past the unsigned TTL, inside the signed TTL.
+    // Advance beyond unsigned TTL while remaining within the signed entry lifetime.
     vi.setSystemTime(Date.now() + FOUR_MINUTES)
     await expect(getOwnerRepoForRemote(REPO, 'origin')).resolves.toEqual({
       owner: 'stablyai',
@@ -66,7 +64,6 @@ describe('owner/repo identity cache', () => {
     readLocalGitConfigSignatureMock.mockImplementation(async () => 'sig-2')
     vi.setSystemTime(Date.now() + THIRTY_SECONDS)
 
-    // A signature change must invalidate before the TTL.
     await expect(getOwnerRepoForRemote(REPO, 'origin')).resolves.toEqual({
       owner: 'other-org',
       repo: 'orca'
@@ -81,7 +78,6 @@ describe('owner/repo identity cache', () => {
     await getOwnerRepoForRemote(REPO, 'origin')
     expect(remoteGetUrlCalls()).toBe(1)
 
-    // Unsigned entries need a bounded lifetime.
     vi.setSystemTime(Date.now() + THIRTY_SECONDS + 1)
     await getOwnerRepoForRemote(REPO, 'origin')
     expect(remoteGetUrlCalls()).toBe(2)

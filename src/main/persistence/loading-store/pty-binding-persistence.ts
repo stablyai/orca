@@ -76,6 +76,8 @@ export type PersistPtyBindingArgs = {
   ptyId: string
   incarnationId?: string
   startupCwd?: string
+  /** Proven host fallback correction; ordinary binds only seed new tabs. */
+  correctStartupCwd?: string
   expectedBinding?: { ptyId: string; incarnationId?: string }
   expectedSourceBinding?: PtyBindingSourceExpectation
   /**

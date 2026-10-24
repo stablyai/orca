@@ -12,11 +12,7 @@ export type CodexAccountAddTarget = {
 }
 
 export type CodexAccountReauthenticateOptions = {
-  /**
-   * Local-only intent from the status bar's "Sign in to see usage" action: when
-   * this account's runtime lane had no selection before login, activate the
-   * account that just signed in instead of restoring the empty selection.
-   */
+  /** Local-only: activate after sign-in if this runtime had no selection before login. */
   activateIfSelectionWasEmpty?: boolean
 }
 

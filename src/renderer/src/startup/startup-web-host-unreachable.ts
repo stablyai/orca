@@ -4,7 +4,7 @@ import { isWebClient } from '../components/sidebar/worktree-card-model'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
-} from '../../../shared/remote-runtime-client-error-classification'
+} from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 
 // Web transport messages the shared classifier doesn't list: the connection waiter's deadline and

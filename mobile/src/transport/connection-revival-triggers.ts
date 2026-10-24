@@ -1,5 +1,6 @@
 import { AppState } from 'react-native'
 import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from 'expo-network'
+import { recordSocketDeadlineAppState } from './socket-deadline-clock'
 
 // Why: Android/iOS suspend JS timers and silently kill sockets while the app
 // is backgrounded, and network handoffs (Wi-Fi → cellular) kill the TCP path
@@ -9,7 +10,9 @@ import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from
 export function subscribeConnectionRevivalTriggers(
   nudge: (reason: 'app-resume' | 'network-change') => void
 ): () => void {
+  recordSocketDeadlineAppState(AppState.currentState)
   const appStateSub = AppState.addEventListener('change', (next) => {
+    recordSocketDeadlineAppState(next)
     if (next === 'active') {
       nudge('app-resume')
     }

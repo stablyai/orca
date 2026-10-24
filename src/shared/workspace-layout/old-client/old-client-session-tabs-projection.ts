@@ -9,8 +9,6 @@ import { resolveTerminalTabTitle } from '../../tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionFileTab,
-  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
 } from '../../runtime-mobile-session-tab-contracts'
@@ -20,11 +18,8 @@ import type {
 } from '../../runtime-session-contracts'
 import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import {
-  agentSessionRowId,
-  publishedTabOrderId,
-  terminalRowId
-} from './old-client-session-tab-rows'
+import { diffTabRow, editorTabRow, reviewTabRow } from './old-client-session-editor-rows'
+import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
 import { groupsInLayoutOrder } from './old-client-group-order'
 import {
@@ -32,7 +27,6 @@ import {
   type DesktopLayoutView,
   type LayoutContentFacts
 } from '../workspace-layout-beside'
-import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -148,7 +142,11 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
     case 'terminal':
       return terminalRows(tab, scope)
     case 'editor': {
-      const row = editorRow(tab, scope)
+      const row = editorTabRow(tab, scope)
+      return row ? [row] : []
+    }
+    case 'diff': {
+      const row = diffTabRow(tab, scope)
       return row ? [row] : []
     }
     case 'browser': {
@@ -159,11 +157,12 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       const row = agentSessionRow(tab, scope)
       return row ? [row] : []
     }
-    // The model holds no file record for a diff (the window lists it from its own state); the
-    // others need the desktop to draw them and are not listed today.
-    case 'diff':
     case 'conflict-review':
-    case 'check-details':
+    case 'check-details': {
+      const row = reviewTabRow({ ...tab, kind: tab.kind }, scope)
+      return row ? [row] : []
+    }
+    // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
       return []
   }
@@ -215,6 +214,10 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
       ...(tabWide && tab.quickCommandLabel?.trim()
         ? { quickCommandLabel: tab.quickCommandLabel.trim() }
         : {}),
+      ...(tabWide && tab.aiVaultTitle?.title.trim() ? { aiVaultTitle: tab.aiVaultTitle } : {}),
+      ...(tabWide && scope.generatedTitlesEnabled && tab.generatedTitle?.trim()
+        ? { generatedTitle: tab.generatedTitle.trim() }
+        : {}),
       parentTabId: tab.entityId,
       leafId,
       ...(leaf?.ptyId ? { ptyId: leaf.ptyId } : {}),
@@ -238,41 +241,6 @@ function recordOf(
     return value ? [[key, value] as const] : []
   })
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
-}
-
-/** Only edit-mode files are in the model; other editor tabs are the desktop view's own. */
-function editorRow(
-  tab: LayoutContentTab,
-  scope: Scope
-): RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab | null {
-  const file = editorTabFile(scope.workspace, tab.entityId)
-  if (!file) {
-    return null
-  }
-  const common = {
-    id: tab.id,
-    title: file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File',
-    filePath: file.filePath,
-    relativePath: file.relativePath,
-    isDirty:
-      scope.view.editorDrafts[scope.key]?.[editorFileKey(file)]?.dirtyDraftContent !== undefined,
-    color: tab.color ?? null,
-    isPinned: tab.isPinned === true,
-    isActive: scope.activeTabId === tab.id
-  }
-  if (file.language === 'markdown') {
-    return {
-      ...common,
-      type: 'markdown',
-      language: 'markdown',
-      mode: 'edit',
-      sourceFileId: file.filePath,
-      sourceFilePath: file.filePath,
-      sourceRelativePath: file.relativePath,
-      documentVersion: `file:${file.filePath}`
-    }
-  }
-  return { ...common, type: 'file', language: file.language, mode: 'edit' }
 }
 
 function browserRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSessionBrowserTab | null {

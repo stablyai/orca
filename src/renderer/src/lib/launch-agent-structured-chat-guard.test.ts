@@ -74,6 +74,7 @@ function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1
 
 const store = {
   clearNativeChatLaunchDraft: vi.fn(),
+  readLocalAgentInventory: () => ({ ids: null, state: 'pending' }),
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
   settings: {
@@ -180,7 +181,7 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () =>
     store.repos[0]?.connectionId ? `ssh:${store.repos[0].connectionId}` : 'local',
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (target: unknown, method: string, params: unknown) =>

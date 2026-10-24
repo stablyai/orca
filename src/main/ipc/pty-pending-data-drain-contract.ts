@@ -10,8 +10,7 @@ export type PendingPtyData = {
   droppedOutput?: true
   droppedMode2031Data?: string
   droppedMode2031ScanState?: Mode2031ReplyScanState
-  /** Latch state across bytes the renderer never received, so a drop that swallowed
-   *  a closing \x1b[?2026l can still release xterm's render hold. */
+  /** Preserve synchronized-output state across dropped bytes, including a lost closing escape that would hold rendering. */
   droppedSynchronizedOutputState?: SynchronizedOutputLatchState
 }
 

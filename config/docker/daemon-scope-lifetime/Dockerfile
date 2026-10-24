@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=debian:bookworm-slim
-FROM node:22-bookworm-slim AS node
+FROM node:22.23.4-bookworm-slim AS node
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive

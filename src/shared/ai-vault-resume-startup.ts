@@ -14,7 +14,11 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
-import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv,
+  type AgentLaunchProfileSettings
+} from './tui-agent-launch-defaults'
 import { buildAgentResumeStartupPlan } from './tui-agent-startup'
 import {
   quoteStartupArg,
@@ -47,9 +51,8 @@ export type AiVaultResumeStartup = {
   providerSession?: AgentProviderSessionMetadata
 }
 
-export type AiVaultResumeLaunchSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
->
+export type AiVaultResumeLaunchSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> &
+  AgentLaunchProfileSettings
 
 /** The platform and live shell a resume line is written for, and the Codex home it pins. */
 export type AiVaultResumeHostShell = {
@@ -133,9 +136,8 @@ export function buildAiVaultLocalResumeStartup(
       cmdOverrides: resumeCommandOverrides(args),
       platform,
       shell: liveShell,
-      agentArgs:
-        args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+      agentArgs: args.agentArgs ?? resolveTuiAgentLaunchArgs(session.agent, settings),
+      agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
       resumeInLaunchCwd: true,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
@@ -218,8 +220,8 @@ export function buildAiVaultForkStartup(
     cmdOverrides: resumeCommandOverrides(args),
     platform,
     shell: liveShell,
-    agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings?.agentDefaultEnv),
+    agentArgs: resolveTuiAgentLaunchArgs(session.agent, settings),
+    agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
     fork: true
   })
@@ -250,7 +252,7 @@ export function resolveAiVaultCopiedSessionAgentArgs(
   const { platform, liveShell } = args.host
   const shell = resolveStartupShell(platform, liveShell)
   const configuredArgs = isTuiAgent(session.agent)
-    ? resolveTuiAgentLaunchArgs(session.agent, settings?.agentDefaultArgs)
+    ? resolveTuiAgentLaunchArgs(session.agent, settings)
     : ''
   const configured = tokenizeStartupCommand(configuredArgs, shell)
   if (!configured.ok) {
@@ -298,7 +300,7 @@ export function assertAiVaultCopiedSessionStoreAllowed(args: AiVaultResumeStartu
       args.settings?.agentCmdOverrides?.[agent] ||
       getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], platform)
     const parsed = tokenizeStartupCommand(
-      `${command} ${resolveTuiAgentLaunchArgs(agent, args.settings?.agentDefaultArgs)}`,
+      `${command} ${resolveTuiAgentLaunchArgs(agent, args.settings)}`,
       resolveStartupShell(platform, liveShell)
     )
     if (!parsed.ok) {

@@ -41,6 +41,7 @@ export type MockTransport = {
   claimViewport: ReturnType<typeof vi.fn>
   setOutputPaused?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
+  isConnected?: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
@@ -70,6 +71,7 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+  transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))

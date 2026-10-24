@@ -30,7 +30,7 @@ import { compactFieldChanges, type FieldChange } from './window-save-divergence-
 const LOG_PATH_ENV = 'ORCA_LAYOUT_SAVE_DIVERGENCE_LOG'
 const MAX_PATHS = 12
 /** A pane's terminal binding and resume record: main writes them on every spawn and capture. */
-const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping'])
+const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping', 'resume'])
 
 /** `values`: main's and the save's values of each changed field, content left out. */
 export type WindowSaveDivergence = { workspace: string; paths: string[]; values?: FieldChange[] }

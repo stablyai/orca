@@ -83,7 +83,7 @@ const WSL_CODEX_SESSION_BRIDGE_BODY = [
   '    fi',
   '    link_source="$target_stage"',
   '  fi',
-  // Codex resume ignores symlinked JSONL, so create links inside the distro.
+  // Codex resume ignores symlinked JSONL; use guest-side hard links.
   '  if ln -- "$link_source" "$target_file"; then',
   '    linked_files=$((linked_files + 1))',
   '  elif [ ! -e "$target_file" ] && [ ! -L "$target_file" ]; then',

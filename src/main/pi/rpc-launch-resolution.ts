@@ -5,11 +5,17 @@ import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusa
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey,
+  type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { isStableCliVersionOnLine, probeAgentCliVersion } from '../agent-cli-version-probe'
+import {
+  checkAgentCliVersion,
+  type AgentCliVersionCheck,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   resolveStructuredAgentCommand,
@@ -27,23 +33,18 @@ import {
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
+  /** The files of the conversation this launch continues, newest first; empty for a new one. */
+  lineage?: readonly string[]
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
-  probeVersion?: typeof probeAgentCliVersion
+  probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
 }
 
-// Stable releases from 0.84.0 emit agent_settled after retries and detached compaction; older
-// Pi (the 0.73.x package included) keeps the terminal chat.
-const PI_RPC_RELEASE_LINES = [
-  { major: 0, floor: '0.84.0' },
-  { major: 1, floor: '1.0.0' }
-] as const
-
-export function supportsPiRpcVersion(version: string): boolean {
-  return PI_RPC_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line))
-}
+// From 0.84.0 Pi emits agent_settled after retries and detached compaction, which a chat's turn
+// waits on; older Pi (the 0.73.x package included) runs only in a terminal.
+export const PI_RPC_MINIMUM_VERSIONS = ['0.84.0'] as const
 
 /** The binary a Pi launch with `env` spawns; create support resolves through here too. */
 export function resolvePiRpcCommand(
@@ -60,11 +61,15 @@ export function resolvePiRpcCommand(
   )
 }
 
-export function piRpcVersionSupported(
+export function checkPiRpcVersion(
   launch: { command: string; cwd: string; env: Record<string, string> },
-  probe: typeof probeAgentCliVersion = probeAgentCliVersion
-): Promise<boolean> {
-  return probe({ program: launch.command, cwd: launch.cwd, env: launch.env }, supportsPiRpcVersion)
+  read?: AgentCliVersionReader
+): Promise<AgentCliVersionCheck> {
+  return checkAgentCliVersion(
+    { program: launch.command, cwd: launch.cwd, env: launch.env },
+    PI_RPC_MINIMUM_VERSIONS,
+    read
+  )
 }
 
 const headerSchema = z.object({
@@ -186,16 +191,18 @@ export function piRpcLaunchPart(
       }
     }
     // Again at every launch: the binary on PATH may have changed since the chat was created.
-    if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
-      throw agentSessionRefusalError('structured_agent_session_unsupported', {
-        reason: 'hostUnsupported'
-      })
+    const launchVersion = await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)
+    if (launchVersion.status === 'tooOld') {
+      throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
     return {
       launch: {
         command,
         fullAccess: deps.resolveFullAccess?.() ?? true,
         previous,
+        ...(sessionFile || forkFile
+          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {})
@@ -204,6 +211,22 @@ export function piRpcLaunchPart(
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
     }
   }
+}
+
+/** The head back through resumes and directory forks, which copy every entry with its id, to the
+ *  session the conversation started as. */
+function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+  const files: string[] = []
+  for (const link of chain.toReversed()) {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+      break
+    }
+    files.push(link.handle.nativeId)
+    if (link.origin !== 'resumed' && link.origin !== 'forked') {
+      break
+    }
+  }
+  return files
 }
 
 export function piRpcProviderLink(

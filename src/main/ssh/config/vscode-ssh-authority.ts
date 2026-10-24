@@ -1,7 +1,7 @@
 import type { SshTarget } from '../../../shared/ssh-types'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 
-export type VsCodeSshAuthorityResult =
+type VsCodeSshAuthorityResult =
   | { ok: true; authority: string }
   | { ok: false; reason: 'ssh-target-invalid' }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }

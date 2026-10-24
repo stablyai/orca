@@ -9,6 +9,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import { buildSidebarProjectCatalog } from '../../../../shared/sidebar-list/sidebar-project-catalog'
 import { fetchPairedServerCatalog } from '../../../../shared/sidebar-list/paired-server-catalog'
 import { group, mainWt, repo } from './sidebar-list-golden-factories.test-fixture'
+import type { SidebarInputsFeedDomain } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
 
 const ENVIRONMENT_ID = 'env-1'
 const SERVER_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
@@ -109,4 +110,17 @@ export async function projectCatalogFromWindowState(state: AppState) {
     [server],
     { manualRepoOrder: state.manualRepoOrder, projectOrderBy: state.projectOrderBy }
   )
+}
+
+/** The projectCatalog domain over that catalog: its server read is awaited once, before the first read. */
+export function projectCatalogDomain(state: AppState): SidebarInputsFeedDomain {
+  let catalog: Awaited<ReturnType<typeof projectCatalogFromWindowState>> | null = null
+  return {
+    name: 'projectCatalog',
+    read: () => catalog,
+    watch: () => () => {},
+    ready: async () => {
+      catalog ??= await projectCatalogFromWindowState(state)
+    }
+  }
 }

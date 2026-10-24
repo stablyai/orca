@@ -41,6 +41,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const terminalTextScaleRevisionRef = useRef(0)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
@@ -144,6 +145,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setInput,
     terminalTextScale,
     setTerminalTextScale,
+    terminalTextScaleRevisionRef,
     autocompleteEnabled,
     setAutocompleteEnabled,
     terminalLinkOpenMode,

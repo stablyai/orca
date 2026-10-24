@@ -1,6 +1,4 @@
-// A `/compact` Orca sends as a prompt, run as the command turn the host opened. What the agent
-// writes meanwhile is the command's output, read for how it went and never drawn; its answer ends
-// the turn with one result row, as Claude's and Codex's compactions end.
+// Consume /compact output without rendering it; end the command turn with one result row.
 
 import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
@@ -10,19 +8,16 @@ import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/s
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { ContentBlock, SessionUpdate } from './generated/acp-protocol.generated'
 
-/** The prompt every compacting ACP agent takes as its own compaction command. */
 export const ACP_COMPACT_PROMPT: readonly ContentBlock[] = [{ type: 'text', text: '/compact' }]
 
-/** What a running compaction has said so far. */
 export type AcpCompaction = { reply: string; failureDetail?: string }
 
-/** The parts of a dialect's frame a running compaction reads. */
 export type AcpCompactionFrame = {
   failureDetail?: string
   end?: { durationMs?: number; failureDetail?: string }
 }
 
-/** Reads the running compaction's reply text; true for an update that is its output. */
+/** Returns true when the update belongs to the compaction. */
 export function readAcpCompactionUpdate(compaction: AcpCompaction, update: SessionUpdate): boolean {
   if (update.sessionUpdate === 'agent_message_chunk') {
     if (update.content.type === 'text') {
@@ -33,8 +28,7 @@ export function readAcpCompactionUpdate(compaction: AcpCompaction, update: Sessi
   return update.sessionUpdate === 'agent_thought_chunk'
 }
 
-/** Folds a frame of the running compaction into it: its words and end are read for the result its
- *  answer writes. True for a frame that is the compaction's own, which draws nothing. */
+/** Absorbs compaction output; true suppresses rendering the frame. */
 export function absorbAcpCompactionFrame(
   prompt: { compaction?: AcpCompaction; durationMs?: number },
   extension: AcpCompactionFrame | undefined,
@@ -58,7 +52,6 @@ export function absorbAcpCompactionFrame(
   return update !== undefined && readAcpCompactionUpdate(compaction, update)
 }
 
-/** The compaction's result row and its turn's end, from the agent's answer. */
 export function acpCompactionEnd(input: {
   compaction: AcpCompaction
   turn: string
@@ -66,15 +59,13 @@ export function acpCompactionEnd(input: {
   stopReason: string
   at: number
   durationMs?: number
-  /** Words the answer itself carried, for one that failed. */
   failureDetail?: string
-  /** The answer said the agent is not signed in. */
   notSignedIn?: boolean
   dialect: AcpDialect
   agentName?: string
 }): ProviderTimelineEvent[] {
   const { compaction, turn, stopReason } = input
-  // The host's command turn is the assembler's open turn, which no provider key names.
+  // The host's command turn has no provider key.
   const join = { thread: input.thread }
   const end = (outcome: 'success' | 'failure' | 'cancellation'): ProviderTimelineEvent => ({
     type: 'turn.end',
@@ -86,7 +77,6 @@ export function acpCompactionEnd(input: {
   const reply =
     stopReason === 'end_turn' ? input.dialect.compactionReply?.(compaction.reply) : undefined
   if (reply?.outcome === 'skipped') {
-    // Nothing to compact is no failure: the turn succeeds and says why nothing changed.
     const text = providerDiagnostic(reply.detail, 'person')?.text ?? 'Nothing to compact'
     return [
       {
@@ -106,7 +96,7 @@ export function acpCompactionEnd(input: {
   const words = reply?.detail ?? input.failureDetail ?? compaction.failureDetail
   const detail = words === undefined ? undefined : providerDiagnostic(words, 'person')
   const verdict = structuredCompactionOutcome({
-    // An agent that ends `/compact` normally compacted, unless its reply says otherwise.
+    // Normal completion implies compaction unless the reply says otherwise.
     compacted: stopReason === 'end_turn' && reply === undefined,
     interruptRequested: stopReason === 'cancelled',
     failed: detail ? { detail } : {}
@@ -114,7 +104,7 @@ export function acpCompactionEnd(input: {
   if (verdict.outcome === 'cancellation') {
     return [end('cancellation')]
   }
-  // The same fact a signed-out send records, so its guidance shows and the child is replaced.
+  // Use signed-out guidance and replace the child, as for a signed-out send.
   const failure =
     verdict.failure && input.notSignedIn
       ? agentSessionFailureFact('notSignedIn', detail ? { detail } : {})

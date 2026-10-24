@@ -1,374 +1,353 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { useEffect } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
-import {
-  agentChildWorkProjectionCandidateFromBackgroundTask,
-  projectAgentChildWorkLegacySubagents
-} from '../../../../shared/agent-status-child-work-projection'
-import {
-  continueMainAgentStatus,
-  isAgentStatusHeldOpenByChildWork,
-  mainAgentTurnInterrupted
-} from '../../../../shared/agent-lead-status-fold'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
-import {
-  agentChildWorkViewsEqual,
-  decodeAgentChildWorkViews
-} from '../../../../shared/agent-status-child-work-view-wire'
-import {
-  agentSubagentsEqual,
-  mainAgentStatusEqual,
-  type AgentSubagentSnapshot
-} from '../../../../shared/agent-status-types'
-import { structuredChildWorkLegacySubagents } from '../../../../shared/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
+import { projectStatus } from './structured-agent-session-status-projection'
 import {
-  structuredAgentSessionDatedMainAgent,
-  structuredAgentSessionRowStateStartedAt
-} from '../../../../shared/structured-agent-session-status-started-at'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
-import { useStructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch-registry'
-import { useStructuredAgentSessionLaunchFailedAt } from '@/lib/structured-agent-session-launch-failed-at'
+  getStructuredAgentSessionLaunchLifecycle,
+  subscribeStructuredAgentLaunchStatus
+} from '@/lib/structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AppState } from '@/store/types'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import {
+  getStructuredAgentSessionStatusFeed,
+  structuredAgentSessionStatusFeedKey,
+  type StructuredAgentSessionStatusFeedOwner
+} from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
 // Re-exported so the bridge stays the one import site its consumers already know.
 export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
-/** The host's projected status for one session, live while the caller is mounted. */
-export function useStructuredAgentSessionStatusSummary(
-  sessionId: string,
-  target: RuntimeClientTarget
-): { summary: AgentSessionStatusSummary | null; observation: 'live' | 'unverifiable' } {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  const summary = useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId) ?? null,
-    () => null
-  )
-  const observation = useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSessionObservation(sessionId),
-    () => 'unverifiable' as const
-  )
-  return { summary, observation }
-}
+export {
+  useStructuredAgentSessionStatusSummary,
+  useStructuredAgentSessionOptionStamp,
+  useStructuredAgentSessionHostExecutionPhase,
+  useStructuredAgentSessionHostStopping,
+  useStructuredAgentSessionHostExecution,
+  useStructuredAgentSessionRewindBlockedReason
+} from './structured-agent-session-status-hooks'
 
-/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
-export function useStructuredAgentSessionOptionStamp(
-  sessionId: string,
-  target: RuntimeClientTarget
-): string {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
-    feed.subscribe,
-    () => {
-      const summary = feed.getSnapshot().get(sessionId)
-      return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
-    },
-    () => ''
-  )
+type HostGroup = {
+  members: Member[]
+  feed: StructuredAgentSessionStatusFeedOwner
+  unsubscribe: () => void
+  release?: () => void
 }
-
-/** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
-export function useStructuredAgentSessionHostExecutionPhase(
-  sessionId: string,
-  target: RuntimeClientTarget
-): NonNullable<AgentSessionStatusSummary['hostExecutionPhase']> | null {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId)?.hostExecutionPhase ?? null,
-    () => null
-  )
-}
-
-/** Whether the host says a person's Stop is still ending the work; an older host never does. */
-export function useStructuredAgentSessionHostStopping(
-  sessionId: string,
-  target: RuntimeClientTarget
-): boolean {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId)?.stopping === true,
-    () => false
-  )
-}
-
-/** Startup phase, Stop and option stamp, each re-rendering the chat only on a change. */
-export function useStructuredAgentSessionHostExecution(
-  sessionId: string,
-  target: RuntimeClientTarget
-): {
-  phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>
-  stopping: boolean
-  optionStamp: string
-} {
-  return {
-    phase: useStructuredAgentSessionHostExecutionPhase(sessionId, target),
-    stopping: useStructuredAgentSessionHostStopping(sessionId, target),
-    optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target)
-  }
-}
-
-/** Only the host's rewind recovery latch, so a chat re-renders when that changes, not on every status. */
-export function useStructuredAgentSessionRewindBlockedReason(
-  sessionId: string,
-  target: RuntimeClientTarget
-): NonNullable<AgentSessionStatusSummary['rewindBlockedReason']> | null {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId)?.rewindBlockedReason ?? null,
-    () => null
-  )
-}
-
-/** The host's child records for the row, and the legacy roster readers of `subagents` keep. A host
- *  that publishes views is copied verbatim; only an older host's task list is converted here. */
-function childWorkFor(summary: AgentSessionStatusSummary): {
-  children?: AgentChildWorkView[]
-  subagents?: AgentSubagentSnapshot[]
-} {
-  const children = decodeAgentChildWorkViews(summary.children)
-  if (children) {
-    const subagents = structuredChildWorkLegacySubagents(children, summary.agent)
-    return { children, ...(subagents ? { subagents } : {}) }
-  }
-  const subagents = summary.backgroundTasks
-    ? projectAgentChildWorkLegacySubagents(
-        summary.backgroundTasks.map(agentChildWorkProjectionCandidateFromBackgroundTask)
-      )
-    : undefined
-  return subagents ? { subagents } : {}
-}
-
-/** A start the host refused leaves it no session to publish, so the launch's own failure is the
- *  row: the same failed verdict the host publishes for a send the agent's start refused. */
-function projectFailedStart(tab: StructuredTab, paneKey: string, failedAt: number): void {
-  const store = useAppStore.getState()
-  const current = store.agentStatusByPaneKey?.[paneKey]
-  if (
-    current?.state === 'done' &&
-    agentMainAgentVerdict(current) === 'failure' &&
-    current.updatedAt === failedAt &&
-    current.stateStartedAt === failedAt &&
-    current.agentType === tab.agentSessionAgent &&
-    current.terminalTitle === tab.label &&
-    current.tabId === tab.id &&
-    current.worktreeId === tab.worktreeId
-  ) {
-    return
-  }
-  const { state, mainAgent } = structuredAgentSessionAgentStatus({
-    status: 'idle',
-    turnOutcome: 'failure'
-  })
-  store.setAgentStatus(
-    paneKey,
-    {
-      state,
-      mainAgent: { ...mainAgent, stateStartedAt: failedAt },
-      interrupted: false,
-      prompt: '',
-      agentType: tab.agentSessionAgent,
-      sessionBoundary: false
-    },
-    tab.label,
-    // Dated by the failure, as a host row is by its journal: it ages the same, a restart does not
-    // refresh it, and it replaces whatever newer-dated row the pane key held.
-    { updatedAt: failedAt, allowOlderTimestamp: true, stateStartedAt: failedAt },
-    { tabId: tab.id, worktreeId: tab.worktreeId },
-    { terminalResumeEligible: false }
-  )
-}
-
-function projectStatus(
-  tab: StructuredTab,
-  summary: AgentSessionStatusSummary | null,
-  observation: 'live' | 'unverifiable',
-  /** When the launch failed; null while it has not. */
-  launchFailedAt: number | null
-): void {
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-  const store = useAppStore.getState()
-  // No persisted turn yet (or nothing known): the row shows no agent status at all.
-  if (!summary?.status) {
-    if (launchFailedAt !== null) {
-      projectFailedStart(tab, paneKey, launchFailedAt)
-    } else if (store.agentStatusByPaneKey?.[paneKey]) {
-      store.removeAgentStatus(paneKey)
-    }
-    return
-  }
-  const { children, subagents } = childWorkFor(summary)
-  // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
-  const agentStatus = structuredAgentSessionAgentStatus({
-    status: summary.status,
-    childWork: children ?? summary.backgroundTasks,
-    turnOutcome: summary.turnOutcome,
-    ...(summary.stopping ? { stopping: summary.stopping } : {})
-  })
-  const current = store.agentStatusByPaneKey?.[paneKey]
-  // Same continuity rule as the host ingest, on the main agent's own clock.
-  const mainAgent = continueMainAgentStatus(
-    current?.mainAgent,
-    structuredAgentSessionDatedMainAgent(agentStatus.mainAgent, summary),
-    summary.updatedAt
-  )
-  const desired = {
-    state: agentStatus.state,
-    ...(agentStatus.workingMode ? { workingMode: agentStatus.workingMode } : {}),
-    mainAgent,
-    // Derived from `mainAgent`, so the equality below needs no second check of it.
-    interrupted: mainAgentTurnInterrupted(mainAgent),
-    prompt: summary.latestPrompt,
-    agentType: tab.agentSessionAgent,
-    // The host projects these from the journal so the row reads like a hook-reported one:
-    // the turn's running or latest tool while it is live, the agent's last words once it settles.
-    ...(summary.model ? { model: summary.model } : {}),
-    ...(summary.toolName ? { toolName: summary.toolName } : {}),
-    ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
-    ...(summary.lastAssistantMessage ? { lastAssistantMessage: summary.lastAssistantMessage } : {}),
-    ...(subagents ? { subagents } : {}),
-    ...(children ? { children } : {}),
-    ...(subagents || children ? { subagentObservation: observation } : {}),
-    sessionBoundary: false
-  } as const
-  if (
-    current?.state === desired.state &&
-    current.workingMode === desired.workingMode &&
-    mainAgentStatusEqual(current.mainAgent, desired.mainAgent) &&
-    current.prompt === desired.prompt &&
-    current.agentType === desired.agentType &&
-    // A row keeps the last model it was told about, so only a reported one can differ.
-    (summary.model === undefined || current.model === summary.model) &&
-    current.toolName === summary.toolName &&
-    current.toolInput === summary.toolInput &&
-    current.lastAssistantMessage === summary.lastAssistantMessage &&
-    agentSubagentsEqual(current.subagents, subagents) &&
-    agentChildWorkViewsEqual(current.children, children) &&
-    current.subagentObservation === desired.subagentObservation &&
-    current.sessionBoundary === desired.sessionBoundary &&
-    current.updatedAt === summary.updatedAt &&
-    current.terminalTitle === tab.label &&
-    current.tabId === tab.id &&
-    current.worktreeId === tab.worktreeId &&
-    current.terminalResumeEligible === false &&
-    current.structuredHostOwned === summary.hostExecutionOwned &&
-    agentProviderSessionsEqual(
-      tab.agentSessionAgent,
-      current.providerSession,
-      summary.providerSession
-    )
-  ) {
-    return
-  }
-  store.setAgentStatus(
-    paneKey,
-    desired,
-    tab.label,
-    {
-      updatedAt: summary.updatedAt,
-      // This ordered host feed can correct a legacy publication clock after upgrade.
-      allowOlderTimestamp: true,
-      // Same continuity key as the host ingest: monitoring and working are distinct published
-      // states, so the timer beside the label must restart when the label changes.
-      stateStartedAt:
-        structuredAgentSessionRowStateStartedAt(desired, summary) ??
-        (desired.state !== 'done' &&
-        current?.state === desired.state &&
-        current.workingMode === desired.workingMode
-          ? current.stateStartedAt
-          : summary.updatedAt),
-      // Same rule as the host ingest: the journal clock stopped when the lead's turn did, so a
-      // row held open by child work alone is dated by when this client saw it instead.
-      evidenceObservedAt: isAgentStatusHeldOpenByChildWork(desired) ? Date.now() : summary.updatedAt
-    },
-    { tabId: tab.id, worktreeId: tab.worktreeId },
-    {
-      ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
-      terminalResumeEligible: false,
-      ...(summary.hostExecutionOwned ? { structuredHostOwned: true as const } : {})
-    }
-  )
-}
-
-/** Reads the chat's status from the host recorded on its tab; a chat no host can be named for has
- *  none to read. */
-function StructuredAgentSessionStatusProjection({
-  tab
-}: {
+type ProjectionInput = {
   tab: StructuredTab
-}): React.JSX.Element | null {
-  const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
-  const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
-  return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
+  member: Member
+  summary: AgentSessionStatusSummary | null
+  observation: 'live' | 'unverifiable'
+  failedAt: number | null
+  sleptAt: number | null | undefined
+  directory: string | undefined
 }
-
-function StructuredAgentSessionOwnedStatusProjection({
-  tab,
-  target
-}: {
+type Member = {
+  paneKey: string
   tab: StructuredTab
-  target: RuntimeClientTarget
-}): null {
-  const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
-  const launchFailed =
-    useStructuredAgentSessionLaunchLifecycle(tab.worktreeId, tab.entityId) === 'failed'
-  const failedAt = useStructuredAgentSessionLaunchFailedAt(tab.entityId)
-  // Only records saved by older builds lack the time; the tab's creation precedes any
-  // acknowledgement of it, so a failure seen before then stays read.
-  const launchFailedAt = launchFailed ? (failedAt ?? tab.createdAt) : null
-  useEffect(() => {
-    projectStatus(tab, summary, observation, launchFailedAt)
-  }, [summary, observation, tab, launchFailedAt])
-  const launchDirectory = summary?.launchDirectory
-  useEffect(() => {
-    // Why local only: a remote host's path is in its syntax, and floating chats only run locally.
-    useAppStore
-      .getState()
-      .setStructuredSessionLaunchDirectory(
-        tab.id,
-        tab.entityId,
-        target.kind === 'local' ? launchDirectory : undefined
-      )
-  }, [launchDirectory, target.kind, tab.id, tab.entityId])
-  useEffect(
-    () => () => useAppStore.getState().clearStructuredSessionLaunchDirectory(tab.id, tab.entityId),
-    [tab.entityId, tab.id]
-  )
-  useEffect(
-    () => () =>
-      useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),
-    [tab.entityId, tab.id]
-  )
-  return null
+  hostKey: string | null
+  group: HostGroup | null
+  status?: ProjectionInput
 }
+const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [
+  'repos',
+  'settings',
+  'worktreesByRepo',
+  'detectedWorktreesByRepo',
+  'folderWorkspaces',
+  'projectGroups',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'activeWorktreeId',
+  'activeWorkspaceExecutionHostId',
+  'runtimeEnvironments',
+  'runtimeEnvironmentCatalogHydrated',
+  'removedRuntimeEnvironmentIds'
+]
 
-export function StructuredAgentSessionStatusBridge(): React.JSX.Element {
-  const tabs = useAppStore(
-    useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
-  )
+function sameStatusInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
-    <>
-      {tabs.map((tab) => (
-        <StructuredAgentSessionStatusProjection key={`${tab.id}:${tab.entityId}`} tab={tab} />
-      ))}
-    </>
+    previous?.tab === next.tab &&
+    previous.summary === next.summary &&
+    previous.observation === next.observation &&
+    previous.failedAt === next.failedAt
   )
+}
+
+function installStatusProjection(): () => void {
+  const members = new Map<string, Member>()
+  const membersByTabId = new Map<string, Member>()
+  const retired = new Set<Member>()
+  const groups = new Map<string, HostGroup>()
+  const queue: (() => void)[] = []
+  let disposed = false
+  let draining = false
+  const report = (error: unknown, context: unknown): void => {
+    try {
+      console.warn('[structured-session-status] projection failed', context, error)
+    } catch {
+      // Diagnostics cannot interrupt the host's reconnect stack.
+    }
+  }
+  const boundary = (operation: () => void, context: unknown = 'membership'): void => {
+    try {
+      operation()
+    } catch (error) {
+      report(error, context)
+    }
+  }
+  const enqueue = (operation: () => void, context: unknown = 'cleanup'): void => {
+    queue.push(() => boundary(operation, context))
+    if (draining) {
+      return
+    }
+    draining = true
+    try {
+      while (queue.length) {
+        const next = queue.shift()
+        if (next) {
+          next()
+        }
+      }
+    } finally {
+      draining = false
+    }
+  }
+  const current = (input: ProjectionInput): boolean => {
+    if (disposed || members.get(input.member.paneKey) !== input.member) {
+      return false
+    }
+    const state = useAppStore.getState()
+    const tab = input.member.tab
+    const target =
+      tab && structuredAgentSessionTargetForHost(structuredAgentSessionOwnerForTab(state, tab))
+    return (
+      tab === input.tab &&
+      (target ? structuredAgentSessionStatusFeedKey(target) : null) === input.member.hostKey
+    )
+  }
+  const companions = (input: ProjectionInput): void => {
+    const { member, tab, sleptAt, directory } = input
+    if (
+      current(input) &&
+      (member.group ? member.group.feed.getSessionSleepState(tab.entityId) : null) === sleptAt
+    ) {
+      const store = useAppStore.getState()
+      if (store.structuredChatSleptAtByPaneKey[member.paneKey] !== sleptAt) {
+        store.setStructuredChatSleptAt(member.paneKey, sleptAt)
+      }
+    }
+    if (!current(input)) {
+      return
+    }
+    const latestDirectory =
+      member.hostKey === 'local'
+        ? member.group?.feed.getSnapshot().get(tab.entityId)?.launchDirectory
+        : undefined
+    if (latestDirectory !== directory) {
+      return
+    }
+    const store = useAppStore.getState()
+    const pin = store.structuredSessionLaunchDirectoryByTabId[tab.id]
+    if (
+      directory
+        ? pin?.sessionId !== tab.entityId || pin.launchDirectory !== directory
+        : pin?.sessionId === tab.entityId
+    ) {
+      if (directory) {
+        store.setStructuredSessionLaunchDirectory(tab.id, tab.entityId, directory)
+      } else {
+        store.clearStructuredSessionLaunchDirectory(tab.id, tab.entityId)
+      }
+    }
+  }
+  const project = (inputs: ProjectionInput[]): void => {
+    const removed = [...retired]
+    const dirty = inputs.filter(
+      (input) => current(input) && !sameStatusInput(input.member.status, input)
+    )
+    const clean = (): void => {
+      for (const old of removed) {
+        if (!members.has(old.paneKey)) {
+          useAppStore.getState().setStructuredChatSleptAt(old.paneKey, undefined)
+        }
+        const replacement = membersByTabId.get(old.tab.id)
+        if (!replacement || replacement.tab.entityId !== old.tab.entityId) {
+          useAppStore.getState().clearStructuredSessionLaunchDirectory(old.tab.id, old.tab.entityId)
+        }
+        retired.delete(old)
+      }
+      for (const input of inputs) {
+        companions(input)
+      }
+    }
+    if (dirty.length || removed.length) {
+      useAppStore.getState().transactAgentStatuses((transaction) => {
+        for (const old of removed) {
+          if (!members.has(old.paneKey)) {
+            transaction.getState().removeAgentStatus(old.paneKey)
+          }
+        }
+        for (const input of dirty) {
+          if (current(input)) {
+            projectStatus(transaction, input.tab, input.summary, input.observation, input.failedAt)
+          }
+        }
+        transaction.afterCommit(clean)
+      })
+      for (const input of dirty) {
+        if (current(input)) {
+          input.member.status = input
+        }
+      }
+    } else {
+      clean()
+    }
+  }
+  const activateGroups = (): void => {
+    for (const [hostKey, group] of groups) {
+      if (groups.get(hostKey) === group && group.members.length && !group.release) {
+        const release = group.feed.activate()
+        if (disposed || groups.get(hostKey) !== group || !group.members.length) {
+          release()
+        } else {
+          group.release = release
+        }
+      }
+    }
+  }
+  const capture = (selected: Iterable<Member>): void => {
+    const inputs = [...selected].map((member): ProjectionInput => {
+      const { tab, group } = member
+      const summary = group?.feed.getSnapshot().get(tab.entityId) ?? null
+      return {
+        member,
+        tab,
+        summary,
+        observation: group?.feed.getSessionObservation(tab.entityId) ?? 'unverifiable',
+        failedAt:
+          group &&
+          getStructuredAgentSessionLaunchLifecycle(tab.worktreeId, tab.entityId) === 'failed'
+            ? (getStructuredAgentSessionLaunchFailedAt(tab.entityId) ?? tab.createdAt)
+            : null,
+        sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
+        directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
+      }
+    })
+    enqueue(
+      () => {
+        activateGroups()
+        project(inputs)
+      },
+      inputs.map(({ member }) => ({ host: member.hostKey, paneKey: member.paneKey }))
+    )
+  }
+  const reconcile = (): void => {
+    const state = useAppStore.getState()
+    const next = new Map<string, Member>()
+    for (const tab of getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)) {
+      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      const target = structuredAgentSessionTargetForHost(
+        structuredAgentSessionOwnerForTab(state, tab)
+      )
+      const hostKey = target ? structuredAgentSessionStatusFeedKey(target) : null
+      let group = hostKey ? groups.get(hostKey) : undefined
+      if (!group && target && hostKey) {
+        const feed = getStructuredAgentSessionStatusFeed(target)
+        const created: HostGroup = { members: [], feed, unsubscribe: () => {} }
+        groups.set(hostKey, created)
+        created.unsubscribe = feed.subscribe(() =>
+          boundary(() => {
+            if (!disposed) {
+              capture(created.members)
+            }
+          })
+        )
+        group = created
+      }
+      const old = members.get(paneKey)
+      const member: Member =
+        old?.group === (group ?? null)
+          ? old
+          : {
+              paneKey,
+              tab,
+              hostKey,
+              group: group ?? null
+            }
+      member.tab = tab
+      next.set(paneKey, member)
+    }
+    for (const member of members.values()) {
+      if (!next.has(member.paneKey)) {
+        retired.add(member)
+      }
+    }
+    members.clear()
+    membersByTabId.clear()
+    for (const group of groups.values()) {
+      group.members = []
+    }
+    for (const [key, member] of next) {
+      members.set(key, member)
+      membersByTabId.set(member.tab.id, member)
+      member.group?.members.push(member)
+    }
+    for (const [key, group] of groups) {
+      if (groups.get(key) === group && !group.members.length) {
+        groups.delete(key)
+        group.members = []
+        group.unsubscribe()
+        group.release?.()
+      }
+    }
+    enqueue(() => {
+      activateGroups()
+      capture(members.values())
+    })
+  }
+  const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
+    if (
+      !disposed &&
+      (state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
+        ownerInputs.some((key) => state[key] !== previous[key]))
+    ) {
+      boundary(reconcile)
+    }
+  })
+  const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus(() =>
+    boundary(() => {
+      if (!disposed) {
+        capture(members.values())
+      }
+    })
+  )
+  boundary(reconcile)
+  return () => {
+    disposed = true
+    unsubscribeApp()
+    unsubscribeLaunch()
+    for (const group of groups.values()) {
+      group.members = []
+      group.unsubscribe()
+      boundary(() => group.release?.())
+    }
+    groups.clear()
+    for (const member of members.values()) {
+      retired.add(member)
+    }
+    members.clear()
+    membersByTabId.clear()
+    enqueue(() => project([]))
+  }
+}
+
+export function StructuredAgentSessionStatusBridge(): null {
+  useEffect(installStatusProjection, [])
+  return null
 }

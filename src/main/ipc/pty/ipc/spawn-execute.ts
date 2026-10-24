@@ -9,6 +9,7 @@ import {
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { assertSpawnReplyWasLive } from '../pane/agent-session-owners'
 import { failPtySpawnExecute } from '../spawn-execute-failure'
+import { attachOnlyViewOf, attachViewWithoutOwner } from '../pane/attach-only-view'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
@@ -18,7 +19,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       ctx.deps.trustedTerminalHandleEnv.add(ctx.preAllocatedHandle)
     }
     ctx.spawnTiming.mark('options')
-    // Why exclude: the restart's own stop leaves its binding for the bind to swap, not to reattach.
+    // Restart must replace the stopped owner instead of reattaching its retained binding.
     const resolveOwner = () =>
       excludeReplacedPaneOwner(
         resolveStablePaneOwner(
@@ -64,7 +65,9 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     if (!ctx.preAdoptedStablePane && ctx.paneAgentLaunch) {
       ctx.paneAgentLaunch.dispatched = true
     }
-    ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
+    ctx.result = attachOnlyViewOf(args)
+      ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
+      : await ctx.provider.spawn(ctx.spawnOptions)
     ctx.stablePaneOwner = null
     ctx.rejectedRegistrationCandidate = ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
@@ -96,9 +99,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
-      // Why kept: this is the reattach boundary in the RENDERER's sequence
-      // domain, and the daemon snapshot's kitty flags mean nothing without
-      // the boundary they were proven at.
+      // Preserve the renderer-domain boundary needed to reconcile daemon snapshot kitty flags.
       ctx.reconciledSnapshotSeq =
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,

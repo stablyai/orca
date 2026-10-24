@@ -1,13 +1,3 @@
-// The idle sweep must never stop a provider child that still owes the user work.
-//
-// A Claude chat is published before its CLI answers initialize, and a message sent in that window
-// is accepted and stays queued until it does; the delivery loop hands it over once startup lands.
-// The idle sweep ticks meanwhile. Inside the idle window it must leave that queued message and the
-// starting child alone, and every journal publish — the handover included — starts the window
-// again; only a chat quiet for the whole window loses its agent. And a lead whose turn has settled
-// can leave subagents, commands and monitors running inside the child; stopping it then ends them
-// silently.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -76,11 +66,9 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it: an admitted prompt's outcome reaches the journal out of band.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     onChildWorkEvidence: (sessionId, evidence) =>
       host.publishChildWorkEvidence(sessionId, evidence),
-    // Initialize answers only when the test says so.
     openConnection: async (launch, handlers) => {
       const connection = await claude.openConnection(launch, handlers)
       const answer = connection.initializationResult
@@ -104,7 +92,6 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
     now: () => clock,
-    // The host's status row and child records, as the runtime wires them.
     statusSink: {
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
@@ -161,15 +148,14 @@ async function dispatchState(clientMessageId: string): Promise<string | undefine
   )?.dispatchState
 }
 
-/** The delivery loop hands a message over on its own serialized steps; this yields to them
- *  without moving the host clock. */
+/** Yield to delivery without advancing host time. */
 async function untilSent(connection: { sent: unknown[] }): Promise<void> {
   for (let turn = 0; turn < 2000 && connection.sent.length === 0; turn += 1) {
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
 
-/** Long enough for many sweep ticks, so "not stopped" means the sweep declined. */
+/** Observe enough ticks to distinguish a declined sweep from one that never ran. */
 function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
@@ -179,7 +165,6 @@ describe('a Claude chat whose CLI is still starting', () => {
     await attachStarting()
     const sent = await send('sent while starting')
 
-    // Held, never written, while initialize is unanswered.
     expect(claude.connections[0].sent).toEqual([])
     expect(await dispatchState(sent)).toBe('pending')
     clock += IDLE_MS - 1
@@ -204,7 +189,7 @@ describe('a Claude chat whose CLI is still starting', () => {
     claude = fakeClaude({ replayUuid: null })
     await attachStarting()
     const connection = claude.connections[0]
-    // Claude echoes a prompt only when it starts that turn, which a loaded machine delays.
+    // Loaded runners may delay Claude’s first turn echo.
     const held = await send('sent while starting')
     expect(connection.sent).toEqual([])
     expect(await dispatchState(held)).toBe('pending')
@@ -214,8 +199,7 @@ describe('a Claude chat whose CLI is still starting', () => {
     expect(await dispatchState(held)).toBe('pending')
     expect(host.hasSession(SESSION)).toBe(true)
 
-    // Startup lands just before the window closes and the message is handed over; the agent stays
-    // while its message waits.
+    // Startup just before expiry renews activity through handover.
     landInit()
     await vi.waitFor(() =>
       expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready')
@@ -319,7 +303,7 @@ describe('a chat whose settled lead still has background work running', () => {
       task_id: 'task-1',
       status: 'completed'
     })
-    // A finished background task can wake the lead; that turn is owed too until it settles.
+    // Child completion still owes the lead’s wake-up turn.
     frame({ type: 'result', subtype: 'success', uuid: 'result-2', is_error: false, result: 'ok' })
     await host.flushStreamedEvents(SESSION)
     clock += IDLE_MS

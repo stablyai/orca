@@ -139,8 +139,10 @@ function saveWorkspaceRecords({
         if (leaf?.incarnationId !== undefined) {
           incarnations[paneKey] = leaf.incarnationId
         }
-        if (leaf?.sleeping) {
-          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...leaf.sleeping }
+        // One disk map holds both: a leaf has at most one of them.
+        const record = leaf?.sleeping ?? leaf?.resume
+        if (record) {
+          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...record }
         }
       }
     }
@@ -186,6 +188,9 @@ export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSes
       : {}),
     ...(records.clientHostedBrowserPagesByWorkspace
       ? { clientHostedBrowserPagesByWorktree: records.clientHostedBrowserPagesByWorkspace }
+      : {}),
+    ...(records.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: records.closedTerminalPanesByPaneKey }
       : {}),
     ...(legacy.topologyRevisionByRepoId
       ? { terminalTopologyRevisionByRepoId: legacy.topologyRevisionByRepoId }

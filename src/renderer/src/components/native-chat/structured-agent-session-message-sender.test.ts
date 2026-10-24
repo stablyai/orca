@@ -195,6 +195,16 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(0)
   })
 
+  // The host refuses an oversized message without a reason; sending it again would fail the same way.
+  it('gives back a message over the size limit, saying so, without sending it', async () => {
+    const a = send('x'.repeat(256 * 1024))
+    expect(await a.outcome).toBe('returned')
+    const notice = getStructuredAgentSessionSendNotice(SESSION) ?? ''
+    expect(notice).toContain('over the 256 KB limit')
+    expect(notice).not.toContain('Send it again.')
+    expect(sendCalls()).toBe(0)
+  })
+
   // A failure before any request went out that trying again won't clear: not sent, at once.
   it('gives back at once, with its own words, a send this client and the server cannot talk on', async () => {
     const blocked = Object.assign(

@@ -865,8 +865,15 @@ describe('agentSession.subscribeStatus', () => {
   })
 
   it('opens the host status feed with a projected snapshot as its first reply', async () => {
-    const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT)
-    expect(reply).toMatchObject({
+    const restoring = Promise.withResolvers<void>()
+    const restore = vi.fn(() => restoring.promise)
+    const response = call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT, {
+      restoreStructuredAgentSessionTabs: restore
+    })
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledOnce())
+    expect(hostCalls.subscribeStatus).not.toHaveBeenCalled()
+    restoring.resolve()
+    expect(await response).toMatchObject({
       ok: true,
       result: {
         type: 'snapshot',

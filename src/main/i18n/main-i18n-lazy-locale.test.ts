@@ -1,8 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: main-i18n avoids bundling locale catalogs on the cold-start path.
-// English comes from translateMain() fallbacks; non-English catalogs load
-// through the backend before awaited menu/tray/dialog rendering reads them.
+// English uses fallbacks; awaited non-English catalogs must load without entering the cold-start bundle.
 
 vi.mock('electron', () => ({
   app: {
@@ -15,10 +13,12 @@ import {
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
+  UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_SPANISH
 } from '../../shared/ui-language'
 import {
   ensureMainI18n,
+  mainI18n,
   setMainPluginLanguagePacks,
   setMainUiLanguage,
   translateMain
@@ -26,6 +26,7 @@ import {
 import { pluginLanguageResourceId } from '../../shared/plugins/plugin-language-pack-artifact'
 
 describe('main-i18n lazy locale loading', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(async () => {
     await ensureMainI18n()
     setMainPluginLanguagePacks([])
@@ -41,8 +42,7 @@ describe('main-i18n lazy locale loading', () => {
   it('lazy-loads the Spanish catalog before changeLanguage resolves', async () => {
     const locale = await setMainUiLanguage(UI_LANGUAGE_SPANISH)
     expect(locale).toBe('es')
-    // If the lazy backend had not loaded es before changeLanguage settled, these
-    // would fall back to the English defaults.
+    // Missing the awaited backend load would return English fallbacks.
     expect(translateMain('menu.file', 'File')).toBe('Archivo')
     expect(translateMain('menu.settings', 'Settings')).toBe('Ajustes')
   })
@@ -56,6 +56,9 @@ describe('main-i18n lazy locale loading', () => {
 
     await setMainUiLanguage(UI_LANGUAGE_CHINESE)
     expect(translateMain('menu.file', 'File')).not.toBe('File')
+
+    await setMainUiLanguage(UI_LANGUAGE_PORTUGUESE)
+    expect(translateMain('menu.file', 'File')).not.toBe('File')
   })
 
   it('uses caller English when a target catalog omits a key', async () => {
@@ -68,6 +71,25 @@ describe('main-i18n lazy locale loading', () => {
     expect(translateMain('menu.file', 'File')).toBe('Archivo')
 
     await setMainUiLanguage(UI_LANGUAGE_ENGLISH)
+    expect(translateMain('menu.file', 'File')).toBe('File')
+  })
+
+  it('keeps a newer explicit language when system fallback catalog loading finishes late', async () => {
+    const { getSystemLanguageDetection } = await import('./system-language')
+    expect(getSystemLanguageDetection(['fr-FR'])?.locale).toBe('fr')
+    let finishLoad: () => void = () => {}
+    const load = vi.spyOn(mainI18n, 'loadLanguages').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoad = resolve
+        })
+    )
+    const fallback = setMainUiLanguage('system')
+    await vi.waitFor(() => expect(load).toHaveBeenCalledWith('fr'))
+    await setMainUiLanguage('en')
+    finishLoad()
+    await fallback
+    expect(mainI18n.language).toBe('en')
     expect(translateMain('menu.file', 'File')).toBe('File')
   })
 

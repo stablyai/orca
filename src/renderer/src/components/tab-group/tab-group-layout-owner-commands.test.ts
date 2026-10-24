@@ -7,6 +7,7 @@ import {
   dropTabThroughLayoutOwner,
   setGroupRatioThroughLayoutOwner
 } from './tab-group-layout-owner-commands'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(
   (): {
@@ -76,11 +77,11 @@ describe('dropTabThroughLayoutOwner', () => {
     ).toBe(true)
     expect(mocks.send).toHaveBeenCalledWith(
       WT,
-      { type: 'moveTab', tabId: 'a', toGroupId: right, index: 0 },
+      { type: 'moveTab', tabId: 'a', toGroupId: right, index: 0, afterTabId: null },
       expect.anything()
     )
 
-    lastHandlers().apply({})
+    lastHandlers().apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(groupOf('a')).not.toBe(right)
     expect(orderOf(right)).toEqual(['c'])
@@ -94,7 +95,7 @@ describe('dropTabThroughLayoutOwner', () => {
     store().getState().dropUnifiedTab('a', { groupId: right, index: 1 })
     store().getState().focusGroup(WT, left)
 
-    lastHandlers().apply({})
+    lastHandlers().apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(orderOf(right)).toEqual(['c', 'a'])
     expect(store().getState().activeGroupIdByWorktree[WT]).toBe(left)
@@ -106,7 +107,7 @@ describe('dropTabThroughLayoutOwner', () => {
     beginLayoutFramePositions()
     const selectedBefore = store().getState().activeGroupIdByWorktree[WT]
     dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'c', groupId: left, direction: 'left' })
-    lastHandlers().apply({ groupId: right })
+    lastHandlers().apply({ groupId: right }, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(store().getState().layoutByWorktree[WT]).toBe(layout)
     expect(store().getState().activeGroupIdByWorktree[WT]).toBe(selectedBefore)
@@ -151,11 +152,18 @@ describe('dropTabThroughLayoutOwner', () => {
       type: 'moveTab',
       tabId: 'a',
       toGroupId: left,
-      index: 1
+      index: 1,
+      afterTabId: 'b'
     })
-    lastHandlers().apply({})
+    lastHandlers().apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(orderOf(left)).toEqual(['a', 'b'])
+  })
+
+  it('anchors a move into another group after the tab drawn before its slot', () => {
+    const { right } = seeded()
+    dropTabThroughLayoutOwner(WT, { kind: 'move', tabId: 'a', groupId: right })
+    expect(mocks.send.mock.calls[0]![1]).toMatchObject({ index: 1, afterTabId: 'c' })
   })
 
   it('moves as today when main cannot act, and not at all when main refuses', () => {
@@ -174,7 +182,7 @@ describe('dropTabThroughLayoutOwner', () => {
     const { left } = seeded()
 
     dropTabThroughLayoutOwner(WT, { kind: 'split', tabId: 'b', groupId: left, direction: 'down' })
-    lastHandlers().apply({ groupId: 'group-main' })
+    lastHandlers().apply({ groupId: 'group-main' }, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(groupOf('b')).toBe(left)
   })

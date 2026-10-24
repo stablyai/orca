@@ -60,7 +60,8 @@ vi.mock('./use-native-chat-draft', () => ({
 vi.mock('./NativeChatComposerField', () => ({
   NativeChatComposerField: (props: FieldProps) => {
     mocks.fieldProps = props
-    return <textarea ref={props.textareaRef} />
+    // Holds the draft as the real editor does; a picker completes the text the editor holds.
+    return <textarea ref={props.textareaRef} value={mocks.draft} readOnly />
   }
 }))
 vi.mock('./use-native-chat-skills', () => ({
@@ -93,6 +94,7 @@ const RESUME: CommandItem = {
 
 function renderStructuredChat() {
   const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {

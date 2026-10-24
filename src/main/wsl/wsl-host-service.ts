@@ -11,6 +11,7 @@ import {
 } from '../../shared/wsl-host-deployment-store'
 import type {
   WslHostAddResult,
+  WslHostConnectIntent,
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
@@ -33,8 +34,10 @@ export type WslHostConnector = {
   listDistros(): Promise<WslHostDistroCandidate[]>
   /** Runs in the distro, so it boots a stopped one: only after the user chose to. */
   readOrcadPublicKey(distro: string): Promise<string | null>
-  /** User-initiated; may boot the distro. `force` takes an update live terminals deferred. */
-  connect(distro: string, options?: { force?: boolean }): Promise<WslOrcadConnection>
+  /** User-initiated; may boot the distro. An intent retries or forces a skipped update. */
+  connect(distro: string, options?: { intent?: WslHostConnectIntent }): Promise<WslOrcadConnection>
+  /** The user asked again: a standing pairing-repair failure or spent cap must not answer it. */
+  forgetPairingFailures?(environmentId: string): void
   get(distro: string): WslOrcadConnection | null
   /** Checks the paired server without starting a stopped or unconfirmed distro. */
   isReachable(distro: string, environmentId: string): Promise<boolean>
@@ -67,6 +70,7 @@ export class WslHostService {
   private readonly removing = new Set<string>()
   // Bumped on disable so an Add that started before it cannot finish as a ready host.
   private disableGeneration = 0
+  private readonly statusListeners = new Set<() => void>()
 
   constructor(private readonly deps: WslHostServiceDependencies) {}
 
@@ -103,6 +107,20 @@ export class WslHostService {
 
   getStatuses(): WslHostStatus[] {
     return [...this.statuses.values()]
+  }
+
+  /** Hears every change to what `getStatuses` returns. */
+  onStatusesChanged(listener: () => void): () => void {
+    this.statusListeners.add(listener)
+    return () => {
+      this.statusListeners.delete(listener)
+    }
+  }
+
+  private notifyStatusesChanged(): void {
+    for (const listener of this.statusListeners) {
+      listener()
+    }
   }
 
   async listDistros(): Promise<WslHostDistro[]> {
@@ -162,6 +180,7 @@ export class WslHostService {
       this.removing.delete(environmentId)
     }
     this.statuses.delete(environmentId)
+    this.notifyStatusesChanged()
     await this.deps.removed(environmentId)
     return serverStop
   }
@@ -187,8 +206,11 @@ export class WslHostService {
     }
   }
 
-  /** The user asked for this host: may boot its distro. `force` takes a deferred update now. */
-  async connect(environmentId: string, options: { force?: boolean } = {}): Promise<void> {
+  /** The user asked for this host: may boot its distro. An intent retries or forces an update. */
+  async connect(
+    environmentId: string,
+    options: { intent?: WslHostConnectIntent } = {}
+  ): Promise<void> {
     const record = this.recordForEnvironment(environmentId)
     if (!record) {
       throw new Error('This server is not a WSL host.')
@@ -197,6 +219,7 @@ export class WslHostService {
     if (refusal || this.removing.has(environmentId)) {
       throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
     }
+    this.wsl.forgetPairingFailures?.(environmentId)
     await this.wsl.connect(record.distro, options)
   }
 
@@ -276,6 +299,7 @@ export class WslHostService {
     const next = toWslHostStatus(record, status, connection)
     this.statuses.set(record.environmentId, next)
     this.deps.publish(next)
+    this.notifyStatusesChanged()
   }
 
   private records(): WslHostDeploymentRecord[] {

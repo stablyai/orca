@@ -20,13 +20,11 @@ import {
   type RuntimeWatcherProcessPoolOptions
 } from './runtime-watcher-pool-state'
 
-// Why: extra ~50 MiB processes are justified only when quarantine isolates a fault.
+// Reserve extra ~50 MiB supervisors for fault isolation.
 const DEFAULT_MAX_SHARED_SUPERVISORS = 1
 const DEFAULT_MAX_QUARANTINE_SUPERVISORS = 4
 
-/**
- * Share children while healthy, then move failed roots into bounded quarantine slots.
- */
+/** Share healthy children; quarantine failed roots within bounded slots. */
 export class RuntimeWatcherProcessPool {
   private readonly maxSharedSupervisors: number
   private readonly maxQuarantineSupervisors: number
@@ -123,8 +121,6 @@ export class RuntimeWatcherProcessPool {
   /** Kill every pooled watcher child (production shutdown or test reset). */
   dispose(): void {
     this.lifecycle.dispose()
-    // disposeSlot deletes the current slot from allSlots; deleting the
-    // in-progress element during Set iteration is safe, so no snapshot needed.
     const disposedError = new WatcherProcessFailure(
       'file watcher supervisor disposed',
       'supervisor',
@@ -153,8 +149,7 @@ export class RuntimeWatcherProcessPool {
   reopen = (): void => this.lifecycle.reset()
 
   forgetRoot(dir: string): void {
-    // Physical subscriptions release their assignment through unsubscribe or
-    // terminal callbacks. This clears fault history after setup gives up.
+    // Physical subscriptions release assignments; forget fault history only after setup gives up.
     if (!this.assignments.has(dir)) {
       this.quarantineQueue.failRoot(dir)
       this.lifecycle.isolatedRoots.delete(dir)
@@ -264,8 +259,7 @@ export class RuntimeWatcherProcessPool {
     }
     slot.retired = true
     this.activeSlots.delete(slot)
-    // Why: a replacement cannot safely reacquire a root while the failed child
-    // may still own its native watcher handle (notably on Windows).
+    // Failed children may retain native handles, especially on Windows; wait before reacquiring roots.
     this.predecessorBarriers.retain(slot.roots, error)
     for (const root of slot.roots) {
       if (this.assignments.get(root)?.slot === slot) {
@@ -274,8 +268,7 @@ export class RuntimeWatcherProcessPool {
       this.lifecycle.quarantineOrFuse(root, slot.isolated)
     }
     slot.roots.clear()
-    // Why: failAllSubscriptions is still iterating callbacks; defer disposal
-    // so every logical root receives the supervisor failure first.
+    // Let failure callbacks finish for every logical root before disposing the supervisor.
     const owners = this.disposalOwners
     queueMicrotask(() => {
       if (this.disposalOwners !== owners) {

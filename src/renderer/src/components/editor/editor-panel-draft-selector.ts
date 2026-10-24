@@ -1,9 +1,12 @@
 import type { AppState } from '@/store'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import {
+  conflictOverviewView,
+  type ConflictOverviewState
+} from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 
-type EditorDraftState = Pick<AppState, 'editorDrafts' | 'openFiles'>
+type EditorDraftState = Pick<AppState, 'editorDrafts'> & ConflictOverviewState
 type EditorPanelDraftSelector = (state: EditorDraftState) => Record<string, string>
 
 const EMPTY_EDITOR_PANEL_DRAFTS = Object.freeze({}) as Record<string, string>
@@ -26,37 +29,48 @@ export function createEditorPanelDraftSelector(
           joinPath(activeFile.filePath, entry.path)
         )
       : []
-  // Why: an overview file open in a tab shows under that tab's id (a server file's is not its path).
+  // Why: an overview file shows under its record's view id (a server file's is not its path).
   const selectedFileIds = (state: EditorDraftState): string[] =>
     overviewPaths.length === 0 || !activeFile
       ? fileIds
       : Array.from(
           new Set([
             ...fileIds,
-            ...overviewPaths.map((path) =>
-              conflictOverviewFileId(state.openFiles, activeFile.worktreeId, path)
+            ...overviewPaths.map(
+              (path) => conflictOverviewView(state, activeFile.worktreeId, path)?.id ?? path
             )
           ])
         )
   let previousDrafts: AppState['editorDrafts'] | null = null
+  let previousOpenFiles: EditorDraftState['openFiles'] | null = null
+  let previousViews: EditorDraftState['editorBufferViews'] | null = null
   let previousSelection = EMPTY_EDITOR_PANEL_DRAFTS
 
   return (state) => {
     // Why: every Zustand write reruns the selector. The slice identity guard
-    // keeps unrelated terminal/status traffic allocation-free.
-    if (previousDrafts === state.editorDrafts) {
+    // keeps unrelated terminal/status traffic allocation-free; overview ids
+    // also move with the tabs and record views they resolve through.
+    if (
+      previousDrafts === state.editorDrafts &&
+      (overviewPaths.length === 0 ||
+        (previousOpenFiles === state.openFiles && previousViews === state.editorBufferViews))
+    ) {
       return previousSelection
     }
     previousDrafts = state.editorDrafts
+    previousOpenFiles = state.openFiles
+    previousViews = state.editorBufferViews
 
     const ids = selectedFileIds(state)
-    const changed = ids.some((fileId) => {
-      const draft = state.editorDrafts[fileId]
-      return (
-        draft !== previousSelection[fileId] ||
-        (draft === undefined && Object.hasOwn(previousSelection, fileId))
-      )
-    })
+    const idSet = new Set(ids)
+    const changed =
+      ids.some((fileId) => {
+        const draft = state.editorDrafts[fileId]
+        return (
+          draft !== previousSelection[fileId] ||
+          (draft === undefined && Object.hasOwn(previousSelection, fileId))
+        )
+      }) || Object.keys(previousSelection).some((fileId) => !idSet.has(fileId))
     if (!changed) {
       return previousSelection
     }

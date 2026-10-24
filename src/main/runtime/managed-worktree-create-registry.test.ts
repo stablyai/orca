@@ -95,10 +95,10 @@ function makeRuntime(repo: Record<string, unknown> = gitRepo): OrcaRuntimeServic
 type LocalCreateArgs = { onWorktreeMetadataPersisted: (created: { id: string }) => unknown }
 
 function creationsOf(runtime: OrcaRuntimeService): Record<string, unknown> {
-  if (!runtime.workspaceCreations) {
+  if (!runtime.workspaceLifecycle) {
     throw new Error('the switch is mocked on')
   }
-  return runtime.workspaceCreations.snapshot().creations
+  return runtime.workspaceLifecycle.creationsSnapshot().creations
 }
 
 describe('runtime creation registry', () => {

@@ -43,8 +43,7 @@ const LEGACY_ORCA_PROFILE_LINES = [
   ''
 ]
 
-// Why a retired form: the sweep may remove only commands no current build writes
-// (#1536's exec-guarded form on POSIX, a per-userData bare path on Windows).
+// Only retired command forms are eligible for cleanup.
 function legacyManagedHookCommand(): string {
   if (process.platform === 'win32') {
     return join(homes.userDataDir, 'agent-hooks', 'codex-hook.cmd')
@@ -64,8 +63,6 @@ function currentManagedHookCommand(): string {
 }
 
 describe('CodexHookService', () => {
-  // Why: every Orca on this HOME writes the same current entry; an install for a
-  // managed account (launch prep for any pane) used to strip it and its trust.
   it('keeps the shared current entry and its trust while removing a retired form', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
@@ -283,7 +280,7 @@ describe('CodexHookService', () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     mkdirSync(managedCodexHome, { recursive: true })
-    // Why ~/.codex holds it too: remove() rebuilds the mirror's user hooks from ~/.codex.
+    // remove() rebuilds mirrored user hooks from the canonical home.
     mkdirSync(join(homes.tmpHome, '.codex'), { recursive: true })
     writeFileSync(
       join(homes.tmpHome, '.codex', 'hooks.json'),

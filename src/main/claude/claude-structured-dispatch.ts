@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,
@@ -47,7 +48,6 @@ export function settleCancelledClaudeDispatchWaiters(
   )
 }
 
-/** Settles sends the CLI proved it will never run, each with the fact that says why. */
 export function rejectClaudeDispatchWaiters(
   session: ClaudeSession,
   uuids: readonly string[],
@@ -59,26 +59,29 @@ export function rejectClaudeDispatchWaiters(
   const retiredWaiters = session.retiredDispatchWaiters.filter((waiter) =>
     named.has(waiter.sentUuid)
   )
-  for (const waiter of activeWaiters) {
-    forgetWaiter(session, waiter)
-    waiter.resolve(null)
-  }
-  for (const waiter of retiredWaiters) {
-    forgetRetiredWaiter(session, waiter)
-  }
-  for (const waiter of [...activeWaiters, ...retiredWaiters]) {
+  // Release and report each waiter together to preserve host ownership.
+  const report = (waiter: ClaudeDispatchWaiter): void => {
     if (waiter.clientMessageId) {
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
+        unrun: true,
         ...claudeDispatchRejection(fact)
       })
     }
   }
+  for (const waiter of activeWaiters) {
+    forgetWaiter(session, waiter)
+    waiter.resolve(null)
+    report(waiter)
+  }
+  for (const waiter of retiredWaiters) {
+    forgetRetiredWaiter(session, waiter)
+    report(waiter)
+  }
 }
 
-/** Releases sends the CLI took and let go without an echo or a verdict: each may have run, so each
- *  settles as doubt, never re-sent. Retired, not dropped, so a late replay still accepts it. */
+/** Retain uncertain sends for late replay; never resend messages that may already have run. */
 export function releaseClaudeDispatchWaitersInDoubt(
   session: ClaudeSession,
   waiters: readonly ClaudeDispatchWaiter[],
@@ -94,9 +97,7 @@ export function releaseClaudeDispatchWaitersInDoubt(
   }
 }
 
-/** Nothing expires a waiter; the child's death ends every one its echo, a lifecycle frame or the
- *  CLI's idle has not. Retired rather than dropped: their identities stay joinable, bounded by
- *  `MAX_RETIRED_DISPATCH_WAITERS`. */
+/** Retain bounded waiter identities after exit so late replay can still settle delivery. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
@@ -104,7 +105,6 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
   }
 }
 
-/** The row keeps only the marker released clients hide; why the write failed belongs in the log. */
 function claudeWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
   console.warn('[claude-dispatch] message could not be handed to Claude:', error)
   return claudeDispatchRejection(agentSessionFailureFact('writeFailed'))
@@ -116,8 +116,8 @@ export async function dispatchClaudeTurn(
     clientMessageId?: string
     body: AgentJournalMessageItem
     requestedAt?: number
-    /** The frame's uuid, for a caller that correlates the provider's answer to it. */
     sentUuid?: string
+    signal?: AbortSignal
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -130,13 +130,12 @@ export async function dispatchClaudeTurn(
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
     return { state: 'rejected', ...claudeDispatchRejection(agentSessionFailureFact('queueFull')) }
   }
-  // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
-  // whether Claude runs a command, so the two cannot disagree about which frame settles this.
+  // Classify the mapped trailing prompt so command detection matches what Claude receives.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
   const sentUuid = input.sentUuid ?? randomUUID()
   const arm = () => {
     ++session.dispatchSequence
-    // A context report asked for before this send may land after it and misstate the context.
+    // Invalidate context reports requested before this send.
     session.translator?.markContextActivity()
     return waitForReplay(
       session,
@@ -171,7 +170,11 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
-      if (error instanceof AgentSessionPreDispatchError) {
+      // Preserve pre-dispatch aborts for the host's Stop settlement.
+      if (
+        error instanceof AgentSessionPreDispatchError ||
+        isAbortSignalReason(input.signal, error)
+      ) {
         throw error
       }
       if (isAgentSessionOptionRejectedError(error)) {
@@ -203,8 +206,7 @@ export async function dispatchClaudeTurn(
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)
-      // The frame was never handed to the SDK's input pump, so this is not doubt:
-      // the message provably did not happen, which is what `rejected` means.
+      // Proven unwritten frames are rejected; ambiguous writes remain unknown.
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }
     if (!waiter.retired) {
@@ -213,9 +215,6 @@ export async function dispatchClaudeTurn(
     }
     return { state: 'unknown', reason: dispatchWriteOutcomeUnknownReason(error) }
   }
-  // The write is the admission signal. Awaiting the echo here would block on the
-  // turn already running, which is why the deadline this replaces kept declaring
-  // doubt about messages that were delivered. The replay resolution
-  // (`claude-replay-turn-resolution.ts`) finishes the job.
+  // Admit on write: an echo may wait for the current turn; replay settles delivery later.
   return { state: 'admitted' }
 }

@@ -74,6 +74,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       ports: {
         readSession,
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
+        paneOf: (pty) => this.paneOfPty(pty),
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),
         getDisplayTitle: (pty) => getLatestPtyTitle(this.getPtyDisplayRecord(pty)),
@@ -233,7 +234,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     }
     const runtimePty = this.getLivePtyForHandle(handle)
     if (runtimePty) {
-      return runtimePty.pty.connected ? (runtimePty.pty.paneKey ?? null) : null
+      return runtimePty.pty.connected ? this.paneOfPty(runtimePty.pty).paneKey : null
     }
     try {
       const leaf = this.resolveLiveLeafForHandle(handle)

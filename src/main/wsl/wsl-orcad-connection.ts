@@ -4,6 +4,12 @@
  * distro; a relaunch that moved orcad's port moves the bridge with it. In memory only: the
  * deployment record (C7) persists what `onChange` reports.
  */
+import type { WslOrcadConnection } from './wsl-orcad-connection-types'
+import {
+  WslOrcadConnectionSupersededError,
+  WslOrcadLaunchDeferredError
+} from './wsl-orcad-connection-errors'
+import type { WslHostConnectIntent } from '../../shared/wsl-host-types'
 import { errorMessage } from '../../shared/error-message'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
@@ -11,64 +17,34 @@ import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import type { OrcadTunnelIdentity } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
 import type { WslDistroHolder } from './wsl-distro-holder'
-import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import {
+  wslConnectFailedStatus,
+  type WslOrcadConnectionStatus
+} from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import {
   defaultWslOrcadEnvironmentId,
   deployAndLaunchWslOrcad,
-  type WslOrcadDeferredUpdate,
   type WslOrcadDeployOptions,
   type WslOrcadLaunch
 } from './wsl-orcad-deploy'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
-import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
+import { resolveWslOrcadPairing, type WslOrcadPairingRecovery } from './wsl-orcad-pairing-identity'
 import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
 import {
   listenWslOrcadStdioBridgeOnPreferredPort,
   type WslOrcadStdioBridgeOptions
 } from './wsl-orcad-stdio-bridge'
 
-export type WslOrcadConnection = {
-  distro: string
-  environmentId: string
-  /** The loopback port on this machine the pairing offer points at. */
-  localPort: number
-  /** orcad's port inside the distro. */
-  remotePort: number
-  fullVersion: string
-  /** orcad's pid inside the distro, from its pid file; null when unreadable. */
-  pid: number | null
-  /** orcad's pairing code, with its endpoint rewritten to `ws://127.0.0.1:<localPort>`. */
-  pairingOffer: string
-  /** An app update the incumbent `fullVersion` is waiting to take (live terminals). */
-  deferredUpdate: WslOrcadDeferredUpdate | null
-  close(): Promise<void>
-}
-
-type WslOrcadDeferredLaunch = Extract<WslOrcadLaunch, { outcome: 'deferred' }>
-
-/** orcad installed an update it may not activate yet (live terminals); nothing is listening. */
-export class WslOrcadLaunchDeferredError extends Error {
-  constructor(readonly launch: WslOrcadDeferredLaunch) {
-    super(launch.reason)
-    this.name = 'WslOrcadLaunchDeferredError'
-  }
-}
-
-export class WslOrcadConnectionSupersededError extends Error {
-  constructor(distro: string) {
-    super(`The connection to the WSL distro ${distro} was closed while it was being opened.`)
-    this.name = 'WslOrcadConnectionSupersededError'
-  }
-}
+export type { WslOrcadConnection } from './wsl-orcad-connection-types'
 
 export type WslOrcadConnectOptions = {
   environmentId?: string
   label?: string
   /** Rebinds a port a persisted pairing offer already names; 0 or absent picks a free one. */
   localPort?: number
-  force?: boolean
+  intent?: WslHostConnectIntent
   signal?: AbortSignal
   /** What `onChange` reports while this connect runs and once it is ready (liveness recovery). */
   status?: WslOrcadConnectStatus
@@ -89,6 +65,8 @@ export type WslOrcadConnectionDependencies = {
     options: WslOrcadStdioBridgeOptions
   ) => Promise<StartedPortForward>
   verifyIdentity?: (pairingOffer: string, readiness: ServeReadiness) => Promise<OrcadTunnelIdentity>
+  /** Re-pairs a refused enrolled token; without it a refusal fails the connect. */
+  pairingRecovery?: Omit<WslOrcadPairingRecovery, 'environmentId'>
   /** A connection (re)opened, its offer changed, or its status moved; null once it closed. */
   onChange?: (
     distro: string,
@@ -118,10 +96,10 @@ export class WslOrcadConnectionManager {
     const key = wslDistroHolderKey(name)
     const pending = this.inFlight.get(key)
     if (pending) {
-      if (!options.force) {
+      if (!options.intent) {
         return pending
       }
-      // Force needs its own deploy; joining a plain connect would silently drop it.
+      // An Update or Force needs its own deploy; joining a plain connect would silently drop it.
       const generation = this.generation(key)
       return pending
         .catch(() => {})
@@ -140,11 +118,9 @@ export class WslOrcadConnectionManager {
     const operation = this.connect(name, key, options, status).catch((error: unknown) => {
       // Liveness owns the status of its own reconnects; a superseded connect was closed.
       if (!options.status && !(error instanceof WslOrcadConnectionSupersededError)) {
-        this.dependencies.onChange?.(name, this.get(name), {
-          state: 'failed',
-          reason: errorMessage(error),
-          terminals: 'unverifiable'
-        })
+        const deferral = error instanceof WslOrcadLaunchDeferredError ? error.launch : null
+        const failed = wslConnectFailedStatus(errorMessage(error), deferral)
+        this.dependencies.onChange?.(name, this.get(name), failed)
       }
       throw error
     })
@@ -155,6 +131,15 @@ export class WslOrcadConnectionManager {
     })
     this.inFlight.set(key, tracked)
     return tracked
+  }
+
+  /** The persisted enrolled pairing, else the live connection's (a host not yet recorded). */
+  private enrolledOffer(key: string, environmentId: string): PairingOffer | null {
+    const current = this.active.get(key)?.connection
+    return (
+      this.dependencies.getPairingOffer?.(environmentId) ??
+      (current?.environmentId === environmentId ? parsePairingCode(current.pairingOffer) : null)
+    )
   }
 
   get(distro: string): WslOrcadConnection | null {
@@ -177,10 +162,17 @@ export class WslOrcadConnectionManager {
     if (!entry) {
       return
     }
-    this.active.delete(key)
+    await this.drop(key, entry)
+    this.dependencies.onChange?.(entry.connection.distro, null, { state: 'closed' })
+  }
+
+  /** Retires one bridge; unlike close, a connect queued behind it still runs. */
+  private async drop(key: string, entry: ActiveWslOrcadConnection): Promise<void> {
+    if (this.active.get(key) === entry) {
+      this.active.delete(key)
+    }
     await entry.forward.close()
     trackWslOrcadHostEnvironment(entry.connection, null)
-    this.dependencies.onChange?.(entry.connection.distro, null, { state: 'closed' })
   }
 
   async dispose(): Promise<void> {
@@ -211,7 +203,8 @@ export class WslOrcadConnectionManager {
     const launch = await (this.dependencies.deployAndLaunch ?? deployAndLaunchWslOrcad)(distro, {
       environmentId,
       label,
-      force: options.force,
+      intent: options.intent,
+      pairedOffer: this.enrolledOffer(key, environmentId),
       signal: options.signal,
       holder: this.dependencies.holder,
       createTransport: () => transport
@@ -223,11 +216,14 @@ export class WslOrcadConnectionManager {
       throw new WslOrcadConnectionSupersededError(distro)
     }
     const current = this.active.get(key)
-    const paired =
-      this.dependencies.getPairingOffer?.(environmentId) ??
-      (current?.connection.environmentId === environmentId
-        ? parsePairingCode(current.connection.pairingOffer)
-        : null)
+    const persisted = this.dependencies.getPairingOffer?.(environmentId) ?? null
+    const paired = persisted ?? this.enrolledOffer(key, environmentId)
+    // Why only a persisted pairing: the gate re-pairs the stored record, which a host still being
+    // added has not written yet.
+    const recovery =
+      persisted && this.dependencies.pairingRecovery
+        ? { ...this.dependencies.pairingRecovery, environmentId }
+        : undefined
     if (
       current &&
       current.connection.remotePort === launch.port &&
@@ -237,8 +233,14 @@ export class WslOrcadConnectionManager {
         launch,
         current.connection.localPort,
         paired,
-        this.dependencies.verifyIdentity
-      )
+        this.dependencies.verifyIdentity,
+        recovery
+      ).catch(async (error: unknown) => {
+        // Why retire: this bridge holds a token the host refused, and a failure published with it
+        // would store that token over a repair the gate already saved.
+        await this.drop(key, current)
+        throw error
+      })
       if (this.generation(key) !== generation) {
         throw new WslOrcadConnectionSupersededError(distro)
       }
@@ -253,9 +255,7 @@ export class WslOrcadConnectionManager {
     // orcad moved ports (or this is the first connect): the old bridge dials a dead port.
     const preferredLocalPort = current?.connection.localPort ?? options.localPort ?? 0
     if (current) {
-      this.active.delete(key)
-      await current.forward.close()
-      trackWslOrcadHostEnvironment(current.connection, null)
+      await this.drop(key, current)
       this.dependencies.onChange?.(distro, null, status.pending)
     }
     const forward = await listenWslOrcadStdioBridgeOnPreferredPort(
@@ -276,7 +276,8 @@ export class WslOrcadConnectionManager {
         launch,
         forward.entry.localPort,
         paired,
-        this.dependencies.verifyIdentity
+        this.dependencies.verifyIdentity,
+        recovery
       )
       if (this.generation(key) !== generation) {
         throw new WslOrcadConnectionSupersededError(distro)

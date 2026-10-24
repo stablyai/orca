@@ -14,7 +14,7 @@ const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 // Why: the wire endpoints only need the runtime RPC host, the renderer client, and
 // the shared codec, plus a release's relay that an app update leaves running. Skipping cli keeps a cold CI
 // extraction a few seconds.
-// The phone's `worktree ps` row reader is one self-contained file, so it rides along alone.
+// The phone's `worktree ps` row reader rides along alone; it imports only from src/shared.
 // Workspace packages the release declares are added per release (releaseWorkspaceArchivePaths).
 const ARCHIVE_PATHS = [
   'src/main',

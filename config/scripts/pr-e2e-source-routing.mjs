@@ -228,6 +228,16 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    id: 'ssh.orcad-sleep-disconnected',
+    specs: ['tests/e2e/ssh-orcad-sleep-disconnected.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/(?:sleep-|workspace-sleep-))/.test(
+          file
+        ))
+  },
+  {
     id: 'ssh.orcad-idle-exit',
     specs: ['tests/e2e/ssh-orcad-idle-exit.spec.ts'],
     matches: (file) =>
@@ -253,6 +263,17 @@ export const PR_E2E_SOURCE_ROUTES = [
       ) ||
       (isProductSource(file) &&
         /^src\/(?:main\/(?:ssh|managed-server\/[a-z-]+)\/orcad-managed-|main\/ipc\/(?:ssh\/)?ssh-port-forward|main\/(?:ipc\/(?:(?:ssh\/)?ssh-(?:connect-flow|connection-handlers|host-user-disconnect|session-teardown)|(?:runtime-environments\/)?runtime-environment-(?:connectivity-handlers|manual-disconnect))|ssh\/(?:connection\/ssh-connection-manager|ssh-user-disconnect))\.ts$|renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts$|renderer\/src\/runtime\/(?:web-runtime-session|web-session-close-|runtime-terminal-artifact-read\.ts$)|renderer\/src\/components\/terminal-pane\/(?:remote-runtime-|terminal-host-(?:workspace-file|file-link-existence)\.ts$))/.test(
+          file
+        ))
+  },
+  {
+    // A reconnect the host cannot image must still bring an idle full-screen program up to date (#26887).
+    id: 'ssh.orcad-reconnect-idle-frame',
+    specs: ['tests/e2e/ssh-orcad-terminal-reconnect-idle-frame.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:renderer\/src\/components\/terminal-pane\/(?:remote-runtime-|pty-connection\/(?:remote-program-redraw|hidden-output-restore-|park-reveal-snapshot-verdict))|main\/runtime\/rpc\/methods\/terminal\/terminal-(?:multiplex-initial-snapshot|snapshot-publication)\.ts$)/.test(
           file
         ))
   },
@@ -499,6 +520,7 @@ export function selectPrE2eSpecs(
         (file.startsWith('tests/e2e/helpers/') &&
           [...specs].some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))) ||
         file === '.github/workflows/e2e.yml' ||
+        file === '.github/scripts/prepare-ubuntu-apt.sh' ||
         file === 'config/scripts/ci-e2e-job-selection.mjs'
     )
   ) {

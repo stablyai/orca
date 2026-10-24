@@ -34,6 +34,10 @@ import {
   type OrcadMigrationPreflightStore
 } from './targets/ssh-target-orcad-preflight'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
+import {
+  preservesOrcadMigrationBridgedPanes,
+  type OrcadMigrationPaneLeasePredicate
+} from './orcad-migration-bridged-panes'
 
 export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS = 'orcad_migration_leave_behind_terminals'
 export const ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON =
@@ -90,6 +94,7 @@ export async function fenceOrcadMigrationSource(args: {
   destinationName: string
   /** Taken by the caller while the relay could still answer; see orcad-migration-terminal-gate. */
   terminalProof: OrcadMigrationTerminalVerdict
+  isBridgedPaneLease?: OrcadMigrationPaneLeasePredicate
   now?: () => Date
   signal?: AbortSignal
 }): Promise<OrcadMigrationFenceResult> {
@@ -113,14 +118,6 @@ export async function fenceOrcadMigrationSource(args: {
   const proof = args.terminalProof
   if (proof.verdict !== 'exited' && proof.verdict !== 'bridged') {
     return refuse(proof.verdict, 'orcad_migration_terminals', proof.reason)
-  }
-  if (proof.verdict === 'bridged' && target.managedServerLeaveBehind) {
-    // Why: leaving the saved tabs behind drops the identities the relay bridge reattaches through.
-    return refuse(
-      proof.relayVerdict,
-      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
-      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
-    )
   }
   const preflight = preflightOrcadMigrationExport(
     args.store,
@@ -150,6 +147,22 @@ export async function fenceOrcadMigrationSource(args: {
     { ...target, generation },
     { migrationId: randomUUID(), destinationEnvironmentId: args.destinationEnvironmentId }
   )
+  if (
+    proof.verdict === 'bridged' &&
+    target.managedServerLeaveBehind &&
+    !preservesOrcadMigrationBridgedPanes(
+      manifest.payload,
+      args.store.getSshRemotePtyLeases(target.id),
+      proof.bridgedPtyIds,
+      args.isBridgedPaneLease
+    )
+  ) {
+    return refuse(
+      proof.relayVerdict,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS,
+      ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON
+    )
+  }
   // Before the journal: a fence on a manifest no request can carry could never be released.
   assertOrcadMigrationRequestFits({ manifest })
   const cutover: OrcadMigrationSourceCutover = {
@@ -187,7 +200,7 @@ export async function fenceOrcadMigrationSource(args: {
 type FenceReleaseArgs = { userDataPath: string; claims: SshTargetOrcadClaims; signal?: AbortSignal }
 
 /** Undoes a fence nothing remote has seen. */
-export async function releaseUnstagedFence(
+async function releaseUnstagedFence(
   args: FenceReleaseArgs,
   cutover: OrcadMigrationSourceCutover
 ): Promise<void> {

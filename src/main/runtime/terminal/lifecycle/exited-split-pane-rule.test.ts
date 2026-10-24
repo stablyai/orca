@@ -6,8 +6,7 @@ const used: ExitedSplitPaneFacts = {
   freshSpawn: true,
   inputSeen: true,
   outputSeen: true,
-  shown: true,
-  endVouched: true
+  shown: true
 }
 
 describe('exitedSplitPaneOutcome', () => {
@@ -19,10 +18,9 @@ describe('exitedSplitPaneOutcome', () => {
     expect(exitedSplitPaneOutcome({ ...used, exitCode: 1 })).toBe('keep')
   })
 
-  it('closes on a negative code only when the host confirmed it or a stop was asked for', () => {
-    expect(exitedSplitPaneOutcome({ ...used, exitCode: -1 })).toBe('close')
-    expect(exitedSplitPaneOutcome({ ...used, exitCode: -1, endVouched: false })).toBe('keep')
-    expect(exitedSplitPaneOutcome({ ...used, exitCode: -1, endVouched: false }, true)).toBe('keep')
+  it('keeps a pane on any negative code, as the window does: the code proves no death', () => {
+    expect(exitedSplitPaneOutcome({ ...used, exitCode: -1 })).toBe('keep')
+    expect(exitedSplitPaneOutcome({ ...used, exitCode: -1 }, true)).toBe('keep')
   })
 
   it('keeps a newborn split that died while shown before any input or output', () => {

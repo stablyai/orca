@@ -42,6 +42,14 @@ export function httpLinkActionDestinationsFor(
     : { primary: 'system', alternate: 'orca' }
 }
 
+/** A modifier click opens the primary destination; Shift takes the other one. */
+export function httpLinkDirectClickDestination(
+  destinations: HttpLinkActionDestinations,
+  shiftKey: boolean
+): HttpLinkDestination {
+  return shiftKey ? (destinations.alternate ?? destinations.primary) : destinations.primary
+}
+
 export function httpLinkDestinationLabel(destination: HttpLinkDestination): string {
   return destination === 'orca'
     ? translate(

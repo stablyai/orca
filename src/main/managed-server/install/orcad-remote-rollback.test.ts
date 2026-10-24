@@ -1,5 +1,6 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ORCAD_UPDATE_ADMISSION_STOP_BY_MS } from '../../../shared/orcad-terminal-census'
 import type * as RecordFile from './orcad-remote-record-file'
 import type * as InstallLock from './remote-install-lock'
 import type * as TerminalBarrier from '../lifecycle/orcad-rollback-terminal-barrier'
@@ -12,8 +13,8 @@ vi.mock('../../../shared/shell-argument-quoting', () => ({
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('./remote-install-transfers', () => ({
-  writeRelayFile: vi.fn().mockResolvedValue(undefined),
-  uploadRelayDirectory: vi.fn().mockResolvedValue(undefined)
+  writeRemoteInstallFile: vi.fn().mockResolvedValue(undefined),
+  uploadRemoteInstallDirectory: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
@@ -25,13 +26,13 @@ vi.mock('./orcad-remote-record-file', async (importOriginal) => ({
 }))
 
 const barrier = vi.hoisted(() => {
-  const state: { log: string[] | null; state: 'retired' | 'unproven' } = {
+  const state: { log: string[] | null; state: 'retired' | 'unproven' | 'withdrawn' } = {
     log: null,
     state: 'retired'
   }
   return state
 })
-// The managed stop and its terminal barrier are proven in orcad-activation-crash-recovery.test.ts.
+// The real stop/barrier path is covered by orcad-activation-crash-recovery.test.ts.
 vi.mock('../lifecycle/orcad-rollback-terminal-barrier', async (importOriginal) => ({
   ...(await importOriginal<typeof TerminalBarrier>()),
   readOrcadRollbackBarrierTarget: async (_options: unknown, version: string) => ({
@@ -48,6 +49,9 @@ vi.mock('../lifecycle/orcad-rollback-terminal-barrier', async (importOriginal) =
     context: { version: string }
   ) => {
     barrier.log?.push(`stop:${context.version}`)
+    if (barrier.state === 'withdrawn') {
+      return { state: 'withdrawn', reason: 'The stop was cancelled before orcad acted on it.' }
+    }
     return barrier.state === 'retired'
       ? { state: 'retired' }
       : { state: 'unproven', reason: 'A terminal started after the census.' }
@@ -191,6 +195,12 @@ function options(overrides: Partial<OrcadRollbackOptions> = {}): OrcadRollbackOp
     bindHost: '127.0.0.1',
     port: 7777,
     census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    recountCensus: async () => ({
+      liveSessions: 0,
+      startedSinceActivation: 0,
+      daemonProtocolVersion: 3
+    }),
+    releaseIncumbentAdmission: async () => {},
     targetBuildHash: BUILD_HASH,
     targetDaemonProtocol: { protocolVersion: 3, previousProtocolVersions: [1, 2] },
     readinessTimeoutMs: 50,
@@ -210,8 +220,7 @@ describe('rollbackOrcad', () => {
     scriptHost(log)
     const result = await rollbackOrcad(options())
     expect(result).toMatchObject({ outcome: 'rolled-back', target: TARGET })
-    // Restoring under a running orcad would replace the store beneath a process holding it;
-    // starting first would let the older build migrate the newer build's state.
+    // Stop before replacing open state; restore before the older build can migrate it.
     expect(log).toEqual([`stop:${ACTIVE}`, 'rescue', 'restore', `launch:${TARGET}`])
   })
 
@@ -249,6 +258,59 @@ describe('rollbackOrcad', () => {
     })
     expect(log).toEqual([])
     expect(vi.mocked(writeAtomicOrcadRemoteRecord)).not.toHaveBeenCalled()
+  })
+
+  it('counts again under the lock, closing admission, and stops nothing if a terminal opened', async () => {
+    const log: string[] = []
+    scriptHost(log)
+    const releaseIncumbentAdmission = vi.fn(async () => {})
+    const recountCensus = vi.fn(async () => ({
+      liveSessions: 1,
+      startedSinceActivation: 1,
+      daemonProtocolVersion: 3
+    }))
+    const result = await rollbackOrcad(options({ recountCensus, releaseIncumbentAdmission }))
+    expect(result).toMatchObject({ outcome: 'refused', code: 'orcad_rollback_terminals_running' })
+    expect(log).toEqual([])
+    expect(vi.mocked(writeAtomicOrcadRemoteRecord)).not.toHaveBeenCalled()
+    // A serving incumbent must reopen admission immediately.
+    expect(releaseIncumbentAdmission).toHaveBeenCalledOnce()
+  })
+
+  it('stops nothing, reopening admission, once its recount may have outlived the fence', async () => {
+    const log: string[] = []
+    scriptHost(log)
+    let clockMs = Date.parse('2026-02-02T00:00:00.000Z')
+    vi.mocked(writeAtomicOrcadRemoteRecord).mockImplementationOnce(async () => {
+      clockMs += ORCAD_UPDATE_ADMISSION_STOP_BY_MS + 1
+    })
+    const releaseIncumbentAdmission = vi.fn(async () => {})
+    const result = await rollbackOrcad(
+      options({ releaseIncumbentAdmission, now: () => new Date(clockMs) })
+    )
+    expect(result).toMatchObject({ outcome: 'refused', code: 'orcad_rollback_census_unavailable' })
+    expect(log).toEqual([])
+    expect(releaseIncumbentAdmission).toHaveBeenCalledOnce()
+  })
+
+  it('reopens admission when its stop was withdrawn before orcad acted on it', async () => {
+    scriptHost([])
+    barrier.state = 'withdrawn'
+    const releaseIncumbentAdmission = vi.fn(async () => {})
+    await expect(rollbackOrcad(options({ releaseIncumbentAdmission }))).resolves.toMatchObject({
+      code: 'orcad_rollback_stop_withdrawn'
+    })
+    expect(releaseIncumbentAdmission).toHaveBeenCalledOnce()
+  })
+
+  it('keeps admission closed once the rollback stops the server', async () => {
+    const log: string[] = []
+    scriptHost(log)
+    const releaseIncumbentAdmission = vi.fn(async () => {})
+    await expect(rollbackOrcad(options({ releaseIncumbentAdmission }))).resolves.toMatchObject({
+      outcome: 'rolled-back'
+    })
+    expect(releaseIncumbentAdmission).not.toHaveBeenCalled()
   })
 
   it('refuses when the snapshot is gone from the host', async () => {
@@ -302,8 +364,7 @@ describe('rollbackOrcad', () => {
       `stop:${TARGET}`,
       'compare'
     ])
-    // Until the target is proven serving, `active` must still name the version an operator
-    // would have to bring back.
+    // Keep active pointing at the recoverable incumbent until the target proves it is serving.
     expect(
       vi
         .mocked(writeAtomicOrcadRemoteRecord)

@@ -14,7 +14,7 @@ import { Readable } from 'node:stream'
 import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from './remote-exec/remote-exec-command'
-import { RELAY_DEPLOY_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
+import { REMOTE_INSTALL_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { makePosixWriteFileCommand } from './system-transport/system-ssh-file-binary-transfer'
 import { collectLocalUploadPlan } from './system-transport/system-ssh-file-transfer'
@@ -59,7 +59,7 @@ async function writeViaExecStdin(
     conn,
     makeExecStdinWriteFileCommand(remotePath, byteLength, { token, executable }),
     // Why the deploy bound: a runtime archive over a slow link outlasts the 30 s probe default.
-    { signal: options?.signal, stdin, timeoutMs: RELAY_DEPLOY_TIMEOUT_MS }
+    { signal: options?.signal, stdin, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   )
   if (output.trim().split('\n').at(-1) !== EXEC_STDIN_WRITE_DONE) {
     throw new Error(`The host did not confirm the upload of ${remotePath}`)

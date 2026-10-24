@@ -72,7 +72,7 @@ describe('buildAppImageDaemonCommand', () => {
     }
   })
 
-  // Why runIf: the env scrub it reuses is a no-op off Linux.
+  // The reused environment scrub runs only on Linux.
   it.runIf(process.platform === 'linux')(
     'drops the parent mount from the inherited loader and PATH entries',
     () => {

@@ -1,6 +1,7 @@
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({ AppState: {} }))
@@ -16,6 +17,21 @@ import type { Worktree } from '../worktree/workspace-list-types'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenState } from './use-host-screen-state'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
@@ -65,7 +81,7 @@ async function displayedRows(args: {
   }
   let setWorktrees: ((rows: Worktree[]) => void) | undefined
   function Probe(): null {
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })
@@ -138,3 +154,5 @@ describe('SSH host health on the host list rows', () => {
     expect(rows[0].hostContextHealthLabel).toBeUndefined()
   })
 })
+
+afterEach(unmountRenderers)

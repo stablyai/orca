@@ -2,6 +2,7 @@ import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
 } from './structured-agent-session-current-requests'
+import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
 // `agentSession.*` — the structured session RPC surface.
 //
 // Every method here is gated on the client advertising
@@ -72,7 +73,6 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredSessionNeverStarted } from '../../agent-session-record-founding'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY } from '../../../../shared/protocol-version'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   noteStructuredAgentSessionClose,
@@ -153,13 +153,15 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
-      const host = requireStructuredCleanupHost(ctx)
+      requireStructuredCapability(ctx)
+      // Noted before the host is required: a close that fails still refuses the create it raced.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         noteStructuredAgentSessionClose(
           params.sessionId,
-          host.deps.store.getRecord(params.sessionId) !== null
+          (getStructuredAgentSessionHost()?.deps.store.getRecord(params.sessionId) ?? null) !== null
         )
       }
+      const host = requireStructuredCleanupHost(ctx)
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
@@ -175,9 +177,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: SleepWorkspaceParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
+      if (params.markAsleep) {
+        return (await requireInstalledHost(ctx)).sleepWorkspace(params.workspaceId, true)
+      }
       const installed = getStructuredAgentSessionHost()
       if (installed) {
-        return installed.sleepWorkspace(params.workspaceId)
+        return installed.sleepWorkspace(params.workspaceId, params.markAsleep)
       }
       let store: Awaited<ReturnType<typeof ctx.runtime.openAgentSessionRecordStore>>
       try {
@@ -185,14 +190,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       } catch (error) {
         const appeared = getStructuredAgentSessionHost()
         if (appeared) {
-          return appeared.sleepWorkspace(params.workspaceId)
+          return appeared.sleepWorkspace(params.workspaceId, params.markAsleep)
         }
         console.warn('[agent-session] workspace sleep record inventory unavailable', error)
         return { stoppedSessionIds: [], failures: [{ reason: 'inventory-unavailable' }] }
       }
       const appeared = getStructuredAgentSessionHost()
       if (appeared) {
-        return appeared.sleepWorkspace(params.workspaceId)
+        return appeared.sleepWorkspace(params.workspaceId, params.markAsleep)
       }
       try {
         const records = store
@@ -224,7 +229,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = await requireInstalledHost(ctx, params.sessionId)
       return projectTurnItemHistory(
         projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(await host.history(params), ctx),
+          projectBackgroundTaskHistory(
+            await host.history(
+              params,
+              undefined,
+              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+            ),
+            ctx
+          ),
           ctx
         ),
         ctx,
@@ -262,13 +274,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
-        // Desktop snapshots require settled send echoes and independent current requests.
-        snapshotCatchUp:
-          ctx.clientKind === undefined ||
-          ctx.clientKind === 'mobile' ||
-          (ctx.clientCapabilities?.includes(AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY) ===
-            true &&
-            clientReadsCurrentRequests(ctx)),
+        snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
         // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
         ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
       })

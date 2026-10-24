@@ -40,7 +40,6 @@ const login = createCodexAuthJson('me@example.com', 'acct-me', 'external-login')
 
 async function mirrorRouteService(): Promise<CodexRuntimeHomeService> {
   const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-  // The mirror route: the real-home lane is not routable (custom CODEX_HOME or its gate is off).
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
   return new CodexRuntimeHomeService(createStore(createSettings()) as never)
 }
@@ -61,10 +60,8 @@ describe("the catalog probe's home prep on the mirror route", () => {
 
   it('brings a login made in ~/.codex into the mirror before the probe reads it', async () => {
     const service = await mirrorRouteService()
-    // A launch while signed out seeded the mirror with nothing.
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
-    // `codex login` in an outside terminal writes only ~/.codex.
     loginInSystemHome()
 
     service.prepareHostCodexHomeForReadOnlyAppServer(getRuntimeCodexHomePath())

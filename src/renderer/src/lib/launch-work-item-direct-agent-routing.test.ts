@@ -17,7 +17,8 @@ import {
   beginDirectWorkItemStructuredLaunch,
   resolveDirectWorkItemAgent
 } from './launch-work-item-direct-agent-routing'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { useAppStore } from '@/store'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Repo } from '../../../shared/repo-types'
@@ -92,7 +93,7 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
 // Why (#29599): a paired server's new workspace picks from that workspace's agents on the server.
 describe('resolveDirectWorkItemAgent', () => {
   it("asks the paired server for the new workspace's agents", async () => {
-    const store = createTestStore()
+    const store = useAppStore
     const ensureRuntimeDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['claude'])
     const ensureDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['codex'])
     const repo: Repo = {
@@ -103,6 +104,7 @@ describe('resolveDirectWorkItemAgent', () => {
     store.setState({
       repos: [repo],
       worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
+      runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('env-1', 'wt-1')]: ['claude'] },
       settings: { ...store.getState().settings!, defaultTuiAgent: 'claude' },
       ensureRuntimeDetectedAgents,
       ensureDetectedAgents

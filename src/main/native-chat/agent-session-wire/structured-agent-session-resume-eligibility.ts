@@ -1,11 +1,4 @@
-// When a record may be handed back a provider child.
-//
-// This used to be inline in the restart restore, which is what made it a STARTUP rule: every record
-// whose lease looked like this got a child, at launch, whether or not anything was going to look at
-// it. `released` + no handoff is the normal end state of a chat the user closed cleanly, so a
-// healthy profile respawned everything it had ever opened. The predicate itself was never wrong —
-// it answers "may this be resumed", not "should it be" — so it lives here now and the caller that
-// knows a surface is asking is the only one that acts on it.
+// Eligibility permits requested startup; a released saved record alone must never trigger automatic respawn.
 
 import { agentSessionLeaseIsReleased } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -15,10 +8,7 @@ import { attachParamsForRecord } from './structured-agent-session-conversation-o
 import type { StructuredAgentSessionEndedChild } from './structured-agent-session-host-types'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
 
-/** Released, or still held by a child this host saw end at the lease's own fence (`ended`, its
- *  `lastEndedChild`), whose release write did not land: the acquisition probes that owner and
- *  replaces it only once proven dead. Nobody else's exit widens this, so an SSH or unverifiable
- *  owner is refused as before. */
+/** Allow matching observed-ended children despite failed release; acquisition still requires death proof. */
 export function isResumableStructuredAgentSessionRecord(
   record: AgentSessionRecord,
   ended?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
@@ -31,7 +21,6 @@ export function isResumableStructuredAgentSessionRecord(
   )
 }
 
-/** Attach params for a resume, or null when this record's lease is somebody else's problem. */
 export function structuredAgentSessionResumeParams(
   record: AgentSessionRecord,
   clientOperationId: string,
@@ -46,7 +35,7 @@ export function structuredAgentSessionResumeParams(
   })
 }
 
-/** `<13-digit ms>-<32 hex>`, the only operation-id shape the durable ledger admits. */
+/** Match durable-ledger operation-ID shape. */
 export function structuredAgentSessionResumeOperationId(now: number): string {
   return `${Math.trunc(now).toString().padStart(13, '0')}-${randomUUID().replaceAll('-', '')}`
 }

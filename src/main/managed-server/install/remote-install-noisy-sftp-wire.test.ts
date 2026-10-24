@@ -6,12 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { spawnProcess } from '@orca/process-host'
 import { SshConnection } from '../../ssh/connection/ssh-connection'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 type NoisyHost = { port: number; subsystems: number; execs: number; close: () => Promise<void> }
 
-/** sshd starts an external sftp-server and every exec through the user's noisy login shell. */
 async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
   const connections = new Set<Connection>()
   const hostKey = utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
@@ -24,7 +23,7 @@ async function startNoisyHost(startupOutput: string): Promise<NoisyHost> {
     connection.on('ready', () => {
       connection.on('session', (acceptSession) => {
         const session = acceptSession()
-        // No 'sftp' listener: ssh2 hands the raw subsystem channel here, as an external server.
+        // No sftp listener: expose the raw external-server subsystem channel.
         session.on('subsystem', (accept) => {
           host.subsystems += 1
           const channel = accept()
@@ -85,7 +84,6 @@ function connectionWithClient(client: Client): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transfers read only id/host fields of the target.
   const target = { id: 'noisy-sftp', host: '127.0.0.1', port: 22, username: 'fixture' } as SshTarget
   const connection = new SshConnection(target, { onStateChange: vi.fn() })
-  // Inject the already-connected client, as the SFTP wire test does.
   Object.assign(connection, { client, useSystemSshTransport: false })
   return connection
 }
@@ -121,14 +119,14 @@ describe.skipIf(process.platform === 'win32')(
           const conn = connectionWithClient(client)
           const linux = getRemoteHostPlatform('linux-x64')
           const remoteDir = join(remoteRoot, 'relay')
-          await uploadRelayDirectory(conn, localDir, remoteDir, linux)
-          await writeRelayFile(conn, linux, join(remoteDir, '.version'), '0.1.0+noisy')
+          await uploadRemoteInstallDirectory(conn, localDir, remoteDir, linux)
+          await writeRemoteInstallFile(conn, linux, join(remoteDir, '.version'), '0.1.0+noisy')
 
           expect(await readFile(join(remoteDir, 'nested', 'payload.bin'))).toEqual(
             Buffer.from([0, 1, 2, 255])
           )
           expect(await readFile(join(remoteDir, '.version'), 'utf8')).toBe('0.1.0+noisy')
-          // The corrupted handshake is a host verdict: the second write skips SFTP entirely.
+          // A corrupted handshake is cached for this host generation, so later writes skip SFTP.
           expect(host.subsystems).toBe(1)
           expect(host.execs).toBeGreaterThan(0)
         } finally {

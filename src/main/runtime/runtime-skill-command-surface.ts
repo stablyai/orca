@@ -188,9 +188,6 @@ export class RuntimeSkillCommands
   revokeSkillShare(shareId: string, options: SkillCloudOptions) {
     return this.requireCloud().revokeShare(shareId, options)
   }
-  deleteSkillPackageVersion(packageId: string, versionId: string, options: SkillCloudOptions) {
-    return this.requireCloud().deleteVersion(packageId, versionId, options)
-  }
   deleteSkillPackage(packageId: string, options: SkillCloudOptions) {
     return this.requireCloud().deletePackage(packageId, options)
   }

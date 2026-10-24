@@ -33,6 +33,8 @@ import {
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
+import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
+import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -64,12 +66,7 @@ export const WORKTREE_METHODS = [
       worktree: await runtime.showManagedWorktree(params.worktree)
     })
   }),
-  defineMethod({
-    name: 'worktree.sleep',
-    permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.sleepManagedWorktree(params.worktree)
-  }),
+  WORKTREE_SLEEP_METHOD,
   defineMethod({
     name: 'worktree.activate',
     permission: 'workspace',
@@ -280,16 +277,19 @@ export const WORKTREE_METHODS = [
       // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
       const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
       const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
-      const result = await runtime.removeManagedWorktree(params.worktree, {
-        force: params.force === true,
-        runHooks: params.runHooks === true,
-        allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
-        allowFailedArchiveHook: params.allowFailedArchiveHook === true,
-        ...(resolvedHostId ? { hostId: resolvedHostId } : {}),
-        // Why: only a client that shows the `removing` marker can wait out Git's delete; older
-        // clients get the acceptance and never see the row again.
-        ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
-      })
+      const result = await queueWorkspaceDelete(
+        runtime,
+        params.worktree,
+        resolvedHostId,
+        params,
+        (removal) =>
+          runtime.removeManagedWorktree(params.worktree, {
+            ...removal,
+            // Why: only a client that shows the `removing` marker can wait out Git's delete; older
+            // clients get the acceptance and never see the row again.
+            ...(readsWorktreeRemovalMarker(context) ? { waitForBackgroundRemoval: true } : {})
+          })
+      )
       return {
         removed: true,
         ...result,

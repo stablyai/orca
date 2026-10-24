@@ -180,7 +180,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
-          onSleepWorktree: () => () => {},
+          onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
           onNewMarkdownTab: () => () => {},
@@ -219,6 +219,7 @@ describe('useIpcEvents browser tab create routing', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: (listener: NonNullable<typeof activateViewListenerRef.current>) => {
             activateViewListenerRef.current = listener

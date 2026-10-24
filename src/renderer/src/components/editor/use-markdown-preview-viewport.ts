@@ -13,6 +13,7 @@ import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { useMarkdownPreviewDomSearch } from './use-markdown-preview-dom-search'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useMarkdownPreviewViewport({
   foundation,
@@ -39,7 +40,6 @@ export function useMarkdownPreviewViewport({
     inputRef,
     matchesRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     setQuery,
@@ -115,7 +115,6 @@ export function useMarkdownPreviewViewport({
     pendingReviewActionFrameIdsRef.current = []
     const reviewTimeouts = pendingReviewActionTimeoutIdsRef.current
     pendingReviewActionTimeoutIdsRef.current = []
-    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
     clearMarkdownPreviewReviewTimers(attentionReviewCommentTimeoutRef, reviewTimeouts)
     clearReviewNotesCopiedResetTimer()
     clearCopiedReviewNoteResetTimer()
@@ -124,7 +123,6 @@ export function useMarkdownPreviewViewport({
     attentionReviewCommentTimeoutRef,
     clearCopiedReviewNoteResetTimer,
     clearReviewNotesCopiedResetTimer,
-    pendingEditorRevealFrameIdsRef,
     pendingReviewActionFrameIdsRef,
     pendingReviewActionTimeoutIdsRef,
     reviewActionFrameGenerationRef
@@ -270,8 +268,8 @@ export function useMarkdownPreviewViewport({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [
     activeAnnotationBlockKeyRef,
     closeSearch,

@@ -25,7 +25,6 @@ function buildInvocation(): CodexAppServerInvocation {
   }
 }
 
-/** Runs the heal body against a fake app-server that answers thread/read. */
 function fakeAppServer(onRead: (threadId: string) => void = () => {}) {
   const readThreadIds: string[] = []
   const runSession = vi.fn(
@@ -48,7 +47,6 @@ function fakeAppServer(onRead: (threadId: string) => void = () => {}) {
   return { runSession, readThreadIds }
 }
 
-/** Bridged threads keyed by id, all from the same rollout timestamp. */
 function bridged(...threadIds: string[]): Map<string, string> {
   return new Map(threadIds.map((threadId) => [threadId, '2026-07-20T10-00-00']))
 }

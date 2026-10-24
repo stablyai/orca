@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
@@ -29,9 +30,12 @@ export function applyWebSessionTabsSnapshotWithContext(
   batchContext?: WebSessionTabsBatchContext,
   options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  // Why: the floating panel is this machine's own, so only its local chat inventory may write it.
+  const isLocalChatInventory =
+    environmentId === LOCAL_STRUCTURED_SESSION_OWNER && options?.contentScope === 'agent-session'
   if (
     suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot) ||
-    rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID
+    (rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID && !isLocalChatInventory)
   ) {
     return state
   }
@@ -45,23 +49,12 @@ export function applyWebSessionTabsSnapshotWithContext(
     previousSnapshotTabIds && isFrameDrawnServerWorkspace(environmentId, worktreeId)
       ? previousSnapshotTabIds
       : null
-  // A frame-drawn workspace still runs these stages for their intent and id-mapping ledgers; unbatched
-  // so their discarded record copies never reach the batch's shared state.
-  const base = prepareWebSessionTabsSnapshotBase(
-    state,
-    rawSnapshot,
-    environmentId,
-    worktreeId,
-    now,
-    frameDrawnPreviousTabIds ? undefined : batchContext,
-    options
-  )
-  const browser = prepareWebSessionTabsSnapshotBrowser(base)
-  const unified = prepareWebSessionTabsSnapshotUnified(browser)
   if (frameDrawnPreviousTabIds) {
+    // Its tabs, ids and focus are the server frames'; this desktop's writes to it name the server's
+    // ids and keep no close or focus intent, so none of the mirror's ledgers below are kept for it.
     return buildFrameDrawnWorkspaceStatusPatch(
       state,
-      base.snapshot,
+      rawSnapshot,
       environmentId,
       worktreeId,
       frameDrawnPreviousTabIds,
@@ -69,6 +62,19 @@ export function applyWebSessionTabsSnapshotWithContext(
       batchContext
     )
   }
+  // Interim (ledger L240): from here on only for a server without `layout.intents.v1`, until the
+  // Phase 2 server cutoff retires the mirror's tab ids, close and focus intents.
+  const base = prepareWebSessionTabsSnapshotBase(
+    state,
+    rawSnapshot,
+    environmentId,
+    worktreeId,
+    now,
+    batchContext,
+    options
+  )
+  const browser = prepareWebSessionTabsSnapshotBrowser(base)
+  const unified = prepareWebSessionTabsSnapshotUnified(browser)
   const groups = prepareWebSessionTabsSnapshotGroups(unified)
   const terminalRecords = applyTerminalRecordUpdates(groups)
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)

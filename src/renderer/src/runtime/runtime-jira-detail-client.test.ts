@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira-attachment-image'
+import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira/jira-attachment-image'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   jiraAddIssueCommentForTarget,

@@ -1,7 +1,7 @@
 import type { AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import { asRecord } from './session-scanner-record-value'
 import { parseJsonObject } from './session-scanner-values'
-import { transcriptMessagesFromContent } from './session-transcript-message-content'
+import { decodeSessionMessage, type SessionMessageDecodeOptions } from './session-decoded-message'
 
 export function extractOpenCode2MessageText(data: string): string | null {
   const record = parseJsonObject(data)
@@ -27,7 +27,8 @@ export function extractOpenCode2MessageText(data: string): string | null {
 export function decodeOpenCode2Message(
   data: string,
   role: AiVaultSessionPreviewMessage['role'],
-  timestamp: string | null
+  timestamp: string | null,
+  options: SessionMessageDecodeOptions = {}
 ) {
   const record = parseJsonObject(data)
   const content = Array.isArray(record?.content)
@@ -36,6 +37,9 @@ export function decodeOpenCode2Message(
         if (item?.type !== 'tool') {
           return [value]
         }
+        if (options.includeTools === false) {
+          return []
+        }
         const state = asRecord(item.state)
         return [
           { type: 'tool_use', name: item.name, input: state?.input },
@@ -43,7 +47,7 @@ export function decodeOpenCode2Message(
         ]
       })
     : record?.text
-  return transcriptMessagesFromContent(role, content, timestamp)
+  return decodeSessionMessage(role, content, timestamp, options)
 }
 
 export function parseOpenCode2MessageRow(value: unknown) {

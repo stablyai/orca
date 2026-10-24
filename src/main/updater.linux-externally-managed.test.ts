@@ -16,7 +16,6 @@ const {
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
 vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
@@ -30,8 +29,7 @@ vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBui
 const EXTERNALLY_MANAGED_MESSAGE =
   'This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.'
 
-/** #17702: a repackaged install (AUR, Nix, container rebuild) inherits the .deb `package-type`
- *  marker but has no package manager that can apply an Orca-downloaded package. */
+// Repackaged installs can retain the deb marker without a usable package manager.
 warmUpdaterModule()
 
 describe('updater externally managed Linux installs', () => {

@@ -13,6 +13,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getIndexedWorktreesById } from '../../../worktree-repo-index'
 import { worktreeOwnerHostIds } from '@/lib/worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 type WorktreeWithEmbeddedLineage = Worktree & { lineage?: WorktreeLineage | null }
 function getProjectedLineage(get: WorktreeSliceGet, worktree: Worktree): WorktreeLineage | null {
@@ -79,7 +80,8 @@ export function createSetWorktreesPinnedAndReveal(
       const worktreeId = target.id
       // Why: an id names every host's copy; without a host only a lone row is safe to write.
       const current =
-        target.hostId || getIndexedWorktreesById(get().worktreesByRepo, worktreeId).length <= 1
+        target.hostId ||
+        getIndexedWorktreesById(selectWorktreesByRepo(get()), worktreeId).length <= 1
           ? get().getKnownWorktreeById(worktreeId, target.hostId)
           : undefined
       if (!current || current.isPinned === isPinned) {

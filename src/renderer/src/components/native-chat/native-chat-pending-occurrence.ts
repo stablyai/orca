@@ -1,3 +1,4 @@
+import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -170,6 +171,39 @@ export function countLeadingPendingTextsGluedToUserText(
   return 0
 }
 
+// Continuations can finish outside this queue, so only their prefix must be represented.
+function countLeadingPendingTextsRepresentedByUserText(
+  pieces: readonly { text: string; literal: string; continuation: boolean }[],
+  userText: string
+): number {
+  let cursor = 0
+  let opened = 0
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]
+    if (!piece?.text) {
+      return opened
+    }
+    const at = index > 0 && userText[cursor] === ' ' ? cursor + 1 : cursor
+    const literal = piece.continuation && userText.startsWith(piece.literal, at)
+    const text = literal ? piece.literal : piece.text
+    if (!userText.startsWith(text, at)) {
+      return opened
+    }
+    cursor = at + text.length
+    if (
+      piece.continuation &&
+      !literal &&
+      (cursor === userText.length || userText[cursor] === ' ')
+    ) {
+      opened = index + 1
+    }
+    if (cursor === userText.length) {
+      return index > 0 ? index + 1 : opened
+    }
+  }
+  return opened
+}
+
 /** A transcript row a glue match may consume, carrying the send boundaries it
  *  satisfies — this matcher has no clock of its own. */
 export type NativeChatGluedUserRow = {
@@ -190,13 +224,19 @@ export function selectPendingIndicesRepresentedByUserRows(
   rows: readonly NativeChatGluedUserRow[]
 ): Set<number> {
   const represented = new Set<number>()
-  if (pending.length < 2 || rows.length === 0) {
+  const remaining = pending.map((entry, index) => {
+    const continuation = nativeChatContinuationSendText(entry.text)
+    return {
+      index,
+      literal: normalizeNativeChatPendingText(entry.text),
+      text: continuation ?? normalizeNativeChatPendingText(entry.text),
+      continuation: continuation !== null
+    }
+  })
+  // A lone continuation can be represented without a second queued send.
+  if (rows.length === 0 || (pending.length < 2 && !remaining.some((entry) => entry.continuation))) {
     return represented
   }
-  const remaining = pending.map((entry, index) => ({
-    index,
-    text: normalizeNativeChatPendingText(entry.text)
-  }))
   for (const row of rows) {
     const open: typeof remaining = []
     for (const entry of remaining) {
@@ -210,15 +250,11 @@ export function selectPendingIndicesRepresentedByUserRows(
       }
       open.push(entry)
     }
-    const gluedCount = countLeadingPendingTextsGluedToUserText(
-      open.map((entry) => entry.text),
-      row.text
-    )
-    // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
-    if (gluedCount < 2) {
+    const matched = countLeadingPendingTextsRepresentedByUserText(open, row.text)
+    if (matched === 0) {
       continue
     }
-    for (let i = 0; i < gluedCount; i += 1) {
+    for (let i = 0; i < matched; i += 1) {
       const entry = open[i]
       if (!entry) {
         continue

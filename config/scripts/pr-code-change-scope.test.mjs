@@ -339,7 +339,9 @@ describe('per-job path classification', () => {
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
       'src/packages/process-host/src/run-process.ts',
-      'config/scripts/mobile-web-app-route-manifest.mjs',
+      'config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs',
+      'config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.mjs',
+      'config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
@@ -655,7 +657,6 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
     expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
-    expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {

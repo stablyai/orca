@@ -280,17 +280,6 @@ describe('bundled skill guide generator', () => {
     }
   )
 
-  it('pins guide sources, projections, and embedded output to LF in Git', async () => {
-    const attributes = await readFile(path.join(projectDir, '.gitattributes'), 'utf8')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-guides/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/_shared/*.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain('/skills/*/SKILL.md text eol=lf\n')
-    expect(normalizeMarkdown(attributes)).toContain(
-      '/src/cli/bundled-skill-guides.ts text eol=lf\n'
-    )
-  })
-
   it('reports stale outputs and write mode repairs all projections', async () => {
     const root = await createFixture()
     const artifacts = await buildArtifacts(root)

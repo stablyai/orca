@@ -21,25 +21,35 @@ export type ProjectedLayout = { layout: PublishedWorkspaceLayout; json: string }
 
 export type ProjectionStore = Pick<
   RuntimeStore,
-  'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'getPtyBindingGeneration'
+  | 'getWorkspaceSession'
+  | 'getWorkspaceSessionHostIds'
+  | 'getPtyBindingGeneration'
+  | 'getLayoutEditorViews'
 >
 
 /** Partitions to re-project; 'all' when a write did not name its partition. */
 export type DirtyPartitions = Set<ExecutionHostId> | 'all'
 
-/** The context main loads a partition with: its panes' binding generations ride the leaves. */
+/** The context main loads a partition with: its panes' binding generations ride the leaves, and
+ *  its editor tabs' in-memory views ride the workspaces. */
 export function runtimeLayoutLoadContext(
-  store: Pick<RuntimeStore, 'getPtyBindingGeneration'> | null,
+  store: Pick<RuntimeStore, 'getPtyBindingGeneration' | 'getLayoutEditorViews'> | null,
   hostId: ExecutionHostId
 ): WorkspaceLayoutLoadContext {
-  const generationOf = store?.getPtyBindingGeneration
-  // Switch point: a window-owned build publishes no generation.
-  return ORCA_LAYOUT_OWNER_IS_MAIN && generationOf
-    ? {
-        ...nameBasedLoadContext(),
-        ptyGenerationOf: (leafId) => generationOf.call(store, hostId, leafId)
-      }
-    : nameBasedLoadContext()
+  // Switch point: a window-owned build publishes no generation and keeps no view.
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN || !store) {
+    return nameBasedLoadContext()
+  }
+  const generationOf = store.getPtyBindingGeneration
+  const views = store.getLayoutEditorViews?.(hostId)
+  return {
+    ...nameBasedLoadContext(),
+    ...(generationOf
+      ? { ptyGenerationOf: (leafId: string) => generationOf.call(store, hostId, leafId) }
+      : {}),
+    // A partition with no view yet still loads as one whose views are known (none held).
+    ...(store.getLayoutEditorViews ? { editorViewsOf: (key: string) => views?.[key] } : {})
+  }
 }
 
 /** One partition as loaded once: its model, and each workspace published from it on first ask. */

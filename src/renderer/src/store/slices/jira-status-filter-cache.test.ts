@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { JiraIssue, JiraIssueListFilters } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraIssueListFilters } from '../../../../shared/jira/jira-types'
 import { createJiraSlice } from './jira'
 const { list } = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/runtime/runtime-jira-client', () => ({

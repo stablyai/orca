@@ -5,6 +5,7 @@ import type {
 import {
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
+  AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
@@ -12,6 +13,17 @@ import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/
 export type AgentLaunchSettingsOwner = {
   environmentId: string
   pairingRevision?: number
+  runtimeId?: string
+}
+
+type SettingsListener = (owner: AgentLaunchSettingsOwner) => void
+const settingsListeners = new Set<SettingsListener>()
+
+export function subscribeHostAgentLaunchSettings(listener: SettingsListener): () => void {
+  settingsListeners.add(listener)
+  return () => {
+    settingsListeners.delete(listener)
+  }
 }
 
 export async function readHostAgentLaunchSettings(
@@ -21,7 +33,8 @@ export async function readHostAgentLaunchSettings(
   if (
     !(await runtimeEnvironmentSupportsCapability(
       owner.environmentId,
-      AGENT_LAUNCH_SETTINGS_CAPABILITY
+      AGENT_LAUNCH_SETTINGS_CAPABILITY,
+      15_000
     ))
   ) {
     return null
@@ -30,7 +43,12 @@ export async function readHostAgentLaunchSettings(
     { kind: 'environment', environmentId: owner.environmentId },
     'settings.getAgentLaunch',
     undefined,
-    { expectedEnvironmentPairingRevision: owner.pairingRevision, signal, timeoutMs: 15_000 }
+    {
+      expectedEnvironmentPairingRevision: owner.pairingRevision,
+      ...(owner.runtimeId ? { expectedEnvironmentRuntimeId: owner.runtimeId } : {}),
+      signal,
+      timeoutMs: 15_000
+    }
   )
   return result.settings
 }
@@ -65,12 +83,24 @@ export async function mutateHostAgentLaunchSettings(
   ) {
     throw new Error('agent_launch_native_chat_permissions_unsupported')
   }
+  if (
+    (mutation.type === 'permission' || mutation.type === 'user-arguments') &&
+    !(await runtimeEnvironmentSupportsCapability(
+      owner.environmentId,
+      AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY
+    ))
+  ) {
+    throw new Error('agent_launch_permission_choice_unsupported')
+  }
   const result = await callRuntimeRpc<{ settings: AgentLaunchSettings }>(
     { kind: 'environment', environmentId: owner.environmentId },
     'settings.mutateAgentLaunch',
     mutation,
     { expectedEnvironmentPairingRevision: owner.pairingRevision, signal, timeoutMs: 15_000 }
   )
+  if (!signal?.aborted) {
+    settingsListeners.forEach((listener) => listener(owner))
+  }
   return result.settings
 }
 

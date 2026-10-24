@@ -27,10 +27,13 @@ import {
 import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
+  chooseProfileStateRepair,
   presentProfileStateStartupRecoveryDialog,
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
+import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
@@ -57,7 +60,7 @@ function requestDesktopActivation(argv: readonly string[] = [], launchPayload?: 
     launchPayload,
     isSidecar: isOrcadSidecarLaunch()
   })
-  // Why: the sidecar's throwaway profile must never become the user's window.
+  // The sidecar’s throwaway profile must never become the user’s window.
   if (action === 'handoff') {
     requestDesktopHandoff()
     return
@@ -71,19 +74,13 @@ function requestDesktopActivation(argv: readonly string[] = [], launchPayload?: 
   state.desktopActivationGate?.requestActivation()
 }
 
-/**
- * Hands buffered OS-opened document paths to a renderer that has proven it is listening.
- *
- * Until that proof arrives the paths stay buffered, because `webContents.send` to a renderer
- * with no listener attached is dropped silently and the queue would be gone.
- */
+/** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
 function publishOsOpenedDocuments(): void {
   const targetWindow = state.mainWindow
   if (!state.osDocumentOpenListenerReady || !targetWindow || targetWindow.isDestroyed()) {
     return
   }
-  // Why consumed before the await: a renderer pull racing this resolve must not take the same
-  // batch again. The restore() calls hand it back if delivery turns out to be impossible.
+  // Consume before awaiting to prevent duplicate renderer pulls; restore if delivery fails.
   const filePaths = state.osOpenedDocuments.consume()
   if (filePaths.length === 0) {
     return
@@ -114,7 +111,7 @@ const preflightReady = runMainProcessPreflight({
   requestDesktopActivation
 })
 
-// Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
+// Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
   void leaseAppImageGenerationForCurrentProcess()
   app.on('open-url', (event, url) => {
@@ -124,21 +121,19 @@ if (preflightReady) {
     event.preventDefault()
     requestDesktopActivation([url])
   })
-  // Why: macOS delivers "Open With" as open-file, often before `ready`, and only to a handler
-  // that claims the event. Unsupported paths stay unclaimed.
+  // macOS can deliver Open With before ready; claim only supported paths.
   app.on('open-file', (event, filePath) => {
     if (!state.osOpenedDocuments.captureFilePaths([filePath], publishOsOpenedDocuments)) {
       return
     }
     event.preventDefault()
-    // Why gated on isReady: pre-ready the cold-start window is already on its way, and
-    // activating the gate here would try to open one before Electron can. The sidecar has none.
+    // Cold-start activation must wait for Electron readiness; sidecars have no pending window.
     if (app.isReady() || isOrcadSidecarLaunch()) {
       requestDesktopActivation()
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
-  // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
+  // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
@@ -161,8 +156,8 @@ if (preflightReady) {
       console.error(`[profile-state] ${message}`)
       if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
+          const userDataPath = getProfileUserDataPath()
           if (isDivergedProfileStateFailure(error)) {
-            const userDataPath = app.getPath('userData')
             const choice = await chooseProfileStateCopy({
               ...readProfileStateCopySavedTimes(userDataPath),
               showMessageBox: (options) => dialog.showMessageBox(options)
@@ -173,6 +168,31 @@ if (preflightReady) {
                 args: profileStateDesktopRecoveryArgs(process.argv, {
                   userDataPath,
                   selector: { kind: choice }
+                })
+              })
+            }
+            app.exit(1)
+            return
+          }
+          if (
+            error instanceof ProfileStateRecoveryRequiredError &&
+            error.repairableSections !== undefined
+          ) {
+            const sections = error.repairableSections
+            if (
+              await chooseProfileStateRepair({
+                sections,
+                showMessageBox: (options) => dialog.showMessageBox(options)
+              })
+            ) {
+              app.relaunch({
+                args: profileStateDesktopRecoveryArgs(process.argv, {
+                  userDataPath,
+                  profileId: error.profileId,
+                  selector: {
+                    kind: 'repair',
+                    sections: sections.map(({ domain, backupId }) => ({ domain, backupId }))
+                  }
                 })
               })
             }

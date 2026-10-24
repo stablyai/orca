@@ -12,7 +12,6 @@ import type { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat
 export function useMobileNativeChatRowRenderer({
   rowKeyOf,
   runOwners,
-  toolsExpanded,
   taskListPredecessors,
   fontScale,
   onOpenFile,
@@ -26,7 +25,6 @@ export function useMobileNativeChatRowRenderer({
   /** The row's place on the page, kept while older messages join it. */
   rowKeyOf: (message: NativeChatMessage) => string
   runOwners: ReadonlyMap<string, string>
-  toolsExpanded: boolean
   /** The last plan each task-list tool wrote before each row, by row id. */
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   fontScale: number
@@ -47,7 +45,6 @@ export function useMobileNativeChatRowRenderer({
       <MobileNativeChatMessage
         message={item}
         rowKey={rowKeyOf(item)}
-        toolsExpanded={toolsExpanded}
         // The calls, not the record: a rebuilt record would defeat the row's memo.
         previousTodoWrite={taskListPredecessors.get(item.id)?.todowrite}
         previousUpdatePlan={taskListPredecessors.get(item.id)?.update_plan}
@@ -65,7 +62,6 @@ export function useMobileNativeChatRowRenderer({
     [
       rowKeyOf,
       runOwners,
-      toolsExpanded,
       taskListPredecessors,
       fontScale,
       onOpenFile,

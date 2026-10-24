@@ -1,6 +1,7 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   detectAgentStatusFromTitle,
@@ -105,7 +106,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -144,7 +145,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
     const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -201,7 +202,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
     const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
@@ -255,7 +256,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
     const uninstallRepublish = statusWiring.attach(runtime)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,

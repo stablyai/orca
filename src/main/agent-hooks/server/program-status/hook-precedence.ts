@@ -1,30 +1,32 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
-/** Hook silence, while OSC 7501 disagrees, before OSC 7501 takes the pane. Why minutes: a long
- *  tool call sends no hooks but leaves the program's state unchanged, so only old disagreement counts. */
+// Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
-/** Whether an OSC 7501 projection must leave the pane's hook row alone: hooks carry richer identity,
- *  so they win until silent on a state they no longer describe. A later hook event hands it back. */
-export function programStatusYieldsToHookRow(
+/** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
+export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: ParsedAgentStatusPayload,
-  now: number
-): boolean {
+  programWorkingSince?: number
+): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
-    return false
+    return undefined
   }
   const sameAgent =
     payload.agentType === undefined || payload.agentType === previous.payload.agentType
-  // A different app after the hook agent finished is a new program in the pane. Mid-turn, the hook
-  // row still wins over another app id: forks report upstream's app (OpenClaude says claude-code).
+  // Different app IDs can be forks; only a completed hook agent lets a different program take over immediately.
   if (!sameAgent && previous.payload.state === 'done') {
-    return false
+    return undefined
   }
-  const hookSilentForMs = now - previous.receivedAt
-  return (
-    payload.state === previous.payload.state ||
-    hookSilentForMs < HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
-  )
+  if (payload.state === previous.payload.state) {
+    return Infinity
+  }
+  // Settled turns are naturally silent; a later wait must prove intervening program work.
+  if (previous.payload.state === 'done' && payload.state === 'waiting') {
+    return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
+      ? undefined
+      : Infinity
+  }
+  return previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
 }

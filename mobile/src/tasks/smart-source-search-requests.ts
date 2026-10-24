@@ -3,12 +3,12 @@ import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
-import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira-types'
+import type { JiraIssue, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
 import { getJiraIssueSearchQuery } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   buildJiraIssueKeyJql,
   buildJiraTextMatchJql
-} from '../../../src/shared/jira-search-input-jql'
+} from '../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from './mobile-jira-operations'
 import { repoBaseRefSearchRead } from './mobile-workspace-source-operations'
 import {

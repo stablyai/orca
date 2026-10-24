@@ -113,6 +113,31 @@ describe('what the next startup reconnects comes from main, not the window’s s
     expect(saved.activeWorktreeIdsOnShutdown).toEqual([])
   })
 
+  it.each(['live', 'quit'] as const)(
+    'a running agent’s %s resume record is not a sleep: its relay session reconnects',
+    (origin) => {
+      const stored = sshPartition()
+      stored.sleepingAgentSessionsByPaneKey = {
+        [`tab-s:${leaf(3)}`]: {
+          paneKey: `tab-s:${leaf(3)}`,
+          worktreeId: SSH_KEY,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin
+        }
+      }
+
+      const saved = windowViewSaveForMain(stored, stored, SSH_HOST, factsFor([], []))
+
+      expect(saved.remoteSessionIdsByTabId).toEqual({ 'tab-s': RELAY })
+      expect(saved.activeWorktreeIdsOnShutdown).toEqual([SSH_KEY])
+    }
+  )
+
   it('a target the user left offline is not redialed; a connected one is', () => {
     const stored = sshPartition()
 

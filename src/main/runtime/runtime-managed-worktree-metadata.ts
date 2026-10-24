@@ -1,8 +1,8 @@
+import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
@@ -174,13 +174,8 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     }
   }
   for (const [repoId, sortOrders] of updatesByRepo) {
-    const hosts = new Set(
-      args.store
-        .getRepos()
-        .filter((repo) => repo.id === repoId)
-        .map(getRepoExecutionHostId)
-    )
-    args.notifyChanged(repoId, hosts.size > 1 ? undefined : sortOrders)
+    const isTwin = getRepoRegistrationHostIds(args.store.getRepos(), repoId).size > 1
+    args.notifyChanged(repoId, isTwin ? undefined : sortOrders)
   }
   return { updated: updates.length }
 }

@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import { detectLanguage } from '@/lib/language-detect'
 import {
@@ -64,7 +64,7 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   // renders through was minted against the worktree's owner at render time, and a tab opened or
   // restored before that owner was known still carries null — which reads as local.
   const runtimeEnvironmentId =
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, document.worktreeId) ??
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, document.worktreeId) ??
     document.runtimeEnvironmentId
   const fileContext = buildWorkspaceFileContextForFile(
     document.worktreeId,

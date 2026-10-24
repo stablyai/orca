@@ -22,6 +22,8 @@ import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
+import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
+import { withRememberedNativeChatIdentity } from './mobile-native-chat-eligibility'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 
@@ -63,10 +65,14 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         return { accepted: false }
       }
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
-      let nextTabs = applyClosedTabTombstones(
-        result.tabs,
-        closedTabTombstonesRef.current,
-        Date.now()
+      const now = Date.now()
+      let nextTabs = withRememberedNativeChatIdentity(
+        withSessionTabStatusReceipts(
+          applyClosedTabTombstones(result.tabs, closedTabTombstonesRef.current, now),
+          sessionTabsRef.current,
+          now
+        ),
+        sessionTabsRef.current
       )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []

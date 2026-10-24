@@ -14,6 +14,7 @@ import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /** The chat's find: open state and query live with the chat, so a reopen keeps the last query. */
 export type NativeChatFind = {
@@ -122,8 +123,8 @@ export function useNativeChatFind(
         open()
       }
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [enabled, open, rootRef])
 
   // Why React capture on the root: it runs before the composer's own onKeyDownCapture (outer

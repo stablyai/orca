@@ -1,5 +1,9 @@
 import type { SidebarFeedDomains } from '../../../src/shared/sidebar-list/sidebar-feed-domains'
 import type { WorkspaceRow } from '../../../src/shared/sidebar-list/workspace-rows'
+import {
+  parseWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../src/shared/worktree/host-qualified-identity'
 import type { ServedProjectSections } from '../worktree/project-sections-operations'
 import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -51,12 +55,21 @@ export const FEED_ROWS = {
   remote: feedRow({ id: 'lab::/w/gpu', hostId: 'ssh:gpu', repoId: 'lab', manualOrder: 3 })
 }
 
+/** A row identity written as its text, as the feed carries it. */
+export function feedKey(identity: string): HostScopedWorktreeKey {
+  const key = parseWorktreeHostIdentity(identity)
+  if (!key) {
+    throw new Error(`not a row identity: ${identity}`)
+  }
+  return key
+}
+
 export function feedDomains(overrides: Partial<SidebarFeedDomains> = {}): SidebarFeedDomains {
   return {
     workspaces: new Map([
-      ['|orca::/w/parent', FEED_ROWS.parent],
-      ['|orca::/w/child', FEED_ROWS.child],
-      ['ssh:gpu|lab::/w/gpu', FEED_ROWS.remote]
+      [feedKey('|orca::/w/parent'), FEED_ROWS.parent],
+      [feedKey('|orca::/w/child'), FEED_ROWS.child],
+      [feedKey('ssh:gpu|lab::/w/gpu'), FEED_ROWS.remote]
     ]),
     activity: new Map(),
     review: new Map(),

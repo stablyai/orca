@@ -36,7 +36,7 @@ export type OrcadMigrationBlobDestination = {
   stageChunk: (request: OrcadMigrationBlobChunkRequest) => Promise<OrcadMigrationBlobChunkResult>
 }
 
-export type OrcadMigrationBlobTransfer = {
+type OrcadMigrationBlobTransfer = {
   source: OrcadMigrationBlobSource
   manifest: OrcadMigrationManifest
   blobs: readonly OrcadMigrationBlobDescriptor[]

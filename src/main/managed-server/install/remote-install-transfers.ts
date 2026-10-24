@@ -1,6 +1,3 @@
-// Relay-install file writes over the host transport's own transfer methods (SFTP on SSH). When
-// the host definitively refuses SFTP, POSIX hosts fall back to exec-channel stdin.
-
 import type { RemoteInstallTransport } from './remote-install-transport'
 import type { SftpNamespacePathMapping } from '../../ssh/sftp-namespace-resolution'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
@@ -16,43 +13,43 @@ import {
 import { isSftpHandshakeCorruption } from '../../ssh/sftp-handshake-corruption'
 import { explainRemoteInstallWriteFailure, localTreeBytes } from './remote-install-out-of-space'
 
-export type RelayTransferOptions = {
+type RemoteInstallTransferOptions = {
   signal?: AbortSignal
   sftpNamespace?: SftpNamespacePathMapping
 }
 
-export async function uploadRelayDirectory(
+export async function uploadRemoteInstallDirectory(
   conn: RemoteInstallTransport,
-  localRelayDir: string,
+  localDir: string,
   shellRemoteDir: string,
   hostPlatform: RemoteHostPlatform,
-  options?: RelayTransferOptions
+  options?: RemoteInstallTransferOptions
 ): Promise<void> {
   await transferWithExecStdinFallback(
     conn,
     hostPlatform,
     shellRemoteDir,
     options?.signal,
-    () => localTreeBytes(localRelayDir),
+    () => localTreeBytes(localDir),
     () =>
-      conn.uploadDirectory(localRelayDir, shellRemoteDir, {
+      conn.uploadDirectory(localDir, shellRemoteDir, {
         hostPlatform,
         signal: options?.signal,
         sftpNamespace: options?.sftpNamespace
       }),
     () =>
-      uploadDirectoryViaExecStdin(conn, localRelayDir, shellRemoteDir, hostPlatform, {
+      uploadDirectoryViaExecStdin(conn, localDir, shellRemoteDir, hostPlatform, {
         signal: options?.signal
       })
   )
 }
 
-export async function writeRelayFile(
+export async function writeRemoteInstallFile(
   conn: RemoteInstallTransport,
   hostPlatform: RemoteHostPlatform,
   shellRemotePath: string,
   contents: string,
-  options?: RelayTransferOptions
+  options?: RemoteInstallTransferOptions
 ): Promise<void> {
   await transferWithExecStdinFallback(
     conn,
@@ -70,17 +67,14 @@ export async function writeRelayFile(
   )
 }
 
-export type SftpExecFallbackReason = 'sftp-unavailable' | 'sftp-sandboxed'
+type SftpExecFallbackReason = 'sftp-unavailable' | 'sftp-sandboxed'
 
-/**
- * Only the host's own answer about SFTP selects exec stdin. A lost transport, a timeout or an
- * abort is unverifiable and must surface, never retry down another path.
- */
+/** Retry via exec stdin only on definitive SFTP refusal; uncertain transfers must surface. */
 export function classifySftpFailureForExecFallback(error: unknown): SftpExecFallbackReason | null {
   if (!(error instanceof Error) || isUnconfirmedSshCommandTermination(error)) {
     return null
   }
-  // ssh2's words when sshd refuses the subsystem (no `Subsystem sftp`, e.g. #12868 Synology).
+  // ssh2 reports this when sshd refuses the subsystem (e.g. Synology #12868).
   if (error.message === 'Unable to start subsystem: sftp') {
     return 'sftp-unavailable'
   }
@@ -92,14 +86,13 @@ export function classifySftpFailureForExecFallback(error: unknown): SftpExecFall
   if (isSftpHandshakeCorruption(error)) {
     return 'sftp-unavailable'
   }
-  // A shell-created path the SFTP view cannot see: a chrooted subsystem (#15479).
+  // Chrooted SFTP cannot see paths created through the shell (#15479).
   if (isSandboxedSftpNamespaceError(error)) {
     return 'sftp-sandboxed'
   }
   return null
 }
 
-/** Exec stdin needs a POSIX shell; the system-SSH transport never used SFTP for these writes. */
 function canFallBackToExecStdin(
   conn: RemoteInstallTransport,
   hostPlatform: RemoteHostPlatform
@@ -107,8 +100,7 @@ function canFallBackToExecStdin(
   return !isWindowsRemoteHost(hostPlatform) && conn.usesSystemSshTransport?.() !== true
 }
 
-// Why per connect generation: a refused subsystem is a host verdict, but a reconnect may reach
-// a different host behind the same alias.
+// Reconnect may reach a different host behind the same alias; scope cached refusal by generation.
 const sftpUnavailableGeneration = new WeakMap<RemoteInstallTransport, number>()
 
 function connectGeneration(conn: RemoteInstallTransport): number {
@@ -167,7 +159,7 @@ async function transferOnce(
       sftpUnavailableGeneration.set(conn, connectGeneration(conn))
     }
     console.warn(
-      `[ssh-relay] SFTP ${reason === 'sftp-unavailable' ? 'is unavailable' : 'cannot see the install path'} (${error instanceof Error ? error.message : String(error)}); streaming ${remotePath} over exec stdin`
+      `[ssh] SFTP ${reason === 'sftp-unavailable' ? 'is unavailable' : 'cannot see the install path'} (${error instanceof Error ? error.message : String(error)}); streaming ${remotePath} over exec stdin`
     )
   }
   await execStdinTransfer()

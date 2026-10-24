@@ -66,11 +66,8 @@ describe('registerPtyHandlers', () => {
         daemonSpawnAndGetEnv
       } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
-      // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('strips inherited Claude child-session stamps from a local runtime-created PTY', async () => {
-        // Why: the runtime strip is deliberately not gated on isDaemonHostSpawn, so
-        // the local provider — which spreads main's own process.env — needs its own
-        // case; a daemon-only test would still pass if someone added that gate.
+        // Local providers inherit main's env too; daemon-only coverage would miss an incorrectly gated strip.
         type RuntimeSpawnController = {
           spawn(args: {
             cols: number
@@ -139,7 +136,7 @@ describe('registerPtyHandlers', () => {
           leafId
         })
 
-        // Why: runtime-created spawns must thread {tabId, leafId} so the catch-path rescue can keep their live PTY (#7587).
+        // Runtime spawns need tab/leaf identity for catch-path live-PTY rescue (#7587).
         expect(runtime.registerPty).toHaveBeenCalledWith(
           expect.any(String),
           'wt-runtime',
@@ -454,8 +451,7 @@ describe('registerPtyHandlers', () => {
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
-        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
-        // the promotion below has something to beat instead of passing trivially.
+        // Development mode guarantees a CLI shim exists for this ordering check.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prevPackaged = mockedApp.isPackaged
@@ -501,8 +497,7 @@ describe('registerPtyHandlers', () => {
         }
       })
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
-        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
-        // the promotion below has something to beat instead of passing trivially.
+        // Development mode guarantees a CLI shim exists for this ordering check.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prevPackaged = mockedApp.isPackaged
@@ -534,7 +529,6 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
       it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
-        // Why: the mocked `app` is a plain object, so we can flip isPackaged for the test's scope.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
@@ -565,8 +559,7 @@ describe('registerPtyHandlers', () => {
         }
       })
       it('drops a legacy shim PATH entry inherited from the host process on the daemon path', async () => {
-        // Why: the daemon path passes a sparse env, so the prepends re-read PATH from
-        // process.env — the scrub must outlive that fallback (pre-upgrade host or parent pane).
+        // Sparse daemon env rereads ambient PATH; scrubbing must survive that fallback.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged

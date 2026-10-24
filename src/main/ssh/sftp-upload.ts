@@ -26,7 +26,7 @@ function watchSessionClose(sftp: SFTPWrapper): { closed: Promise<'closed'>; rele
   return { closed, release: () => sftp.removeListener('close', onClose) }
 }
 
-export function mkdirSftp(
+function mkdirSftp(
   sftp: SFTPWrapper,
   path: string,
   options?: { allowExisting?: boolean }

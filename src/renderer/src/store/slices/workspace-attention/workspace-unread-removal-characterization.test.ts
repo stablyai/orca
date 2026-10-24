@@ -18,6 +18,7 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn, ringBell } from './workspace-unread-characterization-driver'
+import { drawTabsFromMain, type TabsDrawnFromMain } from '../tabs-drawn-from-main.test-fixture'
 
 // Pins what removing a tab or pane does to unread: its markers go, and a workspace whose removed
 // marker was its last live one is read.
@@ -41,6 +42,20 @@ vi.mock('../worktrees/metadata/worktree-meta-persist', async (importOriginal) =>
   return { ...actual, persistWorktreeMeta: vi.fn(async () => undefined) }
 })
 
+// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
+let main: TabsDrawnFromMain | undefined
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -52,6 +67,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  main?.close()
+  main = undefined
   vi.useRealTimers()
 })
 
@@ -124,7 +141,7 @@ describe('closing tabs', () => {
     `)
   })
 
-  it('closing a structured chat tab removes its markers', () => {
+  it('closing a structured chat tab removes its markers', async () => {
     const { store, persists } = createAttentionStore({ experimental: true })
     const chat = store.getState().createUnifiedTab(WS_A, 'agent-session', {
       id: 'chat-1',
@@ -136,9 +153,11 @@ describe('closing tabs', () => {
       unreadTerminalPanes: { [paneKey]: 'agent-completion' },
       unreadAgentCompletionPanes: { [paneKey]: 'agent-completion' }
     })
+    main = await drawTabsFromMain(store)
     observe(store, persists)
 
     store.getState().closeUnifiedTab(chat.id)
+    await main.settle()
     expect(observe(store, persists)).toMatchInlineSnapshot(`
       [
         "rows a@local:read:0 b@local:read:0 sortEpoch=0",

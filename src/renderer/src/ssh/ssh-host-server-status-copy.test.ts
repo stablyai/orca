@@ -297,6 +297,36 @@ describe('SSH host server status line', () => {
     expect(sshConnectFailureText(undefined, 'raw')).toBe('raw')
   })
 
+  it('names what refuses the move, in the status line and the connect toast', () => {
+    const detail =
+      'This host’s Orca server already holds different saved state for something this desktop is moving, so nothing was moved and this desktop keeps its projects. Retrying won’t clear it. (orcad_migration_client_state_conflict:ui:workspaceHostScope)'
+    const state = {
+      managedServer: { kind: 'relay' as const, reason: 'refused' as const, detail }
+    }
+    const line = sshHostServerStatusLine(plain, state)
+    expect(line).toMatchObject({ tone: 'destructive', detail })
+    expect(line?.text).toContain('workspaceHostScope')
+    expect(line?.text).not.toContain('something on the host stops the move')
+    expect(sshConnectFailureText(state, 'raw')).toContain('already holds different saved state')
+  })
+
+  it('caps a long refusal in the Settings row, but not where there is no Details', () => {
+    const detail = `This SSH host cannot move yet: ${'saved tabs and panes (a); '.repeat(60)}then connect again.`
+    const state = { managedServer: { kind: 'relay' as const, reason: 'refused' as const, detail } }
+    const line = sshHostServerStatusLine(plain, state)
+    expect(line?.detail).toBe(detail)
+    expect(line?.text.length).toBeLessThan(400)
+    expect(line?.text).toContain('This SSH host cannot move yet')
+    // The terminal pane and toast keep the way out, which comes last.
+    expect(sshConnectFailureText(state, 'raw')).toContain('then connect again.')
+  })
+
+  it('keeps the plain refusal line when main named no reason', () => {
+    expect(
+      sshHostServerStatusLine(plain, { managedServer: { kind: 'relay', reason: 'refused' } })?.text
+    ).toContain('Orca isn’t set up on this host yet')
+  })
+
   it('says a host an older Orca changed is blocked until moved, not served by the relay', () => {
     const changed = sshHostServerStatusLine(
       { label: 'Box', orcadFence: { environmentId: 'e', sourceChangedAt: '2026-10-05T00:00:00Z' } },

@@ -9,7 +9,6 @@ const OK = {
   profile: { accessToken: 't', email: null, membershipType: null, subscriptionStatus: null }
 }
 
-// Records posted requests and lets a test drive message/exit without a built worker.
 class FakeWorker implements WorkerRequestTransport {
   posted: ForeignSqliteReaderRequest[] = []
   terminated = false
@@ -144,7 +143,7 @@ describe('ForeignSqliteReaderClient', () => {
       },
       log: (message) => logs.push(message)
     })
-    // A real path: a main-thread fallback would read it and answer `ok`.
+    // An existing path would expose an accidental main-thread fallback.
     await expect(client.readCursorProfile(__filename)).resolves.toEqual(FAILURE)
     expect(logs.join('\n')).toContain('entry not found')
     client.dispose()
@@ -160,7 +159,6 @@ describe('ForeignSqliteReaderClient', () => {
     workers[0]?.reply(OK)
     await expect(Promise.all([first, second])).resolves.toEqual([OK, OK])
 
-    // Settled reads are not cached: the next call reads again.
     const third = client.readCursorProfile('/a/state.vscdb')
     await settle()
     expect(workers[0]?.posted).toHaveLength(2)
@@ -200,7 +198,6 @@ describe('ForeignSqliteReaderLane', () => {
       dbPath: '/quick.db'
     }))
     expect(workers).toHaveLength(2)
-    // The second reader answers while the first is still stuck on its database.
     workers[1]?.reply('quick')
     await expect(quick).resolves.toBe('quick')
     workers[0]?.reply('slow')
@@ -222,7 +219,6 @@ describe('ForeignSqliteReaderLane', () => {
         idleTeardownMs: 30_000
       }
     )
-    // One active plus eight queued fill the lane; the tenth distinct read is refused.
     const reads = Array.from({ length: 10 }, (_, index) =>
       lane.read(`/db-${index}`, (id) => ({ id, kind: 'cursorProfile', dbPath: `/db-${index}` }))
     )

@@ -1,5 +1,5 @@
 import React from 'react'
-import { jiraImageReference } from '../../../../shared/jira-attachment-image'
+import { jiraImageReference } from '../../../../shared/jira/jira-attachment-image'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
 import {

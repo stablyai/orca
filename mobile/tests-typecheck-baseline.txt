@@ -17,15 +17,12 @@ src/components/agent-monitoring-indicators.test.ts
 src/components/bottom-drawer-close-lifecycle.test.ts
 src/components/bottom-drawer-window-handback.test.ts
 src/components/codex-reset-credit-capability.test.ts
-src/components/mobile-agent-icon-gradient.test.ts
 src/components/pr-sidebar/PRCommentsSection.test.ts
 src/diagnostics/connection-diagnostics-submission.test.ts
 src/dictation/mobile-dictation-setup.test.ts
-src/files/MobileFileExplorerPanel.test.ts
 src/files/MobileFileMarkdownPreview.test.ts
 src/hooks/mobile-dictation-desktop-start.test.ts
 src/host-edit-route-accessibility.test.ts
-src/host-edit-save-flow.test.ts
 src/mock-server-key-pair.test.ts
 src/notifications/notification-consent-ownership.test.ts
 src/notifications/push-dismissal-native-races.test.ts
@@ -67,7 +64,6 @@ src/settings/native-notification-delivery-settings.test.tsx
 src/settings/notification-display-test.test.tsx
 src/settings/settings-screen-state.test.tsx
 src/settings/voice-settings-poller-refresh.test.tsx
-src/source-control/MobileGitHistoryList.test.tsx
 src/source-control/mobile-branch-compare.test.ts
 src/source-control/mobile-create-pr-action.test.ts
 src/source-control/mobile-git-status.test.ts

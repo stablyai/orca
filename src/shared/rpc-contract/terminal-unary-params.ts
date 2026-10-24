@@ -71,7 +71,10 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Why: layouts are ~31% of a large listing and only the human CLI formatter
   // reads them. Absent means "include" so pre-flag clients keep rendering them.
-  includeVisualLayouts: z.boolean().optional()
+  includeVisualLayouts: z.boolean().optional(),
+  // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
+  // activation sweep); other hosts drop it, as they did before it existed.
+  placeUnshownLiveTerminals: z.boolean().optional()
 })
 
 export const TerminalResolveActive = z.object({
@@ -233,7 +236,11 @@ export const TerminalCreateParams = z.object({
   tabId: OptionalString,
   leafId: OptionalString,
   spawnIntent: SpawnIntentParam.optional(),
-  shell: WindowsShellOverrideParam.optional()
+  shell: WindowsShellOverrideParam.optional(),
+  // Layout-owner build: the window's own new tab, already written to main under `tabId`/`leafId`;
+  // main starts its first pane. Only a window sends it, and only to its own main process.
+  windowTab: z.literal(true).optional(),
+  cwd: OptionalString
 })
 
 export const TerminalSplit = z
@@ -249,6 +256,9 @@ export const TerminalSplit = z
     command: OptionalString,
     env: z.record(z.string(), z.string()).optional(),
     telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
+    // A timed-out split's leaf id; sent only to hosts advertising TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY.
+    // Strict, unlike OptionalString: a stripped blank id would read as a fresh split.
+    retrySplit: z.string().min(1, 'Missing split id').optional(),
     // Layout-owner build: a window names its own pane; main writes the split and starts it.
     pane: z
       .object({

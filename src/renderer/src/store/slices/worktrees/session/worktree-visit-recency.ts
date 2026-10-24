@@ -9,6 +9,10 @@ import {
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp
 } from '@/lib/worktree-visit-recency'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,
@@ -57,15 +61,15 @@ export function createPruneLastVisitedTimestamps(
         validWorktreeIds.add(worktree.id)
         validVisitKeys.add(getWorktreeVisitKey(worktree.id, worktree.hostId))
       }
-      for (const [repoId, list] of Object.entries(s.worktreesByRepo)) {
+      for (const [repoId, list] of Object.entries(selectWorktreesByRepo(s))) {
         // An empty list is the not-yet-hydrated shape, not an authoritative "no worktrees".
-        if (s.detectedWorktreesByRepo[repoId] || list.length === 0) {
+        if (selectDetectedWorktreesByRepo(s)[repoId] || list.length === 0) {
           continue
         }
         validIdsByRepo.set(repoId, new Set(list.map((worktree) => worktree.id)))
         list.forEach(addValidWorktree)
       }
-      for (const [repoId, result] of Object.entries(s.detectedWorktreesByRepo)) {
+      for (const [repoId, result] of Object.entries(selectDetectedWorktreesByRepo(s))) {
         if (result.authoritative) {
           validIdsByRepo.set(repoId, new Set(result.worktrees.map((worktree) => worktree.id)))
           result.worktrees.forEach(addValidWorktree)

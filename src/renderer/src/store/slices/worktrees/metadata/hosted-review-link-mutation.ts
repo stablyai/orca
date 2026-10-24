@@ -2,33 +2,24 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { applyWorktreeUpdates } from '../../worktree-helpers'
-import { branchName } from '@/lib/git-utils'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import type {
   HostedReviewLinkKey,
   RuntimeWorktreeMetaUpdates
 } from '../listing/worktree-slice-types'
+import {
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
+  HOSTED_REVIEW_LINK_KEYS,
+  canonicalHostedReviewBranchIdentity
+} from '../../../../../../shared/worktree/hosted-review-links'
 
-export const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
-  'linkedPR',
-  'linkedGitLabMR',
-  'linkedBitbucketPR',
-  'linkedAzureDevOpsPR',
-  'linkedGiteaPR'
-]
-
-export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
-  WorktreeMeta,
-  HostedReviewLinkKey | 'pushTarget'
-> = {
-  linkedPR: null,
-  linkedGitLabMR: null,
-  linkedBitbucketPR: null,
-  linkedAzureDevOpsPR: null,
-  linkedGiteaPR: null,
-  pushTarget: undefined
+export {
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
+  HOSTED_REVIEW_LINK_KEYS,
+  canonicalHostedReviewBranchIdentity
 }
 
 export const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
@@ -171,10 +162,6 @@ export function getHostedReviewLinkUpdates(
   }
 }
 
-export function canonicalHostedReviewBranchIdentity(branch: string): string {
-  return branchName(branch).trim()
-}
-
 export function rememberHostedReviewLinkClear(
   worktreeId: string,
   branch: string,
@@ -191,7 +178,7 @@ export function rememberHostedReviewLinkClear(
 
 export function sanitizeHostedReviewLinksForBranchClear<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head' | 'linkedItems'>>
 >(worktree: T, currentWorktrees?: readonly T[]): T {
   const hostedReviewWorktreeId = resolveHostedReviewLinkWorktreeId(worktree.id)
   const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(hostedReviewWorktreeId)
@@ -222,13 +209,13 @@ export function sanitizeHostedReviewLinksForBranchClear<
     ...worktree,
     branch: guardBranch,
     ...(guardHead !== undefined ? { head: guardHead } : {}),
-    ...CLEARED_HOSTED_REVIEW_LINK_UPDATES
+    ...normalizeWorkspaceAttachmentUpdate(worktree, CLEARED_HOSTED_REVIEW_LINK_UPDATES)
   }
 }
 
 export function sanitizeHostedReviewLinksForBranchClears<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head' | 'linkedItems'>>
 >(worktrees: readonly T[], currentWorktrees?: readonly T[]): T[] {
   let changed = false
   const sanitized = worktrees.map((worktree) => {

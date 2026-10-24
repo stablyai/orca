@@ -2,7 +2,11 @@ import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '..
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
-import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  getWorktreeExecutionHostId
+} from '../../../shared/execution-host'
 import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,
@@ -14,6 +18,7 @@ import type {
 } from '../runtime-worktree-lineage-resolution'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
+import { chatWorkerErrorEscalationEnabled } from '../orchestration/chat-worker-error-escalation'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -69,7 +74,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
         const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
         const fallback =
-          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+          repo && getRepoRoutingConnectionId(repo) && this.store?.getWorktreeMeta(worktreeId)
             ? this.buildResolvedWorktreeFromId(worktreeId)
             : null
         if (fallback !== null) {
@@ -136,6 +141,10 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
 
   protected getOrchestrationDbIfAvailable(): OrchestrationDb | null {
     return this._orchestrationDb
+  }
+
+  isChatWorkerErrorEscalationEnabled(): boolean {
+    return chatWorkerErrorEscalationEnabled(this.store?.getSettings?.())
   }
 
   getNestedWorkerMaxDepth(): number {

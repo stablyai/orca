@@ -21,6 +21,7 @@ import {
 import { AddHostSubmenuRow } from './RunTargetSubmenus'
 import RunTargetRowList from './RunTargetRowList'
 import RunTargetField from './RunTargetField'
+import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
 
 type RunTargetComboboxProps = {
   hostOptions: readonly ProjectHostSetupOption[]
@@ -74,7 +75,7 @@ export default function RunTargetCombobox({
   const { query, setQuery, open, setOpen, armedKey, arm, moveArm, inputRef, listId, setListNode } =
     combobox
 
-  const { rows, matchedRecipes } = useMemo(
+  const { rows, matchedRecipes, hiddenHostCount } = useMemo(
     () => buildRunTargetRows({ hostOptions, recipes, query, hasAddHost }),
     [hasAddHost, hostOptions, query, recipes]
   )
@@ -308,6 +309,8 @@ export default function RunTargetCombobox({
               onSetLocation={setLocation}
             />
           </div>
+          {/* Why outside the listbox: the note is not an option. */}
+          <HostListOverflowNote hiddenCount={hiddenHostCount} />
           {hasAddHost ? (
             <AddHostSubmenuRow
               open={submenu === 'add-host'}

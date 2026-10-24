@@ -123,10 +123,10 @@ export function getExecutionHostIdForWorktree(
 }
 
 /**
- * {@link resolveOwner}, reading an id no row places as this app's — or, for a folder, the server
- * its saved session names, or a web client's only server.
+ * {@link resolveOwner}, except an id no row places and no caller names a host resolves to this app
+ * instead of `missing` — or, for a folder, to its saved session's server or a web client's only one.
  */
-export function resolveOwnerWithLegacyFallback(
+export function resolveOwnerOrLocal(
   state: WorktreeRuntimeOwnerState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
@@ -148,17 +148,18 @@ export function resolveOwnerWithLegacyFallback(
 }
 
 /**
- * The paired server behind {@link resolveOwnerWithLegacyFallback}, or `null` for this app, a
- * directly dialed SSH target or a twin: for readers whose twin answer is "no server", as before.
+ * The paired server {@link resolveOwnerOrLocal} names, or `null` for this app, a directly dialed
+ * SSH target or a twin. Unlike `runtimeEnvironmentIdUnlessTwin`, an unplaced folder on a web
+ * client names that client's server.
  */
-export function runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+export function runtimeEnvironmentIdOrLocalUnlessTwin(
   state: WorktreeRuntimeOwnerState,
   workspaceId: string | null | undefined
 ): string | null {
   if (!workspaceId) {
     return null
   }
-  const match = resolveOwnerWithLegacyFallback(state, { workspaceId })
+  const match = resolveOwnerOrLocal(state, { workspaceId })
   return match.kind === 'resolved' && match.owner.endpoint.kind === 'environment'
     ? match.owner.endpoint.environmentId
     : null

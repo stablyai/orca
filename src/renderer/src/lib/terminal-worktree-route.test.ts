@@ -89,6 +89,17 @@ describe('resolveTerminalWorktreeRoute', () => {
     expect(resolveTerminalWorktreeRoute(localState(), 'repo-9::/stale')).toBeNull()
   })
 
+  it('never spawns on the focused runtime when the state carries no owner catalogs', () => {
+    const catalogless = {
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      runtimeEnvironments: [{ id: 'hub-a' }]
+    }
+    expect(resolveTerminalHostOwnership(catalogless, 'repo-1::/w', 'spawn')).toEqual({
+      kind: 'unresolved',
+      runtimeEnvironmentId: null
+    })
+  })
+
   it('refuses to spawn on a folder workspace two hosts publish, and tears raw ids down locally', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these folder fields.
     const twin = localState({

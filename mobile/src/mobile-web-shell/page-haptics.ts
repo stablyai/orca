@@ -19,7 +19,7 @@ import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
  * not compile; named as imports rather than reached through a namespace, a row naming a function
  * `haptics.ts` does not export does not compile either. The third direction — a haptic that file
  * grows with no kind of its own, which the page could never ask for — is the census's, in
- * `config/scripts/mobile-web-app-haptics-seam.test.mjs`, which reads both files' names.
+ * `config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs`, which reads both files' names.
  */
 const HAPTIC_BY_KIND: Readonly<Record<BridgeHapticsKind, () => void>> = {
   mediumImpact: triggerMediumImpact,

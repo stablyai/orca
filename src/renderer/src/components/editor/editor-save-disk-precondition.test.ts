@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestEditorFileSave } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
-import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
+import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
 import { createEditorStore } from './editor-autosave-controller-test-fixture'
 import {
   keepTabEditsOverExternalChange,
@@ -11,7 +11,10 @@ import {
   getDiskBaselineSignature,
   getWrittenContentDiskSignature
 } from '../../../../shared/disk-baseline-signature'
-import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../../shared/file-write-disk-precondition'
+import {
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
+} from '../../../../shared/file-write-disk-precondition'
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -68,6 +71,29 @@ describe('editor saves guarded by the disk precondition', () => {
     __clearSelfWriteRegistryForTests()
   })
 
+  it('cleans a tab whose disk already holds the edit, without retaining a self-write stamp', async () => {
+    const disk = stubGuardedDisk({ [PATH]: 'user edit' })
+    const store = createEditorStore()
+    openFile(store, { baseline: 'original', draft: 'user edit' })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestEditorFileSave({ fileId: PATH })
+
+      await expect(disk.writeFile.mock.results[0]?.value).resolves.toEqual({
+        ok: true,
+        unchanged: true
+      })
+      expect(store.getState().openFiles[0]).toMatchObject({
+        isDirty: false,
+        lastKnownDiskSignature: getWrittenContentDiskSignature('user edit')
+      })
+      expect(store.getState().editorDrafts[PATH]).toBeUndefined()
+      expect(hasRecentSelfWrite(PATH)).toBe(false)
+    } finally {
+      cleanup()
+    }
+  })
+
   it('blocks an autosave over an unnoticed agent write and raises the banner', async () => {
     const disk = stubGuardedDisk({ [PATH]: 'original' })
     const store = createEditorStore()
@@ -84,7 +110,8 @@ describe('editor saves guarded by the disk precondition', () => {
           content: 'user edit',
           diskPrecondition: {
             expectedSignature: getDiskBaselineSignature('original'),
-            allowMissing: false
+            allowMissing: false,
+            requireLosslessUtf8: true
           }
         })
       )
@@ -152,9 +179,14 @@ describe('editor saves guarded by the disk precondition', () => {
       store.getState().markFileDirty(PATH, true)
       await vi.advanceTimersByTimeAsync(1500)
 
+      // Why: this host only sees decoded text, so a U+FFFD on disk pauses autosave conservatively.
       expect(disk.writeFile).toHaveBeenCalledTimes(2)
-      expect(disk.files.get(PATH)).toBe('second edit')
+      expect(disk.files.get(PATH)).toBe('a�b')
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
+      // An explicit save asks first; once the user confirms the conversion it writes.
+      await expect(requestEditorFileSave({ fileId: PATH })).rejects.toThrow(/isn't UTF-8/)
+      await requestEditorFileSave({ fileId: PATH, convertToUtf8: true })
+      expect(disk.files.get(PATH)).toBe('second edit')
     } finally {
       cleanup()
     }
@@ -387,7 +419,7 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
-  it('blocks the second of two independently viewed tabs of one file that both save', async () => {
+  it('two workspaces saving one record write it once; the second save finds it clean', async () => {
     const md = '/repo/notes.md'
     const disk = stubGuardedDisk({ [md]: 'original' })
     const store = createEditorStore()
@@ -419,15 +451,20 @@ describe('editor saves guarded by the disk precondition', () => {
       store.getState().markFileDirty(tab.id, true)
     }
 
+    // One record: the last edit is the one draft both views hold.
+    expect(store.getState().editorDrafts[code.id]).toBe('second tab')
+
     const cleanup = attachEditorAutosaveController(store)
     try {
       await requestEditorFileSave({ fileId: code.id })
-      await expect(requestEditorFileSave({ fileId: rich.id })).rejects.toThrow(/changed on disk/)
+      await requestEditorFileSave({ fileId: rich.id })
 
-      expect(disk.files.get(md)).toBe('first tab')
-      const second = store.getState().openFiles.find((f) => f.id === rich.id)
-      expect(second?.externalMutation).toBe('changed')
-      expect(second?.isDirty).toBe(true)
+      expect(disk.writeFile).toHaveBeenCalledTimes(1)
+      expect(disk.files.get(md)).toBe('second tab')
+      for (const tab of store.getState().openFiles) {
+        expect(tab.externalMutation).toBeUndefined()
+        expect(tab.isDirty).toBe(false)
+      }
     } finally {
       cleanup()
     }
@@ -459,7 +496,8 @@ describe('editor saves guarded by the disk precondition', () => {
         expect.objectContaining({
           diskPrecondition: {
             expectedSignature: getDiskBaselineSignature('agent rewrite'),
-            allowMissing: true
+            allowMissing: true,
+            requireLosslessUtf8: true
           }
         })
       )
@@ -489,7 +527,9 @@ describe('editor saves through a remote host without the guarded write (client c
         throw new Error('fixture status must succeed')
       }
       const capabilities = (status.result.capabilities ?? []).filter(
-        (capability) => capability !== FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY
+        (capability) =>
+          capability !== FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY &&
+          capability !== FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
       )
       const olderStatus = { ...status, result: { ...status.result, capabilities } }
       const meta = { _meta: { runtimeId: 'runtime-env-1' } }

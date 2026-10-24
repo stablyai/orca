@@ -1,10 +1,3 @@
-// Real `codex app-server` frame orders, replayed through the translator.
-//
-// The fixture is trimmed from captures of the real binary on 0.141.0 (the oldest
-// version Orca exercises) and 0.158.0, with only the upstream provider faked:
-// statuses, `willRetry`, the provider's sentence and `durationMs`, at the host
-// receipt time `t` each frame arrived. Ids are replaced with synthetic ones.
-
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -27,6 +20,7 @@ const SESSION_ID = 'session-1'
 type CapturedFrame = { case: string; t: number; method: string; params: Record<string, unknown> }
 type Row = { key: string; body: AgentJournalItemBody }
 
+// Captured app-server 0.141.0/0.158.0 frames retain receipt times; IDs are synthetic.
 const FRAMES: CapturedFrame[] = readFileSync(
   join(__dirname, '__fixtures__', 'codex-app-server-turn-endings.jsonl'),
   'utf8'
@@ -41,7 +35,6 @@ function framesOf(name: string): CapturedFrame[] {
   return frames
 }
 
-/** Replays a case's frames, or only its first `count`. */
 function replay(name: string, count = Number.POSITIVE_INFINITY) {
   const frames = framesOf(name).slice(0, count)
   const threadId = readCodexThreadId(frames[0]?.params) ?? ''
@@ -131,8 +124,6 @@ describe('captured Codex turns end once, on their own completion', () => {
       }
       const verdict = VERDICT[end.status ?? '']
       expect(verdict).toBeDefined()
-      // One terminal write per turn, and it is Codex's own completion: its time,
-      // its duration and its verdict, with the start this host saw.
       expect(terminalWrites(rows, turnId)).toEqual([
         expect.objectContaining({
           state: verdict?.state,
@@ -158,7 +149,6 @@ describe('captured Codex turns end once, on their own completion', () => {
             frame.params.willRetry === false &&
             readCodexTurnId(frame.params) === turnId
         )
-        // Through the error, the turn is open; the completion right after it ends it.
         expect(terminalWrites(replay(name, errorAt + 1).rows, turnId)).toEqual([])
         expect(terminalWrites(replay(name).rows, turnId)).toHaveLength(1)
       }
@@ -171,8 +161,6 @@ describe('captured Codex turns end once, on their own completion', () => {
       readCodexTurnId(frames.find((frame) => frame.method === 'turn/started')?.params) ?? ''
     const retries = frames.filter((frame) => frame.method === 'error')
 
-    // Seven "Reconnecting... waiting for network" frames over four minutes, all
-    // willRetry, and no completion: the turn is genuinely still open.
     expect(retries).toHaveLength(7)
     expect(retries.every((frame) => frame.params.willRetry === true)).toBe(true)
     expect(turnWrites(rows, turnId)).toEqual([

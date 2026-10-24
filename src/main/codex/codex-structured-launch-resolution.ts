@@ -1,11 +1,3 @@
-// How a durable session record becomes a Codex process launch.
-//
-// Every input is read back from the record the store already made durable, not
-// from the call that triggered spawn. A client that attaches twice must
-// land in the same working directory under the same account home, and a resume
-// must name the thread this session actually proved — never one a caller asks
-// for, which is how a resume becomes a fork wearing a resume's name.
-
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -13,7 +5,6 @@ import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structu
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
-import { resolvePinnedCodexRolloutProof } from './codex-pinned-rollout-proof'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
@@ -23,20 +14,18 @@ import {
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
-  /** Overridden in tests; production scans the boot-cached PATH and version-manager dirs. */
   resolveCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
-  resolveRollout?: typeof resolvePinnedCodexRolloutProof
 }
 
 export type CodexStructuredInvocationDeps = Pick<
   CodexStructuredLaunchPartDeps,
   'resolveCommand'
 > & {
-  /** Fresh shell/configured environment for this spawn; never written to the session record. */
+  /** Fresh spawn environment, never persisted in the session record. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
-  /** Rereads that environment when Codex is not found in it; absent never retries. */
+  /** Refresh after a missing binary; absence disables retry. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
-  /** Where the program starts, for a PATH entry relative to it; Orca's own when absent. */
+  /** Resolve relative PATH entries from the spawn directory; defaults to Orca's cwd. */
   resolveWorkingDirectory?: () => Promise<string> | string
 }
 
@@ -45,13 +34,7 @@ export type CodexStructuredInvocation = {
   environment: NodeJS.ProcessEnv | undefined
 }
 
-/**
- * The one place a structured Codex child's binary and environment are
- * resolved. The session launch and the session-less catalog probe both build
- * on it, so a probe can never list under a different binary or env than the
- * session it stands in for. Env VALUES stay out of the catalog fingerprint:
- * drift there heals on the next refresh.
- */
+/** Keep session launches and catalog probes on the same binary/environment resolution path. */
 export function resolveCodexStructuredInvocation(
   deps: CodexStructuredInvocationDeps
 ): Promise<CodexStructuredInvocation> {
@@ -75,7 +58,7 @@ async function readCodexStructuredInvocation(
   return { command, environment }
 }
 
-/** Codex's part of a launch: its binary, thread arguments, account home, resume proof and visuals. */
+/** Derive resume identity and account home from the durable record. */
 export function codexStructuredLaunchPart(
   deps: CodexStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
@@ -91,46 +74,34 @@ export function codexStructuredLaunchPart(
     const environment = await basis.environment()
     const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    // A Codex record's chain holds only Codex handles; the launch admission refuses anything else.
     const resumeThreadId = head?.handle.nativeId ?? null
-    // The same saved options every turn sends, so the thread and its turns name one model.
+    // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
     const visuals = await basis.visuals()
-    // Before the rollout scan, so a missing floating folder is still the refusal that wins.
     await basis.launchDirectory()
     return {
       launch: {
         command,
         args: [...args, 'app-server'],
         codexHome: accountHome.path,
-        // An empty chain is a session that has never proved a thread, so it
-        // starts one; anything else resumes the last link this session proved.
         resumeThreadId,
-        // Only a thread this session created may still be one Codex never saved: a resumed,
-        // forked or adopted head names a conversation Codex held.
+        // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
         ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
-        // States every posture outright: a resume inherits the last one for any field left absent.
+        // Omitted policy fields would inherit the resumed thread's previous permissions.
         permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask'),
         ...(model ? { model } : {}),
-        ...(visuals ? { visuals } : {}),
-        ...(resumeThreadId
-          ? {
-              resumePath: await (deps.resolveRollout ?? resolvePinnedCodexRolloutProof)(
-                accountHome.path,
-                resumeThreadId
-              )
-            }
-          : {})
+        ...(visuals ? { visuals } : {})
       },
       env: withNativeChatVisualsEnv(
         { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
         visuals
       ),
-      // Without visuals, a folder Orca itself inherited (started from a chat) names another chat's.
+      // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-      ]
+      ],
+      cliRuntimeCommand: command
     }
   }
 }

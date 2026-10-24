@@ -32,6 +32,11 @@ vi.mock('@/store', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
+vi.mock('./terminal-file-other-workspace-hint', () => ({
+  dismissFileInOtherWorkspaceHint: vi.fn(),
+  showFileInOtherWorkspaceHint: vi.fn()
+}))
+
 vi.mock('@/lib/language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
@@ -86,7 +91,8 @@ describe('terminal file links carry their source tab', () => {
     expect(openFileForLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/src/a.ts', worktreeId: 'wt-1' }),
       { forceContentReload: true },
-      { sourceTabId: 'unified-term', workspaceId: 'wt-1', hostId: null }
+      { sourceTabId: 'unified-term', workspaceId: 'wt-1', hostId: null },
+      expect.any(Function)
     )
   })
 
@@ -104,7 +110,8 @@ describe('terminal file links carry their source tab', () => {
         workspaceId: 'wt-1',
         hostId: null,
         targetGroupId: 'group-a'
-      })
+      }),
+      expect.any(Function)
     )
   })
 
@@ -162,10 +169,9 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses an explicit request routed to another workspace before activating it', async () => {
+  it('keeps an explicit request for another workspace file in the source group', async () => {
     setPlatform('Macintosh')
     seedSourceTab()
-    storeState.openFiles = [{ filePath: '/other/x.ts', worktreeId: 'wt-2' }]
     findWorkspaceFileRouteMock.mockReturnValueOnce({
       worktreeId: 'wt-2',
       executionHostId: 'local',
@@ -175,13 +181,19 @@ describe('terminal file links carry their source tab', () => {
     openDetectedFilePath('/other/x.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
     await flushAsyncWork()
 
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-2', expect.anything())
+    expect(openFileForLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/other/x.ts', worktreeId: 'wt-1', readOnly: true }),
+      expect.anything(),
+      expect.objectContaining({ targetGroupId: 'group-a' }),
+      expect.any(Function)
+    )
+    expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
   it('keeps automatic HTML opens on their existing browser route', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
     seedSourceTab()
 
     openDetectedFilePath('/tmp/report.html', null, null, sourceDeps)

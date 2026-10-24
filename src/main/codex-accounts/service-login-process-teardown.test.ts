@@ -136,7 +136,6 @@ describe('CodexAccountService config sync', () => {
       await vi.advanceTimersByTimeAsync(1_000)
       expect(execFileSyncMock).not.toHaveBeenCalled()
 
-      // Codex finishes the login (auth.json exists) but never exits on its own.
       writeFileSync(
         join(testState.fakeHomeDir, 'auth.json'),
         createCodexAuthJson('user@example.com', 'provider-account-1', 'refresh-token'),
@@ -150,7 +149,6 @@ describe('CodexAccountService config sync', () => {
       )
       expect(child.kill).not.toHaveBeenCalled()
 
-      // The forced non-zero exit still counts as a successful login.
       child.emit('close', 1)
       await expect(loginPromise).resolves.toBeUndefined()
     } finally {

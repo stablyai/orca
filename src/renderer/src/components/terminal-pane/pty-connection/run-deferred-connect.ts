@@ -8,7 +8,7 @@ import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detect
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
-import { waitsForMainPaneStart } from './main-pane-start-wait'
+import { defersToMainPaneStart } from './main-pane-start-request'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -26,6 +26,7 @@ import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
 import { bindHiddenRestoreState } from './hidden-restore-state'
 import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
+import { bindRemoteProgramRedraw } from './remote-program-redraw'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise
@@ -133,7 +134,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       session.connectFrame = requestAnimationFrame(session.runDeferredConnect)
       return
     }
-    if (waitsForMainPaneStart(session, session.runDeferredConnect)) {
+    if (defersToMainPaneStart(session, session.runDeferredConnect)) {
       session.cancelScheduledConnectFrame()
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
@@ -213,6 +214,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       )
     }
 
+    bindRemoteProgramRedraw(session)
     bindSerializeHiddenOutputSnapshot(session)
     bindForegroundOutputRefresh(session)
     bindHiddenOutputSeqAndSkip(session)

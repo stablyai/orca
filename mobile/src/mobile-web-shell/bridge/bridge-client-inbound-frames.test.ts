@@ -4,13 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
-import { createPageClient, idOf, readError } from './bridge-page-client-test-harness'
+import { createPageClient as createPage, idOf, readError } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
+  closeResources()
   vi.useRealTimers()
 })
 
@@ -76,15 +90,33 @@ describe('bridge client refusals and send failures', () => {
     })
   })
 
-  it('cancels nothing for a stream the shell has already retired', () => {
+  it('settles distinct retired streams without posting cancel', () => {
     const page = createPageClient()
     page.start()
-    page.client.subscribe('terminal.stream', { terminal: 't1' }, () => undefined)
-    const id = idOf(page, 0)
-    const posted = page.frames().length
-    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'end', id, reason: 'closed' })
-    page.deliver({ v: BRIDGE_PROTOCOL_VERSION, type: 'error', id, error: { message: 'gone' } })
-    expect(page.frames()).toHaveLength(posted)
+    const ended: unknown[] = []
+    const failed: unknown[] = []
+    page.client.subscribe('terminal.stream', { terminal: 't1' }, (value) => ended.push(value))
+    page.client.subscribe('terminal.stream', { terminal: 't2' }, (value) => failed.push(value))
+    const end = { v: BRIDGE_PROTOCOL_VERSION, type: 'end', id: idOf(page, 0), reason: 'closed' }
+    const error = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'error',
+      id: idOf(page, 1),
+      error: { category: 'Error', message: 'gone', isRpcDeliveryUnknown: false }
+    }
+    const before = page.frames().length
+    page.deliver(end)
+    page.deliver(error)
+    expect(ended).toEqual([
+      expect.objectContaining({ type: 'error', message: expect.stringContaining('closed') })
+    ])
+    expect(failed).toEqual([expect.objectContaining({ type: 'error', message: 'gone' })])
+    page.deliver(end)
+    page.deliver(error)
+    expect(ended).toHaveLength(1)
+    expect(failed).toHaveLength(1)
+    expect(page.frames()).toHaveLength(before)
+    expect(page.diagnostics.filter((entry) => entry.kind === 'refused')).toEqual([])
   })
 
   it('cannot settle a reply whose frame it never parsed, and nothing on the page can', async () => {

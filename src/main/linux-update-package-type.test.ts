@@ -221,7 +221,6 @@ describe('getLinuxRootPackageType', () => {
   })
 
   it('returns unusable when the marker is unreadable', async () => {
-    // A directory in the marker's place makes fail with EISDIR.
     await fsp.mkdir(path.join(resourcesDir, 'package-type'))
     const module = await loadPackageType()
     expect(module.getLinuxPackageType()).toBe('unusable')
@@ -287,7 +286,6 @@ describe('getLinuxRootPackageType', () => {
 
   it('reads the marker once and warns once per process', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // A directory in place of the marker is readable-but-unusable, which is the case worth reporting.
     await fsp.mkdir(path.join(resourcesDir, 'package-type'))
     const module = await loadPackageType()
     module.getLinuxPackageType()
@@ -315,7 +313,6 @@ describe('getLinuxRootPackageType', () => {
 })
 
 describe('isExternallyManagedLinuxInstall', () => {
-  // The #17702 case: an AUR/Nix/container rebuild of the .deb inherits `package-type` verbatim.
   it('reports a deb marker with no deb package manager as externally managed', async () => {
     hasTrustedPackageManagerForMock.mockReturnValue(false)
     await writeMarker('deb')

@@ -234,8 +234,10 @@ describe('WslOrcadLivenessSupervisor', () => {
     const h = harness()
     await h.supervisor.connect('Ubuntu')
     h.state.ensureFails = 1
-    await expect(h.supervisor.connect('Ubuntu', { force: true })).rejects.toThrow('relaunch failed')
-    expect(h.ensure).toHaveBeenLastCalledWith('Ubuntu', { force: true })
+    await expect(h.supervisor.connect('Ubuntu', { intent: 'force' })).rejects.toThrow(
+      'relaunch failed'
+    )
+    expect(h.ensure).toHaveBeenLastCalledWith('Ubuntu', { intent: 'force' })
     expect(h.watches).toHaveLength(2)
     expect(h.lastWatch().closed).toBe(false)
   })

@@ -1,9 +1,4 @@
-/**
- * Host truth for "is anything running from this extracted generation": the executables of this
- * user's processes. Covers processes that never wrote a lease (pre-lease builds, and a new process
- * between its exec and its lease write). Every Orca process from a generation runs its `orca-ide`,
- * so the executable is enough; reading every process's maps would stall the main process.
- */
+// Scan executables to cover pre-lease builds and exec-to-lease races without costly process maps.
 import { readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import type { ProcessLivenessVerdict } from '../daemon/daemon-incarnation-evidence-types'
@@ -28,7 +23,6 @@ export function scanResidentExecutables(
   options: { proc?: ProcReader; uid?: number; platform?: NodeJS.Platform } = {}
 ): ResidentExecutableScan {
   if ((options.platform ?? process.platform) !== 'linux') {
-    // No AppImage process can run here, so nothing is resident.
     return { status: 'scanned', executables: [], unreadablePid: null }
   }
   const proc = options.proc ?? linuxProcReader
@@ -47,9 +41,8 @@ export function scanResidentExecutables(
         executables.push(proc.readExe(pid))
       }
     } catch (error) {
-      // Exited mid-scan: not a resident. Denied: a non-dumpable process, which /proc reports as
-      // root-owned and which root without CAP_SYS_PTRACE cannot read; Orca's own processes are
-      // dumpable and also hold leases. Anything else could hide a resident.
+      // Exited processes cannot be resident; non-dumpable processes can deny /proc access.
+      // Orca is dumpable and holds leases; unexpected errors could hide a resident.
       if (!['ENOENT', 'ESRCH', 'EACCES', 'EPERM'].some((code) => hasErrorCode(error, code))) {
         unreadablePid = pid
       }

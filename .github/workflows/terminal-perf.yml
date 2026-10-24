@@ -48,10 +48,16 @@ on:
     # terminal throughput regressions are caught before users report typing lag.
     - cron: '30 8 * * *'
 
+permissions:
+  contents: read
+
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 jobs:
   terminal-perf:
     name: terminal scale perf
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -85,7 +91,9 @@ jobs:
             'node config/scripts/rebuild-native-deps.mjs',
             'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
           ]
-          const shared = process.env.RUNNER_KIND === 'github-hosted' && !process.env.JOB_CONTAINER &&
+          const supportedRunner = process.env.RUNNER_KIND === 'github-hosted' ||
+            process.env.RUNNER_NAME?.startsWith('blacksmith-')
+          const shared = supportedRunner && !process.env.JOB_CONTAINER &&
             process.env.RUNNER_OS === 'Linux' && process.env.RUNNER_ARCH === 'X64' &&
             manifest.engines?.node === '24' && typeof manifest.packageManager === 'string' &&
             manifest.packageManager.split('+')[0] === 'pnpm@12.14.0' &&
@@ -115,6 +123,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Historical refs can lack the shared action; retain their original install path.

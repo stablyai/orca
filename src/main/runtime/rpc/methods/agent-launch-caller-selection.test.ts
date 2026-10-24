@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../shared/startup-cwd-fallback'
 import {
   CAPABLE_CLIENT,
   STRUCTURED_PREFERENCE,
@@ -152,6 +153,19 @@ describe('a paired client launching into an existing workspace', () => {
 
     expect(result.outcome).toMatchObject({ kind: 'terminal', handle: 'term_1' })
     expect(result.warning).toBeUndefined()
+  })
+
+  it('still tells a caller that shows the tab itself that its folder was gone', async () => {
+    const runtime = selectionRuntime({
+      settings: {},
+      terminalPaneKey: PANE_KEY,
+      terminalWarning: REVEAL_WARNING,
+      terminalStartupCwdFallback: true
+    })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.warning).toBe(STARTUP_CWD_FALLBACK_SENTENCE)
   })
 
   // A folder workspace has no setup for a host activation to run, so its create moves only the caller.

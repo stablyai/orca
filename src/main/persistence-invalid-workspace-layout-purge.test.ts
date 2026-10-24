@@ -174,7 +174,6 @@ describe('main drops the layout of workspaces the catalog no longer validates', 
       dropWorkspacesTheListingInvalidates(store, listing([KEPT]))
       await Promise.resolve()
 
-      // Other repos have no listing in this catalog, so they are untouched.
       expect(storedKeys(store)).toEqual([KEPT, 'other-repo::/x'].sort())
       expect(events).toContainEqual(expect.objectContaining({ type: 'removed', key: DELETED }))
     })

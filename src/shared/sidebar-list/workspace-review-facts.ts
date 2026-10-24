@@ -6,6 +6,11 @@ import { isGitHubPRSuppressed } from '../worktree/github-pr-suppression'
 import { getPRGroupKeyForState, type PRGroupKey } from '../workspace-view/workspace-pr-groups'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import { parseExecutionHostId } from '../execution-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
+import { listGitWorkspaceRows } from './workspace-rows'
 
 /** Grouping by PR reads GitHub PRs only, so only a row with a GitHub PR carries a fact. */
 const WorkspaceReviewFactSchema = z.object({
@@ -13,7 +18,7 @@ const WorkspaceReviewFactSchema = z.object({
   reviewState: z.string()
 })
 
-/** Read on demand, so it carries no revision. An absent id has no PR. */
+/** Read on demand, so it carries no revision. Keyed by row identity; an absent key has no PR. */
 export const WorkspaceReviewFactsSnapshotSchema = z.object({
   facts: z.record(z.string(), WorkspaceReviewFactSchema)
 })
@@ -58,20 +63,20 @@ export function workspaceReviewFactsEqual(
   return a?.provider === b?.provider && a?.reviewState === b?.reviewState
 }
 
-/** Facts for every worktree with a PR; the window and main run this over their own copies. */
+/** Facts for every worktree this host lists with a PR, under its row key and read with its own repo. */
 export function buildWorkspaceReviewFacts(
-  worktrees: Iterable<
-    Pick<Worktree, 'id' | 'repoId' | 'branch' | 'linkedPR' | 'suppressedGitHubPR'>
-  >,
-  repos: Iterable<Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>>,
+  worktrees: readonly Pick<
+    Worktree,
+    'id' | 'repoId' | 'hostId' | 'branch' | 'linkedPR' | 'suppressedGitHubPR'
+  >[],
+  repos: readonly Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>[],
   prCache: PRCacheView
-): Record<string, WorkspaceReviewFact> {
-  const repoById = new Map([...repos].map((repo) => [repo.id, repo]))
-  const facts: Record<string, WorkspaceReviewFact> = {}
-  for (const worktree of worktrees) {
-    const fact = readWorkspaceReviewFact(worktree, repoById.get(worktree.repoId), prCache)
+): Record<HostScopedWorktreeKey, WorkspaceReviewFact> {
+  const facts: Record<HostScopedWorktreeKey, WorkspaceReviewFact> = {}
+  for (const { identity, worktree, repo } of listGitWorkspaceRows(worktrees, repos)) {
+    const fact = readWorkspaceReviewFact(worktree, repo, prCache)
     if (fact) {
-      facts[worktree.id] = fact
+      facts[identity] = fact
     }
   }
   return facts
@@ -81,8 +86,8 @@ export function buildWorkspaceReviewFacts(
 export function buildPairedServerReviewFacts(
   servers: readonly { hostId: string; rows: readonly PairedServerWorkspaceRow[] }[],
   prCache: PRCacheView
-): Record<string, WorkspaceReviewFact> {
-  const facts: Record<string, WorkspaceReviewFact> = {}
+): Record<HostScopedWorktreeKey, WorkspaceReviewFact> {
+  const facts: Record<HostScopedWorktreeKey, WorkspaceReviewFact> = {}
   for (const server of servers) {
     const hostId = parseExecutionHostId(server.hostId)?.id
     for (const row of hostId ? server.rows : []) {
@@ -95,7 +100,7 @@ export function buildPairedServerReviewFacts(
             )
           : null
       if (fact) {
-        facts[row.worktreeId] = fact
+        facts[composeWorktreeHostIdentity(hostId, row.worktreeId)] = fact
       }
     }
   }

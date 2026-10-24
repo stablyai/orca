@@ -1,16 +1,25 @@
-- Tests that reimplement production logic instead of importing and exercising the real code.
-- Tests with descriptive names but no meaningful assertions, including `expect(true).toBe(true)`.
-- Tests that only assert a mock was called, or assert the exact hardcoded value returned by their own mock.
-- Tests that mock internal database, ORM, builder, or service chains so wrong tables, fields, joins, filters, or arguments cannot fail.
-- Tests whose fixtures, field names, thresholds, or expected statuses encode behavior different from real producers or the source contract.
-- Tests whose names promise inputs or behavior that their setup never exercises.
-- Tests that duplicate stronger coverage and add no unique coverage, faster feedback, or better failure diagnosis.
-- Tests that copy inventories, manifests, export lists, source imports, or literal strings instead of proving behavior.
-- Tests of private predicates, call shapes, or provider-local replays that duplicate shared helper coverage.
-- Test-only exports, globals, wrappers, or production paths that exist solely to make tests possible.
-- Mocks that implement the behavior being asserted or pretend distinct APIs are equivalent.
-- Fixtures that provide receipts, admission, callback ordering, or other outputs the owning production code should generate.
-- Persistence tests that assert against a store path the exercised code never writes.
-- Tests that assert capability flags instead of actual delivery or acknowledgement.
-- Negative controls that pass because an unrelated guard fires or the rejection path is unreachable.
-- Tests that sleep or wait on real time, retries, polling, or networks instead of using fake clocks and deterministic boundaries.
+# Test anti-patterns
+
+Tests that:
+
+- Reimplement production logic instead of exercising it.
+- Have no meaningful assertions, such as `expect(true).toBe(true)`.
+- Assert only mock calls or values supplied by their own mocks.
+- Promise inputs or behavior their setup never exercises.
+- Duplicate coverage without faster feedback or clearer failures, including private predicates and provider replays.
+- Copy inventories, manifests, exports, imports, or strings instead of proving behavior.
+- Check persistence at a path the code never writes.
+- Assert capability flags instead of delivery or acknowledgement.
+- Pass negative cases without exercising the intended rejection path.
+- Wait on real time or networks instead of fake clocks and deterministic boundaries.
+
+Mocks and fixtures that:
+
+- Hide incorrect tables, fields, joins, filters, or arguments behind mocked internal chains.
+- Contradict real producers or source contracts.
+- Implement the behavior under test or treat distinct APIs as equivalent.
+- Supply receipts, admission decisions, callback ordering, or other outputs production code should generate.
+
+Production code that:
+
+- Adds exports, globals, wrappers, or code paths solely for tests.

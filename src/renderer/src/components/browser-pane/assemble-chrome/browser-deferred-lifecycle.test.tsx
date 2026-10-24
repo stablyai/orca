@@ -35,7 +35,7 @@ vi.mock('@/store', async () => {
   }
 })
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null,
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null,
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({

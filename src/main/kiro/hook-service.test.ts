@@ -8,8 +8,7 @@ import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-h
 import { KiroHookService } from './hook-service'
 import { getKiroManagedCommandMatcher, KIRO_HOOK_EVENTS } from './hook-settings'
 
-// Why both names: os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows; setting
-// only one would let a run edit the developer's real ~/.kiro or ~/.orca.
+// Isolate HOME and USERPROFILE so tests cannot write real Kiro or Orca configs on any OS.
 let home: string
 let originalHome: string | undefined
 let originalUserProfile: string | undefined
@@ -81,7 +80,6 @@ describe('KiroHookService', () => {
 
     const service = new KiroHookService()
     expect(service.install().state).toBe('installed')
-    // Idempotent: a second install must not duplicate the managed entries.
     expect(service.install().state).toBe('installed')
 
     const caverna = readAgent('caverna')
@@ -193,7 +191,6 @@ describe('KiroHookService', () => {
     expect(result.state).toBe('installed')
     const remote = JSON.parse(readFileSync(join(kiroHome, 'agents', 'remote.json'), 'utf-8'))
     expect(Object.keys(remote.hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
-    // The inactive default home is left alone.
     expect(readAgent('stale').hooks).toBeUndefined()
   })
 
@@ -235,7 +232,7 @@ describe('KiroHookService', () => {
     expect(readAgent('kept').hooks).toBeDefined()
   })
 
-  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under Kiro's shells.
+  // Check command shapes everywhere; windows-hook-payload-delivery.test.ts executes them under Kiro's shells.
   it('registers the Windows batch hook command for every event', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {

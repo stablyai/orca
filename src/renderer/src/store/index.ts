@@ -49,6 +49,7 @@ import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
@@ -62,6 +63,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
 import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
+import { attachEditorBufferIdentityEvents } from './editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
@@ -138,6 +140,7 @@ export const useAppStore = create<AppState>()(
           ...createRemoteServerUpdatesSlice(...a),
           ...createTerminalQuickCommandHostsSlice(...a),
           ...createStructuredSessionLaunchDirectorySlice(...a),
+          ...createStructuredChatSleptAtSlice(...a),
           ...createWorkspaceAttentionSlice(...a)
         }
       })
@@ -147,10 +150,11 @@ export const useAppStore = create<AppState>()(
 )
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
+attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)
 registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
-  await openWorkspaceBrowserTab(request)
+  return openWorkspaceBrowserTab(request)
 })
 
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs

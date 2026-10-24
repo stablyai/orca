@@ -78,12 +78,14 @@ export function connectPanePty(
   session.cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   session.cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
   session.cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
+  session.flushRemoteProgramRedraw = (): void => {}
   session.resetRendererOrderedSeqForPtyExit = () => {}
   session.cleanupStartupDraftPasteTimers = (): void => {}
   session.unregisterE2ePtyDataInjection = (): void => {}
   session.startupInjectTimer = null
   session.agentTaskCompleteNotificationGraceTimer = null
   session.agentTaskCompleteNotificationMaxTimer = null
+  session.hookOwnedIdleAbsorbsBell = false
   session.agentTaskCompleteStatusUnsubscribe = null
   session.agentTaskCompleteSettingsUnsubscribe = null
   session.agentTaskCompleteNotificationGeneration = 0

@@ -98,6 +98,33 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: colors.borderSubtle
   },
+  // Hosts the edge hints over the strip's ends; stretches so the strip keeps its old sizing.
+  tabScrollFrame: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch'
+  },
+  // Marks a working or blocked tab scrolled out of view on that side.
+  tabEdgeHint: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.bgPanel
+  },
+  tabEdgeHintLeft: {
+    left: 0,
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle
+  },
+  tabEdgeHintRight: {
+    right: 0,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderSubtle
+  },
   tabScroll: {
     flex: 1,
     maxHeight: 44

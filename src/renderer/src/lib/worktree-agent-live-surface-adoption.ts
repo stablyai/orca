@@ -113,8 +113,8 @@ function adoptHostOwnedSurface(
 ): boolean {
   const store = getState()
   const known = tabExists(store, owner.tabId)
-  // Switch point: main's frames draw a pane main holds for this terminal; the window makes no tab
-  // or pane of its own. Declined when main lacks it (main-first follow-up) or before the snapshot.
+  // Switch point, a paired server's workspace (the gate blocks those before any sweep today; a
+  // local one returns before this): frames draw the server's pane; the window makes none.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && !known) {
     return framesShowRecordedPane(worktreeId, owner)
   }
@@ -215,6 +215,15 @@ export async function adoptLiveWorkspacePtySurfaces(
       declinedPtyIds.push(ptyId)
       continue
     }
+    const mainPlaces =
+      ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
+    // Switch point: main placed the workspace's unshown terminals before answering (the listing's
+    // placeUnshownLiveTerminals), so a pane main names is the surface and main's frames draw it.
+    // The window writes nothing. A paired server's workspace keeps today's path.
+    if (mainPlaces && !('unowned' in owner)) {
+      surfaced = true
+      continue
+    }
     if (!('unowned' in owner)) {
       if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
         surfaced = true
@@ -223,13 +232,9 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
-    // Switch point: main shows every live terminal no pane shows at startup and window load
-    // (placeUnshownLiveTerminals) and records the pane it chose, so the window only reads that
-    // the frames show it there. A paired server's workspace keeps today's path.
-    if (
-      ORCA_LAYOUT_OWNER_IS_MAIN &&
-      runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
-    ) {
+    // Switch point: one main could not place stays unshown, unless main's frames already show it
+    // in the pane main recorded (main's graph not yet reinstalled when it answered).
+    if (mainPlaces) {
       if (owner.recorded && mainHoldsRecordedPane(worktreeId, owner.recorded)) {
         surfaced = true
       } else {

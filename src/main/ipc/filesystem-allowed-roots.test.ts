@@ -85,10 +85,7 @@ function makeCountingStore(fixture: StoreFixture): { store: Store; counts: Store
   return { store, counts }
 }
 
-/**
- * The pre-change `getAllowedRoots` algorithm, kept verbatim so the equivalence test compares the
- * new root list against the old one rather than against a hand-written expectation.
- */
+/** Preserve the old algorithm as an independent allowed-root equivalence oracle. */
 function referenceAllowedRoots(store: Store): string[] {
   const scopeStore = store as unknown as {
     getRepos: () => Repo[]
@@ -219,7 +216,6 @@ function makeMixedFixture(): StoreFixture {
   ]
   const folderWorkspaces = [
     makeWorkspace({ id: 'ws-git', folderPath: '/folders/root/feature' }),
-    // Not a git worktree: a plain folder workspace under a folder-kind repo.
     makeWorkspace({
       id: 'ws-plain',
       folderPath: '/folders/plain/scratch',
@@ -294,9 +290,7 @@ describe('getAllowedRoots', () => {
     expect.soft(counts.getRepos).toBe(1)
     expect.soft(counts.getProjectGroups).toBe(1)
     expect.soft(counts.getFolderWorkspaces).toBe(1)
-    // Batched runtime resolution scans the project list once, not once per local repo.
     expect.soft(counts.getProjects).toBe(1)
-    // The per-scope subtree walk no longer rebuilds the parent->children index.
     expect.soft(vi.mocked(buildProjectGroupChildIndex)).toHaveBeenCalledTimes(1)
     expect.soft(vi.mocked(getProjectGroupSubtreeIds)).not.toHaveBeenCalled()
   })
@@ -334,7 +328,7 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
     }
 
     const buildCount = callCount * 2
-    // One build per authorization, not one per raw-path check plus one per realpath check.
+    // Reuse one root snapshot across raw and realpath authorization.
     expect.soft(counts.getFolderWorkspaces).toBe(buildCount)
     expect.soft(counts.getRepos).toBe(buildCount)
     expect.soft(counts.getProjects).toBe(buildCount)
@@ -342,9 +336,7 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
     expect.soft(vi.mocked(getProjectGroupSubtreeIds)).not.toHaveBeenCalled()
   })
 
-  // Why (both symlink cases): creating a symlink on Windows needs elevation or
-  // Developer Mode, so these would fail EPERM in setup rather than exercise the
-  // escape check. Every non-symlink case still runs there.
+  // Windows symlinks require elevation/Developer Mode; retain ordinary path coverage there.
   it.skipIf(process.platform === 'win32')(
     'still refuses a symlink that escapes every allowed root',
     async () => {

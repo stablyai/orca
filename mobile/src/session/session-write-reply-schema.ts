@@ -12,7 +12,7 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  *
  * Rename, close, tab-close, focus, tab-activate and the review-notes write are all decided by the
  * acceptance verdict alone — use-mobile-session-close-actions.ts:50/76/113 read `accepted` and
- * nothing else, the two activation sends are never interpreted at all, and
+ * nothing else, a tab activation is read only by the optional `activatedAtWorkspaceRoot`, and
  * use-mobile-session-diff-comments.ts:53 discards the interpretation. Declaring a member on any of
  * them would be a requirement with no reader behind it.
  */
@@ -43,4 +43,9 @@ export const sessionCreatedTerminalTabSchema = z
 
 export function createdTerminalDesktopWarning(raw: unknown): boolean {
   return z.looseObject({ warning: z.literal('desktop-tab-not-shown') }).safeParse(raw).success
+}
+
+/** A tab tap whose terminal restarted at the workspace root because its saved folder is gone. */
+export function activatedAtWorkspaceRoot(raw: unknown): boolean {
+  return z.looseObject({ startupCwdFallback: z.literal('workspace-root') }).safeParse(raw).success
 }

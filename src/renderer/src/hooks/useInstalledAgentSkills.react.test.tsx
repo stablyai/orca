@@ -15,11 +15,14 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import {
+  discoverInstalledAgentSkills,
+  resetSkillDiscoveryCacheForTests
+} from './installed-agent-skill-discovery'
 import { INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS } from './installed-agent-skill-discovery-cache'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   type InstalledAgentSkillState,
-  _installedAgentSkillDiscoveryInternalsForTests,
   notifyInstalledAgentSkillsChanged,
   notifyInstalledAgentSkillsRefreshed,
   useInstalledAgentSkillNames
@@ -172,7 +175,7 @@ afterEach(async () => {
   latestState = null
   renderedStates.length = 0
   suspendNextProbeRender = null
-  _installedAgentSkillDiscoveryInternalsForTests.reset()
+  resetSkillDiscoveryCacheForTests()
   clearRuntimeCompatibilityCacheForTests()
   useAppStore.setState({
     settings: null,
@@ -924,7 +927,6 @@ describe('useInstalledAgentSkill', () => {
       value: { skills: { discover } }
     })
 
-    const { discoverInstalledAgentSkills } = _installedAgentSkillDiscoveryInternalsForTests
     await discoverInstalledAgentSkills(false, undefined)
     await expect(discoverInstalledAgentSkills(false, undefined)).resolves.toEqual(
       expect.objectContaining({ skills: [] })

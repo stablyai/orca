@@ -1,6 +1,5 @@
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 
-/** Admission for a createPage command: the id must be fresh across every tracking map and capacity must remain. */
 export function assertBrowserClientPageAdmission(
   trackedPages: readonly ReadonlyMap<string, unknown>[],
   maxPages: number,

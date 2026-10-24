@@ -86,15 +86,14 @@ describe('the three mobile web bundle serializers', () => {
   it('emit exactly path, sha256, byteLength, contentType, in that order, and nothing else', () => {
     const decorated = ASSETS.map((asset) => ({ ...asset, sourcePath: '/tmp/ignored', extra: 1 }))
 
-    expect(serializeInContract(decorated)).toBe(serializeInContract(ASSETS))
-    expect(serializeInBuilder(decorated)).toBe(serializeInContract(ASSETS))
-    expect(serializeInGuard(decorated)).toBe(serializeInContract(ASSETS))
-    expect(JSON.parse(serializeInContract(ASSETS))[0]).toEqual({
-      path: 'assets/Za.js',
-      sha256: digest('a1'),
-      byteLength: 2048,
-      contentType: 'text/javascript; charset=utf-8'
-    })
+    const expected =
+      '[{"path":"assets/Za.js","sha256":"00000000000000000000000000000000000000000000000000000000000000a1","byteLength":2048,"contentType":"text/javascript; charset=utf-8"},' +
+      '{"path":"assets/aQ.css","sha256":"00000000000000000000000000000000000000000000000000000000000000b2","byteLength":512,"contentType":"text/css"},' +
+      '{"path":"assets/nested/mark.png","sha256":"00000000000000000000000000000000000000000000000000000000000000c3","byteLength":40960,"contentType":"image/png"},' +
+      '{"path":"index.html","sha256":"00000000000000000000000000000000000000000000000000000000000000d4","byteLength":640,"contentType":"text/html; charset=utf-8"}]'
+    for (const serialize of [serializeInContract, serializeInBuilder, serializeInGuard]) {
+      expect(serialize(decorated)).toBe(expected)
+    }
   })
 
   it('hash to one buildId, which the manifest schema then accepts', () => {

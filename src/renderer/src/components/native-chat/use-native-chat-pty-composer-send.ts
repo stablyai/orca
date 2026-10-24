@@ -1,3 +1,7 @@
+import {
+  admitNativeChatPastedText,
+  resolveNativeChatPastedText
+} from './native-chat-composer-pasted-text-references'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
@@ -26,6 +30,7 @@ import {
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
   draft: string
+  draftScopeKey: string
   imageAttachments: readonly { path: string }[]
   disabled: boolean
   isDispatchingSessionOption: boolean
@@ -49,7 +54,7 @@ export function useNativeChatPtyComposerSend(args: {
   setNotice: (notice: string | null) => void
 }): () => void {
   return useCallback(() => {
-    const text = args.draft
+    let text = args.draft
     const imagePaths = args.imageAttachments.map((attachment) => attachment.path)
     if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
       return
@@ -66,6 +71,10 @@ export function useNativeChatPtyComposerSend(args: {
     if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
       return
     }
+    if (!admitNativeChatPastedText(args.draftScopeKey, text, args.setNotice)) {
+      return
+    }
+    text = resolveNativeChatPastedText(args.draftScopeKey, text)
     const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,

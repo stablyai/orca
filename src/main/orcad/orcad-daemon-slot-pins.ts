@@ -10,7 +10,7 @@ import {
   currentOrcadPeerMachine,
   orcadPeerPidIsJudgeableHere,
   type OrcadPeerMachine
-} from './orcad-instance-lock'
+} from './orcad-lock-holder-locality'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
 
 /** This machine, for telling a peer record's PID apart from one another machine issued. */

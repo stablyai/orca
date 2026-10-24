@@ -18,7 +18,6 @@ import {
 } from './persistence-test-harness'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -63,8 +62,7 @@ async function createStore() {
     return createFreshStore()
   }
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
+  // Reinstall this test’s userData path after resetModules before initializing Store.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -91,7 +89,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── UI state ───────────────────────────────────────────────────────
 
   it('defaults new users to compact status bar usage', async () => {
     const store = await createStore()
@@ -131,7 +128,6 @@ describe('Store', () => {
     const store = await createStore()
     store.updateUI({ workspaceHostScope: 'ssh:box', visibleWorkspaceHostIds: ['ssh:box'] })
 
-    // A paired phone writes only the list.
     store.updateUI({ visibleWorkspaceHostIds: null })
     expect(store.getUI()).toMatchObject({
       visibleWorkspaceHostIds: null,
@@ -139,7 +135,6 @@ describe('Store', () => {
     })
     store.updateUI({ visibleWorkspaceHostIds: ['ssh:box'] })
     expect(store.getUI().workspaceHostScope).toBe('ssh:box')
-    // A multi-host list keeps the default host for new workspaces.
     store.updateUI({ visibleWorkspaceHostIds: ['local', 'ssh:box'] })
     expect(store.getUI().workspaceHostScope).toBe('ssh:box')
     store.updateUI({ sidebarWidth: 300 })
@@ -151,7 +146,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 400 })
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(400)
-    expect(ui.groupBy).toBe('repo') // default preserved
+    expect(ui.groupBy).toBe('repo')
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
@@ -187,11 +182,7 @@ describe('Store', () => {
     ])
   })
 
-  // The RPC now strips manualRepoOrder, so every paired-client ui.set reaches the store without
-  // the key. Absent has to mean preserve: if it read as clear, the strip would erase the desktop's
-  // order on the first unrelated setting a phone or web client changes.
-  // Absent-means-preserve is what makes the pairing-local strip safe: a client's ui.set arrives
-  // without these fields, so the desktop's own values must survive the update.
+  // Paired-client updates omit local ordering fields; omission must preserve the desktop’s own values.
   it('updateUI preserves the manual repo and host-section order when an update omits them', async () => {
     const store = await createStore()
     store.updateUI({
@@ -293,7 +284,6 @@ describe('Store', () => {
     store.flush()
 
     const raw = readPersistedStateJson(dataFile())
-    // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
     expect(raw).not.toMatch(/\n\s+"/)
     const parsed = JSON.parse(raw) as PersistedState
     expect(parsed.repos).toContainEqual(
@@ -772,9 +762,10 @@ describe('Store', () => {
   it('normalizes default browser zoom UI writes', async () => {
     const store = await createStore()
 
+    // Convert the saved logarithmic zoom to a factor, then snap to Chrome’s 125% preset.
     store.updateUI({ browserDefaultZoomLevel: 1.26 })
 
-    expect(store.getUI().browserDefaultZoomLevel).toBe(1.5)
+    expect(1.2 ** (store.getUI().browserDefaultZoomLevel ?? 0)).toBeCloseTo(1.25)
   })
 
   it('encrypts the Kagi session link on disk and decrypts it on load', async () => {
@@ -791,7 +782,7 @@ describe('Store', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
-  // Relay-era builds wrote this record; this build only carries it, sealed, for a downgrade.
+  // Preserve sealed relay-era recovery records for downgrades.
   const legacyRecovery = {
     targetId: 'ssh-1',
     clientInstanceId: 'client-1',

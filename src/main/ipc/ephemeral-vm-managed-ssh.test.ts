@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
     removeHandler: vi.fn()
   }
 }))
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connect,
   disconnectRuntimeOwnedSshTarget: vi.fn(async () => {}),
   removeRuntimeOwnedSshTarget: vi.fn(async () => {})
@@ -26,9 +26,10 @@ vi.mock('./runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: vi.fn()
 }))
 
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 
 const tempDirs: string[] = []
 afterEach(() => {
@@ -52,7 +53,7 @@ const sshResult = {
   }
 }
 
-function setupManagedSshRecipe(): { userDataPath: string } {
+function setupManagedSshRecipe(): { userDataPath: string; store: Store } {
   const userDataPath = tempDir('orca-vm-managed-user-data-')
   const repoPath = tempDir('orca-vm-managed-repo-')
   getPath.mockReturnValue(userDataPath)
@@ -88,7 +89,7 @@ function setupManagedSshRecipe(): { userDataPath: string } {
     getSettings: () => ({})
   } as unknown as Store
   registerEphemeralVmHandlers(store)
-  return { userDataPath }
+  return { userDataPath, store }
 }
 
 async function provision(): Promise<unknown> {
@@ -109,13 +110,13 @@ it("records the managed server that serves a recipe VM's SSH host", async () => 
 })
 
 it("reconnects a resumed VM's SSH host instead of asking for a pairing code", async () => {
-  const { userDataPath } = setupManagedSshRecipe()
+  const { userDataPath, store } = setupManagedSshRecipe()
   const provisioned = await provision()
   const [runtime] = listEphemeralVmRuntimes(userDataPath)
   expect(provisioned).toMatchObject({ ok: true, runtime: { id: runtime.id } })
   const runtimeId = runtime.id
   await handlers.get('ephemeralVm:attachWorkspace')?.(null, { runtimeId, workspaceId: 'ws-1' })
-  await handlers.get('ephemeralVm:suspendWorkspace')?.(null, { workspaceId: 'ws-1' })
+  await suspendEphemeralVmWorkspace(store, 'ws-1')
   connect.mockClear()
 
   const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, { workspaceId: 'ws-1' })

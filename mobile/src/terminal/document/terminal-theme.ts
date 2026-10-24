@@ -1,3 +1,4 @@
+import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { colors } from '../../theme/mobile-theme'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
@@ -199,4 +200,5 @@ export function applyTerminalTheme(
       scope.term.options.minimumContrastRatio = scope.terminalMinimumContrastRatio
     }
   }
+  paintBottomRowBackdrop(scope)
 }

@@ -15,10 +15,7 @@ const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000
 const MAX_STDERR_BYTES = 32 * 1024
 
-/**
- * The relay child. `spawnProcess` always pipes all three streams, so the non-null
- * shape is a fact of the chokepoint rather than an assumption about this call.
- */
+// spawnProcess pipes all three streams, so the relay child has no null streams.
 export type WslBrowserNetworkRelayChild = ReturnType<typeof spawnProcess> & {
   stdin: NonNullable<ReturnType<typeof spawnProcess>['stdin']>
   stdout: NonNullable<ReturnType<typeof spawnProcess>['stdout']>

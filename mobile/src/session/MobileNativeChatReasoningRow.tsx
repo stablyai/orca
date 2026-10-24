@@ -1,4 +1,4 @@
-import { mobileNativeChatMemberId } from './MobileNativeChatScrollHold'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'

@@ -8,6 +8,7 @@ import {
   type WorkspaceSessionWriteListener
 } from './workspace-session-write-listeners'
 import { ptyBindingGenerationOf } from './pty-binding-generations'
+import type { PartitionEditorViews } from './layout-editor-views'
 
 /** Gets the domains a write changed; undefined when it may have changed any of them. */
 export type StateWriteListener = (dirtyDomains: readonly string[] | undefined) => void
@@ -31,6 +32,8 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'workspaceSessionOperationListeners'
   | 'stateWriteListeners'
   | 'ptyBindingGenerations'
+  | 'layoutEditorViews'
+  | 'state'
 >
 
 const writeSchedulingOperationsContext = Symbol('WriteSchedulingOperations')
@@ -75,6 +78,11 @@ export class WriteSchedulingOperations {
   /** A pane's binding generation in this process, for readers of its writes; see pty-binding-generations. */
   getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
     return ptyBindingGenerationOf(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
+  }
+
+  /** A partition's in-memory editor tab views, for the layout projection; see layout-editor-views. */
+  getLayoutEditorViews(hostId: ExecutionHostId): PartitionEditorViews | undefined {
+    return this[writeSchedulingOperationsContext].runtime.layoutEditorViews.get(hostId)
   }
 
   /** Called after each in-memory write that schedules a save; listeners must not throw or block. */

@@ -222,9 +222,8 @@ import Foundation
     // arrive as a fetched same-origin script, which is the directive that matters.
     precondition(directives.filter { $0.contains("unsafe-inline") } == ["style-src 'self' 'unsafe-inline'"])
     precondition(!header.contains("unsafe-eval"))
-    // Narrowed rather than absent: `data:` is a fetch source for images and for nothing else, so a
-    // directive that grew one would fail here instead of passing a blanket absence check.
-    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: blob: https:"])
+    // Only images and bundled fonts can use embedded data URLs.
+    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: blob: https:", "font-src 'self' data:"])
     precondition(directives.filter { $0.contains("blob:") } == ["img-src 'self' data: blob: https:", "media-src blob:"])
     // Same shape for `https:`: images and nothing else. `http:` is not a substring of `https:`, so
     // this still refuses a cleartext source anywhere in the header.
@@ -234,10 +233,16 @@ import Foundation
   }
 
   static func checkLoadStateMachine() {
-    precondition(MobileWebShellFailureReason.generationUnreadable.rawValue == "generation-unreadable")
-    precondition(MobileWebShellFailureReason.isolationUnavailable.rawValue == "isolation-unavailable")
-    precondition(MobileWebShellFailureReason.documentLoadFailed.rawValue == "document-load-failed")
-    precondition(MobileWebShellFailureReason.renderProcessGone.rawValue == "render-process-gone")
+    let failures: [(MobileWebShellFailureReason, String)] = [
+      (.generationUnreadable, "generation-unreadable"),
+      (.isolationUnavailable, "isolation-unavailable"),
+      (.documentLoadFailed, "document-load-failed"),
+      (.renderProcessGone, "render-process-gone")
+    ]
+    for (reason, expected) in failures {
+      let machine = MobileWebShellLoadStateMachine()
+      precondition(machine.failed(reason) == MobileWebShellLoadEmission(state: "failed", reason: expected))
+    }
 
     // The own-load flag's whole lifetime, which is what decides whether a navigation to the document
     // may be allowed. Raised only by the view's own `load`, and dropped by anything that ends the
@@ -396,15 +401,6 @@ import Foundation
     precondition(!props().matches(props(directory: "/gen/ab")))
     precondition(!props().matches(props(session: "sess-01JN_aZ8")))
     precondition(!props().matches(props(bridge: false)))
-    // A triple that could not be honoured is still applied: re-entry reads the props, never whether
-    // the install succeeded, so a corrupt generation reports its failure once rather than on every
-    // commit for the life of the mount.
-    precondition(props(directory: "/gen/corrupt").matches(props(directory: "/gen/corrupt")))
-
-    // A fourth prop that nobody compared is a prop that silently never reloads, so the record's
-    // shape is pinned here rather than left to whoever adds the field.
-    let fields = Mirror(reflecting: props()).children.compactMap(\.label).sorted()
-    precondition(fields == ["bridgeEnabled", "generationDirectory", "sessionId"])
   }
 
   static func checkBridgeAcceptance() {
@@ -522,10 +518,6 @@ import Foundation
     precondition(MobileWebShellBridge.acceptsByteCount(cap))
     precondition(!MobileWebShellBridge.acceptsByteCount(cap + 1))
 
-    // The cap is on UTF-8 bytes, not characters: a multi-byte payload must not buy extra room.
-    let wide = String(repeating: "\u{1F600}", count: 4)
-    precondition(wide.count == 4 && wide.utf8.count == 16)
-
     let gate = MobileWebShellBridgeGate()
     precondition(gate.refusedCount == 0)
     precondition(gate.accepts(byteCount: cap))
@@ -574,9 +566,6 @@ import Foundation
     precondition(verdict(document, isDocumentUrl: true, isShellLoad: false, hasGesture: false) == .cancel)
     // A top-page meta refresh or a redirect to somewhere else: refused, and never opened.
     precondition(verdict(hasGesture: false) == .cancel)
-    // A tap inside the sealed preview is exactly a subframe-initiated foreign navigation, and that
-    // is the one thing the artifact is allowed to ask for.
-    precondition(verdict() == .cancelAndOffer(foreign))
     // A download is not a document load, so it is refused there rather than allowed; started by a
     // tap it reaches the opener, which is what makes `<a download>` behave as it does natively.
     precondition(

@@ -1,7 +1,10 @@
 import { useCallback } from 'react'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../src/shared/startup-cwd-fallback'
 import { triggerSelection } from '../platform/haptics'
+import type { RpcResponse } from '../transport/types'
 import { isCachedActiveDocumentRetap } from './mobile-session-active-document-retap'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { activatedAtWorkspaceRoot } from './session-write-reply-schema'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
@@ -25,8 +28,17 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     unsubscribeTerminal,
     subscribeToTerminal,
     readMarkdownTab,
-    readFileTab
+    readFileTab,
+    showToast
   } = scope
+  const reportActivation = useCallback(
+    (response: RpcResponse) => {
+      if (response.ok && activatedAtWorkspaceRoot(response.result)) {
+        showToast(STARTUP_CWD_FALLBACK_SENTENCE, 1800)
+      }
+    },
+    [showToast]
+  )
   // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
     (handle: string) => {
@@ -59,13 +71,16 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             notifyClients: false,
             navigation: 'caller',
             intent: 'user'
-          }).catch(() => {})
+          })
+            .then(reportActivation)
+            .catch(() => {})
         }
       }
     },
     [
       client,
       defaultTerminalHandlesToLiveInput,
+      reportActivation,
       sessionTabs,
       subscribeToTerminal,
       unsubscribeTerminal,
@@ -101,7 +116,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             notifyClients: false,
             navigation: 'caller',
             intent: 'user'
-          }).catch(() => {})
+          })
+            .then(reportActivation)
+            .catch(() => {})
         }
         return
       }
@@ -124,7 +141,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           notifyClients: false,
           navigation: 'caller',
           intent: 'user'
-        }).catch(() => {})
+        })
+          .then(reportActivation)
+          .catch(() => {})
       }
       if (tab.type === 'browser') {
         return
@@ -150,6 +169,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       markdownDocs,
       readFileTab,
       readMarkdownTab,
+      reportActivation,
       switchTab,
       unsubscribeTerminal,
       worktreeId

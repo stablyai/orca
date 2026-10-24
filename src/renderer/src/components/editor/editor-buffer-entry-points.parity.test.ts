@@ -4,8 +4,6 @@ import type { OpenFile } from '@/store/slices/editor'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { restartSaveTargets } from './editor-autosave-state-projections'
-import { EDITOR_SAVE_KEYS } from './editor-save-queue'
-import { editorTabModelUri } from './editor-save-disk-precondition'
 import {
   flushPendingEditorBuffer,
   hasPendingEditorBufferChange,
@@ -14,7 +12,7 @@ import {
 import { discardEditorFileChangesAndClose } from './discard-editor-file-changes'
 import type * as EditorAutosave from './editor-autosave'
 
-const quiesce = vi.hoisted(() => vi.fn(async () => undefined))
+const quiesce = vi.hoisted(() => vi.fn(async () => () => {}))
 vi.mock('./editor-autosave', async (importOriginal) => ({
   ...(await importOriginal<typeof EditorAutosave>()),
   requestEditorSaveQuiesce: quiesce
@@ -71,14 +69,6 @@ describe('editor buffer entry points return the per-tab answer', () => {
     expect(restartSaveTargets(state)).toEqual(state.openFiles.filter((file) => file.isDirty))
   })
 
-  it.each(IDS)('save keys for %s equal the model URI queue and the tab-id timer', (id) => {
-    const state = seed()
-    const file = state.openFiles.find((candidate) => candidate.id === id)
-    const oldQueueKey = file?.mode === 'edit' ? editorTabModelUri(state, file) : id
-    expect(EDITOR_SAVE_KEYS.queue(state, id)).toBe(oldQueueKey)
-    expect(EDITOR_SAVE_KEYS.schedule(state, id)).toBe(id)
-  })
-
   it.each([
     [false, ['rich-new', 'csv']],
     [true, ['rich-new']]
@@ -111,7 +101,7 @@ describe('editor buffer entry points return the per-tab answer', () => {
 
     await discardEditorFileChangesAndClose('/repo/a.ts')
 
-    expect(quiesce).toHaveBeenCalledWith({ fileId: '/repo/a.ts' })
+    expect(quiesce).toHaveBeenCalledWith({ fileId: '/repo/a.ts', discard: true })
     const state = useAppStore.getState()
     expect(state.openFiles.some((file) => file.id === '/repo/a.ts')).toBe(false)
     expect(state.editorDrafts['/repo/a.ts']).toBeUndefined()

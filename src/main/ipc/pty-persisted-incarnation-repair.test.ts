@@ -380,7 +380,6 @@ describe('registerPtyHandlers', () => {
         command: 'codex resume exact-dead-provider-session'
       })
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // The dead binding stays until the fresh spawn's one bind swaps it.
         expect(store.setWorkspaceSession).not.toHaveBeenCalled()
         const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
         expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
@@ -506,7 +505,6 @@ describe('registerPtyHandlers', () => {
       })
     ).rejects.toThrow('terminal_pane_owner_unverified')
 
-    // The live PTY keeps its pane binding, gets no synthetic exit, and is not duplicated.
     expect(providerSpawn).toHaveBeenCalledOnce()
     expect(providerSpawn.mock.calls[0]?.[0]).toMatchObject({ attachOnly: true })
     expect(runtime.onPtyExit).not.toHaveBeenCalled()

@@ -1,8 +1,4 @@
-// Why: every recursive host delete Orca performs (worktrees, terminal history, quarantined recovery
-// generations) hits the same two hazards, so one helper exists so no call site forgets either.
-// Windows stickiness — AV/indexers/late handle releases surface transient EBUSY/ENOTEMPTY/EPERM on a
-// tree Node just emptied — and Electron's asar shim, which strands any tree holding a `*.asar`
-// (see `asar-transparent-fs`).
+// Host deletion needs Windows lock retries and unpatched fs for Electron’s .asar handling.
 
 import { win32 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -15,8 +11,7 @@ const WINDOWS_REMOVE_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000]
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {
-  // POSIX paths are used by WSL callers even while the Electron process runs
-  // on Windows; do not reinterpret those as drive-relative Win32 paths.
+  // WSL callers supply POSIX paths even on Windows; do not interpret them as drive-relative paths.
   return process.platform === 'win32' &&
     isWindowsAbsolutePathLike(targetPath) &&
     !isWslUncPath(targetPath)
@@ -25,8 +20,7 @@ export function toHostFilesystemPath(targetPath: string): string {
 }
 
 export function toHostRemovalPath(targetPath: string): string {
-  // Why: Git for Windows can fail long recursive deletes even after Orca has
-  // proven the worktree target; Node's host deletion should use Win32 long paths.
+  // Node deletion uses Win32 long paths even after Git has verified the target.
   return toHostFilesystemPath(targetPath)
 }
 
@@ -46,8 +40,7 @@ function isTransientWindowsRemovalError(error: unknown): boolean {
 export async function removeHostTree(targetPath: string): Promise<void> {
   const removalPath = toHostRemovalPath(targetPath)
   const retryDelays = process.platform === 'win32' ? WINDOWS_REMOVE_RETRY_DELAYS_MS : []
-  // Why: large Windows trees commonly surface transient ENOTEMPTY/EPERM while Node walks and
-  // removes nested directories; Node's own retries absorb that before the loop below has to.
+  // Node’s retries absorb transient directory locks before the outer retry loop.
   const rmOptions = transientLockRemovalOptions()
   let attempt = 0
 
@@ -59,8 +52,7 @@ export async function removeHostTree(targetPath: string): Promise<void> {
       if (attempt >= retryDelays.length || !isTransientWindowsRemovalError(error)) {
         throw error
       }
-      // Why: Git/Node recursive deletes on Windows can observe a just-emptied
-      // directory before antivirus/indexers/handles release it.
+      // Antivirus, indexers, and late handle release can keep just-emptied Windows directories locked.
       await delay(retryDelays[attempt])
       attempt += 1
     }

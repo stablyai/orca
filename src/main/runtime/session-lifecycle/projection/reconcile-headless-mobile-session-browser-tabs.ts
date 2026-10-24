@@ -164,7 +164,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
       }
     }
     for (const pty of this.ptysById.values()) {
-      const parsed = parsePaneKey(pty.paneKey ?? '')
+      const parsed = parsePaneKey(this.paneOfPty(pty).paneKey ?? '')
       if (parsed?.leafId === leafId) {
         return parsed.tabId
       }

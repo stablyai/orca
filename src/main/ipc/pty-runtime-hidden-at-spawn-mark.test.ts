@@ -4,6 +4,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerPtyHandlers } from './pty/register-handlers'
+import { attachViewAfterHiddenStart } from './pty/pane/attach-only-view'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -160,7 +161,6 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
     daemon.setPtyBackgrounded.mockClear()
     simulateRendererReload()
 
-    // A reload must not resurrect a runtime mark on a PTY a renderer view already owned.
     expect(isHiddenRendererPty(result.id)).toBe(false)
     expect(daemon.setPtyBackgrounded).not.toHaveBeenCalledWith(result.id, true)
   })
@@ -179,7 +179,6 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
 
     const spawnPromise = controller.spawn({ cols: 80, rows: 24, initiallyHidden: true })
     await vi.waitFor(() => expect(mintedSessionId).toBeDefined())
-    // The visible mount reports visible and releases the pre-spawn mark.
     getPtySetRendererPtyVisibleListener()(null, { id: mintedSessionId!, visible: true })
     getPtySetHiddenRendererPtyListener()(null, { id: mintedSessionId!, hidden: false })
     spawnGate.resolve()
@@ -193,6 +192,37 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
         expect.objectContaining({ id: result.id, data: 'visible output' })
       ])
     )
+  })
+
+  it('does not hide a PTY main starts while a window view attaches to it (layout-owner build)', async () => {
+    const runtime = createRuntimeMock()
+    const daemon = installObservableDaemonTestProvider()
+    const spawnGate = makeDeferred()
+    let mintedSessionId: string | undefined
+    daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
+      mintedSessionId = options.sessionId
+      await spawnGate.promise
+      return { id: options.sessionId ?? 'daemon-pty' }
+    })
+    const controller = installController(runtime)
+    const spawnPromise = controller.spawn({ cols: 80, rows: 24, initiallyHidden: true })
+    await vi.waitFor(() => expect(mintedSessionId).toBeDefined())
+    const attachGate = makeDeferred()
+    // The view attaches before main's start commits, as a window that sees the binding first.
+    const viewAttach = attachViewAfterHiddenStart(
+      mintedSessionId!,
+      (id, hidden) => getPtySetHiddenRendererPtyListener()(null, { id, hidden }),
+      async () => {
+        await attachGate.promise
+        return { id: mintedSessionId!, snapshot: '' }
+      }
+    )
+    spawnGate.resolve()
+    const result = await spawnPromise
+    attachGate.resolve()
+    await viewAttach
+
+    expect(isHiddenRendererPty(result.id)).toBe(false)
   })
 
   it('clears the pre-spawn mark when the runtime spawn fails', async () => {

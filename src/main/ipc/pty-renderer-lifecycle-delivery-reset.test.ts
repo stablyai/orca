@@ -147,7 +147,6 @@ describe('registerPtyHandlers', () => {
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       handleRendererLoading()
-      // Reloaded page's dispatcher re-registers, releasing held sends (§1b).
       handleRendererDispatcherReady()
       mockProc.emitData('reload-gap output')
       vi.advanceTimersByTime(2)
@@ -185,7 +184,7 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       const handleRendererLoading = getMainFrameNavigationListener()
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
-      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake to model a live page) so flood timing starts clean.
+      // Drain the fixture's ready flush before measuring flood timing.
       vi.advanceTimersByTime(1)
       mainWindow.webContents.send.mockClear()
 
@@ -196,7 +195,6 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
 
-      // Gate closed: sends stop at the cap and the remainder accrues as pending.
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
       vi.advanceTimersByTime(1)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
@@ -209,7 +207,7 @@ describe('registerPtyHandlers', () => {
         lastLifecycleResetClearedChars: 0
       })
 
-      // Renderer reload: the dead page never ACKs, so its in-flight/pending accounting must clear or the surviving PTY stays gated forever.
+      // The dead page cannot ACK; clear its debt so surviving PTYs do not remain gated.
       handleRendererLoading()
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 0,
@@ -220,7 +218,7 @@ describe('registerPtyHandlers', () => {
         lastLifecycleResetClearedChars: 512 * 1024
       })
 
-      // Boot window (§1b): dispatcher not re-registered, so sends must be held — bytes into the listener-less page drop yet count in-flight, re-pinning the gate.
+      // Hold bytes until the replacement dispatcher exists, or lost sends recreate permanent debt.
       mainWindow.webContents.send.mockClear()
       mockProc.emitData('post-reload output')
       vi.advanceTimersByTime(8)
@@ -231,7 +229,7 @@ describe('registerPtyHandlers', () => {
         pendingPtyCount: 1
       })
 
-      // The dispatcher-ready handshake releases the held backlog; assert delivery actually resumes and pending drains, not just counters-zero.
+      // Verify the handshake restores delivery, beyond merely clearing counters.
       handleRendererDispatcherReady()
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -261,7 +259,6 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       const handleRendererNavigation = getMainWindowWebContentsListener('did-start-navigation')
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
-      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake).
       vi.advanceTimersByTime(1)
       mainWindow.webContents.send.mockClear()
 
@@ -286,7 +283,6 @@ describe('registerPtyHandlers', () => {
         rendererPtyDispatcherReady: true
       })
 
-      // Gate remains open: output after the iframe navigation reaches the fresh page without waiting for the watchdog.
       mainWindow.webContents.send.mockClear()
       mockProc.emitData('post-subframe output')
       vi.advanceTimersByTime(8)
@@ -316,7 +312,6 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
       const ackData = getPtyAckDataListener()
-      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake).
       vi.advanceTimersByTime(1)
       mainWindow.webContents.send.mockClear()
 
@@ -333,7 +328,7 @@ describe('registerPtyHandlers', () => {
         rendererPtyDispatcherReady: true
       })
 
-      // Handshake while the gate is open proves a missed lifecycle reset; reconcile or survivors stay pinned at the cap.
+      // A handshake on an open gate exposes a missed lifecycle reset; reconcile stale debt.
       mainWindow.webContents.send.mockClear()
       handleRendererDispatcherReady()
       const reconciled = getPtyRendererDeliveryDebugSnapshot()
@@ -346,7 +341,6 @@ describe('registerPtyHandlers', () => {
       })
       expect(reconciled.lastLifecycleResetClearedChars).toBeGreaterThan(0)
 
-      // Delivery has resumed: fresh output flows immediately instead of piling up behind the stale cap.
       mockProc.emitData('post-reconcile output')
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -354,7 +348,7 @@ describe('registerPtyHandlers', () => {
         data: 'post-reconcile output'
       })
 
-      // A straggler ACK from the dead page is clamped and cannot underflow the reconciled counters below zero.
+      // Clamp straggler ACKs from the dead page to avoid underflow after reconciliation.
       ackData(null, { id: spawnResult.id, charCount: 512 * 1024 })
       expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(0)
     } finally {
@@ -376,14 +370,12 @@ describe('registerPtyHandlers', () => {
       const handleRendererLoading = getMainFrameNavigationListener()
       const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
       const writeListener = getPtyWriteListener()
-      // Drain the initial ready-flush the beforeEach handshake schedules.
       vi.advanceTimersByTime(1)
 
-      // Reload closes the gate; the reloaded page's dispatcher has not re-registered.
       handleRendererLoading()
       mainWindow.webContents.send.mockClear()
 
-      // With shouldSendInteractiveOutputNow() true, only the `&& rendererPtyDispatcherReady` guard keeps the interactive echo out of the still-listener-less page.
+      // Interactive bypass must still wait for the replacement page's dispatcher.
       const redraw = '\x1b[20;2Hredraw'
       writeListener(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
       mockProc.emitData(redraw)
@@ -394,7 +386,6 @@ describe('registerPtyHandlers', () => {
         pendingPtyCount: 1
       })
 
-      // The handshake releases the held echo (drained via the batch flush).
       handleRendererDispatcherReady()
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -420,7 +411,7 @@ describe('registerPtyHandlers', () => {
       const handleRendererLoading = getMainFrameNavigationListener()
       vi.advanceTimersByTime(1)
 
-      // Reload closes the gate and arms the ~10s watchdog; the reloaded page never sends the handshake (dropped IPC), so output stays held.
+      // A missing reload handshake must recover through the bounded readiness watchdog.
       handleRendererLoading()
       mainWindow.webContents.send.mockClear()
       mockProc.emitData('post-reload output')
@@ -431,7 +422,6 @@ describe('registerPtyHandlers', () => {
         rendererDispatcherReadyForcedCount: 0
       })
 
-      // Past the 10s watchdog window the gate self-heals (ready forced, backlog drains) instead of freezing permanently.
       vi.advanceTimersByTime(10_000)
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -613,7 +603,7 @@ describe('PTY renderer send recovery', () => {
       expect(getPtyDataSendCalls()).toEqual([['pty:data', { id: 'send-fail-exit', data: pending }]])
       expect(
         mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
-      ).toEqual([['pty:exit', { id: 'send-fail-exit', code: 7 }]])
+      ).toEqual([['pty:exit', { id: 'send-fail-exit', code: 7, hostId: 'local' }]])
       expect(
         mainWindow.webContents.send.mock.calls.filter(
           (call) => call[0] === 'pty:modelRestoreNeeded'
@@ -651,7 +641,7 @@ describe('PTY renderer send recovery', () => {
 
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: 'flood-pty', data: '', droppedOutput: true }],
-        ['pty:exit', { id: 'flood-pty', code: 0 }]
+        ['pty:exit', { id: 'flood-pty', code: 0, hostId: 'local' }]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 0,

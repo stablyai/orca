@@ -66,8 +66,6 @@ async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvaila
   return { available: simctl.ok && serveSim.ok && devices.length > 0, devices, simctl, serveSim }
 }
 
-// Android devices are surfaced through the same SimulatorDevice-shaped list the
-// settings pane already renders (name + state + a synthetic "Android" runtime).
 function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
   return {
     name: device.name,
@@ -78,8 +76,6 @@ function toSimulatorRow(device: EmulatorDevice): SimulatorDevice {
   }
 }
 
-// Aggregates availability across backends so the Mobile Emulator pane works on
-// every desktop platform: iOS (macOS only) plus Android (any host with the SDK).
 export async function inspectEmulatorAvailability(
   bridge: EmulatorBridge
 ): Promise<EmulatorAvailability> {
@@ -98,8 +94,7 @@ export async function inspectEmulatorAvailability(
 
   const devices = [...ios.devices, ...android.devices.map(toSimulatorRow)]
   const available = ios.available || android.available
-  // Why: on non-macOS hosts the iOS messages are irrelevant, so surface the
-  // Android setup message instead of "requires macOS".
+  // Outside macOS, report Android setup rather than an irrelevant iOS host error.
   const message = available
     ? 'Ready'
     : currentPlatform === 'darwin'

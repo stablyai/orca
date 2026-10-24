@@ -48,7 +48,6 @@ function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
 }
 
-/** The folder handle the app opens to provoke the prompt; `read` then `close`, both awaited. */
 function fakeDir(): { read: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> } {
   return { read: vi.fn(async () => null), close: vi.fn(async () => {}) }
 }
@@ -86,7 +85,6 @@ describe('resetFolderAccessForDaemon rejects cases it cannot remedy', () => {
     expect(resetMacosTccPermissionMock).not.toHaveBeenCalled()
   })
 
-  // Only Documents/Desktop/Downloads have a per-app TCC row; the rest have nothing to reset.
   it.each([['other-home'], ['outside-home']])(
     'is unsupported for the %s folder class',
     async (cwdClass) => {
@@ -127,7 +125,6 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
     expect(resetMacosTccPermissionMock).toHaveBeenCalledWith(service, 'com.stablyai.orca')
   })
 
-  // The prompt is attributed to whoever makes the syscall, so the app has to be what reads it.
   it('reads the folder from the app, then forces a fresh-daemon re-probe', async () => {
     const dir = fakeDir()
     opendirMock.mockResolvedValue(dir)
@@ -159,8 +156,7 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
     expect(refreshProbeMock).toHaveBeenCalledWith(DAEMON, { force: true })
   })
 
-  // An unanswered TCC sheet blocks the read for as long as the user ignores it, and the dialog is
-  // modal and busy the whole time.
+  // An unanswered TCC prompt can block the read indefinitely.
   it('stops waiting on an unanswered prompt, and does not probe under the sheet', async () => {
     const denied = {
       daemonScope: 'aaaa111122223333',
@@ -175,13 +171,12 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(60_000)
 
-      // The stored verdict predates the reset, so it is not the reset's answer.
+      // The stored verdict predates the reset.
       expect(await pending).toEqual({
         outcome: 'probed',
         mismatch: { ...denied, freshDaemonAccess: 'unknown' }
       })
       expect(refreshProbeMock).not.toHaveBeenCalled()
-      // Nothing probed the folder after the reset, so the outcome is not a verdict.
       expect(trackMock).toHaveBeenCalledWith('daemon_folder_access_notice', {
         action: 'reset_outcome_unknown',
         cwd_class: 'documents'
@@ -225,8 +220,6 @@ describe('resetFolderAccessForDaemon runs the remedy', () => {
   })
 })
 
-// Nobody has verified this remedy on an affected machine, so the re-probe's verdict is the
-// feature's only evidence. It must leave main as a valid event every time.
 describe('resetFolderAccessForDaemon reports the outcome', () => {
   it.each([
     ['allowed', 'reset_outcome_allowed'],

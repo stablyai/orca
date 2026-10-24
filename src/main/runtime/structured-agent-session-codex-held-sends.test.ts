@@ -245,6 +245,24 @@ describe('a Codex send whose turn completes without taking it', () => {
     )
     const published = lastPublished(blocked)
     expect(published && hasUnansweredStructuredAgentSessionDispatch([published], fence)).toBe(false)
+
+    const later = await send('second succeeds')
+    await vi.waitFor(() => expect(answers).toBe(2))
+    turns.start()
+    turns.echo(later)
+    turns.end('completed')
+    await vi.waitFor(async () =>
+      expect((await rawSubmission(later)).dispatchState).toBe('accepted')
+    )
+    handlers?.onExit?.(new Error('codex exited'))
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    )
+    expect(
+      (await host.journalSnapshot(SESSION)).items.some(
+        (item) => item.body.kind === 'status' && item.body.failure
+      )
+    ).toBe(false)
   })
 
   it('keeps a send Working while Codex holds it, and its echo still settles it', async () => {

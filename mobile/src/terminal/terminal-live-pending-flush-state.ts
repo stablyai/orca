@@ -7,12 +7,14 @@ type TerminalLivePendingRequest = {
 type TerminalLivePendingBatch = {
   readonly handle: string
   payload: string
+  byteLength: number
   readonly requests: TerminalLivePendingRequest[]
   readonly sender: TerminalLiveMirrorSender
 }
 
 export type TerminalLivePendingFlushState = {
   current: Promise<boolean> | null
+  cancelCurrent: (() => void) | null
   activeRequests: TerminalLivePendingRequest[]
   generation: number
   pendingBatches: TerminalLivePendingBatch[]
@@ -21,6 +23,7 @@ export type TerminalLivePendingFlushState = {
 export function createTerminalLivePendingFlushState(): TerminalLivePendingFlushState {
   return {
     current: null,
+    cancelCurrent: null,
     activeRequests: [],
     generation: 0,
     pendingBatches: []
@@ -35,6 +38,8 @@ export function waitForTerminalLivePendingFlush(
 
 export function cancelTerminalLivePendingFlush(state: TerminalLivePendingFlushState): void {
   state.generation += 1
+  state.cancelCurrent?.()
+  state.cancelCurrent = null
   const requests = [
     ...state.activeRequests,
     ...state.pendingBatches.flatMap((batch) => batch.requests)
@@ -58,7 +63,13 @@ async function drainTerminalLiveMirrorSends(
     }
 
     state.activeRequests = batch.requests
-    const sent = await batch.sender(batch.handle, batch.payload).catch(() => false)
+    let delivery: Promise<boolean>
+    try {
+      delivery = batch.sender(batch.handle, batch.payload)
+    } catch {
+      delivery = Promise.resolve(false)
+    }
+    const sent = await delivery.catch(() => false)
     if (state.generation !== generation) {
       return false
     }
@@ -81,14 +92,21 @@ export function queueTerminalLiveMirrorSend(
   const request = new Promise<boolean>((resolve) => {
     resolveRequest = resolve
   })
+  const byteLength = getTerminalInputByteLength(payload)
   const pendingTail = state.pendingBatches.at(-1)
-  if (pendingTail?.handle === handle && pendingTail.sender === sender) {
+  if (
+    pendingTail?.handle === handle &&
+    pendingTail.sender === sender &&
+    pendingTail.byteLength + byteLength <= TERMINAL_LIVE_INPUT_MAX_BYTES
+  ) {
     pendingTail.payload += payload
+    pendingTail.byteLength += byteLength
     pendingTail.requests.push({ resolve: resolveRequest })
   } else {
     state.pendingBatches.push({
       handle,
       payload,
+      byteLength,
       requests: [{ resolve: resolveRequest }],
       sender
     })
@@ -96,13 +114,25 @@ export function queueTerminalLiveMirrorSend(
 
   if (!state.current) {
     const generation = state.generation
+    let resolveBarrier = (_sent: boolean): void => {}
+    const barrier = new Promise<boolean>((resolve) => {
+      resolveBarrier = resolve
+    })
+    const cancelBarrier = () => resolveBarrier(false)
+    state.cancelCurrent = cancelBarrier
     const drain = drainTerminalLiveMirrorSends(state, generation).catch(() => false)
-    state.current = drain
-    void drain.then(() => {
-      if (state.current === drain) {
+    state.current = barrier
+    void drain.then((sent) => {
+      resolveBarrier(sent)
+      if (state.current === barrier) {
         state.current = null
+      }
+      if (state.cancelCurrent === cancelBarrier) {
+        state.cancelCurrent = null
       }
     })
   }
   return request
 }
+import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
+import { TERMINAL_LIVE_INPUT_MAX_BYTES } from './terminal-live-input'

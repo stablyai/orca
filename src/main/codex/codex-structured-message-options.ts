@@ -6,7 +6,7 @@ import { CODEX_DEFAULT_SERVICE_TIER } from './codex-structured-service-tier'
 import type { CodexSession } from './codex-structured-session-state'
 import { applyCodexStructuredSessionOption } from './codex-structured-session-options'
 
-/** Resolve one message's choices and baseline without changing the next pick. */
+/** Resolve per-message overrides without replacing the session's saved picks. */
 export async function resolvedCodexMessageOptions(
   session: CodexSession,
   choices: AgentSessionExecutionOptions | undefined
@@ -17,7 +17,7 @@ export async function resolvedCodexMessageOptions(
   const listing = codexAcquireCatalogListing(session.catalogAccess)
   const priorModel = session.options.get('model')
   const priorEffort = session.options.get('effort')
-  // An unchosen key keeps what the thread runs; another model brings its own default effort.
+  // Keep the thread's effort unless switching models.
   const thread = session.reportedOptions
   const model =
     choices.model ?? thread.model ?? listing?.models.find((entry) => entry.isDefault)?.id
@@ -26,11 +26,7 @@ export async function resolvedCodexMessageOptions(
   }
   const listedModel = listing?.models.find((entry) => entry.id === model)
   const threadEffort = model === thread.model ? thread.effort : undefined
-  const defaultEffort =
-    threadEffort &&
-    (!listedModel || listedModel.efforts.some((entry) => entry.value === threadEffort))
-      ? threadEffort
-      : listedModel?.defaultEffort
+  const defaultEffort = threadEffort ?? listedModel?.defaultEffort
   if (choices.effort === undefined && priorEffort && !defaultEffort) {
     throw new AgentSessionOptionRejectedError(new Error('codex default effort is unavailable'))
   }
@@ -82,23 +78,27 @@ export async function resolvedCodexMessageOptions(
       choices.fastMode === 'true' ||
       (choices.serviceTier && choices.serviceTier !== CODEX_DEFAULT_SERVICE_TIER))
   ) {
-    await applyCodexStructuredSessionOption(selected, 'model', model)
+    // Preserve previously admitted choices across installation changes.
+    selected.options.set('model', model)
     if (!defaultEffort && choices.effort === undefined) {
       selected.options.delete('effort')
     }
-    // Where the model brought an effort, it is the thread's own for the thread's model.
     if (
       choices.effort === undefined &&
       defaultEffort &&
       (priorEffort || choices.model || selected.options.has('effort'))
     ) {
-      await applyCodexStructuredSessionOption(selected, 'effort', defaultEffort)
+      selected.options.set('effort', defaultEffort)
     }
   }
   for (const key of ['effort', 'personality', 'fastMode', 'serviceTier'] as const) {
     const value = choices[key]
     if (value !== undefined) {
-      await applyCodexStructuredSessionOption(selected, key, value)
+      if (key === 'fastMode') {
+        await applyCodexStructuredSessionOption(selected, key, value)
+      } else {
+        selected.options.set(key, value)
+      }
     }
   }
   return Object.fromEntries(selected.options)

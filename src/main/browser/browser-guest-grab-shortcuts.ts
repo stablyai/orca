@@ -2,7 +2,7 @@ import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/
 import { isAgentInjectingInput } from './agent-input-injection'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
-// Why: a focused guest never surfaces Cmd/Ctrl+C to the renderer; forward only when it wouldn't do a normal copy (no editable focus, no selection).
+// Guests swallow renderer shortcuts; keep normal copy when editing or text is selected.
 export function setupGrabShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -12,7 +12,7 @@ export function setupGrabShortcutForwarding(args: {
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
-    // Why: agent-injected keys must not run Orca shortcuts or grab actions (#20595).
+    // Agent-injected keys must not trigger Orca actions (#20595).
     if (isAgentInjectingInput(guest)) {
       return
     }
@@ -32,14 +32,14 @@ export function setupGrabShortcutForwarding(args: {
       if (!renderer) {
         return
       }
-      // Why: a focused guest swallows bare keys; during an active grab pick, plain C/S are Orca's copy/screenshot, not page typing.
+      // During a grab, bare C/S control copy/screenshot instead of page typing.
       event.preventDefault()
       renderer.send('browser:grabActionShortcut', { browserPageId: browserTabId, key: bareKey })
       return
     }
 
     if (
-      // Why: the renderer toggles the picker per message, so a held chord would flicker it.
+      // Repeating a toggle would flicker the picker.
       input.isAutoRepeat ||
       !keybindingMatchesAction('browser.grabElement', input, process.platform, getKeybindings?.())
     ) {
@@ -76,7 +76,7 @@ export function setupGrabShortcutForwarding(args: {
         renderer.send('browser:grabModeToggle', browserTabId, 'copy')
       })
       .catch(() => {
-        // Why: shortcut forwarding is best-effort — guest teardown or a transient executeJavaScript failure must not break normal copy.
+        // Guest teardown or script failure must not interrupt normal copy.
       })
   }
 
@@ -85,7 +85,7 @@ export function setupGrabShortcutForwarding(args: {
     try {
       guest.off('before-input-event', handler)
     } catch {
-      // Why: browser tabs can briefly outlive the guest webContents during teardown, so cleanup is best-effort.
+      // The guest may already be destroyed.
     }
   }
 }

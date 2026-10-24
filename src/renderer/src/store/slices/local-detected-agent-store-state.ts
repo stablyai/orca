@@ -6,6 +6,10 @@ import type {
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type LocalDetectedAgentState = {
+  readLocalAgentInventory: (worktreeId?: string | null) => {
+    ids: TuiAgent[] | null
+    state: 'pending' | 'successful' | 'failed'
+  }
   detectedAgentIds: TuiAgent[] | null
   isDetectingAgents: boolean
   isRefreshingAgents: boolean

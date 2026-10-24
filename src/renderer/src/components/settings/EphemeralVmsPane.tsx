@@ -8,16 +8,12 @@ import { Button } from '../ui/button'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
-import {
-  EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
-  EPHEMERAL_VMS_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
+import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -45,15 +41,6 @@ export function EphemeralVmsPane(): React.JSX.Element {
       }
     }
   }, [])
-
-  // Why: an absent runtime still resolves to the local host, which is what the
-  // seven sibling panes rely on to reach the Windows npx preflight.
-  const installCommand = activeSkillRuntime.installDisabledReason
-    ? EPHEMERAL_VMS_SKILL_INSTALL_COMMAND
-    : buildSkillCommandForRuntime(
-        EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
 
   const {
     installed: skillDetected,
@@ -154,18 +141,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
           'auto.components.settings.EphemeralVmsPane.skillDescription',
           'Sets up, builds, authenticates, and validates repo-owned environment recipes.'
         )}
-        command={installCommand}
-        terminalTitle={translate(
-          'auto.components.settings.EphemeralVmsPane.cloudVmTerminalTitle',
-          'Cloud VM setup'
-        )}
-        terminalAriaLabel={translate(
-          'auto.components.settings.EphemeralVmsPane.cloudVmTerminalAriaLabel',
-          'Cloud VM skill install terminal'
-        )}
-        terminalWorktreeId="settings-ephemeral-vms-skill-terminal"
-        terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-        terminalRuntime={activeSkillRuntime.agentRuntime}
+        skillNames={[EPHEMERAL_VMS_SKILL_NAME]}
         installed={skillDetected}
         loading={skillLoading}
         error={activeSkillRuntime.installDisabledReason ?? skillError}
@@ -173,7 +149,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         icon={<Server className="size-5" />}
         onRecheck={refreshSkill}
         freshnessSkillName={
-          activeSkillRuntime.canUseLocalSkillFreshness ? EPHEMERAL_VMS_SKILL_NAME : undefined
+          activeSkillRuntime.canUseSkillFreshness ? EPHEMERAL_VMS_SKILL_NAME : undefined
         }
       />
 

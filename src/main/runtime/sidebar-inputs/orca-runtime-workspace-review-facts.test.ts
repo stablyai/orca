@@ -47,7 +47,7 @@ function worktree(id: string, branch: string): ResolvedWorktree {
 }
 
 describe('getWorkspaceReviewFacts', () => {
-  it('keys the persisted PR cache by workspace', async () => {
+  it('keys the persisted PR cache by workspace row', async () => {
     const merged: PRInfo = {
       number: 3,
       title: 'Ship it',
@@ -73,7 +73,7 @@ describe('getWorkspaceReviewFacts', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read touches only repos and the GitHub cache.
     const runtime = withSidebarFacts(new Probe(store as RuntimeStore))
     await expect(runtime.getWorkspaceReviewFacts()).resolves.toEqual({
-      facts: { 'repo-1::/r/a': { provider: 'github', reviewState: 'merged' } }
+      facts: { '|repo-1::/r/a': { provider: 'github', reviewState: 'merged' } }
     })
   })
 

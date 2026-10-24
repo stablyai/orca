@@ -212,48 +212,65 @@ describe('Windows server prebuild cache inputs', () => {
     )
   })
 
-  it('covers the bundled compiler-spawn implementation', () => {
-    expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
-      expect.arrayContaining(
-        [
-          'run-process',
-          'spawn-resolution',
-          'process-tree-termination',
-          'process-tree-kill-gate',
-          'spawn-observer',
-          'bounded-output-sink',
-          'growing-byte-buffer',
-          'child-termination-reporter',
-          'process-spec',
-          'windows-command-line',
-          'windows-cmd-shim-resolution',
-          'windows-system-binary',
-          'windows-tree-kill'
-        ].map((name) => `src/packages/process-host/src/${name}.ts`)
-      )
-    )
-    expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
-      expect.arrayContaining([
-        'src/packages/process-host/.gitignore',
-        'src/packages/process-host/package.json',
-        'src/packages/process-host/scripts/build-dist.mjs',
-        'src/packages/process-host/tsconfig.json'
-      ])
-    )
+  const compilerInputs = [
+    ...[
+      'run-process',
+      'spawn-resolution',
+      'process-tree-termination',
+      'process-tree-kill-gate',
+      'spawn-observer',
+      'bounded-output-sink',
+      'growing-byte-buffer',
+      'child-termination-reporter',
+      'process-spec',
+      'windows-command-line',
+      'windows-cmd-shim-resolution',
+      'windows-system-binary',
+      'windows-tree-kill'
+    ].map((name) => `src/packages/process-host/src/${name}.ts`),
+    'src/packages/process-host/.gitignore',
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/scripts/build-dist.mjs',
+    'src/packages/process-host/tsconfig.json'
+  ]
+  const cacheInputs = [...new Set([...WINDOWS_PREBUILD_CACHE_INPUTS, ...compilerInputs])]
+
+  it('reuses native binaries across app versions but invalidates every other manifest field', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-version-key-'))
+    temporary.push(repository)
+    const source = resolve(import.meta.dirname, '../..')
+    for (const relative of cacheInputs) {
+      mkdirSync(dirname(join(repository, relative)), { recursive: true })
+      cpSync(join(source, relative), join(repository, relative))
+    }
+    const path = join(repository, 'package.json')
+    const manifest = JSON.parse(readFileSync(path, 'utf8'))
+    const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
+    writeFileSync(path, JSON.stringify({ ...manifest, version: '999.0.0' }))
+    expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).toBe(before)
+    for (const field of Object.keys(manifest).filter((field) => field !== 'version')) {
+      writeFileSync(path, JSON.stringify({ ...manifest, [field]: 'changed' }))
+      expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
+    }
   })
 
-  it.each(WINDOWS_PREBUILD_CACHE_INPUTS)('invalidates a changed %s input', (file) => {
+  it.each(cacheInputs)('invalidates a changed %s input', (file) => {
     const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
     temporary.push(repository)
     const source = resolve(import.meta.dirname, '../..')
-    for (const relative of WINDOWS_PREBUILD_CACHE_INPUTS) {
+    for (const relative of cacheInputs) {
       mkdirSync(dirname(join(repository, relative)), { recursive: true })
       cpSync(join(source, relative), join(repository, relative))
     }
     const before = windowsPrebuildCacheIdentity({ ...options, repository }).key
     writeFileSync(
       join(repository, file),
-      `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
+      file === 'package.json'
+        ? JSON.stringify({
+            ...JSON.parse(readFileSync(join(repository, file), 'utf8')),
+            engines: { node: 'changed' }
+          })
+        : `${readFileSync(join(repository, file), 'utf8')}\nchanged input`
     )
     expect(windowsPrebuildCacheIdentity({ ...options, repository }).key).not.toBe(before)
   })

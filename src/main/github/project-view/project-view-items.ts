@@ -27,16 +27,14 @@ export async function fetchAllItems(args: {
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: isolate missing Issue.parent capability by owner, type, and host.
   const scopeKey = ownerScopeKey(args.owner, args.ownerType, args.host)
-  // Why: await the same-scope probe, then re-read state because it may have changed.
   const inFlight = parentFieldProbeInFlight.get(scopeKey)
   if (inFlight) {
     await inFlight.catch(() => {})
   }
   let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
-  // Single-flight the with-parent probe per owner; assign the in-flight promise synchronously (no await between get() and set()) so callers share one probe.
+  // Register the shared parent probe synchronously so concurrent callers cannot duplicate it.
   let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
   let probePromise: Promise<Awaited<ReturnType<typeof fetchItemsPageWithRaw>>> | null = null
   if (includeParent && !parentFieldProbeInFlight.has(scopeKey)) {
@@ -57,7 +55,7 @@ export async function fetchAllItems(args: {
           includeParent: true,
           host: args.host
         })
-        // Why: set the retried flag BEFORE resolving/clearing the probe so siblings awoken on inFlight.catch() see it and don't fire duplicate with-parent probes.
+        // Publish unsupported capability before releasing probe waiters.
         if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
           markParentFieldRetried(scopeKey)
         }
@@ -81,7 +79,7 @@ export async function fetchAllItems(args: {
     })
   }
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
-    // Retry the whole table without parent; mark this owner retried so later fetches skip the probe (other owners unaffected).
+    // Retry only this owner without parent; other owner scopes retain capability.
     markParentFieldRetried(scopeKey)
     includeParent = false
     parentFieldDropped = true
@@ -106,7 +104,6 @@ export async function fetchAllItems(args: {
     return { ok: false, error: first.error }
   }
 
-  // Drift guards
   if (first.page.totalCount === undefined || first.page.totalCount === null) {
     return { ok: false, error: driftError('items.totalCount missing') }
   }
@@ -118,7 +115,6 @@ export async function fetchAllItems(args: {
     return { ok: false, error: driftError('items.nodes missing'), totalCount }
   }
 
-  // Size cap
   if (totalCount > MAX_ITEMS) {
     return {
       ok: false,
@@ -148,7 +144,6 @@ export async function fetchAllItems(args: {
     return { ok: false, error: e1, totalCount }
   }
 
-  // Paginate
   let hasNext = first.page.pageInfo.hasNextPage === true
   let cursor: string | null | undefined = first.page.pageInfo.endCursor
   if (hasNext && typeof cursor !== 'string') {
@@ -198,8 +193,6 @@ export async function fetchAllItems(args: {
   }
   return { ok: true, rows, totalCount, parentFieldDropped }
 }
-
-// ─── Cheap count-only query (for unsupported_layout) ──────────────────
 
 export async function fetchItemsCountOnly(args: {
   owner: string

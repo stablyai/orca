@@ -1,7 +1,3 @@
-// What earlier runs of this session recorded about its Claude subagents, re-derived from the rows
-// they journaled: the task id each spawn call resolved to (a resumed child's frames still carry the
-// old call), the latest run of each child, and which task ids were subagents at all.
-
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat-subagent-items'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -13,8 +9,7 @@ type Reading = {
   subagents: Set<string>
 }
 
-/** Read once per bound journal epoch. Before the journal is bound nothing is read and nothing is
- *  kept, so the first read after bind still sees every row. */
+/** Cache per bound journal epoch; reads before binding must not populate the cache. */
 export class ClaudeJournaledSubagents {
   private journal: StructuredAgentSessionLinkageJournal | null = null
   private epoch: string | null = null
@@ -22,14 +17,12 @@ export class ClaudeJournaledSubagents {
 
   constructor(private readonly bound: () => StructuredAgentSessionLinkageJournal | null) {}
 
-  /** The task id an earlier run resolved this spawn call to. */
   canonical = (toolUseId: string): string | null =>
     this.current()?.canonicalByToolUse.get(toolUseId) ?? null
 
-  /** The latest run any row records for this child; 0 when no row names it. */
+  /** Zero means no journaled attempt. */
   attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 0
 
-  /** An earlier run saved this task as a subagent, so it is not a background task. */
   isSubagent = (taskId: string): boolean => this.current()?.subagents.has(taskId) === true
 
   private current(): Reading | null {
@@ -74,7 +67,7 @@ function readAgentRow(
     agentId,
     Math.max(attempt ?? 1, reading.attemptByAgent.get(agentId) ?? 1)
   )
-  // A row stamped with its own reference was never resolved, so it names no alias.
+  // Provisional self-stamps do not establish aliases.
   if (
     providerParentRef !== undefined &&
     agentId !== providerParentRef &&

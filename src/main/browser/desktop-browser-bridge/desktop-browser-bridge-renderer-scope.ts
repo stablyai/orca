@@ -3,11 +3,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 
 const SCOPE_REPLY_TIMEOUT_MS = 5_000
 
-/**
- * Asks the renderer, which owns the workspace-to-host map and every page record (mounted or not),
- * which workspace of `environmentId`'s own machine a command may use. No window, a timeout or a
- * malformed reply all answer null.
- */
+// The renderer owns host/workspace mappings and unmounted page records; null denies access.
 export function rendererResolveRemoteCliWorkspace(
   getWindow: () => BrowserWindow | null,
   query: { environmentId: string; workspaceId?: string; pageId?: string }

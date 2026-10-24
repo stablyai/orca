@@ -1,5 +1,19 @@
 import { unitConsumers } from './ci-unit-dependency-graph.mjs'
 import { balanceFiles } from './ci-shard-assignment.mjs'
+import { UNIT_SETUP_FILES } from './ci-unit-files.mjs'
+
+const RUNTIME_ENTRY_POINTS = new Set([
+  'config/vitest.config.ts',
+  'config/scripts/run-vitest.mjs',
+  ...UNIT_SETUP_FILES
+])
+
+function isUnitRuntimeEntryPoint(file) {
+  return (
+    RUNTIME_ENTRY_POINTS.has(file) ||
+    (/^config\/scripts\/vitest[^/]*\.(?:ts|mjs)$/.test(file) && !file.includes('.test.'))
+  )
+}
 
 export function selectUnitFiles(files, changed, graphInput) {
   const full = (reason) => ({ files, reason, full: true })
@@ -15,11 +29,17 @@ export function selectUnitFiles(files, changed, graphInput) {
   }
   for (const file of changed) {
     const consumers = unitConsumers([file], graph.reverse)
+    if ([...consumers].some(isUnitRuntimeEntryPoint)) {
+      return full('Shared unit runtime input')
+    }
     if (!files.some((test) => consumers.has(test))) {
       return full('No proven test coverage for changed inputs')
     }
   }
-  const affected = unitConsumers([...changed, ...graph.opaque], graph.reverse)
+  const affected = unitConsumers(changed, graph.reverse)
+  for (const file of graph.opaqueConsumers ?? unitConsumers(graph.opaque, graph.reverse)) {
+    affected.add(file)
+  }
   const selected = files.filter((file) => affected.has(file))
   if (!selected.length) {
     return full('No proven test coverage for changed inputs')
@@ -27,7 +47,8 @@ export function selectUnitFiles(files, changed, graphInput) {
   return {
     files: selected,
     reason: 'Transitive imports plus indirect-input consumers',
-    full: false
+    full: false,
+    checkedInputOwners: graph.checkedInputOwners ?? []
   }
 }
 
@@ -59,6 +80,7 @@ export function planUnitSelection({
     mode: selected ? 'selected' : 'shadow',
     selectionAvailable: !candidate.full,
     reason: candidate.reason,
+    checkedInputOwners: candidate.checkedInputOwners ?? [],
     files,
     candidateFiles: candidate.files,
     executionFiles,

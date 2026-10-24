@@ -21,6 +21,11 @@ export function editorTabShowsFile(entityId: string, file: FileOwner, worktreeId
  * layout-owner build its runtime owner too, since a local and a runtime-environment file can share
  * a path. A layout frame's records keep one key in every build (workspace-layout-records.ts).
  */
+/** The file fields `editorFileKey` is made of: a changed one names another record. */
+export const EDITOR_FILE_KEY_FIELDS: readonly (keyof FileOwner)[] = ORCA_LAYOUT_OWNER_IS_MAIN
+  ? ['filePath', 'runtimeEnvironmentId']
+  : ['filePath']
+
 export function editorFileKey(file: FileOwner): string {
   // Why no worktree: every record keyed here belongs to one workspace, or moves between two.
   return ORCA_LAYOUT_OWNER_IS_MAIN

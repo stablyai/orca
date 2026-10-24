@@ -16,6 +16,11 @@ import {
   type WorktreeOperationRoute
 } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
@@ -150,10 +155,10 @@ function resolveCurrentEditorRoute(
 
 function isWorktreePublished(state: EditorOwnerState, worktreeId: string): boolean {
   return (
-    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
+    Object.values(selectWorktreesByRepo(state) ?? {}).some((worktrees) =>
       worktrees.some((worktree) => worktree.id === worktreeId)
     ) ||
-    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+    Object.values(selectDetectedWorktreesByRepo(state) ?? {}).some((result) =>
       result.worktrees.some((worktree) => worktree.id === worktreeId)
     )
   )
@@ -193,7 +198,7 @@ export function getEditorFileOperationContext(
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
     (workspaceScope?.type === 'folder'
-      ? (state.folderWorkspaces.find(
+      ? (selectFolderWorkspaces(state).find(
           (workspace) => workspace.id === workspaceScope.folderWorkspaceId
         )?.folderPath ?? null)
       : null)

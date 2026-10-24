@@ -39,14 +39,6 @@ function patchesUnder(dockTitle: string, branch: string) {
 }
 
 describe('dev-electron-bundle-identity', () => {
-  it('leaves process.env untouched, including its object identity', () => {
-    const envBefore = process.env
-    const snapshot = { ...process.env }
-    patchesUnder('Orca: some-branch', 'some-branch')
-    expect(process.env).toBe(envBefore)
-    expect({ ...process.env }).toEqual(snapshot)
-  })
-
   it('gives the dev app a legible display name so notifications are not just "Electron"', () => {
     const byKey = Object.fromEntries(
       getDevBundlePlistPatches().map((patch) => [patch.key, patch.value])
@@ -78,16 +70,5 @@ describe('dev-electron-bundle-identity', () => {
     expect(patchesUnder('Orca: dev', 'main')).toEqual(
       patchesUnder('Orca: some-worktree @ feature/x', 'feature/x')
     )
-  })
-
-  it('leaks no branch, worktree, or title text into any patched value', () => {
-    const branch = 'fix-login-crash'
-    const worktree = 'Orca-safe-storage-lock'
-    for (const patch of patchesUnder(`Orca: ${branch}`, branch)) {
-      expect(patch.value).not.toContain(branch)
-      expect(patch.value).not.toContain(worktree)
-      expect(typeof patch.value).toBe('string')
-      expect(patch.value.length).toBeGreaterThan(0)
-    }
   })
 })

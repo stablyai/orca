@@ -4,7 +4,6 @@ import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { visibleHostRouteNotice } from '../host-route-notice'
-import { resolveHostRouteActionState } from '../host-route-action-state'
 import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
 import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
@@ -36,19 +35,16 @@ export type HostScreenProps = {
   embedded?: boolean
   // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
   hostId?: string
-  action?: string
   onHideSidebar?: () => void
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
+  const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
-  const action = actionProp ?? params.action
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
@@ -70,7 +66,7 @@ export function useHostScreenController({
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
-  const state = useHostScreenState(hostId, action)
+  const state = useHostScreenState(hostId)
   const settings = useHostViewSettings({ client, connState, state })
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
@@ -80,7 +76,7 @@ export function useHostScreenController({
 
   useHostScreenIdentity({ client, hostId, state })
   const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
-  const sidebarFeed = useSwitchedHostSidebarFeed(client)
+  const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
   // Read through a ref so the metadata refresh keeps its identity across installs.
   const feedRef = useRef(sidebarFeed?.feed)
   useEffect(() => {
@@ -128,18 +124,12 @@ export function useHostScreenController({
     state
   })
 
-  const resolvedRouteActionState = resolveHostRouteActionState(state.routeActionState, action)
-  // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
-  if (resolvedRouteActionState !== state.routeActionState) {
-    state.setRouteActionState(resolvedRouteActionState)
-  }
-  const showNewWorktree = resolvedRouteActionState.showNewWorktree
-
   const hostPlatform = useResolvedHostPlatform(state, hostId)
   const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
   const feed = sidebarFeed?.feed ?? null
   const sectionsResult = useHostListSections({
     client,
+    hostId,
     feed,
     displayWorktrees,
     hostPlatform,
@@ -156,7 +146,7 @@ export function useHostScreenController({
     [state.view.filters, uniqueRepos]
   )
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
-  const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)
+  const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
 
   return {
     actions,
@@ -192,7 +182,6 @@ export function useHostScreenController({
     sectionsResult,
     setDismissedNotice,
     settings,
-    showNewWorktree,
     state
   }
 }

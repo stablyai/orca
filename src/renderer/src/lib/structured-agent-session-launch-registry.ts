@@ -28,7 +28,10 @@ import {
   retireStructuredAgentLaunchCancellation
 } from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
+import {
+  cancelStructuredAgentLaunchOnLocalHost,
+  resetStructuredAgentLocalLaunchCancelsForTests
+} from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -39,6 +42,8 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
    *  failure named none. */
   failure?: StructuredLaunchFailure
   selection: StructuredLaunchSelection
+  /** A host list showed the chat, so its create reply needs no protection from older lists. */
+  hostListed?: true
 }
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -56,6 +61,7 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetStructuredAgentLaunchCancellationForTests()
+  resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
 export function notifyStructuredLaunchListeners(): void {
@@ -237,12 +243,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   if (matchesLaunchWorktree(state, worktreeId) && state) {
     // The launch's own owner outranks the caller's: it is the host the create was sent to.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && state.intent.executionHostId === LOCAL_EXECUTION_HOST_ID) {
-      cancelStructuredAgentLaunchOnLocalHost(
-        worktreeId,
-        sessionId,
-        notifyStructuredLaunchListeners,
-        state.promise
-      )
+      cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
     } else {
       markStructuredAgentLaunchCancellation(
         sessionId,
@@ -261,7 +262,7 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     !alreadyCancelled &&
     executionHostId === LOCAL_EXECUTION_HOST_ID
   ) {
-    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId, notifyStructuredLaunchListeners)
+    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
   } else if (!alreadyCancelled) {
     markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
   }

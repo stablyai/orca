@@ -170,11 +170,14 @@ describe('GitLab flag project identity', () => {
     })
   }
 
-  it('accepts an scp remote without guessing a web port', async () => {
+  it.each([
+    'git@gitlab.com:group/project.git',
+    'ssh://git@altssh.gitlab.com:443/group/project.git'
+  ])('matches GitLab issue and MR URLs against stored remote %s', async (remoteUrl) => {
     queueFixtures(
       callMock,
       okFixture('req_repo', {
-        repo: { id: 'repo', gitRemoteIdentity: { remoteUrl: 'git@gitlab.com:group/project.git' } }
+        repo: { id: 'repo', gitRemoteIdentity: { remoteUrl } }
       }),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/child', 'linked-task'),
@@ -192,6 +195,8 @@ describe('GitLab flag project identity', () => {
         '--name',
         'linked-task',
         '--no-parent',
+        '--gitlab-issue',
+        'https://gitlab.com/group/project/-/issues/53',
         '--gitlab-mr',
         'https://gitlab.com/group/project/-/merge_requests/77/diffs',
         '--json'
@@ -201,7 +206,7 @@ describe('GitLab flag project identity', () => {
     expect(callMock).toHaveBeenNthCalledWith(
       2,
       'worktree.create',
-      expect.objectContaining({ linkedGitLabMR: 77 })
+      expect.objectContaining({ linkedGitLabIssue: 53, linkedGitLabMR: 77 })
     )
   })
 })

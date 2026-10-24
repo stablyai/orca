@@ -306,18 +306,24 @@ describe('shared tab navigation routing', () => {
     mocks.state = { activeWorktreeId: controller.activeWorktreeId }
   })
 
-  function nextTab(): void {
-    handleTerminalWorkspaceKeyDown(
-      new KeyboardEvent('keydown', {
-        key: ']',
-        metaKey: true,
-        shiftKey: true,
-        cancelable: true
-      }),
-      controller,
-      'darwin'
-    )
+  function nextTab(repeat = false): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: ']',
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true,
+      repeat
+    })
+    handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
+    return event
   }
+
+  it('claims a held tab chord on every repeat but switches once', () => {
+    nextTab()
+    const repeat = nextTab(true)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(handleSwitchTabAcrossAllTypes).toHaveBeenCalledTimes(1)
+  })
 
   it('sends the keyboard and IPC navigation intent to the same workspace operation', () => {
     nextTab()

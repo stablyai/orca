@@ -179,7 +179,8 @@ export function createAgentCompletionHookObserver({
       !state.workingStatusObserved &&
       state.lastCompletionSource === 'hook' &&
       state.lastCompletedTurn === state.currentTurn &&
-      Date.now() - state.lastCompletionAt >= 1_000
+      // Why: a new host turn-end stamp is a real end even right after a banner; replays restate it.
+      (Date.now() - state.lastCompletionAt >= 1_000 || payload.turnEndedAt !== undefined)
     ) {
       state.currentTurn += 1
     }

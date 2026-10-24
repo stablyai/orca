@@ -1,6 +1,6 @@
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { ORCAD_SERVER_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
@@ -21,7 +21,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   workerThreadChildProcess:
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
   claudeProfileSetup: 'src/main/claude-accounts/claude-profile-setup-worker-entry.ts',
-  sttWorker: 'src/main/speech/stt-worker.ts'
+  sttWorker: 'src/main/speech/stt-worker.ts',
+  computerSidecar: 'src/main/computer/computer-sidecar.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */
@@ -62,7 +63,80 @@ const jsoncParserEsm = {
   }
 }
 
-export function buildOrcadEntry(outfile) {
+/**
+ * Where the bundle leaves the one-byte range, if anywhere. A single non-ASCII character makes V8 hold
+ * the whole ~11 MB server source as a two-byte string (~21 MB); esbuild escapes strings itself but
+ * not regex literals or tagged templates.
+ */
+export function findNonAsciiSource(source) {
+  let index = 0
+  while (index < source.length && source.charCodeAt(index) < 0x80) {
+    index++
+  }
+  if (index === source.length) {
+    return null
+  }
+  const line = source.slice(0, index).split('\n').length
+  return { offset: index, line, excerpt: source.slice(Math.max(0, index - 60), index + 20) }
+}
+
+const LEGAL_COMMENT_TAIL = '\n/*! Bundled license information:'
+
+/** Escapes the license text esbuild gathers at the end; it is a comment, so no value changes. */
+export function escapeLegalCommentTail(source) {
+  const start = source.lastIndexOf(LEGAL_COMMENT_TAIL)
+  if (start === -1) {
+    return source
+  }
+  let tail = ''
+  for (const char of source.slice(start)) {
+    const code = char.codePointAt(0)
+    tail += code < 0x80 ? char : `\\u{${code.toString(16)}}`
+  }
+  return source.slice(0, start) + tail
+}
+
+/** The module holding `offset` in an unminified build, read from esbuild's `// path` markers. */
+export function moduleAtOffset(source, offset) {
+  let found = null
+  for (const match of source.matchAll(/\n {0,2}\/\/ ((?:src|node_modules|\.\.)\/[^\n]+)\n/g)) {
+    if (match.index > offset) {
+      break
+    }
+    found = match[1]
+  }
+  return found
+}
+
+async function nonAsciiModule(outfile) {
+  const unminified = `${outfile}.unminified.js`
+  try {
+    await buildOrcadEntryBundle(unminified, false)
+    const source = readFileSync(unminified, 'utf8')
+    const nonAscii = findNonAsciiSource(source)
+    return nonAscii ? moduleAtOffset(source, nonAscii.offset) : null
+  } finally {
+    rmSync(unminified, { force: true })
+  }
+}
+
+export async function buildOrcadEntry(outfile) {
+  const result = await buildOrcadEntryBundle(outfile, true)
+  const source = escapeLegalCommentTail(readFileSync(outfile, 'utf8'))
+  writeFileSync(outfile, source)
+  const nonAscii = findNonAsciiSource(source)
+  if (nonAscii) {
+    const module = await nonAsciiModule(outfile)
+    throw new Error(
+      `orcad server bundle has a non-ASCII character at offset ${nonAscii.offset} ` +
+        `(line ${nonAscii.line}${module ? `, from ${module}` : ''}): ...${nonAscii.excerpt}... ` +
+        'Write it as a \\uXXXX escape in the source regex or String.raw template.'
+    )
+  }
+  return result
+}
+
+function buildOrcadEntryBundle(outfile, minify) {
   return build({
     ...ORCAD_COMMONJS_MODULE_OPTIONS,
     entryPoints: [join(root, ORCAD_ENTRY_POINT)],
@@ -74,7 +148,9 @@ export function buildOrcadEntry(outfile) {
     external: ORCAD_EXTERNAL_MODULES,
     plugins: [jsoncParserEsm, externalNativeAddons],
     metafile: true,
-    minify: true,
+    minify,
+    // Licenses stay in the bundle as a trailing comment, which `escapeLegalCommentTail` keeps ASCII.
+    legalComments: 'eof',
     sourcemap: false,
     define: {
       ...ORCAD_COMMONJS_MODULE_OPTIONS.define,

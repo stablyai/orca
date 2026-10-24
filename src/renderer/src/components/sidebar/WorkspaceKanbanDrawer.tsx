@@ -21,6 +21,7 @@ import { useWorkspaceKanbanNativeDrag } from './use-workspace-kanban-native-drag
 import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render-lifecycle'
 import { useWorkspaceKanbanDrawerLingering } from './use-workspace-kanban-drawer-lingering'
 import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -53,7 +54,7 @@ function WorkspaceKanbanDrawerContent({
   onMenuOpenChange
 }: WorkspaceKanbanDrawerProps): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)

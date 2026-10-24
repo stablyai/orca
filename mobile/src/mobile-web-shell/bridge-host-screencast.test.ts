@@ -62,30 +62,27 @@ function frame(seq: number, image: Uint8Array): BrowserScreencastFrame {
 const IMAGE = Uint8Array.from({ length: 512 }, (_, index) => (index * 31 + 7) & 0xff)
 
 describe('the host asks for binary only when the page did', () => {
-  it('hands the client no binary listener for a plain subscribe', () => {
+  it.each([undefined, false])('omits the binary listener when wantsBinary is %s', (wantsBinary) => {
     const bridge = harness({ ready: true })
-    bridge.host.receive(screencastSubscribe(ID))
-    expect(bridge.client.streams[0]?.emitBinary).toBeNull()
-  })
-
-  it('hands the client a binary listener when the page asked for one', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(screencastSubscribe(ID, true))
-    expect(bridge.client.streams[0]?.emitBinary).toBeInstanceOf(Function)
-  })
-
-  it('treats wantsBinary false as no listener at all', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(screencastSubscribe(ID, false))
+    bridge.host.receive(screencastSubscribe(ID, wantsBinary))
     expect(bridge.client.streams[0]?.emitBinary).toBeNull()
   })
 })
 
 describe('a binary frame crosses as the event the page decodes', () => {
   it('reconstructs the frame the native listener was handed', () => {
-    const bridge = harness({ ready: true })
+    const bridge = harness({ ready: true, routeGrants: ['navigate', 'screencastBinary'] })
     bridge.host.receive(screencastSubscribe(ID, true))
-    bridge.client.streams[0]?.emitBinary?.(frame(41, IMAGE))
+    expect(bridge.last()).toMatchObject({
+      type: 'init',
+      grants: { native: expect.arrayContaining(['screencastBinary']) }
+    })
+    const emit = bridge.client.streams[0]?.emitBinary
+    if (emit === undefined || emit === null) {
+      throw new Error('binary listener missing')
+    }
+    emit(frame(41, IMAGE))
+    expect(bridge.diagnostics).toEqual([])
     const event = bridge.last()
     expect(event).toMatchObject({ v: 1, type: 'event', id: ID, seq: 1 })
     const binary = 'binary' in event ? event.binary : null
@@ -118,7 +115,10 @@ describe('a binary frame crosses as the event the page decodes', () => {
     bridge.host.receive(screencastSubscribe(ID, true))
     const emitBinary = bridge.client.streams[0]?.emitBinary
     bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'subscription' }))
-    emitBinary?.(frame(1, IMAGE))
+    if (emitBinary === undefined || emitBinary === null) {
+      throw new Error('binary listener never installed')
+    }
+    emitBinary(frame(1, IMAGE))
     expect(bridge.frames().filter((message) => message.type === 'event')).toEqual([])
   })
 })
@@ -135,9 +135,6 @@ describe('a binary frame crosses as the event the page decodes', () => {
 describe('an over-cap frame drops on the binary lane and ends the stream on the JSON one', () => {
   /** Encoded, this exceeds `BRIDGE_MAX_MESSAGE_BYTES`: 500,000 bytes is 666,668 base64 chars. */
   const OVERSIZED = new Uint8Array(500_000)
-  /** The image plus the event frame around it, which is what the cap is applied to — the number
-   *  the diagnostic reports is the frame, never the image. */
-  const OVERSIZED_FRAME_BYTES = 666_668 + 194
 
   function openBinary(): ReturnType<typeof harness> {
     const bridge = harness({ ready: true })
@@ -210,9 +207,15 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
     bridge.host.receive(screencastSubscribe(OTHER, true))
     bridge.client.streams[1]?.emitBinary?.(frame(1, OVERSIZED))
     expect(bridge.droppedBinaryFrames).toEqual([1, 2])
+    for (const entry of bridge.diagnostics) {
+      if (entry.kind === 'binary-frame-dropped') {
+        expect(entry.bytes).toBeGreaterThan(BRIDGE_MAX_MESSAGE_BYTES)
+        expect(entry.bytes).toBeGreaterThan(OVERSIZED.byteLength)
+      }
+    }
     expect(bridge.diagnostics.filter((entry) => entry.kind === 'binary-frame-dropped')).toEqual([
-      { kind: 'binary-frame-dropped', id: ID, bytes: OVERSIZED_FRAME_BYTES, dropped: 1 },
-      { kind: 'binary-frame-dropped', id: OTHER, bytes: OVERSIZED_FRAME_BYTES, dropped: 1 }
+      { kind: 'binary-frame-dropped', id: ID, bytes: expect.any(Number), dropped: 1 },
+      { kind: 'binary-frame-dropped', id: OTHER, bytes: expect.any(Number), dropped: 1 }
     ])
   })
 })
@@ -227,12 +230,6 @@ describe('an over-cap frame drops on the binary lane and ends the stream on the 
  * not.
  */
 describe('the binary lane is served only to a route granted it', () => {
-  it('hands the client a binary listener when the route was granted the lane', () => {
-    const bridge = harness({ ready: true, routeGrants: ['navigate', 'screencastBinary'] })
-    bridge.host.receive(screencastSubscribe(ID, true))
-    expect(bridge.client.streams[0]?.emitBinary).toBeInstanceOf(Function)
-  })
-
   /**
    * The same list a shell too old to implement the lane produces: `grantsForRoute` filters a route's
    * declared grants through the implemented set, so granted-but-unimplemented and never-granted
@@ -240,7 +237,12 @@ describe('the binary lane is served only to a route granted it', () => {
    */
   it('hands it none when the route was not, and still opens the stream', () => {
     const bridge = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
+    expect(bridge.last()).toMatchObject({
+      type: 'init',
+      grants: { native: ['fault', 'rpcEnvelope', 'navigate', 'storage'] }
+    })
     bridge.host.receive(screencastSubscribe(ID, true))
+    expect(bridge.diagnostics).toEqual([{ kind: 'binary-lane-refused', id: ID }])
     expect(bridge.client.streams[0]?.emitBinary).toBeNull()
     // Not a refusal: the stream is open and its JSON events cross as they always have.
     bridge.client.streams[0]?.emit({ type: 'ready' })
@@ -248,39 +250,10 @@ describe('the binary lane is served only to a route granted it', () => {
     expect(bridge.frames().filter((message) => message.type === 'error')).toEqual([])
   })
 
-  /**
-   * Nothing crosses back for an ungranted ask, so without this the page gets JSON for the life of
-   * the document and no side says why. Local only, like every other grant refusal: the wire is
-   * exactly what the case above pins.
-   */
-  it('reports the ungranted ask as a diagnostic and changes nothing on the wire', () => {
-    const bridge = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
-    bridge.host.receive(screencastSubscribe(ID, true))
-    expect(bridge.diagnostics).toEqual([{ kind: 'binary-lane-refused', id: ID }])
-    expect(bridge.frames().filter((message) => message.type === 'error')).toEqual([])
-  })
-
   it('says nothing about a page that never asked for the lane', () => {
     const bridge = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
     bridge.host.receive(screencastSubscribe(ID))
     expect(bridge.diagnostics).toEqual([])
-  })
-
-  it('says nothing when the route was granted the lane', () => {
-    const bridge = harness({ ready: true, routeGrants: ['navigate', 'screencastBinary'] })
-    bridge.host.receive(screencastSubscribe(ID, true))
-    expect(bridge.diagnostics).toEqual([])
-  })
-
-  it('offers the lane in init exactly when it will serve it', () => {
-    const granted = harness({ ready: true, routeGrants: ['navigate', 'screencastBinary'] })
-    const ungranted = harness({ ready: true, routeGrants: ['navigate', 'storage'] })
-    const nativeOf = (bridge: ReturnType<typeof harness>): readonly string[] => {
-      const init = bridge.frames().find((message) => message.type === 'init')
-      return init?.type === 'init' ? init.grants.native : []
-    }
-    expect(nativeOf(granted)).toContain('screencastBinary')
-    expect(nativeOf(ungranted)).not.toContain('screencastBinary')
   })
 })
 

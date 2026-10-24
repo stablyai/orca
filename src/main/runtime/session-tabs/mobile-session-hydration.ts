@@ -212,7 +212,8 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
-        session
+        session,
+        this.store?.getSettings?.()?.tabAutoGenerateTitle === true
       ).filter(
         (tab) =>
           !runtimeOwnedOnly ||

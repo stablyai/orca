@@ -12,11 +12,13 @@ import type {
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { PtyPaneOf, PtyPaneSource } from '../surface/pty-pane-query'
 
-type PlacementPty = Pick<
-  RuntimePtyWorktreeRecord,
-  'ptyId' | 'incarnationId' | 'worktreeId' | 'connectionId' | 'runtimeSessionOwned' | 'tabId'
-> & { paneKey: string | null; connected: boolean }
+type PlacementPty = PtyPaneSource &
+  Pick<
+    RuntimePtyWorktreeRecord,
+    'incarnationId' | 'worktreeId' | 'connectionId' | 'runtimeSessionOwned' | 'connected'
+  >
 
 export type LiveTerminalPlacementPorts = {
   /** A fresh census of every local workspace; null when the host could not answer. */
@@ -28,6 +30,7 @@ export type LiveTerminalPlacementPorts = {
   ptys: () => Iterable<PlacementPty>
   /** A spawn still binding its pane (its workspace's spawn lock is held): not proven to have none. */
   isStillBinding: (pty: PlacementPty) => boolean
+  paneOf: PtyPaneOf
   hostIds: () => readonly ExecutionHostId[]
   session: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   apply: (command: CommandOf<'createTerminalTab'> & { tabId: string }) => Promise<LayoutApplyReply>
@@ -60,9 +63,13 @@ function paneBoundPtyIds(ports: LiveTerminalPlacementPorts): Set<string> {
   return bound
 }
 
-function recordedPaneKeyOf(pty: PlacementPty): string | undefined {
-  const pane = parsePaneKey(pty.paneKey ?? '')
-  return pane && pane.tabId === pty.tabId && pty.paneKey ? pty.paneKey : undefined
+function recordedPaneKeyOf(
+  ports: LiveTerminalPlacementPorts,
+  pty: PlacementPty
+): string | undefined {
+  const { tabId, paneKey } = ports.paneOf(pty)
+  const pane = parsePaneKey(paneKey ?? '')
+  return pane && pane.tabId === tabId && paneKey ? paneKey : undefined
 }
 
 /**
@@ -127,7 +134,7 @@ async function placeOne(
   if (!isUnshown(pty, paneBoundPtyIds(ports), inventory) || ports.isStillBinding(pty)) {
     return
   }
-  const recordedPaneKey = recordedPaneKeyOf(pty)
+  const recordedPaneKey = recordedPaneKeyOf(ports, pty)
   const reply = await ports.apply({
     type: 'createTerminalTab',
     workspace: pty.worktreeId,

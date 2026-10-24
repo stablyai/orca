@@ -21,8 +21,9 @@ const repo = makeRepo()
 function mainOwner(): SidebarRetentionOwner {
   return new SidebarRetentionOwner(new SidebarClock(), {
     showSleepingWorkspaces: () => useAppStore.getState().showSleepingWorkspaces,
-    listRowKeys: async () =>
+    rowKeys: () =>
       (useAppStore.getState().worktreesByRepo[repo.id] ?? []).map(getWorktreeHostIdentity),
+    watchRowKeys: () => () => {},
     retentionCandidates: () => {
       const state = useAppStore.getState()
       const live = (id: string): boolean =>

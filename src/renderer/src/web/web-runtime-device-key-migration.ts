@@ -1,6 +1,7 @@
 import { REGISTER_DEVICE_KEY_METHOD } from '../../../shared/device-key-capability'
 import { encodeDeviceProofMessage } from '../../../shared/device-key-proof'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import type {
   WebRuntimeAuthPlan,
   WebRuntimeCredentialSource
@@ -32,7 +33,7 @@ export async function migrateWebRuntimeToDeviceKey(args: {
       return 'unavailable'
     }
     const proof = await plan.key.sign(
-      encodeDeviceProofMessage('register', base64ToBytes(transcriptHashB64))
+      encodeDeviceProofMessage('register', decodeBase64Bytes(transcriptHashB64))
     )
     const registered = await args.call(REGISTER_DEVICE_KEY_METHOD, {
       devicePublicKeyB64: plan.key.publicKeyB64,
@@ -69,10 +70,6 @@ function readDeviceId(result: unknown): string | null {
     return null
   }
   return typeof result.deviceId === 'string' && result.deviceId ? result.deviceId : null
-}
-
-function base64ToBytes(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

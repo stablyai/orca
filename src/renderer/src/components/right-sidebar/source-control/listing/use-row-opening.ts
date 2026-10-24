@@ -35,7 +35,6 @@ export function useSourceControlRowOpening({
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openDiff = useAppStore((s) => s.openDiff)
   const openFile = useAppStore((s) => s.openFile)
-  const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
 
   // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
@@ -90,7 +89,7 @@ export function useSourceControlRowOpening({
       const targetGroupId = resolveSplitTargetGroupId(event)
       const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
       openUncommittedEntry(
-        { trackConflictPath, openConflictFile, openFile, setEditorViewMode, openDiff },
+        { trackConflictPath, openConflictFile, openFile, openDiff },
         activeWorktreeId,
         worktreePath,
         entry,
@@ -104,8 +103,7 @@ export function useSourceControlRowOpening({
       trackConflictPath,
       openConflictFile,
       openDiff,
-      openFile,
-      setEditorViewMode
+      openFile
     ]
   )
 

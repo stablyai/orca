@@ -3,7 +3,7 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from './desktop-window-chrome'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { expectsBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
 import {
   getOrcadSshDeployment,
@@ -77,7 +77,7 @@ export function getClientCreationActionPolicy(
   const runtimeEnvironmentId = floatingWorkspace
     ? null
     : worktreeId
-      ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+      ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       : (state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
   const runtimeStatus = runtimeEnvironmentId
     ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)

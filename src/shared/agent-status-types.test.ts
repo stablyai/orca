@@ -21,6 +21,7 @@ import {
   ORCA_DISPATCH_PROMPT_LEAD_LINE,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
+import { parseAskFromStatus } from './native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -306,6 +307,25 @@ Fix dispatch fallback preview for normalized status prompts`
       JSON.stringify({ state: 'waiting', interactivePrompt: long })
     )
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
+  })
+
+  it('shortens an oversized question prompt into a card that still parses with every option', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'q'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 4000),
+          header: 'Plan',
+          options: [{ label: 'Ship it', description: 'd'.repeat(3000) }, { label: 'Wait' }]
+        }
+      ]
+    })
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+    expect(result!.interactivePrompt!.length).toBeLessThanOrEqual(
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    )
+    const ask = parseAskFromStatus(result!.interactivePrompt, 'ask_user_question')
+    expect(ask!.questions[0].question.startsWith('qqq')).toBe(true)
+    expect(ask!.questions[0].options.map((option) => option.label)).toEqual(['Ship it', 'Wait'])
   })
 
   it('leaves interactivePrompt undefined when absent or non-string', () => {

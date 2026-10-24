@@ -61,9 +61,15 @@ const TABS: MobileSessionTab[] = [
 
 const switched: MobileSessionTab[] = []
 
-function Probe({ terminalsLoaded }: { terminalsLoaded: boolean }): null {
+function Probe({
+  terminalsLoaded,
+  sessionTabs = TABS
+}: {
+  terminalsLoaded: boolean
+  sessionTabs?: MobileSessionTab[]
+}): null {
   useNotificationPaneNavigation({
-    sessionTabs: TABS,
+    sessionTabs,
     terminalsLoaded,
     switchSessionTab: (tab) => switched.push(tab)
   })
@@ -184,13 +190,26 @@ describe('the page pane hook', () => {
     expect(bridge.cleared).toEqual([])
   })
 
-  it('consumes a request for a pane that has since closed, so no later render serves it', () => {
+  it('stays on the open tab for a pane that has since closed', () => {
     render(true)
     deliver(`gone:${LEAF}`)
     expect(switched).toEqual([])
-    // A re-render with nothing new delivered must not go looking for it again.
+    // A later render still finds no such pane.
     deliver('')
     expect(switched).toEqual([])
+  })
+
+  it('opens a pane missing from a list loaded before the push once a fresh list names it', () => {
+    const tree = render(true)
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: [TABS[0]!] }))
+    })
+    deliver(`tab-b:${LEAF}`)
+    expect(switched).toEqual([])
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: TABS }))
+    })
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })
 
   it('does nothing at all when the page was opened on no pane', () => {

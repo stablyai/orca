@@ -62,9 +62,10 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: mocks.getState
-  }
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
 }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'

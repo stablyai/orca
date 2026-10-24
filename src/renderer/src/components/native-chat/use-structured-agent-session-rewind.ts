@@ -16,6 +16,7 @@ export function useStructuredAgentSessionRewind(
 ) {
   const {
     blocked,
+    capturePresentation,
     composerScopeKey,
     contextFloor,
     hostBlockedReason,
@@ -34,6 +35,7 @@ export function useStructuredAgentSessionRewind(
   const input = useMemo<RewindInput>(
     () => ({
       sessionId,
+      capturePresentation,
       composerScopeKey,
       contextFloor,
       onMessageReturned,
@@ -47,6 +49,7 @@ export function useStructuredAgentSessionRewind(
     }),
     [
       blocked,
+      capturePresentation,
       composerScopeKey,
       contextFloor,
       hostBlockedReason,

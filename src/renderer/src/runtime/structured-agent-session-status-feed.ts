@@ -5,6 +5,7 @@
 // keeps the cached summaries and reconnects; a fresh snapshot merges over them.
 // Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
 
+import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from '../../../shared/agent-session-workspace-sleep'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import {
   foldAgentSessionStatusEvent,
@@ -21,6 +22,7 @@ export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getSessionSleepState: (sessionId: string) => number | null | undefined
   getNamingActive: (sessionId: string) => boolean | null
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
@@ -41,8 +43,11 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   let snapshot: StructuredAgentSessionStatusSnapshot = new Map()
   let namingActiveSessionIds: Set<string> | null = null
   const confirmedSessions = new Set<string>()
+  // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
+  const knownSleep = new Map<string, number | null>()
   const listeners = new Set<() => void>()
   const activations = new Set<symbol>()
+  let sleepResolved = false
   let generation = 0
   let handle: { unsubscribe: () => void } | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -59,15 +64,25 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   }
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
+      // Naming metadata precedes the full status snapshot and says nothing about Sleep.
+      sleepResolved ||= event.namingActiveSessionIds === undefined
       reconnectAttempt = 0
       if (event.namingActiveSessionIds !== undefined) {
         namingActiveSessionIds = new Set(event.namingActiveSessionIds)
       }
       for (const session of event.sessions) {
         confirmedSessions.add(session.sessionId)
+        knownSleep.set(
+          session.sessionId,
+          session.hostExecutionOwned ? null : (session.sleptAt ?? null)
+        )
       }
     } else if (event.type === 'status') {
       confirmedSessions.add(event.session.sessionId)
+      knownSleep.set(
+        event.session.sessionId,
+        event.session.hostExecutionOwned ? null : (event.session.sleptAt ?? null)
+      )
     } else {
       return
     }
@@ -160,13 +175,23 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       return
     }
     const environmentId = target.environmentId
-    void runtimeEnvironmentSupportsCapability(
-      environmentId,
-      AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
-    )
-      .then((supported) => {
+    void Promise.all([
+      runtimeEnvironmentSupportsCapability(
+        environmentId,
+        AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
+      ),
+      runtimeEnvironmentSupportsCapability(
+        environmentId,
+        AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY
+      )
+    ])
+      .then(([supported, marksSleep]) => {
         if (!active(candidate)) {
           return
+        }
+        if (!marksSleep || !supported) {
+          sleepResolved = true
+          emit()
         }
         // A host without the method is terminal, not a fault: retrying would relay-probe
         // forever. A failed probe is not an answer, so that path still reconnects.
@@ -205,6 +230,10 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       }
     },
     getSnapshot: () => snapshot,
+    getSessionSleepState: (sessionId) => {
+      const known = knownSleep.get(sessionId)
+      return known !== undefined ? known : sleepResolved ? null : undefined
+    },
     getNamingActive: (sessionId) => namingActiveSessionIds?.has(sessionId) ?? null,
     getSessionObservation: (sessionId) =>
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',

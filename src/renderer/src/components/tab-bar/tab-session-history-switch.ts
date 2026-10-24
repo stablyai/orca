@@ -42,6 +42,7 @@ import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 
 /** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
@@ -112,6 +113,33 @@ export type NativeChatTabSession = {
   agent: AgentType | undefined
 }
 
+export type NativeChatCliForkIdentity = {
+  workspaceId: string
+  sessionId: string
+  executionHostScope: ExecutionHostScope
+}
+
+export function resolveNativeChatCliForkIdentity(
+  state: AppState,
+  args: { tab: Pick<TerminalTab, 'id' | 'worktreeId'>; nativeChat: NativeChatTabSession }
+): NativeChatCliForkIdentity | null {
+  const { nativeChat, tab } = args
+  if (
+    !nativeChat.agent ||
+    !agentForksConversations(nativeChat.agent) ||
+    !resolveAiVaultTargetWorkspacePath(state, tab.worktreeId)
+  ) {
+    return null
+  }
+  const executionHostScope = resolveAiVaultHostScopeDefaults(
+    getAiVaultResumeWorkspaceExecutionHostId(state, tab.worktreeId),
+    tab.worktreeId
+  ).defaultExecutionHostScope
+  return canHostOfferTabSessionMove('chat', executionHostScope)
+    ? { workspaceId: tab.worktreeId, sessionId: nativeChat.sessionId, executionHostScope }
+    : null
+}
+
 export function resolveTabSessionHistorySubject(
   state: AppState,
   args: {
@@ -133,11 +161,18 @@ export function resolveTabSessionHistorySubject(
   }
   if (args.nativeChat) {
     // A chat tab's only move is opening a copy in its CLI.
-    const target =
-      args.nativeChat.agent && agentForksConversations(args.nativeChat.agent)
-        ? workspace(args.tab.worktreeId, 'chat')
-        : null
-    return target ? { ...target, kind: 'chat', sessionId: args.nativeChat.sessionId } : null
+    const identity = resolveNativeChatCliForkIdentity(state, {
+      ...args,
+      nativeChat: args.nativeChat
+    })
+    return identity
+      ? {
+          kind: 'chat',
+          workspaceId: identity.workspaceId,
+          sessionId: identity.sessionId,
+          request: resolveAiVaultPanelSessionListRequest(state, identity.workspaceId)
+        }
+      : null
   }
   // The pane-to-conversation mapping tab titles use, for the agents a chat can take over, limited to
   // agents still running: once the agent exits, the tab title keeps its conversation but the move is
@@ -193,8 +228,8 @@ export function resolveTabSessionSwitch(
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {
   const worktrees = aiVaultSessionOwnerWorkspaces(
-    getIndexedAllWorktrees(state.worktreesByRepo),
-    state.folderWorkspaces
+    getIndexedAllWorktrees(selectWorktreesByRepo(state)),
+    selectFolderWorkspaces(state)
   )
   const { resumeState, resumeInChat } = resolveAiVaultHistoryRowResume({
     session,

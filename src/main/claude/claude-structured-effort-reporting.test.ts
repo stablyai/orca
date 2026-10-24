@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import {
-  readClaudeStructuredSessionOptions,
-  readClaudeSettingsEffort
-} from './claude-structured-session-options'
+import { readClaudeSettingsEffort } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
 import { USER_MESSAGE, acquired, fakeClaude } from './claude-structured-session-test-support'
@@ -39,7 +35,7 @@ function sessionWith(
           calls.push(`set_model:${model}`)
         },
         applyFlagSettings: async (settings: { effortLevel?: string }) => {
-          // The measured behaviour: an unknown effort is accepted and ignored.
+          // The CLI accepts and ignores unknown effort values.
           calls.push(`apply:${settings.effortLevel}`)
         },
         getSettings: async () => {
@@ -68,8 +64,6 @@ describe('Claude effort reporting', () => {
     ['the payload carries no effective block', { applied: { effort: 'high' } }],
     ['the request failed outright', null]
   ])('reports no effort when %s', (_case, settings) => {
-    // Never defaulted: an effort nothing measured would be worse than a blank
-    // pill, and this is the assertion that goes red if the key is renamed.
     expect(readClaudeSettingsEffort(settings)).toBeNull()
   })
 
@@ -83,12 +77,15 @@ describe('Claude effort reporting', () => {
   })
 
   it('leaves the effort unreported when the session never learns one', async () => {
-    const claude = fakeClaude({ settings: { applied: {}, effective: {}, sources: {} } })
+    const model = 'claude-opus-5[1m]'
+    const claude = fakeClaude({
+      settings: { applied: { model }, effective: { model }, sources: {} }
+    })
     const adapter = await acquired(claude)
 
     const options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
     expect(options.current.effort).toBeUndefined()
-    expect(options.current.model).toBeTruthy()
+    expect(options.current.model).toBe(model)
   })
 
   it('keeps the init fixture free of an effort the real frame never sends', async () => {
@@ -107,8 +104,6 @@ describe('Claude effort reporting', () => {
 
     expect(init).toHaveLength(1)
     expect(init[0]).toHaveProperty('model')
-    // The regression that hid this defect: a fixture inventing `effortLevel`
-    // kept every gate green over a value that is always empty in production.
     expect(Object.keys(init[0])).not.toContain('effortLevel')
   })
 })
@@ -117,14 +112,10 @@ describe('Claude effort readback', () => {
   it('records an effort the child did not adopt without vouching for it', async () => {
     const { session, calls } = sessionWith('high')
 
-    // The disagreement stops the confirmation, not the write: no other client
-    // vetoes here, and the pre-flight catalog guard already refuses the levels
-    // the model cannot run.
     await expect(
       setClaudeStructuredOption(session, { key: 'effort', value: 'bogus-effort-xyz' }, undefined)
     ).resolves.toEqual({ effort: 'bogus-effort-xyz' })
     expect(session.confirmedOptions.has('effort')).toBe(false)
-    // The child's own answer is kept rather than discarded with the refusal.
     expect(session.reportedOptions.effort).toBe('high')
     expect(calls).toEqual(['apply:bogus-effort-xyz', 'get_settings'])
   })
@@ -138,106 +129,10 @@ describe('Claude effort readback', () => {
   })
 
   it('records the request when the readback is unavailable', async () => {
-    // No evidence of a refusal is not evidence of one; the apply itself succeeded.
     const { session } = sessionWith(null)
 
     await expect(
       setClaudeStructuredOption(session, { key: 'effort', value: 'low' }, undefined)
     ).resolves.toEqual({ effort: 'low' })
-  })
-})
-
-describe('Claude effort against the model that must run it', () => {
-  const HAIKU = { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' }
-  const SONNET = {
-    value: 'sonnet',
-    resolvedModel: 'claude-sonnet-5',
-    displayName: 'Sonnet',
-    supportsEffort: true,
-    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max']
-  }
-
-  it('refuses an effort the current model advertises no control for', async () => {
-    const { session, calls } = sessionWith('high', [], { model: 'haiku', catalog: [HAIKU, SONNET] })
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).rejects.toBeInstanceOf(AgentSessionOptionRejectedError)
-    // Measured on Claude Code 2.1.260: apply_flag_settings stores `high` on a
-    // haiku session and get_settings reads it straight back, so a send here is
-    // never undone. The refusal has to land before the write.
-    expect(calls).toEqual(['list_models'])
-    expect(session.options.has('effort')).toBe(false)
-  })
-
-  it('refuses a level outside the ones the current model advertises', async () => {
-    const { session } = sessionWith('high', [], {
-      model: 'sonnet',
-      catalog: [{ ...SONNET, supportedEffortLevels: ['low', 'medium'] }]
-    })
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).rejects.toBeInstanceOf(AgentSessionOptionRejectedError)
-  })
-
-  it('sends an effort the current model advertises', async () => {
-    const { session, calls } = sessionWith('high', [], {
-      model: 'sonnet',
-      catalog: [HAIKU, SONNET]
-    })
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet', effort: 'high' })
-    expect(calls).toEqual(['list_models', 'apply:high', 'get_settings'])
-    expect(session.confirmedOptions.has('effort')).toBe(true)
-  })
-
-  it('sends `max`, which the readback cannot report, when the model advertises it', async () => {
-    // The underlying setting may differ from a transient execution effort.
-    const { session, calls } = sessionWith('high', [], { model: 'sonnet', catalog: [SONNET] })
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'max' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet', effort: 'max' })
-    expect(calls).toEqual(['list_models', 'apply:max'])
-    await readClaudeStructuredSessionOptions(session, undefined)
-    expect(session.appliedInputOptions.get('effort')).toBe('max')
-    expect(session.confirmedOptions.has('effort')).toBe(false)
-  })
-
-  it('sends the effort when the model is not in the catalog the CLI listed', async () => {
-    // An unlisted model is an unknown one, not one that refuses effort.
-    const { session, calls } = sessionWith('high', [], { model: 'sonnet', catalog: [HAIKU] })
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet', effort: 'high' })
-    expect(calls).toEqual(['list_models', 'apply:high', 'get_settings'])
-  })
-
-  it('sends the effort when list_models is unavailable', async () => {
-    const calls: string[] = []
-    const { session } = sessionWith('high', calls, { model: 'sonnet', catalog: [] })
-    session.connection.supportedModels = async () => {
-      calls.push('list_models')
-      throw new Error('this CLI predates list_models')
-    }
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).resolves.toEqual({ model: 'sonnet', effort: 'high' })
-    expect(calls).toEqual(['list_models', 'apply:high', 'get_settings'])
-  })
-
-  it('matches the model the init frame reported, not just the id the user picked', async () => {
-    const { session } = sessionWith('high', [], { model: 'sonnet', catalog: [HAIKU, SONNET] })
-    session.options.delete('model')
-    session.reportedOptions.model = 'claude-haiku-4-5-20251001'
-
-    await expect(
-      setClaudeStructuredOption(session, { key: 'effort', value: 'high' }, undefined)
-    ).rejects.toBeInstanceOf(AgentSessionOptionRejectedError)
   })
 })

@@ -128,7 +128,6 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
       fitOverrideEvents.push({ ptyId, mode, cols, rows })
     },
@@ -805,7 +804,6 @@ describe('terminal layout runtime dispatch and ownership', () => {
         renameTerminal: vi.fn(),
         focusTerminal: vi.fn(),
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalDriverChanged: () => events.push(`driver:${label}`),
         terminalFitOverrideChanged: () => events.push(`fit:${label}`)
       })

@@ -16,7 +16,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
-import { isENOENT } from '../filesystem-path-containment'
+import { isPathAbsentError } from '../filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
@@ -40,7 +40,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       _event,
       args: { dirPath: string; connectionId?: string; followSymlinks?: boolean }
     ): Promise<DirEntry[]> => {
-      // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
+      // Record throw site and redacted path shape because fs:readDir IPC errors otherwise lack context.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
         if (args.connectionId) {
@@ -157,7 +157,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
               await stat(await resolveDesktopAuthorizedPath(filePath, store))
               return true
             } catch (error) {
-              if (isENOENT(error)) {
+              if (isPathAbsentError(error)) {
                 return false
               }
               throw error
@@ -182,7 +182,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         await stat(filePath)
         return true
       } catch (error) {
-        if (isENOENT(error)) {
+        if (isPathAbsentError(error)) {
           return false
         }
         throw error

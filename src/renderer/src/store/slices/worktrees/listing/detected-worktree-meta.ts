@@ -15,12 +15,15 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
-import {
-  findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  selectFolderWorkspaces,
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
@@ -106,7 +109,7 @@ export function findKnownWorktreeById(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
+    const folderWorkspace = selectFolderWorkspaces(state).find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
@@ -114,12 +117,11 @@ export function findKnownWorktreeById(
     return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
   }
   const visible = executionHostId
-    ? (findIndexedWorktreeOwnerForHost(
-        state.worktreesByRepo,
-        worktreeId,
-        executionHostId
-      ) as Worktree | null)
-    : findWorktreeById(state.worktreesByRepo, worktreeId)
+    ? selectWorkspaceByHostTarget(
+        state,
+        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
+      )
+    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }

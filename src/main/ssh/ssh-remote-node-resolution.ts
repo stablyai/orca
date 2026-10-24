@@ -64,10 +64,10 @@ export async function resolveRemoteNodePath(
   return throwNodeNotFound(conn, options)
 }
 
-export type CandidateCheck<T> = (candidate: string) => Promise<T | null>
+type CandidateCheck<T> = (candidate: string) => Promise<T | null>
 
 /** Probes each candidate path once per resolution, however many strategies name it. */
-export function memoizeCandidateCheck<T>(check: CandidateCheck<T>): CandidateCheck<T> {
+function memoizeCandidateCheck<T>(check: CandidateCheck<T>): CandidateCheck<T> {
   const results = new Map<string, Promise<T | null>>()
   return (candidate) => {
     let result = results.get(candidate)
@@ -100,7 +100,7 @@ function rethrowUnlessAnsweredMiss(err: unknown, options?: ProbeOptions): void {
 // plus system package-manager locations. Every probe runs unconditionally so
 // a missing directory prints nothing rather than short-circuiting later
 // probes. Returns the first candidate with a complete Node/npm toolchain.
-export async function tryResolveViaKnownPaths<T>(
+async function tryResolveViaKnownPaths<T>(
   conn: SshConnection,
   check: CandidateCheck<T>,
   options?: ProbeOptions

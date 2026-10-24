@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { GitHubPrStartPoint } from '../../../../shared/worktree/types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import { pr, mr, useReviewBaseSelectionFixture } from './composer-review-base-test-fixture'
 
 const linear: LinearIssue = {

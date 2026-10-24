@@ -37,7 +37,7 @@ vi.mock('../linear/linear-sdk', () => ({
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'
 import { acquire, release } from '../linear/linear-request-concurrency'
 import { addIssueCommentForAgent } from '../linear/linear-issue-comments'
-import { linearError } from '../linear/issue-context-errors'
+import { linearError } from '../linear/issue-context/errors'
 
 function rawComment(body: string): unknown {
   return {

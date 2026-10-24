@@ -33,7 +33,7 @@ export async function closeMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // Why: glab exits non-zero when the MR is already closed — treat as success.
+        // glab signals already-closed with nonzero exit; treat the repeated transition as success.
         if (msg.toLowerCase().includes('already')) {
           return { ok: true }
         }
@@ -100,7 +100,6 @@ export async function mergeMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        // Why: omitting both --squash and --rebase yields a regular merge commit.
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
         await glabExecFileAsync(

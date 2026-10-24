@@ -221,6 +221,7 @@ function representableMobileSelection(
 ): PersistedMobileClientTabSelection | null {
   const tabIds = eligible?.tabIds ?? new Set<string>()
   const groupIds = eligible?.groupIds ?? new Set<string>()
+  const recentTabIds = selection.recentTabIds?.filter((tabId) => tabIds.has(tabId)) ?? []
   const next: PersistedMobileClientTabSelection = {
     activeTabId:
       selection.activeTabId !== null && movedMobileTab(selection.activeTabId, tabIds)
@@ -234,7 +235,8 @@ function representableMobileSelection(
       Object.entries(selection.activeTabIdByGroupId).filter(
         ([groupId, tabId]) => groupIds.has(groupId) && tabIds.has(tabId)
       )
-    )
+    ),
+    ...(recentTabIds.length > 0 ? { recentTabIds } : {})
   }
   return next.activeTabId === null &&
     next.activeGroupId === null &&

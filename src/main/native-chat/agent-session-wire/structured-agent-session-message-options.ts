@@ -8,7 +8,7 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 
 const OPTION_ORDER = ['model', 'effort'] as const
 
-/** A choice a message leaves unset runs what the child reports running. */
+/** Unset message choices inherit child execution values. */
 function sameOptions(
   a: AgentSessionExecutionOptions | undefined,
   b: AgentSessionExecutionOptions | undefined,
@@ -20,7 +20,7 @@ function sameOptions(
   return OPTION_ORDER.every((key) => (a?.[key] ?? ran?.[key]) === (b?.[key] ?? ran?.[key]))
 }
 
-/** A different Codex model or effort needs a new turn: steer has no choice parameters. */
+/** Codex steer has no model/effort parameters; changed choices need a new turn. */
 export function waitsForCodexTurnOptions(
   record: Pick<AgentSessionRecord, 'provider'> | null,
   journal: Pick<AgentSessionJournal, 'newestTurn' | 'submissions' | 'itemBody'>,

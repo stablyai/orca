@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_LEAF_ID, TEST_WORKTREE_ID } from '../../orca-runtime-test-fixtures.spec'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { PaneStartStatuses } from '../../pane-start-statuses'
 import { SURFACE_TAB_ID, surfaceRuntime } from './terminal-surface-replies.test-fixture'
 
@@ -8,9 +9,10 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_
 
 const PANE_KEY = makePaneKey(SURFACE_TAB_ID, HEADLESS_LEAF_ID)
 
-/** The scenario with its first pane holding a sleeping agent record (a pane with a status). */
+/** The scenario with its first pane holding an agent resume record (a sleep record by default). */
 function sleepingPaneRuntime(
-  hostLists?: () => readonly string[]
+  hostLists?: () => readonly string[],
+  origin?: SleepingAgentSessionRecord['origin']
 ): ReturnType<typeof surfaceRuntime> {
   const harness = surfaceRuntime({ hostLists })
   const session = harness.store.getSession()
@@ -26,7 +28,8 @@ function sleepingPaneRuntime(
         prompt: '',
         state: 'done',
         capturedAt: 1,
-        updatedAt: 1
+        updatedAt: 1,
+        ...(origin ? { origin } : {})
       }
     }
   })
@@ -67,6 +70,30 @@ describe("main's pane verdicts (switch on)", () => {
       })
     }
   )
+
+  // A running agent's resume record ('live', or 'quit' on a warm reattach) is not a sleep.
+  it.each(['live', 'quit'] as const)(
+    "a pane bound to a running terminal with a '%s' resume record is connected and live",
+    async (origin) => {
+      const { runtime } = sleepingPaneRuntime(undefined, origin)
+
+      expect(await firstPaneRow(runtime)).toEqual({
+        connected: true,
+        writable: true,
+        verdict: 'live'
+      })
+    }
+  )
+
+  it("a pane with a 'worktree-sleep' record still reads as sleeping", async () => {
+    const { runtime } = sleepingPaneRuntime(undefined, 'worktree-sleep')
+
+    expect(await firstPaneRow(runtime)).toEqual({
+      connected: false,
+      writable: false,
+      verdict: 'unverifiable'
+    })
+  })
 
   it('a sleeping pane whose terminal the host reports absent is exited', async () => {
     let hostLists = ['pty-a', 'pty-b']

@@ -11,6 +11,17 @@ vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
     writeRuntimeFile: mocks.writeRuntimeFile
   }
 })
+// Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
@@ -29,6 +40,12 @@ import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
 import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
 import { renameFileOnDisk } from './rename-file'
 import { withLoadedBaselines } from '@/components/editor/editor-autosave-controller-test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+
+let main: TabsDrawnFromMain
 
 const PROJECT = '/Users/me/project'
 const WT = `repo-local::${PROJECT}`
@@ -75,7 +92,9 @@ function openUserNamedTab(filePath: string, worktreeId: string): void {
   )
 }
 
-function onlyTab() {
+async function onlyTab() {
+  // Main draws each open and answers each rename before the tab shows it.
+  await main.settle()
   const tabs = useAppStore.getState().openFiles
   expect(tabs).toHaveLength(1)
   return tabs[0]!
@@ -84,7 +103,7 @@ function onlyTab() {
 // Why each check: reads and the next rename/image insert derive access from the tab, and a restart
 // restores the same filePath/relativePath, so access must survive on the stored fields alone.
 async function expectUserNamedAt(filePath: string): Promise<void> {
-  const tab = onlyTab()
+  const tab = await onlyTab()
   expect(tab.filePath).toBe(filePath)
   expect(tab.relativePath).toBe(filePath)
   const state = useAppStore.getState()
@@ -105,12 +124,13 @@ async function expectUserNamedAt(filePath: string): Promise<void> {
     filePath,
     'edited',
     { kind: 'user-file' },
-    expect.anything()
+    expect.anything(),
+    expect.any(Function)
   )
 }
 
 async function renameTab(newName: string, worktreePath: string): Promise<void> {
-  const tab = onlyTab()
+  const tab = await onlyTab()
   await renameFileOnDisk({
     oldPath: tab.filePath,
     newName,
@@ -125,7 +145,7 @@ function renameCalls(): unknown[][] {
   return mocks.renameRuntimePath.mock.calls.map((call) => call.slice(1))
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({ repos: [repo], worktreesByRepo: { 'repo-local': [worktree] } })
   clearFileExplorerUndoHistory()
@@ -136,9 +156,11 @@ beforeEach(() => {
     clearTimeout,
     dispatchEvent: vi.fn()
   })
+  main = await drawTabsFromMain(useAppStore)
 })
 
 afterEach(() => {
+  main.close()
   vi.unstubAllGlobals()
 })
 
@@ -227,7 +249,7 @@ describe('renaming a tab opened by its full path in a project workspace', () => 
 
     await renameTab('plan2.md', PROJECT)
 
-    const tab = onlyTab()
+    const tab = await onlyTab()
     expect(tab.relativePath).toBe('docs/plan2.md')
     expect(editorTabFileAccess(useAppStore.getState(), tab)).toBeUndefined()
     expect(renameCalls()).toEqual([

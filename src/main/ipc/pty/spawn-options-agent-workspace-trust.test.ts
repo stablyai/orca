@@ -44,7 +44,6 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
     adoptStablePane: notReachedByOptionBuilding,
     assertWorkspaceAcceptsNewPty: notReachedByOptionBuilding,
     resolvePtySpawnStartupCwd: notReachedByOptionBuilding,
-    localStartupCwdDirectoryExists: notReachedByOptionBuilding,
     prepareCodexResumeHome: notReachedByOptionBuilding,
     noCodexResumeLaunch: notReachedByOptionBuilding,
     resolveCodexResumeLaunch: notReachedByOptionBuilding,
@@ -65,7 +64,6 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
   }
 }
 
-/** What preflight and env assembly leave for the option builders; both spawn states share it. */
 function seed(
   ctx: Pick<
     PtyIpcSpawnState,

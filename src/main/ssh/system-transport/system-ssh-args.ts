@@ -18,6 +18,15 @@ export type SystemSshBuildArgsOptions = {
    * be read as having answered "nothing claims it". See `sshConfigMayClaimAlias`.
    */
   aliasClaimedByConfig?: boolean
+  /** Dial Orca's held `ssh -L` forward instead of the target's proxy. See `system-ssh-loopback-route`. */
+  loopbackRoute?: SystemSshLoopbackRouteArgs
+  /** Server-alive probes for a long-lived unmultiplexed process, which no ControlMaster watches. */
+  keepAlive?: boolean
+}
+
+export type SystemSshLoopbackRouteArgs = {
+  localPort: number
+  hostKeyAlias: string
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
@@ -59,11 +68,36 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     // Why: keep master alive 300s after last command so rapid reconnects
     // (e.g. on tab focus) skip re-handshake without holding a process open.
     args.push('-o', 'ControlPersist=300')
+  }
+  if (options?.keepAlive || (!forceDisableControlMaster && controlPath)) {
     args.push('-o', 'ServerAliveInterval=15')
     args.push('-o', 'ServerAliveCountMax=3')
   }
 
+  appendSshTargetDestinationArgs(args, target, options)
+  return args
+}
+
+/**
+ * Who to log in as and how to reach the host, ending `-- destination`: the part of a dial that
+ * belongs to the saved target rather than to Orca's transport (multiplexing, batch mode, `-T`).
+ */
+export function appendSshTargetDestinationArgs(
+  args: string[],
+  target: SshTarget,
+  options?: Pick<SystemSshBuildArgsOptions, 'aliasClaimedByConfig' | 'gssapiOnly' | 'loopbackRoute'>
+): void {
   const useConfigHost = shouldUseOpenSshConfigHost(target)
+  const loopbackRoute = options?.loopbackRoute
+  if (loopbackRoute) {
+    // Why: OpenSSH keeps the first value it sees per option, so these win over ssh_config's route
+    // while User, IdentityFile, certificates, and known_hosts files still come from the alias.
+    args.push('-o', 'HostName=127.0.0.1')
+    args.push('-o', `Port=${loopbackRoute.localPort}`)
+    args.push('-o', 'ProxyCommand=none')
+    args.push('-o', 'ProxyJump=none')
+    args.push('-o', `HostKeyAlias=${loopbackRoute.hostKeyAlias}`)
+  }
 
   // Why: a wildcard `Host *` block supplies ProxyCommand/ProxyJump for every alias, so an alias
   // whose own Host block was renamed or deleted still looks config-backed and gets dialled bare —
@@ -74,7 +108,7 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     appendUnclaimedAliasEndpoint(args, target)
   }
 
-  if (!useConfigHost && target.port !== 22) {
+  if (!useConfigHost && !loopbackRoute && target.port !== 22) {
     args.push('-p', String(target.port))
   }
 
@@ -96,11 +130,12 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'GSSAPIAuthentication=yes')
   }
 
-  if (!useConfigHost && target.jumpHost) {
+  // Why: `-J` after `ProxyJump=none` is a fatal duplicate in OpenSSH, so the route skips both proxies.
+  if (!useConfigHost && !loopbackRoute && target.jumpHost) {
     args.push('-J', target.jumpHost)
   }
 
-  if (!useConfigHost && target.proxyCommand) {
+  if (!useConfigHost && !loopbackRoute && target.proxyCommand) {
     args.push('-o', `ProxyCommand=${target.proxyCommand}`)
   }
 
@@ -109,8 +144,6 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   // must not override a fresh wildcard, Include, or Match result.
   const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
   args.push('--', userHost)
-
-  return args
 }
 
 /**
@@ -125,8 +158,10 @@ export function buildForwardProcessSshArgs(
   target: SshTarget,
   options?: SystemSshBuildArgsOptions
 ): string[] {
+  // Why no loopbackRoute: forwards outlive commands, and the route's own forward must take the real proxy.
   return buildSshArgs(target, {
     ...options,
+    loopbackRoute: undefined,
     suppressOrcaControlMaster: true,
     disableControlMaster: true
   })
@@ -166,6 +201,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.aliasClaimedByConfig === false) {
     buildArgsOptions.aliasClaimedByConfig = false
+  }
+  if (options?.loopbackRoute !== undefined) {
+    buildArgsOptions.loopbackRoute = options.loopbackRoute
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }

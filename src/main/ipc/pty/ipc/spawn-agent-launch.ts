@@ -1,5 +1,3 @@
-// A pane's own agent launch, planned in its reserved spawn by the shared planner; no launch record.
-
 import { randomUUID } from 'node:crypto'
 import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
@@ -15,7 +13,6 @@ import { resolveEarlyPaneKey } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
 
-/** Whether the user's close of this pane, or its whole tab, is already committed to main. */
 function closedInSession(store: Store | undefined, paneKey: string): boolean {
   const pane = parsePaneKey(paneKey)
   const session = store?.getWorkspaceSession()
@@ -27,7 +24,6 @@ function closedInSession(store: Store | undefined, paneKey: string): boolean {
   )
 }
 
-/** The planned launch replaces whatever the pane would have run; the pane's own spawn facts stay. */
 function withPlannedLaunch(
   args: PtySpawnIpcArgs,
   planned: Awaited<ReturnType<OrcaRuntimeService['planAgentPaneLaunch']>>
@@ -39,8 +35,6 @@ function withPlannedLaunch(
     launchAgent: _agent,
     startupCommandDelivery: _delivery,
     telemetry: _telemetry,
-    // TEMPORARY parity (follow-up 2): a missing folder fails as the host's launch did, never the root.
-    cwdFallback: _fallback,
     ...pane
   } = args
   const launchToken = agentLaunchTokenFor(
@@ -74,7 +68,7 @@ function withPlannedLaunch(
 
 export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> {
   const { args, deps } = ctx
-  // A live owner of the pane is adopted below: its agent already runs there.
+  // Adopting a live pane owner also adopts its already-running agent.
   if (args.agentLaunch === undefined || ctx.earlyStablePaneOwner) {
     return
   }

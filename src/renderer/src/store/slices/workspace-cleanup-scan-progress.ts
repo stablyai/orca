@@ -10,6 +10,7 @@ import {
   enrichWorkspaceCleanupCandidatesWithCache,
   type WorkspaceCleanupEnrichmentCacheEntry
 } from './workspace-cleanup-candidate-enrichment'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 let latestWorkspaceCleanupScanToken = 0
 let finalizedWorkspaceCleanupScanToken = 0
@@ -210,8 +211,8 @@ function buildWorkspaceCleanupLocalStateToken(state: AppState): readonly unknown
     state.retainedAgentsByPaneKey,
     state.agentStatusByPaneKey,
     state.unifiedTabsByWorktree,
-    state.worktreesByRepo,
-    state.detectedWorktreesByRepo,
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
     state.runtimeAgentOrchestrationByPaneKey,
     state.paneForegroundAgentByPaneKey,
     state.lastVisitedAtByWorktreeId,

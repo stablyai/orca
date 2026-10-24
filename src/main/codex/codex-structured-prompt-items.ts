@@ -15,13 +15,6 @@ import {
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
 
-// Codex prompt requests → durable journal items.
-//
-// Codex blocks the turn on these, but the answer may arrive minutes later from
-// a different device, so the prompt has to exist as a journal item with its own
-// resolution state rather than as live callback state. The reply path already
-// lives in `codex-structured-prompt-replies.ts`; this is only the render model.
-
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
   acceptForSession: 'Allow for this session',
@@ -57,12 +50,7 @@ function boundPromptOptionLabel(value: string): string {
   return boundInlineText(value, PROMPT_OPTION_LIMITS).text
 }
 
-/**
- * Codex offers a per-request decision set, so the options come off the request
- * when it names them. Falling back to the full set is deliberate: a build that
- * omits the field still accepts all four, and offering nothing would leave the
- * turn blocked with no way to answer it.
- */
+/** Older providers omit availableDecisions; fall back to all supported decisions. */
 export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[] {
   const available = readParams(params).availableDecisions
   const offered = Array.isArray(available)
@@ -77,8 +65,7 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
 export function codexApprovalItem(input: {
   method: string
   params: unknown
-  /** What is being approved, taken from the item Codex already announced —
-   *  the approval request itself does not repeat the command or the patch. */
+  /** Fallback from the announced item when the approval request omits its detail. */
   detail: string | null
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
@@ -118,12 +105,7 @@ export type CodexQuestionItem = {
   body: AgentJournalQuestionItem
 }
 
-/**
- * One journal item per question, not one per request. Codex takes a single
- * reply covering every question, but a client answers them one at a time, and
- * each answer has to win its own compare-and-set — so each question needs its
- * own resolution state. The reply fires when the last one lands.
- */
+/** Each question needs independent answer arbitration; Codex receives one combined reply. */
 export function codexQuestionItems(input: {
   threadId: string
   promptKey: string
@@ -183,8 +165,7 @@ function questionOptions(
     const option = readParams(entry)
     const label = readString(option, 'label')
     if (label !== null && option.isOther !== true) {
-      // The option id has to name its question: Codex's reply is a map keyed by
-      // question id, and the client only ever hands back an option id.
+      // Clients return option IDs; encode the question needed by Codex's answer map.
       mapped.push({
         id: encodeCodexJournalQuestionOptionId(questionId, label),
         label: boundPromptOptionLabel(label)
@@ -194,10 +175,7 @@ function questionOptions(
   return mapped
 }
 
-/** Prompts are live-session state Codex does not persist, so they are keyed in
- *  the Orca namespace rather than by `(threadId, turnId, ordinal)`. */
-/** Keyed by the prompt, not by the tool item it is about: one shell item can
- *  ask several times, and each ask is its own journal row to answer. */
+/** Use Orca keys for nonpersisted prompts; one tool item can issue several distinct asks. */
 export function codexPromptIdentity(input: {
   threadId: string
   promptKey: string

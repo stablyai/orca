@@ -21,6 +21,13 @@ import { indexLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface
 // Main places live terminals in a layout-owner build; those tests' twins are in
 // worktree-agent-activation-gate-layout-owner.test.ts, under the same name unless noted.
 const windowOwnedIt = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
+
+/** Layout-owner build: the sweep only reads main's listing; it binds no pane of its own. */
+function expectNoBindingWrite(store: GateTestStore): void {
+  expect(store.setTabLayout).not.toHaveBeenCalled()
+  expect(store.updateTabPtyId).not.toHaveBeenCalled()
+  expect(store.replaceTerminalLayoutPanePtyId).not.toHaveBeenCalled()
+}
 const STALE_STRUCTURED_SESSION_ID = 'structured-session-stale'
 
 function runtimeSnapshot(
@@ -482,6 +489,11 @@ describe('worktree agent activation gate', () => {
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main's listing names the pane it holds and its frames rebind it; the window writes nothing.
+      expectNoBindingWrite(store)
+      return
+    }
     expect(store.updateTabPtyId).toHaveBeenCalledWith('tab-live', livePtyId)
     expect(store.replaceTerminalLayoutPanePtyId).toHaveBeenCalledWith(
       'tab-live',
@@ -563,6 +575,15 @@ describe('worktree agent activation gate', () => {
     })
     seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main holds the layout: the leaf it names is shown by its frames, so nothing is declined.
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+      expect(createTab).not.toHaveBeenCalled()
+      expectNoBindingWrite(deps.getState())
+      expect(warn).not.toHaveBeenCalled()
+      warn.mockRestore()
+      return
+    }
     // The seam re-checks its own guard, so an existing tab is not re-seeded by 'empty'.
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
 
@@ -610,9 +631,10 @@ describe('worktree agent activation gate', () => {
       await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
       expect(createTab).not.toHaveBeenCalled()
       expect(resume).not.toHaveBeenCalled()
-      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
-        [LIVE_LEAF_ID]: livePtyId
-      })
+      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual(
+        // Layout-owner build: main's frames bind the pane, not the window.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { [LIVE_LEAF_ID]: livePtyId }
+      )
     }
   )
 
@@ -633,9 +655,10 @@ describe('worktree agent activation gate', () => {
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 
     expect(createTab).not.toHaveBeenCalled()
-    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
-      [LIVE_LEAF_ID]: livePtyId
-    })
+    expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual(
+      // Layout-owner build: main's frames bind the pane, not the window.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { [LIVE_LEAF_ID]: livePtyId }
+    )
   })
 
   it('re-reads local ownership after the census before minting', async () => {

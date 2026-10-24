@@ -7,8 +7,7 @@ const { runProcessMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
   rmMock: vi.fn()
 }))
 
-// Why mock the chokepoint: encoding, timeout and the hidden console are its
-// contract now, so this suite asserts what the distro is asked to run.
+// Process-host tests own encoding, timeouts, and console hiding; assert guest commands here.
 vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
@@ -190,9 +189,7 @@ describe('local worktree filesystem runtime access', () => {
         expect.objectContaining({
           program: 'wsl.exe',
           args: expect.arrayContaining(['-d', 'Ubuntu']),
-          // Why a concrete directory (#16463): the guest path is inside the
-          // command, and these run while a worktree is being removed -- which is
-          // the cwd an omitted one would inherit.
+          // The inherited cwd may be the worktree being removed (#16463).
           cwd: expect.any(String)
         })
       )
@@ -208,9 +205,7 @@ describe('local worktree filesystem runtime access', () => {
       completeExecFile('file')
       await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).statPath('/home/me/repo/.git')
 
-      // Why: a login/interactive shell is what puts the distro's rc banner on the
-      // stdout these callers parse. cat/stat/rm need nothing from the user's PATH,
-      // so the shell mode is the fix rather than filtering what it prints.
+      // Avoid login-shell banners instead of filtering potentially valid file content.
       const args = runProcessMock.mock.calls[0]?.[0].args as string[]
       expect(args).toContain('-c')
       expect(args).not.toContain('-lc')
@@ -250,7 +245,6 @@ describe('local worktree filesystem runtime access', () => {
         const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 
         await expect(access.statPath('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
-        // A delete that did not happen still has to look like a failure, or cleanup silently "succeeds".
         await expect(isWorktreePathMissing('/mnt/c/repo/locked', access.statPath)).resolves.toBe(
           false
         )
@@ -270,8 +264,7 @@ describe('local worktree filesystem runtime access', () => {
 
   it('reports a translated stat failure as a failure rather than as absence', async () => {
     await withPlatform('win32', async () => {
-      // Synthetic: no host available here ships a non-English locale, and the probe pins LC_ALL=C
-      // anyway. The point is the direction it errs if that pin ever comes off.
+      // Synthetic localization verifies that unknown errors cannot prove absence if LC_ALL=C regresses.
       failExecFile(1, "stat: <translated verb> '/mnt/c/repo/missing': <translated errno>\n")
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 

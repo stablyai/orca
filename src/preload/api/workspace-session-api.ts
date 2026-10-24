@@ -8,9 +8,9 @@ import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-c
 
 export type WorkspaceSessionApi = {
   session: {
-    // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
+    // Omitted hostId selects the local persistence partition.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
-    /** Partitions persistence holds, so boot reads them all instead of guessing from the catalog. */
+    /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>

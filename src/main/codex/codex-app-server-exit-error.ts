@@ -1,7 +1,4 @@
-// What a dead `codex app-server` child means to whoever was talking to it. The
-// stderr tail is the only evidence: a CLI without the subcommand is a durable
-// capability fact, and anything else is this run's crash.
-
+// A missing subcommand is a durable capability result; other exits remain failures of this run.
 import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'

@@ -28,6 +28,13 @@ export const OrcadTerminalCensusSchema = z.object({
 
 export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
 
+/** A daemon that could not answer: unknown, never zero. */
+export const UNVERIFIABLE_ORCAD_TERMINAL_CENSUS: Readonly<OrcadTerminalCensus> = Object.freeze({
+  liveSessions: null,
+  startedSinceActivation: null,
+  daemonProtocolVersion: null
+})
+
 /** The longest a census may close terminal admission; the stop that follows takes seconds. */
 export const ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS = 5 * 60_000
 

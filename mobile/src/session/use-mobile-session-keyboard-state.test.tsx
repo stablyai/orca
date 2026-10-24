@@ -34,7 +34,9 @@ vi.mock('../terminal/terminal-viewport-refit', () => ({
   })
 }))
 vi.mock('../terminal/terminal-custom-keys', () => ({ removeCustomKey: harness.removeCustomKey }))
-vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
+vi.mock('../worktree/last-visited-worktree-by-host', () => ({
+  writeLastVisitedWorktree: async () => {}
+}))
 
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'
 

@@ -194,7 +194,7 @@ describe('terminal replies from main (switch on)', () => {
     expect(killed).toEqual(['pty-b'])
   })
 
-  it("record the pane main's layout binds, over a caller's stale claim", () => {
+  it("answer the pane main's layout binds, over a caller's stale claim", () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
@@ -205,22 +205,21 @@ describe('terminal replies from main (switch on)', () => {
     })
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ptysById is the runtime's PTY registry; the test reads the record it keeps.
-    const { ptysById } = runtime as unknown as {
-      ptysById: Map<string, { tabId: string | null; paneKey: string | null }>
-    }
-    expect(ptysById.get('pty-b')).toMatchObject({
+    const { ptysById } = runtime as unknown as { ptysById: Map<string, { ptyId: string }> }
+    expect(runtime['paneOfPty'](ptysById.get('pty-b')!)).toMatchObject({
       tabId: SURFACE_TAB_ID,
       paneKey: `${SURFACE_TAB_ID}:${HEADLESS_SECOND_LEAF_ID}`
     })
   })
 
-  it('reinstall after a graph sync reconnects a terminal, never inside it', async () => {
+  // Switch-on variant (ruled behaviour): a pane main owns is no proof its terminal runs, so the
+  // window's graph no longer reconnects a disconnected terminal; the host's inventory decides.
+  it("a graph sync leaves a disconnected terminal of main's pane disconnected, with no reinstall", async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, mountedSurfaceGraph())
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ptysById is the runtime's PTY registry; the test edits the record it keeps.
     const { ptysById } = runtime as unknown as { ptysById: Map<string, { connected: boolean }> }
-    // Disconnected, not exited: the graph's leaf loop records it connected again.
     ptysById.get('pty-a')!.connected = false
     const installs: { depth: number; connected: boolean | undefined }[] = []
     let depth = 0
@@ -236,18 +235,9 @@ describe('terminal replies from main (switch on)', () => {
     })
 
     runtime.syncWindowGraph(1, mountedSurfaceGraph())
-    expect(installs).toHaveLength(1)
     await Promise.resolve()
 
-    // One deferred reinstall, outside the sync, after the record says connected.
-    expect(installs).toEqual([
-      { depth: 0, connected: false },
-      { depth: 0, connected: true }
-    ])
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(listed.terminals.map(({ ptyId, connected }) => ({ ptyId, connected }))).toEqual([
-      { ptyId: 'pty-a', connected: true },
-      { ptyId: 'pty-b', connected: true }
-    ])
+    expect(installs).toEqual([{ depth: 0, connected: false }])
+    expect(ptysById.get('pty-a')?.connected).toBe(false)
   })
 })

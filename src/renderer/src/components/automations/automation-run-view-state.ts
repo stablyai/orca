@@ -61,6 +61,8 @@ export function getAutomationRunViewState({
   terminalOnPairedServer?: boolean
 }): AutomationRunViewState {
   const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
+  // Why the pane alone: a slept run drops its PTY id but keeps its pane, which the server resumes.
+  const hasPaneIdentity = Boolean(run.terminalPaneKey)
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',
@@ -70,7 +72,7 @@ export function getAutomationRunViewState({
     }
   }
 
-  if (run.workspaceId && workspaceExists && hasTerminalIdentity && terminalOnPairedServer) {
+  if (run.workspaceId && workspaceExists && hasPaneIdentity && terminalOnPairedServer) {
     return {
       availability: 'terminal',
       actionLabel: 'View run',

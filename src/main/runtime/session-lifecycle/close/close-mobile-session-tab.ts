@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
+import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
 import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeSessionTabCloseReason
@@ -21,8 +21,9 @@ import { SESSION_TAB_NOT_FOUND_ERROR } from '../../../../shared/session-tab-clos
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { structuredAgentSessionTabCloseCause } from '../../structured-agent-session-tab-close-cause'
 import { retireHeadlessMobileSessionEditorTab } from '../../mobile-session-editor-projection'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
   declare browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
 
   async closeMobileSessionTab(
@@ -165,6 +166,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           // remote lifecycle echo must never cross that boundary into a kill.
           return refusedMobileSessionTabClose('retirement-owner')
         }
+      }
+      // Switch point: a terminal row main owns closes in main's layout, with or without a window.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        (await this.closeMobileRowInMainLayout(worktreeId, tabId, tab, options))
+      ) {
+        return finishCommittedClose()
       }
       // Why: a runtime-owned headless tab is absent from renderer state, so the
       // closeTerminalTab relay below would ack success without killing its PTY,
