@@ -127,7 +127,13 @@ export function AppWorkspaceShell(props: {
               layout.leftTitlebarChromeLayout.shouldMount ? (
                 /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
                 <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  className={`flex min-h-0 flex-col shrink-0${
+                    layout.sidebarOpen
+                      ? ''
+                      : layout.isSidebarRail
+                        ? ' relative w-12 border-r border-worktree-sidebar-border bg-worktree-sidebar'
+                        : ' relative w-0 overflow-visible'
+                  }`}
                 >
                   <div
                     // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
@@ -146,7 +152,13 @@ export function AppWorkspaceShell(props: {
                     {titlebarLeftControls}
                   </div>
                   {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
-                  <div className="flex min-h-0 flex-1">
+                  <div
+                    className={`flex min-h-0 flex-1${
+                      layout.isSidebarRail && layout.leftTitlebarChromeLayout.isFloating
+                        ? ' pt-9'
+                        : ''
+                    }`}
+                  >
                     <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
                   </div>
                 </div>
