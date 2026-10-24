@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
 import {
-  WSL_MOVE_WORLD_PANE,
   createWslMoveWorld,
+  WSL_MOVE_WORLD_PANE,
   type WslMoveWorld
 } from '../__fixtures__/wsl-mover/wsl-move-driver-world'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -70,14 +70,9 @@ describe('moveProjectsToWslHost', () => {
       ['repo-1::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app']
     ])
     expect([...world.catalog.values()]).toEqual(['committed'])
-    // The restore hints were sent from the journal, and the commit named them.
-    expect(world.committedWithBlobs?.map((blob) => blob.blobKind)).toEqual([
-      'terminal-restore-hints'
-    ])
+    // The paused pane's own checkpoint (history and folder) went as its blob, and the commit named it.
+    expect(world.committedWithBlobs?.map((blob) => blob.blobKind)).toEqual(['terminal-history'])
     const [cutover] = journal()
-    expect(cutover.terminalRestoreHints).toEqual([
-      { paneKey: WSL_MOVE_WORLD_PANE, cwd: '/home/dev/app/src' }
-    ])
     expect(cutover.manifest.payload.repositories[0].path).toBe('/home/dev/app')
     expect(world.progress.map((event) => event.step)).toEqual([
       'preparing',
@@ -103,7 +98,7 @@ describe('moveProjectsToWslHost', () => {
 
   it.each([
     ['stage:before', 'reset'],
-    ['blob:terminal-restore-hints', 'reset'],
+    ['blob:terminal-history', 'reset'],
     ['commit:before', 'reset']
   ])('resets to zero when %s fails', async (failAt, outcome) => {
     world.failAt.add(failAt)

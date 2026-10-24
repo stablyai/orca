@@ -34,7 +34,7 @@ import { compareKeys } from '../migrating-orcad-catalog/orcad-source-key-order'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { withoutWindowsShellChoices } from './wsl-move-windows-shell-choices'
-import { withoutPtyBindings } from './wsl-move-session-rewrite'
+import { withoutDesktopFocus, withoutPtyBindings } from './wsl-move-session-rewrite'
 
 export type WslMoveManifestExportRequest = {
   migrationId: string
@@ -50,7 +50,7 @@ export type WslMoveManifestExportRequest = {
   repoIds: readonly string[]
   folderWorkspaceIds: readonly string[]
   /** Slept panes' daemon history: their only copy of the scrollback. */
-  sleptScrollback?: (tabId: string, leafId: string) => Buffer | null
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 }
 
 export type WslMoveManifestExport = {
@@ -143,7 +143,7 @@ export function exportWslMoveManifest(
     source,
     catalog,
     request.destinationEnvironmentId,
-    request.sleptScrollback
+    request.daemonHistoryLeaf
   )
   blockers.push(...inspection.blockedSessionItems, ...inspection.leftBehindItems)
   for (const [kind, count] of Object.entries(inspection.blockedCounts)) {
@@ -153,14 +153,14 @@ export function exportWslMoveManifest(
       )
     }
   }
-  const dormantState = inspection.payload.workspaceSession
-    ? {
-        ...inspection.payload,
-        // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
-        workspaceSession: withoutWindowsShellChoices(
-          withoutPtyBindings(inspection.payload.workspaceSession)
-        )
-      }
+  // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
+  const workspaceSession =
+    inspection.payload.workspaceSession &&
+    withoutDesktopFocus(
+      withoutWindowsShellChoices(withoutPtyBindings(inspection.payload.workspaceSession))
+    )
+  const dormantState = workspaceSession
+    ? { ...inspection.payload, workspaceSession }
     : inspection.payload
   const rewriter = createUncToLinuxPathRewriter(request.distro)
   const payload = rewriteOrcadMigrationPayloadPaths(

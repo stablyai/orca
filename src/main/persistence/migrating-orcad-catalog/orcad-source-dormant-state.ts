@@ -70,7 +70,7 @@ export function collectOrcadMigrationSourceDormantState(
   storage?: TerminalScrollbackSnapshotStorage,
   destinationEnvironmentId?: string,
   /** A WSL move's slept panes; see `projectOrcadMigrationSessionScrollback`. */
-  sleptLeafScrollback?: (tabId: string, leafId: string) => Buffer | null
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
   const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = emptyBlockedCounts()
@@ -183,7 +183,7 @@ export function collectOrcadMigrationSourceDormantState(
     catalog,
     storage,
     leaveBehind,
-    sleptLeafScrollback
+    daemonHistoryLeaf
   )
   const blockedSessionItems = [...workspaceSession.blockedItems]
   const automationState = collectOrcadMigrationSourceAutomationState(state, source, catalog)

@@ -124,7 +124,8 @@ describe('orcad migration blob contract', () => {
     expect(advertisedOrcadMigrationBlobCapabilities()).toEqual([
       ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
       'orcad.migration-blob.terminal-restore-hints.v1',
-      'orcad.migration-blob.shell-history.v1'
+      'orcad.migration-blob.shell-history.v1',
+      'orcad.migration-blob.terminal-history.v1'
     ])
     // A kind with no installer stays unadvertised, so no desktop sends it here.
     expect(advertisedOrcadMigrationBlobCapabilities()).not.toContain(

@@ -28,12 +28,7 @@ import {
   readPairedPaneContent
 } from './helpers/paired-host-terminal'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
-import {
-  createMovedRepo,
-  MOVED_BROWSER_URL,
-  MOVED_TAB,
-  seedImportedMovedTab
-} from './helpers/wsl-moved-host-profile'
+import { createMovedRepo, MOVED_TAB, seedImportedMovedTab } from './helpers/wsl-moved-host-profile'
 import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 
@@ -212,16 +207,6 @@ async function openImportedPane(
     rmSync(root, { recursive: true, force: true })
   }
 }
-
-test("a moved pane's stored history and browser tab show on the desktop that opens it", async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
-{}, testInfo) => {
-  test.skip(process.platform === 'win32', 'POSIX paths')
-  test.setTimeout(600_000)
-  const outcome = await openImportedPane(testInfo, true)
-  // Exactly once: the desktop's own snapshot read must not paint it a second time over the host's.
-  expect.soft(outcome.content.split(outcome.marker).length - 1).toBe(1)
-  expect.soft(outcome.browserUrls).toContain(MOVED_BROWSER_URL)
-})
 
 test("an ordinary pane's saved snapshot is not replayed by a host start", async (// oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring to request no fixtures.
 {}, testInfo) => {

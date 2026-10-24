@@ -17,11 +17,16 @@ import {
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
 } from '../../../../shared/orcad-runtime-capabilities'
 import { getDefaultPersistedState } from '../../../../shared/constants'
+import { terminalTab } from './wsl-mover-profile-rows'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WslMoveProgressEvent } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { collectOrcadMigrationSourceDormantState } from '../../migrating-orcad-catalog/orcad-source-dormant-state'
 import { exportWslMoveManifest } from '../../moving-wsl-projects/wsl-move-manifest-export'
 import { runWslMoveDesktopRewritePass } from '../../moving-wsl-projects/wsl-move-desktop-rewrite'
+import {
+  readWslMoveSleptScrollbackFromHistory,
+  wslMoveSleptSpoolRoot
+} from '../../moving-wsl-projects/wsl-move-slept-scrollback'
 import type {
   WslMoveDriverDeps,
   WslMoveHost,
@@ -183,6 +188,16 @@ export function createWslMoveWorld(userDataPath: string): WslMoveWorld {
       exports += 1
       const state = getDefaultPersistedState('C:\\Users\\dev')
       state.repos = world.repos
+      // The paused pane's tab, so its terminal-history blob has a pane on the host to restore into.
+      const [tabId, leafId] = WSL_MOVE_WORLD_PANE.split(':')
+      const worktreeId = `repo-1::${unc('/home/dev/app')}`
+      state.workspaceSession = {
+        ...state.workspaceSession,
+        tabsByWorktree: { [worktreeId]: [terminalTab(tabId, worktreeId, null, null)] },
+        terminalLayoutsByTabId: {
+          [tabId]: { root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
+        }
+      }
       const exported = exportWslMoveManifest(
         {
           getRepos: () => world.repos,
@@ -214,6 +229,37 @@ export function createWslMoveWorld(userDataPath: string): WslMoveWorld {
         return { verdict: 'exited' }
       }
     },
+    // The paused pane's checkpoint, carried as its terminal-history blob.
+    sleptScrollback: (panes, distro, migrationId) =>
+      readWslMoveSleptScrollbackFromHistory(
+        {
+          detectColdRestoreState: async (sessionId) => ({
+            status: 'restored',
+            sessionId,
+            hasUnreadableRecovery: false,
+            restoreInfo: {
+              snapshotAnsi: '$ make\r\nok\r\n$ ',
+              scrollbackAnsi: '',
+              rehydrateSequences: '',
+              cwd: '/home/dev/app/src',
+              cols: 80,
+              rows: 24,
+              scrollbackLines: 2,
+              modes: {
+                bracketedPaste: false,
+                mouseTracking: false,
+                applicationCursor: false,
+                alternateScreen: false
+              }
+            }
+          })
+        },
+        panes.map((pane) => ({ ...pane, wslDistro: distro })),
+        distro,
+        wslMoveSleptSpoolRoot(userDataPath, migrationId),
+        () => null,
+        () => new Date('2026-10-20T00:00:00.000Z')
+      ),
     snapshots: {
       readOrcadMigrationSourceSnapshotChunk: () => {
         throw new Error('unused')

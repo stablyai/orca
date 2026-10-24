@@ -14,7 +14,7 @@ import {
   type WslMovePrepared
 } from './wsl-move-driver-plan'
 import { resetWslMoveToZero } from './wsl-move-reset'
-import { sleptScrollbackReader, type WslMoveSleptScrollback } from './wsl-move-slept-scrollback'
+import { daemonHistoryLeafOf, type WslMoveSleptScrollback } from './wsl-move-slept-scrollback'
 
 export async function journalSleptWslMove(
   deps: Pick<WslMoveDriverDeps, 'exportManifest' | 'userDataPath'>,
@@ -29,7 +29,7 @@ export async function journalSleptWslMove(
   try {
     // The slept state, which the session freeze then holds for the rest of the move.
     const exported = deps.exportManifest(
-      exportRequestOf(prepared, migrationId, startedAt, sleptScrollbackReader(slept))
+      exportRequestOf(prepared, migrationId, startedAt, daemonHistoryLeafOf(slept))
     )
     if (exported.blockers.length > 0) {
       return refusal('wsl_move_export_incomplete', { reasons: [...exported.blockers] })

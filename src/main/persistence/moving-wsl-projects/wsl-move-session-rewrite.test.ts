@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -8,7 +9,12 @@ import { wslMoverProfile } from '../__fixtures__/wsl-mover/wsl-mover-profiles'
 import { tabGroup, terminalTab } from '../__fixtures__/wsl-mover/wsl-mover-profile-rows'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { wslMoveRewriteScope } from './wsl-move-rewrite-scope'
-import { wslMoveHostSessionSeed, wslMoveSessionGlobalsPatch } from './wsl-move-session-rewrite'
+import {
+  withoutDesktopFocus,
+  wslMoveHostSessionSeed,
+  wslMoveSessionGlobalsPatch
+} from './wsl-move-session-rewrite'
+import { prepareOrcadMigrationWorkspaceSession } from '../migrating-orcad-catalog/orcad-destination-workspace-session'
 
 const HOST = toRuntimeExecutionHostId('wsl:Ubuntu')
 const scope = wslMoveRewriteScope({
@@ -257,5 +263,42 @@ describe('WSL move host session seed', () => {
     expect(seed?.tabGroups?.[MOVED_ON_HOST]?.map((group) => group.id)).toEqual(['group-1'])
     expect(seed?.tabGroupLayouts?.[MOVED_ON_HOST]).toEqual({ type: 'leaf', groupId: 'group-1' })
     expect(seed?.activeGroupIdByWorktree?.[MOVED_ON_HOST]).toBe('group-1')
+  })
+})
+
+describe('WSL move carried session focus', () => {
+  // awin verify-7, N1: the focused project could not move into a host that had its own focus.
+  it('carries no desktop focus, so a host with its own focus takes the moved project and keeps its focus', () => {
+    const desktop: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo-moving',
+      activeWorktreeId: 'repo-moving::/home/dev/app',
+      activeWorkspaceKey: worktreeWorkspaceKey('repo-moving::/home/dev/app'),
+      activeWorkspaceExecutionHostId: 'local',
+      activeTabId: 'tab-1'
+    }
+    const carried = withoutDesktopFocus(desktop)
+    expect(carried).toMatchObject({ activeRepoId: null, activeWorktreeId: null, activeTabId: null })
+    expect('activeWorkspaceKey' in carried).toBe(false)
+    expect('activeWorkspaceExecutionHostId' in carried).toBe(false)
+
+    const host = {
+      ...getDefaultPersistedState('/host-data'),
+      workspaceSession: {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo-on-host',
+        activeWorktreeId: 'repo-on-host::/home/dev/other',
+        activeTabId: 'host-tab'
+      }
+    }
+    const prepared = prepareOrcadMigrationWorkspaceSession(carried, host)
+    expect(prepared.merged).toMatchObject({
+      activeRepoId: 'repo-on-host',
+      activeWorktreeId: 'repo-on-host::/home/dev/other',
+      activeTabId: 'host-tab'
+    })
+    expect(() => prepareOrcadMigrationWorkspaceSession(desktop, host)).toThrow(
+      'orcad_migration_dormant_focus_conflict'
+    )
   })
 })

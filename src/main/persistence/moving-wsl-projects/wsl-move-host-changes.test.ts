@@ -86,7 +86,7 @@ function replaceOrcadWithNewerStagingFormat(): void {
 
 describe('R41: orcad updated during a move', () => {
   it('between staging and the commit, with the same staging format: the move finishes', async () => {
-    at('blob:terminal-restore-hints:before', () => {
+    at('blob:terminal-history:before', () => {
       rig.host = createStore()
     })
     expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({
@@ -97,7 +97,7 @@ describe('R41: orcad updated during a move', () => {
   })
 
   it('between staging and the commit, by a build that cannot read the stage: back to zero, then a retry moves', async () => {
-    at('blob:terminal-restore-hints:before', replaceOrcadWithNewerStagingFormat)
+    at('blob:terminal-history:before', replaceOrcadWithNewerStagingFormat)
     expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({
       outcome: 'reset'
     })
@@ -132,7 +132,7 @@ describe('R38: the distro unregistered or renamed', () => {
   }
 
   it('before the commit request: back to zero; the leftover stage is owed to the next host', async () => {
-    at('blob:terminal-restore-hints:before', () => {
+    at('blob:terminal-history:before', () => {
       rig.hostPresent = false
     })
     expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({

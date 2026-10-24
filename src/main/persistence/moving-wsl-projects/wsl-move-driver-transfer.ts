@@ -15,7 +15,10 @@ import { transferOrcadMigrationSnapshots } from '../../ssh/orcad-migration-snaps
 import { writeWslMoveCutover } from './wsl-move-cutover-journal'
 import type { WslMoveDriverDeps, WslMoveHost, WslMoveManifestExport } from './wsl-move-driver-ports'
 import { assertWslMoveCommitRequestAllowed } from './wsl-move-reset'
-import { buildWslMoveRestoreHintsBlob } from './wsl-move-restore-hints-blob'
+import {
+  wslMoveTerminalHistoryBlobs,
+  type WslMoveSleptScrollback
+} from './wsl-move-slept-scrollback'
 
 type TransferDeps = Pick<WslMoveDriverDeps, 'userDataPath' | 'snapshots' | 'shellHistory' | 'now'>
 
@@ -69,21 +72,22 @@ export async function stageWslMove(
   return staged
 }
 
-/** Restore hints come from the journal record, so what is sent is what a crash kept. */
+/** Each pane's own checkpoint (history and folder) as a blob, plus the shells' history files. */
 export async function collectWslMoveBlobs(
   deps: TransferDeps,
   cutover: WslMoveCutover,
-  worktrees: WslMoveManifestExport['worktrees']
+  worktrees: WslMoveManifestExport['worktrees'],
+  slept: WslMoveSleptScrollback
 ): Promise<{ descriptors: OrcadMigrationBlobDescriptor[]; source: OrcadMigrationBlobSource }> {
-  const hints = buildWslMoveRestoreHintsBlob(cutover.terminalRestoreHints ?? [])
+  const panes = wslMoveTerminalHistoryBlobs(slept, cutover.manifest)
   const history = await deps.shellHistory(cutover.manifest.source.distro, worktrees)
-  const descriptors = [...(hints ? [hints.descriptor] : []), ...history.descriptors]
+  const descriptors = [...panes.descriptors, ...history.descriptors]
   return {
     descriptors,
     source: {
       readChunk: (descriptor, offset, maxBytes) =>
-        descriptor.blobKind === 'terminal-restore-hints' && hints
-          ? hints.source.readChunk(descriptor, offset, maxBytes)
+        descriptor.blobKind === 'terminal-history'
+          ? panes.source.readChunk(descriptor, offset, maxBytes)
           : history.source.readChunk(descriptor, offset, maxBytes)
     }
   }

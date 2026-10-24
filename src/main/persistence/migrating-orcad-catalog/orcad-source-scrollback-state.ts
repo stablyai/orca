@@ -5,7 +5,6 @@ import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
 } from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
@@ -44,10 +43,10 @@ export function projectOrcadMigrationSessionScrollback(
   /** "Move anyway": a pane's history that can't move stays on this desktop; the pane still moves. */
   leaveBehind = false,
   /**
-   * A WSL move's slept panes: their history is the daemon's checkpoint, never a renderer snapshot,
-   * so without this a moved terminal opens empty. Taken first: the move slept the pane just now.
+   * A WSL move's panes whose daemon checkpoint travels as a `terminal-history` blob: the host's
+   * daemon restores it, so no renderer snapshot or ref may also paint it.
    */
-  sleptLeafScrollback?: (tabId: string, leafId: string) => Buffer | null
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): ProjectedOrcadMigrationScrollback {
   const projected = structuredClone(session)
   const snapshots: OrcadMigrationTerminalScrollbackSnapshot[] = []
@@ -63,32 +62,19 @@ export function projectOrcadMigrationSessionScrollback(
       ...Object.keys(localOnly ?? {}),
       ...Object.keys(sourceLayout.scrollbackRefsByLeafId ?? {})
     ])
-    const slept = new Map<string, Buffer>()
-    if (sleptLeafScrollback) {
-      for (const leafId of collectLeafIds(sourceLayout.root)) {
-        const bytes = sleptLeafScrollback(tabId, leafId)
-        if (bytes && bytes.length > 0) {
-          slept.set(leafId, bytes)
-          leafIds.add(leafId)
-        }
-      }
-    }
     for (const leafId of [...leafIds].sort(compareKeys)) {
-      // The move just slept this pane: its checkpoint is newer than any snapshot saved before.
-      const sleptBytes = slept.get(leafId)
-      const buffer = sleptBytes
-        ? null
-        : inlineLeafBuffer(localOnly, sourceLayout.buffersByLeafId, leafId)
+      // Its checkpoint is newer than any snapshot saved before, and the host restores it itself.
+      if (daemonHistoryLeaf?.(tabId, leafId)) {
+        continue
+      }
+      const buffer = inlineLeafBuffer(localOnly, sourceLayout.buffersByLeafId, leafId)
       const sourceRef = sourceLayout.scrollbackRefsByLeafId?.[leafId]
-      const ref =
-        buffer || sleptBytes ? makeTerminalScrollbackSnapshotRef(tabId, leafId) : sourceRef
-      const bytes =
-        sleptBytes ??
-        (buffer
-          ? Buffer.from(buffer, 'utf8')
-          : sourceRef
-            ? readTerminalScrollbackStoredBytesSync(sourceRef, storage)
-            : null)
+      const ref = buffer ? makeTerminalScrollbackSnapshotRef(tabId, leafId) : sourceRef
+      const bytes = buffer
+        ? Buffer.from(buffer, 'utf8')
+        : sourceRef
+          ? readTerminalScrollbackStoredBytesSync(sourceRef, storage)
+          : null
       if (
         !ref ||
         !bytes ||
