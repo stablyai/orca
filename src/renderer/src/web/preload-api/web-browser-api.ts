@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { noopUnsubscribe } from './web-storage'
 
 export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the web client hosts no pages, so it stubs only the browser calls its shared UI makes.
   return {
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
@@ -23,6 +24,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onDownloadProgress: () => noopUnsubscribe,
     onDownloadFinished: () => noopUnsubscribe,
     onContextMenuRequested: () => noopUnsubscribe,
+    onTargetUrlChanged: () => noopUnsubscribe,
     onContextMenuDismissed: () => noopUnsubscribe,
     onNavigationUpdate: () => noopUnsubscribe,
     onActivateView: () => noopUnsubscribe,

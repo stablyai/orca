@@ -47,7 +47,8 @@ import type {
   BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
-  BrowserPopupEvent
+  BrowserPopupEvent,
+  BrowserTargetUrlChangedEvent
 } from '../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
@@ -153,6 +154,7 @@ export type BrowserApi = {
   onContextMenuDismissed: (
     callback: (event: BrowserContextMenuDismissedEvent) => void
   ) => () => void
+  onTargetUrlChanged: (callback: (event: BrowserTargetUrlChangedEvent) => void) => () => void
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
