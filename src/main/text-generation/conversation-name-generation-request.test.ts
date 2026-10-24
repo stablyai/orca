@@ -3,6 +3,7 @@ import { createMockDiscoveryChild } from './commit-message-text-generation-test-
 import { generateConversationNameFromContext } from './commit-message-text-generation'
 import { cancelLocalGeneration } from './source-control-generation-lanes'
 import { generateConversationName } from './conversation-name-generation-request'
+import { BACKGROUND_NAME_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
 import type { SpawnedSourceControlAgentProcess } from './source-control-text-generation-types'
 
 describe('generateConversationName', () => {
@@ -23,7 +24,7 @@ describe('generateConversationName', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async (plan, cwd, timeoutMs, requestedOperation) => {
           expect(cwd).toBe('/repo')
-          expect(timeoutMs).toBe(60_000)
+          expect(timeoutMs).toBe(BACKGROUND_NAME_GENERATION_TIMEOUT_MS)
           prompt = plan.stdinPayload ?? ''
           operation = requestedOperation
           return {
