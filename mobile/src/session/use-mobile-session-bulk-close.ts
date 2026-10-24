@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   createBulkCloseSheetActions,
-  createCloseWithBulkActions
+  createCloseWithBulkActions,
+  runBulkCloseSessionTabs,
+  type PendingBulkCloseConfirmation
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../transport/types'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
@@ -28,14 +30,29 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     parkedPendingTerminalContext,
     retryPendingTerminalRecovery
   } = scope
-  const bulkCloseActions = createBulkCloseSheetActions({
+  const [pendingBulkClose, setPendingBulkClose] = useState<PendingBulkCloseConfirmation | null>(
+    null
+  )
+  const bulkCloseDeps = {
     sessionTabsRef,
     markdownDocs,
     activeSessionTabIdRef,
     switchSessionTab,
     closeSessionTab: handleCloseSessionTab
+  }
+  const bulkCloseActions = createBulkCloseSheetActions({
+    ...bulkCloseDeps,
+    onRequestConfirmBulkClose: setPendingBulkClose
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
+  const confirmBulkClose = () => {
+    const target = pendingBulkClose
+    setPendingBulkClose(null)
+    if (target) {
+      void runBulkCloseSessionTabs(bulkCloseDeps, target.anchor)
+    }
+  }
+  const cancelBulkClose = () => setPendingBulkClose(null)
 
   const visibleTabs: MobileSessionTab[] = sessionTabs
   const activeMarkdownTab = activeSessionTab?.type === 'markdown' ? activeSessionTab : null
@@ -100,6 +117,9 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
   return {
     bulkCloseActions,
     closeWithBulkActions,
+    pendingBulkClose,
+    confirmBulkClose,
+    cancelBulkClose,
     visibleTabs,
     activeMarkdownTab,
     activeFileTab,

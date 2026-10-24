@@ -17,6 +17,7 @@ import {
   getRepoIdFromMobileWorktreeId,
   isTerminalPhoneDisplayMode
 } from './mobile-session-route-helpers'
+import { describeBulkCloseConfirmation } from './mobile-bulk-close-sheet-actions'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
@@ -27,16 +28,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     client,
     worktreeName,
     sessionTabs,
-    pendingDiffNotesDelivery,
-    setPendingDiffNotesDelivery,
-    showCreateTabDrawer,
-    setShowCreateTabDrawer,
-    showQuickCommands,
-    setShowQuickCommands,
-    setShowCreateBrowserModal,
-    showCreateBrowserModal,
-    showHeaderMoreActions,
-    setShowHeaderMoreActions,
     actionTarget,
     setActionTarget,
     markdownActionTarget,
@@ -47,20 +38,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setBrowserActionTarget,
     agentSessionActionTarget,
     setAgentSessionActionTarget,
-    discardMarkdownTarget,
-    setDiscardMarkdownTarget,
-    leaveDrafts,
-    setLeaveDrafts,
-    setRenameTarget,
-    renameTarget,
-    setCustomKeys,
-    showCustomKeyModal,
-    setShowCustomKeyModal,
-    deleteKeyTarget,
-    setDeleteKeyTarget,
     terminalModes,
-    showDictationSetup,
-    setShowDictationSetup,
     browserScreencastSupported,
     quickCommandsSupported,
     quickCommandAgentPromptMaxLength,
@@ -72,10 +50,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     readFileTab,
     leaveSession,
     discardMarkdownLocalContent,
-    copyMarkdownPath,
-    confirmDiscardMarkdown,
-    handleDeleteCustomKey,
-    handleManageShortcuts,
     handleClearTerminal,
     handleCreateTerminal,
     launchQuickCommand,
@@ -90,25 +64,23 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     createTabAgentActions,
     sendDiffNotesAgentActions,
     handlePanelTap,
-    openAgentSessionHistory,
-    showAgentSessionHistoryAction,
-    showChecksAction
+    openAgentSessionHistory
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
-        visible={showHeaderMoreActions}
-        showAgentSessionHistory={showAgentSessionHistoryAction}
-        showChecks={showChecksAction}
+        visible={controller.showHeaderMoreActions}
+        showAgentSessionHistory={controller.showAgentSessionHistoryAction}
+        showChecks={controller.showChecksAction}
         onOpenAgentSessionHistory={openAgentSessionHistory}
         onOpenChecks={() => handlePanelTap('pr')}
-        onClose={() => setShowHeaderMoreActions(false)}
+        onClose={() => controller.setShowHeaderMoreActions(false)}
       />
       <QuickCommandsSheet
-        visible={showQuickCommands && quickCommandsSupported === true}
-        onClose={() => setShowQuickCommands(false)}
+        visible={controller.showQuickCommands && quickCommandsSupported === true}
+        onClose={() => controller.setShowQuickCommands(false)}
         client={client}
         repoId={
           isFolderWorkspaceRoute || isFloatingWorkspaceRoute
@@ -120,7 +92,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onLaunch={launchQuickCommand}
       />
       <ActionSheetModal
-        visible={showCreateTabDrawer}
+        visible={controller.showCreateTabDrawer}
         title="New Tab"
         actions={[
           ...createTabAgentActions,
@@ -128,7 +100,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: 'Terminal',
             icon: SquareTerminal,
             onPress: () => {
-              setShowCreateTabDrawer(false)
+              controller.setShowCreateTabDrawer(false)
               void handleCreateTerminal()
             }
           },
@@ -147,7 +119,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                       showToast('Desktop update required for mobile browser streaming', 1600)
                       return
                     }
-                    setShowCreateBrowserModal(true)
+                    controller.setShowCreateBrowserModal(true)
                   }
                 },
                 ...(onPairedHost
@@ -156,7 +128,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                         label: 'Markdown Note',
                         icon: FileText,
                         onPress: () => {
-                          setShowCreateTabDrawer(false)
+                          controller.setShowCreateTabDrawer(false)
                           void handleCreateMarkdownNote()
                         }
                       }
@@ -164,10 +136,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                   : [])
               ])
         ]}
-        onClose={() => setShowCreateTabDrawer(false)}
+        onClose={() => controller.setShowCreateTabDrawer(false)}
       />
       <ActionSheetModal
-        visible={pendingDiffNotesDelivery !== null}
+        visible={controller.pendingDiffNotesDelivery !== null}
         title="Send Review Notes"
         message="Choose an agent session for the current notes."
         actions={[
@@ -176,8 +148,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: 'Copy Notes',
             icon: Copy,
             onPress: () => {
-              const delivery = pendingDiffNotesDelivery
-              setPendingDiffNotesDelivery(null)
+              const delivery = controller.pendingDiffNotesDelivery
+              controller.setPendingDiffNotesDelivery(null)
               if (!delivery) {
                 return
               }
@@ -194,7 +166,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             }
           }
         ]}
-        onClose={() => setPendingDiffNotesDelivery(null)}
+        onClose={() => controller.setPendingDiffNotesDelivery(null)}
       />
       <ActionSheetModal
         visible={actionTarget != null}
@@ -208,7 +180,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onToggleChat: toggleTabChatView,
           isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),
           onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
-          onRename: setRenameTarget,
+          onRename: controller.setRenameTarget,
           onClear: (target) => void handleClearTerminal(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
@@ -240,7 +212,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void copyMarkdownPath(target)
+                void controller.copyMarkdownPath(target)
               }
             }
           },
@@ -289,7 +261,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onClose={() => setAgentSessionActionTarget(null)}
       />
       <ActionSheetModal
-        visible={leaveDrafts != null}
+        visible={controller.leaveDrafts != null}
         title="Unsaved markdown changes"
         message="Copy or discard phone drafts before leaving."
         actions={[
@@ -297,14 +269,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: 'Copy All & Leave',
             icon: FileText,
             onPress: () => {
-              const drafts = leaveDrafts ?? []
+              const drafts = controller.leaveDrafts ?? []
               const combined = drafts
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
               void clipboard
                 .writeText(combined)
                 .then(() => {
-                  setLeaveDrafts(null)
+                  controller.setLeaveDrafts(null)
                   leaveSession()
                 })
                 .catch(() => {
@@ -317,32 +289,39 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: 'Discard & Leave',
             destructive: true,
             onPress: () => {
-              setLeaveDrafts(null)
+              controller.setLeaveDrafts(null)
               leaveSession()
             }
           }
         ]}
-        onClose={() => setLeaveDrafts(null)}
+        onClose={() => controller.setLeaveDrafts(null)}
       />
       <ConfirmModal
-        visible={discardMarkdownTarget != null}
+        visible={controller.discardMarkdownTarget != null}
         title="Discard Changes"
         message="Replace the phone draft with the latest desktop file?"
         confirmLabel="Discard"
         destructive
-        onConfirm={confirmDiscardMarkdown}
-        onCancel={() => setDiscardMarkdownTarget(null)}
+        onConfirm={controller.confirmDiscardMarkdown}
+        onCancel={() => controller.setDiscardMarkdownTarget(null)}
+      />
+      <ConfirmModal
+        visible={controller.pendingBulkClose != null}
+        {...describeBulkCloseConfirmation(controller.pendingBulkClose)}
+        destructive
+        onConfirm={controller.confirmBulkClose}
+        onCancel={controller.cancelBulkClose}
       />
       <TextInputModal
-        visible={renameTarget != null}
+        visible={controller.renameTarget != null}
         title="Rename Terminal"
-        defaultValue={renameTarget?.title || 'Terminal'}
+        defaultValue={controller.renameTarget?.title || 'Terminal'}
         placeholder="Terminal name"
         onSubmit={(value) => void handleRenameTerminal(value)}
-        onCancel={() => setRenameTarget(null)}
+        onCancel={() => controller.setRenameTarget(null)}
       />
       <TextInputModal
-        visible={showCreateBrowserModal}
+        visible={controller.showCreateBrowserModal}
         title="New Browser"
         message="Enter a URL, or leave blank for a new tab."
         defaultValue=""
@@ -354,42 +333,43 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onSubmit={(value) => {
           void handleCreateBrowser(value).then((created) => {
             if (created) {
-              setShowCreateBrowserModal(false)
+              controller.setShowCreateBrowserModal(false)
             }
           })
         }}
-        onCancel={() => setShowCreateBrowserModal(false)}
+        onCancel={() => controller.setShowCreateBrowserModal(false)}
       />
       <CustomKeyModal
-        visible={showCustomKeyModal}
-        onClose={() => setShowCustomKeyModal(false)}
-        onKeysChanged={setCustomKeys}
-        onManageShortcuts={handleManageShortcuts}
+        visible={controller.showCustomKeyModal}
+        onClose={() => controller.setShowCustomKeyModal(false)}
+        onKeysChanged={controller.setCustomKeys}
+        onManageShortcuts={controller.handleManageShortcuts}
       />
       <MobileDictationSetupSheet
-        visible={showDictationSetup}
+        visible={controller.showDictationSetup}
         client={client}
-        onClose={() => setShowDictationSetup(false)}
-        onReady={() => setShowDictationSetup(false)}
+        onClose={() => controller.setShowDictationSetup(false)}
+        onReady={() => controller.setShowDictationSetup(false)}
       />
       <ActionSheetModal
-        visible={deleteKeyTarget != null}
-        title={deleteKeyTarget?.label ?? 'Shortcut'}
+        visible={controller.deleteKeyTarget != null}
+        title={controller.deleteKeyTarget?.label ?? 'Shortcut'}
         message="Remove this custom shortcut?"
         actions={[
           {
             label: 'Remove',
             destructive: true,
             onPress: () => {
-              if (deleteKeyTarget) {
-                void handleDeleteCustomKey(deleteKeyTarget)
+              if (controller.deleteKeyTarget) {
+                void controller.handleDeleteCustomKey(controller.deleteKeyTarget)
               }
-              setDeleteKeyTarget(null)
+              controller.setDeleteKeyTarget(null)
             }
           }
         ]}
-        onClose={() => setDeleteKeyTarget(null)}
+        onClose={() => controller.setDeleteKeyTarget(null)}
       />
     </>
   )
 }
+
