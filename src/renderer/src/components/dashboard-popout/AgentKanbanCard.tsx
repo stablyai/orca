@@ -215,6 +215,10 @@ export const AgentKanbanCard = memo(
     // twice.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
+    const projectLabel =
+      worktreeInFooter && card.worktreeName !== card.repoName
+        ? `${card.repoName} / ${card.worktreeName}`
+        : card.repoName
 
     return (
       <div
@@ -323,7 +327,7 @@ export const AgentKanbanCard = memo(
             <TooltipTrigger asChild>
               <span
                 className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-muted-foreground/10 text-muted-foreground transition-colors group-hover:text-foreground"
-                aria-label={card.repoName}
+                aria-hidden
               >
                 <RepoIconGlyph repoIcon={repoIcon} className="size-3" iconClassName="size-3" />
               </span>
@@ -338,7 +342,9 @@ export const AgentKanbanCard = memo(
             hostLabel={card.hostLabel}
             className="size-[18px] rounded-[5px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
           />
-          {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
+          <span className="min-w-0 truncate" title={projectLabel}>
+            {projectLabel}
+          </span>
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
