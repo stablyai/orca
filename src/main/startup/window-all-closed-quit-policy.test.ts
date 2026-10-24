@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
+import {
+  closingLastWindowQuitsApp,
+  shouldQuitWhenAllWindowsClosed
+} from './window-all-closed-quit-policy'
 
 describe('shouldQuitWhenAllWindowsClosed', () => {
   it('keeps headless serve alive when its offscreen browser windows close', () => {
@@ -50,5 +53,20 @@ describe('shouldQuitWhenAllWindowsClosed', () => {
         isServeMode: true
       })
     ).toBe(true)
+  })
+})
+
+describe('closingLastWindowQuitsApp', () => {
+  it('is true on Windows and Linux desktop, where the X button ends the app', () => {
+    expect(closingLastWindowQuitsApp({ platform: 'win32', isServeMode: false })).toBe(true)
+    expect(closingLastWindowQuitsApp({ platform: 'linux', isServeMode: false })).toBe(true)
+  })
+
+  it('is false on macOS, where the app outlives its last window', () => {
+    expect(closingLastWindowQuitsApp({ platform: 'darwin', isServeMode: false })).toBe(false)
+  })
+
+  it('is false for a serve host, which keeps running with no window', () => {
+    expect(closingLastWindowQuitsApp({ platform: 'win32', isServeMode: true })).toBe(false)
   })
 })

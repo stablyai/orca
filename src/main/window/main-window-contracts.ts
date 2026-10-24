@@ -16,6 +16,8 @@ export type MainWindowLoadObserver = {
 export type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
+  /** Returns true when closing this window ends the app (Windows/Linux desktop), so the renderer judges running work as for a quit. */
+  getWindowCloseEndsApp?: () => boolean
   /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
   onRendererProcessGone?: (

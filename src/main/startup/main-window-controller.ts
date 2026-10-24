@@ -24,6 +24,7 @@ import {
   installMainWindowAgentStatusListeners
 } from './main-window-agent-status'
 import { mainProcessState as state } from './main-process-state'
+import { closingLastWindowQuitsApp } from './window-all-closed-quit-policy'
 import {
   clearExpectedRendererReload,
   markExpectedRendererReload,
@@ -92,6 +93,8 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
+    getWindowCloseEndsApp: () =>
+      closingLastWindowQuitsApp({ platform: process.platform, isServeMode: state.isServeMode }),
     onQuitAborted: () => {
       state.isQuitting = false
       clearExpectedRendererReload()

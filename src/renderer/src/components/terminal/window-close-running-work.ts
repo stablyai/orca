@@ -44,6 +44,7 @@ export type WindowCloseRunningWork =
  *   of `exited`, so it must fail toward asking rather than toward a silent quit.
  */
 export async function assessWindowCloseRunningWork(params: {
+  /** A quit, or a close that ends the app (the last window on Windows/Linux). */
   isQuitting: boolean
 }): Promise<WindowCloseRunningWork> {
   const state = useAppStore.getState()
