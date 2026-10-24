@@ -21,6 +21,14 @@ describe('workspace status visuals', () => {
     )
   })
 
+  it('truncates long labels without splitting an emoji', () => {
+    const [status] = normalizeWorkspaceStatuses([
+      { id: 'review', label: `${'a'.repeat(31)}🚀 later` }
+    ])
+
+    expect(status?.label).toBe('a'.repeat(31))
+  })
+
   it('keeps the default workflow order', () => {
     expect(cloneDefaultWorkspaceStatuses().map((status) => status.id)).toEqual([
       'todo',
