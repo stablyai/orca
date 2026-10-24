@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { normalizeWindowsNativeShellEnvironment } from '../../pty/windows-native-shell-environment'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
@@ -37,6 +38,7 @@ export async function spawnNativeDaemonPty(args: {
     cwd: string
   ): Promise<pty.IPty> => {
     args.signal?.throwIfAborted()
+    normalizeWindowsNativeShellEnvironment(args.env, shellPath)
     const tcc = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     const wrapped = wrapPtySpawnInTerminalScope(tcc.file, tcc.args, args.env)
     const nodePty = await loadNodePty()
