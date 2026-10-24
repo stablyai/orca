@@ -222,7 +222,13 @@ export function holdNextUninstallRefresh(service: PluginService) {
   return { entered, release, restore: () => refresh.mockRestore() }
 }
 
-export async function publishBundledUninstallSuccessor(root: string, id: string, key: string) {
+/** Publishes new bundled worker bytes and approves them, as the user would after review. */
+export async function publishBundledUninstallSuccessor(
+  root: string,
+  id: string,
+  key: string,
+  store: Awaited<ReturnType<typeof createUninstallFixture>>['store']
+) {
   const sourcePath = join(root, 'sources', id)
   await writeFile(
     join(sourcePath, 'worker.js'),
@@ -237,6 +243,8 @@ export async function publishBundledUninstallSuccessor(root: string, id: string,
   if (!result.ok) {
     throw new Error(result.error)
   }
+  const { pluginConsents } = store.getSettings()
+  store.updateSettings({ pluginConsents: { ...pluginConsents, [key]: result.consentFingerprint } })
   return result
 }
 

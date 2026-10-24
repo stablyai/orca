@@ -16,6 +16,7 @@ async function createInstalledPlugin(options: { worker: boolean }): Promise<{
   pluginKey: string
   rootDir: string
   manifest: PluginManifest
+  contentHash: string
 }> {
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-plugin-service-integrity-'))
   roots.push(userDataPath)
@@ -52,14 +53,14 @@ async function createInstalledPlugin(options: { worker: boolean }): Promise<{
   const rootDir = join(pluginDir, content.hash)
   await rename(stagingDir, rootDir)
   await writeFile(join(pluginDir, 'current'), content.hash)
-  return { userDataPath, pluginKey, rootDir, manifest }
+  return { userDataPath, pluginKey, rootDir, manifest, contentHash: content.hash }
 }
 
 function createService(
   plugin: Awaited<ReturnType<typeof createInstalledPlugin>>,
   workerFactory?: PluginWorkerFactory
 ): PluginService {
-  const consentFingerprint = fingerprintPluginConsent(plugin.manifest)
+  const consentFingerprint = fingerprintPluginConsent(plugin.manifest, plugin.contentHash)
   return new PluginService({
     userDataPath: plugin.userDataPath,
     hostVersion: '1.4.0',

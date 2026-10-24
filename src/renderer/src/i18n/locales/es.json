@@ -11943,7 +11943,7 @@
           "mixedTitle": "Revisar acceso y contenido",
           "instructionalTitle": "Revisar el contenido del plugin",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "reconsent": "Los permisos, el nivel de confianza del proceso o el contenido instructivo cambiaron desde la última revisión de este plugin. Revísalo de nuevo antes de ejecutarlo.",
+          "reconsent": "Este plugin cambió desde que lo aprobaste. Revísalo para volver a ejecutarlo.",
           "capabilities": "Este plugin puede",
           "warning": "Estos permisos limitan cómo usa el plugin la API de Orca. Su proceso se ejecuta como un proceso normal en tu equipo, con acceso completo a tus archivos, red y otros procesos.",
           "instructionalWarning": "Este plugin no tiene ningún proceso en segundo plano. Aun así, su contenido instructivo puede provocar acciones cuando tú o un agente lo usen. Revisa las instrucciones y los comandos siguientes antes de habilitarlo.",

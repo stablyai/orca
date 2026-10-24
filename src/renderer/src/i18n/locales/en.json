@@ -12231,7 +12231,7 @@
           "mixedTitle": "Review access and content",
           "instructionalTitle": "Review plugin content",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "reconsent": "Permissions, the worker trust tier, or instructional content changed since you last reviewed this plugin. Review it again before it can run.",
+          "reconsent": "This plugin changed since you approved it. Review it to run it again.",
           "capabilities": "This plugin can",
           "warning": "These permissions limit how the plugin uses Orca's API. Its worker still runs as a normal process on your computer with full access to your files, network, and other processes.",
           "instructionalWarning": "This plugin has no worker process. Its instructional content can still cause actions when you or an agent use it. Review the instructions and commands below before enabling it.",

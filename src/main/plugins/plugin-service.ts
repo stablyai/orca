@@ -24,7 +24,7 @@ import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-hos
 import { PluginPanelController } from './plugin-panel-controller'
 import { PluginWorkerController } from './plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
-import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
+import { collectApprovedWorkerSpecs, isApprovedWorkerSpec } from './plugin-worker-reconciliation'
 import type { PluginRunState } from './plugin-supervisor'
 import { isPluginApproved, snapshotPluginConsentLists } from './plugin-activation-policy'
 import { PluginContentPackRegistry } from './plugin-content-pack-registry'
@@ -67,11 +67,12 @@ export class PluginService {
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
+    const resolveApproved = (pluginKey: string) => {
+      const plugin = this.findValidPlugin(pluginKey)
+      return plugin && this.canStartPluginWork(plugin) ? plugin : null
+    }
     this.panels = new PluginPanelController({
-      resolveApprovedPlugin: (pluginKey) => {
-        const plugin = this.findValidPlugin(pluginKey)
-        return plugin && this.canStartPluginWork(plugin) ? plugin : null
-      },
+      resolveApprovedPlugin: resolveApproved,
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
@@ -85,8 +86,7 @@ export class PluginService {
       registry: this.registry,
       contentVerifier: this.contentVerifier,
       capabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
-      isCurrentApproved: (plugin) =>
-        this.findValidPlugin(plugin.pluginKey) === plugin && this.canStartPluginWork(plugin),
+      isCurrentApproved: (spec) => isApprovedWorkerSpec(spec, resolveApproved(spec.pluginKey)),
       invokeCommand: (pluginKey, commandId, args) => this.invokeCommand(pluginKey, commandId, args),
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: false }),
@@ -118,8 +118,7 @@ export class PluginService {
 
   async whenReady(): Promise<void> {
     await (this.initPromise ?? Promise.resolve()).catch(() => undefined)
-    // Client reads wait for the complete transaction so rollback-based content
-    // validation cannot expose a partially activated plugin between passes.
+    // Client reads must wait for rollback-based content validation to settle.
     await waitForPluginRefreshSettlement(() => this.refreshChain)
   }
 
@@ -170,7 +169,7 @@ export class PluginService {
     const nextSpecs = collectApprovedWorkerSpecs(next, (plugin) => this.isRuntimeApproved(plugin))
     // Notify before slow shutdown so feature-off unmounts panels immediately.
     this.notifyChanged(true)
-    await this.workerController.reconcile(nextSpecs)
+    await this.workerController.reconcile(nextSpecs, (key) => this.findValidPlugin(key))
     if (this.disposed) {
       return
     }

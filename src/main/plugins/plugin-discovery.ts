@@ -12,7 +12,8 @@ import {
 } from '../../shared/plugins/plugin-manifest'
 import {
   fingerprintPluginConsent,
-  hasInstructionalPluginContributions
+  hasInstructionalPluginContributions,
+  requiresPluginContentApproval
 } from '../../shared/plugins/plugin-consent-fingerprint'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
 import { readPluginManifestText } from './plugin-manifest-file'
@@ -125,9 +126,11 @@ async function readManifestDir(
     }
   }
   let consentContentIdentity: string | undefined
-  if (installedContentHash && hasInstructionalPluginContributions(manifest)) {
+  if (installedContentHash && requiresPluginContentApproval(manifest)) {
     consentContentIdentity = installedContentHash
   }
+  // Why dev trees bind only instructions: dev code is the author's working copy, and
+  // binding it would re-prompt on every save.
   if (isDev && hasInstructionalPluginContributions(manifest)) {
     const treeHash = await hashPluginTree(rootDir)
     if (!treeHash.ok) {

@@ -12078,7 +12078,7 @@
           "mixedTitle": "Examiner l'accès et le contenu",
           "instructionalTitle": "Examiner le contenu du plugin",
           "subtitle": "{{value0}} v{{value1}} · {{value2}}",
-          "reconsent": "Les autorisations, le niveau de confiance du worker ou le contenu instructif ont changé depuis votre dernière revue de ce plugin. Revoyez-le avant qu'il puisse s'exécuter.",
+          "reconsent": "Ce plugin a changé depuis votre approbation. Vérifiez-le pour le relancer.",
           "capabilities": "Ce plugin peut",
           "warning": "Ces autorisations limitent la façon dont le plugin utilise l'API d'Orca. Son worker s'exécute néanmoins comme un processus normal sur votre ordinateur, avec un accès complet à vos fichiers, votre réseau et vos autres processus.",
           "instructionalWarning": "Ce plugin n'a pas de processus worker. Son contenu instructif peut malgré tout déclencher des actions quand vous ou un agent l'utilisez. Examinez les instructions et commandes ci-dessous avant de l'activer.",

@@ -86,6 +86,34 @@ describe('fingerprintPluginConsent', () => {
     ).toBe('pending')
   })
 
+  it.each([
+    ['a v2 panel', { execution: 'sandboxed-ui' as const, capabilities: [] }],
+    ['a v2 worker', { execution: 'trusted-worker' as const, main: 'worker.js', capabilities: [] }],
+    ['a v1 worker', { main: 'worker.js', capabilities: [] }],
+    [
+      'a v1 panel',
+      { capabilities: [], contributes: { panels: [{ id: 'p', title: 'P', entry: 'p.html' }] } }
+    ]
+  ])('binds %s approval to exact package bytes', (_label, subject) => {
+    const approved = fingerprintPluginConsent(subject, 'a'.repeat(64))
+    const updated = fingerprintPluginConsent(subject, 'b'.repeat(64))
+
+    expect(updated).not.toBe(approved)
+    expect(
+      needsReconsent('orca-samples.demo', updated, {
+        pluginConsents: { 'orca-samples.demo': approved },
+        disabledPlugins: []
+      })
+    ).toBe(true)
+  })
+
+  it('keeps data pack consent stable across byte changes', () => {
+    const subject = { execution: 'data' as const, capabilities: [] }
+    expect(fingerprintPluginConsent(subject, 'a'.repeat(64))).toBe(
+      fingerprintPluginConsent(subject, 'b'.repeat(64))
+    )
+  })
+
   it('does not invalidate inert content consent when only its content hash changes', () => {
     const subject = {
       main: undefined,
