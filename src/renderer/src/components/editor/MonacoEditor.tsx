@@ -5,7 +5,11 @@ import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  computeEditorLineHeight,
+  resolveEditorFontFamily
+} from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -100,6 +104,7 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  const editorLineHeight = computeEditorLineHeight(editorFontSize, settings?.terminalLineHeight)
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
   const modelOwnerKey = useAppStore((state) => {
@@ -117,12 +122,12 @@ export default function MonacoEditor({
     if (!autoHeight) {
       return null
     }
-    return getMonacoAutoHeightForContent(content, Math.ceil(editorFontSize * 1.45))
-  }, [autoHeight, content, editorFontSize])
+    return getMonacoAutoHeightForContent(content, Math.ceil(editorLineHeight))
+  }, [autoHeight, content, editorLineHeight])
   const renderedEditorHeight = autoHeight
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
-  const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
+  const autoHeightLineHeight = Math.ceil(editorLineHeight)
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // Why: @monaco-editor/react skips its value→model sync on the first post-remount render, so retained models need an explicit sync or they show stale text.
@@ -180,12 +185,13 @@ export default function MonacoEditor({
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
+      lineHeight: editorLineHeight,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
       // Keep a retained Monaco instance aligned when a tab changes between
       // a read-only surface and a normal editable file.
       readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
+  }, [editorFontFamily, editorFontSize, editorLineHeight, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -296,6 +302,7 @@ export default function MonacoEditor({
           ...buildFileEditorWordWrapOptions(editorWordWrap),
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
+          lineHeight: editorLineHeight,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
