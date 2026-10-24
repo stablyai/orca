@@ -12,6 +12,7 @@ import { getDirectoryName } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
+/** Renders workspace metadata with repository and branch labels that share the available width. */
 export function WorktreeCardMetaRow({
   card,
   presentation
@@ -48,9 +49,9 @@ export function WorktreeCardMetaRow({
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         {showRepoBadgeInMetaRow && repo && (
-          <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+          <div className="flex min-w-0 items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
             <RepoBadgeMark color={repo.badgeColor} />
-            <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+            <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
               {repo.displayName}
             </span>
           </div>
