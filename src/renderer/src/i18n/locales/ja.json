@@ -16045,6 +16045,7 @@
           "kernelStartFailed": "カーネルの起動に失敗しました。",
           "noPython": "このコンピュータに Python が見つかりません。[python.org](https://www.python.org/downloads/) からインストールして、セルを再実行してください。",
           "kernelDied": "カーネルが停止しました。",
+          "outputTruncated": "出力を切り詰めました: このセルの出力が Orca で保持できる量を超えました。すべて残すには、ファイルに書き出してください。",
           "localOnly": "ノートブックセルはこのコンピュータ上のファイルでのみ実行できます。",
           "pythonOnly": "Orca では Python ノートブックのみ実行できます。",
           "commandCopied": "コマンドをコピーしました",

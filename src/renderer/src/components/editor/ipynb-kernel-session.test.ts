@@ -39,7 +39,7 @@ Object.defineProperty(globalThis, 'window', {
 })
 
 const session = await import('./ipynb-kernel-session')
-const { getCellRun, getSession } = await import('./ipynb-kernel-store')
+const { getCellRun, getSession, store } = await import('./ipynb-kernel-store')
 
 function frame(value: KernelFrame): void {
   emitFrame({ filePath: FILE, frame: value })
@@ -126,6 +126,17 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledTimes(2)
     expect(getCellRun(FILE, 'c')).toBeUndefined()
     expect(getCellRun(FILE, 'b')?.finishedAt).not.toBeNull()
+  })
+
+  it('drops output past the cell limit without notifying the store', async () => {
+    await session.runCells(FILE, [{ key: 'a', code: 'flood()' }], '/proj')
+    frame({ type: 'stream', content: { name: 'stdout', text: 'x'.repeat(3 * 1024 * 1024) } })
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    frame({ type: 'stream', content: { name: 'stdout', text: 'more' } })
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(getCellRun(FILE, 'a')?.outputs).toHaveLength(2)
   })
 
   it('reports a dead kernel in the running cell and drops the queue', async () => {

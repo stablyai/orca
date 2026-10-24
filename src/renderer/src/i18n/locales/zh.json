@@ -16045,6 +16045,7 @@
           "kernelStartFailed": "内核启动失败。",
           "noPython": "在此电脑上未找到 Python。请从 [python.org](https://www.python.org/downloads/) 安装，然后重新运行单元格。",
           "kernelDied": "内核已停止。",
+          "outputTruncated": "输出已截断：此单元格产生的输出超过了 Orca 保留的上限。如需保留全部输出，请改为写入文件。",
           "localOnly": "笔记本单元格只能针对此电脑上的文件运行。",
           "pythonOnly": "Orca 中只能运行 Python 笔记本。",
           "commandCopied": "命令已复制",

@@ -16061,6 +16061,7 @@
           "kernelStartFailed": "El kernel no pudo iniciarse.",
           "noPython": "No se encontró Python en este equipo. Instálalo desde [python.org](https://www.python.org/downloads/) y vuelve a ejecutar la celda.",
           "kernelDied": "El kernel murió.",
+          "outputTruncated": "Salida truncada: esta celda generó más salida de la que Orca conserva. Para conservarla completa, escríbela en un archivo.",
           "localOnly": "Las celdas del notebook solo pueden ejecutarse para archivos de este equipo.",
           "pythonOnly": "Solo los notebooks de Python pueden ejecutarse en Orca.",
           "commandCopied": "Comando copiado",

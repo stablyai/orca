@@ -16393,6 +16393,7 @@
           "kernelStartFailed": "The kernel failed to start.",
           "noPython": "Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.",
           "kernelDied": "The kernel died.",
+          "outputTruncated": "Output truncated: this cell produced more output than Orca keeps. To keep all of it, write it to a file instead.",
           "localOnly": "Notebook cells can only run for files on this computer.",
           "pythonOnly": "Only Python notebooks can run in Orca.",
           "ownerUnresolved": "Orca can't tell which computer this notebook is on yet, so its cells can't run."
