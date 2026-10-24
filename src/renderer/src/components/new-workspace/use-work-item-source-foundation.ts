@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
@@ -13,6 +13,8 @@ import { useLinearSourceConnection } from './use-linear-source-connection'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useWorkItemSourceState } from './use-work-item-source-state'
 import { useJiraComposerProject } from './use-jira-composer-project'
+import { selectComposerIssueSourceCandidates } from './composer-issue-source'
+import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 
 export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearchProps) {
   const {
@@ -41,7 +43,10 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     expectedPreflightContextKey,
     refreshPreflightStatus,
     searchJiraIssues,
-    searchLinearIssues
+    searchLinearIssues,
+    setIssueSourcePreference,
+    workItemsCache,
+    workItemsInvalidationNonce
   } = useAppStore(
     useShallow((s) => ({
       checkLinearConnection: s.checkLinearConnection,
@@ -58,7 +63,10 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
       expectedPreflightContextKey: localPreflightContextKey(getLocalPreflightContext(s)),
       refreshPreflightStatus: s.refreshPreflightStatus,
       searchJiraIssues: s.searchJiraIssues,
-      searchLinearIssues: s.searchLinearIssues
+      searchLinearIssues: s.searchLinearIssues,
+      setIssueSourcePreference: s.setIssueSourcePreference,
+      workItemsCache: s.workItemsCache,
+      workItemsInvalidationNonce: s.workItemsInvalidationNonce
     }))
   )
   const selectedRepo = useMemo(
@@ -80,6 +88,37 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
         })
       : null
   }, [githubSourceContextOverride, selectedRepo])
+  // Why: fork checkouts need an explicit Upstream|Origin control on branch-from-issue
+  // create; Tasks already has it, the composer did not (#9281).
+  const issueSourceCandidates = useMemo(
+    () => selectComposerIssueSourceCandidates(workItemsCache, selectedRepo?.id),
+    [selectedRepo?.id, workItemsCache]
+  )
+  // Why: warm listWorkItems so origin/upstream candidates exist for the selector
+  // even before the user opens the smart picker dropdown (#9281).
+  useEffect(() => {
+    const repo = selectedRepo
+    if (textOnly || disabled || props.repoBackedSourcesDisabled || !repo?.path) {
+      return
+    }
+    if (issueSourceCandidates) {
+      return
+    }
+    void fetchWorkItems(repo.id, repo.path, RESULT_LIMIT, '', {
+      sourceContext: githubSourceContext
+    }).catch(() => {
+      // Why: selector is optional polish; a failed warm fetch must not toast.
+    })
+  }, [
+    disabled,
+    fetchWorkItems,
+    githubSourceContext,
+    issueSourceCandidates,
+    props.repoBackedSourcesDisabled,
+    selectedRepo,
+    textOnly,
+    workItemsInvalidationNonce
+  ])
   const gitlabSourceContext = useMemo(
     () =>
       props.gitlabSourceContext?.provider === 'gitlab'
@@ -205,6 +244,9 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     searchLinearIssues,
     selectedRepo,
     githubSourceContext,
+    setIssueSourcePreference,
+    workItemsInvalidationNonce,
+    issueSourceCandidates,
     gitlabSourceContext,
     repoBackedSearchTargets,
     linearSourceContext,
