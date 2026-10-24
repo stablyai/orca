@@ -88,7 +88,7 @@ async function failLatestStart(host: StructuredAgentSessionHost, count: number):
 }
 
 describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
-  it('restarts once, rejects the message held for it with the diagnostic when that start dies too, then delivers once the CLI is healthy', async () => {
+  it('exhausts five starts and rejects the held message with the diagnostic, then delivers once the CLI is healthy', async () => {
     claude.behave(SESSION, { initHangs: true })
     const host = await claude.install()
     await expect(host.attach(CALLER, claude.attachParams(SESSION, null))).resolves.toMatchObject({
@@ -106,7 +106,10 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     )
     expect(await written(host)).toBe(false)
-    await failLatestStart(host, 2)
+    for (let count = 2; count <= 6; count++) {
+      expect(await statusRows(host)).toEqual([STARTUP_TEXT])
+      await failLatestStart(host, count)
+    }
 
     // Rejected with the cause, not left in doubt; one row for this attempt names it.
     await vi.waitFor(async () =>
@@ -118,15 +121,15 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
       })
     )
     expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
-    // The restart moved the fence twice: its acquisition, and the exit that released it.
-    expect(fence(host)).toBe(releasedFence + 2)
-    expect(claude.children(SESSION)).toHaveLength(2)
+    // Each of the five attempts acquires and then releases its fence.
+    expect(fence(host)).toBe(releasedFence + 10)
+    expect(claude.children(SESSION)).toHaveLength(6)
 
     // The user signs in and retries: one restart, proven, written to the CLI.
     claude.behave(SESSION, {})
     await send(host, 'hello again')
-    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(3))
-    await vi.waitFor(() => expect(fence(host)).toBe(releasedFence + 3))
+    await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(7))
+    await vi.waitFor(() => expect(fence(host)).toBe(releasedFence + 11))
     await vi.waitFor(() => expect(claude.child(SESSION).calls).toContain('send'))
     await vi.waitFor(() =>
       expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('live')

@@ -18,6 +18,7 @@ import type { StructuredAgentSessionConversationNaming } from './structured-agen
 /** Resolve deps lazily because field initializers run before host constructor assignments. */
 export function createStructuredAgentSessionHostStatusFeed(args: {
   sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  starting?: (sessionId: string) => boolean
   now: () => number
   currentWork: StructuredAgentSessionSubagentRowsDeps['currentWork']
   deps: () => {
@@ -56,6 +57,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   })
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
+    starting: args.starting,
     getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
     now: args.now,
