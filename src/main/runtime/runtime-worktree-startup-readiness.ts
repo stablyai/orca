@@ -6,6 +6,11 @@ import {
 } from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import {
+  assertTerminalInputWithinLimit,
+  iterateTerminalInputChunks
+} from '../../shared/terminal-input'
+import { wrapTerminalBracketedPasteText } from '../../shared/terminal-bracketed-paste-text'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
@@ -13,8 +18,6 @@ import type {
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
 
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 // Why: an interactive shell turns bracketed paste on at its prompt and off when it runs the typed
 // command (`zsh-prompt-runs-command.txt`), so a 2004 before the last `?2004l` is the shell's.
@@ -29,7 +32,7 @@ export type WorktreeStartupReadinessHost = {
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
-  write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
+  write: (ptyId: string, data: string, inputKind: TerminalInputKind) => boolean | undefined
 }
 
 export function pasteWorktreeStartupDraftWhenReady(
@@ -38,12 +41,18 @@ export function pasteWorktreeStartupDraftWhenReady(
   draft: WorktreeStartupDraftPaste
 ): void {
   void waitForWorktreeStartupDraft(host, handle, draft.agent)
-    .then((ptyId) => {
+    .then(async (ptyId) => {
       if (!ptyId) {
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
+      const payload = assertTerminalInputWithinLimit(wrapTerminalBracketedPasteText(draft.content))
+      for (const chunk of iterateTerminalInputChunks(payload)) {
+        if (host.write(ptyId, chunk, 'launch') !== true) {
+          throw new Error('startup_draft_not_writable')
+        }
+        await Promise.resolve()
+      }
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
