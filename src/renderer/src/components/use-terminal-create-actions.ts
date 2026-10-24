@@ -8,13 +8,8 @@ import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import {
-  captureAgentTabLaunchContext,
-  type AgentTabLaunchContext
-} from './agent-tab-launch-context'
+import { launchAgentTabFromShortcut, type AgentTabLaunchContext } from './agent-tab-launch-context'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -71,24 +66,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       if (!activeWorktreeId) {
         return
       }
-      const { groupId, focusIntent } = context ?? captureAgentTabLaunchContext(activeWorktreeId)
-      const result = launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
-        focusIntent,
-        agent,
-        worktreeId: activeWorktreeId,
-        groupId,
-        launchSource: 'shortcut'
-      })
-      if (!result) {
-        toast.error(
-          translate(
-            'auto.components.Terminal.e57db40c11',
-            'Could not build launch command for {{value0}}.',
-            { value0: agent }
-          )
-        )
-      }
+      launchAgentTabFromShortcut(activeWorktreeId, agent, context)
     },
     [activeWorktreeId]
   )

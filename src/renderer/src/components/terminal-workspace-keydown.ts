@@ -25,6 +25,8 @@ import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
 import {
   captureAgentTabLaunchContext,
+  launchFloatingWorkspaceAgentShortcut,
+  reportNoAgentCliDetected,
   type AgentTabLaunchContext
 } from './agent-tab-launch-context'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
@@ -80,24 +82,24 @@ export function handleTerminalWorkspaceKeyDown(
 
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
-      activeWorktreeId,
+      activeWorktreeId: floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
       keybindings,
       matchShortcut
     })
     if (agentShortcut.actionId) {
       event.preventDefault()
       notifyTerminalCapture(agentShortcut.actionId)
+      if (floatingWorkspaceFocused) {
+        // Why: this capture listener usually runs before the floating panel's own, so it routes there too.
+        launchFloatingWorkspaceAgentShortcut(agentShortcut)
+        return
+      }
       const launchOrReport = (agent: TuiAgent | null, context?: AgentTabLaunchContext): void => {
         if (agent) {
           handleNewAgentTab(agent, context)
           return
         }
-        toast.message(
-          translate(
-            'auto.components.Terminal.5b2c1a9e44',
-            'No agent CLI detected — install one or pick a default agent in Settings.'
-          )
-        )
+        reportNoAgentCliDetected()
       }
       if (agentShortcut.pendingAgent) {
         const detectionTarget = getDetectionTargetIdentityForWorktree(
