@@ -286,7 +286,11 @@ export function buildProjectSections<
   for (const item of args.items) {
     const repoId = args.repoIdOf(item)
     addItemToProjectSection(
-      sections, item, args.displayRepoIdOf?.(item) ?? repoId, repoMap, projectIndex
+      sections,
+      item,
+      args.displayRepoIdOf?.(item) ?? repoId,
+      repoMap,
+      projectIndex
     )
   }
   // Why: repos can arrive before worktree scans, but stale IDs passed by

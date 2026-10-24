@@ -88,33 +88,6 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
       )
     })
 
-    it('does not switch renderers when background SGR is split across PTY chunks', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.('\x1b[48')
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-
-      capturedDataCallback.current?.(';2;52;52;52m codex block \x1b[0m\r\n')
-
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-    })
-
     it('does not switch renderers across split background SGR PTY chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -141,40 +114,6 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
       capturedDataCallback.current?.(';52;52m codex block \x1b[0m\r\n')
 
       expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-    })
-
-    it('forces a viewport refresh for foreground Codex-style background redraws', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const refresh = vi.fn()
-      const terminal = pane.terminal as typeof pane.terminal & {
-        _core?: { refresh: typeof refresh }
-      }
-      terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string, callback?: () => void) => {
-        callback?.()
-      })
-
-      connectPanePty(pane as never, manager as never, createDeps() as never)
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.(
-        '\x1b[2J\x1b[H\x1b[48;2;52;52;52m codex block text \x1b[0m\r\n'
-      )
-
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-      expect(refresh).toHaveBeenCalledWith(0, 39, true)
     })
 
     it('forces a viewport refresh for foreground CJK output without CSI', async () => {

@@ -3,7 +3,8 @@ import {
   isOpenCodeLegacySharedConfigDir
 } from '../../../opencode/legacy-shared-config-dir'
 import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
-import { resolveOpenCodeSourceConfigDir, restoreOrStripOverlayEnv } from './pi-agent'
+import { resolveOpenCodeSourceConfigDir } from './pi-agent'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { resolveOpenCodeConfigDirectory } from '../../../../shared/opencode-config-directory'

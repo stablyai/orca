@@ -88,11 +88,23 @@ describe('resolveNativeChatAttachmentOwner', () => {
     })
   })
 
-  it('refuses client files for a runtime-owned repo', () => {
+  it('refuses client files for a runtime-owned repo but saves clipboard images on that server', () => {
+    // #27997: a managed SSH host is a runtime owner; its agent reads the server's own temp dir.
     expect(
       resolveNativeChatAttachmentOwner(
         state({
           repos: [{ id: 'repo', connectionId: null, executionHostId: 'runtime:env-1' }] as never
+        }),
+        'tab-1'
+      )
+    ).toEqual({ kind: 'remote', clipboardImageEnvironmentId: 'env-1' })
+  })
+
+  it('takes no clipboard image for a server-nested SSH host the server does not serve', () => {
+    expect(
+      resolveNativeChatAttachmentOwner(
+        state({
+          repos: [repoFixture({ connectionId: 'jetson', executionHostId: 'runtime:env-1' })]
         }),
         'tab-1'
       )

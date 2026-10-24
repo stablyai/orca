@@ -1,22 +1,30 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
+import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
+import {
+  noticeRemovedUnsavedFiles,
+  type ConfirmedUnsavedDiscards
+} from './removed-workspace-unsaved-files'
 
 /** Clears worktree-owned renderer state after successful removal so a reused identity cannot inherit stale preferences. */
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
   worktreeId: string,
   tabIds: Set<string>,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 ): void {
   // Why outside `set`: it is module-scope, not store state. Dropping it also
   // re-arms the once-per-workspace warning if this id is ever added back.
   forgetAmbiguousOwnerWarnings([worktreeId])
+  forgetCombinedDiffViewsForWorktrees([worktreeId])
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
@@ -36,6 +44,7 @@ export function applyRemoveWorktreeSuccessState(
         removedFileIds.add(file.markdownPreviewSourceFileId)
       }
     }
+    const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, removedFileIds, confirmedDiscards)
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
@@ -43,6 +52,7 @@ export function applyRemoveWorktreeSuccessState(
       : false
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
     return {
+      editorBufferKeepRequest,
       ...removeWorktreeLayout(s, {
         worktreeIds: new Set(worktreeIds),
         tabIds,
@@ -120,6 +130,9 @@ export function applyRemoveWorktreeSuccessState(
         new Set(worktreeIds),
         executionHostId
       ),
+      // Why: terminal shutdown clears these earlier, but teardown awaits after that and a
+      // provider-session event routed by worktree id can write a record in between (#24784).
+      ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds)),
       sortEpoch: s.sortEpoch + 1
     }
   })

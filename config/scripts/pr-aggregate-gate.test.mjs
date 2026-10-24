@@ -12,7 +12,10 @@ import {
 
 const results = ['success', 'failure', 'cancelled', 'skipped', '', 'unknown', undefined, null]
 const admitted = (needs, cancelled = false) =>
-  aggregateShouldRun({ needs }, cancelled).coerceString() === 'true'
+  aggregateShouldRun(
+    { needs, github: { event: { pull_request: { draft: false } } } },
+    cancelled
+  ).coerceString() === 'true'
 
 describe('explicit PR aggregate result', () => {
   it('keeps every required dependency and the existing failure reporter', () => {
@@ -27,7 +30,6 @@ describe('explicit PR aggregate result', () => {
     }
     expect(aggregateJob['continue-on-error']).toBeUndefined()
     expect(aggregateShell['continue-on-error']).toBeUndefined()
-    expect(aggregateJob.if).toBe('${{ !cancelled() }}')
     expect(aggregateShell.run).toContain('"$CODE_PATHS" != "success"')
     const checked = [...aggregateShell.run.matchAll(/^check_job (\S+) /gm)].map((match) => match[1])
     expect(checked).toEqual(aggregateRequiredJobs)

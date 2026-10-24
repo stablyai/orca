@@ -56,7 +56,7 @@ describe('cross-host pane identity migration', () => {
   it('refuses hostless alias and acknowledgement rewrites for a tab id two partitions share', async () => {
     writeDataFile({
       schemaVersion: 1,
-      // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+      // Register both owners so orphan cleanup cannot remove the cross-host fixture.
       repos: [
         makeRepo({ id: 'repo-local', path: '/repo-local' }),
         makeRepo({ id: 'repo-a', path: '/repo-a' })
@@ -87,7 +87,6 @@ describe('cross-host pane identity migration', () => {
     const localLeaf = localRoot?.type === 'leaf' ? localRoot.leafId : null
     const hostLeaf = hostRoot?.type === 'leaf' ? hostRoot.leafId : null
 
-    // Leaf maps and leases are host-scoped, so each partition still gets its own identity.
     expect(localLeaf && isTerminalLeafId(localLeaf)).toBe(true)
     expect(hostLeaf).not.toBe(localLeaf)
     expect(store.getSshRemotePtyLeases('host-a')[0]?.leafId).toBe(hostLeaf)
@@ -97,7 +96,7 @@ describe('cross-host pane identity migration', () => {
       legacyPaneKeyAliasEntries?: { legacyPaneKey: string }[]
       ui?: { acknowledgedAgentsByPaneKey?: Record<string, number> }
     }
-    // `tab-shared:1` and `tab-shared:pane:1` carry no host segment; either rewrite pins one host's pane to the other's terminal.
+    // Hostless legacy aliases would bind one host’s pane to another host’s terminal.
     expect(
       persisted.legacyPaneKeyAliasEntries?.some((entry) =>
         entry.legacyPaneKey.startsWith(`${SHARED_TAB_ID}:`)

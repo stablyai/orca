@@ -29,17 +29,18 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
   // best-effort — the desktop renderer refits the PTY on its next settled
   // frame. Returns `true` whenever there was a lock to reclaim, `false` only
   // when there was nothing to reclaim.
+  //
+  // Why the display mode stays 'desktop' afterwards (#28487): the phone
+  // re-subscribes on its own after a reconnect, an iOS resume or a refit, and a
+  // fresh subscribe in 'auto' mode takes the floor and phone-fits the PTY. Only
+  // a deliberate phone gesture (typing, the phone-mode toggle) may undo a
+  // take-back; mobileTookFloor and terminal.setDisplayMode both clear this mode.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
     this.cancelPendingDriverMutations(ptyId)
     if (this.isMobileSubscriberActive(ptyId)) {
       this.setMobileDisplayMode(ptyId, 'desktop')
       await this.applyMobileDisplayMode(ptyId)
       this.releaseDesktopTakeBack(ptyId)
-      // Why: a desktop-initiated reclaim is "I'm taking over right now", not a
-      // sticky preference. The next mobile subscribe (e.g. user switches back to
-      // the terminal tab on the phone) must default to phone-fit again, not stay
-      // in passive desktop-watch mode.
-      this.setMobileDisplayMode(ptyId, 'auto')
       if (this.remoteDesktopFloor.hasLayoutState(ptyId)) {
         await this.applyRemoteDesktopLayout(ptyId)
       }
@@ -58,16 +59,15 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
         this.pendingSoftLeavers.delete(ptyId)
       }
       this.setDriver(ptyId, { kind: 'idle' })
+      this.setMobileDisplayMode(ptyId, 'desktop')
       const converged = await this.applyRemoteDesktopLayout(ptyId)
       if (!converged) {
         // Explicit take-back always clears the lock; resize convergence is
         // best-effort and the desktop renderer will retry on its next frame.
         this.releaseDesktopTakeBack(ptyId)
-        this.setMobileDisplayMode(ptyId, 'auto')
         return true
       }
       this.setDriver(ptyId, { kind: 'desktop' })
-      this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
     if (heldOverride) {
@@ -79,9 +79,10 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
       const renderer = this.lastRendererSizes.get(ptyId)
       const cols = renderer?.cols ?? heldOverride.previousCols ?? fallback.cols
       const rows = renderer?.rows ?? heldOverride.previousRows ?? fallback.rows
+      // Why: set before the await so a resubscribe landing mid-resize reads 'desktop' and stays passive.
+      this.setMobileDisplayMode(ptyId, 'desktop')
       await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       this.releaseDesktopTakeBack(ptyId)
-      this.setMobileDisplayMode(ptyId, 'auto')
       return true
     }
     // Why: a stale lock — driver still reads mobile with no active subscriber
@@ -90,6 +91,7 @@ export abstract class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRunti
     // banner can't linger; there is nothing to resize.
     if (this.getDriver(ptyId).kind === 'mobile') {
       this.releaseDesktopTakeBack(ptyId)
+      this.setMobileDisplayMode(ptyId, 'desktop')
       return true
     }
     return false

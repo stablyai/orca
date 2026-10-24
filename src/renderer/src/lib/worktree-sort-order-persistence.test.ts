@@ -63,10 +63,13 @@ describe('persistWorktreeSortOrderByHost', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'worktree.persistSortOrder',
-      { orderedIds: ['runtime-repo::wt-b'] },
+      { orderedIds: ['runtime-repo::wt-b'], hostIds: ['local'] },
       { timeoutMs: 15_000 }
     )
-    expect(localPersistSortOrder).toHaveBeenCalledWith({ orderedIds: ['local-repo::wt-a'] })
+    expect(localPersistSortOrder).toHaveBeenCalledWith({
+      orderedIds: ['local-repo::wt-a'],
+      hostIds: ['local']
+    })
   })
 
   it('handles best-effort persistence rejections from disconnected hosts', async () => {

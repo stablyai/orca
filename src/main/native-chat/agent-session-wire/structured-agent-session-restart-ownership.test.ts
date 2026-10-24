@@ -99,9 +99,6 @@ it.each(['turn', 'submission'] as const)(
   }
 )
 
-// Teardown judged the chat working. A send the provider proves it never received is still the chat
-// Orca stopped; the continuation asks the agent
-// to check what finished rather than refusing.
 it('still continues a chat whose last send acquisition proves was never delivered', async () => {
   const { host, acquire, dispatch } = await interruptedRestart('submission')
   expect(await host.restartResume.list()).toHaveLength(1)
@@ -115,8 +112,6 @@ it('still continues a chat whose last send acquisition proves was never delivere
   expect(result.continued).toMatchObject([{ outcome: 'continued' }])
 })
 
-// The send the user made just before quitting, after an earlier exchange had finished: that
-// finished turn does not withdraw it.
 it('offers and continues a send made after an earlier completed turn', async () => {
   const { host, dispatch, marker } = await interruptedRestart('send-after-reply', false)
   expect(marker?.work.kind).toBe('submission')
@@ -134,7 +129,7 @@ it('replays the same logical continuation through the durable send ledger', asyn
   if (!sent) {
     throw new Error('the continuation was not sent')
   }
-  // No person's: re-derived by its own records after another restart, so never kept as a card.
+  // Host-origin continuations cannot become personal kept cards.
   expect(sent).not.toHaveProperty('source')
   expect((await host.journalSnapshot(SESSION)).submissions[0]).not.toHaveProperty('source')
   const replay = await host.send(
@@ -146,7 +141,6 @@ it('replays the same logical continuation through the durable send ledger', asyn
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-// A send that throws after Orca may have taken it is not proof it was not delivered.
 it('keeps a continuation unconfirmed when its accepted message cannot be read back', async () => {
   const { host, store } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -158,13 +152,11 @@ it('keeps a continuation unconfirmed when its accepted message cannot be read ba
     .finally(() => vi.restoreAllMocks())
 
   expect(result.continued).toMatchObject([{ sessionId: SESSION, outcome: 'unknown' }])
-  // Filed as unconfirmed, with a warning in the chat.
   expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
   expect(await statusNotes(host)).toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
     tone: 'warning'
   })
-  // Its acceptance committed with its submission: a resend replays it.
   expect(
     store
       .listOperationRows()
@@ -172,7 +164,6 @@ it('keeps a continuation unconfirmed when its accepted message cannot be read ba
   ).toMatchObject({ outcome: { status: 'succeeded' } })
 })
 
-// A throw after the message is in the chat is answered as a resend would be: it was delivered.
 it('reports a continuation delivered when its send throws after its message is in the chat', async () => {
   const { host, dispatch } = await interruptedRestart()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -193,15 +184,12 @@ it('reports a continuation delivered when its send throws after its message is i
   )
 })
 
-// The continuation is accepted, then its start fails: the message is rejected with the cause and
-// the failure is filed, and nothing is stopped because nothing started.
 it('rejects the continuation when its start fails, and files a retryable refusal', async () => {
   const { host, acquire, dispatch, closeSession } = await interruptedRestart()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(result.resumed).toMatchObject([{ outcome: 'refused' }])
   expect(result.continued).toMatchObject([{ outcome: 'refused' }])
-  // Nothing ran, so the offer stands as a failure a retry can act on.
   expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused', retryable: true }])
   expect(await statusNotes(host)).toContainEqual({
     text: AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
@@ -235,8 +223,6 @@ it('admits one durable continuation under concurrent calls', async () => {
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-// The batch counts a chat done once its agent took the continuation; the provider's slow answer is
-// awaited after, and decides the outcome.
 it('waits out a slow provider answer before reporting the continuation', async () => {
   const { host, dispatch } = await interruptedRestart()
   const settlement = Promise.withResolvers<Awaited<ReturnType<typeof dispatch>>>()
@@ -262,8 +248,6 @@ it('waits out a slow provider answer before reporting the continuation', async (
   expect(dispatch).toHaveBeenCalledTimes(1)
 })
 
-// Opening the chat is inspection only: it starts nothing, and the explicit restart action is what
-// removes the durable offer, so reading the chat must not make this status disappear.
 it('keeps offering a chat after the user opens it', async () => {
   const { host, root, acquire } = await interruptedRestart()
   expect(await host.restartResume.list()).toHaveLength(1)
@@ -277,9 +261,7 @@ it('keeps offering a chat after the user opens it', async () => {
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
 })
 
-// The snooze, through the real quit path rather than a session map that cannot move: eviction
-// forgets sessions BEFORE the write-back runs, so a marker whose journal is only reachable while
-// the host still indexes it is exactly what a mock harness cannot catch.
+// Teardown evicts indexed sessions before write-back; a real host catches lost snoozed-marker access.
 it('carries a snoozed offer through a real teardown', async () => {
   const { host, root } = await interruptedRestart()
   expect(await host.restartResume.list()).toHaveLength(1)
@@ -287,7 +269,6 @@ it('carries a snoozed offer through a real teardown', async () => {
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toHaveLength(1)
 })
 
-// Nothing acted on the capsule this launch, so it is still exactly as the last teardown left it.
 it('keeps a durable offer intact through a teardown with no explicit action', async () => {
   const { host, root } = await interruptedRestart()
   await host.flushAllStreamedEvents({ trigger: 'quit' })
@@ -357,8 +338,7 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-  // list; the action's read of offers and of failures; the post-action refresh of both. The send
-  // cannot withdraw an offer it cannot read either, and says so.
+  // Observe listing, action reads and final refresh; unreadable offers cannot withdraw on send.
   await vi.waitFor(() =>
     expect(log.entries.at(-1)).toEqual({
       level: 'warn',
@@ -366,13 +346,11 @@ it('fails closed on corrupt recovery storage while an ordinary send still works'
       fields: { scope: 'restart-offer-withdraw', sessionId: SESSION }
     })
   )
-  // Counted before the console's repeat suppression, which prints each repeated read only once.
+  // Count before console repeat suppression.
   expect(log.scopes().filter((scope) => scope !== 'restart-offer-withdraw')).toHaveLength(5)
   warning.mockRestore()
 })
 
-// The user's own message was accepted first: the continuation is refused, and since nothing the
-// user did failed, the chat says nothing and no failure is kept.
 it("refuses a continuation quietly when the user's own message was accepted first", async () => {
   const { host, root, dispatch, result } = await supersededRefusal()
   expect(result).toMatchObject({
@@ -381,13 +359,11 @@ it("refuses a continuation quietly when the user's own message was accepted firs
     failed: []
   })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  // The quit's own row about the cut, and nothing about the refused continuation.
   expect(await statusNotes(host)).toEqual([QUIT_CUT_NOTICE])
   expect(await new AgentSessionRecoveryCapsule(root).list(NOW)).toEqual([])
   expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
 })
 
-/** A continuation whose start failed, filed as a retryable failure. */
 async function failedContinuation() {
   const state = await interruptedRestart()
   state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
@@ -396,13 +372,11 @@ async function failedContinuation() {
   return state
 }
 
-// Starting the chat's agent again answers a failure, as it ends an offer.
 it('retires a recorded failure once the user sends in that chat, with no send hook', async () => {
   const { host, root, dispatch } = await failedContinuation()
   const body = hostTestMessage('Carry on from where you stopped')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  // Pruned from the file, not only hidden.
   await vi.waitFor(async () => {
     expect(await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).toEqual([])
   })
@@ -430,7 +404,6 @@ it('removes a failure when a named retry succeeds', async () => {
     NOW
   )
   expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: true }])
-  // An unselective action leaves it alone; naming it retries it.
   expect((await host.restartResume.continueAfterRestart(undefined, 'all')).resumed).toEqual([])
   const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
   expect(retried.continued).toMatchObject([{ outcome: 'continued' }])
@@ -493,10 +466,8 @@ it('logs teardown capsule publication failure and still releases the provider', 
   await rm(capsulePath, { recursive: true })
 })
 
-// The resume ledger's reason stays the refusal code, which is what every renderer's guidance keys
-// on; the details are filed beside it, never in its place.
+// Renderer guidance keys on refusal code; retain details beside it.
 it('files a restart refused by a conflicted claim under its code, with its details beside it', async () => {
-  // The terminal agent that holds the claim is still running, so nothing may take it over.
   const { host, store } = await interruptedRestart('turn', true, async () => ({
     outcome: 'identity-matched',
     matchedOn: ['spawn-token']

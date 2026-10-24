@@ -1,5 +1,3 @@
-// Test-only: the host-lane launch parity table (rows 3, 4, 7, 8, 10). Each case is the call a host
-// producer makes and the facts main hands the provider, the phone and telemetry for it.
 import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
 import type { LaunchWorkspace } from '../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH, WSL_PATH } from '../../shared/launch-parity-window-cases.test-fixture'
@@ -44,7 +42,6 @@ export type HostLaunchCase = {
   phone: { title: string; launchAgent?: string; isActive: boolean }
 }
 
-// rpc/methods/agent-launch-surfaces.ts createTerminalAgent options for an AI button's reserved pane.
 const agentLaunch = (extra: Record<string, unknown> = {}): HostLaunchCall => ({
   kind: 'create',
   options: {
@@ -58,7 +55,6 @@ const agentLaunch = (extra: Record<string, unknown> = {}): HostLaunchCall => ({
     ...extra
   }
 })
-// worker-topology.ts createExistingWorktreeWorkerTerminal options.
 const worker: HostLaunchCall = {
   kind: 'create',
   options: {
@@ -71,8 +67,7 @@ const worker: HostLaunchCall = {
 
 export const repo = (path: string): LaunchWorkspace => ({ kind: 'repo', path })
 const folder = (path: string): LaunchWorkspace => ({ kind: 'folder', path })
-// The same factory for a mobile quick command (agent.launchReplay with a reserved pane and a
-// prompt): a paired phone never moves the host window.
+// Mobile replay reserves a pane without moving the host window.
 const mobileQuickCommand = (startupPrompt: string): HostLaunchCall => ({
   kind: 'create',
   options: {
@@ -87,25 +82,22 @@ const mobileQuickCommand = (startupPrompt: string): HostLaunchCall => ({
   }
 })
 const TASK_PAGE = { agent_kind: 'claude-code', launch_source: 'task_page', request_kind: 'new' }
-// The AI button that reaches each workspace kind: fix checks needs a repo with a PR (task_page);
-// in a folder, review notes' "New agent" (also on browser and markdown annotations, notes_send).
+// Repo AI actions use task_page; folder review-note actions use notes_send.
 const aiButtonSource = (workspace: LaunchWorkspace): string =>
   workspace.kind === 'repo' ? 'task_page' : 'notes_send'
 const QUICK_COMMAND = { agent_kind: 'codex', launch_source: 'quick_command', request_kind: 'new' }
 export const AGENT_PHONE = { title: 'Terminal', launchAgent: 'claude', isActive: true }
 const POSIX_CLAUDE = "claude '--dangerously-skip-permissions'"
-// A local POSIX host hands the provider the settings shell as stored, which settings load trims.
 export const ZSH = { shellOverride: '/bin/zsh', terminalWindowsWslDistro: null }
 export const CMD_EXE = { shellOverride: 'cmd.exe', terminalWindowsWslDistro: null }
 export const CMD = { terminalWindowsShell: 'cmd.exe' }
-// A saved default argument with an apostrophe: the byte that tells POSIX and PowerShell quoting apart.
+// Apostrophes distinguish POSIX quoting from PowerShell quoting.
 const BOB_ARGS = {
   agentDefaultArgs: { claude: `--dangerously-skip-permissions --name "Bob's box"` }
 }
 const BOB_POSIX = `${POSIX_CLAUDE} '--name' 'Bob'"'"'s box'`
 const CODEX = "codex '--dangerously-bypass-approvals-and-sandbox'"
 
-/** Row 3: agent.launch with no prompt; `command` + shell are what the provider gets. */
 function aiButton(
   name: string,
   os: NodeJS.Platform,
@@ -126,9 +118,8 @@ function aiButton(
   }
 }
 export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
-  // C1 (host planner inputs) and C2 (AI buttons onto the pane trigger) must keep these commands.
   aiButton('macOS repo', 'darwin', repo(POSIX_PATH), { command: POSIX_CLAUDE, ...ZSH }),
-  // C1: a `\\wsl$` repo with no saved runtime is quoted for Linux and runs in its distro, as in "+".
+  // A WSL-share repo without saved runtime must quote for Linux and run in its distro.
   aiButton(
     'Windows wsl$ repo, no saved runtime',
     'win32',
@@ -144,7 +135,6 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     BOB_ARGS
   ),
   {
-    // C1-C7 keep the host path's prompt carry.
     name: 'mobile quick command, macOS repo, codex prompt waits for the shell',
     row: '10',
     os: 'darwin',
@@ -158,7 +148,6 @@ export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
     telemetry: QUICK_COMMAND,
     phone: { ...AGENT_PHONE, launchAgent: 'codex' }
   },
-  // C5d/C5e (options, presentation) check host callers against these.
   ...[repo(POSIX_PATH), folder(POSIX_PATH)].map((workspace): HostLaunchCase => ({
     name: `orchestration worker, Linux ${workspace.kind}`,
     row: '10',
@@ -180,8 +169,9 @@ const HOST_ENV_KEYS = [
 ]
 const FOLDER_ENV_KEYS = ['ORCA_WORKSPACE_ID', 'ORCA_PROJECT_GROUP_ID', 'ORCA_WORKSPACE_ROOT']
 
-/** What main hands the provider for a host-lane case. */
 export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown> {
+  // Windows shell metadata is consumed only by Windows main.
+  const { terminalWindowsWslDistro, ...provider } = c.provider
   return {
     cwd: c.workspace.path.replaceAll('\\', '/'),
     cols: 120,
@@ -189,8 +179,11 @@ export function expectedHostProvider(c: HostLaunchCase): Record<string, unknown>
     commandDelivery: 'provider',
     hidden: true,
     env: {},
-    ...c.provider,
-    // main today: the host lane stamps ORCA_WORKSPACE_ID on folders only.
-    orcaEnv: c.workspace.kind === 'folder' ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS] : HOST_ENV_KEYS
+    ...provider,
+    ...(c.os === 'win32' ? { terminalWindowsWslDistro } : {}),
+    orcaEnv:
+      c.workspace.kind === 'folder'
+        ? [...FOLDER_ENV_KEYS, ...HOST_ENV_KEYS]
+        : ['ORCA_WORKSPACE_ID', ...HOST_ENV_KEYS]
   }
 }

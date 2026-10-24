@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import { useHostClient } from './client-context'
+import { useHostClient } from './host-client-hooks'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 

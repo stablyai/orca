@@ -27,7 +27,7 @@ describe('createRestartReconciler', () => {
     expect(reconcileOnRestart).toHaveBeenCalledTimes(2)
   })
 
-  it('passes every pending record through the batch owner probe', async () => {
+  it('passes only the addressed record through the batch owner probe', async () => {
     let records = [
       { sessionId: 'session-1', lease: { unreconciled: true } },
       { sessionId: 'session-2', lease: { unreconciled: true } }
@@ -40,14 +40,18 @@ describe('createRestartReconciler', () => {
     })
     const reconcileOnRestart = vi.fn(
       async (args: {
+        sessionId?: string
         probeMany?: (
           pending: readonly AgentSessionRecord[]
         ) => Promise<Map<string, { outcome: 'pid-absent' }>>
       }) => {
-        await args.probeMany?.(records)
+        await args.probeMany?.(records.filter((record) => record.sessionId === args.sessionId))
         records = records.map((record) => ({
           ...record,
-          lease: { ...record.lease, unreconciled: false }
+          lease: {
+            ...record.lease,
+            unreconciled: record.sessionId !== args.sessionId
+          }
         }))
         return new Map()
       }
@@ -64,10 +68,8 @@ describe('createRestartReconciler', () => {
     ).resolves.toBeNull()
 
     expect(probeMany).toHaveBeenCalledOnce()
-    expect(probeMany.mock.calls[0]?.[0].map((record) => record.sessionId)).toEqual([
-      'session-1',
-      'session-2'
-    ])
+    expect(probeMany.mock.calls[0]?.[0].map((record) => record.sessionId)).toEqual(['session-1'])
+    expect(records[1]?.lease.unreconciled).toBe(true)
     expect(probe).not.toHaveBeenCalled()
   })
 })

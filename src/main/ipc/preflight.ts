@@ -10,10 +10,6 @@ import type {
   RemoteWindowsTerminalCapabilities
 } from '../preflight/agent-detection'
 
-// Why this file is thin: everything above the handler layer moved to
-// ../preflight/agent-detection so the runtime can call it without ipcMain.
-// Re-exported here so existing importers of `ipc/preflight` keep working.
-export * from '../preflight/agent-detection'
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 
 export function registerPreflightHandlers(): void {
@@ -31,8 +27,6 @@ export function registerPreflightHandlers(): void {
     detectAgentsOnHost({ kind: 'local', context: args })
   )
 
-  // Why here: this is the one place that already answers "what can the installed agent CLIs
-  // do", and the probe is cached, so a repeat launch costs nothing.
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
     readZCodeInteractiveCapability()
   )

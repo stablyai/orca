@@ -23,6 +23,8 @@ export type MainHttpClient = {
   fetch(url: string, init?: RequestInit): Promise<Response>
   /** The Chromium session whose proxy state applies, or null on a host without one. */
   proxySession(): Session | null
+  /** An isolated Chromium cookie jar; absent on a host without Chromium. */
+  partitionSession?(partition: string): Session
 }
 
 const nodeHttpClient: MainHttpClient = {
@@ -38,4 +40,15 @@ export function setMainHttpClient(client: MainHttpClient | null): void {
 
 export function getMainHttpClient(): MainHttpClient {
   return current
+}
+
+/** A provider's isolated cookie jar; throws where no Chromium session exists (orcad). */
+export function requirePartitionSession(partition: string, providerLabel: string): Session {
+  const client = getMainHttpClient()
+  if (!client.partitionSession) {
+    throw new Error(
+      `${providerLabel} usage from a session cookie needs the Orca desktop app and is not available on this server`
+    )
+  }
+  return client.partitionSession(partition)
 }

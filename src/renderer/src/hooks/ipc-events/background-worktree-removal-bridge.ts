@@ -6,6 +6,10 @@ import {
   UNFINISHED_WORKTREE_REMOVAL_ERROR,
   settleHostWorktreeRemovals
 } from '../../store/slices/worktrees/teardown/host-worktree-removal-state'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 type HostMarkedRow = Pick<Worktree, 'id' | 'hostId'>
 type AppStoreApi = Pick<typeof useAppStore, 'getState' | 'setState'>
@@ -52,7 +56,7 @@ function showHostFailure(store: AppStoreApi, row: Worktree & { removalError: str
 export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore): void {
   settleHostWorktreeRemovals()
   const listed = new Map<string, Worktree>()
-  for (const rows of Object.values(store.getState().worktreesByRepo)) {
+  for (const rows of Object.values(selectWorktreesByRepo(store.getState()))) {
     for (const row of rows) {
       listed.set(deleteStateKey(row), row)
     }
@@ -110,18 +114,18 @@ export function reconcileHostWorktreeRemovals(store: AppStoreApi = useAppStore):
 }
 
 export function registerBackgroundWorktreeRemovalBridge(unsubs: (() => void)[]): void {
-  let previousRows = useAppStore.getState().worktreesByRepo
-  let previousDetected = useAppStore.getState().detectedWorktreesByRepo
+  let previousRows = selectWorktreesByRepo(useAppStore.getState())
+  let previousDetected = selectDetectedWorktreesByRepo(useAppStore.getState())
   unsubs.push(
     useAppStore.subscribe((state) => {
       if (
-        state.worktreesByRepo === previousRows &&
-        state.detectedWorktreesByRepo === previousDetected
+        selectWorktreesByRepo(state) === previousRows &&
+        selectDetectedWorktreesByRepo(state) === previousDetected
       ) {
         return
       }
-      previousRows = state.worktreesByRepo
-      previousDetected = state.detectedWorktreesByRepo
+      previousRows = selectWorktreesByRepo(state)
+      previousDetected = selectDetectedWorktreesByRepo(state)
       reconcileHostWorktreeRemovals()
     })
   )

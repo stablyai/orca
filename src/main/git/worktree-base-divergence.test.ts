@@ -82,8 +82,7 @@ describe('measureRetargetDivergence deadlines', () => {
 
     expect(subcommands()).toEqual(['rev-list', 'rev-list', 'merge-base'])
     const signals = callOptions().map((options) => options.signal)
-    // One signal object across all three: the counts and merge-base are staged, so per-probe
-    // budgets would let the check cost the sum of them.
+    // One budget spans all staged probes; per-probe budgets would add together.
     expect(new Set(signals).size).toBe(1)
     expect(signals[0]).toBeInstanceOf(AbortSignal)
   })
@@ -93,8 +92,7 @@ describe('measureRetargetDivergence deadlines', () => {
 
     await measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main')
 
-    // The signal covers admission queueing and the WSL environment wait, which start before a
-    // command timeout exists; the timeout still covers a hung spawn.
+    // Signals cover pre-spawn waits; command timeouts still bound a hung spawn.
     for (const options of callOptions()) {
       expect(options.timeout).toBe(RETARGET_DIVERGENCE_BUDGET_MS)
     }
@@ -102,9 +100,6 @@ describe('measureRetargetDivergence deadlines', () => {
   })
 
   it('really aborts the in-flight probes when the shared budget expires', async () => {
-    // A probe that behaves like a slow walk: it produces nothing on its own and only settles when
-    // its signal fires. If the budget never fired, or never reached the probe, this hangs and the
-    // test fails on its own timeout rather than passing on a signal that does nothing.
     mocks.gitExecFileAsync.mockImplementation(
       (_args: string[], options: ExecOptions) =>
         new Promise((_resolve, reject) => {
@@ -127,8 +122,7 @@ describe('measureRetargetDivergence deadlines', () => {
   })
 
   it('clears the WSL read-environment wait, which starts before any command timeout', () => {
-    // Equal to it would make the first WSL-routed create of a session `unknown` by construction,
-    // and the WSL numbers meaningless.
+    // Leave walk headroom after the first WSL environment probe.
     expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeGreaterThan(WSL_GIT_READ_ENVIRONMENT_WAIT_MS)
     expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeLessThan(GIT_READ_TIMEOUT_MS)
   })
@@ -166,14 +160,12 @@ describe('measureRetargetDivergence deadlines', () => {
     await expect(
       measureRetargetDivergence('/repo', 'refs/heads/main', 'refs/remotes/origin/main')
     ).resolves.toBe('unknown')
-    // A count that never answered must not go on to spend a merge-base walk.
     expect(subcommands()).not.toContain('merge-base')
   })
 
   it('separates merge-base saying no from merge-base failing', async () => {
     mocks.gitExecFileAsync.mockImplementation(async (args: string[]) => {
       if (args[0] === 'merge-base') {
-        // Exit 1 is Git's answer for unrelated histories.
         throw exitCodeError(1)
       }
       return { stdout: '2\n' }
@@ -185,7 +177,6 @@ describe('measureRetargetDivergence deadlines', () => {
     mocks.gitExecFileAsync.mockReset()
     mocks.gitExecFileAsync.mockImplementation(async (args: string[]) => {
       if (args[0] === 'merge-base') {
-        // A timeout carries no exit code and must not be read as "no common ancestor".
         throw new Error('git timed out.')
       }
       return { stdout: '2\n' }

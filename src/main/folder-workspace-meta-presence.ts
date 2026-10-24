@@ -2,7 +2,11 @@ import type { ExecutionHostId } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/repo-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, getRepoIdFromWorktreeId } from '../shared/worktree/id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  getRepoMainWorktreeId
+} from '../shared/worktree/id'
 
 type FolderWorkspaceMetaReader = {
   getRepos: () => Repo[]
@@ -13,10 +17,7 @@ type FolderWorkspaceMetaReader = {
   ) => WorktreeMeta | undefined
 }
 
-/**
- * Why (#22712): a folder workspace instance exists only as its meta row, so a metadata write that
- * lands after its removal would mint a blank row the sidebar lists under the project name.
- */
+/** Writes after removal must not recreate a blank metadata-only workspace (#22712). */
 export function isRemovedFolderWorkspaceInstance(
   store: FolderWorkspaceMetaReader,
   worktreeId: string,
@@ -30,7 +31,9 @@ export function isRemovedFolderWorkspaceInstance(
       (repo) =>
         repo.id === repoId &&
         isFolderRepo(repo) &&
-        worktreeId.startsWith(`${repo.id}::${repo.path}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+        worktreeId.startsWith(
+          `${getRepoMainWorktreeId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+        )
     )
   if (!isFolderInstance) {
     return false
@@ -40,4 +43,13 @@ export function isRemovedFolderWorkspaceInstance(
       ? store.getWorktreeMetaForHost(worktreeId, executionHostId)
       : store.getWorktreeMeta(worktreeId)
   return !meta
+}
+
+/** Git listings cannot show extra folder workspace ids; hiding them would purge their saved tabs. */
+export function findExtraFolderWorkspaceIds(
+  repo: Pick<Repo, 'id' | 'path'>,
+  metaById: Record<string, WorktreeMeta>
+): string[] {
+  const prefix = `${getRepoMainWorktreeId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+  return Object.keys(metaById).filter((worktreeId) => worktreeId.startsWith(prefix))
 }

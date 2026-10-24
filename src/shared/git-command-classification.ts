@@ -95,11 +95,22 @@ const READ_ACTION_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
 // Subcommands whose action-less form only lists (`git remote`, `git submodule`).
 const BARE_FORM_IS_READ = new Set(['remote', 'submodule'])
 
-/** Leading `-c key=value` / `--git-dir=...` style options precede the subcommand. */
+export const GIT_GLOBAL_OPTIONS_WITH_VALUE: ReadonlySet<string> = new Set([
+  '-c',
+  '-C',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--super-prefix',
+  '--config-env',
+  '--exec-path'
+])
+
+/** Leading global options and their values precede the subcommand. */
 export function findGitSubcommandIndex(args: readonly string[]): number {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === '-c' || arg === '-C') {
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
       continue
     }

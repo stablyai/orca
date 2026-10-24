@@ -17,13 +17,24 @@ export class RelayAgentPresence {
       return existing
     }
     const presence = row.agentPresence
-    const check = probeAgentProcessPresence(presence.process)
+    let suspended: boolean | undefined
+    const check = probeAgentProcessPresence(presence.process, undefined, undefined, (observed) => {
+      suspended = observed
+    })
       .then((verdict) => {
         if (verdict === 'exited' && current() === row) {
           publish({
             ...row,
             hookEventName: 'AgentProcessExit',
             agentPresence: { ...presence, ended: true }
+          })
+        } else if (current() === row && (suspended === true) !== (presence.suspended === true)) {
+          const { suspended: _suspended, ...unsuspended } = presence
+          publish({
+            ...row,
+            hookEventName: undefined,
+            hasExplicitPrompt: undefined,
+            agentPresence: suspended ? { ...unsuspended, suspended: true } : unsuspended
           })
         }
       })

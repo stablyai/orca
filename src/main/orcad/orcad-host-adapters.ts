@@ -4,10 +4,12 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { ORCAD_CLI_PACKAGE_FILENAME } from '../../shared/orcad-artifacts'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
-import { setSecretStore, type SecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from './orcad-cli-launcher'
-import { describeOrcadSecretProtectionGap } from './orcad-secret-protection-gap'
+import { createOrcadSecretStore, type OrcadSecretStore } from './orcad-secret-store'
+import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
+import { orcadSpeechServiceFactories } from './orcad-speech-services'
 
 let quitRegisteredHandlers = (): void => {}
 
@@ -51,22 +53,17 @@ function createNodeAppEnvironment(): AppEnvironment {
   }
 }
 
-/**
- * Why not silently plaintext: `isEncryptionAvailable() === false` already makes every
- * caller fall back to unsealed storage, which is a security posture, not a detail.
- * `describeProtectionGap()` gives the reason a client can surface.
- */
-function createNodeSecretStore(): SecretStore {
-  return {
-    isEncryptionAvailable: () => false,
-    encryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
-    decryptString: () => {
-      throw new Error('orcad_secret_sealing_unavailable')
-    },
-    describeProtectionGap: () => describeOrcadSecretProtectionGap(process.platform)
+let orcadSecretStore: OrcadSecretStore | null = null
+
+/** Loads the sealing key kept in `keyDir`; resolves whether sealing works. */
+export async function prepareOrcadSecretStore(
+  keyDir: string,
+  userDataPath: string
+): Promise<boolean> {
+  if (!orcadSecretStore) {
+    throw new Error('orcad_secret_store_not_installed — call installOrcadHostAdapters() first')
   }
+  return orcadSecretStore.prepare({ keyDir, userDataPath })
 }
 
 /**
@@ -91,5 +88,7 @@ export function stampOrcadAppVersion(installRoot: () => string = resolveOrcadIns
 export function installOrcadHostAdapters(): void {
   stampOrcadAppVersion()
   setAppEnvironment(createNodeAppEnvironment())
-  setSecretStore(createNodeSecretStore())
+  orcadSecretStore = createOrcadSecretStore()
+  setSecretStore(orcadSecretStore)
+  setSpeechServiceFactories(orcadSpeechServiceFactories)
 }

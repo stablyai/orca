@@ -6,8 +6,7 @@ export function isProcessRunning(pid: number | null | undefined): boolean {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    // Why: only ESRCH proves the pid is gone. EPERM means it exists under another uid, and
-    // reporting that as `stale_bootstrap` calls a live Orca dead.
+    // Only ESRCH proves absence; EPERM indicates a live PID under another uid.
     return !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
   }
 }

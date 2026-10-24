@@ -6,10 +6,10 @@ import {
   identityFor,
   PROVIDER_SESSION_ID,
   recordingJournalSink,
-  tick
+  tick,
+  claudeOpened
 } from './claude-structured-session-test-support'
 
-/** A resumed owner that completed one turn (`a4`) and then saw the next turn's prompt. */
 async function ownerMidSecondTurn(persisted: unknown[]) {
   const claude = fakeClaude()
   const adapter = adapterFor(
@@ -82,13 +82,15 @@ describe('Claude resume point is the last completed turn on every exit path', ()
       [],
       persisted
     )
-    const acquisition = await adapter.acquire({
+    await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-7',
       events: recordingJournalSink()
     })
-    expect(acquisition.link.handle).toMatchObject({ resumeCursor: 'a3' })
+    expect((await claudeOpened(adapter, 'session-1')).link?.handle).toMatchObject({
+      resumeCursor: 'a3'
+    })
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     expect(persisted).toEqual([expect.objectContaining({ leafUuid: 'a3' })])
   })
@@ -97,7 +99,6 @@ describe('Claude resume point is the last completed turn on every exit path', ()
     const persisted: unknown[] = []
     const { adapter, frame } = await ownerMidSecondTurn(persisted)
     frame({ type: 'assistant', uuid: 'a5' })
-    // Claude's transcript chains these after a reply; the live stream never adopts them.
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: 'a5-hook-summary' })
     frame({ type: 'attachment', uuid: 'a5-attachment' })
     frame({ type: 'result', subtype: 'success', uuid: 'a5-result' })

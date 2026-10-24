@@ -156,11 +156,8 @@ export const acknowledgeAgentPromptSubmit = setup.acknowledgeAgentPromptSubmit
 export { electronMocks } from './orca-runtime-test-mocks/setup.spec'
 export {
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock
 } from './orca-runtime-test-mocks/setup.spec'
 export const MOCK_GIT_WORKTREES = setup.MOCK_GIT_WORKTREES
@@ -220,6 +217,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,

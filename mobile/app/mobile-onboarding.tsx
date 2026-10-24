@@ -10,7 +10,7 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
-import { useReducedMotionEnabled } from '../src/onboarding/use-reduced-motion'
+import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,

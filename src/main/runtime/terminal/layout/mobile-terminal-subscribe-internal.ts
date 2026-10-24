@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithHandleMobileSubscribe } from './mobile-terminal-subscribe'
-import { clampTerminalViewport } from '../../terminal-viewport'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 
 export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWithHandleMobileSubscribe {
   protected async handleMobileSubscribeInternal(
@@ -37,8 +37,9 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
       if (!viewport) {
         return false
       }
-      this.setDriver(ptyId, { kind: 'mobile', clientId })
+      // Why: an iOS resume resubscribes inside this grace; after a desktop take-back it must stay passive like a fresh subscribe (#28487).
       if (mode !== 'desktop') {
+        this.setDriver(ptyId, { kind: 'mobile', clientId })
         const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
           viewport.cols,
           viewport.rows

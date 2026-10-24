@@ -27,21 +27,16 @@ export type GenerationFileSystem = {
    *  be read" lead the store to opposite decisions about deleting the cache. */
   readText(uri: string): Promise<string | null>
   fileExists(uri: string): Promise<boolean>
+  /** Null when the file is missing. */
+  fileSize(uri: string): Promise<number | null>
+  /** Copies a file natively, creating the destination's directories. The destination must not
+   *  exist, as on both platforms. Throws when the source is gone or unreadable. */
+  copyFile(fromUri: string, toUri: string): Promise<void>
   /** Recursive, and a no-op when the path is missing. */
   delete(uri: string): Promise<void>
   /** Renames a directory. The destination must not exist: expo moves a directory *into* an existing
    *  destination rather than over it. */
   moveDirectory(fromUri: string, toUri: string): Promise<void>
-  /**
-   * Renames a file over the destination, which may already exist.
-   *
-   * Not an atomic replace, because expo exposes none: `FileManager.moveItem` and Kotlin's
-   * `moveTo` both refuse a destination that exists, so the adapter deletes it first. A failure
-   * therefore leaves either the old file or none — never a half-written one, which is what the
-   * store needs, since a manifest that cannot be parsed and one that is absent both read back as
-   * "no activation" and redownload.
-   */
-  moveFile(fromUri: string, toUri: string): Promise<void>
 }
 
 const FILE_URI_PREFIX = 'file://'
@@ -95,6 +90,16 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
     async fileExists(uri) {
       return new File(uri).exists
     },
+    async fileSize(uri) {
+      const file = new File(uri)
+      return file.exists ? file.size : null
+    },
+    async copyFile(fromUri, toUri) {
+      const target = new File(toUri)
+      // iOS copies only into an existing directory.
+      target.parentDirectory.create({ intermediates: true, idempotent: true })
+      new File(fromUri).copy(target)
+    },
     async delete(uri) {
       const directory = new Directory(uri)
       if (directory.exists) {
@@ -108,13 +113,6 @@ export function createExpoGenerationFileSystem(): GenerationFileSystem {
     },
     async moveDirectory(fromUri, toUri) {
       new Directory(fromUri).move(new Directory(toUri))
-    },
-    async moveFile(fromUri, toUri) {
-      const destination = new File(toUri)
-      if (destination.exists) {
-        destination.delete()
-      }
-      new File(fromUri).move(destination)
     }
   }
 }

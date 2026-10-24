@@ -24,7 +24,7 @@ export function compileAggregateExpression(expression, contexts = ['needs']) {
     ).evaluate()
 }
 
-export const aggregateShouldRun = compileAggregateExpression(aggregateJob.if)
+export const aggregateShouldRun = compileAggregateExpression(aggregateJob.if, ['needs', 'github'])
 const aggregateEnvironmentExpressions = Object.fromEntries(
   Object.entries(aggregateShell.env).map(([name, expression]) => [
     name,

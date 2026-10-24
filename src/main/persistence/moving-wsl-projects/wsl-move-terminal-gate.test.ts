@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
 import { assessWslMoveTerminals, type WslMovePaneFacts } from './wsl-move-terminal-gate'
 
@@ -34,20 +34,20 @@ describe('assessWslMoveTerminals', () => {
       'an agent mid-turn',
       { agent: { state: 'working', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       'an agent at a permission prompt',
       { agent: { state: 'waiting', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       // Copilot, Pi and Freebuff report a pending ask or approval as 'blocked'.
       'an agent reported blocked on a person',
       { agent: { state: 'blocked', resumable: true, ownsForeground: true } },
       'agent-working',
-      ['wait', 'end']
+      ['wait', 'end', 'skip-project']
     ],
     [
       'an agent with no session to resume',
@@ -96,12 +96,52 @@ describe('assessWslMoveTerminals', () => {
     })
   })
 
+  it.each([
+    ['a done, non-resumable row', { state: 'done', resumable: false, ownsForeground: false }],
+    ['a working row', { state: 'working', resumable: true, ownsForeground: false }],
+    ['a waiting row', { state: 'waiting', resumable: false, ownsForeground: false }]
+  ] as const)('does not let %s left on an idle shell block it', (_label, agent) => {
+    expect(gate([pane('t1:a', { agent })])).toEqual({ verdict: 'ready', paneKeys: ['t1:a'] })
+  })
+
+  it('still blocks a current non-resumable agent in the foreground', () => {
+    expect(
+      gate([
+        pane('t1:a', {
+          foreground: 'process-running',
+          agent: { state: 'done', resumable: false, ownsForeground: true }
+        })
+      ])
+    ).toEqual({
+      verdict: 'blocked',
+      blockers: [{ kind: 'agent-not-resumable', ids: ['t1:a'], actions: ['end', 'skip-project'] }]
+    })
+  })
+
+  it('reports a pane with an unbounded byte count once, as unverifiable', () => {
+    expect(gate([pane('t1:a', { scrollbackBytes: Number.POSITIVE_INFINITY })])).toEqual({
+      verdict: 'blocked',
+      blockers: [{ kind: 'unverifiable', ids: ['t1:a'], actions: ['wait', 'skip-project'] }]
+    })
+  })
+
+  it('counts a pane listed twice once, for the caps and the ready list', () => {
+    const atCount = Array.from({ length: MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS }, (_, i) =>
+      pane(`t${i}:a`)
+    )
+    const verdict = gate([...atCount, pane('t0:a')])
+    expect(verdict.verdict).toBe('ready')
+    expect(verdict.verdict === 'ready' && verdict.paneKeys).toHaveLength(
+      MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS
+    )
+  })
+
   it('blocks on unfinished automation runs and orchestration dispatches in scope', () => {
     expect(gate([pane('t1:a')], ['run-1'], ['dispatch-1'])).toEqual({
       verdict: 'blocked',
       blockers: [
-        { kind: 'automation-running', ids: ['run-1'], actions: ['wait'] },
-        { kind: 'dispatch-running', ids: ['dispatch-1'], actions: ['wait'] }
+        { kind: 'automation-running', ids: ['run-1'], actions: ['wait', 'skip-project'] },
+        { kind: 'dispatch-running', ids: ['dispatch-1'], actions: ['wait', 'skip-project'] }
       ]
     })
   })

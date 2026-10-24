@@ -2,12 +2,20 @@
 // equal to the store's keeps the store's object, so an unchanged frame re-renders nothing; a
 // record the store already holds keeps what only this window knows about it (a terminal row's
 // in-flight spawn and recovery state, an open file's editor state, a browser tab's page state).
+// Building also notes a staged browser tab the frames take over (L284): every built patch is applied.
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from './types'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
+import {
+  NO_HELD_TABS,
+  withHeldTabsAsDrawn,
+  type HeldDrawnTabs
+} from './workspace-layout-frame-held-tabs'
+import { noteFramesTakingOverStagedBrowserTabs } from './workspace-layout-frame-browser-handover'
 
 /** Row fields this window owns: what its mounted panes are doing, and which terminal each row
  *  binds (main publishes the saved binding; the live one stays the window's until main owns it). */
@@ -49,9 +57,14 @@ function withoutWindowFields(tab: TerminalTab): Partial<TerminalTab> {
   return fields
 }
 
-function mergeTerminalRow(existing: TerminalTab | undefined, built: TerminalTab): TerminalTab {
+function mergeTerminalRow(
+  existing: TerminalTab | undefined,
+  built: TerminalTab,
+  newRowFields: (tabId: string) => Partial<TerminalTab> | null
+): TerminalTab {
   if (!existing) {
-    return built
+    const fields = newRowFields(built.id)
+    return fields ? { ...built, ...fields } : built
   }
   if (same(withoutWindowFields(existing), withoutWindowFields(built))) {
     return existing
@@ -120,9 +133,16 @@ function setKey<T>(
  */
 export function buildLayoutFrameStorePatch(
   state: LayoutFrameStoreState,
-  built: LayoutFrameSlices,
-  keys: readonly string[]
+  frameSlices: LayoutFrameSlices,
+  keys: readonly string[],
+  /** A tab whose pane layout stays as the store has it: the window's own pane command holds it. */
+  keepsTerminalLayout: (tabId: string) => boolean = () => false,
+  /** This window's own fields for a row the frame creates. */
+  newRowFields: (tabId: string) => Partial<TerminalTab> | null = () => null,
+  /** Tabs the window drew, closed or moved before main answered: they stay as the store has them. */
+  held: HeldDrawnTabs = NO_HELD_TABS
 ): Partial<LayoutFrameStoreState> {
+  const built = withHeldTabsAsDrawn(state, frameSlices, keys, held)
   const patch: Partial<LayoutFrameStoreState> = {}
   const keyed = (slice: KeyedSlice, value: (key: string) => unknown): void => {
     let next: Record<string, unknown> = state[slice]
@@ -135,7 +155,9 @@ export function buildLayoutFrameStorePatch(
   }
 
   keyed('tabsByWorktree', (key) =>
-    mergeById(state.tabsByWorktree[key], built.tabsByWorktree[key], mergeTerminalRow)
+    mergeById(state.tabsByWorktree[key], built.tabsByWorktree[key], (existing, next) =>
+      mergeTerminalRow(existing, next, newRowFields)
+    )
   )
   keyed('unifiedTabsByWorktree', (key) =>
     mergeById(state.unifiedTabsByWorktree[key], built.unifiedTabsByWorktree[key])
@@ -181,19 +203,45 @@ export function buildLayoutFrameStorePatch(
     ...tabIdsOf(state.tabsByWorktree),
     ...tabIdsOf(built.tabsByWorktree)
   ])) {
+    if (
+      keepsTerminalLayout(tabId) &&
+      tabId in terminalLayouts &&
+      tabId in built.terminalLayoutsByTabId
+    ) {
+      continue
+    }
     terminalLayouts =
       setKey(terminalLayouts, tabId, built.terminalLayoutsByTabId[tabId]) ?? terminalLayouts
   }
-  if (terminalLayouts !== state.terminalLayoutsByTabId) {
-    patch.terminalLayoutsByTabId = terminalLayouts
-  }
+  Object.assign(patch, terminalLayoutsPatch(state, terminalLayouts))
 
   const keySet = new Set(keys)
   // An open file's editor state is this window's; a frame decides only which files are open.
+  // Frames carry only edit-mode files, so a diff, preview or conflict record goes with its last
+  // tab, and one no tab shows (a conflict review's selected file) stays.
   const builtFileIds = new Set(built.openFiles.map((file) => file.id))
   const heldFileIds = new Set(state.openFiles.map((file) => file.id))
+  const editorEntities = (tabs: AppState['unifiedTabsByWorktree']): Set<string> =>
+    new Set(
+      keys.flatMap((key) =>
+        (tabs[key] ?? []).flatMap((tab) =>
+          isEditorTabContentType(tab.contentType) ? [`${key}\0${tab.entityId}`] : []
+        )
+      )
+    )
+  const shown = editorEntities(state.unifiedTabsByWorktree)
+  const stillShown = editorEntities(built.unifiedTabsByWorktree)
+  const keeps = (file: AppState['openFiles'][number]): boolean => {
+    const entity = `${file.worktreeId}\0${file.id}`
+    return (
+      !keySet.has(file.worktreeId) ||
+      builtFileIds.has(file.id) ||
+      stillShown.has(entity) ||
+      !shown.has(entity)
+    )
+  }
   const files = [
-    ...state.openFiles.filter((file) => !keySet.has(file.worktreeId) || builtFileIds.has(file.id)),
+    ...state.openFiles.filter(keeps),
     ...built.openFiles.filter((file) => !heldFileIds.has(file.id))
   ]
   if (
@@ -212,6 +260,7 @@ export function buildLayoutFrameStorePatch(
     .flatMap((key) => state.browserTabsByWorktree[key] ?? [])
     .map((tab) => tab.id)
     .filter((id) => !builtBrowserTabIds.has(id))
+  noteFramesTakingOverStagedBrowserTabs(state, built, closedBrowserTabIds, builtBrowserTabIds)
   const closedPageIds = new Set(
     closedBrowserTabIds.flatMap((id) =>
       (state.browserPagesByWorkspace[id] ?? []).map((page) => page.id)
@@ -235,4 +284,12 @@ export function buildLayoutFrameStorePatch(
     patch.remoteBrowserPageHandlesByPageId = { ...handles, ...Object.fromEntries(addedHandles) }
   }
   return patch
+}
+
+/** The patch that shows `layouts` as the store's pane trees; empty when they are the store's. */
+export function terminalLayoutsPatch(
+  state: Pick<LayoutFrameStoreState, 'terminalLayoutsByTabId'>,
+  layouts: LayoutFrameStoreState['terminalLayoutsByTabId']
+): Partial<LayoutFrameStoreState> {
+  return layouts === state.terminalLayoutsByTabId ? {} : { terminalLayoutsByTabId: layouts }
 }

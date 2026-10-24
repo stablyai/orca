@@ -1,9 +1,12 @@
 import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
-import { isSameAgentProcess } from '../shared/agent-process-presence'
+import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
+import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
@@ -35,6 +38,17 @@ export function applyRelayHookEvent(
     return undefined
   }
   const previous = host.state.lastStatusByPaneKey.get(incoming.paneKey)
+  if (
+    previous &&
+    !previous.providerSessionOnly &&
+    sameAgentStatusTerminalOwner(previous, incoming) &&
+    hasOtherAgentProcessOwner(previous.agentPresence, {
+      agent: incoming.payload.agentType ?? 'unknown',
+      process: incoming.agentPresence?.process
+    })
+  ) {
+    return undefined
+  }
   const cancellation = reconcileRelayClaudeCancel(host.state, previous, incoming, source)
   if (cancellation.hold) {
     return previous
@@ -43,13 +57,26 @@ export function applyRelayHookEvent(
   if (!transitioned) {
     return undefined
   }
-  const event = withRelayClaudeTurnRevision(
+  const revised = withRelayClaudeTurnRevision(
     previous,
     transitioned.agentPresence?.ended
       ? { ...transitioned, providerSessionOnly: true }
       : transitioned,
     source
   )
+  // Why: the relay is this pane's execution host, the only side that sees the event name.
+  const {
+    stopHookActive: _stopHookActive,
+    nativeTurnKey: _nativeTurnKey,
+    turnEndedAt: _turnEndedAt,
+    turnEndDisposition: _turnEndDisposition,
+    hostTurn: _hostTurn,
+    ...unflagged
+  } = revised
+  const event: AgentHookEventPayload = {
+    ...unflagged,
+    ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+  }
   // Why: this post came from a process still running inside a pane whose tab the user closed.
   // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
   // that no tab owns — the advertisement that ends up auto-typing a second `--resume` onto a
@@ -71,8 +98,18 @@ export function applyRelayHookEvent(
   ) {
     return undefined
   }
+  const claudeSettledRequests = retainClaudeSettledRequests(
+    host.metadata.get(event.paneKey)?.claudeSettledRequests,
+    previous,
+    event
+  )
   host.metadata.delete(event.paneKey)
-  host.metadata.set(event.paneKey, { source, env, version })
+  host.metadata.set(event.paneKey, {
+    source,
+    env,
+    version,
+    ...(claudeSettledRequests ? { claudeSettledRequests } : {})
+  })
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

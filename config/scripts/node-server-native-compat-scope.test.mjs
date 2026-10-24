@@ -278,37 +278,63 @@ it('checks the cleanup against the actual native build and smoke closure', async
   expect(result.nativeCompatibility).toBe(false)
 }, 60_000)
 
-it('limits the extra job guard to glibc 2.17 and preserves unconditional callers', () => {
+it('limits test-only native skip evidence to ordinary pull requests', () => {
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
   )
-  const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.if).toContain("needs.changes.outputs.native_compatibility != 'false'")
-  expect(compat.if).toContain(
-    "github.event_name != 'pull_request' || inputs.build_template || inputs.ref != ''"
-  )
-  for (const job of [
-    workflow.jobs.persistence,
-    workflow.jobs.linux_glibc_floor,
-    workflow.jobs.linux_musl
-  ]) {
-    expect(job.if).not.toContain('native_compatibility')
-  }
   const scope = workflow.jobs.changes.steps.find((step) => step.id === 'scope')
   const graph = workflow.jobs.changes.steps.find((step) => step.id === 'graph')
   expect(scope.run).toContain('git diff --raw --no-renames --no-abbrev -z HEAD^1 HEAD')
   for (const step of [scope, graph]) {
-    expect(step.env.ALLOW_TEST_ONLY_NATIVE_SKIP).toBe(
-      "${{ github.event_name == 'pull_request' && !inputs.build_template && inputs.ref == '' }}"
-    )
+    const allowSkip = compileAggregateExpression(step.env.ALLOW_TEST_ONLY_NATIVE_SKIP, [
+      'github',
+      'inputs'
+    ])
+    for (const [event, template, ref, expected] of [
+      ['pull_request', false, '', true],
+      ['push', false, '', false],
+      ['schedule', false, '', false],
+      ['workflow_dispatch', false, '', false],
+      ['workflow_call', false, '', false],
+      ['pull_request', true, '', false],
+      ['pull_request', false, 'refs/tags/v1', false]
+    ]) {
+      expect(
+        allowSkip({
+          github: { event_name: event },
+          inputs: { build_template: template, ref }
+        }).coerceString()
+      ).toBe(String(expected))
+    }
     expect(step.run).toContain('--pull-request --diff-paths "$RUNNER_TEMP/node-server-native-diff"')
+  }
+  for (const name of ['persistence', 'linux_glibc_floor', 'linux_musl']) {
+    const eligible = compileAggregateExpression(workflow.jobs[name].if, [
+      'needs',
+      'github',
+      'inputs'
+    ])
+    for (const native of ['true', 'false']) {
+      expect(
+        eligible({
+          github: { event_name: 'pull_request', event: { pull_request: { draft: false } } },
+          inputs: { build_template: false, ref: '' },
+          needs: {
+            changes: {
+              outputs: { should_run: 'true', qualification: 'true', native_compatibility: native }
+            },
+            mobile_web_bundle: { result: 'success' }
+          }
+        }).coerceString()
+      ).toBe('true')
+    }
   }
   expect(workflow.on).toHaveProperty('workflow_dispatch')
   expect(workflow.on).toHaveProperty('workflow_call')
   expect(workflow.on.schedule).toHaveLength(1)
 })
 
-it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (design D6)', () => {
+it('configures server glibc 2.28 slots and the glibc 2.17 compatibility lane', () => {
   const workflow = parse(
     readFileSync(new URL('../../.github/workflows/node-server-tests.yml', import.meta.url), 'utf8')
   )
@@ -327,13 +353,14 @@ it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (d
   expect(floor.env).toMatchObject({ CC: 'gcc', CXX: 'g++' })
 
   const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.needs).toEqual(['changes', 'persistence'])
-  expect(compat.if).toContain(floor.if.slice(0, -3))
-  expect(compat.if).toContain("needs.changes.outputs.native_compatibility != 'false'")
-  expect(compat.if).toContain(
-    "github.event_name != 'pull_request' || inputs.build_template || inputs.ref != ''"
-  )
-  expect(compat['runs-on']).toBe('ubuntu-22.04')
+  expect(compat.needs).toBe('changes')
+  const runner = compileAggregateExpression(compat['runs-on'], ['inputs', 'github'])
+  expect(
+    runner({
+      inputs: { fast_runners: false },
+      github: { event_name: 'workflow_dispatch' }
+    }).coerceString()
+  ).toBe('ubuntu-22.04')
   const run = compat.steps.map((step) => step.run ?? '').join('\n')
   expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
   expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')
@@ -363,15 +390,19 @@ it.each([
   { expected: true, native: 'false', event: 'workflow_dispatch' },
   { expected: true, native: 'false', template: true },
   { expected: true, native: 'false', ref: 'other-commit' },
-  { expected: false, native: 'true', persistence: 'failure' },
-  { expected: false, native: 'true', persistence: 'cancelled' },
-  { expected: false, native: 'true', persistence: 'skipped' },
+  { expected: true, native: 'true', persistence: 'failure' },
+  { expected: true, native: 'true', persistence: 'cancelled' },
+  { expected: true, native: 'true', persistence: 'skipped' },
+  { expected: false, native: 'true', draft: true },
   { expected: false, native: 'true', qualification: 'false' },
   { expected: false, native: 'true', shouldRun: 'false' },
   { expected: false, native: 'true', cancelled: true }
 ])('evaluates the hosted native job guard with %j', (scenario) => {
   const context = {
-    github: { event_name: scenario.event ?? 'pull_request' },
+    github: {
+      event_name: scenario.event ?? 'pull_request',
+      event: { pull_request: { draft: scenario.draft ?? false } }
+    },
     inputs: { build_template: scenario.template ?? false, ref: scenario.ref ?? '' },
     needs: {
       persistence: { result: scenario.persistence ?? 'success' },

@@ -7,12 +7,12 @@
  * resolves it once — settings default plus per-launch feasibility from
  * `structured-native-chat-launch-route` — so no surface carries its own copy of that decision.
  *
- * The intent deliberately does NOT name a mode. A caller states what it wants to happen, not how
- * to deliver it; picking structured vs terminal is the host's job and is reported back in the
- * receipt rather than requested here.
+ * A caller may name the surface it wants (`surface`); otherwise picking structured vs terminal is
+ * the host's job. Either way the host decides feasibility and reports the result in the receipt.
  */
 
 import type { TuiAgent } from './tui-agent'
+import type { AgentLaunchSurface } from './agent-launch-surface'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -102,6 +102,8 @@ export type AgentLaunchIntent = {
   accountEnv?: Readonly<Record<string, string>>
   /** `agent.launch`'s `nativeChatDefault`: the caller's chat default in place of the host's own. */
   nativeChatDefault?: boolean
+  /** `agent.launch`'s `surface`: the user's pick for this launch, ahead of either default. */
+  surface?: AgentLaunchSurface
 }
 
 /**
@@ -215,10 +217,11 @@ export type AgentLaunchResult = {
 
 export type AgentLaunchMode = 'structured' | 'terminal'
 
-/** Why a launch ran in the mode it did. `user_default` is the preference being honoured; every
- *  other member is a reason the preference could not be applied to this launch. */
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured and
+ *  `requested` the caller's explicit pick; every other member is a reason a chat could not run. */
 export type AgentLaunchModeReason =
   | 'user_default'
+  | 'requested'
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
@@ -236,7 +239,7 @@ export type AgentLaunchModeReason =
 export type AgentLaunchModeReceipt = {
   /** The mode the launch actually ran in. */
   mode: AgentLaunchMode
-  /** The user's settings default for a new agent tab. */
+  /** The caller's explicit pick, else the user's settings default for a new agent tab. */
   preferred: AgentLaunchMode
   reason: AgentLaunchModeReason
   /** One sentence, always present, so a fallback is never silent. */

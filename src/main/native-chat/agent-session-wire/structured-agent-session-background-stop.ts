@@ -1,39 +1,44 @@
-// A background Stop: the strip's Stop of one task, or of every task the records offer one.
-
 import {
   agentChildWorkStopEvidence,
   type AgentChildWorkStopAcknowledgement
 } from '../../../shared/agent-child-work-stop-targets'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export type StructuredAgentSessionBackgroundStopInput = {
   taskId?: string
-  /** The session's child records: a background Stop reaches the tasks they offer a stop. */
   childWork?: () => readonly AgentChildWorkView[] | undefined
-  /** Hands the host the stops the provider accepted, as evidence about the runs it sent them to.
-   *  Never throws: recording it is bookkeeping, and cannot fail the Stop. */
+  /** Record accepted-stop evidence without throwing or failing the Stop. */
   acknowledgeStops?: (evidence: AgentChildWorkEvidence[]) => void
-  /** Work the host could not list, read inside the Stop's step, and the provider child's end that
-   *  reaches it; for an untargeted Stop only. */
+  /** Capture exact runtime lifetimes before awaiting Stop. */
+  captureStops?: (
+    targets: readonly (AgentChildWorkView & { providerId: string })[]
+  ) => CapturedChildWorkStops
+  /** Unlisted work and the provider child holding it. */
   unlisted?: { present: () => boolean; stop: () => Promise<void> }
 }
 
-/** `atRest`: no turn runs, so ending the agent ends only the work no record lists. */
+/** Stop all may end unlisted work’s agent only when no lead turn runs. */
 export async function stopStructuredAgentSessionBackgroundWork(
   ctx: Pick<AgentSessionTurnContext, 'adapter' | 'sessionId' | 'fence'>,
-  input: Pick<StructuredAgentSessionBackgroundStopInput, 'acknowledgeStops' | 'unlisted'> & {
-    /** Captured before the stop goes out: its acknowledgement may end only these runs. */
+  input: Pick<StructuredAgentSessionBackgroundStopInput, 'acknowledgeStops'> & {
+    /** Acknowledgements apply only to runs captured before Stop. */
     targets: readonly (AgentChildWorkView & { providerId: string })[]
-    /** The host could not read the task list the targets came from. */
+    /** Recheck captured runtime lifetime before sending each listed ID. */
+    targetCurrent?: (handleId: string) => boolean
+    unlisted?: { stop: () => Promise<void> }
     unreadable?: true
   },
   atRest: () => boolean
 ): Promise<{ cancelled: boolean; stillRunning?: true }> {
-  const { targets } = input
+  const { targetCurrent } = input
+  const targets = targetCurrent
+    ? input.targets.filter((target) => targetCurrent(target.providerId))
+    : input.targets
   const acknowledged: AgentChildWorkStopAcknowledgement[] = []
-  // Nothing listed has a stop to send; an agent without a stop route would refuse even none.
+  // Avoid unsupported stop-route refusal when no listed target needs stopping.
   const background =
     targets.length === 0
       ? undefined
@@ -44,7 +49,7 @@ export async function stopStructuredAgentSessionBackgroundWork(
             taskIds: targets.map((target) => target.providerId),
             acknowledge: (acknowledgement) => void acknowledged.push(acknowledgement)
           })
-          // A batch that fails part way still ended each run it was answered for first.
+          // Preserve earlier acknowledgements even if the batch later fails.
           .finally(() => {
             if (acknowledged.length > 0) {
               input.acknowledgeStops?.(
@@ -55,13 +60,12 @@ export async function stopStructuredAgentSessionBackgroundWork(
   if (background?.stillRunning) {
     return background
   }
-  // Work no record lists is reached only by ending the agent, never under a turn it runs. Read after
-  // the listed stops: one ending can wake the agent into a turn of its own.
-  if (input.unlisted?.present() && atRest()) {
+  // Later work must not expand this Stop’s captured targets.
+  if (input.unlisted && atRest()) {
     await input.unlisted.stop()
     return { cancelled: true }
   }
-  // A list the host could not read proves no task ended: unconfirmed, never "nothing to stop".
+  // Unreadable lists prove no task ended; report uncertainty instead of an empty target set.
   if (input.unreadable) {
     throw new Error('the background task list could not be read')
   }

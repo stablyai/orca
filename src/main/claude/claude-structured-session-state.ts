@@ -1,13 +1,10 @@
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../shared/agent-session-failure'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type {
-  StructuredAgentSessionOptionsReportedEvent,
-  StructuredAgentSessionOptionsSkippedEvent,
-  StructuredAgentSessionStartedEvent
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionOptionsReportedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -24,7 +21,8 @@ import type { ClaudeBackgroundTaskTracker } from './claude-background-task-track
 import type { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
-import type { ClaudeSessionStartup } from './claude-structured-session-startup-state'
+import type { ClaudeInitProof } from './claude-structured-init-proof'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -39,15 +37,14 @@ export type ClaudeStructuredSessionEvent =
       type: 'message'
       sessionId: string
       message: Record<string, unknown>
-      /** Present only when this replay acknowledged Orca's in-flight dispatch
-       *  AND opens a turn; a replay folded into the running turn settles
-       *  delivery without one. */
+      /** Present when an acknowledged replay opens a turn; folded replays only settle delivery. */
       startsTurn?: true
-      /** Submission instant of the dispatch this replay acknowledged; the origin
-       *  of the turn it opens. Absent when the host cannot name a send. */
+      /** Submission time for the acknowledged dispatch, absent when its send is unknown. */
       requestedAt?: number
       /** The submission this replay acknowledged, which opens the turn. */
       clientMessageId?: string
+      /** On any other frame: the send the CLI started and has not echoed, whose turn output opens. */
+      startedSend?: ClaudeStartedSend
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
     }
@@ -63,10 +60,7 @@ export type ClaudeStructuredSessionEvent =
       fence: number
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
-  /** The CLI answered initialize: the host may hand the child input from here. */
-  | StructuredAgentSessionStartedEvent
   | StructuredAgentSessionOptionsReportedEvent
-  | StructuredAgentSessionOptionsSkippedEvent
   | {
       type: 'ended'
       sessionId: string
@@ -78,32 +72,32 @@ export type ClaudeStructuredSessionEvent =
       acquisitionGeneration?: string
       /** Host clock when the end was observed. */
       observedAt?: number
-      /** The child ended before proving startup, so reacquiring would repeat the same start. */
-      startupUnproven?: true
-      /** The child ended before it answered initialize, so it ran nothing it was handed. */
-      startupUnanswered?: true
     }
+
+export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
 export type ClaudeLateDispatchOutcome =
   | {
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
     }
-  | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
+  /** `unrun`: the CLI reported it removed the send without running it. */
+  | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
   /** The CLI took the send and let it go unanswered: it may have run, so it is never re-sent. */
   | { clientMessageId: string; state: 'unknown'; reason: string }
 
 export type ClaudeStructuredSessionAdapterDeps = {
-  /** The `/` surface of a chat whose Claude is not running. */
   atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
-  /** The CLI reported `session_state_changed idle`: its turn is over. */
-  onSessionIdle?: (input: { sessionId: string }) => void
-  /** What the session's child work did, delivered after the journal handled the frame. */
-  onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
+  /** Delivered after journaling; producer writes corrections to the reporting child's rows. */
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -116,7 +110,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string | null
     fence: number
   }) => Promise<void>
-  /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
   /** Advance the durable resume point in place at a turn end; bookkeeping, never a turn failure. */
   persistResumePoint?: (input: {
@@ -159,35 +152,40 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
+  /** Sends the frame being handled settled, until their settlements reach the host. */
+  unreportedSettlements?: ReadonlySet<string>
   /** Bounded identities for dispatches settled without an echo; a late replay still accepts one. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
-  /** What `get_settings` says the next request will send, after Claude's own env and settings
-   *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */
+  /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string }
+  /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
+  configuredDefaults?: { model?: string; effort?: string }
+  /** Mutation at which the provider last reported its Fast routing state. */
+  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
-  /** `optionMutationSequence` when `reportedOptions.model` was last observed, so a
-   *  write still awaiting its first turn outranks the report it will replace. */
+  /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
-  restoreSkippedOptions: Set<string>
+  /** Inputs carried by launch or accepted controls, independent of provider reports. */
+  appliedInputOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
-  /** The launch left the saved Fast out, so the start applies it once the settings are read. */
+  /** A launched model the CLI answered `model_not_found` for; reported until a new pick. */
+  retiredModel?: string
+  /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
-  /** Each child's own task frames, as evidence for the host's child records. */
   childWork: ClaudeChildWorkDecoder
-  /** The `/` surface the CLI reports for itself; seeded from init, kept current
-   *  by later init and `commands_changed` frames. */
+  /** Commands seeded by init and updated by later init or commands_changed frames. */
   commands: ClaudeSlashCommandCatalog
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
@@ -206,30 +204,31 @@ export type ClaudeSession = {
   translator: ClaudeJournalTranslator | null
   events: StructuredAgentSessionEventSink | undefined
   unbindReadingControl?: () => void
-  /** Published at spawn with its saved options; init facts land when startup does. */
-  startup: ClaudeSessionStartup
+  /** Provider identity and initialize proof retained for the host-awaited open. */
+  link: AgentSessionProviderHandleLink
+  initialization: {
+    proof: ClaudeInitProof
+    account: ClaudeStructuredLaunch['account']
+    resumesTranscript: boolean
+    onLateRefusal: (error: Error) => void
+  }
 }
 
 export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAdapterDeps): string {
   return deps.mintAcquisitionGeneration?.() ?? randomUUID()
 }
 
-/**
- * The first-hand exit that removed a published session. Kept until the session
- * is acquired again so acquisition cleanup that arrives after the exit finds
- * what the ladder observed, not an absence it would otherwise report as proven.
- */
+/** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {
+  observedAt: number
   connection: ClaudeStreamJsonConnection
-  /** Full session identity retained until the exit settles. */
   session: ClaudeSession
   error: Error
   /** The exit path's first proof attempt; retries must observe this result. */
   closePromise?: Promise<boolean>
   /** Shared lifecycle settlement for concurrent proof retries. */
   settlementPromise?: Promise<void>
-  /** The whole ladder-then-settle tail, retained so a barrier can await an exit
-   *  that is observed but not yet published. Never rejects. */
+  /** Never-rejecting cleanup/settlement barrier for exits observed before lifecycle publication. */
   publication?: Promise<void>
 }
 
@@ -340,8 +339,6 @@ export async function cancelClaudeAcquisitionAttempt(
   })
 }
 
-/** What an acquisition hands back to the adapter that owns the session map:
- *  event delivery ordered against publication, and the two exit settlements. */
 export type ClaudeAcquireCallbacks = {
   deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
   emit: (

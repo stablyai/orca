@@ -37,8 +37,6 @@ describe('resolveWorktreeCreateRoute', () => {
   })
 
   it('lets an explicit local host win over a surviving connectionId', () => {
-    // A contradictory row. `getRepoExecutionHostId` answers `local`, which is what the runtime
-    // create sibling has always done; the raw read sent it remote.
     expect(
       resolveWorktreeCreateRoute(repoRow({ executionHostId: 'local', connectionId: HOST_A }))
     ).toEqual({ kind: 'local', hostId: 'local' })

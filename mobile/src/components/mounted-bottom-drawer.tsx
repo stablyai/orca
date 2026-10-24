@@ -14,7 +14,10 @@ import Animated, {
 import { spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
+import {
+  BOTTOM_DRAWER_HIDE_DURATION_MS,
+  BOTTOM_DRAWER_SHOW_DURATION_MS
+} from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
@@ -32,7 +35,6 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // so the drawer resists upward dragging — a subtle polish touch that signals
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
-const SHOW_DURATION = 180
 const TOP_SCROLL_EPSILON = 1
 
 export type MountedBottomDrawerProps = {
@@ -47,6 +49,8 @@ export type MountedBottomDrawerProps = {
   // preserved) but must not take touches, stack backdrops, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
+  /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
+  scrollResetKey?: string | null
 }
 
 export function MountedBottomDrawer({
@@ -58,12 +62,20 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
-  zIndex = 1000
+  zIndex = 1000,
+  scrollResetKey = null
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
+  const scrollRef = useRef<ScrollView>(null)
+  useEffect(() => {
+    if (scrollResetKey !== null) {
+      scrollRef.current?.scrollTo({ y: 0, animated: false })
+      scrollOffsetY.value = 0
+    }
+  }, [scrollOffsetY, scrollResetKey])
   const contentDragStartY = useSharedValue(0)
   const contentDragCanDismiss = useSharedValue(false)
   // Why: fill mode needs the keyboard inset in React layout (not only the
@@ -104,7 +116,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -112,7 +124,7 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
@@ -336,9 +348,10 @@ export function MountedBottomDrawer({
     <>
       {handle}
       <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false}>
+        <Animated.View collapsable={false} style={styles.scrollFrame}>
           <GestureDetector gesture={scrollGesture}>
             <Animated.ScrollView
+              ref={scrollRef}
               bounces={false}
               keyboardShouldPersistTaps="handled"
               onScroll={scrollHandler}
@@ -355,6 +368,7 @@ export function MountedBottomDrawer({
     <>
       {handle}
       <ScrollView
+        ref={scrollRef}
         bounces={false}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

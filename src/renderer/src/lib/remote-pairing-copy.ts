@@ -81,6 +81,11 @@ export function translateRemotePairingFailureDescription(
         'auto.components.settings.RuntimeHostAccessForm.saveFailedHelp',
         'The host was verified, but Orca could not save it. Check the name and local settings storage, then try again.'
       )
+    case 'different-server':
+      return translate(
+        'auto.components.settings.RuntimeHostAccessForm.differentServerHelp',
+        'This pairing link is for a different server. Create the link on the server you are re-pairing.'
+      )
     case 'host-unreachable':
       return translate(
         'auto.components.settings.RuntimeHostAccessForm.unavailableHelp',

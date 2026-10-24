@@ -71,6 +71,7 @@ export function traceShellStep(
     case 'page-painted':
     case 'page-back-claim':
     case 'page-ready-deadline':
+    case 'document-load-deadline':
     case 'layout-changed':
       return trace
   }
@@ -126,7 +127,7 @@ export function shellStallLine(
             `Web shell: page has not drawn after ${seconds}`,
             `build=${buildPrefix(state.buildId)} page ready=${yesNo(session.pageReady)} readyAsks=${trace.readyAsks} documentLoaded=${yesNo(trace.documentLoaded)}`
           )
-    case 'native-route':
+    case 'route-unavailable':
     case 'wall':
     case 'failed':
     case 'offline':
@@ -181,6 +182,10 @@ function eventLines(
       return before.pageReady
         ? []
         : [pageLine('warn', 'Web shell: page never said ready before the deadline')]
+    case 'document-load-deadline':
+      return before.documentLoaded || before.pageReady
+        ? []
+        : [pageLine('warn', 'Web shell: document never finished loading before the deadline')]
     case 'document-started':
     case 'document-loaded':
     case 'page-ready':
@@ -223,9 +228,10 @@ function transitionLine(
         ? flowLine('info', 'Web shell: activating app', 'source=download')
         : null
     case 'ready':
-    case 'native-route':
-      // `ready` is logged at paint; native is every native screen's normal outcome.
+      // Logged at paint.
       return null
+    case 'route-unavailable':
+      return flowLine('warn', 'Web shell: page does not serve this route')
     case 'wall': {
       const side = 'side' in after.verdict ? ` side=${after.verdict.side}` : ''
       return flowLine(

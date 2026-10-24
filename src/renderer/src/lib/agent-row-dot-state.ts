@@ -2,7 +2,7 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import type { AgentStatusEntry, AgentWorkingMode } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
 
 /**
  * Map an agent row's state onto the shared state-indicator vocabulary. One copy so the

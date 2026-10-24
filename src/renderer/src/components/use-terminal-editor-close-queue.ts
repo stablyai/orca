@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
 import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
@@ -59,12 +60,12 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (inFlightSaveFileIdRef.current === fileId) {
         return null
       }
-      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
-      if (!file) {
+      const state = useAppStore.getState()
+      if (!state.openFiles.some((candidate) => candidate.id === fileId)) {
         settleQueuedClose(fileId)
         continue
       }
-      if (!file.isDirty) {
+      if (!needsSavePromptOnClose(state, fileId)) {
         closeFile(fileId)
         settleQueuedClose(fileId)
         continue
@@ -119,8 +120,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (activeWorktreeId && isPinnedActiveEditorTab(state, activeWorktreeId, fileId)) {
         return
       }
-      const file = state.openFiles.find((candidate) => candidate.id === fileId)
-      if (file?.isDirty) {
+      if (needsSavePromptOnClose(state, fileId)) {
         queueEditorCloseRequests([fileId])
         return
       }

@@ -7,6 +7,7 @@ import {
   type TerminalOscColorQuerySlot
 } from '../../../../shared/terminal-osc-color-reply'
 import { guardParserHandler } from './terminal-parser-handler-guard'
+import { installProgramStatusQueryResponder } from '../../../../shared/program-status/query-responder'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
@@ -27,6 +28,8 @@ type TerminalCapabilityRepliesDeps = {
    *  answers jcode's burst anyway. Why skip at all: jcode themes itself, and the reply
    *  can land before its composer is ready and render as pre-typed text. */
   skipOscColorQueryReplies?: () => boolean
+  /** False while the pane's execution host cannot read OSC 7501 (see PROGRAM_STATUS_RUNTIME_CAPABILITY). */
+  answerProgramStatusQueries?: () => boolean
 }
 
 // Adds Sixel to a DA1 response so DA1-detecting image tools emit Sixel; idempotent.
@@ -188,7 +191,12 @@ export function installTerminalCapabilityReplyHandlers(
         }
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
       })
-    )
+    ),
+    installProgramStatusQueryResponder({
+      parser: deps.parser,
+      emitReply: deps.sendInput,
+      shouldReply: () => !deps.isReplaying() && deps.answerProgramStatusQueries?.() !== false
+    })
   ]
 
   return {

@@ -69,8 +69,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   })
 
   it('refuses torn bytes and leaves the account home intact', () => {
-    // Hash call 1 is the source pre-check; rotating right after it means `cp`
-    // reads bytes freshness never judged. Pre-guard, those reached the target.
+    // Hash 1 checks the source before a rotation can change the bytes copied for promotion.
     const outcome = runApplyScript({ rewriteAfterHashCall: 1 })
     expect(outcome.status).toBe(42)
     expect(outcome.targetAuth).toBe(TARGET_AUTH)
@@ -107,8 +106,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   })
 
   it('keeps the source pending when an unpromoted destination changes before deletion', () => {
-    // Hash call 3 is the pinned destination check; the quarantine recheck must
-    // observe this in-place rewrite before removing the source.
+    // Hash 3 pins destination bytes; later validation must catch a subsequent in-place rewrite.
     const outcome = runApplyScript({
       deleteSource: true,
       promoteAuth: false,
@@ -124,8 +122,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   })
 
   it('keeps the source pending when the destination changes after final precommit validation', () => {
-    // Hash call 9 validates the independent snapshot. A rewrite immediately
-    // afterward races the atomic cutover and must be detected on the old inode.
+    // Hash 9 validates the snapshot; detect a subsequent pre-cutover rewrite through the old inode.
     const outcome = runApplyScript({
       deleteSource: true,
       promoteAuth: false,
@@ -141,8 +138,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   })
 
   it('blocks destination rewrites after the final locked validation', () => {
-    // Hash call 12 is the installed read-only destination check. The shim's
-    // attempted in-place rewrite must fail before the source is retired.
+    // Hash 12 checks the installed read-only snapshot; the attempted rewrite must fail.
     const outcome = runApplyScript({
       deleteSource: true,
       promoteAuth: false,
@@ -159,7 +155,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   it('recovers the source and destination mode after abrupt interruption', () => {
     const outcome = runApplyScript({ deleteSource: true, killAfterSourceRemoval: true })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetMode).toBe(0o600)
@@ -172,7 +168,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       killAfterDestinationInstall: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetMode).toBe(0o600)
@@ -185,7 +181,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       killBeforeDestinationRecoveryLink: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.destinationRecoveryAuth).toBeNull()
     expect(outcome.destinationRecoveryPathExists).toBe(false)
@@ -199,7 +195,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       rewriteQuarantineBeforeRecovery: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.sourceRecoveryAuth).toBeNull()
     expect(outcome.sourceQuarantineAuth).toBe(NEWER_AUTH)
@@ -213,7 +209,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       replaceTargetBeforeRecovery: true
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetAuth).toBe(NEWER_AUTH)
     expect(outcome.destinationRecoveryAuth).toBe(SOURCE_AUTH)
@@ -352,7 +348,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       sourceSession: RETIRED_SESSION
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetSession).toBeNull()
     expect(outcome.markerExists).toBe(false)
@@ -365,7 +361,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       sourceSession: RETIRED_SESSION
     })
 
-    expect(outcome.status).not.toBe(0)
+    expect(outcome.signal).toBe('SIGKILL')
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.targetSession).toBe(RETIRED_SESSION)
     expect(outcome.sessionCommitMarkerExists).toBe(false)
@@ -445,14 +441,10 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
   })
 
   it('refuses to retire the source when the destination is atomically replaced after the inode pin', () => {
-    // Why this needs its own case: the pinned hard link keeps the ORIGINAL inode, so its hash
-    // still matches after another writer renames a different file over the destination path.
-    // Only the `-ef` inode-identity assertions can see that; hash checks cannot. Without them
-    // the script proceeds and retires the source, leaving the user with bytes nobody validated.
+    // A pinned inode's matching hash cannot detect path replacement; -ef must guard source retirement.
     const outcome = runApplyScript({ replaceTargetOnHashOf: '.orca-drain-destination-' })
 
     expect(outcome.status).not.toBe(0)
-    // The source is the only thing that must survive an unproven destination.
     expect(outcome.legacyAuth).toBe(SOURCE_AUTH)
     expect(outcome.markerExists).toBe(false)
   })

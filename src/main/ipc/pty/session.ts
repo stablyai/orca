@@ -10,7 +10,8 @@ import type {
 } from '../../../shared/pty-renderer-delivery-health'
 import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { PtyProducerFlowController } from '../pty-producer-flow-control'
-import { PtyPendingDataDrainQueue, type PendingPtyData } from '../pty-pending-data-drain-queue'
+import { PtyPendingDataDrainQueue } from '../pty-pending-data-drain-queue'
+import type { PendingPtyData } from '../pty-pending-data-drain-contract'
 import { activeRendererPtys } from './delivery/visibility-state'
 import {
   isHiddenPtyDeliveryGateEnabled,
@@ -49,7 +50,7 @@ export type PtyIpcSessionOptions = {
   prepareCodexSessionResume?: PrepareCodexSessionResume
   awaitLocalPtyStartup?: () => Promise<void>
   awaitLocalPtyProviderStartup?: () => Promise<void>
-  // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+  // Recovery reload must preserve live in-process PTYs until restore re-adopts them (#5787).
   isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   onPtyExit?: (id: string, exitSequence: number) => void
@@ -156,7 +157,12 @@ export type PtyIpcSession = {
   transitionHiddenRendererPtyDeliveryState: (
     id: string,
     hidden: boolean
-  ) => { droppable: boolean; droppedWhileHidden: boolean; policyChanged: boolean }
+  ) => {
+    droppable: boolean
+    droppedWhileHidden: boolean
+    hiddenDropEpisode?: number
+    policyChanged: boolean
+  }
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   rendererPtyIsKnownHidden: (id: string) => boolean
   schedulePendingDataAfterCreditReport: (creditedAny: boolean) => void
@@ -253,7 +259,7 @@ export function createPtyIpcSession(args: {
   session.pendingData = new PtyPendingDataDrainQueue(
     (id) => {
       const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
-      // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
+      // Hidden delivery can retire even when renderer credit is exhausted.
       if (shouldDropHiddenRendererPtyData(id, session.getSettings?.())) {
         return runnableLane
       }

@@ -112,28 +112,40 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
-const showPinnedInGroupsReader: RpcCompatibleReader<unknown, 'show-pinned-in-groups', boolean> = (
-  raw
-) => {
+type HostListSettings = {
+  showPinnedWorktreesInGroups: boolean
+  compactWorktreeCards: boolean
+  newCardStyle: boolean
+}
+
+// Why `=== true` throughout: a host predating a setting sends no key, and each desktop default is off.
+const hostListSettingsReader: RpcCompatibleReader<
+  unknown,
+  'host-list-settings',
+  HostListSettings
+> = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
-  const show: unknown =
-    settings == null ? undefined : settingsField(settings, 'showPinnedWorktreesInGroups')
+  const isOn = (key: string) => settings != null && settingsField(settings, key) === true
   return {
     compatible: true,
-    variant: 'show-pinned-in-groups',
-    // Why `=== true`: a host predating the setting sends no key; desktop's default is off.
-    value: show === true,
+    variant: 'host-list-settings',
+    value: {
+      showPinnedWorktreesInGroups: isOn('showPinnedWorktreesInGroups'),
+      compactWorktreeCards: isOn('compactWorktreeCards'),
+      newCardStyle: isOn('experimentalNewWorktreeCardStyle')
+    },
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
 }
 
-export const showPinnedWorktreesInGroupsRead = bindDeferredRpcOperation(
+/** The desktop settings the workspace list mirrors: pinned placement, Card layout and card style. */
+export const hostListSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'settings.show-pinned-worktrees-in-groups-or-skip',
+    name: 'settings.host-list-settings-or-skip',
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: showPinnedInGroupsReader
+    read: hostListSettingsReader
   })
 )
 

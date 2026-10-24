@@ -9,10 +9,8 @@ import {
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
-import {
-  settleStaleStructuredAgentSessionState,
-  settleStructuredAgentSessionDeadGeneration
-} from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase,
@@ -97,7 +95,7 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
   }
 
   function settle() {
-    return settleStructuredAgentSessionDeadGeneration({
+    return settleObservedExitForTest({
       journal,
       sessionId: SESSION,
       fence: 7,
@@ -398,12 +396,12 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
       WHEN NEW.session_id = '${SESSION}' AND json_extract(NEW.row_json, '$.recovered') = 1
         AND json_extract(NEW.row_json, '$.kind') = 'item'
       BEGIN SELECT RAISE(ABORT, 'item rejected after submission'); END`)
-        expect(await settleStructuredAgentSessionDeadGeneration(input)).toMatchObject({ ok: false })
+        expect(await settleObservedExitForTest(input)).toMatchObject({ ok: false })
         expect(journal.snapshot()).toEqual(before)
         expect(rows()).toEqual(diskBefore)
         expect(published).toEqual([])
         database.db.exec('DROP TRIGGER reject_submission_settlement_item')
-        expect(await settleStructuredAgentSessionDeadGeneration(input)).toEqual({ ok: true })
+        expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
         expect(journal.submission('unanswered')).toMatchObject({
           dispatchState: 'rejected',
           recovered: true,
@@ -412,7 +410,7 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
         const committed = rows().slice(diskBefore.length)
         expect(committed.filter((row) => row.kind === 'dispatch')).toHaveLength(1)
         expect(published).toEqual([journal.snapshot()])
-        expect(await settleStructuredAgentSessionDeadGeneration(input)).toEqual({ ok: true })
+        expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
         expect(rows().slice(diskBefore.length)).toEqual(committed)
         expect(published).toHaveLength(1)
       }

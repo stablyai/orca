@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { runProcessSync } from '@orca/process-host'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
@@ -70,7 +71,9 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
   [
     'react-doctor(no-derived-state-effect)',
     new Set([
-      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
+      'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts',
+      // The open-cycle reset effect predates this entry; it surfaced when its body changed.
+      'src/renderer/src/components/right-sidebar/useSourceControlAgentActionDialog.ts'
     ])
   ],
   [
@@ -143,7 +146,11 @@ function resolveBase(root, requestedBase) {
   throw new Error('Pass the pull request base SHA or make origin/main available locally.')
 }
 
-export function collectAddedLineRanges(root, requestedBase) {
+export function collectAddedLineRanges(
+  root,
+  requestedBase,
+  { includePath = (file) => isRootCodeQualityPath(file) && SOURCE_FILE_PATTERN.test(file) } = {}
+) {
   // On a pull_request checkout HEAD is the merge commit, so its first parent is the base side and
   // no merge base has to be computed. Resolving it first is what lets CI checkout shallowly: the
   // payload base SHA can lag HEAD^1 by any number of commits and need not be in the graph at all.
@@ -152,23 +159,44 @@ export function collectAddedLineRanges(root, requestedBase) {
   const comparisonBase =
     resolvePullRequestDiffBase(root, null) ??
     runGit(root, ['merge-base', resolveBase(root, requestedBase), 'HEAD']).trim()
-  const changedFiles = splitNullDelimited(
-    runGit(root, ['diff', '--name-only', '-z', '--diff-filter=ACMRTUB', comparisonBase, '--'])
+  const changedEntries = splitNullDelimited(
+    runGit(root, ['diff', '--name-status', '--find-renames', '-z', comparisonBase, '--'])
   )
+  const changedFiles = []
+  const renamedSources = new Map()
+  for (let index = 0; index < changedEntries.length;) {
+    const status = changedEntries[index++]
+    const source = changedEntries[index++]
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const destination = changedEntries[index++]
+      changedFiles.push(destination)
+      if (status.startsWith('R') && includePath(source)) {
+        renamedSources.set(destination, source)
+      }
+    } else if (status !== 'D') {
+      changedFiles.push(source)
+    }
+  }
   const untrackedFiles = splitNullDelimited(
     runGit(root, ['ls-files', '--others', '--exclude-standard', '-z'])
   )
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(path.join(root, file))
-    ) {
+    if (!includePath(file) || !existsSync(path.join(root, file))) {
       continue
     }
-    const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
+    const source = renamedSources.get(file)
+    const paths = source ? [source, file] : [file]
+    const diff = runGit(root, [
+      'diff',
+      '--find-renames',
+      '--unified=0',
+      '--no-color',
+      comparisonBase,
+      '--',
+      ...paths
+    ])
     const ranges = parseAddedLineRanges(diff)
     if (ranges.length > 0) {
       rangesByFile.set(file, ranges)
@@ -177,11 +205,7 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (
-      !isRootCodeQualityPath(file) ||
-      !SOURCE_FILE_PATTERN.test(file) ||
-      !existsSync(absolutePath)
-    ) {
+    if (!includePath(file) || !existsSync(absolutePath)) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
@@ -228,6 +252,55 @@ function normalizeSourceLine(line) {
   return line.replace(/\s+/g, ' ').trim()
 }
 
+function readBaseSourceBatch(root, comparisonBase, files) {
+  // Git 2.25 supports --batch; its newline protocol cannot represent newline paths.
+  if (files.some((file) => /[\r\n]/.test(`${comparisonBase}:${file}`))) {
+    return null
+  }
+  try {
+    const result = runProcessSync({
+      program: 'git',
+      args: ['cat-file', '--batch'],
+      cwd: root,
+      input: files.map((file) => `${comparisonBase}:${file}\n`).join(''),
+      captureStdoutAsBytes: true,
+      maxOutputBytes: 64 * 1024 * 1024,
+      timeoutMs: null
+    })
+    if (result.code !== 0 || !result.stdoutBytes) {
+      return null
+    }
+    const output = result.stdoutBytes
+    const sources = []
+    let offset = 0
+    for (const file of files) {
+      const end = output.indexOf(10, offset)
+      if (end === -1) {
+        return null
+      }
+      const header = output.subarray(offset, end).toString('utf8')
+      offset = end + 1
+      if (header === `${comparisonBase}:${file} missing`) {
+        continue
+      }
+      const match = /^[0-9a-f]{40}(?:[0-9a-f]{24})? blob (\d+)$/.exec(header)
+      if (!match) {
+        return null
+      }
+      const size = Number(match[1])
+      if (!Number.isSafeInteger(size) || output[offset + size] !== 10) {
+        return null
+      }
+      sources.push(output.subarray(offset, offset + size).toString('utf8'))
+      offset += size + 1
+    }
+    return offset === output.length ? sources : null
+  } catch {
+    // Preserve per-file reads when a batch exceeds the output limit or cannot run.
+    return null
+  }
+}
+
 export function collectBaseLineBlocks(root, comparisonBase, files = null) {
   // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
   // often deleted or renamed away. Deleted paths never reach the changed-file list
@@ -239,21 +312,32 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
       runGit(root, ['diff', '--name-only', '--no-renames', '-z', comparisonBase, '--'])
     ).filter((file) => SOURCE_FILE_PATTERN.test(file))
   const blocks = []
-  for (const file of paths) {
-    const result = spawnSync('git', ['show', `${comparisonBase}:${file}`], {
-      cwd: root,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024
-    })
-    if (result.status !== 0 || typeof result.stdout !== 'string') {
-      continue
+  for (let start = 0; start < paths.length; start += 32) {
+    const batch = paths.slice(start, start + 32)
+    let sources = readBaseSourceBatch(root, comparisonBase, batch)
+    if (sources === null) {
+      sources = []
+      for (const file of batch) {
+        try {
+          const result = runProcessSync({
+            program: 'git',
+            args: ['show', `${comparisonBase}:${file}`],
+            cwd: root,
+            maxOutputBytes: 64 * 1024 * 1024,
+            timeoutMs: null
+          })
+          if (result.code === 0) {
+            sources.push(result.stdout)
+          }
+        } catch {
+          // Failed source reads were already skipped by the per-file implementation.
+          continue
+        }
+      }
     }
-    blocks.push(
-      result.stdout
-        .split(/\r?\n/)
-        .map(normalizeSourceLine)
-        .filter((line) => line !== '')
-    )
+    for (const source of sources) {
+      blocks.push(source.split(/\r?\n/).map(normalizeSourceLine).filter(Boolean))
+    }
   }
   return blocks
 }

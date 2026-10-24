@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { EditorTabView } from '../editor-tab-view-types'
+import type { LayoutEditorView } from './layout-editor-view'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import type { CommandOf, LayoutCommand } from './workspace-layout-command-types'
 import {
@@ -157,44 +157,32 @@ describe('layout command refusals', () => {
     ).toBe('same_pane')
   })
 
+  it('movePaneToNewTab opens the chat pane’s new tab in chat view, as the window does', () => {
+    const { ctx, model, tabA, leafA, leafA2 } = setup()
+    const chat = build(
+      ctx,
+      [{ type: 'setChatPane', workspace: WS, tabId: tabA, leafId: leafA2 }],
+      model
+    ).model
+    const moveOut = (leafId: string) =>
+      build(ctx, [{ type: 'movePaneToNewTab', workspace: WS, tabId: tabA, leafId }], chat)
+    const chatMove = moveOut(leafA2)
+    const chatTab = chatMove.model.workspaces[WS]!.tabs.find(
+      (tab) => tab.id === chatMove.results[0]!.tabId
+    )
+    expect(chatTab).toMatchObject({ viewMode: 'chat', panes: { chatLeafId: leafA2 } })
+    const shellMove = moveOut(leafA)
+    const shellTab = shellMove.model.workspaces[WS]!.tabs.find(
+      (tab) => tab.id === shellMove.results[0]!.tabId
+    )
+    expect(shellTab).not.toHaveProperty('viewMode')
+  })
+
   it('movePaneToNewTab refuses the last pane, which moves as a tab instead', () => {
     const { model, tabB, leafB } = setup()
     expect(
       refusal(model, { type: 'movePaneToNewTab', workspace: WS, tabId: tabB, leafId: leafB })
     ).toBe('last_pane')
-  })
-
-  it('setPaneRatios accepts divider sizes only', () => {
-    const { model, tabA, leafA, leafA2 } = setup()
-    const root = terminalTab(model, tabA).panes!.root!
-    if (root.type !== 'split') {
-      throw new Error('expected a split')
-    }
-    expect(
-      refusal(model, {
-        type: 'setPaneRatios',
-        workspace: WS,
-        tabId: tabA,
-        root: { ...root, ratio: 0.3 }
-      })
-    ).toBe('applied')
-    const swapped = {
-      type: 'split' as const,
-      direction: 'vertical' as const,
-      first: { type: 'leaf' as const, leafId: leafA2 },
-      second: { type: 'leaf' as const, leafId: leafA }
-    }
-    expect(
-      refusal(model, { type: 'setPaneRatios', workspace: WS, tabId: tabA, root: swapped })
-    ).toBe('pane_structure_changed')
-    expect(
-      refusal(model, {
-        type: 'setPaneRatios',
-        workspace: WS,
-        tabId: tabA,
-        root: { type: 'leaf', leafId: leafA }
-      })
-    ).toBe('pane_structure_changed')
   })
 
   it('group commands refuse a missing group, a changed group set, and splitting a lone tab off itself', () => {
@@ -247,7 +235,7 @@ describe('layout command refusals', () => {
     ).toBe('invalid_params')
   })
 
-  it('startPane refuses a missing or sleeping pane; restartPane a missing one', () => {
+  it('startPane refuses a missing pane and starts a slept one from its record; restartPane refuses a missing one', () => {
     const { model, tabB, leafB } = setup()
     const paneKey = `${tabB}:${leafB}`
     expect(refusal(model, { type: 'startPane', workspace: WS, paneKey: 'nope:x' })).toBe(
@@ -272,10 +260,148 @@ describe('layout command refusals', () => {
       [{ type: 'sleep', workspace: WS, records: [record] }],
       model
     ).model
-    expect(refusal(slept, { type: 'startPane', workspace: WS, paneKey })).toBe('pane_sleeping')
-    const woken = build(testContext(), [{ type: 'wake', workspace: WS }], slept)
-    expect(woken.results[0]!.woken).toEqual([paneKey])
-    expect(refusal(woken.model, { type: 'startPane', workspace: WS, paneKey })).toBe('applied')
+    // The runtime's start resumes the agent the record names, so a slept pane starts from it.
+    expect(
+      applyLayoutCommand(slept, { type: 'startPane', workspace: WS, paneKey }, context)
+    ).toMatchObject({ ok: true, effects: { startPaneKeys: [paneKey] } })
+    // A wake starts the pane and keeps its record; a record-only wake drops it.
+    const woken = applyLayoutCommand(slept, { type: 'wake', workspace: WS }, context)
+    expect(woken).toMatchObject({
+      ok: true,
+      result: { woken: [paneKey] },
+      effects: { startPaneKeys: [paneKey] }
+    })
+    expect(woken.ok && woken.model).toEqual(slept)
+    const dropped = build(testContext(), [{ type: 'wake', workspace: WS, recordOnly: true }], slept)
+    expect(dropped.results[0]!.woken).toEqual([paneKey])
+    expect(dropped.model.workspaces[WS]!.leaves?.[leafB]?.sleeping).toBeUndefined()
+  })
+
+  it('startPane leaves a live pane with a resume record alone, and starts one restoring from its record', () => {
+    const { model, tabB, leafB } = setup()
+    const paneKey = `${tabB}:${leafB}`
+    const sleeping = {
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 's' },
+      prompt: 'p',
+      state: 'working' as const,
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live' as const
+    }
+    const withLeaf = (leaf: { ptyId?: string }): WorkspaceLayoutModel => {
+      const workspace = model.workspaces[WS]!
+      return {
+        ...model,
+        workspaces: {
+          ...model.workspaces,
+          [WS]: { ...workspace, leaves: { ...workspace.leaves, [leafB]: { ...leaf, sleeping } } }
+        }
+      }
+    }
+    const start = { type: 'startPane', workspace: WS, paneKey } as const
+    expect(applyLayoutCommand(withLeaf({ ptyId: 'pty-b' }), start, context)).toMatchObject({
+      ok: true,
+      effects: { startPaneKeys: [] }
+    })
+    // Its terminal is gone, or a start status says its binding is what it restores from.
+    expect(applyLayoutCommand(withLeaf({}), start, context)).toMatchObject({
+      ok: true,
+      effects: { startPaneKeys: [paneKey] }
+    })
+    expect(
+      applyLayoutCommand(withLeaf({ ptyId: 'pty-b' }), start, {
+        ...context,
+        isBindingLive: (key) => key !== paneKey
+      })
+    ).toMatchObject({ ok: true, effects: { startPaneKeys: [paneKey] } })
+  })
+
+  it('startPane replaces an empty shell a hibernated agent left, as a restart does', () => {
+    const { model, tabB, leafB } = setup()
+    const paneKey = `${tabB}:${leafB}`
+    const workspace = model.workspaces[WS]!
+    const bound: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        ...model.workspaces,
+        [WS]: { ...workspace, leaves: { ...workspace.leaves, [leafB]: { ptyId: 'pty-b' } } }
+      }
+    }
+    const start = { type: 'startPane', workspace: WS, paneKey } as const
+
+    const applied = applyLayoutCommand(bound, start, {
+      ...context,
+      retiresBinding: (key, ptyId) => key === paneKey && ptyId === 'pty-b'
+    })
+
+    expect(applied).toMatchObject({
+      ok: true,
+      effects: { stopPtyIds: ['pty-b'], startPaneKeys: [paneKey] }
+    })
+    expect(applied.ok && applied.model.workspaces[WS]!.leaves?.[leafB]?.ptyId).toBeUndefined()
+  })
+
+  it('a record-only sleep and wake change the resume record and stop or start nothing', () => {
+    const { model, tabB, leafB } = setup()
+    const paneKey = `${tabB}:${leafB}`
+    const workspace = model.workspaces[WS]!
+    const bound: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        ...model.workspaces,
+        [WS]: { ...workspace, leaves: { ...workspace.leaves, [leafB]: { ptyId: 'pty-b' } } }
+      }
+    }
+    const record = {
+      paneKey,
+      tabId: tabB,
+      worktreeId: WS,
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 's' },
+      prompt: 'p',
+      state: 'working' as const,
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live' as const
+    }
+    const sleep: CommandOf<'sleep'> = {
+      type: 'sleep',
+      workspace: WS,
+      paneKeys: [paneKey],
+      records: [record]
+    }
+    expect(applyLayoutCommand(bound, sleep, context)).toMatchObject({
+      effects: { stopPtyIds: ['pty-b'] }
+    })
+
+    const recorded = applyLayoutCommand(bound, { ...sleep, recordOnly: true }, context)
+    expect(recorded).toMatchObject({ ok: true, effects: { stopPtyIds: [] } })
+    const recordedModel = recorded.ok ? recorded.model : bound
+    // A running agent's capture is its resume record, not a sleep.
+    expect(recordedModel.workspaces[WS]!.leaves![leafB]).toEqual({
+      ptyId: 'pty-b',
+      resume: {
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 's' },
+        prompt: 'p',
+        state: 'working',
+        capturedAt: 1,
+        updatedAt: 1,
+        origin: 'live'
+      }
+    })
+    const cleared = applyLayoutCommand(
+      recordedModel,
+      { type: 'wake', workspace: WS, paneKeys: [paneKey], recordOnly: true },
+      context
+    )
+    expect(cleared).toMatchObject({
+      ok: true,
+      result: { woken: [paneKey] },
+      effects: { startPaneKeys: [] }
+    })
+    expect(cleared.ok && cleared.model.workspaces[WS]!.leaves![leafB]).toEqual({ ptyId: 'pty-b' })
   })
 })
 
@@ -384,6 +510,115 @@ describe('layout command effects', () => {
     )
   })
 
+  it('a window drag-out names the tab, outranks a stale binding and moves a last pane', () => {
+    const { model, tabA, tabB, leafA2, leafB, ctx } = setup()
+    const workspace = model.workspaces[WS]!
+    const withData: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        [WS]: {
+          ...workspace,
+          leaves: { ...workspace.leaves, [leafA2]: { ptyId: 'pty-old', incarnationId: 'inc' } }
+        }
+      }
+    }
+    const stale = build(
+      ctx,
+      [
+        {
+          type: 'movePaneToNewTab',
+          workspace: WS,
+          tabId: tabA,
+          leafId: leafA2,
+          windowDetach: { ptyId: 'pty-live', tabId: 'tab-main' }
+        }
+      ],
+      withData
+    )
+    expect(stale.results[0]).toEqual({ tabId: 'tab-main', ptyId: 'pty-live' })
+    expect(stale.model.workspaces[WS]!.leaves?.[leafA2]).toEqual({ ptyId: 'pty-live' })
+    // A copy that never bound the pane keeps its incarnation, as the desktop's move does.
+    const unbound = applyLayoutCommand(
+      {
+        ...model,
+        workspaces: {
+          [WS]: {
+            ...workspace,
+            leaves: { ...workspace.leaves, [leafA2]: { incarnationId: 'inc' } }
+          }
+        }
+      },
+      {
+        type: 'movePaneToNewTab',
+        workspace: WS,
+        tabId: tabA,
+        leafId: leafA2,
+        windowDetach: { ptyId: 'pty-live', tabId: 'tab-main' }
+      },
+      ctx
+    )
+    expect(unbound.ok && unbound.model.workspaces[WS]!.leaves?.[leafA2]).toEqual({
+      ptyId: 'pty-live',
+      incarnationId: 'inc'
+    })
+
+    // Main's copy lacks the window's other panes, so the tab stays for them (no rule check: to
+    // main's copy alone it reads as the tab re-ided).
+    const last = applyLayoutCommand(
+      model,
+      {
+        type: 'movePaneToNewTab',
+        workspace: WS,
+        tabId: tabB,
+        leafId: leafB,
+        windowDetach: { ptyId: null }
+      },
+      ctx
+    )
+    if (!last.ok) {
+      throw new Error(last.code)
+    }
+    const newTabId = last.result.tabId!
+    expect(terminalTab(last.model, newTabId).panes.root).toEqual({ type: 'leaf', leafId: leafB })
+    expect(terminalTab(last.model, tabB).panes.root).toBeNull()
+    expect(last.result.ptyId).toBeNull()
+  })
+
+  it('a window drag-out starts an unbound pane’s new tab in the pane’s folder', () => {
+    const { model, tabA, leafA2, ctx } = setup()
+    const workspace = model.workspaces[WS]!
+    const withCwd: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        [WS]: {
+          ...workspace,
+          tabs: workspace.tabs.map((tab) =>
+            tab.id === tabA && tab.kind === 'terminal'
+              ? { ...tab, terminal: { ...tab.terminal, startupCwd: '/w' } }
+              : tab
+          )
+        }
+      }
+    }
+    const drag = (ptyId: string | null) =>
+      build(
+        ctx,
+        [
+          {
+            type: 'movePaneToNewTab',
+            workspace: WS,
+            tabId: tabA,
+            leafId: leafA2,
+            windowDetach: { ptyId, tabId: 'tab-main', startupCwd: '/w/packages/app' }
+          }
+        ],
+        withCwd
+      ).model
+    expect(terminalTab(drag(null), 'tab-main').terminal.startupCwd).toBe('/w/packages/app')
+    // A bound pane keeps its shell; its new tab keeps the source tab's folder.
+    expect(terminalTab(drag('pty-live'), 'tab-main').terminal.startupCwd).toBe('/w')
+  })
+
   it('equalizes same-axis panes into equal shares', () => {
     const { model, tabA, leafA2, ctx } = setup()
     const three = build(
@@ -431,11 +666,14 @@ describe('layout command effects', () => {
     expect(entities).not.toContain('/w/b.ts')
   })
 
-  const viewedOpens: [string, CommandOf<'openEditorTab'>, EditorTabView, string[]][] = [
+  const viewedOpens: [string, CommandOf<'openEditorTab'>, LayoutEditorView, string[]][] = [
     [
       'a diff tab',
       { type: 'openEditorTab', workspace: WS, fileId: '/w', contentType: 'diff' },
-      { mode: 'diff', diffSource: 'combined-all', combinedAreaFilter: 'staged' },
+      {
+        view: { mode: 'diff', diffSource: 'combined-all', combinedAreaFilter: 'staged' },
+        file: { filePath: '/w', relativePath: 'All Changes', language: 'plaintext' }
+      },
       ['/w/a.ts']
     ],
     [
@@ -448,13 +686,16 @@ describe('layout command effects', () => {
         file: { filePath: '/w/b.ts', relativePath: 'b.ts', language: 'typescript' }
       },
       {
-        mode: 'edit',
-        conflict: {
-          kind: 'conflict-editable',
-          conflictKind: 'both_modified',
-          conflictStatus: 'unresolved',
-          conflictStatusSource: 'git'
-        }
+        view: {
+          mode: 'edit',
+          conflict: {
+            kind: 'conflict-editable',
+            conflictKind: 'both_modified',
+            conflictStatus: 'unresolved',
+            conflictStatusSource: 'git'
+          }
+        },
+        file: { filePath: '/w/b.ts', relativePath: 'b.ts', language: 'typescript' }
       },
       ['/w/a.ts', '/w/b.ts']
     ]
@@ -507,5 +748,66 @@ describe('layout command effects', () => {
     expect(
       opened.model.workspaces[WS]!.tabs.find((tab) => tab.id === session!.tabId)
     ).toMatchObject({ kind: 'agent-session', entityId: 'sess-1', agentSessionAgent: 'codex' })
+  })
+
+  it('creates a terminal tab at the time the window drew it, else now', () => {
+    const ctx = testContext()
+    const { model, results } = build(ctx, [
+      { type: 'createTerminalTab', workspace: WS, createdAt: 42 },
+      { type: 'createTerminalTab', workspace: WS }
+    ])
+    expect(terminalTab(model, results[0]!.tabId!).createdAt).toBe(42)
+    expect(terminalTab(model, results[1]!.tabId!).createdAt).toBeGreaterThan(42)
+  })
+
+  it('creates a terminal tab with the quick command label the window drew it with', () => {
+    const { model, results } = build(testContext(), [
+      { type: 'createTerminalTab', workspace: WS, quickCommandLabel: 'Dev server' },
+      { type: 'createTerminalTab', workspace: WS }
+    ])
+    expect(terminalTab(model, results[0]!.tabId!).quickCommandLabel).toBe('Dev server')
+    expect(terminalTab(model, results[1]!.tabId!)).not.toHaveProperty('quickCommandLabel')
+  })
+
+  it('opens an editor tab at the time the window drew it, else now', () => {
+    const ctx = testContext()
+    const open = { type: 'openEditorTab', workspace: WS, contentType: 'editor' } as const
+    const { model, results } = build(ctx, [
+      { ...open, fileId: '/w/a.ts', createdAt: 42 },
+      { ...open, fileId: '/w/b.ts' }
+    ])
+    const createdAt = (tabId: string) =>
+      model.workspaces[WS]!.tabs.find((tab) => tab.id === tabId)!.createdAt
+    expect(createdAt(results[0]!.tabId!)).toBe(42)
+    expect(createdAt(results[1]!.tabId!)).toBeGreaterThan(42)
+  })
+
+  it('forgets an ended launch agent on a terminal tab only', () => {
+    const ctx = testContext()
+    const { model, results } = build(ctx, [
+      { type: 'createTerminalTab', workspace: WS, creation: { launchAgent: 'claude' } },
+      {
+        type: 'openEditorTab',
+        workspace: WS,
+        fileId: '/w/a.ts',
+        contentType: 'editor',
+        file: { filePath: '/w/a.ts', relativePath: 'a.ts', language: 'typescript' }
+      }
+    ])
+    const [terminal, editor] = results
+    const cleared = build(
+      ctx,
+      [{ type: 'setTabProps', workspace: WS, tabId: terminal!.tabId!, clearLaunchAgent: true }],
+      model
+    ).model
+    expect(terminalTab(cleared, terminal!.tabId!).terminal).toEqual({ defaultTitle: 'Terminal 1' })
+    expect(
+      refusal(model, {
+        type: 'setTabProps',
+        workspace: WS,
+        tabId: editor!.tabId!,
+        clearLaunchAgent: true
+      })
+    ).toBe('invalid_params')
   })
 })

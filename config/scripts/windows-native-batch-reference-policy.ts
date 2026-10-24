@@ -16,6 +16,10 @@ const references = new Map([
     'config/scripts/capture-windows-native-environment.cmd'
   ],
   [
+    'config/scripts/orcad-windows-prebuild-cache.mjs',
+    'config/scripts/capture-windows-native-environment.cmd'
+  ],
+  [
     'config/scripts/windows-native-toolchain-routing.test.mjs',
     'config/scripts/capture-windows-native-environment.cmd'
   ],

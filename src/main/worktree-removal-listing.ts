@@ -16,11 +16,7 @@ export type PendingWorktreeRemovals = ReadonlyMap<string, WorktreeRemovalRecord>
 
 const NO_PENDING_REMOVALS: PendingWorktreeRemovals = new Map()
 
-/**
- * Git's rows for a local repo plus one for each removal this host still owns whose checkout Git no
- * longer lists but is still on disk: a failed delete (carrying its error) or one still finishing.
- * A failed delete ends here once its checkout is gone or a different checkout took the path.
- */
+/** Keep unregistered removal leftovers visible until the folder disappears or a different checkout replaces it. */
 export async function withUnregisteredRemovalCheckouts(
   repoId: string,
   gitWorktrees: GitWorktreeInfo[]
@@ -60,15 +56,12 @@ export async function withUnregisteredRemovalCheckouts(
   return leftovers.length === 0 ? gitWorktrees : [...gitWorktrees, ...leftovers]
 }
 
-/** Taken before a listing reads Git; pass it to projectPendingWorktreeRemovals with the rows. */
+/** Capture before reading Git so completed deletes cannot reappear from stale rows. */
 export function snapshotPendingWorktreeRemovals(): PendingWorktreeRemovals {
   return pendingWorktreeRemovals.size === 0 ? NO_PENDING_REMOVALS : new Map(pendingWorktreeRemovals)
 }
 
-/**
- * Marks rows whose checkout this host is deleting, or leaves them out for a client that cannot
- * read the marker: such a client already dropped the row on acceptance and would re-show it.
- */
+/** Older clients cannot read removing markers; omit pending rows they already dropped on acceptance. */
 export function projectPendingWorktreeRemovals<
   T extends { hostId?: ExecutionHostId; removing?: true }
 >(
@@ -91,7 +84,7 @@ export function projectPendingWorktreeRemovals<
       continue
     }
     const scanned = local ? pendingAtScan.get(id) : undefined
-    // Why: Git was read before this delete finished; unmarked, the gone row reads as a failed delete.
+    // Git was read before deletion finished; do not resurrect the stale row as a failed delete.
     if (!scanned || !finishedWorktreeRemovals.has(scanned)) {
       projected.push(row)
     }

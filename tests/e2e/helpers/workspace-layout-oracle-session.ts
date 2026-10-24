@@ -151,10 +151,7 @@ export async function runOracleScenario(
     })
     return run.oracle.findings
   } finally {
-    if (app) {
-      await session.close(app)
-    }
-    await session.dispose()
+    await session.dispose(app ?? undefined)
   }
 }
 

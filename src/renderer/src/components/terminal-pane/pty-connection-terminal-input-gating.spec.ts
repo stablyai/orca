@@ -630,48 +630,7 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
         prompt: 'disconnected input',
         updatedAt: 1_000,
         stateStartedAt: 900,
-        agentType: 'codex',
-        stateHistory: []
-      }
-
-      const pane = createPane(1)
-      const terminalTarget = createKeyboardEventTarget()
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
-      ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      vi.advanceTimersByTime(500)
-
-      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
-    })
-
-    it('does not infer interrupts when the main process rejects acknowledged input', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const transport = createMockTransport('pty-mobile-race')
-      transport.sendInputAccepted = vi.fn().mockResolvedValue(false)
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        paneKey,
-        state: 'working',
-        prompt: 'mobile race input',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'codex',
+        agentType: 'custom-agent',
         stateHistory: []
       }
 
@@ -692,7 +651,51 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       await flushAsyncTicks()
-      vi.advanceTimersByTime(500)
+      await vi.advanceTimersByTimeAsync(500)
+      await flushAsyncTicks()
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+    })
+
+    it('does not infer interrupts when the main process rejects acknowledged input', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+
+      vi.useFakeTimers()
+      vi.setSystemTime(1_100)
+      const transport = createMockTransport('pty-mobile-race')
+      transport.sendInputAccepted = vi.fn().mockResolvedValue(false)
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        paneKey,
+        state: 'working',
+        prompt: 'mobile race input',
+        updatedAt: 1_000,
+        stateStartedAt: 900,
+        agentType: 'custom-agent',
+        stateHistory: []
+      }
+
+      const pane = createPane(1)
+      const terminalTarget = createKeyboardEventTarget()
+      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+      ;(onDataHandler as unknown as (data: string) => void)('\x03')
+      await flushAsyncTicks()
+      await vi.advanceTimersByTimeAsync(500)
+      await flushAsyncTicks()
 
       expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
       expect(transport.sendInput).not.toHaveBeenCalled()
@@ -751,12 +754,12 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       // The surviving tail of `echo hi; rm -rf x`: reaching the fresh shell would
       // let the user's own Enter run `rm -rf x` (#10065 follow-up).
       sendTerminalInputThroughPane(pane, 'cho hi; rm -rf x')
-      expect(transport.sendInput).not.toHaveBeenCalledWith('cho hi; rm -rf x')
+      expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('cho hi; rm -rf x')
       // A program that queries during reattach hangs if its reply is dropped.
       sendTerminalInputThroughPane(pane, '\x1b[3;1R')
       expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[3;1R')
       sendTerminalInputThroughPane(pane, '\r')
-      expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
+      expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\r')
       // The terminator disarmed it, so the next real command reaches the shell.
       sendTerminalInputThroughPane(pane, 'ls\r')
       expect(transport.sendInput).toHaveBeenCalledWith('ls\r', 'query-reply')

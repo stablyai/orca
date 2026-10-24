@@ -4,12 +4,8 @@ import { MobileFileExplorerPanel } from '../../../../src/files/MobileFileExplore
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 /**
- * Web sibling for the file explorer.
- *
- * This page is what the shell renders for this route, so there is no shell to mount here and no
- * flag to read: the switch already happened natively. Its native file also reaches
- * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
- * browser, which is what the page opening this route would hit.
+ * The page's route for the file explorer: the screen itself. The native route file mounts the shell, whose
+ * native view module throws at import in a browser, and the manifest imports every route.
  */
 export default withWorkspaceRoute(function MobileFileExplorerScreen() {
   // Through `firstParam`, as the native sibling does. The page reaches this route only through

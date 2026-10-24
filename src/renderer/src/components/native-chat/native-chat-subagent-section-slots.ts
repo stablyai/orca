@@ -23,7 +23,10 @@ import {
   type NativeChatSubagentRosterState,
   type NativeChatSubagentSections
 } from './native-chat-subagent-sections'
-import { nativeChatRowRendersProse, nativeChatRowSpeaksOrActs } from './native-chat-trailing-run'
+import {
+  nativeChatRowRendersProse,
+  nativeChatRowSpeaksOrActs
+} from '../../../../shared/native-chat-trailing-run'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 /** The head of a section no loaded roster row holds: it names whose rows follow it. */

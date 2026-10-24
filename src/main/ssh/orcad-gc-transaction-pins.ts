@@ -5,14 +5,14 @@
  * A held fence without a journal, or a journal this client cannot read, means a transaction
  * this client cannot see into, so GC keeps everything rather than guess.
  */
-import { orcadInstallDirNames } from './orcad-activation-record'
-import type { OrcadActivationTransaction } from './orcad-activation-transaction'
-import { readOrcadActivationTransaction } from './orcad-activation-transaction-store'
-import { orcadActivationFenceExists } from './orcad-activation-lock'
-import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
-import type { OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
+import { orcadInstallDirNames } from '../managed-server/activation/orcad-activation-record'
+import type { OrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction'
+import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
+import { orcadActivationFenceExists } from '../managed-server/activation/orcad-activation-lock'
+import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
+import type { OrcadRemoteExecTarget } from '../managed-server/install/orcad-remote-runtime-control'
 
-export type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
+type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
 
 function transactionVersions(transaction: OrcadActivationTransaction): (string | null)[] {
   const records = [transaction.recordBefore, transaction.recordAfter]

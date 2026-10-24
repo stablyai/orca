@@ -1,5 +1,4 @@
-// A Codex that keeps reconnecting is working, so the idle sweep must not stop it. Every retry
-// frame writes and publishes its own row, and that publish is the activity the sweep reads.
+// Published retry rows count as activity, keeping reconnecting sessions alive.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,6 +50,9 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   const store = await openTestAgentSessionRecordStore(root)
   const adapter: StructuredAgentSessionAdapter = {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: async ({ fence, spawnToken, events }) => {
       sink = events ?? null
       return {
@@ -100,7 +102,7 @@ describe('a Codex reconnecting a dropped stream', () => {
     }
     const translator = createCodexJournalTranslator({ sink, primaryThreadId: () => THREAD })
 
-    // Five frames ten minutes apart: fifty minutes, well past the thirty-minute idle window.
+    // Continue retries beyond the idle window.
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       clock += RETRY_GAP_MS
       translator.handle({
@@ -130,7 +132,6 @@ describe('a Codex reconnecting a dropped stream', () => {
       )
     )
 
-    // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await host.collaboratorsForTests().lifetime.idleSweep.tick()
     await vi.waitFor(() => {

@@ -160,8 +160,9 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
       capturedDataCallback.current?.('\x1b[48')
       expect(refresh).not.toHaveBeenCalled()
+      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
 
-      capturedDataCallback.current?.(';2;52;52;52m codex block text \x1b[0m\r\n')
+      capturedDataCallback.current?.(';2;52;52;52m codex block \x1b[0m\r\n')
 
       expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
       expect(refresh).toHaveBeenCalledWith(0, 39, true)
@@ -215,6 +216,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       transportFactoryQueue.push(transport)
 
       const pane = createPane(1)
+      const manager = createManager(1)
       const refresh = vi.fn()
       const terminal = pane.terminal as typeof pane.terminal & {
         _core?: { refresh: typeof refresh }
@@ -224,13 +226,14 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
         callback?.()
       })
 
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+      connectPanePty(pane as never, manager as never, createDeps() as never)
       await flushAsyncTicks(6)
 
       capturedDataCallback.current?.(
         '\x1b[2J\x1b[H\x1b[48;2;52;52;52m codex block text \x1b[0m\r\n'
       )
       expect(refresh).toHaveBeenCalledWith(0, 39, true)
+      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
 
       refresh.mockClear()
       capturedDataCallback.current?.('plain follow-up output\r\n')

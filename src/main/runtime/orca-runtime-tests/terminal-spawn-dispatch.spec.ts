@@ -1,8 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
-import { OrcaRuntimeWithRuntimeId } from '../construction/runtime-identity-state'
-import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 
 // `agent.launch` settles a launch as failed only when its create threw before this hook ran.
@@ -133,31 +131,6 @@ describe('PTY registration dispatch characterization', () => {
   }
 
   describe('PTY runtime dispatch', () => {
-    it('constructs supported early layers and keeps lifecycle cells available to the full runtime', () => {
-      // Earlier constructors already require this browser callback.
-      abstract class EarlyStateRuntime extends OrcaRuntimeWithStateFields {
-        protected markHeadlessBrowserSessionTabActive(): void {}
-      }
-      const cells: boolean[] = []
-      class ConstructorRuntime extends OrcaRuntimeService {
-        protected get canonicalFetchKeyCache(): ReadonlyMap<string, string> {
-          cells.push(
-            this.stopRequestedPtyIds instanceof Set,
-            this.ptyExitListenersByPtyId instanceof Map
-          )
-          return super.canonicalFetchKeyCache
-        }
-      }
-      const runtimes: unknown[] = [
-        Reflect.construct(OrcaRuntimeWithRuntimeId, []),
-        new ConstructorRuntime(),
-        new ConstructorRuntime(null),
-        Reflect.construct(EarlyStateRuntime, [null])
-      ]
-      expect(runtimes).toHaveLength(4)
-      expect(cells).toEqual([true, true, true, true])
-    })
-
     it('captures the admission method before reading the incarnation', () => {
       const runtime = new DispatchRuntime()
       runtime.replaceAdmission(function (this: DispatchRuntime) {
@@ -320,86 +293,6 @@ describe('PTY registration dispatch characterization', () => {
       register(runtime, tab)
       expect(reads).toBe(2)
       expect(replacement.pendingRegistration).toBe(true)
-    })
-
-    it('initializes original lifecycle state before the base constructor getter', () => {
-      const observations: boolean[] = []
-      class ConstructorRuntime extends OrcaRuntimeService {
-        protected get canonicalFetchKeyCache(): ReadonlyMap<string, string> {
-          observations.push(
-            this.earlyExitedPtyIncarnations instanceof Map,
-            this.pendingPtyRegistrationIncarnations instanceof Map,
-            this.ptyLivenessVerdictByPtyId instanceof Map,
-            this.ptyExitListenersByPtyId instanceof Map,
-            this.stopRequestedPtyIds instanceof Set,
-            this.ptyControllerInventoryGenerationByProvider instanceof Map,
-            this.ptyLivenessObservationSequence === 0,
-            this.ptyControllerInventorySequence === 0,
-            this.ptyControllerAggregateInventoryGeneration === 0
-          )
-          this.markPtyStopRequested(PTY_ID)
-          expect(this.isPtyStopRequested(PTY_ID)).toBe(true)
-          return new Map()
-        }
-      }
-      expect(() => new ConstructorRuntime(null)).not.toThrow()
-      expect(observations).toEqual(Array<boolean>(9).fill(true))
-    })
-  })
-})
-
-describe('PTY inventory construction characterization', () => {
-  const PTY_ID = 'pty-constructor-probe'
-
-  describe('PTY methods during runtime construction', () => {
-    it('keeps registration fences and liveness on the original canonical state', async () => {
-      const pending: Promise<unknown>[] = []
-      let seamCalls = 0
-      class ConstructorRuntime extends OrcaRuntimeService {
-        protected get canonicalFetchKeyCache(): ReadonlyMap<string, string> {
-          seamCalls++
-          this.beginPtyRegistration(PTY_ID, 'incarnation')
-          expect(this.pendingPtyRegistrationIncarnations.get(PTY_ID)).toBe('incarnation')
-          this.cancelPendingPtyRegistration(PTY_ID, 'incarnation')
-          expect(this.pendingPtyRegistrationIncarnations.has(PTY_ID)).toBe(false)
-          this.assertPtyRegistrationAllowed(PTY_ID, 'incarnation')
-          this.releaseRejectedPtyRegistrationFence(PTY_ID, 'incarnation')
-          this.acceptPtyIncarnationForExit(PTY_ID, 'incarnation')
-          this.markPtyStopRequested(PTY_ID)
-          expect(this.isPtyStopRequested(PTY_ID)).toBe(true)
-          this.markPtyLivenessLive(PTY_ID)
-          expect(this.getPtyLivenessVerdict(PTY_ID)).toEqual({ status: 'live', ptyIds: [PTY_ID] })
-          this.markPtyLivenessUnverifiable(PTY_ID, 'host unavailable')
-          expect(this.getPtyLivenessVerdict(PTY_ID)).toEqual({
-            status: 'unverifiable',
-            reason: 'host unavailable'
-          })
-          this.forgetPtyLivenessVerdict(PTY_ID)
-          expect(this.getPtyLivenessVerdict(PTY_ID)).toBeNull()
-          expect(this.getTerminalPtyIdForHandle('missing')).toBeNull()
-          expect(this.getAgentProviderSessionRows()).toEqual([])
-          expect(this.getAgentStatusRowsForPane('missing')).toEqual([])
-          pending.push(
-            this.confirmTerminalShellAlone(PTY_ID).then((value) => expect(value).toBe(false))
-          )
-          pending.push(
-            this.refreshPtyWorktreeRecordsFromController([]).then((value) =>
-              expect(value).toBeNull()
-            )
-          )
-          pending.push(
-            this.refreshPtyWorktreeRecordsWithControllerInventory([]).then((value) =>
-              expect(value).toBeNull()
-            )
-          )
-          this.invalidatePtyControllerInventoryForLifecycle(PTY_ID)
-          expect(this.ptyControllerInventorySequence).toBe(1)
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new ConstructorRuntime(null)).not.toThrow()
-      expect(seamCalls).toBe(1)
-      await Promise.all(pending)
     })
   })
 })

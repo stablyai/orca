@@ -11,7 +11,7 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { JiraSite } from '../../../../shared/jira-types'
+import type { JiraSite } from '../../../../shared/jira/jira-types'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
 
 const ROW_ITEM_CLASS_NAME = 'gap-2 px-3 py-2 text-xs'

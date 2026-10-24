@@ -64,7 +64,6 @@ describe('packed-refs lock ownership', () => {
 
   it('refuses a lock it cannot prove is its own', async () => {
     const commonDir = await gitCommonDir()
-    // A lock with no marker belongs to the user's own git, or to another tool.
     await writeFile(paths(commonDir).lock, 'someone else')
 
     await expect(new PackRefsLockOwnership(commonDir).claim()).resolves.toMatchObject({ ok: false })
@@ -84,7 +83,6 @@ describe('packed-refs lock ownership', () => {
   })
 
   it('reclaims the lock its own dead process left behind', async () => {
-    // SIGKILL and power loss bypass git's cleanup, and git never clears this itself.
     const commonDir = await gitCommonDir()
     const { lock, marker } = paths(commonDir)
     await writeFile(lock, 'abandoned mid-rewrite')
@@ -100,8 +98,7 @@ describe('packed-refs lock ownership', () => {
   })
 
   it('leaves a young lock alone even when the marker names a dead process', async () => {
-    // A marker outlives its lock, so a foreign lock can appear after our death.
-    // Age is the only thing separating our wreckage from somebody's live lock.
+    // Markers can outlive locks; a fresh foreign lock must remain untouched.
     const commonDir = await gitCommonDir()
     const { lock, marker } = paths(commonDir)
     await writeFile(marker, JSON.stringify({ pid: DEAD_PID }))
@@ -150,9 +147,7 @@ describe('packed-refs lock ownership', () => {
 
 describe('stranded per-ref locks', () => {
   it('clears the empty refs/**/*.lock files its own dead process left behind', async () => {
-    // `tempfile.c` opens the lock O_EXCL before linking it into the list the
-    // signal handler walks, so a kill in that window leaves a 0-byte file that
-    // Git never clears -- and `update-ref -d` on that ref then fails forever.
+    // Git can die between O_EXCL creation and registering signal cleanup, leaving a persistent empty lock.
     const commonDir = await gitCommonDir()
     const namespace = join(commonDir, 'refs', 'remotes', 'origin')
     await mkdir(namespace, { recursive: true })
@@ -163,7 +158,6 @@ describe('stranded per-ref locks', () => {
     await new PackRefsLockOwnership(commonDir).claim(laterBy(ABANDONED_LOCK_AGE_MS + 1))
 
     await expect(exists(join(namespace, 'main.lock'))).resolves.toBe(false)
-    // The ref itself is untouched.
     await expect(exists(join(namespace, 'main'))).resolves.toBe(true)
   })
 

@@ -64,7 +64,11 @@ export function AiVaultVirtualRow({
   onRevealLog,
   onOpenCwd,
   onRequestDelete,
-  searchHits
+  searchHits,
+  searchHitHostLabels,
+  selected,
+  onSelect,
+  onPickSession
 }: {
   row: AiVaultListRow | undefined
   index: number
@@ -98,6 +102,12 @@ export function AiVaultVirtualRow({
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
+  searchHitHostLabels?: ReadonlyMap<string, string> | null
+  /** Set only where rows are keyboard-selectable. */
+  selected?: boolean
+  onSelect?: () => void
+  /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
+  onPickSession?: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
   if (!row) {
     return null
@@ -182,8 +192,10 @@ export function AiVaultVirtualRow({
     <div
       ref={measureElement}
       data-index={index}
+      data-selected={selected ? 'true' : undefined}
       className={cn(
         'left-0 w-full',
+        row.type === 'session' && 'ai-vault-session-row',
         isActiveStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
       style={isActiveStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
@@ -198,6 +210,7 @@ export function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           searchHit={searchHit}
+          sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
@@ -211,7 +224,18 @@ export function AiVaultVirtualRow({
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           resumeActions={visibleResumeActions}
-          onToggleDetails={() => onToggleSessionDetails(row.session.id)}
+          onToggleDetails={() => {
+            onSelect?.()
+            onToggleSessionDetails(row.session.id)
+          }}
+          onPick={
+            onPickSession
+              ? () => {
+                  onSelect?.()
+                  onPickSession(row.session)
+                }
+              : undefined
+          }
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }

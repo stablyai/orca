@@ -223,7 +223,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       expect(storeSubscribers).toHaveLength(0)
     })
 
-    it('does not dispatch generic title completions when agent-complete notifications are disabled', async () => {
+    it('offers generic title completions while desktop completion banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -261,14 +261,22 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
       titleHandler('experimental-agent-observability', 'experimental-agent-observability')
       await flushAsyncTicks()
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: 'experimental-agent-observability',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
-    it('does not replay disabled generic title completions after notifications are re-enabled', async () => {
+    it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -306,6 +314,9 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
       titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
       titleHandler('experimental-agent-observability', 'experimental-agent-observability')
+      await flushAsyncTicks()
+      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
       mockStoreState.settings = {
         ...mockStoreState.settings,
         notifications: {
@@ -313,16 +324,24 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
           agentTaskComplete: true
         }
       }
+      notifyStoreSubscribers()
       inspection.resolve('codex')
       await flushAsyncTicks()
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: 'experimental-agent-observability',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
-    it('clears title completion state when notifications are disabled', async () => {
+    it('keeps raw title completion continuity across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -370,14 +389,21 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
       notifyStoreSubscribers()
       titleHandler('Claude done', 'Claude done')
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: 'Claude done',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
-    it('cancels scheduled agent completion when notifications are disabled before dispatch', async () => {
+    it('keeps a scheduled agent completion across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -407,6 +433,8 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
 
       idleHandler('* Codex done')
+      vi.advanceTimersByTime(500)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
       mockStoreState.settings = {
         ...mockStoreState.settings,
         notifications: {
@@ -423,11 +451,18 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         }
       }
       notifyStoreSubscribers()
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 500 - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: '* Codex done',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
     it('restores a suppressed terminal bell when disabling pending agent completion', async () => {
@@ -482,7 +517,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
     })
 
-    it('requires fresh working evidence after notifications are disabled', async () => {
+    it('delivers completion after working and desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -532,14 +567,21 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
       notifyStoreSubscribers()
       idleHandler('* Codex done')
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: '* Codex done',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
-    it('requires fresh working evidence when notifications start disabled then re-enable', async () => {
+    it('delivers completion after working starts with desktop banners disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
@@ -581,11 +623,18 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       }
       notifyStoreSubscribers()
       idleHandler('* Codex done')
-      vi.advanceTimersByTime(1_000)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete' })
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          terminalTitle: '* Codex done',
+          paneKey: makePaneKey('tab-1', LEAF_1)
+        })
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
   })
 }

@@ -13,6 +13,11 @@ import {
   stubBrowserTabCreateEnvironment
 } from './web-runtime-session-test-harness'
 import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import {
+  _resetStagedBrowserFrameHandoversForTests,
+  noteStagedBrowserTabHandedToFrames,
+  wasStagedBrowserTabHandedToFrames
+} from '@/lib/staged-browser-frame-handover'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -32,7 +37,6 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
@@ -67,10 +71,6 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
-}))
-
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
@@ -166,7 +166,10 @@ function closedHostPages(runtimeCall: { mock: { calls: unknown[][] } }): string[
     .map((request) => request.params?.page ?? '')
 }
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  _resetStagedBrowserFrameHandoversForTests()
+})
 
 describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   beforeEach(() => {
@@ -432,6 +435,136 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     ])
     expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
     expect(stagedBrowserWorkspaces(mocks)).toEqual([])
+  })
+
+  describe("a server-hosted create the server's frames take over (L284)", () => {
+    async function useRealMaterialization(): Promise<void> {
+      const { hasMaterializedWebRuntimeBrowserPage: realPredicate } = await vi.importActual<
+        typeof BrowserMaterializationModule
+      >('./web-runtime-browser-materialization')
+      mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(realPredicate)
+    }
+
+    /** The frame build replacing the staged rows with the server's tab for the page. */
+    function framesDrawHostPage(handedOver: boolean): void {
+      closeStagedWorkspace('staged-workspace-1')
+      mirrorHostPage('host-workspace-9', 'host-page-1')
+      if (handedOver) {
+        noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')
+      }
+    }
+
+    function createAnswering(onCreate: () => void, onClose?: () => void) {
+      return vi.fn((request: { method: string; params: { page?: string } }) => {
+        if (request.method === 'browser.tabCreate') {
+          onCreate()
+          return Promise.resolve({
+            id: 'create',
+            ok: true,
+            result: { browserPageId: 'host-page-1' }
+          })
+        }
+        if (request.method === 'browser.tabClose') {
+          onClose?.()
+          return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
+        }
+        return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
+      })
+    }
+
+    it('completes into the drawn tab and closes nothing', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(() => framesDrawHostPage(true))
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      expect(closedHostPages(runtimeCall)).toEqual([])
+      // The record does not outlive the create.
+      expect(wasStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')).toBe(false)
+    })
+
+    it('completes when the drawn tab has no handle yet, its pane not mounted', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(() => {
+        closeStagedWorkspace('staged-workspace-1')
+        noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'host-page-1')
+      })
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      expect(closedHostPages(runtimeCall)).toEqual([])
+    })
+
+    it('still cancels a staged tab the user closed before the frames drew the page', async () => {
+      await useRealMaterialization()
+      const runtimeCall = createAnswering(
+        () => framesDrawHostPage(false),
+        () => forgetHostPage('host-workspace-9', 'host-page-1')
+      )
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(false)
+
+      expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
+    })
+
+    it('does not reuse a handover an earlier create left for another page', async () => {
+      await useRealMaterialization()
+      noteStagedBrowserTabHandedToFrames('staged-workspace-1', 'earlier-host-page')
+      const runtimeCall = createAnswering(
+        () => framesDrawHostPage(false),
+        () => forgetHostPage('host-workspace-9', 'host-page-1')
+      )
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(false)
+
+      expect(closedHostPages(runtimeCall)).toEqual(['host-page-1'])
+      expect(wasStagedBrowserTabHandedToFrames('staged-workspace-1', 'earlier-host-page')).toBe(
+        false
+      )
+    })
+
+    it("leaves a close of the drawn tab after the handover to the server tab's own close", async () => {
+      await useRealMaterialization()
+      // The user closes the frames' tab: the server closes the page, and frames drop the tab.
+      const runtimeCall = createAnswering(() => {
+        framesDrawHostPage(true)
+        forgetHostPage('host-workspace-9', 'host-page-1')
+      })
+      stubBrowserCreateRuntimeEnvironmentBridge(runtimeCall)
+      await expect(
+        createWebRuntimeSessionBrowserTab({
+          worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID
+        })
+      ).resolves.toBe(true)
+
+      // Not read as a staged-tab cancel: the create sends no close of its own.
+      expect(closedHostPages(runtimeCall)).toEqual([])
+    })
   })
 
   // Why: with a known-id host nothing rehomes, so `staged` still points at rows a snapshot may

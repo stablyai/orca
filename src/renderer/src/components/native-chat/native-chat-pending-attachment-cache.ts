@@ -1,14 +1,19 @@
-// Pending operations belong to draft scopes and outlive their composers. They are not persisted.
+// Pending operations belong to draft scopes and outlive their composers. They are not persisted;
+// a finished image is, at once, in the draft.
 // Completion, failure, explicit removal, draft/workspace deletion or renderer exit ends ownership.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  appendNativeChatAttachmentCache,
+  appendNativeChatDraftCache
+} from './native-chat-draft-cache'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import {
   appendToNativeChatComposerDraft,
   nativeChatDraftScopeTabId,
+  readNativeChatComposerDraft,
   resolveNativeChatComposerDraftOwner,
   structuredAgentSessionIdOfDraftScope
 } from './native-chat-composer-draft-store'
@@ -24,6 +29,16 @@ export function nativeChatPendingAttachmentSnapshot(
   scopeKey: string
 ): readonly NativeChatComposerImageAttachment[] {
   return pendingCache.get(scopeKey) ?? EMPTY
+}
+
+/** Pending chips are user content before their file paths settle into the draft. */
+export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
+  const draft = readNativeChatComposerDraft(scopeKey)
+  return (
+    draft.text.trim() !== '' ||
+    draft.images.length > 0 ||
+    nativeChatPendingAttachmentSnapshot(scopeKey).length > 0
+  )
 }
 
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {
@@ -75,40 +90,96 @@ export function addNativeChatPendingAttachment(
   writePending(scopeKey, [...nativeChatPendingAttachmentSnapshot(scopeKey), pending])
 }
 
-/** Removes a pending chip and returns it; undefined when the user already removed it. */
+/** Removes a chip still on its way and returns it; undefined when the user already removed it. */
 export function takeNativeChatPendingAttachment(
   scopeKey: string,
   id: string
 ): NativeChatComposerImageAttachment | undefined {
   const current = nativeChatPendingAttachmentSnapshot(scopeKey)
-  const taken = current.find((attachment) => attachment.id === id)
+  const taken = current.find((attachment) => attachment.id === id && attachment.pending)
   if (taken) {
-    writePending(
-      scopeKey,
-      current.filter((attachment) => attachment !== taken)
-    )
+    writePending(scopeKey, trimSettled(current.filter((attachment) => attachment !== taken)))
   }
   return taken
 }
 
-/** Settles a pending chip into the scope's draft, as an image the user attached. False when the
- *  user already removed it. */
+/** A finished image stays in the queue only to keep its place behind a chip attached before it. */
+function trimSettled(
+  queue: readonly NativeChatComposerImageAttachment[]
+): readonly NativeChatComposerImageAttachment[] {
+  const waiting = queue.findIndex((chip) => chip.pending)
+  return waiting === -1 ? [] : queue.slice(waiting)
+}
+
+/** The first image attached after `queue[index]` that the draft holds. */
+function heldAfter(
+  scopeKey: string,
+  queue: readonly NativeChatComposerImageAttachment[],
+  index: number
+): string | undefined {
+  const held = new Set(readNativeChatComposerDraft(scopeKey).images.map(({ id }) => id))
+  return queue.slice(index + 1).find(({ id }) => held.has(id))?.id
+}
+
+/** The thumbnail row: the draft's images, each chip still on its way in front of the first image
+ *  attached after it, so thumbnails and chip numbers don't jump as uploads end. */
+export function nativeChatImageRow<T extends { id: string }>(
+  images: readonly T[],
+  queue: readonly NativeChatComposerImageAttachment[]
+): (T | NativeChatComposerImageAttachment)[] {
+  const held = new Set(images.map(({ id }) => id))
+  const ahead = new Map<string, NativeChatComposerImageAttachment[]>()
+  let waiting: NativeChatComposerImageAttachment[] = []
+  for (const chip of queue) {
+    if (held.has(chip.id)) {
+      ahead.set(chip.id, waiting)
+      waiting = []
+    } else if (chip.pending) {
+      waiting.push(chip)
+    }
+  }
+  return [...images.flatMap((image) => [...(ahead.get(image.id) ?? []), image]), ...waiting]
+}
+
+/** Saves a finished chip into the scope's draft at once, as an image the user attached, in front of
+ *  any image attached after it. False when the user already removed it. */
 export function settleNativeChatPendingAttachment(
   scopeKey: string,
   id: string,
   path: string,
   connectionId?: string | null
 ): boolean {
-  const owner = pendingOwners.get(scopeKey)
-  if (!takeNativeChatPendingAttachment(scopeKey, id)) {
+  const current = nativeChatPendingAttachmentSnapshot(scopeKey)
+  const index = current.findIndex((chip) => chip.id === id && chip.pending)
+  if (index === -1) {
     return false
   }
+  const image = { id, path, ...(connectionId ? { connectionId } : {}) }
+  const before = heldAfter(scopeKey, current, index)
   appendToNativeChatComposerDraft(
     scopeKey,
-    { images: [{ id, path, ...(connectionId ? { connectionId } : {}) }], fromUser: true },
-    owner
+    { images: [image], fromUser: true, ...(before ? { before } : {}) },
+    pendingOwners.get(scopeKey)
   )
+  writePending(scopeKey, trimSettled(current.map((chip) => (chip.id === id ? image : chip))))
   return true
+}
+
+/** Attaches images at once, and behind any chip still on its way, so they keep the order they were
+ *  attached in: pasted or dropped alike. */
+export function appendNativeChatAttachmentsAfterPending(
+  scopeKey: string,
+  images: readonly NativeChatComposerImageAttachment[],
+  options?: { fromUser?: boolean }
+): void {
+  if (images.length === 0) {
+    return
+  }
+  appendNativeChatAttachmentCache(scopeKey, images, options)
+  const current = nativeChatPendingAttachmentSnapshot(scopeKey)
+  if (current.length > 0) {
+    writePending(scopeKey, [...current, ...images])
+  }
 }
 
 /** File results settle only while their operation still belongs to this draft. */
@@ -116,19 +187,20 @@ export function settleNativeChatPendingAttachmentReferences(
   scopeKey: string,
   references: { id: string; path: string }[],
   insertAtCaret?: (paths: string[]) => void
-): void {
+): boolean {
   const owner = pendingOwners.get(scopeKey)
   const paths = references.flatMap(({ id, path }) =>
     takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []
   )
   if (paths.length === 0) {
-    return
+    return false
   }
   if (insertAtCaret) {
     insertAtCaret(paths)
   } else {
     appendNativeChatDraftCache(scopeKey, paths.map(formatNativeChatFileReference).join(' '), owner)
   }
+  return true
 }
 
 export function clearNativeChatPendingAttachments(scopeKey: string): void {

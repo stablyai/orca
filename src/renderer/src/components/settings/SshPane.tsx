@@ -1,24 +1,37 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
 import { useAppStore } from '@/store'
-import { sshTargetConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
+import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { Button } from '../ui/button'
-import { SshTargetCard } from './SshTargetCard'
-import { SshTargetServerStatus } from './SshTargetServerStatus'
+import { SshTargetList } from './SshTargetList'
 import { SshTargetsEmptyState } from './SshTargetsEmptyState'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
+import { SshHostsHeaderActions, SshHostsListToolbar } from './SshPaneToolbar'
+import { SshHostsHeaderPortal } from './ssh-hosts-header-slot'
+import { useSshTargetTests } from './use-ssh-target-tests'
+import { SshRestoreRemovedHostsDialog } from './SshRestoreRemovedHostsDialog'
+import { useSshConfigSync } from './use-ssh-config-sync'
+import { useSshTargetSelection } from './use-ssh-target-selection'
+import {
+  countSshTargetsBySource,
+  filterSshTargets,
+  SSH_TARGET_FILTER_THRESHOLD,
+  sshTargetDisplayOrder
+} from './ssh-target-list-model'
+import { useSshBulkRemove } from './use-ssh-bulk-remove'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import { getEditingTargetForSshTarget } from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
 import { HostRemoveDialog } from '../sidebar/HostRemoveDialog'
+import { isManagedServerSshHost, SshManagedHostRemoveDialog } from './SshManagedHostRemoveDialog'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
+import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
 export { getSshPaneSearchEntries } from './ssh-search'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
@@ -36,7 +49,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   // Why: gates the submit button and the Enter path so a double click cannot
   // land two addTarget/updateTarget writes for one draft.
   const [saving, setSaving] = useState(false)
-  const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
+  const { testingIds, testOne, testMany, bulkTesting } = useSshTargetTests()
   // Why: when a target still has workspaces, route removal through the shared
   // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
   // confirm, so the user chooses to delete or keep them rather than silently
@@ -45,7 +58,27 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     targetId: string
     label: string
   } | null>(null)
+  const [managedHostRemoveLabel, setManagedHostRemoveLabel] = useState<string | null>(null)
   const mountedRef = useMountedRef()
+  const [filter, setFilter] = useState('')
+  const [restoreOpen, setRestoreOpen] = useState(false)
+  const visibleTargets = useMemo(() => filterSshTargets(targets, filter), [targets, filter])
+  const visibleIds = useMemo(() => sshTargetDisplayOrder(visibleTargets), [visibleTargets])
+  const selection = useSshTargetSelection(visibleIds)
+  // Hosts a filter change deselected; said once in the bulk slot so the bar doesn't just vanish.
+  const [hiddenDeselected, setHiddenDeselected] = useState(0)
+  if (hiddenDeselected > 0 && selection.selected.size > 0) {
+    setHiddenDeselected(0)
+  }
+  const changeFilter = (value: string): void => {
+    setFilter(value)
+    // Why: a host the filter hides must not stay selected and be removed unseen.
+    const nextVisible = new Set(filterSshTargets(targets, value).map((target) => target.id))
+    const dropped = [...selection.selected].filter((id) => !nextVisible.has(id)).length
+    selection.retain([...nextVisible])
+    setHiddenDeselected((prev) => (value.trim() === '' ? 0 : prev + dropped))
+  }
+  const totalBySource = useMemo(() => countSshTargetsBySource(targets), [targets])
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const clearRemovedSshTargetState = useAppStore((s) => s.clearRemovedSshTargetState)
@@ -76,12 +109,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     // and newly added hosts appear without a manual Import click. Best-effort —
     // a sync failure must not block listing the already-known targets.
     void (async () => {
-      try {
-        const result = await window.api.ssh.importConfig()
-        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
-      } catch {
-        // Surfaced on demand via the explicit Import button; ignore here.
-      }
+      await syncSshConfigTargetsPassively()
       if (abortController.signal.aborted) {
         return
       }
@@ -98,6 +126,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     setShowForm(true)
   }, [])
   useSshAddTargetIntent(addTargetIntentSignal, openAddTargetForm)
+  const { syncing, sync } = useSshConfigSync(loadTargets)
 
   const handleSave = async (): Promise<void> => {
     const savePayload = buildSshTargetSavePayload(form)
@@ -151,6 +180,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     target: { id: string; label: string },
     requestPlainRemove: (target: { id: string; label: string }) => void
   ): void => {
+    const stored = targets.find((candidate) => candidate.id === target.id)
+    if (stored && isManagedServerSshHost(stored)) {
+      setManagedHostRemoveLabel(target.label)
+      return
+    }
     const resolution = resolveSshHostRemoval({
       targetId: target.id,
       repos: useAppStore.getState().repos,
@@ -164,12 +198,16 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     requestPlainRemove(target)
   }
 
+  const removeTargetQuietly = async (id: string): Promise<void> => {
+    await window.api.ssh.removeTarget({ id })
+    // Why: a deleted passphrase-gated target may still have deferred
+    // reconnect metadata; clear it so focused SSH tabs stop retrying it.
+    clearRemovedSshTargetState(id)
+  }
+
   const handleRemove = async (id: string): Promise<void> => {
     try {
-      await window.api.ssh.removeTarget({ id })
-      // Why: a deleted passphrase-gated target may still have deferred
-      // reconnect metadata; clear it so focused SSH tabs stop retrying it.
-      clearRemovedSshTargetState(id)
+      await removeTargetQuietly(id)
       if (mountedRef.current) {
         toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
       }
@@ -177,13 +215,22 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     } catch (err) {
       if (mountedRef.current) {
         toast.error(
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+          extractIpcErrorMessage(
+            err,
+            translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+          )
         )
       }
     }
   }
+
+  const { requestRemoveSelected, finishBulkRemove } = useSshBulkRemove({
+    targets,
+    selected: selection.selected,
+    clearSelection: selection.clear,
+    reload: loadTargets,
+    requestSingleRemove: requestRemoveTarget
+  })
 
   const handleEdit = (target: SshTarget): void => {
     setEditingId(target.id)
@@ -196,12 +243,10 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(
-        sshTargetConnectFailureText(
-          targetId,
-          err,
-          translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
-        )
+      toastSshConnectFailure(
+        targetId,
+        err,
+        translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
       )
     }
   }
@@ -219,77 +264,6 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     }
   }
 
-  const handleTest = async (targetId: string): Promise<void> => {
-    setTestingIds((prev) => new Set(prev).add(targetId))
-    try {
-      const result = await window.api.ssh.testConnection({ targetId })
-      recordFeatureInteraction('ssh')
-      if (mountedRef.current) {
-        if (result.success) {
-          toast.success(
-            translate('auto.components.settings.SshPane.81d08bcddf', 'Connection successful')
-          )
-        } else {
-          toast.error(
-            result.error ??
-              translate('auto.components.settings.SshPane.0cda732f43', 'Connection test failed')
-          )
-        }
-      }
-    } catch (err) {
-      if (mountedRef.current) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.68c13b4589', 'Test failed')
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setTestingIds((prev) => {
-          const next = new Set(prev)
-          next.delete(targetId)
-          return next
-        })
-      }
-    }
-  }
-
-  const handleImport = async (): Promise<void> => {
-    try {
-      // Why: the explicit Import action re-adopts every ~/.ssh/config host,
-      // including ones the user previously deleted — clear tombstones so a
-      // deliberate re-import can bring them back.
-      const result = await window.api.ssh.importConfig({ reAdopt: true })
-      useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
-      recordFeatureInteraction('ssh')
-      if (mountedRef.current) {
-        if (result.targets.length === 0) {
-          toast('~/.ssh/config already in sync')
-        } else {
-          toast.success(
-            translate(
-              result.targets.length === 1
-                ? 'auto.components.settings.SshPane.syncedServerSingular'
-                : 'auto.components.settings.SshPane.syncedServerPlural',
-              result.targets.length === 1 ? 'Synced {{count}} server' : 'Synced {{count}} servers',
-              { count: result.targets.length }
-            )
-          )
-        }
-      }
-      await loadTargets()
-    } catch (err) {
-      if (mountedRef.current) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.f495689b82', 'Import failed')
-        )
-      }
-    }
-  }
-
   const cancelForm = (): void => {
     setShowForm(false)
     setEditingId(null)
@@ -297,68 +271,78 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium">
-            {translate('auto.components.settings.SshPane.94c5284560', 'SSH hosts')}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.SshPane.a7d28dff81',
-              'Add an existing machine over SSH so projects and workspaces can run there.'
-            )}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => void handleImport()}
-            className="gap-1.5"
-          >
-            <Upload className="size-3" />
-            {translate('auto.components.settings.SshPane.51d7dba44d', 'Import')}
-          </Button>
-          <Button variant="outline" size="xs" onClick={openAddTargetForm} className="gap-1.5">
-            <Plus className="size-3" />
-            {translate('auto.components.settings.SshPane.639ceb3698', 'Add Target')}
-          </Button>
-        </div>
-      </div>
-
-      <SshTargetDestructiveActions onRemove={handleRemove}>
-        {({ busyActionForTarget, requestRemove }) => (
+    <div className="space-y-3">
+      <SshHostsHeaderPortal>
+        <SshHostsHeaderActions
+          syncing={syncing}
+          onSync={() => void sync()}
+          onAdd={openAddTargetForm}
+          onRestoreRemoved={() => setRestoreOpen(true)}
+        />
+      </SshHostsHeaderPortal>
+      <SshTargetDestructiveActions
+        onRemove={handleRemove}
+        removeQuietly={removeTargetQuietly}
+        onBulkRemoveFinished={finishBulkRemove}
+      >
+        {({ busyActionForTarget, requestRemove, requestBulkRemove }) => (
           <>
-            {/* Target list */}
+            <SshHostsListToolbar
+              totalCount={targets.length}
+              visibleCount={visibleTargets.length}
+              selectedCount={selection.selected.size}
+              allVisibleSelected={visibleIds.every((id) => selection.selected.has(id))}
+              // Why: a reload can drop the list under the threshold; an active filter must stay clearable.
+              showFilter={targets.length > SSH_TARGET_FILTER_THRESHOLD || filter !== ''}
+              filter={filter}
+              busy={[...selection.selected].some((id) => busyActionForTarget(id) === 'remove')}
+              testing={bulkTesting}
+              hiddenDeselectedCount={hiddenDeselected}
+              onFilterChange={changeFilter}
+              onSelectVisible={() => selection.setGroup(visibleIds, true)}
+              onClearSelection={selection.clear}
+              onTestSelected={() =>
+                void testMany(targets.filter((target) => selection.selected.has(target.id)))
+              }
+              onRemoveSelected={() => requestRemoveSelected(requestBulkRemove, requestRemove)}
+            />
             {targets.length === 0 ? (
               <SshTargetsEmptyState />
+            ) : visibleTargets.length === 0 ? (
+              <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                {translate('auto.components.settings.SshPane.noFilterMatch', 'No hosts match.')}
+              </p>
             ) : (
-              <div className="space-y-2">
-                {targets.map((target) => (
-                  <div key={target.id} className="space-y-1">
-                    <SshTargetCard
-                      target={target}
-                      state={sshConnectionStates.get(target.id)}
-                      testing={testingIds.has(target.id)}
-                      busyAction={busyActionForTarget(target.id)}
-                      onConnect={handleConnect}
-                      onDisconnect={handleDisconnect}
-                      onTest={handleTest}
-                      onEdit={handleEdit}
-                      onRemove={(id) =>
-                        requestRemoveTarget({ id, label: target.label }, requestRemove)
-                      }
-                    />
-                    <SshTargetServerStatus target={target} onChanged={() => void loadTargets()} />
-                  </div>
-                ))}
-              </div>
+              <SshTargetList
+                targets={visibleTargets}
+                totalBySource={totalBySource}
+                connectionStates={sshConnectionStates}
+                testingIds={testingIds}
+                busyActionForTarget={busyActionForTarget}
+                selection={selection}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+                onTest={testOne}
+                onEdit={handleEdit}
+                onRemove={(target) => requestRemoveTarget(target, requestRemove)}
+                onServerChanged={() => void loadTargets()}
+              />
             )}
           </>
         )}
       </SshTargetDestructiveActions>
+
+      <SshRestoreRemovedHostsDialog
+        open={restoreOpen}
+        busy={syncing}
+        onOpenChange={setRestoreOpen}
+        onConfirm={async () => {
+          await sync({ restoreRemoved: true })
+          if (mountedRef.current) {
+            setRestoreOpen(false)
+          }
+        }}
+      />
 
       {/* Why: modal keeps the form in viewport over long host lists (STA-3067). */}
       <SshTargetForm
@@ -373,6 +357,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
             cancelForm()
           }
         }}
+      />
+
+      <SshManagedHostRemoveDialog
+        label={managedHostRemoveLabel}
+        onClose={() => setManagedHostRemoveLabel(null)}
       />
 
       {hostRemoveTarget ? (

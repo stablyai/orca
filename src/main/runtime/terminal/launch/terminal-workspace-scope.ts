@@ -5,16 +5,20 @@ import {
   isFloatingWorkspaceSelector
 } from '../../../../shared/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
-import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
+import {
+  resolveWorktreeHostRouting,
+  resolveWorktreeLaunchHost
+} from '../../worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
@@ -24,11 +28,15 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import { resolveTerminalStartupCwd } from '../../../../shared/terminal-startup-cwd'
 import type { ResolvedTerminalWorkspaceLaunchTarget } from '../../orca-runtime-core'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../orca-runtime-core'
-import { ensureJcodeRuntimeDir } from '../../../../shared/jcode-runtime-dir'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
-import { WORKTREE_ID_SEPARATOR } from '../../../../shared/worktree/id'
+import {
+  WORKTREE_ID_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  worktreeIdsEqual
+} from '../../../../shared/worktree/id'
+import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import { WorktreeIdRequiresFullPathError } from '../../runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from '../../runtime-terminal-spawn-push-target-materialization'
 import { resolveCreatedWorktreeTerminalTarget } from '../../runtime-created-worktree-terminal-target'
@@ -180,36 +188,29 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     }
   }
 
-  protected async buildTerminalWorkspaceEnv(
+  protected buildTerminalWorkspaceEnv(
     scope: TerminalWorkspaceLaunchScope,
     baseEnv: Record<string, string>,
-    paneKey: string,
-    tabId: string,
     agentTeamsEnv?: Record<string, string>
-  ): Promise<Record<string, string>> {
+  ): Record<string, string> {
     const cleanBaseEnv = { ...baseEnv }
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
-    const jcodeRuntimeDirEnv =
-      scope.connectionId === null ? await ensureJcodeRuntimeDir(paneKey) : undefined
+    // Pane identity (ORCA_PANE_KEY/TAB_ID/WORKTREE_ID, jcode dir) is stamped by the spawn step from the spawn's ids.
+    // Why: the window stamps ORCA_WORKSPACE_ID (its ORCA_WORKTREE_ID) for every workspace kind,
+    // and agent wrappers forward it.
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
       ...this.buildAgentHookPtyEnv?.(),
-      // Why: the runtime dir is a local unix-socket path; remote (SSH)
-      // terminals must keep jcode on its own guest-side default daemon.
-      ...jcodeRuntimeDirEnv,
-      ORCA_PANE_KEY: paneKey,
-      ORCA_TAB_ID: tabId,
-      ORCA_WORKTREE_ID: scope.id
+      ORCA_WORKSPACE_ID: scope.id
     }
     if (!scope.folderWorkspace) {
       return env
     }
     return {
       ...env,
-      ORCA_WORKSPACE_ID: scope.id,
       ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
       ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
@@ -226,5 +227,73 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       throw new WorktreeIdRequiresFullPathError()
     }
     return worktreeId
+  }
+
+  /** Keeps host-owned session keys intact; accepts one path alias and rejects ambiguous matches. */
+  getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null {
+    const worktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    if (
+      !worktreeId?.includes(WORKTREE_ID_SEPARATOR) ||
+      this.mobileSessionTabsByWorktree.has(worktreeId)
+    ) {
+      return worktreeId
+    }
+    // Why: clients normalize Windows paths, but tab maps retain the host's original spelling.
+    const knownIds = new Set([
+      ...this.mobileSessionTabsByWorktree.keys(),
+      ...Object.keys(this.getOwnWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree ?? {})
+    ])
+    // Why: live PTYs keep their registered spelling, so an exact PTY key must never be rewritten.
+    for (const pty of this.ptysById.values()) {
+      if (pty.connected) {
+        knownIds.add(pty.worktreeId)
+      }
+    }
+    if (knownIds.has(worktreeId)) {
+      return worktreeId
+    }
+    const matches = [...knownIds].filter((knownId) => worktreeIdsEqual(knownId, worktreeId))
+    if (matches.length > 1) {
+      throw new Error('selector_ambiguous')
+    }
+    const matchedId = matches[0]
+    if (!matchedId) {
+      return worktreeId
+    }
+    const owner = resolveWorktreeHostRouting(this.store?.getRepos?.() ?? [], {
+      repoId: getRepoIdFromWorktreeId(worktreeId)
+    })
+    if (owner.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    if (owner.kind === 'resolved') {
+      const ownerIsRuntime = parseExecutionHostId(owner.hostId)?.kind === 'runtime'
+      const ptyIds = new Set<string>()
+      for (const tab of this.mobileSessionTabsByWorktree.get(matchedId)?.tabs ?? []) {
+        if (tab.type === 'terminal') {
+          const ptyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]
+          if (ptyId) {
+            ptyIds.add(ptyId)
+          }
+        }
+      }
+      for (const [ptyId, pty] of this.ptysById) {
+        if (pty.connected && worktreeIdsEqual(pty.worktreeId, matchedId)) {
+          ptyIds.add(ptyId)
+        }
+      }
+      for (const ptyId of ptyIds) {
+        const pty = this.ptysById.get(ptyId)
+        const hostId =
+          getPtyExecutionHost(ptyId) ??
+          (pty && !ownerIsRuntime ? getConnectionExecutionHostId(pty.connectionId) : null)
+        // Why: returning the raw alias after a conflict lets PTY rescue adopt the foreign terminal.
+        // An unattributed remote id is only tolerable under a runtime owner, never a local/SSH one.
+        if (hostId && hostId !== owner.hostId && (hostId !== 'foreign' || !ownerIsRuntime)) {
+          throw new Error('worktree_execution_host_unresolved')
+        }
+      }
+    }
+    return matchedId
   }
 }

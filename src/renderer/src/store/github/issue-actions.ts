@@ -5,7 +5,6 @@ import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { sourceScopedRepoCacheKey } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { debouncedSaveCache } from './cache-persistence'
 import { inflightIssueRequests } from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
 import {
@@ -71,7 +70,6 @@ export const createIssueActions = (
             fetchedAt: Date.now()
           })
         }))
-        debouncedSaveCache(get())
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
@@ -81,7 +79,6 @@ export const createIssueActions = (
             fetchedAt: Date.now()
           })
         }))
-        debouncedSaveCache(get())
         return null
       } finally {
         inflightIssueRequests.delete(cacheKey)

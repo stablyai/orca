@@ -10,6 +10,8 @@ import {
   SSH_GIT_RECONNECT_MESSAGE,
   SshHostNotServedError
 } from '../providers/ssh-host-not-served-error'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
 
 type LocalGitExecOptions = {
   cwd: string
@@ -17,13 +19,14 @@ type LocalGitExecOptions = {
 }
 
 export async function fetchPrHeadTrackingRef(
-  repo: { path: string; connectionId?: string | null },
+  repo: { path: string } & Pick<Repo, 'connectionId' | 'executionHostId'>,
   remote: string,
   branch: string,
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
 ): Promise<void> {
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId, SSH_GIT_RECONNECT_MESSAGE)
+  const sshTargetId = getRepoRoutingConnectionId(repo)
+  if (sshTargetId) {
+    throw new SshHostNotServedError(sshTargetId, SSH_GIT_RECONNECT_MESSAGE)
   }
   await gitExecFileAsync(
     ['fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`],
@@ -32,7 +35,7 @@ export async function fetchPrHeadTrackingRef(
 }
 
 export async function fetchGitHubPullRequestHeadRef(
-  repo: { path: string; connectionId?: string | null },
+  repo: { path: string } & Pick<Repo, 'connectionId' | 'executionHostId'>,
   remote: string,
   prNumber: number,
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
@@ -43,12 +46,13 @@ export async function fetchGitHubPullRequestHeadRef(
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Pull request fetch remote must not start with "-".')
   }
-  if (repo.connectionId) {
-    throw new SshHostNotServedError(repo.connectionId, SSH_GIT_RECONNECT_MESSAGE)
+  const sshTargetId = getRepoRoutingConnectionId(repo)
+  if (sshTargetId) {
+    throw new SshHostNotServedError(sshTargetId, SSH_GIT_RECONNECT_MESSAGE)
   }
   const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
   const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
-  // Why: return the same path the fetch wrote so callers don't re-resolve identity.
+  // Return the written ref so callers do not recompute its remote identity.
   const localRef = githubPullRequestHeadLocalRef(remoteComponent, prNumber)
   await gitExecFileAsync(
     ['fetch', '--no-tags', remote, `+refs/pull/${prNumber}/head:${localRef}`],

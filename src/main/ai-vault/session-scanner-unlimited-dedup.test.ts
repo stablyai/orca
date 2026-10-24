@@ -13,10 +13,6 @@ vi.mock('./session-scanner-source-discovery', () => ({
 vi.mock('./session-scanner-candidates', () => ({
   sessionCandidatesFromDiscoveries: async () => candidates()
 }))
-vi.mock('./session-parse-cache-persistence', () => ({
-  ensureSessionParseCacheLoaded: async () => {},
-  scheduleSessionParseCachePersist: () => {}
-}))
 vi.mock('./session-scanner-parse-cache', () => ({
   createSessionParseStats: () => ({
     reused: 0,
@@ -25,7 +21,7 @@ vi.mock('./session-scanner-parse-cache', () => ({
     earlyStopped: 0,
     bytesRead: 0
   }),
-  parseAgentSessionFileCached: async (candidate: { session: AiVaultSession }) => candidate.session
+  parseListedSessionFile: async (candidate: { session: AiVaultSession }) => candidate.session
 }))
 vi.mock('./session-root-dedup', async (original) => {
   const actual = await original<typeof SessionDedup>()
@@ -190,7 +186,7 @@ it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', (
     return process.memoryUsage().heapUsed
   }
   const count = 50000
-  // Why pre-build: the corpus itself must not count against the collection.
+  // Build fixtures before measuring collection retention.
   const corpus = Array.from({ length: count }, (_, index) =>
     index % 100 === 99
       ? {
@@ -209,7 +205,6 @@ it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', (
   const retained = heapUsed() - before
 
   expect([...collection.values()]).toEqual(expected)
-  // Two map entries plus one winner record per live row measure ~115 B; an
-  // alias-key string per live row measured ~300 B.
+  // ~115 B per live row allows headroom below the ~300 B alias-string implementation.
   expect(retained).toBeLessThan(count * 160)
 })

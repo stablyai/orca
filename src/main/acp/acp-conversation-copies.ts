@@ -5,7 +5,7 @@ import { copyAcpConversation } from './acp-conversation-copy'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
-/** Copy children have their own cleanup lifecycle; they never gate the original chat's start. */
+/** Copy children never gate the original chat's start. */
 export class AcpConversationCopies {
   private readonly children = new ProviderAcquisitionStarts<AcpStructuredConnection>()
   private readonly shutdown = new AbortController()
@@ -14,15 +14,20 @@ export class AcpConversationCopies {
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
 
   copy: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = async (input) => {
+    const gate = this.deps.spec.launchGate?.enter(this.shutdown.signal)
     const copy = copyAcpConversation(this.deps, input, {
-      signal: this.shutdown.signal,
-      track: (connection) => this.children.retainFailed(randomUUID(), connection)
+      signal: gate?.signal ?? this.shutdown.signal,
+      track: (connection) => {
+        this.children.retainFailed(randomUUID(), connection)
+        this.deps.spec.launchGate?.retain(connection)
+      }
     })
     this.pending.add(copy)
     try {
       return await copy
     } finally {
       this.pending.delete(copy)
+      gate?.leave()
     }
   }
 

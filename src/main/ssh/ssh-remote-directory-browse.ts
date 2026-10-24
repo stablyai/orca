@@ -1,11 +1,13 @@
-import type { SshConnectionManager } from './ssh-connection-manager'
-import type { SshExecOptions } from './ssh-connection-utils'
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import type { SshConnectionManager } from './connection/ssh-connection-manager'
+import type { SshExecOptions } from './connection/ssh-exec-options'
+import { powerShellCommand } from './ssh-remote-powershell'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
-export type RemoteDirEntry = {
+type RemoteDirEntry = {
   name: string
   isDirectory: boolean
 }
@@ -62,14 +64,23 @@ export async function browseSshDirectory(
   }
 }
 
+const POSIX_LIST_WITH_DIR_MARKERS =
+  'entries=$(command ls -1A) && printf \'%s\\n\' "$entries" | while IFS= read -r f; do ' +
+  'if [ -d "$f" ]; then printf \'%s/\\n\' "$f"; else printf \'%s\\n\' "$f"; fi; done'
+
 type SshBrowseConnection = NonNullable<ReturnType<SshConnectionManager['getConnection']>>
 
 function browseWithPosixShell(
   conn: SshBrowseConnection,
   dirPath: string
 ): Promise<RemoteBrowseResult> {
-  // Why: `command ls` skips aliases; `&&` makes a failing ls exit non-zero (not look empty); -1Ap = one-per-line + trailing / on dirs.
-  return runBrowseCommand(conn, `cd ${shellEscape(dirPath)} && pwd && command ls -1Ap`, 'posix')
+  // Why: `command ls` skips aliases; capturing it keeps a failing ls exiting non-zero (not looking empty).
+  // The trailing / comes from `[ -d ]`, which follows symlinks (ls -p doesn't); broken links and loops test false.
+  return runBrowseCommand(
+    conn,
+    `cd ${shellEscape(dirPath)} && pwd && ${POSIX_LIST_WITH_DIR_MARKERS}`,
+    'posix'
+  )
 }
 
 function browseWithWindowsPowerShell(
@@ -256,13 +267,9 @@ function shellEscape(s: string): string {
     return '"$HOME"'
   }
   if (s.startsWith('~/')) {
-    return `"$HOME"/${shellEscapeRaw(s.slice(2))}`
+    return `"$HOME"/${quotePosixShell(s.slice(2))}`
   }
-  return shellEscapeRaw(s)
-}
-
-function shellEscapeRaw(s: string): string {
-  return `'${s.replace(/'/g, "'\\''")}'`
+  return quotePosixShell(s)
 }
 
 function powerShellPathExpression(s: string): string {

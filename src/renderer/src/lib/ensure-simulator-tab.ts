@@ -12,6 +12,14 @@ import {
 } from './unified-tab-host-ownership'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import {
+  frameDrawnServerOfSimulatorTab,
+  noteSimulatorTabCreatedHere,
+  openingSimulatorTabId,
+  openSimulatorTabThroughLayoutOwner
+} from './simulator-tab-layout-owner'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string
@@ -30,7 +38,7 @@ type ExistingSimulatorTab = {
 function getSimulatorWorktrees(state: ReturnType<typeof useAppStore.getState>, worktreeId: string) {
   return [
     ...(state.allWorktrees?.() ?? []),
-    ...(state.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+    ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
   ].filter((worktree) => worktree.id === worktreeId)
 }
 
@@ -99,7 +107,9 @@ export function ensureSimulatorTab(
   const sourceGroupId =
     options?.targetGroupId ??
     store.activeGroupIdByWorktree[worktreeId] ??
-    store.groupsByWorktree[worktreeId]?.[0]?.id
+    store.groupsByWorktree[worktreeId]?.[0]?.id ??
+    // Main's frames draw no empty group: a layout-owner build opens into the workspace's root one.
+    (ORCA_LAYOUT_OWNER_IS_MAIN ? store.ensureWorktreeRootGroup(worktreeId) : undefined)
   if (!sourceGroupId) {
     return null
   }
@@ -121,56 +131,82 @@ export function ensureSimulatorTab(
     return existing.id
   }
 
-  if (options?.placement === 'rightSplit' && shouldSurface) {
-    const reusableRightGroupId = findReusableRightSplitGroupId(
-      store.layoutByWorktree[worktreeId],
-      sourceGroupId
-    )
-    if (reusableRightGroupId) {
-      const tabId = createBrowserUuid()
-      store.createUnifiedTab(worktreeId, 'simulator', {
-        id: tabId,
-        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
-        targetGroupId: reusableRightGroupId,
-        activate: true,
-        ...(executionHostId ? { executionHostId } : {})
-      })
-      surfaceCreatedSimulatorTab(worktreeId, tabId)
-      return tabId
-    }
-
+  const label = translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator')
+  const reusableRightGroupId =
+    options?.placement === 'rightSplit' && shouldSurface
+      ? findReusableRightSplitGroupId(store.layoutByWorktree[worktreeId], sourceGroupId)
+      : null
+  // Switch point: a paired server's frame-drawn workspace has no group of this desktop's own, so
+  // the tab opens in the group it would split beside.
+  const serverEnvironmentId = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? frameDrawnServerOfSimulatorTab(store, worktreeId)
+    : null
+  const rightSplit =
+    options?.placement === 'rightSplit' &&
+    shouldSurface &&
+    !reusableRightGroupId &&
+    !serverEnvironmentId
+  const groupId = reusableRightGroupId ?? sourceGroupId
+  const drawHere = (tabId?: string): string | null => {
     // Why: publish the simulator directly in its split group. A two-step
     // create-then-move can persist the midpoint during dev reload/HMR.
-    const splitTab = store.createUnifiedTabInSplit(
-      worktreeId,
-      'simulator',
-      {
-        sourceGroupId,
-        splitDirection: 'right'
-      },
-      {
-        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
-        activate: true,
-        ...(executionHostId ? { executionHostId } : {})
-      }
-    )
+    const splitTab = rightSplit
+      ? store.createUnifiedTabInSplit(
+          worktreeId,
+          'simulator',
+          { sourceGroupId, splitDirection: 'right' },
+          { ...(tabId ? { id: tabId } : {}), label, activate: true, ...hostOf(executionHostId) }
+        )
+      : null
     if (splitTab) {
       return splitTab.id
     }
+    const id = tabId ?? createBrowserUuid()
+    store.createUnifiedTab(worktreeId, 'simulator', {
+      id,
+      label,
+      targetGroupId: groupId,
+      activate: reusableRightGroupId ? true : shouldSurface,
+      ...hostOf(executionHostId)
+    })
+    if (reusableRightGroupId || shouldSurface) {
+      surfaceCreatedSimulatorTab(worktreeId, id)
+    }
+    return id
   }
+  // Switch point: main opens the tab and its frame draws it; the window surfaces it after.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    const opening = openingSimulatorTabId(worktreeId)
+    if (opening) {
+      return opening
+    }
+    const sent = openSimulatorTabThroughLayoutOwner(store, {
+      worktreeId,
+      label,
+      groupId,
+      rightSplit,
+      surface: (tabId) => {
+        if (shouldSurface) {
+          surfaceCreatedSimulatorTab(worktreeId, tabId)
+        }
+      },
+      drawHere
+    })
+    if (sent) {
+      return sent
+    }
+  }
+  const drawnId = drawHere()
+  if (drawnId && serverEnvironmentId) {
+    noteSimulatorTabCreatedHere(serverEnvironmentId, worktreeId, drawnId)
+  }
+  return drawnId
+}
 
-  const tabId = createBrowserUuid()
-  store.createUnifiedTab(worktreeId, 'simulator', {
-    id: tabId,
-    label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
-    targetGroupId: sourceGroupId,
-    activate: shouldSurface,
-    ...(executionHostId ? { executionHostId } : {})
-  })
-  if (shouldSurface) {
-    surfaceCreatedSimulatorTab(worktreeId, tabId)
-  }
-  return tabId
+function hostOf(executionHostId: ExecutionHostId | undefined): {
+  executionHostId?: ExecutionHostId
+} {
+  return executionHostId ? { executionHostId } : {}
 }
 
 function surfaceCreatedSimulatorTab(worktreeId: string, tabId: string): void {

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { Separator } from '../ui/separator'
 import { Textarea } from '../ui/textarea'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { cn } from '@/lib/utils'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -14,8 +14,7 @@ import {
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
-  getTerminalRenderingSearchEntries,
-  getTerminalSetupScriptSearchEntries
+  getTerminalRenderingSearchEntries
 } from './terminal-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
@@ -27,7 +26,6 @@ import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
-import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './TerminalCustomShellInput'
@@ -331,13 +329,6 @@ export function TerminalPane({
         searchQuery={searchQuery}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
-      <TerminalSetupScriptSection
-        key="setup-script"
-        settings={settings}
-        updateSettings={updateSettings}
-      />
-    ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
       <ManageSessionsSection key="manage-sessions" />
     ) : null,
@@ -362,16 +353,11 @@ export function TerminalPane({
         isMac={isMac}
       />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-6">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="section" />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 import type {
@@ -7,6 +8,7 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
 import type {
+  TerminalInteractiveWaitEvidence,
   TerminalWaitPermissionInputs,
   TerminalWaitStatusEvidence
 } from './terminal-wait-permission'
@@ -49,8 +51,14 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   protected abstract resolveAuthoritativeTerminalWaitPermission(
     terminal: RuntimeTerminalAgentStatusSnapshot,
     explicitStatus: TerminalWaitStatusEvidence,
-    lifecycle: TerminalWaitPermissionInputs['lifecycle']
+    lifecycle: TerminalWaitPermissionInputs['lifecycle'],
+    observedOnScreen?: boolean
   ): RuntimeTerminalWaitBlockedReason | null
+
+  protected abstract readTerminalInteractiveWaitEvidence(
+    handle: string,
+    ptyId: string
+  ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined>
 
   abstract getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus>
 
@@ -66,20 +74,19 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     handle: string
   ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
     let ptyId: string
-    let inputs: TerminalWaitPermissionInputs
+    let evidence: TerminalInteractiveWaitEvidence | undefined
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
-      inputs = this.getTerminalWaitPermissionInputs(handle, ptyId)
+      const read = this.readTerminalInteractiveWaitEvidence(handle, ptyId)
+      // Why not always await: a hook-status probe must start in this tick so concurrent queries share it.
+      evidence = read instanceof Promise ? await read : read
     } catch {
       return undefined
     }
-    const { terminal, lifecycle } = inputs
-    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
-    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
-      terminal,
-      explicitStatus,
-      lifecycle
-    )
+    if (!evidence) {
+      return undefined
+    }
+    const { terminal, explicitStatus, promptReason } = evidence
     if (promptReason) {
       return {
         source: 'prompt-text',
@@ -91,7 +98,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       return { source: 'title' }
     }
     if (explicitStatus?.status !== 'permission') {
-      return null
+      return evidence.unconfirmed ? undefined : null
     }
     const status = await withTimeout(
       this.probeAgentStatusOncePerPty(handle, ptyId),
@@ -174,7 +181,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     const live = this.getLivePtyForHandle(handle)
     const record = live?.record ?? this.handles.get(handle)
     if (!record?.ptyId) {
-      return null
+      return this.getOrchestrationCompatibilitySshTerminal(handle)?.processIncarnation ?? null
     }
     const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
     if (incarnationId) {
@@ -245,7 +252,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
     // SAFETY: Forward an absent target unchanged; the existing resolver owns validation.
     const workspace = repo
-      ? { repo, path: repo.path, connectionId: repo.connectionId }
+      ? { repo, path: repo.path, connectionId: getRepoRoutingConnectionId(repo) }
       : await this.resolveTerminalWorkspaceLaunchScope(target.worktree!)
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
     const shell = resolveStartupShell(

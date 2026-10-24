@@ -122,7 +122,7 @@ function digestFiles(root, paths) {
   )
 }
 
-function treeDigest(root) {
+export function treeDigest(root) {
   const digest = createHash('sha256')
   const files = []
   const visit = (path) => {
@@ -180,7 +180,7 @@ export async function benchmarkWindowsNativePreparation(
 ) {
   assert.equal(process.platform, 'win32', 'This hosted comparison requires Windows')
   assert(['x64', 'arm64'].includes(process.arch), 'Unsupported Windows runner')
-  assert.equal(process.versions.node, '24.21.0', 'Comparison requires pinned Node')
+  assert.equal(process.versions.node, '24.22.1', 'Comparison requires pinned Node')
   assert(
     !hasWindowsCompilerSelection(process.env),
     'Explicit compiler selection prevents a qualified automatic-capture comparison'
@@ -274,7 +274,7 @@ export async function benchmarkWindowsNativePreparation(
     await command('source-clean', 'git', ['diff', '--exit-code', 'HEAD', '--'])
     const tree = (await command('source-tree', 'git', ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
     const pnpmVersion = (await pnpmCommand('pnpm-version', ['--version'], root)).stdout.trim()
-    assert.equal(pnpmVersion, '12.8.1', 'Comparison requires pinned pnpm')
+    assert.equal(pnpmVersion, '12.14.0', 'Comparison requires pinned pnpm')
     const action = readFileSync(
       join(root, '.github/actions/prepare-native-runtime/action.yml'),
       'utf8'

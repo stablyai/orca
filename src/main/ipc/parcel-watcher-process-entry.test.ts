@@ -13,22 +13,30 @@ const { detectShallowWatchDeliveryMock, statMock, subscribeMock, watchMock, writ
 vi.mock('node:fs', () => ({
   mkdtempSync: vi.fn(() => '/tmp/orca-watcher-canary-test'),
   rmSync: vi.fn(),
+  // Shallow roots and macOS metadata files are stat-ed before watching.
+  statSync: vi.fn(() => ({ isDirectory: () => true, dev: 1n, ino: 1n, birthtimeNs: 0n })),
   watch: watchMock,
   writeFileSync: writeFileSyncMock
 }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
 vi.mock('./shallow-watch-delivery-probe', () => ({
-  detectShallowWatchDelivery: detectShallowWatchDeliveryMock
+  detectShallowWatchDelivery: detectShallowWatchDeliveryMock,
+  hasShallowWatchDelivered: () => false,
+  noteShallowWatchDelivered: vi.fn()
 }))
 vi.mock('@parcel/watcher', () => ({ subscribe: subscribeMock }))
 
 describe('parcel watcher process canary', () => {
-  let originalMessageListeners: ReturnType<typeof process.listeners>
-  let originalExitListeners: ReturnType<typeof process.listeners>
-  let originalDisconnectListeners: ReturnType<typeof process.listeners>
+  let originalMessageListeners: NodeJS.MessageListener[]
+  let originalExitListeners: NodeJS.ExitListener[]
+  let originalDisconnectListeners: NodeJS.DisconnectListener[]
   let originalSend: typeof process.send
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
   beforeEach(() => {
+    // Pin a crawling backend; macOS subscribe does not crawl.
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    detectShallowWatchDeliveryMock.mockReset()
     vi.useFakeTimers()
     vi.resetModules()
     subscribeMock.mockReset()
@@ -58,14 +66,13 @@ describe('parcel watcher process canary', () => {
       }
     }
     process.send = originalSend
+    Object.defineProperty(process, 'platform', originalPlatform)
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
   it('fails the shallow subscribe when the host never delivers fs.watch events', async () => {
-    // A real macOS 26.3.1 machine registers the watch and stays mute forever.
-    // Reporting failure is what lets the caller fall back to polling instead of
-    // showing indefinitely stale Git metadata.
+    // Registration can succeed with permanently silent delivery; callers must fall back to polling.
     detectShallowWatchDeliveryMock.mockResolvedValue(false)
     watchMock.mockImplementation(() => {
       const watcher = new EventEmitter() as EventEmitter & { close: () => void }
@@ -77,12 +84,16 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 7,
-      dir: '/repo/.git',
-      opts: { mode: 'shallow', include: ['HEAD'] }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 7,
+        dir: '/repo/.git',
+        opts: { mode: 'shallow', include: ['HEAD'] }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     expect(sendMock).toHaveBeenCalledWith(
@@ -119,17 +130,27 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 1,
-      dir: '/repo/.git',
-      opts: { mode: 'shallow', include: ['HEAD'] }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 1,
+        dir: '/repo/.git',
+        opts: { mode: 'shallow', include: ['HEAD'] }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     expect(subscribeMock).toHaveBeenCalledTimes(1)
-    watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
-    await vi.advanceTimersByTimeAsync(0)
+    // macOS binds the metadata file itself; other platforms bind the directory.
+    if (process.platform === 'darwin') {
+      watcherCallbacks.get('/repo/.git/HEAD')?.('change', 'HEAD')
+    } else {
+      watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
+    }
+    // macOS confirms the event with a stat after a short coalescing window.
+    await vi.advanceTimersByTimeAsync(200)
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',
@@ -148,12 +169,90 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/large-repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/large-repo', opts: {} }, undefined)
 
     await vi.advanceTimersByTimeAsync(30_000)
 
     expect(writeFileSyncMock).not.toHaveBeenCalled()
     expect(exitSpy).not.toHaveBeenCalled()
+  })
+
+  it('restarts on macOS when a native subscribe deadlocks while pending', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    detectShallowWatchDeliveryMock.mockResolvedValue(true)
+    let independentListener: (() => void) | undefined
+    watchMock.mockImplementation((_dir: string, _opts: unknown, listener: () => void) => {
+      independentListener = listener
+      return Object.assign(new EventEmitter(), { close: () => undefined })
+    })
+    writeFileSyncMock.mockImplementation(() => independentListener?.())
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockReturnValueOnce(new Promise(() => undefined))
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(exitSpy).toHaveBeenCalledWith(2)
+  })
+
+  it('keeps the child when another native subscription delivers during the probe', async () => {
+    let independentListener: (() => void) | undefined
+    let repoCallback: ((err: Error | null, events: unknown[]) => void) | undefined
+    watchMock.mockImplementation((_dir: string, _opts: unknown, listener: () => void) => {
+      independentListener = listener
+      return Object.assign(new EventEmitter(), { close: () => undefined })
+    })
+    writeFileSyncMock.mockImplementation((path: string) => {
+      independentListener?.()
+      if (path.endsWith('canary-probe.txt')) {
+        repoCallback?.(null, [])
+      }
+    })
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, callback) => {
+        repoCallback = callback
+        return { unsubscribe: vi.fn() }
+      })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(exitSpy).not.toHaveBeenCalled()
+  })
+
+  it('reports canary health transitions to the host', async () => {
+    let canaryCallback: ((err: Error | null) => void) | undefined
+    subscribeMock
+      .mockImplementationOnce(async (_dir, callback) => {
+        canaryCallback = callback
+        return { unsubscribe: vi.fn() }
+      })
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+    writeFileSyncMock.mockImplementation(() => canaryCallback?.(null))
+    const sendMock = vi.fn()
+    process.send = sendMock
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    const healthMessages = sendMock.mock.calls.filter(
+      ([message]) => message.op === 'delivery-health'
+    )
+    expect(healthMessages.map(([message]) => message)).toEqual([
+      { op: 'delivery-health', state: 'healthy' }
+    ])
   })
 
   it('invalidates an outstanding probe when another subscription starts crawling', async () => {
@@ -165,12 +264,12 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(writeFileSyncMock).toHaveBeenCalledTimes(1)
 
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/large-repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/large-repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(20_000)
 
     expect(writeFileSyncMock).toHaveBeenCalledTimes(1)
@@ -186,15 +285,15 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
-    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(30_000)
 
-    expect(writeFileSyncMock).toHaveBeenCalledTimes(3)
+    expect(writeFileSyncMock).toHaveBeenCalledTimes(2)
     expect(exitSpy).toHaveBeenCalledWith(2)
   })
 
@@ -215,11 +314,11 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
 
     await vi.advanceTimersByTimeAsync(30_000)
     expect(deadlockedUnsubscribe).not.toHaveBeenCalled()
@@ -244,15 +343,15 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo-a', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/repo-b', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(0)
     expect(deadlockedUnsubscribe).toHaveBeenCalledTimes(1)
 
-    process.emit('message', { op: 'subscribe', id: 3, dir: '/repo-c', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 3, dir: '/repo-c', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(30_000)
 
     expect(subscribeMock).toHaveBeenCalledTimes(3)
@@ -275,12 +374,12 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/live-repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/live-repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/crawling-repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/crawling-repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'unsubscribe', id: 2 })
-    process.emit('message', { op: 'subscribe', id: 3, dir: '/later-repo', opts: {} })
+    process.emit('message', { op: 'unsubscribe', id: 2 }, undefined)
+    process.emit('message', { op: 'subscribe', id: 3, dir: '/later-repo', opts: {} }, undefined)
 
     await vi.advanceTimersByTimeAsync(30_000)
     expect(writeFileSyncMock).not.toHaveBeenCalled()
@@ -308,13 +407,12 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/active', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/active', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 2, dir: '/queued', opts: {} })
-    process.emit('message', { op: 'cancel-subscribe', id: 2 })
+    process.emit('message', { op: 'subscribe', id: 2, dir: '/queued', opts: {} }, undefined)
+    process.emit('message', { op: 'cancel-subscribe', id: 2 }, undefined)
 
-    // Why: non-restart cancel reuses async unsubscribe teardown; drain the
-    // exclusive lifecycle queue after the active crawl finishes.
+    // Non-restart cancellation queues unsubscribe after the active crawl.
     finishActiveCrawl?.({ unsubscribe: vi.fn().mockResolvedValue(undefined) })
     await vi.advanceTimersByTimeAsync(0)
 
@@ -337,11 +435,11 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/finished', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/finished', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
     expect(sendMock).toHaveBeenCalledWith({ op: 'subscribed', id: 1 }, expect.any(Function))
-    process.emit('message', { op: 'cancel-subscribe', id: 1 })
+    process.emit('message', { op: 'cancel-subscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
@@ -362,9 +460,9 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
     expect(sendMock).toHaveBeenCalledWith(
@@ -390,9 +488,9 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/active', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/active', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'cancel-subscribe', id: 1 })
+    process.emit('message', { op: 'cancel-subscribe', id: 1 }, undefined)
 
     expect(sendMock).toHaveBeenCalledWith(
       { op: 'cancel-requires-restart', id: 1 },
@@ -409,12 +507,12 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
     await vi.advanceTimersByTimeAsync(30_000)
 
-    expect(writeFileSyncMock).toHaveBeenCalledTimes(3)
+    expect(writeFileSyncMock).toHaveBeenCalledTimes(2)
     expect(exitSpy).toHaveBeenCalledWith(2)
   })
 
@@ -436,13 +534,17 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 1,
-      dir: '/repo',
-      opts: {},
-      delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 1,
+        dir: '/repo',
+        opts: {},
+        delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     callback?.(null, [
@@ -488,7 +590,7 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
     await vi.advanceTimersByTimeAsync(0)
 
     callback?.(
@@ -532,7 +634,7 @@ describe('parcel watcher process canary', () => {
       process.send = sendMock
       await import('./parcel-watcher-process-entry')
       await vi.advanceTimersByTimeAsync(0)
-      process.emit('message', { op: 'subscribe', id: 1, dir, opts: {} })
+      process.emit('message', { op: 'subscribe', id: 1, dir, opts: {} }, undefined)
       await vi.advanceTimersByTimeAsync(0)
       sendMock.mockClear()
 
@@ -575,13 +677,17 @@ describe('parcel watcher process canary', () => {
     process.send = sendMock
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 1,
-      dir: '/repo',
-      opts: {},
-      delivery: { maxEventsPerBatch: 1 }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 1,
+        dir: '/repo',
+        opts: {},
+        delivery: { maxEventsPerBatch: 1 }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
     sendMock.mockClear()
 
@@ -628,13 +734,17 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 1,
-      dir: '/repo',
-      opts: {},
-      delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 1,
+        dir: '/repo',
+        opts: {},
+        delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     callback?.(null, [{ type: 'update', path: '/repo/first.txt' }])
@@ -673,19 +783,23 @@ describe('parcel watcher process canary', () => {
 
     await import('./parcel-watcher-process-entry')
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', {
-      op: 'subscribe',
-      id: 1,
-      dir: '/repo',
-      opts: {},
-      delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
-    })
+    process.emit(
+      'message',
+      {
+        op: 'subscribe',
+        id: 1,
+        dir: '/repo',
+        opts: {},
+        delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 2 }
+      },
+      undefined
+    )
     await vi.advanceTimersByTimeAsync(0)
 
     callback?.(null, [{ type: 'update', path: '/repo/first.txt' }])
     callback?.(null, [{ type: 'update', path: '/repo/queued.txt' }])
     await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'unsubscribe', id: 1 })
+    process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(0)
     releaseFirstEvent?.()
     await vi.advanceTimersByTimeAsync(0)

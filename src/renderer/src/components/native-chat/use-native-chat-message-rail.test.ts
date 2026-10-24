@@ -249,6 +249,7 @@ describe('message rail hook', () => {
 
   it('ticks every user message and shows from the first one', () => {
     const element = document.createElement('div')
+    Object.defineProperty(element, 'clientWidth', { value: 800 })
     const scrollRef = { current: element }
 
     const { result } = renderHook(() =>
@@ -280,6 +281,7 @@ describe('message rail hook', () => {
 
   it('maps user messages above the loaded window from the outline, before the loaded ones', () => {
     const scrollRef = { current: document.createElement('div') }
+    Object.defineProperty(scrollRef.current, 'clientWidth', { value: 800 })
     const outline = Array.from({ length: 30 }, (_, index) => ({
       id: `older-${index}`,
       text: `older prompt ${index}`,

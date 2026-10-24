@@ -1,8 +1,6 @@
-// Which per-emit fields ride one subscriber frame: the provider command catalog,
-// the queue publication (the draft list with the queue's pause) and the strip's
-// background-task roster. Each is deduplicated against the LAST VALUE SENT to that
-// subscriber — never advanced on a frame that withheld the field, or the final
-// replacement would be suppressed — and each attaches whole to hydrating frames.
+import type { AgentSessionPublishedWork } from './agent-session-published-work'
+import type { Subscriber } from './structured-agent-session-subscribers'
+// Deduplicate against last sent values only; withheld fields must not suppress final replacements.
 
 import type {
   AgentSessionBackgroundTaskState,
@@ -14,30 +12,28 @@ import { boundedFrames } from './agent-session-bounded-frames'
 
 export type SubscriberFieldState = {
   sessionId: string
-  /** Every frame to fit a phone's bridge frame; see `boundedFrames`. */
   boundedFrames: boolean
+  projectQueuePublication?: (publication: QueuePublication) => QueuePublication
   commands?: AgentSessionSlashCommand[] | null
-  /** The last queue publication actually SENT. */
+  /** Deduplicate canonical state before reader-specific projection. */
   queuePublication?: QueuePublication
-  /** Fingerprint of the roster last SENT; absent until this subscriber's first frame. */
   backgroundTasks?: string
 }
 
 export type SubscriberFieldHooks = {
   readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
-  /** Built from the host's child records, so it is read only when a frame owes it: never per token. */
+  /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
 }
 
 export type SubscriberFrame = {
-  /** In order: one for most subscribers; for a bounded-frame one, its side lists follow. */
+  /** Bounded subscribers receive side lists after history. */
   frames: AgentSessionSubscribeEvent[]
-  /** Undefined for a bounded-frame subscriber, which is never sent the list. */
+  /** Phones read commands through agentSession.options instead. */
   commands: AgentSessionSlashCommand[] | null | undefined
   attachedQueued: boolean
   queued: QueuePublication | undefined
-  /** The attached roster's fingerprint; undefined when the frame carries none. */
   backgroundTasks: string | undefined
 }
 
@@ -45,8 +41,7 @@ export function backgroundTaskFingerprint(state: AgentSessionBackgroundTaskState
   return JSON.stringify(state)
 }
 
-/** Builds the frame to emit; the caller stores the returned refs only after the
- *  emit succeeded, so a dropped subscriber never advances its dedup state. */
+/** Advance dedup references only after successful emission. */
 export function buildSubscriberFrame(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState,
@@ -60,15 +55,15 @@ export function buildSubscriberFrame(
     hooks.readCommands !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || commands !== subscriber.commands)
-  // Withheld on intermediate catch-up pages (the caller says so), attached to
-  // every hydrating frame, and to batches only when the list changed.
   const queued = withholdQueued ? undefined : hooks.readQueuePublication?.(subscriber.sessionId)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || queued !== subscriber.queuePublication)
   const backgroundTasks = subscriberBackgroundTasks(hooks, subscriber, event)
-  const sideQueued = attachedQueued ? queued : undefined
+  const sideQueued = attachedQueued
+    ? (subscriber.projectQueuePublication?.(queued) ?? queued)
+    : undefined
   return {
     frames: subscriber.boundedFrames
       ? boundedFrames(event, { queued: sideQueued, backgroundTasks })
@@ -94,9 +89,7 @@ export function buildSubscriberFrame(
   }
 }
 
-/** A subscriber's first frame and every hydrating frame state the roster, so a client resuming
- *  from its cursor never keeps a roster that changed while it was away; a republish carries its
- *  own. Other batches leave it out: the client keeps what it holds. */
+/** First/hydrating frames restate rosters changed while disconnected; ordinary batches keep prior state. */
 function subscriberBackgroundTasks(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState,
@@ -113,8 +106,7 @@ function subscriberBackgroundTasks(
     : undefined
 }
 
-/** Whether the `/` list changed since this subscriber was last sent it. A bounded-frame subscriber
- *  is never sent it: a phone reads it from `agentSession.options`. */
+/** Phones read commands through agentSession.options, so never owe this field. */
 export function subscriberCommandsChanged(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState
@@ -126,9 +118,7 @@ export function subscriberCommandsChanged(
   )
 }
 
-/** Whether a caught-up publish with no rows still owes this subscriber a frame:
- *  draft inserts and pause changes write no journal row, so an unchanged cursor
- *  must still deliver the changed publication. */
+/** Changed queue publications still require delivery when the subscriber is already caught up. */
 export function subscriberQueuedMessagesChanged(
   hooks: SubscriberFieldHooks,
   subscriber: SubscriberFieldState
@@ -137,4 +127,38 @@ export function subscriberQueuedMessagesChanged(
     hooks.readQueuePublication !== undefined &&
     hooks.readQueuePublication(subscriber.sessionId) !== subscriber.queuePublication
   )
+}
+
+/** Publication contains only a version; read completion supplies payload delivery credit. */
+export function emitSubscriberFrame(
+  hooks: SubscriberFieldHooks,
+  subscriber: Subscriber,
+  event: AgentSessionSubscribeEvent,
+  options?: { withholdQueued?: boolean; currentWork?: AgentSessionPublishedWork }
+): void {
+  const marker =
+    event.type !== 'end' && subscriber.readsCurrentRequests
+      ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
+      : undefined
+  const includeMarker =
+    marker && (event.type !== 'batch' || marker.version !== subscriber.requestVersion)
+  const built = buildSubscriberFrame(
+    hooks,
+    subscriber,
+    includeMarker && event.type !== 'end' ? { ...event, currentRequests: marker } : event,
+    options?.withholdQueued === true
+  )
+  for (const outgoing of built.frames) {
+    subscriber.emit(outgoing)
+  }
+  if (includeMarker) {
+    subscriber.requestVersion = marker.version
+  }
+  subscriber.commands = built.commands
+  if (built.attachedQueued) {
+    subscriber.queuePublication = built.queued
+  }
+  if (built.backgroundTasks !== undefined) {
+    subscriber.backgroundTasks = built.backgroundTasks
+  }
 }

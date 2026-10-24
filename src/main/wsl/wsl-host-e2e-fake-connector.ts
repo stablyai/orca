@@ -88,6 +88,7 @@ export function createFakeWslHostConnector(
       return connection
     },
     get: (distro) => active.get(key(distro)) ?? null,
+    isReachable: async (distro) => active.has(key(distro)),
     disconnect: async (distro) => {
       if (active.delete(key(distro))) {
         onChange(distro, null, { state: 'closed' })

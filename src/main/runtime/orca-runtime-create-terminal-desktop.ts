@@ -1,3 +1,4 @@
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal/launch/terminal-create'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
@@ -14,6 +15,7 @@ export async function createDesktopTerminal(
       `--shell ${opts.shellOverride} needs a workspace, because the shell is resolved on the workspace's execution host. No terminal was created.`
     )
   }
+  opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
   runtime.assertGraphReady()
   const win = runtime.getAuthoritativeWindow()
   const requestId = dependencies.randomUUID()

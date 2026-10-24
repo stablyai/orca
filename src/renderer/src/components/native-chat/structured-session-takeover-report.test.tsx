@@ -30,6 +30,7 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 
 function transport(): NativeChatStructuredComposerTransport {
   return {
+    capturePresentation: () => () => true,
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {

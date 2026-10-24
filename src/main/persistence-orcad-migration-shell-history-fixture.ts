@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration-blob-transfer'
-import type { OrcadMigrationManifest } from '../shared/orcad-migration-manifest'
+import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../shared/orcad-migration/orcad-migration-manifest'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
 import { getOrcadMigrationReceivedBlobPath } from './persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
 import { buildWslMoveShellHistoryBlobs } from './persistence/moving-wsl-projects/wsl-move-shell-history-blobs'
@@ -19,7 +19,7 @@ export const FOLDER_KEY = folderWorkspaceKey(FOLDER_WORKSPACE.id)
 export const ZSH = ': 1700000000:0;make test\n'
 export const BASH = 'git status\n'
 
-// What the desktop sends for the moved worktree: its source ids already equal the host's here.
+// Migration payloads use source IDs already mapped to this host.
 export async function encodedHistories(
   desktopHistory: string,
   files: { worktreeId: string; file: string; content: string }[]
@@ -84,7 +84,6 @@ export function hostHistory(worktreeId: string, file: string): string | null {
   return existsSync(path) ? readFileSync(path, 'utf8') : null
 }
 
-/** A runtime's live-shell check on a host where no shell runs. */
 export const noLiveShells = (): boolean => false
 
 export async function commitDurably(store: Store, input: OrcadMigrationManifest): Promise<string> {

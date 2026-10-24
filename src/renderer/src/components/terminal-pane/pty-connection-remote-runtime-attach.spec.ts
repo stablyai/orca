@@ -278,11 +278,12 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          // No recorded recipe, so no permission bypass is added to the resumed session.
+          command: "codex 'resume' 'codex-session-1'",
           launchAgent: 'codex',
           launchConfig: {
-            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+            agentCommand: 'codex',
+            agentArgs: '',
             agentEnv: {}
           },
           launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
@@ -450,9 +451,10 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
       expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
-    it('uses the focused runtime only for ownerless mixed-version publications', async () => {
+    it('spawns an unstamped local worktree locally while a single server is focused', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -467,7 +469,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
 
-      expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('legacy-hub', expect.any(Object))
+      // Why: the client stamps every server row on arrival, so an unstamped row is this machine's.
+      expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
+      expect(createIpcPtyTransport).toHaveBeenCalled()
     })
 
     it('runs an inline setup terminal locally instead of failing its host closed', async () => {

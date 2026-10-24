@@ -80,9 +80,6 @@ import {
 import type { CodexHookHashes } from './codex-hook-trust-derivation'
 import { computeTrustKey, readHookTrustEntries, upsertHookTrustEntries } from './config-toml-trust'
 
-// Why this file: the reconcile is the only writer of Orca's entry in ~/.codex,
-// and the common call, on every pane spawn and Codex launch, must change nothing.
-
 let root: string
 let home: string
 let userData: string
@@ -181,7 +178,7 @@ async function finishHeldLookupWait(
 }
 
 beforeEach(() => {
-  // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
+  // Resolve macOS /var symlinks to avoid a second trust-key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-reconcile-')))
   home = join(root, 'home')
   userData = join(root, 'user-data')
@@ -247,7 +244,7 @@ describe('reconcileCodexHooks', () => {
       })
     )
     const launch = reconcileCodexHooksForLaunch()
-    // Why past the reconcile's 500 ms answer wait: an early run would write its stopgap by then.
+    // Exceed the 500ms lookup budget to detect a premature stopgap write.
     await vi.advanceTimersByTimeAsync(600)
     expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
     expect(mocks.realHomeRuns).toBe(0)
@@ -514,8 +511,8 @@ describe('while the lookup is still asking Codex', () => {
   it('writes nothing while an entry is already in place', async () => {
     await start()
     const before = snapshot(codexHome())
-    // Why new bytes: a Codex update the lookup has not asked about yet.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0')
+    // A different size invalidates the binary fingerprint even within one filesystem clock tick.
+    writeFileSync(mocks.codexPath, 'codex 0.161.0 updated')
     const release = holdDerivation()
 
     await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
@@ -610,7 +607,7 @@ describe('an app start whose lookup has not answered within its wait', () => {
     })
     await start()
     const settled = snapshot(codexHome())
-    // A restart: in-process answers gone, the saved one kept, and `codex --version` slow.
+    // Simulate a restart retaining disk answers with a slow version probe.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     _internals.resetForTesting()
     lookupInternals.resetForTesting()

@@ -51,6 +51,8 @@ export function NativeChatThreadGoalBanner(props: {
   hostChanges: boolean
   /** The composer cannot admit another message or the session is working. */
   sendUnavailable: boolean
+  /** The host may take no turn now: Resume, and a clear that enters a turn, are held. */
+  startsHeld?: boolean
   isVisible: boolean
   /** The session's running turn, or null when idle; goal time accrues only while one runs. */
   runningTurn: { startedAt: number | null } | null
@@ -90,7 +92,10 @@ export function NativeChatThreadGoalBanner(props: {
             <GoalAction
               label={translate('components.native-chat.goal.clear', 'Clear goal')}
               // Claude's `/goal clear` must enter a fresh turn, like a composer send.
-              disabled={pending || (!props.hostChanges && props.sendUnavailable)}
+              disabled={
+                pending ||
+                (!props.hostChanges && (props.sendUnavailable || props.startsHeld === true))
+              }
               onClick={() => onChange({ kind: 'clear' })}
             >
               <Trash2 className="size-3.5" />
@@ -106,7 +111,7 @@ export function NativeChatThreadGoalBanner(props: {
             ) : statusChange === 'active' ? (
               <GoalAction
                 label={translate('components.native-chat.goal.resume', 'Resume goal')}
-                disabled={pending}
+                disabled={pending || props.startsHeld === true}
                 onClick={() => onChange({ kind: 'status', status: 'active' })}
               >
                 <Play className="size-3.5" />

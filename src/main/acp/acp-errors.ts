@@ -1,4 +1,5 @@
 import type { AuthMethod } from './generated/acp-protocol.generated'
+import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
 
 export class AcpRpcError extends Error {
   constructor(
@@ -11,8 +12,7 @@ export class AcpRpcError extends Error {
   }
 }
 
-/** The agent's own error answer to a request: it read the request and refused it. Errors Orca
- *  raises about a request (a timeout, an unreadable answer, a closed connection) are not this. */
+/** A rejection received from the agent, distinct from local transport failures. */
 export class AcpAgentError extends AcpRpcError {
   constructor(code: number, message: string, data?: unknown) {
     super(code, message, data)
@@ -31,7 +31,20 @@ export class AcpAuthRequiredError extends AcpAgentError {
   }
 }
 
-/** Orca could not read the agent's answer; `data` keeps the raw answer, `issues` why it failed. */
+/** Orca's sign-in prompt message, distinct from an agent-authored error. */
+export class AcpSignInPromptError extends AcpAuthRequiredError {}
+
+/** Preserve prompt errors so Orca's diagnostic text is never attributed to the agent. */
+export function acpAuthRequiredError(
+  error: AcpAgentError,
+  authMethods?: AuthMethod[]
+): AcpAuthRequiredError {
+  return error instanceof AcpSignInPromptError
+    ? error
+    : new AcpAuthRequiredError(error.message, error.data, authMethods)
+}
+
+/** Retains the raw answer in `data` and validation failures in `issues`. */
 export class AcpInvalidResponseError extends AcpRpcError {
   constructor(
     message: string,
@@ -43,7 +56,6 @@ export class AcpInvalidResponseError extends AcpRpcError {
   }
 }
 
-/** A line from the agent exceeded the framing limit, so the message it carried was never read. */
 export class AcpFrameTooLargeError extends Error {
   constructor(
     readonly method: string | null,
@@ -65,8 +77,12 @@ export class AcpConnectionClosedError extends Error {
 }
 
 export class AcpRequestTimeoutError extends Error {
-  constructor(readonly method: string) {
+  constructor(
+    readonly method: string,
+    timeoutMs: number
+  ) {
     super(`ACP request timed out: ${method}`)
     this.name = 'AcpRequestTimeoutError'
+    withProviderRequestTimeout(this, { method, timeoutMs })
   }
 }

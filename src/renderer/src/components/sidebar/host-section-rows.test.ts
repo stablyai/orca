@@ -3,9 +3,18 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
-import type { Row } from './worktree-list/grouping/row-types'
-import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
+import {
+  addHostSectionRows,
+  type HostSectionRow
+} from '../../../../shared/sidebar-list/host-section-rows'
+
+function sectionRows(
+  args: Omit<Parameters<typeof addHostSectionRows>[0], 'localHostLabel'>
+): HostSectionRow[] {
+  return addHostSectionRows({ ...args, localHostLabel: 'Local Mac' })
+}
 
 function repo(id: string, connectionId?: string | null): Repo {
   return {
@@ -45,8 +54,8 @@ function header(key: string, label = key): Extract<Row, { type: 'header' }> {
     type: 'header',
     key,
     label,
-    count: 1,
-    tone: 'text-foreground'
+    icon: { kind: 'project' },
+    count: 1
   }
 }
 
@@ -144,7 +153,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows = [repoHeader(local), item('local-wt', local)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -169,7 +178,7 @@ describe('addHostSectionRows', () => {
     const rows = [repoHeader(local), item('local-wt', local)]
 
     expect(
-      addHostSectionRows({
+      sectionRows({
         rows,
         hostOptions: [
           {
@@ -191,7 +200,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -226,7 +235,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -251,7 +260,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -284,7 +293,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [header('all'), item('local-wt', local), header('done'), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -327,7 +336,7 @@ describe('addHostSectionRows', () => {
       item('ssh-normal', ssh)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -379,7 +388,7 @@ describe('addHostSectionRows', () => {
       )
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -417,7 +426,7 @@ describe('addHostSectionRows', () => {
       item('local-wt', local)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -458,7 +467,7 @@ describe('addHostSectionRows', () => {
       item('ssh-wt', ssh)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -494,7 +503,7 @@ describe('addHostSectionRows', () => {
       item('ssh-wt', ssh)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -536,7 +545,7 @@ describe('addHostSectionRows', () => {
       item('remote-wt', runtimeOwned)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -579,7 +588,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows: Row[] = [repoHeader(local), item('local-wt', local), folderWorkspaceRow('ssh-1')]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -609,7 +618,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -651,7 +660,7 @@ describe('addHostSectionRows', () => {
       item('runtime-wt', project)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -681,7 +690,7 @@ describe('addHostSectionRows', () => {
     })
   })
 
-  it('passes host kind and blocked compatibility through to the header row', () => {
+  it('passes host kind, blocked compatibility and reason through to the header row', () => {
     const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
     const rows = [
@@ -691,7 +700,7 @@ describe('addHostSectionRows', () => {
       item('runtime-wt', project)
     ]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -713,7 +722,8 @@ describe('addHostSectionRows', () => {
             clientProtocolVersion: 5,
             serverProtocolVersion: 1,
             requiredServerProtocolVersion: 4
-          }
+          },
+          blockedReason: 'incompatible'
         }
       ],
       workspaceHostScope: 'all',
@@ -725,7 +735,8 @@ describe('addHostSectionRows', () => {
     ).toMatchObject({
       kind: 'runtime',
       health: 'blocked',
-      compatibility: { kind: 'blocked', reason: 'server-too-old' }
+      compatibility: { kind: 'blocked', reason: 'server-too-old' },
+      blockedReason: 'incompatible'
     })
   })
 
@@ -733,7 +744,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const rows = [repoHeader(local), item('local-wt', local)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -766,7 +777,7 @@ describe('addHostSectionRows', () => {
     const collapsedSshHeader = { ...repoHeader(ssh), count: 9 }
     const rows = [repoHeader(local), item('local-wt', local), collapsedSshHeader]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -795,7 +806,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {
@@ -829,7 +840,7 @@ describe('addHostSectionRows', () => {
     const ssh = repo('ssh', 'ssh-1')
     const rows = [repoHeader(local), item('local-wt', local), repoHeader(ssh), item('ssh-wt', ssh)]
 
-    const sectioned = addHostSectionRows({
+    const sectioned = sectionRows({
       rows,
       hostOptions: [
         {

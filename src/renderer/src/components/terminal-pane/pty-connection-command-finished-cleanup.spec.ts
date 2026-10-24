@@ -366,7 +366,8 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const { connectPanePty } = await import('./pty-connection')
       // Both imported after vi.resetModules() so they share pty-connection's module registry; a
       // static top-level import here is a DIFFERENT instance and the assertion goes vacuous.
-      const { createTestStore } = await import('@/store/slices/store-test-helpers')
+      const { createCommandFinishedStatusStore } =
+        await import('./command-finished-status-store-test-fixture')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
       vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -392,24 +393,22 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       // A real accepted status write, through the real slice, so the row carries whatever
       // bookkeeping the store stamps on an accepted write. `working` is the shape STA-4612 is about:
       // a latch is holding the pane open and the agent is about to exit out from under it.
-      const realStore = createTestStore()
-      realStore
-        .getState()
-        .setAgentStatus(paneKey, { state: 'working', prompt: 'ship it', agentType: 'claude' })
-      const row = realStore.getState().agentStatusByPaneKey[paneKey]
+      const realStore = createCommandFinishedStatusStore()
+      const row = realStore.acceptWorkingClaudeStatus(paneKey)
       expect(row).toBeDefined()
       mockStoreState.agentStatusByPaneKey[paneKey] = row
       // The real dismissal removes the row and runs the slice's own teardown; mirror both, or the
       // ordering this test exists to pin is never exercised.
       mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
         delete mockStoreState.agentStatusByPaneKey[key]
-        realStore.getState().dropAgentStatus(key)
+        realStore.dropAgentStatus(key)
       })
 
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350)
 
       expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      expect(realStore.getStatus(paneKey)).toBeUndefined()
       expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
     })
 

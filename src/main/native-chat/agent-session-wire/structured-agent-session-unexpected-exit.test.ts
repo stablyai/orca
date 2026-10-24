@@ -14,6 +14,11 @@ import {
   type StructuredAgentSessionChildExitSession
 } from './structured-agent-session-child-exit'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import {
+  exitJournalDouble,
+  plannedBatchThrough
+} from './structured-agent-session-settlement-double.test-fixture'
+import type { JournalLifecycleBatchInput } from '../agent-session-journal/journal-store-contracts'
 
 const exitOutcome = (agent: string): string =>
   `${agent} stopped while this response was in progress. You can continue in this conversation.`
@@ -101,7 +106,8 @@ describe('provider-exit settlement', () => {
         itemFence: () => 7,
         lastProviderActivityAt: () => undefined,
         stopMarks: { latest: () => null, personStopDecides: () => false },
-        appendLifecycleBatch
+        submissions: () => [],
+        appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
     } as unknown as StructuredAgentSessionHostSession
 
@@ -129,7 +135,7 @@ describe('provider-exit settlement', () => {
         observedAt
       }
     )
-    // Released, not latched: a later settle from this evidence finishes what this write left.
+    // Release without latching so later settlement can finish the failed write.
     expect(record.lease).toMatchObject({
       claimStatus: 'released',
       handoffStage: null,
@@ -173,7 +179,8 @@ describe('provider-exit settlement', () => {
         itemBody: () => null,
         itemFence: () => undefined,
         snapshot: () => ({ items }),
-        appendLifecycleBatch
+        submissions: () => [],
+        appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
@@ -211,7 +218,6 @@ describe('provider-exit settlement', () => {
     )
 
     expect(session.child).toBeNull()
-    // The running row is revised to interrupted at exit receipt, never tombstoned.
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
       settlementId: `dead-generation:provider-exit:${SESSION}:7:${GENERATION}`,
       fence: 7,
@@ -230,7 +236,6 @@ describe('provider-exit settlement', () => {
             failure: { kind: 'providerExited' },
             tone: 'error'
           },
-          // The exit belongs to the turn it ended.
           turnScope: {
             kind: 'turn',
             turnItemId: agentJournalItemKey({
@@ -279,19 +284,13 @@ describe('provider-exit settlement', () => {
           ...(initialState === 'running' ? {} : { completedAt: 40 })
         })
       ]
-      const appendLifecycleBatch = vi.fn(async (_input: { mutations: readonly unknown[] }) => ({
+      const appendLifecycleBatch = vi.fn(async (_input: JournalLifecycleBatchInput) => ({
         epoch: 'epoch-1',
         sequence: 3
       }))
       const session: StructuredAgentSessionChildExitSession = {
         child: { generation: GENERATION, fence: 7, phase: 'ready' },
-        journal: {
-          cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-          itemBody: () => null,
-          itemFence: () => undefined,
-          snapshot: () => ({ items }),
-          appendLifecycleBatch
-        }
+        journal: exitJournalDouble({ items: () => items, appendLifecycleBatch })
       }
 
       const { store } = mutableStore()
@@ -340,16 +339,19 @@ describe('provider-exit settlement', () => {
   )
 
   it('settles a submission the dead child never acknowledged', async () => {
+    const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
     const session: StructuredAgentSessionChildExitSession = {
-      child: { generation: GENERATION, fence: 7, phase: 'ready' },
-      journal: {
-        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
-        itemFence: () => undefined,
-        snapshot: () => ({ items: [] }),
-        appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
-        submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending' }]
-      }
+      child: {
+        generation: GENERATION,
+        fence: 7,
+        phase: 'ready',
+        exitObservation: () => ({ heldSends: new Set(['client-1']) })
+      },
+      journal: exitJournalDouble({
+        items: () => [],
+        appendLifecycleBatch,
+        submissions: () => [{ clientMessageId: 'client-1', dispatchState: 'pending', fence: 7 }]
+      })
     }
 
     const { store } = mutableStore()
@@ -371,8 +373,10 @@ describe('provider-exit settlement', () => {
       acquisitionGeneration: GENERATION
     })
 
-    expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
+    // Settle at the exited child’s fence before release advances it.
+    expect(appendLifecycleBatch).toHaveBeenCalledWith(
       expect.objectContaining({
+        fence: 7,
         dispatches: [
           {
             clientMessageId: 'client-1',
@@ -399,17 +403,12 @@ describe('provider-exit settlement', () => {
   it('releases without offering a restart while terminal settlement is failing', async () => {
     const session: StructuredAgentSessionChildExitSession = {
       child: { generation: GENERATION, fence: 7, phase: 'ready' },
-      journal: {
-        cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
-        itemBody: () => null,
-        itemFence: () => undefined,
-        snapshot: () => ({
-          items: [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })]
-        }),
+      journal: exitJournalDouble({
+        items: () => [lifecycleItem('turn-failing', 1, { state: 'running', startedAt: 1 })],
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')
         })
-      }
+      })
     }
     const log = recordingStructuredAgentSessionLogger()
     const generationEnded = vi.fn()
@@ -434,9 +433,40 @@ describe('provider-exit settlement', () => {
     await settleStructuredAgentSessionChildExit(context, event)
 
     expect(session.child).toBeNull()
+    // Publish death before writes, then retain the exit account for retry.
     expect(generationEnded).toHaveBeenCalledTimes(2)
     expect(generationEnded).toHaveBeenNthCalledWith(1, SESSION)
     expect(generationEnded).toHaveBeenLastCalledWith(SESSION, { restate: true })
     expect(log.scopes()).toEqual(['exit-lifecycle-barrier', 'exit-settlement'])
+  })
+
+  it('ignores an exit reported for an earlier generation at the same fence', async () => {
+    const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
+    const session: StructuredAgentSessionChildExitSession = {
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
+      journal: exitJournalDouble({ items: () => [], appendLifecycleBatch })
+    }
+    const { store } = mutableStore()
+    const context: StructuredAgentSessionChildExitContext<typeof session> = {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      store,
+      sessions: new Map([[SESSION, session]]),
+      flushLifecycle: async () => ({ ok: true }),
+      generationEnded: vi.fn(),
+      serialize: async (_sessionId, task) => task(),
+      now: () => 1
+    }
+    await settleStructuredAgentSessionChildExit(context, {
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'provider exited',
+      cause: 'unexpected-exit',
+      fence: 7,
+      acquisitionGeneration: 'generation-stale'
+    })
+
+    expect(store.getRecord().lease.claimStatus).toBe('live')
+    expect(session.child?.generation).toBe(GENERATION)
+    expect(appendLifecycleBatch).not.toHaveBeenCalled()
   })
 })

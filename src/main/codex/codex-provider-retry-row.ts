@@ -1,6 +1,4 @@
-// The row a Codex stream error it is about to retry writes: Codex's own progress sentence, what
-// failed on the line under it, and a `providerRetrying` fact. Every attempt is its own row; the
-// transcript draws only the latest of a run.
+// Each retry attempt gets a journal row; the transcript displays only the latest in a run.
 
 import {
   agentSessionFailureFact,
@@ -12,7 +10,7 @@ import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import {
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  PROVIDER_FRAME_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
@@ -22,7 +20,7 @@ import {
   readCodexErrorWillRetry
 } from './codex-structured-thread-facts'
 
-/** An `error` frame for a stream error Codex is about to retry; it ends nothing. */
+/** Retryable stream errors do not end the turn. */
 export function isCodexProviderRetryFrame(event: CodexStructuredSessionEvent): boolean {
   return (
     event.type === 'notification' &&
@@ -37,7 +35,7 @@ export function codexProviderRetryRowBody(payload: unknown): AgentJournalStatusI
   const additionalDetails = readCodexErrorAdditionalDetails(payload)
   const retry = readProviderRetry({
     ...readCodexErrorInfo(payload),
-    // Details that only repeat the message would print the same words twice.
+    // Do not repeat the message as its own cause.
     ...(additionalDetails && additionalDetails.trim() !== message?.trim()
       ? { cause: additionalDetails }
       : {})
@@ -56,7 +54,7 @@ export function codexProviderRetryRowBody(payload: unknown): AgentJournalStatusI
     providerFrame: {
       provider: 'codex',
       kind: 'notification:error',
-      payload: boundPayload(JSON.stringify(payload), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+      payload: boundPayload(JSON.stringify(payload), PROVIDER_FRAME_PAYLOAD_LIMITS)
     }
   }
 }

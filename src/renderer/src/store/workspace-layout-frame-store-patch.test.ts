@@ -15,7 +15,19 @@ import { createTestStore } from './slices/store-test-helpers'
 import type { AppState } from './types'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
+import {
+  DESKTOP_CREATED_SERVER_TAB_HOLDS,
+  _resetDesktopCreatedServerTabsForTests,
+  noteDesktopCreatedServerTab
+} from '@/lib/desktop-created-server-tabs'
 
+// Off as the build ships; the desktop-created record exists only with it on.
+const layoutOwner = vi.hoisted(() => ({ on: false }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.on
+  }
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -39,7 +51,15 @@ async function restored(): Promise<{
 function patchFor(
   state: AppState,
   session: WorkspaceSessionState,
-  frame: PublishedWorkspaceLayout
+  frame: PublishedWorkspaceLayout,
+  ...windowSide: Parameters<typeof buildLayoutFrameStorePatch> extends [
+    unknown,
+    unknown,
+    unknown,
+    ...infer Rest
+  ]
+    ? Rest
+    : never
 ) {
   const { facts, desktopView } = loadWorkspaceLayoutWithoutReport(
     'local',
@@ -47,7 +67,7 @@ function patchFor(
     nameBasedLoadContext()
   )
   const built = buildLayoutFrameSlices({ layouts: { [GIT_KEY]: frame }, facts, view: desktopView })
-  return buildLayoutFrameStorePatch(state, built, [GIT_KEY])
+  return buildLayoutFrameStorePatch(state, built, [GIT_KEY], ...windowSide)
 }
 
 function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWorkspaceLayout {
@@ -75,6 +95,40 @@ describe('laying frame slices over the store', () => {
     expect(patch.unifiedTabsByWorktree?.[GIT_KEY]?.map((tab) => tab.id)).not.toContain('tab-shell')
   })
 
+  it('keeps the pane layout of a tab the window’s own pane command holds, until main drops the tab', async () => {
+    const { state, session, frame } = await restored()
+    const newRatios: PublishedWorkspaceLayout = {
+      ...frame,
+      tabs: frame.tabs.map((tab) =>
+        tab.id === 'tab-shell' && tab.terminal?.root?.type === 'split'
+          ? { ...tab, terminal: { ...tab.terminal, root: { ...tab.terminal.root, ratio: 0.2 } } }
+          : tab
+      )
+    }
+    const held = (id: string): boolean => id === 'tab-shell'
+
+    expect(patchFor(state, session, newRatios).terminalLayoutsByTabId?.['tab-shell']).toBeDefined()
+    expect(patchFor(state, session, newRatios, held).terminalLayoutsByTabId).toBeUndefined()
+    expect(
+      patchFor(state, session, withoutTab(frame, 'tab-shell'), held).terminalLayoutsByTabId
+    ).not.toHaveProperty('tab-shell')
+  })
+
+  it('gives a row the frame creates the window’s own fields for it', async () => {
+    const { state, session, frame } = await restored()
+    const shown = patchFor(state, session, withoutTab(frame, 'tab-shell'))
+    const before = { ...state, ...shown }
+    const fields = vi.fn((id: string) =>
+      id === 'tab-shell' ? { pendingActivationSpawn: true } : null
+    )
+
+    const patch = patchFor(before, session, frame, undefined, fields)
+
+    const row = patch.tabsByWorktree?.[GIT_KEY]?.find((tab) => tab.id === 'tab-shell')
+    expect(row?.pendingActivationSpawn).toBe(true)
+    expect(fields).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps an open file’s editor state and place, and drops a file main closed', async () => {
     const { state, session, frame } = await restored()
     const file = state.openFiles.find((entry) => entry.worktreeId === GIT_KEY)!
@@ -100,5 +154,57 @@ describe('laying frame slices over the store', () => {
       browserTabs: []
     })
     expect(closed.browserPagesByWorkspace).not.toHaveProperty('browser-1')
+  })
+
+  it('keeps a client-hosted browser tab this desktop created, with its page and handle, at its place (L274)', async () => {
+    const { state, session, frame } = await restored()
+    const page = state.browserPagesByWorkspace['browser-1']![0]!
+    const handle = {
+      environmentId: 'web-env-1',
+      remotePageId: 'server-page-1',
+      placement: {
+        kind: 'client' as const,
+        browserHostClientId: 'this-desktop',
+        browserHostGeneration: 1,
+        pageHostGeneration: 1
+      }
+    }
+    const hosting = {
+      ...state,
+      remoteBrowserPageHandlesByPageId: {
+        ...state.remoteBrowserPageHandlesByPageId,
+        [page.id]: handle
+      }
+    }
+    const groupOf = (tabs: AppState['groupsByWorktree']) =>
+      tabs[GIT_KEY]!.find((group) => group.tabOrder.includes('browser-1'))
+    const order = groupOf(state.groupsByWorktree)!.tabOrder
+    // The server's frame lists every tab but the one this desktop hosts.
+    const serverFrame = { ...withoutTab(frame, 'browser-1'), browserTabs: [] }
+    layoutOwner.on = true
+    noteDesktopCreatedServerTab('web-env-1', GIT_KEY, 'browser-1')
+    try {
+      const patch = patchFor(
+        hosting,
+        session,
+        serverFrame,
+        undefined,
+        undefined,
+        DESKTOP_CREATED_SERVER_TAB_HOLDS
+      )
+      const after = { ...hosting, ...patch }
+      expect(after.unifiedTabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toContain('browser-1')
+      expect(groupOf(after.groupsByWorktree)?.tabOrder).toEqual(order)
+      expect(after.browserTabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toContain('browser-1')
+      expect(after.browserPagesByWorkspace['browser-1']).toEqual([page])
+      expect(after.remoteBrowserPageHandlesByPageId[page.id]).toEqual(handle)
+    } finally {
+      _resetDesktopCreatedServerTabsForTests()
+      layoutOwner.on = false
+    }
+    // Presence: without the hold, the same frame drops all three.
+    const dropped = patchFor(hosting, session, serverFrame)
+    expect(dropped.browserPagesByWorkspace).not.toHaveProperty('browser-1')
+    expect(dropped.remoteBrowserPageHandlesByPageId).not.toHaveProperty(page.id)
   })
 })

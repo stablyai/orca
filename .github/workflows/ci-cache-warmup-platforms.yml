@@ -20,7 +20,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/initialize-windows-native-toolchain.mjs'
       - 'config/scripts/capture-windows-native-environment.cmd'
@@ -37,6 +37,7 @@ on:
       - 'config/scripts/space-sharing-copy.mjs'
       - 'config/patches/**'
       - 'native/windows-registry/**'
+      - 'native/windows-security/**'
       - 'native/windows-cli-launcher/**'
       - 'native/windows-agent-hook/**'
       - 'config/scripts/build-windows-cli-launcher.mjs'
@@ -44,6 +45,7 @@ on:
       - 'config/scripts/windows-rust-executable-build.mjs'
       - 'resources/build/icon.ico'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/ci-cache-warmup-platforms.yml'
       - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
@@ -51,6 +53,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-cache-warmup-platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   warm-platforms:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     uses: ./.github/workflows/ci-cache-warmup-platform-jobs.yml

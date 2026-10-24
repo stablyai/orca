@@ -260,6 +260,49 @@ describe('structured agent session reducer', () => {
     expect(restored.hasOlder).toBe(false)
   })
 
+  it('stops offering older history once a /clear divider is loaded, live or paged in', () => {
+    const clearRow = (sequence: number): AgentJournalRenderItem => ({
+      ...item(`clear-${sequence}`, sequence),
+      body: {
+        kind: 'status',
+        text: 'Context cleared',
+        presentation: 'context-cleared',
+        contextClear: { operationId: `clear-${sequence}`, afterFence: 1, clearedAt: sequence }
+      }
+    })
+    const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('old', 10)]), hasOlder: true }
+    })
+    expect(restored.hasOlder).toBe(true)
+    const cleared = reduceStructuredAgentSession(restored, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 11 },
+          items: [clearRow(11)],
+          removedItemIds: [],
+          submissions: []
+        }
+      }
+    })
+    expect(cleared.hasOlder).toBe(false)
+
+    const afterLongChat = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'history-page',
+      page: { ...hydrationPage([item('new', 40)]), hasOlder: true }
+    })
+    const pagedBack = reduceStructuredAgentSession(afterLongChat, {
+      type: 'older-page',
+      requestedCursor: { epoch: 'epoch-a', sequence: 40 },
+      page: { ...hydrationPage([item('old', 10), clearRow(11)]), hasOlder: true }
+    })
+    expect(pagedBack.items.map(({ itemId }) => itemId)).toEqual(['old', 'clear-11', 'new'])
+    expect(pagedBack.hasOlder).toBe(false)
+  })
+
   it('projects additive background task state without changing transcript identity', () => {
     const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',

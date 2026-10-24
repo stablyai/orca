@@ -1,9 +1,11 @@
 import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import { getDaemonRuntimeDir as getRuntimeDir } from './daemon-launch-paths'
 import { readDaemonPidRecord as readDaemonPidRecordAt } from './daemon-endpoint-incarnation'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
+  getCurrentDaemonAdapter,
   getLegacyDaemonAdapters,
   listEveryDaemonGeneration,
   type DaemonProvider
@@ -32,14 +34,7 @@ export function getDaemonSpawner(): DaemonSpawner | null {
   return spawner
 }
 
-/**
- * Whether the installed provider is a daemon that will own FRESH terminals too.
- *
- * Why not `getDaemonProvider() !== null`: DegradedDaemonPtyProvider routes the daemon's
- * EXISTING sessions to the daemon but spawns new ones on the in-process local provider, so
- * those die with this process. A host that answered "I can recover persistent local PTYs"
- * from that state would be advertising recovery for terminals that cannot be recovered.
- */
+/** Degraded providers keep existing sessions persistent but spawn fresh terminals in-process. */
 export function daemonOwnsFreshPersistentPtys(): boolean {
   return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
 }
@@ -67,18 +62,11 @@ export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
   }
 }
 
-/**
- * What the live daemon's own PID record says about the build it was forked from.
- *
- * Why the record and not this process's version: the daemon deliberately outlives the
- * runtime, so after an update the two can legitimately disagree — and a health surface that
- * reported orcad's version for both would hide exactly that.
- */
+/** Read the daemon's build from its record: it may outlive the app version now running. */
 export function readDaemonPidRecord(): ParsedDaemonPid | null {
   return readDaemonPidRecordAt(getDaemonEndpointFacts()?.pidPath ?? null)
 }
 
-// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
@@ -95,8 +83,7 @@ export function isTerminalOnLegacyDaemon(
     : false
 }
 
-// Why: computed from the pid record on demand (not cached at adoption) so the Settings
-// remedy surface always reflects the daemon actually serving terminals right now.
+// Read attribution on demand so Settings describes the daemon currently serving terminals.
 export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
   const runtimeDir = getRuntimeDir()
   return getMacDaemonTccAttributionHealth(
@@ -106,14 +93,13 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
   )
 }
 
-// Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
+// Keep module state and the quit-time provider reference in sync.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
   setLocalPtyProvider(newAdapter)
 }
 
-// Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
-// Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
+// Preserve warm sessions and unclean history so crashes while Orca is closed remain recoverable.
 export async function disconnectDaemon(): Promise<void> {
   await adapter?.disconnectOnly()
   adapter = null
@@ -168,6 +154,25 @@ export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetiremen
     return { state: 'unverifiable' }
   }
   return adapter.requestIdleRetirement()
+}
+
+/** Whether an idle-retirement attempt left the daemon refusing new terminals. */
+export function isDaemonTerminalAdmissionClosed(): boolean {
+  if (!adapter || adapter instanceof DegradedDaemonPtyProvider) {
+    return false
+  }
+  // Fresh terminals go to the current generation, behind the router's own fence.
+  return (
+    (adapter instanceof DaemonPtyRouter && adapter.retirement.admissionClosed) ||
+    getCurrentDaemonAdapter(adapter).isIdleRetirementAdmissionClosed()
+  )
+}
+
+/** The pid the current daemon generation last authenticated as, if it ever did. */
+export function getCurrentDaemonPid(): number | null {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? (getCurrentDaemonAdapter(adapter).getLastAuthenticatedDaemonIdentity()?.pid ?? null)
+    : null
 }
 
 /** Reopens terminal admission when an idle-retirement attempt did not retire the daemon. */

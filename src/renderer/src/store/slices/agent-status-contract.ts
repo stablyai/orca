@@ -5,9 +5,11 @@ import type {
   AgentStatusOrchestrationContext,
   AgentType,
   MigrationUnsupportedPtyEntry,
-  ParsedAgentStatusPayload
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
 } from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
@@ -81,6 +83,8 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
    *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
   observation?: AgentStatusObservation
+  /** `null` clears the facet; absent keeps it (the writer has no facet channel, e.g. renderer OSC). */
+  programStatus?: ProgramStatusFacet | null
 }
 
 export type AgentStatusTiming = {
@@ -92,6 +96,9 @@ export type AgentStatusTiming = {
   stateStartedAt?: number
   /** The host's turn start; see `AgentStatusEntry.turnStartedAt`. */
   turnStartedAt?: number
+  /** The host's turn end; see `AgentStatusEntry.turnEndedAt`. */
+  turnEndedAt?: number
+  turnEndDisposition?: TurnEndDisposition
 }
 
 export type AgentStatusRouting = {
@@ -141,7 +148,18 @@ export type AgentProviderSessionUpdate = {
   metadata?: AgentProviderSessionRecordMetadata
 }
 
-export type AgentStatusBatchUpdate = AgentStatusUpdate | AgentProviderSessionUpdate
+/** Patch only a live row's OSC 7501 facet; no state, timing, notification or attention effects. */
+export type AgentProgramStatusUpdate = {
+  kind: 'programStatus'
+  paneKey: string
+  /** `null` clears the facet. */
+  programStatus: ProgramStatusFacet | null
+}
+
+export type AgentStatusBatchUpdate =
+  | AgentStatusUpdate
+  | AgentProviderSessionUpdate
+  | AgentProgramStatusUpdate
 
 export type AgentStatusBatchTransaction = {
   getState: () => AppState

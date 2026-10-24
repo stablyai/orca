@@ -1,7 +1,3 @@
-// A start that fails can be written up twice: by the exit settlement, for a message the starting
-// child was handed, and by the delivery loop, for a message the exit found still queued. The chat
-// gets one row for that start, in the words the message was rejected with.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,9 +25,8 @@ import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-
 
 const CALLER = { callerKey: 'client-1' }
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
-// The exit's reason is Orca's log text; the row says only that the start stopped.
+// Internal exit diagnostics must not reach the failure row.
 const EXIT_TEXT = 'Codex stopped before it finished starting. Send your message to try again.'
-// The first child (generation-1) is lost at setup; the send starts generation-2.
 const START_ROW = agentJournalItemKey({
   provider: 'orca',
   clientMessageId: 'start-failure:generation-2'
@@ -45,7 +40,6 @@ let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let generation = 0
-/** The next start's child exits as its start step returns, before the handover step. */
 let exitOnStart = false
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let frames: AgentSessionSubscribeEvent[] = []
@@ -57,8 +51,7 @@ function exitBeforeProof(): Promise<void> {
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -88,7 +81,6 @@ async function submission(clientMessageId: string) {
   )
 }
 
-/** Every text the subscriber was sent for the start's row, in order. */
 function publishedStartRows(): string[] {
   return frames.flatMap((frame) =>
     frame.type === 'batch'
@@ -118,6 +110,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: () => new Promise(() => {}),
       acquire: vi.fn(async ({ fence, spawnToken }) => {
         const child = {
           process: {
@@ -133,19 +126,17 @@ beforeEach(async () => {
             mintedAtFence: fence,
             observedAt: NOW
           },
-          acquisitionGeneration: `generation-${++generation}`,
-          providerChildPhase: 'starting' as const
+          acquisitionGeneration: `generation-${++generation}`
         }
         if (exitOnStart) {
-          // Asked for on the lane while the start step runs, so it lands before the handover.
+          // Enqueue exit within startup so it precedes handover.
           void host.handleAdapterEvent({
             type: 'ended',
             sessionId: SESSION,
             fence,
             acquisitionGeneration: child.acquisitionGeneration,
             reason: EXIT_REASON,
-            cause: 'unexpected-exit',
-            startupUnproven: true
+            cause: 'unexpected-exit'
           })
         }
         return child
@@ -203,7 +194,6 @@ describe('a start that fails before it proves itself', () => {
 
     expect(dispatch).not.toHaveBeenCalled()
     expect(await startRows()).toEqual([EXIT_TEXT])
-    // Written once, after the message was settled, not first by the exit and again by the loop.
     expect(publishedStartRows()).toEqual([EXIT_TEXT])
   })
 })

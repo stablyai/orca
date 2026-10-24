@@ -1,5 +1,3 @@
-// Host API for crash-isolated @parcel/watcher children. Desktop uses one
-// supervisor; runtime roots use a bounded pool with independent crash fuses.
 import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
 import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
 import type {
@@ -9,20 +7,8 @@ import type {
 } from './parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
-export type {
-  WatcherProcessCallback,
-  WatcherProcessHooks,
-  WatcherProcessSubscription
-} from './parcel-watcher-process-subscription'
-export type {
-  WatcherProcessDeliveryOptions,
-  WatcherProcessEvent,
-  WatcherProcessSubscribeOptions
-} from './parcel-watcher-process-protocol'
-
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
-// Why: healthy roots share one child; only fault quarantine scales to four,
-// containing a failed shard without paying that RSS cost during normal use.
+// Healthy roots share a child; quarantine adds isolation only after faults to limit RSS.
 const runtimeWatcherProcessPool = new RuntimeWatcherProcessPool()
 
 export function createWatcherProcessSupervisor(): WatcherProcessSupervisor {
@@ -47,22 +33,17 @@ export function subscribeViaRuntimeWatcherProcess(
   return runtimeWatcherProcessPool.subscribe(dir, callback, opts, hooks)
 }
 
-/** Kill shared desktop and runtime watcher children at app/runtime shutdown. */
 export function disposeWatcherProcess(): void {
-  // Why: Vitest reuses this module singleton after closeAllWatchers(), while
-  // production shutdown must remain final and reject any later subscription.
+  // Vitest reuses this singleton; production shutdown must reject later subscriptions.
   if (process.env.VITEST) {
     sharedWatcherProcessSupervisor.resetForTest()
     runtimeWatcherProcessPool.resetForTest()
   } else {
     sharedWatcherProcessSupervisor.dispose()
-    // Why: the runtime pool owns independent children that otherwise outlive a
-    // shutdown sequence that does not immediately exit the main process.
     runtimeWatcherProcessPool.dispose()
   }
 }
 
-/** Dispose both watcher hosts and wait for every child they own to exit. */
 export async function disposeWatcherProcessAndWait(): Promise<void> {
   const results = await Promise.allSettled([
     sharedWatcherProcessSupervisor.disposeAndWait(),

@@ -2,7 +2,7 @@ import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { buildServePairingReadiness } from '../server/serve-pairing-readiness'
 import type { OrcadHealth } from './orcad-health'
-import type { OrcadOptions } from './orcad-entry'
+import type { OrcadOptions } from './orcad-start-contract'
 
 /** The readiness payload orcad publishes once its RPC transport is listening. */
 export async function buildOrcadServeReadiness(input: {

@@ -10,7 +10,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
-import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -32,6 +32,7 @@ import {
   invalidateRuntimeClientEventReplay
 } from './runtime-environment-subscription-selection'
 import type { WorktreeEventRuntime } from './worktree-event-runtime'
+import { readPublishedSortOrders } from '../../store/slices/worktrees/listing/worktree-sort-order-patch'
 
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
@@ -42,15 +43,15 @@ export function registerRuntimeClientIpcBridge(
   unsubs.push(() => {
     stopped = true
   })
+  const isRuntimeEventRepoKnown = ({ repoId, executionHostId }: OwnedWorktreeEvent): boolean =>
+    (useAppStore.getState().repos ?? []).some(
+      (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
+    )
   const ensureRuntimeEventRepoKnown = async (
     environmentId: string,
-    { repoId, executionHostId }: OwnedWorktreeEvent
+    event: OwnedWorktreeEvent
   ): Promise<void> => {
-    if (
-      (useAppStore.getState().repos ?? []).some(
-        (repo) => repo.id === repoId && getRepoExecutionHostId(repo) === executionHostId
-      )
-    ) {
+    if (isRuntimeEventRepoKnown(event)) {
       return
     }
     await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
@@ -141,6 +142,13 @@ export function registerRuntimeClientIpcBridge(
           ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {})
         }
       })
+      const sortOrders =
+        event.sortOrderOnly === true ? readPublishedSortOrders(event.sortOrders) : null
+      if (sortOrders && isRuntimeEventRepoKnown(owned)) {
+        // Why sync: published values must enqueue in receipt order; an unknown repo refetches instead.
+        worktreeChangeRefreshQueue.enqueue({ ...owned, sortOrders })
+        return
+      }
       void ensureRuntimeEventRepoKnown(environmentId, owned).then(() =>
         worktreeChangeRefreshQueue.enqueue(owned)
       )
@@ -153,6 +161,10 @@ export function registerRuntimeClientIpcBridge(
         .catch((error) => {
           console.error('Failed to refresh updated Linear issue:', error)
         })
+      return
+    }
+    // This window builds its sidebar from its own store, never from a host's phone feed.
+    if (event.type === 'sidebarInputsChanged') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.

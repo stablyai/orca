@@ -17,6 +17,7 @@ import {
   adoptEndpointRepo
 } from '../../../shared/endpoint-catalog-adoption'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
 import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
 
 export type FetchedRepo = { kind: 'repo'; row: Repo }
@@ -32,6 +33,7 @@ type WorktreeEventRow = {
   repoId: string
   renamed?: { oldWorktreeId: string; newWorktreeId: string }
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
 }
 /** A worktree change or activation an endpoint pushed; the endpoint is its only owner fact. */
 export type EndpointWorktreeEvent = { kind: 'worktreeEvent'; row: WorktreeEventRow }

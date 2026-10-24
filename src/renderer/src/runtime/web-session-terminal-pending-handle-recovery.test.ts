@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
-import type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery'
+import type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery-surface'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const ENVIRONMENT_ID = 'remote-runtime'
@@ -482,7 +482,7 @@ describe('web session pending terminal handle recovery', () => {
         { call: call as never }
       )
     ).resolves.toMatchObject({
-      tabs: [expect.objectContaining({ status: 'ready', terminal: TERMINAL_HANDLE })]
+      tabs: [expect.objectContaining({ status: 'pending-handle', terminal: null })]
     })
   })
 

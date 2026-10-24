@@ -17,12 +17,14 @@ export type PaneSpawnReservationResult = {
   }
 } & Partial<PtySpawnResult>
 
-// Why: identical pane coordinates on different worktrees or hosts are independent owners.
+// Pane coordinates belong to independent owners across worktrees and execution hosts.
 export const paneSpawnReservationsByOwnerKey = new Map<string, PaneSpawnReservation>()
 export type PendingRuntimePaneCreate = {
   count: number
-  promise: Promise<void>
+  promise: Promise<PaneSpawnReservationResult | undefined>
   resolve: () => void
+  /** The terminal the create started, for a view that waited on it (layout-owner build). */
+  result?: PaneSpawnReservationResult
 }
 export const pendingRuntimePaneCreatesByOwnerKey = new Map<string, PendingRuntimePaneCreate>()
 
@@ -39,24 +41,23 @@ export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
   return reservation
 }
 
-/**
- * Awaits a concurrent spawn of the same pane. Null when that spawn was an automatic one refused for a
- * slept worktree: its refusal is not the pane's outcome, so a joining user wake must spawn itself.
- */
+/** Join a concurrent spawn; automatic slept-worktree refusal leaves a user wake free to start its own process. */
 export async function joinPaneSpawn(
   reservation: PaneSpawnReservation
 ): Promise<PaneSpawnReservationResult | null> {
   try {
     return await reservation.promise
   } catch (error) {
-    if (isWorktreeTerminalsSleepingError(error)) {
+    if (
+      isWorktreeTerminalsSleepingError(error) ||
+      (error instanceof Error && error.message === 'terminal_pane_unbound')
+    ) {
       return null
     }
     throw error
   }
 }
 
-/** Reserves the pane once no runtime create or other spawn holds it. */
 export async function reserveIdlePaneSpawn(ownerKey: string): Promise<PaneSpawnReservation> {
   for (;;) {
     const pendingCreate = pendingRuntimePaneCreatesByOwnerKey.get(ownerKey)
@@ -96,13 +97,13 @@ export function claimRuntimePaneCreate(ownerKey: string): () => void {
     existing.count += 1
     return () => releaseRuntimePaneCreate(ownerKey, existing)
   }
-  let resolve!: () => void
-  const claim = {
+  let resolve!: (result: PaneSpawnReservationResult | undefined) => void
+  const claim: PendingRuntimePaneCreate = {
     count: 1,
-    promise: new Promise<void>((done) => {
+    promise: new Promise((done) => {
       resolve = done
     }),
-    resolve: () => resolve()
+    resolve: () => resolve(claim.result)
   }
   pendingRuntimePaneCreatesByOwnerKey.set(ownerKey, claim)
   return () => releaseRuntimePaneCreate(ownerKey, claim)
@@ -147,4 +148,14 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
     clearPaneSpawnReservation(paneKey, reservation)
   }
   return response
+}
+
+export function noteRuntimePaneCreateResult(
+  ownerKey: string | null | undefined,
+  result: PaneSpawnReservationResult
+): void {
+  const claim = ownerKey ? pendingRuntimePaneCreatesByOwnerKey.get(ownerKey) : undefined
+  if (claim) {
+    claim.result = result
+  }
 }

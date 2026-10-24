@@ -21,7 +21,6 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
 
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
-      // Why: select-all + delete clears the existing value before typing, matching Playwright/agent-browser fill().
       await sender('Input.dispatchKeyEvent', {
         type: 'keyDown',
         key: 'a',
@@ -37,8 +36,7 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
 
       await insertTextThroughCdp(sender, value)
 
-      // Why: React's synthetic listeners ignore native key events, so dispatch input/change so controlled components update.
-      // Why: use refSender for iframe sessions so document.activeElement is the focused element inside the iframe, not the parent <iframe>.
+      // Notify controlled inputs in their own frame, where activeElement resolves to the input.
       const eventSender = node.sessionId ? refSender : sender
       await eventSender('Runtime.evaluate', {
         expression: `(() => {
@@ -155,7 +153,7 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 }
 
-// Why: Input.dispatchKeyEvent needs `text` for keys with default actions (Enter/Tab), or Chrome skips the action.
+// CDP needs character text for Enter/Tab default actions.
 type KeyDefinition = {
   key: string
   code: string
@@ -184,7 +182,7 @@ function resolveKeyDefinition(key: string): KeyDefinition {
   if (KEY_DEFINITIONS[key]) {
     return KEY_DEFINITIONS[key]
   }
-  // Why: sites that check event.code drop events with invalid code values.
+  // Sites may reject keys with invalid event.code values.
   if (key.length === 1) {
     const charCode = key.charCodeAt(0)
     if (charCode >= 48 && charCode <= 57) {

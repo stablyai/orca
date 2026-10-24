@@ -7,12 +7,16 @@ permissions:
   contents: read
 
 jobs:
-  warm-linux-arm:
+  warm-linux-runtime:
     if: github.event_name != 'pull_request'
     concurrency:
-      group: ci-cache-warmup-linux-arm-${{ github.event.pull_request.number || github.ref }}
+      group: ci-cache-warmup-linux-runtime-${{ matrix.runner }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-4vcpu-ubuntu-2404-arm, blacksmith-8vcpu-ubuntu-2404]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -38,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, windows-11-arm]
+        os: [windows-2022, windows-11-arm, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -50,12 +54,13 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-          cache-pnpm-store-lookup-only: 'true'
+          # Windows PR consumers download packages directly; retain only the build caches.
+          cache-pnpm-store: 'false'
       - name: Verify native cache is usable
         run: node config/scripts/ensure-native-runtime.mjs --check-only
 
       - name: Cache Windows CLI launcher
-        if: runner.arch == 'X64'
+        if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         uses: actions/cache@v5
         with:
           path: |
@@ -67,7 +72,7 @@ jobs:
           key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       - name: Build the Windows native executables
-        if: runner.arch == 'X64'
+        if: runner.arch == 'X64' && matrix.os != 'windows-2025'
         shell: pwsh
         run: |
           if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
@@ -90,7 +95,7 @@ jobs:
     concurrency:
       group: ci-cache-warmup-linux-package-fixtures-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

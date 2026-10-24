@@ -18,8 +18,8 @@ export function verifyRequiredPrContext(parseYaml) {
   }
   const gate = providers[0].job
   const condition = gate.if?.replace(/^\$\{\{\s*|\s*\}\}$/g, '').trim()
-  if (condition !== '!cancelled()') {
-    throw new Error('Required PR aggregate must run unless the workflow is cancelled.')
+  if (condition !== '!cancelled() && github.event.pull_request.draft != true') {
+    throw new Error('Required PR aggregate must run unless cancelled or the PR is a draft.')
   }
   if (gate['continue-on-error'] || gate.steps?.some((step) => step['continue-on-error'])) {
     throw new Error('Required PR aggregate must not ignore failures.')

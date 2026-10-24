@@ -40,8 +40,7 @@ describe('browser screencast lifecycle', () => {
       onFrame
     })
 
-    // Why: a joining subscriber always updates a stream that has already emitted
-    // frames; without one this test cannot distinguish the initial-snapshot path.
+    // Emit first to exercise the update path for an existing stream.
     webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
       sessionId: 7,
       data: Buffer.from('live-frame').toString('base64'),
@@ -115,8 +114,6 @@ describe('browser screencast lifecycle', () => {
     }
     emitFrame(1)
     emitFrame(2)
-    // Why: the new interval only takes effect if the pacer reads it live off the shared
-    // options; a pinned creator interval would let both frames straight through.
     expect(onFrame).toHaveBeenCalledOnce()
 
     session.stop()
@@ -144,6 +141,7 @@ describe('browser screencast lifecycle', () => {
       scheduleNavigationFrameCapture: vi.fn(),
       clearNavigationCaptureTimer: vi.fn(),
       bumpSnapshotGeneration: vi.fn(),
+      observeGuestViewSize: () => false,
       setDialogOpen: vi.fn()
     })
 

@@ -27,6 +27,7 @@ import {
   GIT_KEY,
   leaf
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import type { AppState } from '../store/types'
@@ -38,7 +39,8 @@ import {
 import {
   ACCEPTED_DIFFERENCES,
   GIT,
-  KNOWN_DIFFERENCES
+  KNOWN_DIFFERENCES,
+  sweptAtStartup
 } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -46,6 +48,13 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
+// Main and the frame applier run as in a layout-owner build; the restore they match runs as today's.
+const layoutOwner = vi.hoisted(() => ({ isMain: true }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -120,18 +129,43 @@ function groupsWithoutSelection(): WorkspaceSessionState {
   return session
 }
 
+/** An editor tab Orca moved to the workspace owning its file: saved under the file's owned id. */
+function movedEditorTab(): WorkspaceSessionState {
+  const filePath = '/Users/dev/orca/docs/readme.md'
+  const session = addWorkspace(emptySession(), GIT_KEY, [
+    {
+      id: 'group-m',
+      activeTabId: 'editor-moved',
+      tabs: [
+        {
+          id: 'editor-moved',
+          entityId: buildOwnedEditorFileId(filePath, GIT_KEY, null),
+          kind: 'editor'
+        }
+      ]
+    }
+  ])
+  session.openFilesByWorktree = {
+    [GIT_KEY]: [
+      { filePath, relativePath: 'docs/readme.md', worktreeId: GIT_KEY, language: 'markdown' }
+    ]
+  }
+  return session
+}
+
 const PROFILES: readonly WorkspaceLayoutProfile[] = [
   ...WORKSPACE_LAYOUT_PROFILES,
   ...LEGACY_WORKSPACE_LAYOUT_PROFILES,
+  { name: 'an editor tab moved to its file’s workspace', hostId: 'local', build: movedEditorTab },
   { name: 'editor files other hosts own', hostId: 'local', build: filesOfOtherHosts },
   { name: 'groups with no selected tab', hostId: 'local', build: groupsWithoutSelection }
 ]
 
-/** What main publishes for a stored partition, and what the Loader keeps beside the layout. */
+/** What main publishes for a stored partition after its startup sweep, and what the Loader keeps beside the layout. */
 function frameInput(hostId: ExecutionHostId, stored: WorkspaceSessionState): LayoutFrameSliceInput {
   const { layout, facts, desktopView } = loadWorkspaceLayoutWithoutReport(
     hostId,
-    stored,
+    sweptAtStartup(hostId, stored),
     nameBasedLoadContext()
   )
   return {
@@ -195,16 +229,6 @@ type SliceDifference = {
 /** Slice paths that differ. Entries may only be removed. */
 const SLICE_DIFFERENCES: readonly SliceDifference[] = [
   {
-    fixture: 'row without a tab-bar entry or a terminal',
-    cause: 'ghost tab (Loader parity)',
-    paths: [
-      `tabsByWorktree ${GIT} 1`,
-      'terminalLayoutsByTabId tab-b',
-      `unifiedTabsByWorktree ${GIT} 1`,
-      `groupsByWorktree ${GIT} 0 tabOrder 1`
-    ]
-  },
-  {
     fixture: 'legacy surface tombstone on a pane still showing its terminal',
     cause: 'tombstones (Loader parity)',
     paths: [
@@ -226,6 +250,11 @@ const SLICE_DIFFERENCES: readonly SliceDifference[] = [
     paths: [`unifiedTabsByWorktree ${GIT} 1 executionHostId`]
   },
   {
+    fixture: 'row without a tab-bar entry, its terminal only on a relay',
+    cause: 'host stamp (above)',
+    paths: [`unifiedTabsByWorktree ${GIT} 1 executionHostId`]
+  },
+  {
     fixture: 'legacy split row sharing one pane’s terminal with a tab-bar tab',
     cause: 'host stamp (above)',
     paths: [`unifiedTabsByWorktree ${GIT} 2 executionHostId`]
@@ -244,6 +273,18 @@ const SLICE_DIFFERENCES: readonly SliceDifference[] = [
       `activeGroupIdByWorktree ${GIT}`,
       `layoutByWorktree ${GIT} groupId`
     ]
+  },
+  {
+    fixture: 'session from before the tab bar, a row with no terminal',
+    cause: 'root group and host stamp (above), for the one kept tab',
+    paths: [
+      `unifiedTabsByWorktree ${GIT} 0 groupId`,
+      `unifiedTabsByWorktree ${GIT} 0 executionHostId`,
+      `groupsByWorktree ${GIT} 0 id`,
+      `groupsByWorktree ${GIT} 0 recentTabIds`,
+      `activeGroupIdByWorktree ${GIT}`,
+      `layoutByWorktree ${GIT} groupId`
+    ]
   }
 ]
 
@@ -252,9 +293,12 @@ async function restoreAndApply(profile: WorkspaceLayoutProfile): Promise<{
   applied: LayoutFrameSlices
 }> {
   const stored = profile.build()
+  layoutOwner.isMain = false
   const restored = await bootWindowFromPartitions(createTestStore(), [
     { hostId: profile.hostId, session: stored }
-  ])
+  ]).finally(() => {
+    layoutOwner.isMain = true
+  })
   return { restored, applied: buildLayoutFrameSlices(frameInput(profile.hostId, stored)) }
 }
 
@@ -328,6 +372,19 @@ describe('the slices built from layout frames match the window restored from dis
     expect(titleOf(buildLayoutFrameSlices(input))).toEqual({ row: 'pane 1', label: 'pane 1' })
     input.view.panes['tab-shell'] = { activeLeafId: leaf(2), expandedLeafId: null }
     expect(titleOf(buildLayoutFrameSlices(input))).toEqual({ row: 'pane 2', label: 'pane 2' })
+  })
+
+  it('keeps a live agent title a frame reports instead of resetting it as restore does', () => {
+    const input = frameInput('local', localDesktopSession())
+    const shell = input.layouts[GIT]!.tabs.find((tab) => tab.id === 'tab-shell')!
+    shell.terminal!.panes = shell.terminal!.panes.map((pane) => ({
+      ...pane,
+      liveTitle: '\u280b use Claude Sonnet'
+    }))
+    const row = buildLayoutFrameSlices(input).tabsByWorktree[GIT]!.find(
+      (tab) => tab.id === 'tab-shell'
+    )!
+    expect(row.title).toBe('\u280b use Claude Sonnet')
   })
 
   it('restores a browser tab from a frame without its creation time, as the tab-bar tab’s', () => {

@@ -51,14 +51,16 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
       targetWorkspaceId !== null &&
       targetOwner !== null &&
       targetOwner === normalizeExecutionHostId(args.session.executionHostId) &&
-      structuredAgentSessionLaunchFeasible(state, {
-        agent: CLI_CONVERSATION_ADOPTING_AGENTS[args.session.agent],
-        workspace: {
-          kind: workspaceKindForWorktreeId(targetWorkspaceId),
-          worktreeId: targetWorkspaceId
-        },
-        settings: args.settings
-      }) &&
+      CLI_CONVERSATION_ADOPTING_AGENTS[args.session.agent].some((agent) =>
+        structuredAgentSessionLaunchFeasible(state, {
+          agent,
+          workspace: {
+            kind: workspaceKindForWorktreeId(targetWorkspaceId),
+            worktreeId: targetWorkspaceId
+          },
+          settings: args.settings
+        })
+      ) &&
       resolveHostCapabilities(state, targetOwner)?.includes(
         STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
       ) === true

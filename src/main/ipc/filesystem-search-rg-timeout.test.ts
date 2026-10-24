@@ -74,8 +74,7 @@ vi.mock('./local-worktree-runtime-options', () => ({
 }))
 
 vi.mock('./markdown-documents', () => ({
-  listMarkdownDocuments: vi.fn(),
-  markdownDocumentsFromRelativePaths: vi.fn()
+  listMarkdownDocuments: vi.fn()
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -175,8 +174,7 @@ describe('filesystem rg search timeout', () => {
       wslAwareSpawnMock.mockReturnValue(child)
       registerFilesystemHandlers({} as never)
 
-      // Why a root that exists: an ENOENT spawn failure is also what a vanished workspace looks
-      // like, so this stays about the binary only while the search root is reachable.
+      // ENOENT must concern the binary here, not a missing workspace.
       resolveAuthorizedPathMock.mockImplementation(async () => process.cwd())
       const promise = handlers.get('fs:search')!(
         { sender: { id: 7 } },
@@ -215,8 +213,7 @@ describe('filesystem rg search timeout', () => {
     await expect(promise).rejects.toThrow('post-spawn failure')
   })
 
-  // Why close(97): the WSL wrapper's "cd failed" code. It is above rg's own 0/1/2, so a handler
-  // that checks it after the unavailable branch reports a broken install instead.
+  // Classify WSL cd failure 97 before generic unavailable checks for codes above rg's 0/1/2.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const child = createMockProcess()
     Object.defineProperty(child, 'pid', { value: 1 })

@@ -102,8 +102,7 @@ describe('registerPtyHandlers', () => {
     })
 
     it('answers unknown for a probe-less provider that is not the in-process one', async () => {
-      // Why: only the in-process provider is its own sole owner; any other
-      // probe-less provider's ignorance is doubt, not absence.
+      // Only the in-process provider can prove sole ownership without a probe.
       setLocalPtyProvider(createAgentClaimProvider({}) as never)
       const controller = registerAgentClaimController()
 
@@ -111,8 +110,7 @@ describe('registerPtyHandlers', () => {
     })
 
     it('answers unknown for remote-scoped ids without consulting local providers', async () => {
-      // Why: a locally routed provider would answer confidently — and wrongly —
-      // for a PTY that lives on a remote Orca host.
+      // A local provider cannot prove ownership of a PTY on another host.
       setLocalPtyProvider(new LocalPtyProvider())
       const controller = registerAgentClaimController()
 
@@ -140,20 +138,16 @@ describe('registerPtyHandlers', () => {
     const ownedSshPtyId = 'owned-remote-pty'
     setPtyOwnership(ownedSshPtyId, 'ssh:ssh-attach')
     try {
-      // Local daemon session: attach flows to the provider.
       await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
       expect(localProvider.attach).toHaveBeenCalledWith(daemonPtyId)
 
-      // SSH-scoped sessions are excluded and never fall through to the local provider.
       await expect(controller.attach(ownedSshPtyId)).resolves.toBe(false)
       await expect(controller.attach('ssh:ssh-attach@@relay-pty')).resolves.toBe(false)
       expect(localProvider.attach).toHaveBeenCalledTimes(1)
 
-      // Provider refusal (absent/unprovable session) answers false, not throw.
       localProvider.attach.mockRejectedValueOnce(new Error('Session not found'))
       await expect(controller.attach(daemonPtyId)).resolves.toBe(false)
 
-      // The in-process local provider streams without attach; never called.
       const inProcess = new LocalPtyProvider()
       const inProcessAttach = vi.spyOn(inProcess, 'attach')
       setLocalPtyProvider(inProcess)
@@ -185,6 +179,18 @@ describe('registerPtyHandlers', () => {
       providerSequence,
       0
     )
+  })
+  it('seeds the title of a session adopted by subscriber-driven attach', async () => {
+    const daemonPtyId = 'repo-1::/tmp/wt@@title-handoff'
+    const localProvider = createAgentClaimProvider({})
+    localProvider.attach.mockResolvedValueOnce({ lastTitle: '⠋ Claude' })
+    setLocalPtyProvider(localProvider as never)
+    const seedTerminalRestoreTail = vi.fn()
+    const controller = registerAgentClaimController({ seedTerminalRestoreTail })
+
+    await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
+
+    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, { lastTitle: '⠋ Claude' })
   })
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
     const provider = createAgentClaimProvider({})
@@ -245,7 +251,8 @@ describe('registerPtyHandlers', () => {
     expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
     expect(runtime.cancelPendingPtyRegistration).toHaveBeenCalledWith(
       'different-requested-id',
-      'incarnation-canonical-exited'
+      'incarnation-canonical-exited',
+      undefined
     )
   })
 })

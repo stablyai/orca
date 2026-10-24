@@ -3,7 +3,7 @@ import type {
   TerminalPaneSplitDirection
 } from '../../../../shared/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { collectLeafIds } from './terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
 /**
  * Whether a tab's split layout is owned by a host (web/mobile clients, or a

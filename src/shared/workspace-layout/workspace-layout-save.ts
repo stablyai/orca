@@ -15,6 +15,7 @@ import {
   FACT_SESSION_FIELDS,
   VIEW_SESSION_FIELDS
 } from './workspace-layout-beside'
+import { editorFileKey, editorTabNamesFile } from './workspace-layout-editor-tab-file'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import { paneKeyOf, tabsInOrder, type WorkspaceLayout } from './workspace-layout-model'
@@ -42,7 +43,7 @@ function saveWorkspace(
     workspaceKey: key,
     worktreeId,
     hostId: loaded.layout.hostId,
-    editorFiles: workspace.editorFiles,
+    workspace,
     leaves: workspace.leaves ?? {},
     facts,
     view
@@ -99,16 +100,14 @@ function saveWorkspace(
   }
   if (workspace.editorFiles) {
     // One preview fact per editor tab; today's writer stores the file's copy only when true.
-    const previewFiles = new Set(
-      workspace.tabs.flatMap((tab) =>
-        tab.kind === 'editor' && tab.isPreview ? [tab.entityId] : []
-      )
-    )
+    const previewTabs = workspace.tabs.filter((tab) => tab.kind === 'editor' && tab.isPreview)
     session.openFilesByWorktree[key] = workspace.editorFiles.map((file): PersistedOpenFile => ({
       ...file,
       worktreeId,
-      ...(previewFiles.has(file.filePath) ? { isPreview: true } : {}),
-      ...view.editorDrafts[key]?.[file.filePath]
+      ...(previewTabs.some((tab) => editorTabNamesFile(workspace, tab.entityId, file))
+        ? { isPreview: true }
+        : {}),
+      ...view.editorDrafts[key]?.[editorFileKey(file)]
     }))
   }
   if (workspace.browserTabs) {
@@ -140,8 +139,10 @@ function saveWorkspaceRecords({
         if (leaf?.incarnationId !== undefined) {
           incarnations[paneKey] = leaf.incarnationId
         }
-        if (leaf?.sleeping) {
-          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...leaf.sleeping }
+        // One disk map holds both: a leaf has at most one of them.
+        const record = leaf?.sleeping ?? leaf?.resume
+        if (record) {
+          sleeping[paneKey] = { paneKey, tabId: tab.entityId, worktreeId, ...record }
         }
       }
     }
@@ -187,6 +188,9 @@ export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSes
       : {}),
     ...(records.clientHostedBrowserPagesByWorkspace
       ? { clientHostedBrowserPagesByWorktree: records.clientHostedBrowserPagesByWorkspace }
+      : {}),
+    ...(records.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: records.closedTerminalPanesByPaneKey }
       : {}),
     ...(legacy.topologyRevisionByRepoId
       ? { terminalTopologyRevisionByRepoId: legacy.topologyRevisionByRepoId }

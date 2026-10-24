@@ -1,3 +1,4 @@
+import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import {
@@ -14,9 +15,9 @@ type PromptIdentity = { itemId: string; expectedRevision: number }
 
 /** The prompt a Stop cancels: one the host says still waits on the person, when it says. */
 export function pendingStructuredPromptIdentity(
-  state: Pick<StructuredAgentSessionState, 'items' | 'actionablePromptIds'>
+  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
-  const prompt = state.items.find((item) =>
+  const prompt = selectAgentSessionCurrentRequests(state).find((item) =>
     item.body.kind === 'approval' || item.body.kind === 'question'
       ? item.body.resolution.state === 'pending' &&
         isActionableStructuredAgentSessionPrompt(item.itemId, state.actionablePromptIds)

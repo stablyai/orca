@@ -1,9 +1,3 @@
-// Fixtures shared by the restart-resume suites: one durable record, one journal, one marker.
-//
-// Kept in one place so the predicate suite and the host suite cannot drift into disagreeing about
-// what a resumable session looks like — a divergence there would let one suite pass on a shape the
-// other rejects.
-
 import type {
   AgentJournalApprovalItem,
   AgentJournalRenderItem,
@@ -22,15 +16,14 @@ export const SESSION = 'session-working-1'
 export const THREAD = 'thread-1'
 export const HANDLE_ROOT = `codex:${JSON.stringify(THREAD)}`
 export const NOW = 1_700_000_000_000
-/** Distinct teardown identities; neither encodes launch ancestry. */
+/** Opaque teardown IDs do not encode ancestry. */
 export const TEARDOWN_PREVIOUS = 'teardown-previous'
 export const TEARDOWN_CURRENT = 'teardown-current'
 
 export function turnItem(
   turnId: string,
   state: 'running' | 'completed' | 'interrupted' | 'unverifiable',
-  /** The provider key of the user item that opened this turn — how a submission is followed
-   *  forward to the turn it became. Absent models an older host that recorded no link. */
+  /** Link submission to its opening turn; absent models older hosts. */
   userItemId?: string
 ): AgentJournalRenderItem {
   return {
@@ -75,7 +68,6 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
       leaseDeadlineAt: NOW,
       lastRenewedAt: NOW,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: 'released',
       unreconciled: false,
@@ -86,7 +78,6 @@ export function record(overrides: { chain?: AgentSessionRecord['providerHandleCh
   } as unknown as AgentSessionRecord
 }
 
-/** The same record with its lease already re-taken, modelling a pane that bound after the offer. */
 export function liveLeaseRecord(): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the base fixture is already record-shaped; only claimStatus is overridden.
   return {
@@ -95,7 +86,6 @@ export function liveLeaseRecord(): AgentSessionRecord {
   } as AgentSessionRecord
 }
 
-/** A prompt the agent is blocked on. The chat is waiting on the USER, not on itself. */
 export function pendingApproval(): AgentJournalRenderItem & { body: AgentJournalApprovalItem } {
   return {
     itemId: 'approval:1',
@@ -115,7 +105,7 @@ export function pendingApproval(): AgentJournalRenderItem & { body: AgentJournal
 export const CLAUDE_PROVIDER_SESSION = 'prov-session-1'
 export const CLAUDE_ROOT = `claude:${JSON.stringify(CLAUDE_PROVIDER_SESSION)}`
 
-/** Claude's handle carries a leaf uuid, and the adapter's close path advances it. */
+/** Claude close can advance the leaf UUID without changing conversation identity. */
 export function claudeRecord(
   leafUuid: string | null,
   providerSessionId = CLAUDE_PROVIDER_SESSION
@@ -137,8 +127,6 @@ export function claudeRecord(
   } as unknown as AgentSessionRecord
 }
 
-/** The fake journal's own shape, so callers can wire `appendItem` without reaching into `unknown`.
- *  The code under test sees the real `AgentSessionJournal` type; tests see this. */
 export type HarnessJournal = {
   snapshot: () => {
     items: AgentJournalRenderItem[]
@@ -160,7 +148,6 @@ export function journal(
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
     submissions: () => submissions,
     appendItem: async () => undefined,
-    // Created by the generation the record names: current while its lease is held.
     itemFence: () => undefined,
     wroteBeforeOpen: () => false
   } as never
@@ -181,11 +168,9 @@ export function marker(
   }
 }
 
-/** A journalled send, in whichever dispatch state the test needs. */
 export function submission(
   clientMessageId: string,
   dispatchState: 'pending' | 'accepted' | 'rejected' | 'unknown',
-  /** The provider's key for the sent message. A turn names the same key in `userItemId`. */
   providerItemId: string | null = null
 ): AgentJournalSubmission {
   return {
@@ -200,7 +185,6 @@ export function submission(
   }
 }
 
-/** A child record as the host's store serves it; live unless the test settles it. */
 export function childRecord(
   child: Pick<AgentChildWorkView, 'id' | 'kind'> & Partial<AgentChildWorkView>
 ): AgentChildWorkView {
@@ -215,15 +199,12 @@ export function childRecord(
   }
 }
 
-/** The epoch the fake journal reports. */
 export const EPOCH = 'epoch-1'
 
-/** The resumable set over one fake journal, wired as the host's candidate reader wires it. */
 export function resumableSet(input: {
   markers: AgentSessionResumeMarker[]
   items?: AgentJournalRenderItem[]
   chain?: AgentSessionRecord['providerHandleChain']
-  /** Sessions a newer Orca saved. */
   savedByNewerOrca?: string[]
 }) {
   return structuredAgentSessionResumableSet({

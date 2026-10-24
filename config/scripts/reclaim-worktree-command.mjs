@@ -53,7 +53,7 @@ export async function runReclaimCommand(
       'Usage: pnpm reclaim-space [--apply] [--repo DIRECTORY] [--tests-stopped] [--release-cache-min-age-days 30]\n'
     )
     output.write(
-      'Shares Electron installs and removes idle dev bundles across local Git worktrees.\n'
+      'Shares Electron installs and removes idle dev bundles and Vite caches unused for 30 days across local Git worktrees.\n'
     )
     output.write('Without --apply, previews cleanup and offers [y/N] in an interactive terminal.\n')
     output.write(

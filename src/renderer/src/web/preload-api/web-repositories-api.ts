@@ -71,7 +71,6 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
-    getGitUsername: () => Promise.resolve(''),
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),
     searchBaseRefs: async ({ repoId, query, limit }) =>

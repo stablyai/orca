@@ -9,10 +9,7 @@ import type {
 } from './parcel-watcher-process-subscription'
 import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
 
-/**
- * Use Parcel directly when Vitest mocks it. Production builds fail closed if
- * the crash-isolated child entry is unavailable.
- */
+/** Vitest uses mocked Parcel directly; production fails closed when the child entry is missing. */
 export async function subscribeWithInProcessWatcher(
   dir: string,
   callback: WatcherProcessCallback,
@@ -63,8 +60,7 @@ export async function subscribeWithInProcessWatcher(
   }
   let watcher: typeof ParcelWatcher
   try {
-    // Why: setup ownership starts before module loading; an abort or timeout
-    // during the import must settle the caller just like one during the crawl.
+    // Abort/timeout owns setup before module loading as well as during crawling.
     watcher = await Promise.race([loadParcelWatcher(), cancellation])
   } catch (error) {
     clearPendingControls()
@@ -106,9 +102,7 @@ export async function subscribeWithInProcessWatcher(
     active = false
     eventDelivery.close()
     clearPendingControls()
-    // Why: Parcel cannot cancel a crawl in-process. If it eventually finishes,
-    // release the late native handle instead of leaking it into the test host.
-    // Swallow unsubscribe failures so they never surface as unhandled rejections.
+    // In-process crawls cannot be cancelled; release late handles without unhandled teardown rejections.
     void subscriptionPromise
       .then((lateSubscription) => lateSubscription.unsubscribe())
       .catch(() => undefined)

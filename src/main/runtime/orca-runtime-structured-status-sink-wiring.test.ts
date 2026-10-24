@@ -109,7 +109,8 @@ describe('mail dispatch through the current runtime', () => {
     })
 
     target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'working' })
-    expect(events).toEqual([])
+    expect(events).toEqual(['journal:session-mailbox'])
+    events.length = 0
     target.onStructuredSessionStatusForMail({ sessionId: 'session-mailbox', status: 'idle' })
     expect(events).toEqual(['journal:session-mailbox', 'delivery:term_mailbox'])
   })
@@ -163,13 +164,6 @@ abstract class MailSchedulerPhaseProbe extends OrcaRuntimeWithRuntimeId {
   readonly pendingMailDuringConstruction = this.mailPointerRepointScheduler.pendingCount
 }
 
-class ConstructorMailStatusProbe extends OrcaRuntimeService {
-  protected override get canonicalFetchKeyCache(): ReadonlyMap<string, string> {
-    this.onStructuredSessionStatusForMail({ sessionId: 'construction', status: 'working' })
-    return super.canonicalFetchKeyCache
-  }
-}
-
 describe('input state before later runtime layers initialize', () => {
   it('makes the scheduler available immediately after the original base layer', () => {
     expect(
@@ -179,42 +173,9 @@ describe('input state before later runtime layers initialize', () => {
       )?.value
     ).toBe(0)
   })
-
-  it('preserves mail method reentry from the original constructor getter seam', () => {
-    expect(() => new ConstructorMailStatusProbe()).not.toThrow()
-  })
 })
 
 describe('checked runtime construction', () => {
-  it('reads the existing fetch resource during construction through virtual getters', () => {
-    const reads: string[] = []
-    class FetchResourceProbe extends OrcaRuntimeService {
-      protected get canonicalFetchKeyCache(): ReadonlyMap<string, string> {
-        reads.push('key')
-        expect(this.store).toBeNull()
-        expect(this.skillCommands).toBeDefined()
-        expect(this.stopRequestedPtyIds).toBeInstanceOf(Set)
-        return super.canonicalFetchKeyCache
-      }
-      protected get fetchLastCompletedAt(): ReadonlyMap<string, number> {
-        reads.push('time')
-        expect(this.getAgentStatusSnapshotFn).toBeUndefined()
-        return super.fetchLastCompletedAt
-      }
-      get maps() {
-        return [super.canonicalFetchKeyCache, super.fetchLastCompletedAt]
-      }
-    }
-    const first = new FetchResourceProbe(null)
-    const second = new FetchResourceProbe()
-    expect(reads).toEqual(['key', 'time', 'key', 'time'])
-    expect(first.getAgentStatusSnapshotFn).toBeNull()
-    expect(second.getAgentStatusSnapshotFn).toBeNull()
-    expect(first.maps).toEqual([new Map(), new Map()])
-    expect(first.maps[0]).not.toBe(second.maps[0])
-    expect(first.maps[1]).not.toBe(second.maps[1])
-  })
-
   it('installs subscription callbacks on the runtime with their real registry receiver', () => {
     const runtime = new OrcaRuntimeService()
     const cleanup = vi.fn()

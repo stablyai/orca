@@ -1,11 +1,13 @@
 import type { RuntimeBrowserTabQueries } from './browser-tab-queries'
-import { closeRuntimeBrowserClientPage } from '../runtime-browser-client-page-creation'
+import {
+  resolveClientPageToClose,
+  retireRuntimeBrowserClientPage
+} from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
-import type { RuntimeBrowserTabCatalog } from './browser-tab-catalog'
 
 export class RuntimeBrowserTabClose {
   constructor(
@@ -29,8 +31,7 @@ export class RuntimeBrowserTabClose {
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserWorktreeId' | 'retireGhostBrowserSessionRow'
-    >,
-    private readonly catalog: Pick<RuntimeBrowserTabCatalog, 'assertClientPageWorkspace'>
+    >
   ) {}
 
   async browserTabClose(params: {
@@ -38,44 +39,9 @@ export class RuntimeBrowserTabClose {
     page?: string
     worktree?: string
   }): Promise<{ closed: boolean }> {
-    const pages = this.host.getRuntimeBrowserPageRegistry()
-    let clientPage = params.page ? pages.getPage(params.page) : undefined
+    const clientPage = await resolveClientPageToClose(this.host, this.queries, params)
     if (clientPage) {
-      await this.catalog.assertClientPageWorkspace(clientPage, params.worktree)
-    } else if (!params.page) {
-      const workspaceId = params.worktree
-        ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-        : undefined
-      if (pages.listPages(workspaceId).length > 0) {
-        const tab =
-          params.index !== undefined
-            ? (await this.queries.browserTabList({ worktree: params.worktree })).tabs[params.index]
-            : (await this.queries.browserTabCurrent({ worktree: params.worktree })).tab
-        clientPage = tab ? pages.getPage(tab.browserPageId) : undefined
-      }
-    }
-    if (clientPage) {
-      const authority = this.host.getBrowserHostLeaseRegistry()
-      // Why: a retained page whose host quit has no placement left to command, and asking the
-      // absent host first would refuse the close and strand the tab with no way to dismiss it.
-      if (authority.getPlacement(clientPage.browserPageId)) {
-        await closeRuntimeBrowserClientPage(authority, {
-          browserPageId: clientPage.browserPageId,
-          placement: clientPage.placement
-        })
-      }
-      if (!pages.retirePage(clientPage.browserPageId, clientPage.placement)) {
-        throw new Error('browser_page_placement_stale')
-      }
-      if (this.host.retireRuntimeOwnedBrowserSessionTab) {
-        this.host.retireRuntimeOwnedBrowserSessionTab(
-          clientPage.workspaceId,
-          clientPage.browserPageId
-        )
-      } else {
-        this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
-      }
-      return { closed: true }
+      return retireRuntimeBrowserClientPage(this.host, clientPage)
     }
     const namedPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : null

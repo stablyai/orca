@@ -102,6 +102,7 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'host.view-settings': {
     'host-view-settings-sync': 'identical',
+    'matrix-host.view-settings-settings.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.get-1': 'result-absent-settlement',
     'matrix-host.view-settings-ui.set-1': 'result-absent-settlement'
   },

@@ -10,6 +10,7 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { WORKSPACE_LAYOUT_PROFILES } from './workspace-layout-profile.test-fixture'
 import { patchStoredSession } from './workspace-layout-record-patch'
 import { saveWorkspaceLayout } from './workspace-layout-save'
+import type { WorkspaceSessionState } from '../workspace-session-state-types'
 
 const CONTEXT = {
   mintId: () => 'minted-id',
@@ -23,9 +24,30 @@ function commandsFor(model: WorkspaceLayoutModel): LayoutCommand[] {
   for (const [workspace, layout] of Object.entries(model.workspaces)) {
     commands.push({ type: 'createTerminalTab', workspace })
     commands.push({ type: 'openEditorTab', workspace, fileId: '/new.md', contentType: 'editor' })
+    commands.push({
+      type: 'closeTabs',
+      workspace,
+      tabIds: ['tab-not-listed'],
+      force: true,
+      recordClose: 'cleanup'
+    })
     const lastGroup = layout.groups.at(-1)
+    if (layout.groupLayout?.type === 'split') {
+      commands.push({
+        type: 'setGroupRatios',
+        workspace,
+        groupLayout: { ...layout.groupLayout, ratio: 0.3 }
+      })
+    }
     for (const tab of layout.tabs) {
       commands.push({ type: 'closeTabs', workspace, tabIds: [tab.id], force: true })
+      commands.push({
+        type: 'closeTabs',
+        workspace,
+        tabIds: [tab.id],
+        force: true,
+        recordClose: 'user'
+      })
       commands.push({
         type: 'renameTab',
         workspace,
@@ -41,6 +63,13 @@ function commandsFor(model: WorkspaceLayoutModel): LayoutCommand[] {
           toGroupId: lastGroup.id,
           index: 0
         })
+        commands.push({
+          type: 'splitGroup',
+          workspace,
+          tabId: tab.id,
+          besideGroupId: lastGroup.id,
+          direction: 'right'
+        })
       }
       if (tab.kind !== 'terminal') {
         continue
@@ -55,9 +84,51 @@ function commandsFor(model: WorkspaceLayoutModel): LayoutCommand[] {
           direction: 'vertical'
         })
       }
+      if (first) {
+        commands.push({
+          type: 'renamePane',
+          workspace,
+          tabId: tab.id,
+          leafId: first,
+          title: 'Pane'
+        })
+      }
+      if (first) {
+        commands.push({
+          type: 'movePaneToNewTab',
+          workspace,
+          tabId: tab.id,
+          leafId: first,
+          windowDetach: { ptyId: 'pty-detached', tabId: 'tab-detached' }
+        })
+      }
       if (second) {
+        commands.push({ type: 'movePaneToNewTab', workspace, tabId: tab.id, leafId: second })
         commands.push({ type: 'closePane', workspace, tabId: tab.id, leafId: second })
+        commands.push({
+          type: 'closePane',
+          workspace,
+          tabId: tab.id,
+          leafId: second,
+          userPaneClose: true
+        })
         commands.push({ type: 'equalizePanes', workspace, tabId: tab.id })
+        commands.push({
+          type: 'movePane',
+          workspace,
+          tabId: tab.id,
+          leafId: second,
+          targetLeafId: first!,
+          side: 'left'
+        })
+        if (tab.panes.root?.type === 'split') {
+          commands.push({
+            type: 'setPaneRatios',
+            workspace,
+            tabId: tab.id,
+            root: { ...tab.panes.root, ratio: 0.7 }
+          })
+        }
       }
     }
   }
@@ -99,12 +170,6 @@ function withListConsequences(records: string[]): string[] {
   return [...allowed]
 }
 
-const FOLDED_LEGACY_ROW_GAPS = new Map<string, string[]>([
-  ['legacy row repeating a tab-bar tab’s terminal', ['closeTabs']],
-  ['legacy row repeating a tab-bar tab’s terminal, selected', ['closeTabs']],
-  ['legacy split row sharing one pane’s terminal with a tab-bar tab', ['closeTabs', 'moveTab']]
-])
-
 describe('patchStoredSession', () => {
   const profiles = [...WORKSPACE_LAYOUT_PROFILES, ...LEGACY_WORKSPACE_LAYOUT_PROFILES]
 
@@ -116,7 +181,28 @@ describe('patchStoredSession', () => {
       const before = saveWorkspaceLayout(loaded)
       const normalizedAtLoad = diffStoredSession(stored, before).length > 0
       let applied = 0
-      const roundTripGaps = new Set<string>()
+      // Legacy rows the load folds into a tab-bar tab (dropped, or terminals taken off them).
+      const entryIds = new Set(
+        Object.values(stored.unifiedTabs ?? {})
+          .flat()
+          .map((entry) => entry.entityId)
+      )
+      const loadChanged = changedRecords(diffStoredSession(stored, before))
+      const foldedIds = Object.values(stored.tabsByWorktree)
+        .flat()
+        .map((row) => row.id)
+        .filter(
+          (id) =>
+            !entryIds.has(id) &&
+            loadChanged.some((record) => record.endsWith(`|${id}`) || record === `layout/${id}`)
+        )
+      const isFolded = (record: string) =>
+        foldedIds.some((id) => record.endsWith(`|${id}`) || record === `layout/${id}`)
+      const selectionNamesFolded = foldedIds.some(
+        (id) =>
+          stored.activeTabId === id ||
+          Object.values(stored.activeTabIdByWorktree ?? {}).includes(id)
+      )
       for (const command of commandsFor(loaded.layout)) {
         const result = applyLayoutCommand(loaded.layout, command, CONTEXT)
         if (!result.ok) {
@@ -138,22 +224,148 @@ describe('patchStoredSession', () => {
           ),
           terminalTopologyRevisionByRepoId: undefined
         })
-        if (stableJson(reloaded(patched)) !== stableJson(reloaded(after))) {
-          roundTripGaps.add(command.type)
-        }
+        expect(stableJson(reloaded(patched)), label).toBe(stableJson(reloaded(after)))
         const written = changedRecords(diffStoredSession(stored, patched))
-        const commanded = withListConsequences(changedRecords(diffStoredSession(before, after)))
+        // A folded row may be written only in its loaded form, and a selection naming it with it.
+        const notLoadForm = new Set(changedRecords(diffStoredSession(before, patched)))
+        const loadForms = written.filter(
+          (record) =>
+            !notLoadForm.has(record) &&
+            (isFolded(record) ||
+              (selectionNamesFolded &&
+                ['session/activeTabId', 'session/activeTabIdByWorktree'].includes(record)))
+        )
+        const commanded = withListConsequences([
+          ...changedRecords(diffStoredSession(before, after)),
+          ...loadForms
+        ])
+        // A map the stored partition lacks is reported whole on one side, by record on the other.
+        const wholeMaps = commanded.includes('session/closedTerminalTabTombstonesByTabId')
+          ? ['closedTab/']
+          : []
         expect(
-          written.filter((record) => !commanded.includes(record)),
+          written.filter(
+            (record) =>
+              !commanded.includes(record) && !wholeMaps.some((table) => record.startsWith(table))
+          ),
           `${label} commanded=${commanded.join(',')}`
         ).toEqual([])
       }
       expect(applied > 0 || Object.keys(loaded.layout.workspaces).length === 0).toBe(true)
-      // Known gap, closed before layout.apply accepts more than splitPane: a legacy row the load
-      // folds into a tab-bar tab stays stored, so closing or moving that tab brings the row back.
-      expect([...roundTripGaps]).toEqual(FOLDED_LEGACY_ROW_GAPS.get(profile.name) ?? [])
     }
   )
+
+  describe('a legacy row the load folds into a tab-bar tab', () => {
+    const patchedBy = (
+      name: string,
+      command: (workspace: string) => LayoutCommand,
+      edit: (stored: WorkspaceSessionState) => void = () => {}
+    ) => {
+      const profile = LEGACY_WORKSPACE_LAYOUT_PROFILES.find((candidate) => candidate.name === name)!
+      const stored = profile.build()
+      edit(stored)
+      const loaded = loadWorkspaceLayout(profile.hostId, stored, nameBasedLoadContext())
+      const workspace = Object.keys(stored.tabsByWorktree)[0]!
+      const result = applyLayoutCommand(loaded.layout, command(workspace), CONTEXT)
+      if (!result.ok) {
+        throw new Error(result.code)
+      }
+      const after = saveWorkspaceLayout({ ...loaded, layout: result.model })
+      return { stored, patched: patchStoredSession(stored, saveWorkspaceLayout(loaded), after) }
+    }
+
+    it('goes with the tab it repeats, and a selection naming it follows the load', () => {
+      const { patched } = patchedBy(
+        'legacy row repeating a tab-bar tab’s terminal, selected',
+        (workspace) => ({ type: 'closeTabs', workspace, tabIds: ['tab-a'], force: true })
+      )
+
+      expect(Object.values(patched.tabsByWorktree)[0]!.map((row) => row.id)).toEqual(['tab-b'])
+      expect(patched.terminalLayoutsByTabId['tab-legacy']).toBeUndefined()
+      expect(patched.activeTabId).not.toBe('tab-legacy')
+    })
+
+    it('goes with the tab it repeats when they share only a remote session', () => {
+      const { patched } = patchedBy(
+        'legacy row repeating a tab-bar tab’s terminal',
+        (workspace) => ({ type: 'closeTabs', workspace, tabIds: ['tab-a'], force: true }),
+        (stored) => {
+          for (const row of Object.values(stored.tabsByWorktree).flat()) {
+            if (row.id !== 'tab-b') {
+              row.ptyId = null
+              stored.terminalLayoutsByTabId[row.id]!.ptyIdsByLeafId = {}
+            }
+          }
+          stored.remoteSessionIdsByTabId = { 'tab-a': 'remote-1', 'tab-legacy': 'remote-1' }
+        }
+      )
+
+      expect(Object.values(patched.tabsByWorktree)[0]!.map((row) => row.id)).toEqual(['tab-b'])
+      expect(patched.terminalLayoutsByTabId['tab-legacy']).toBeUndefined()
+    })
+
+    it('keeps its loaded terminals when it gains a tab-bar entry, so the shared one stays put', () => {
+      const { patched } = patchedBy(
+        'legacy split row sharing one pane’s terminal with a tab-bar tab',
+        (workspace) => ({
+          type: 'moveTab',
+          workspace,
+          tabId: 'tab-legacy',
+          toGroupId: 'g1',
+          index: 0
+        })
+      )
+
+      const rows = Object.values(patched.tabsByWorktree)[0]!
+      expect(rows.find((row) => row.id === 'tab-legacy')?.ptyId).toBe('pty-c')
+      expect(rows.find((row) => row.id === 'tab-a')?.ptyId).toBe('pty-a')
+      expect(Object.values(patched.terminalLayoutsByTabId['tab-legacy']!.ptyIdsByLeafId!)).toEqual([
+        'pty-c'
+      ])
+    })
+
+    it('stays as stored when the tab it repeats is only renamed', () => {
+      const { stored, patched } = patchedBy(
+        'legacy row repeating a tab-bar tab’s terminal',
+        (workspace) => ({
+          type: 'renameTab',
+          workspace,
+          tabId: 'tab-a',
+          kind: 'custom',
+          title: 'Renamed'
+        })
+      )
+
+      expect(patched.tabsByWorktree).not.toBe(stored.tabsByWorktree)
+      expect(Object.values(patched.tabsByWorktree)[0]!.map((row) => row.id)).toContain('tab-legacy')
+      expect(patched.terminalLayoutsByTabId['tab-legacy']).toEqual(
+        stored.terminalLayoutsByTabId['tab-legacy']
+      )
+    })
+  })
+
+  it('does not write a sibling the load supplied when a close only renumbers it', () => {
+    const profile = LEGACY_WORKSPACE_LAYOUT_PROFILES.find(
+      (candidate) => candidate.name === 'row without a tab-bar entry, still bound to a terminal'
+    )!
+    const stored = profile.build()
+    const loaded = loadWorkspaceLayout(profile.hostId, stored, nameBasedLoadContext())
+    const [workspace] = Object.keys(stored.tabsByWorktree)
+    const result = applyLayoutCommand(
+      loaded.layout,
+      { type: 'closeTabs', workspace: workspace!, tabIds: ['tab-a'], force: true },
+      CONTEXT
+    )
+    if (!result.ok) {
+      throw new Error(result.code)
+    }
+
+    const after = saveWorkspaceLayout({ ...loaded, layout: result.model })
+    const patched = patchStoredSession(stored, saveWorkspaceLayout(loaded), after)
+
+    expect(after.unifiedTabs?.[workspace!]?.map((entry) => entry.entityId)).toEqual(['tab-b'])
+    expect(patched.unifiedTabs?.[workspace!] ?? []).toEqual([])
+  })
 
   it('keeps a legacy partition’s unrelated records as stored when a pane splits', () => {
     const profile = LEGACY_WORKSPACE_LAYOUT_PROFILES.find(

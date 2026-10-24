@@ -73,10 +73,11 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),
   workspaceSession: { disposition: 'per-field', item: 22 },
-  workspaceSessionsByHostId: notApplicableDisposition(
-    22,
-    "WSL projects live in 'local', i.e. workspaceSession."
-  ),
+  workspaceSessionsByHostId: {
+    disposition: 'rewrite-desktop',
+    item: 22,
+    note: "The desktop seeds the WSL host's session from the moved 'local' rows (D1b-7c)."
+  },
   remoteLayoutSnapshots: { disposition: 'rewrite-desktop', item: 47 },
   sshTargets: notApplicableDisposition(62),
   sshTargetGenerationCounter: notApplicableDisposition(62),
@@ -112,6 +113,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   workspaceDocHistory: moveDisposition(30),
   activeConnectionIdsAtShutdown: notApplicableDisposition(60),
   clientHostedBrowserCloseIntentsByEnvironment: moveDisposition(29),
+  pairedTerminalTabCloseIntentsByEnvironment: notApplicableDisposition(
+    60,
+    'Closes owed to a paired runtime host, not to a local or WSL project.'
+  ),
   tabsByWorktree: moveDisposition(22),
   openFilesByWorktree: moveDisposition(26),
   activeFileIdByWorktree: moveDisposition(27),
@@ -140,7 +145,9 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   },
   terminalTopologyRevisionByRepoId: { disposition: 'rederive', item: 35 },
   terminalSurfaceTombstonesByPaneKey: moveDisposition(34),
-  closedTerminalTabTombstonesByTabId: moveDisposition(34)
+  closedTerminalTabTombstonesByTabId: moveDisposition(34),
+  // Names terminals of the host the project leaves, as the incarnation map does.
+  closedTerminalPanesByPaneKey: { disposition: 'drop-pty-binding', item: 36 }
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>
 
 /** Nested PTY bindings dropped wherever they appear in moved session rows (item 36). */

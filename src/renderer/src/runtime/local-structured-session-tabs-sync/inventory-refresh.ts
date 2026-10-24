@@ -9,7 +9,7 @@ import { applyStructuredSessionTabSnapshots } from './snapshot-apply'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/structured-agent-session-launch-cancellation'
+} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../runtime-rpc-client'
@@ -92,7 +92,7 @@ export function refreshLocalStructuredSessionTabs(
 export async function refreshLocalStructuredSessionWorktreeTabs(
   worktreeId: string,
   options: { reacceptCurrentVersion?: boolean } = {}
-): Promise<void> {
+): Promise<RuntimeMobileSessionTabsResult | null> {
   // Structured chat can be switched off mid-call, which wipes the mirror; a late answer must not re-seed it.
   const expectedGeneration = localStructuredSessionGeneration()
   const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
@@ -100,7 +100,9 @@ export async function refreshLocalStructuredSessionWorktreeTabs(
     'session.tabs.list',
     { worktree: toRuntimeWorktreeSelector(worktreeId) }
   )
-  if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-    applyStructuredSessionTabSnapshots([snapshot], undefined, options)
+  if (!isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
+    return null
   }
+  applyStructuredSessionTabSnapshots([snapshot], undefined, options)
+  return snapshot
 }

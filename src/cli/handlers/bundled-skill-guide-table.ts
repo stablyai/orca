@@ -20,10 +20,7 @@ function canonicalGuides(guides: readonly BundledSkillGuide[]): BundledSkillGuid
   )
 }
 
-/**
- * Load the embedded guide table in canonical order. Deferred because the table is
- * large and unrelated CLI commands must not pay its module-load cost at startup.
- */
+/** Defer the large guide table so unrelated commands avoid its startup cost. */
 export async function loadCanonicalGuides(): Promise<BundledSkillGuide[]> {
   const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
   return canonicalGuides(BUNDLED_SKILL_GUIDES)
@@ -41,8 +38,7 @@ export function requireTopic(
       `Missing skill topic. Available topics: ${availableTopics}`
     )
   }
-  // Why: installed stubs may retain an old topic forever, so aliases and canonical
-  // names share one lookup table instead of being treated as transient CLI aliases.
+  // Installed stubs can retain old topics indefinitely, so aliases must remain valid lookup keys.
   const guideByTopic = new Map<string, BundledSkillGuide>(
     guides.flatMap((guide) => [guide.name, ...guide.aliases].map((name) => [name, guide]))
   )

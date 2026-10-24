@@ -213,6 +213,16 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('writes a background-origin alternate-screen repaint that arrives after the reveal restore', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      vi.useFakeTimers({
+        toFake: [
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+          'Date',
+          'performance'
+        ]
+      })
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -260,7 +270,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       const settleWrites = async (): Promise<void> => {
         for (let round = 0; round < 8; round += 1) {
           await flushAsyncTicks(2)
-          await new Promise((resolve) => setTimeout(resolve, 60))
+          await vi.advanceTimersByTimeAsync(60)
           while (parseCallbacks.length > 0) {
             parseCallbacks.shift()?.()
           }
@@ -291,6 +301,16 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('re-restores a skipped alt frame from the model when the fit lands back on the capture grid', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      vi.useFakeTimers({
+        toFake: [
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+          'Date',
+          'performance'
+        ]
+      })
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; droppedOutput?: boolean }) => void) | null
@@ -339,7 +359,7 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       capturedDataCallback.current?.('', { seq: 100, droppedOutput: true })
       for (let round = 0; round < 8; round += 1) {
         await flushAsyncTicks(2)
-        await new Promise((resolve) => setTimeout(resolve, 60))
+        await vi.advanceTimersByTimeAsync(60)
         while (parseCallbacks.length > 0) {
           parseCallbacks.shift()?.()
         }

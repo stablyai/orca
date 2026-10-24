@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration-blob-transfer'
+import type { OrcadMigrationBlobDescriptor } from '../shared/orcad-migration/orcad-migration-blob-transfer'
 import { getOrcadMigrationReceivedBlobPath } from './persistence/migrating-orcad-catalog/orcad-migration-blob-staging'
 import { manifest } from './persistence-orcad-migration-catalog-fixture'
 import { createStore, testState } from './persistence-test-harness'
@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 
-// A kind with no installer yet, so the channel's own behaviour is all that runs.
+// Use a blob kind without an installer to isolate channel behavior.
 const bytes = Buffer.from('session record one\nsession record two\n')
 const blob: OrcadMigrationBlobDescriptor = {
   blobKind: 'agent-session-records',

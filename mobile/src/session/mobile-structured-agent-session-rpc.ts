@@ -2,6 +2,8 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
@@ -25,7 +27,7 @@ import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-se
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
-  | { status: 'accepted'; value: TValue }
+  | { status: 'accepted'; value: TValue; cursor?: AgentJournalCursor }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
   | { status: 'failed'; message: string }
   | { status: 'unknown' }
@@ -59,15 +61,20 @@ export function agentSessionReadFailureRefusal(failure: unknown) {
   )
 }
 
+/** A host's refusal of a history read, worded as the pane shows it. */
+export function agentSessionReadRefusalText(refusal: AgentSessionRefusalReference): string {
+  return agentSessionWriteNoticeEnglish(
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+  )
+}
+
 /** A failed read of a chat's history as the pane shows it, from a thrown error or a stream's error
  *  frame (`{ message, error }`): a thrown refusal's message is its bare code, so its words come
  *  from the refusal in the error's data. */
 export function agentSessionReadFailureText(failure: unknown): string {
   const refusal = agentSessionReadFailureRefusal(failure)
   if (refusal) {
-    return agentSessionWriteNoticeEnglish(
-      agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
-    )
+    return agentSessionReadRefusalText(refusal)
   }
   if (failure instanceof Error) {
     return failure.message
@@ -169,7 +176,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return { status: 'unknown' }
     }
     return result.ok
-      ? { status: 'accepted', value: result.value }
+      ? { status: 'accepted', value: result.value, cursor: result.cursor }
       : {
           status: 'refused',
           code: result.refusal.code,

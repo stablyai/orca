@@ -21,6 +21,7 @@ export type TabBarItemSurfaceProps = Pick<
   | 'activeSimulatorTabId'
   | 'activeTabType'
   | 'expandedPaneByTabId'
+  | 'onCloseSplitPane'
 >
 
 export type TabBarItemSurfaceRuntime = Pick<
@@ -141,6 +142,7 @@ export function renderTabBarItems({
         isChatView={isChatView}
         viewModeTabId={viewModeTabId}
         canDuplicate={item.type === 'browser' && managedBrowserCreationEnabled}
+        canCloseSplitPane={props.onCloseSplitPane !== undefined}
         gitStatus={
           item.type === 'editor' ? resolveEditorTabGitStatus(item.data, statusByRelativePath) : null
         }

@@ -8,8 +8,7 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => true),
   closeTerminalTab: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
-  requestEditorFileClose: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn(() => null as string | null)
+  requestEditorFileClose: vi.fn()
 }))
 
 vi.mock('../../runtime/web-runtime-session-tab-lifecycle', () => ({
@@ -25,9 +24,6 @@ vi.mock('../../store/slices/browser-webview-cleanup', () => ({
 vi.mock('../editor/editor-autosave', () => ({
   requestEditorFileClose: mocks.requestEditorFileClose
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
-}))
 
 import { useAppStore } from '../../store'
 import { useTabGroupTabCloseCommands } from './useTabGroupTabCloseCommands'
@@ -39,15 +35,29 @@ const BROWSER_TAB = {
   groupId: 'group-1'
 } as Tab
 
+const OWNED_BY_ENV_OWNER = {
+  repos: [{ id: 'repo-a', executionHostId: 'runtime:env-owner' }],
+  worktreesByRepo: {
+    'repo-a': [
+      {
+        id: 'worktree-a',
+        repoId: 'repo-a',
+        hostId: 'runtime:env-owner',
+        runtimeOwnerEnvironmentId: 'env-owner'
+      }
+    ]
+  }
+}
+
 let closeUnifiedTab: ReturnType<typeof vi.fn>
 let closeBrowserTab: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   // clearAllMocks leaves implementations in place, so a per-test mockReturnValue would leak.
   mocks.isWebRuntimeSessionActive.mockReturnValue(true)
-  mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
   closeUnifiedTab = vi.fn()
   closeBrowserTab = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
   useAppStore.setState({
     closeUnifiedTab,
     closeBrowserTab,
@@ -55,6 +65,8 @@ beforeEach(() => {
     closeFile: vi.fn(),
     setActiveWorktree: vi.fn(),
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
+    repos: [],
+    worktreesByRepo: {},
     unifiedTabsByWorktree: { 'worktree-a': [BROWSER_TAB] },
     browserPagesByWorkspace: {
       'workspace-a': [
@@ -119,31 +131,33 @@ describe('closing a browser workspace owned by more than one runtime environment
   })
 
   // Why: a mirror of a host tab has no page of its own, so nothing names an owner — without the
-  // focused runtime standing in, the X removed nothing and the host re-mirrored the tab.
-  it('removes a pageless host mirror through the focused runtime', () => {
+  // worktree's owner standing in, the X removed nothing and the host re-mirrored the tab.
+  it("removes a pageless host mirror through the worktree's runtime owner", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
     useAppStore.setState({
       browserPagesByWorkspace: {},
-      remoteBrowserPageHandlesByPageId: {}
+      remoteBrowserPageHandlesByPageId: {},
+      ...OWNED_BY_ENV_OWNER
     } as never)
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-focused')
 
     commands().closeItem('unified-browser')
 
-    expect(closedEnvironmentIds()).toEqual(['env-focused'])
+    expect(closedEnvironmentIds()).toEqual(['env-owner'])
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
     expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
   })
 
   it('routes the bulk close through the same plan for a pageless host mirror', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setState takes a partial slice; these fixtures seed only the fields the close plan reads.
     useAppStore.setState({
       browserPagesByWorkspace: {},
-      remoteBrowserPageHandlesByPageId: {}
+      remoteBrowserPageHandlesByPageId: {},
+      ...OWNED_BY_ENV_OWNER
     } as never)
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-focused')
 
     commands().closeMany(['unified-browser'])
 
-    expect(closedEnvironmentIds()).toEqual(['env-focused'])
+    expect(closedEnvironmentIds()).toEqual(['env-owner'])
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-browser', undefined)
   })
 

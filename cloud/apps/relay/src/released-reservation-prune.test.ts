@@ -219,16 +219,35 @@ describePostgres('heap window reaper against PostgreSQL', () => {
     const client = new pg.Client({ connectionString: scopedUrl() })
     await client.connect()
     try {
-      const plan = await client.query(
-        `EXPLAIN DELETE FROM relay_control_connection_reservations WHERE ctid = ANY(ARRAY(
-           SELECT ctid FROM relay_control_connection_reservations
-           WHERE ctid >= CAST($1 AS tid) AND ctid < CAST($2 AS tid) AND ${PREDICATE.replace('?', '$3')}
-           FOR UPDATE SKIP LOCKED))`,
-        ['(0,0)', '(16,0)', NOW]
+      const plans: string[] = []
+      const query = database.query.bind(database)
+      const observed: RelayDatabase = {
+        dialect: database.dialect,
+        query: async (sql, params) => {
+          if (sql.trimStart().startsWith('DELETE')) {
+            let parameter = 0
+            const plan = await client.query(
+              `EXPLAIN ${sql.replace(/\?/g, () => `$${++parameter}`)}`,
+              params
+            )
+            plans.push(plan.rows.map((row) => String(row['QUERY PLAN'])).join('\n'))
+          }
+          return await query(sql, params)
+        },
+        queryLocked: database.queryLocked.bind(database),
+        transaction: database.transaction.bind(database),
+        close: database.close.bind(database)
+      }
+      const reaper = new HeapWindowReaper(
+        'relay_control_connection_reservations',
+        PREDICATE,
+        { pagesPerStatement: 16, maxPagesPerTick: 16, maxRowsPerTick: ROWS, budgetMs: 60_000 },
+        () => 0
       )
-      const text = plan.rows.map((row) => String(row['QUERY PLAN'])).join('\n')
-      expect(text).toContain('Tid Range Scan')
-      expect(text).not.toContain('Seq Scan')
+      expect(await reaper.reap(observed, [NOW])).toBeGreaterThan(0)
+      expect(plans).toHaveLength(1)
+      expect(plans[0]).toContain('Tid Range Scan')
+      expect(plans[0]).not.toContain('Seq Scan')
     } finally {
       await client.end()
     }

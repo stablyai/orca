@@ -149,13 +149,9 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
       await expect(orcaPage.getByRole('button', { name: /Spaces/ })).toBeVisible()
       await orcaPage.screenshot({ path: path.join(screenshotDir, '01-question-card.png') })
 
-      // The submit button reads "Skip" until an option is chosen; picking one is
-      // what proves the card is answerable rather than merely rendered.
+      // A single-select pick on the last question submits on its own after a short
+      // beat (#26288); that is what proves the card is answerable rather than merely rendered.
       await orcaPage.getByRole('button', { name: /Spaces/ }).click()
-      await expect(orcaPage.getByRole('button', { name: 'Submit' })).toBeVisible()
-      await orcaPage.screenshot({ path: path.join(screenshotDir, '02-option-selected.png') })
-
-      await orcaPage.getByRole('button', { name: 'Submit' }).click()
       // The card owns the composer slot, so its disappearance is the visible
       // signal that the answer was accepted and chat input came back. The
       // resolution receipt keeps the question in the transcript row, so only

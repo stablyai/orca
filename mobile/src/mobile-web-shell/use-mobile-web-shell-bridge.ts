@@ -3,7 +3,7 @@ import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
 } from '../../modules/orca-mobile-web-shell/src'
-import { useHostClient } from '../transport/client-context'
+import { useHostClient } from '../transport/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine, frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
@@ -162,8 +162,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
    *
    * The route in it is not the whole story any more (ruling 33.1). A same-path param change used
    * to be unreachable — the page routes once, before its first render, so a route that changed
-   * afterwards had nothing left to change, and every switch keyed on the whole route to make one
-   * a remount. The session switch does not: a notification tap for another pane of the session on
+   * afterwards had nothing left to change, and every route file keyed on the whole route to make one
+   * a remount. The session route does not: a notification tap for another pane of the session on
    * screen is a tab switch, so it keeps `paneKey` out of its key and hands the change to
    * `publishRoute` below, which re-sends `init` to a page that said it takes one.
    */

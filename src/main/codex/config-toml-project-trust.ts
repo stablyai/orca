@@ -32,7 +32,7 @@ export function upsertProjectTrustContent(
   }
   const nextHeaderOffset = findNextTomlTableHeader(existing.slice(headerLineEnd))
   const blockEnd = nextHeaderOffset === -1 ? existing.length : headerLineEnd + nextHeaderOffset
-  // Why: rewrite any existing trust_level key, whatever its spelling or value, so none is duplicated.
+  // Replace even quoted or invalid trust_level assignments to avoid duplicate keys.
   const existingEntry = findProjectTrustLevelEntries(existing.slice(headerLineEnd, blockEnd))[0]
   if (existingEntry) {
     return (

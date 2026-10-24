@@ -1,14 +1,14 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { runOxlintPluginOnSource } from './oxlint-plugin-test-runner.mjs'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { runOxlintPluginOnSources } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/native-chat-design-tokens.mjs')
 
-function lintSource(source) {
-  return runOxlintPluginOnSource({
+function lintSources(sources) {
+  return runOxlintPluginOnSources({
     pluginName: 'native-chat-design-tokens',
     pluginPath,
-    source,
+    sources,
     rules: {
       'native-chat-design-tokens/no-arbitrary-font-size': 'warn',
       'native-chat-design-tokens/no-softened-foreground': 'warn',
@@ -18,17 +18,39 @@ function lintSource(source) {
 }
 
 const violations = [
-  ['arbitrary px size', 'export const X = () => <p className="truncate text-[13px]" />'],
-  ['arbitrary rem size', 'export const X = () => <p className="text-[0.8125rem]" />'],
-  ['arbitrary size behind a variant', 'export const X = () => <p className="sm:text-[11px]" />'],
-  ['arbitrary size in a class constant', "const ROW = 'flex text-[10px]'"],
+  [
+    'arbitrary px size',
+    'native-chat-design-tokens(no-arbitrary-font-size)',
+    'export const X = () => <p className="truncate text-[13px]" />'
+  ],
+  [
+    'arbitrary rem size',
+    'native-chat-design-tokens(no-arbitrary-font-size)',
+    'export const X = () => <p className="text-[0.8125rem]" />'
+  ],
+  [
+    'arbitrary size behind a variant',
+    'native-chat-design-tokens(no-arbitrary-font-size)',
+    'export const X = () => <p className="sm:text-[11px]" />'
+  ],
+  [
+    'arbitrary size in a class constant',
+    'native-chat-design-tokens(no-arbitrary-font-size)',
+    "const ROW = 'flex text-[10px]'"
+  ],
   [
     'arbitrary size in a composer',
+    'native-chat-design-tokens(no-arbitrary-font-size)',
     "export const X = () => <p className={cn(a && 'text-[12px]')} />"
   ],
-  ['softened foreground', 'export const X = () => <p className="text-foreground/85" />'],
+  [
+    'softened foreground',
+    'native-chat-design-tokens(no-softened-foreground)',
+    'export const X = () => <p className="text-foreground/85" />'
+  ],
   [
     'weakened focus ring',
+    'native-chat-design-tokens(no-weakened-focus-ring)',
     'export const X = () => <button className="focus-visible:ring-2 focus-visible:ring-ring/70" />'
   ]
 ]
@@ -55,12 +77,23 @@ const accepted = [
   ]
 ]
 
+const diagnosticsBySource = new Map()
+beforeAll(() => {
+  const sources = [
+    ...violations.map(([, , source]) => source),
+    ...accepted.map(([, source]) => source)
+  ]
+  lintSources(sources).forEach((diagnostics, index) => {
+    diagnosticsBySource.set(sources[index], diagnostics)
+  })
+})
+
 describe('native-chat-design-tokens oxlint plugin', () => {
-  it.each(violations)('reports %s', (_name, source) => {
-    expect(lintSource(source)).toHaveLength(1)
+  it.each(violations)('reports %s', (_name, rule, source) => {
+    expect(diagnosticsBySource.get(source).map((diagnostic) => diagnostic.code)).toEqual([rule])
   })
 
   it.each(accepted)('accepts %s', (_name, source) => {
-    expect(lintSource(source)).toEqual([])
+    expect(diagnosticsBySource.get(source)).toEqual([])
   })
 })

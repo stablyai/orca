@@ -13,6 +13,7 @@ export type WorkerTerminalReleaseRuntime = Pick<
   | 'getTerminalPaneKey'
   | 'getTerminalProcessIncarnation'
   | 'getTerminalLivenessVerdict'
+  | 'checkTerminalAgentPresence'
   | 'getOrchestrationDispatchAuthority'
   | 'ensureStructuredAgentSessionHost'
   | 'inspectTerminalProcessIncarnationLiveness'

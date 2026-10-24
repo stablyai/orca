@@ -1,4 +1,6 @@
 import { app } from 'electron'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { isLocalExecutionHost } from '../../shared/execution-host'
 import { classifyError } from '../telemetry/classify-error'
 import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
@@ -24,7 +26,6 @@ import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
 import {
   indexPersistedPaneKeyPtyIds,
-  isLocalExecutionHost,
   resolveAgentWorkspaceExecutionHostId,
   retireRestoredStatusesWithDeadTerminals
 } from '../agent-hooks/restored-status-dead-terminal-sweep'
@@ -35,6 +36,10 @@ import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
+  // Public worktree events retain their Git-only scope.
+  if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
+    return
+  }
   state.pluginService?.emitEvent(
     event.kind === 'created' ? 'worktree.created' : 'worktree.removed',
     event.kind === 'created'
@@ -108,6 +113,8 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
     getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
     getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey)
   })
+  state.runtime?.agentTransitions.seedRestoredRows()
+  await state.runtime?.sidebarFacts?.reconcileSortStampTiers(provider)
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {

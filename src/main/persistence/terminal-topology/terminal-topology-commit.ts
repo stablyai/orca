@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   TerminalLeafMoveRequest,
@@ -13,7 +13,6 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
   admitPaneToSession,
-  applyCommandToSession,
   withdrawPaneFromSession,
   type PaneLayoutChange,
   type TerminalPaneAdmission,
@@ -29,9 +28,21 @@ import type {
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
 import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
-import { planTerminalLeafMove, rekeyMovedLeafProfileRecords } from './terminal-leaf-move'
+import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './terminal-leaf-move'
+import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
-import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
+import {
+  commitLayoutCommand,
+  commitLayoutCommandsAcrossPartitions,
+  commitWindowPaneDetach,
+  keepFrozen,
+  type LayoutCommandRun
+} from './layout-command-commit'
+import {
+  fencedIfLayoutOwner,
+  layoutCommandFence,
+  partitionsFence
+} from './closed-pane-binding-fence'
 
 // The commit boundary for terminal layout (tabs, panes, pane-to-PTY bindings). Wraps the close and
 // the pane move; the close transform still lives in runtime/ and other writers move here later.
@@ -50,7 +61,11 @@ export function closeLeafOrTab(
 ): () => DurableProfileStateMutation<Error | undefined> {
   return traced(
     commit.target.kind === 'pane' ? 'close_leaf' : 'close_tab',
-    terminalSurfaceCloseMutation(commit),
+    // A start under way in a pane main closed must not bring it back.
+    fencedIfLayoutOwner(
+      () => ({ sessions: commit, fences: true }),
+      terminalSurfaceCloseMutation(commit)
+    ),
     // Refusals are fixed reason codes, never ids.
     (refusal) => refusal?.message
   )
@@ -79,12 +94,16 @@ export function admitPane(
 ): () => DurableProfileStateMutation<TerminalPaneAdmissionOutcome> {
   return traced(
     'admit_pane',
-    () =>
-      commitPaneChange(
-        hostId,
-        admitPaneToSession(hostId, context.getSession(hostId), admission),
-        context
-      ),
+    // A pane main writes again under a closed pane's id binds as any.
+    fencedIfLayoutOwner(
+      () => partitionsFence([hostId], context.getSession, false),
+      () =>
+        commitPaneChange(
+          hostId,
+          admitPaneToSession(hostId, context.getSession(hostId), admission),
+          context
+        )
+    ),
     (outcome) => (outcome === 'admitted' || outcome === 'exists' ? undefined : outcome)
   )
 }
@@ -97,30 +116,56 @@ export function withdrawPane(
 ): () => DurableProfileStateMutation<LayoutRefusalCode | null> {
   return traced(
     'withdraw_pane',
-    () =>
-      commitPaneChange(
-        hostId,
-        withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
-        context
-      ),
+    // A start under way in a pane main took back must not bring it back.
+    fencedIfLayoutOwner(
+      () => partitionsFence([hostId], context.getSession, true),
+      () =>
+        commitPaneChange(
+          hostId,
+          withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
+          context
+        )
+    ),
     (code) => code ?? undefined
   )
 }
 
-/** A client's layout command (`layout.apply`), applied to the stored partition. */
+/**
+ * A client's layout command (`layout.apply`), applied to each partition holding its tab, routed
+ * partition first: that partition's outcome is the reply, and its refusal writes nothing.
+ */
 export function applyLayout(
-  hostId: ExecutionHostId,
+  hostIds: readonly ExecutionHostId[],
   command: LayoutCommand,
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
+): () => DurableProfileStateMutation<LayoutApplyOutcome> {
+  return traced(
+    'apply_layout',
+    // Closes fence the panes they removed; creates lift the fence on the ids they write.
+    fencedIfLayoutOwner(
+      () => layoutCommandFence(command.type, hostIds, context.getSession),
+      () =>
+        command.type === 'movePaneToNewTab' && command.windowDetach
+          ? commitWindowPaneDetach(
+              hostIds,
+              { ...command, windowDetach: command.windowDetach },
+              context
+            )
+          : commitLayoutCommand(hostIds, command, context, run)
+    ),
+    (outcome) => (outcome.ok ? undefined : outcome.code)
+  )
+}
+
+/** One disk move's editor renames, a command per partition, in one durable write of all. */
+export function applyEditorFileRenamesInPartitions(
+  batches: readonly { hostId: ExecutionHostId; command: CommandOf<'renameEditorFiles'> }[],
   context: TerminalTopologyCommitContext
 ): () => DurableProfileStateMutation<LayoutApplyOutcome> {
   return traced(
     'apply_layout',
-    () =>
-      commitPaneChange(
-        hostId,
-        applyCommandToSession(hostId, context.getSession(hostId), command),
-        context
-      ),
+    () => commitLayoutCommandsAcrossPartitions(batches, context),
     (outcome) => (outcome.ok ? undefined : outcome.code)
   )
 }
@@ -129,7 +174,7 @@ export function applyLayout(
  * One `persistence.terminal-topology` span per commit, from admission to the in-memory write.
  * Attributes stay low-cardinality: no pane key, PTY id or path; `refusalOf` returns a fixed code.
  */
-function traced<T>(
+export function traced<T>(
   kind: TerminalTopologyCommitKind,
   mutate: () => DurableProfileStateMutation<T>,
   refusalOf: (value: T) => string | undefined
@@ -171,6 +216,8 @@ export type TerminalTopologyCommitContext = {
   markDirty: (
     domain: 'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
   ) => void
+  /** Main's in-memory editor views; absent where a commit never changes them. */
+  editorViews?: Pick<StoreRuntimeState, 'layoutEditorViews'>
 }
 
 /** The commit context over a Store's state and its session partitions. */
@@ -178,7 +225,8 @@ export function topologyCommitContext({
   runtime,
   sessions
 }: {
-  runtime: Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'>
+  runtime: Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'> &
+    Partial<Pick<StoreRuntimeState, 'layoutEditorViews'>>
   sessions: Pick<
     SessionHostPartitionOperations,
     'getWorkspaceSessionHostIds' | 'getWorkspaceSession'
@@ -188,29 +236,10 @@ export function topologyCommitContext({
     state: runtime.state,
     hostIds: () => sessions.getWorkspaceSessionHostIds(),
     getSession: (hostId) => sessions.getWorkspaceSession(hostId),
-    markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain)
-  }
-}
-
-/** Writes `next`, returning a restore that puts the prior value back unless a later write replaced it. */
-// A paused WSL move keeps its local rows as the quiesce left them.
-function keepFrozen(
-  hostId: ExecutionHostId,
-  session: WorkspaceSessionState,
-  context: TerminalTopologyCommitContext
-): WorkspaceSessionState {
-  return hostId === LOCAL_EXECUTION_HOST_ID
-    ? keepWslMoveFrozenSessionsForStore(session, context.getSession(hostId))
-    : session
-}
-
-function writeRestorable<V>(read: () => V, write: (value: V) => void, next: V): () => void {
-  const prior = read()
-  write(next)
-  return () => {
-    if (read() === next) {
-      write(prior)
-    }
+    markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
+    ...(runtime.layoutEditorViews
+      ? { editorViews: { layoutEditorViews: runtime.layoutEditorViews } }
+      : {})
   }
 }
 
@@ -233,27 +262,7 @@ function commitLeafMove(
       keepFrozen(hostId, session, context)
     )
   )
-  const rekeyed = rekeyMovedLeafProfileRecords(state, request)
-  if (rekeyed.ui) {
-    restores.push(
-      writeRestorable(
-        () => state.ui,
-        (ui) => (state.ui = ui),
-        rekeyed.ui
-      )
-    )
-    context.markDirty('ui')
-  }
-  if (rekeyed.sshRemotePtyLeases) {
-    restores.push(
-      writeRestorable(
-        () => state.sshRemotePtyLeases,
-        (leases) => (state.sshRemotePtyLeases = leases),
-        rekeyed.sshRemotePtyLeases
-      )
-    )
-    context.markDirty('sshRemotePtyLeases')
-  }
+  restores.push(...writeMovedLeafProfileRecords(request, context))
   return {
     value: planned.result,
     rollback: () => restores.forEach((restore) => restore())

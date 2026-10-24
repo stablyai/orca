@@ -23,8 +23,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => (
 
 const NOW = 1_800_000_000_000
 
-// Relay-era builds record undelivered stops on the lease; this build only carries them so a
-// downgrade can still replay them.
+// Only legacy relay paths create pending stops; preserve them for downgrade replay elsewhere.
 describe('persisted SSH pending PTY kills', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -70,5 +69,23 @@ describe('persisted SSH pending PTY kills', () => {
       { ptyId: 'pty2:epoch-a:1', pendingKill: { requestedAt: NOW, attempts: 0 } },
       { ptyId: 'pty-2', pendingKill: undefined }
     ])
+  })
+
+  it('keeps a stop the legacy relay bridge records across a restart, until it clears it', async () => {
+    const store = createStoreWithSshRemotePtyLeases([
+      { targetId: 'ssh-1', ptyId: 'pty2:epoch-a:1', state: 'detached', tabId: 'tab-1' }
+    ])
+    store.setSshRemotePtyLeasePendingKill('ssh-1', 'pty2:epoch-a:1', {
+      requestedAt: NOW,
+      attempts: 0
+    })
+
+    const reloaded = createStore()
+    expect(reloaded.getSshRemotePtyLeases('ssh-1')[0]).toMatchObject({
+      state: 'detached',
+      pendingKill: { requestedAt: NOW, attempts: 0 }
+    })
+    reloaded.setSshRemotePtyLeasePendingKill('ssh-1', 'pty2:epoch-a:1', null)
+    expect(createStore().getSshRemotePtyLeases('ssh-1')[0].pendingKill).toBeUndefined()
   })
 })

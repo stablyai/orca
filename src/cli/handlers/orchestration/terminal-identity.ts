@@ -9,11 +9,7 @@ import {
 } from '../../../shared/agent-session-caller-env'
 import { sessionAddressForHost } from '../../session-caller-flags'
 
-/**
- * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:
- * the orchestration envelope carries that id and the host binds the caller param to it, so nothing
- * is resolved or guessed here, except a session address only the host can place.
- */
+/** undefined delegates caller identity to the injected session; the host resolves /clear addresses. */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -21,7 +17,7 @@ export async function resolveOrchestrationTerminalHandle(
   flagName: 'from' | 'terminal',
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string | undefined> {
-  // A caller flag naming anyone else was already refused at the CLI entry, from the command's spec.
+  // CLI entry already fences caller flags using the command spec.
   const explicit = getOptionalStringFlag(flags, flagName)
   const sessionId = readInjectedAgentSessionId()
   if (sessionId) {
@@ -33,7 +29,7 @@ export async function resolveOrchestrationTerminalHandle(
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
     if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+      // Shells can retain stale handles after remint; validate before embedding them in coordinator preambles.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
@@ -45,11 +41,7 @@ export async function resolveOrchestrationTerminalHandle(
     }
     return envHandle
   }
-  // Past this point every remaining route GUESSES an implicit terminal, and a structured session
-  // has no pane for the guess to land on — so it lands on a sibling. `check` is destructive by
-  // default, so that guess consumed another pane's oldest unread batch and marked it read, and the
-  // rightful worker never saw its mail. Refusing is the only honest answer: this child genuinely
-  // cannot infer its own identity.
+  // Implicit guesses can select a sibling pane and consume its mail; identity-less sessions must refuse.
   if (hasStructuredSessionMarker()) {
     throw structuredSessionRefusal(flagName)
   }
@@ -59,14 +51,7 @@ export async function resolveOrchestrationTerminalHandle(
   return await getTerminalHandle(flags, cwd, client)
 }
 
-/**
- * Whether the handle this process was born with still names a live identity.
- *
- * `terminal.resolveIdentity`, never `terminal.show`: `show` is a PTY verb, so it missed for a
- * structured worker and reported `terminal_handle_stale` for a handle that was perfectly live —
- * which then failed every coordinator verb, because the pane remint below needs an `ORCA_PANE_KEY`
- * a structured child deliberately does not carry.
- */
+// terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
 async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Promise<boolean> {
   try {
     const response = await client.call<{ identity?: { live?: boolean } }>(
@@ -81,9 +66,7 @@ async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Prom
       return false
     }
     if (getClientErrorCode(err) === 'method_not_found') {
-      // Clients and remote hosts update independently, so a host that predates the identity probe
-      // is the normal mixed-version state. Fall back to what it does have — which is correct for
-      // that host, because a host without the probe also has no structured workers to miss.
+      // Hosts without the identity probe also predate structured workers, so terminal.show is sufficient.
       return await showResolvesTerminalHandle(handle, client)
     }
     throw err
@@ -128,7 +111,7 @@ async function resolveOrchestrationPaneTerminalHandle(
     return undefined
   }
   try {
-    // Why: pane-key reminting preserves caller identity; focus-based active-terminal fallback can point at a different pane.
+    // Remint by pane key; focus-based fallback can select another caller.
     const response = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
       paneKey
     })
@@ -172,15 +155,11 @@ function getClientErrorMessage(err: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined
 }
 
-/** How check output names its caller: the handle, or the session's address. */
 export function orchestrationCallerLabel(handle: string | undefined): string {
   return handle ?? injectedSessionAddress() ?? 'unknown'
 }
 
-/**
- * The caller for a read that `--run` scopes: no terminal is resolved, but a session's declared
- * address still goes to the host, which places a `/clear` root and refuses anyone else.
- */
+/** Named-run reads need no terminal lookup, but the host must still verify declared session lineage. */
 export function runScopedSessionCaller(flags: Map<string, string | boolean>): string | undefined {
   const declared = getOptionalStringFlag(flags, 'from')
   const sessionId = readInjectedAgentSessionId()
@@ -203,8 +182,7 @@ async function resolveImplicitOrchestrationSender(
   client: RuntimeClient
 ): Promise<string> {
   try {
-    // Unambiguous: naming the sender is an identity claim, so an arbitrary pick would let this
-    // command speak as a sibling worker.
+    // An arbitrary active-terminal choice would let this command speak as a sibling worker.
     return await getTerminalHandle(flags, cwd, client, { requireUnambiguous: true })
   } catch (err) {
     if (!isNoActiveTerminalError(err)) {
@@ -214,11 +192,7 @@ async function resolveImplicitOrchestrationSender(
   }
 }
 
-/**
- * Why no flag is suggested: every caller reaches a refusal only after the explicit-flag branch has
- * already returned, so `--from` advice would succeed — against a handle that necessarily belongs to
- * another pane, whose unread mail the next `check` consumes.
- */
+// --from bypasses implicit resolution and could consume another pane's mailbox; never suggest it here.
 function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientError {
   return new RuntimeClientError(
     'no_active_sender_terminal',
@@ -230,12 +204,21 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
 }
 
 export function throwNoActiveSenderTerminal(): never {
-  // Lifecycle sends refuse here before the structured guard above ever runs, so this is the only
-  // place left that would tell an identity-less session to pass a handle it does not have. A stale
-  // ORCA_TERMINAL_HANDLE is a different case — that caller HAS an identity, so it keeps the advice
-  // to re-run under a live one.
+  // Lifecycle sends can refuse before the structured guard; distinguish missing identity from stale handles.
   if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
     throw structuredSessionRefusal('from')
+  }
+  // Codex sets CODEX_THREAD_ID after the env filter that can drop Orca identity (#25775).
+  if (process.env.CODEX_THREAD_ID && !process.env.ORCA_TERMINAL_HANDLE) {
+    throw new RuntimeClientError(
+      'no_active_sender_terminal',
+      'Codex ran this orchestration command without ORCA_TERMINAL_HANDLE. If Codex was started in ' +
+        'an Orca terminal, its shell_environment_policy removed it, and relaunching the same way ' +
+        'will not restore it. Start Codex by typing `codex` in an Orca terminal, or set ' +
+        'inherit = "all" with include_only listing the variables to keep plus "ORCA_*". ' +
+        "Pass --from only with your own terminal's handle — another pane's handle would act on " +
+        'its mailbox.'
+    )
   }
   throw new RuntimeClientError(
     'no_active_sender_terminal',

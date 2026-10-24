@@ -5,6 +5,7 @@ import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-h
 import { deletePtyOwnership, setPtyOwnership } from './pty/provider/ownership-state'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
+import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -80,8 +81,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(mainWindow as never)
 
-    // The local provider would happily report `false` here — it just doesn't
-    // hold the id. Callers read that as "the shell died" (STA-2830).
+    // Local absence cannot prove a remote PTY dead (STA-2830).
     await expect(
       handlers.get('pty:hasPty')!(null, { id: 'remote:env-1@@terminal-1' })
     ).resolves.toBe(null)
@@ -105,8 +105,7 @@ describe('registerPtyHandlers', () => {
   )
   it('reports agent ownership through pty:listSessions so the renderer cannot guess it', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: the renderer's binding map is empty during restore, so agent ownership is the only
-    // positive liveness evidence it has. Dropping it here force-killed live sessions (#8459).
+    // During restore the binding map may be empty; owner evidence must protect live sessions (#8459).
     const owner = {
       claim: {
         digestVersion: AGENT_SESSION_CLAIM_DIGEST_VERSION,
@@ -163,8 +162,7 @@ describe('registerPtyHandlers', () => {
   })
   it('reports unknown ownership when the provider cannot serialize claims', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: a legacy daemon generation or older SSH relay lists no owners for a session that may
-    // have one. Reporting that silence as 'absent' is what let live agent sessions be killed (#8459).
+    // Legacy daemons/relays may omit ownership listings; silence must remain unknown (#8459).
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -233,7 +231,11 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
 
     expect(localShutdown).not.toHaveBeenCalled()
-    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+      'ssh-1',
+      'relay-pty',
+      expect.objectContaining({ unverifiableReason: SSH_PROVIDER_UNREGISTERED_REASON })
+    )
   })
   it('ignores fire-and-forget IPC for SSH-owned PTYs this process cannot dispatch', () => {
     const local = { write: vi.fn(), resize: vi.fn(), sendSignal: vi.fn() }

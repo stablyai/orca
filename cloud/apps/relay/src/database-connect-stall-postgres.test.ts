@@ -149,6 +149,9 @@ function watchEventLoop(): { stop: () => number } {
     longestGapMs = Math.max(longestGapMs, now - last)
     last = now
   }, 10)
+  cleanups.push(async () => {
+    clearInterval(timer)
+  })
   return {
     stop: () => {
       clearInterval(timer)

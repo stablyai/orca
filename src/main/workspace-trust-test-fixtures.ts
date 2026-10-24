@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from 'node:path'
 import type { AgentTrustPreset } from './agent-trust-presets'
 
-/** Whether any trust entry for `preset` landed under `home` (Claude's config lives in the home). */
 export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): boolean {
   switch (preset) {
     case 'claude':
@@ -24,7 +23,6 @@ export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): b
   }
 }
 
-/** A linked worktree at `worktree` whose main checkout is `mainCheckout`, as git lays it out. */
 export function linkGitWorktree(mainCheckout: string, worktree: string): void {
   const gitDir = join(mainCheckout, '.git', 'worktrees', 'feature')
   mkdirSync(gitDir, { recursive: true })

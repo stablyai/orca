@@ -29,6 +29,7 @@ import {
   readHostOrcadActivation
 } from './helpers/orcad-template-variant'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import {
   decommissionConvertedHost,
@@ -103,7 +104,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       session.userDataDir,
       host.input,
       { repoPath: host.remoteRepoPath, folderPath: host.remoteFolderPath },
-      { terminalTab: true }
+      { terminalTab: true, parkedScrollback: true }
     )
     // No relay ever ran here, so the terminal gate must prove `exited` from an empty lease set.
     // This launch bypasses the fixture's log relay; keep the SSH lines a failed move explains itself by.
@@ -136,6 +137,24 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
       .toMatchObject({ kind: 'managed' })
     await upgraded.page.screenshot({ path: testInfo.outputPath('relay-era-terminal-dialed.png') })
     await convertAndRetain(upgraded.page, session.userDataDir, seeded)
+    // #30126: the parked panes' history rode the snapshot channel; inlined, it overflowed the manifest.
+    const moved = findOrcadMigrationSourceCutoverForTarget(session.userDataDir, seeded.targetId)
+      ?.manifest.payload.dormantState
+    expect(moved?.workspaceSession?.localOnlyScrollbackByTabId).toBeUndefined()
+    expect(
+      Object.fromEntries(
+        (moved?.terminalScrollbackSnapshots ?? [])
+          .filter((snapshot) => snapshot.tabId === seeded.terminalTabId)
+          .map((snapshot) => [snapshot.leafId, snapshot.byteLength])
+      )
+    ).toEqual(
+      Object.fromEntries(
+        Object.entries(seeded.parkedScrollbackByLeafId).map(([leafId, buffer]) => [
+          leafId,
+          Buffer.byteLength(buffer)
+        ])
+      )
+    )
     const environment = (
       await upgraded.page.evaluate(() => window.api.runtimeEnvironments.list())
     ).find((entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId)
@@ -258,6 +277,10 @@ test('a host whose sshd refuses TCP forwarding runs a managed server over the st
   await serverCall(page, environment!.id, 'repo.list')
 })
 
+const heldPortProbe = `(echo > /dev/tcp/127.0.0.1/6768) 2>/dev/null && echo held || true`
+// Every installed slot's readiness line names the endpoint that orcad actually bound.
+const BOUND_ENDPOINTS = `cat /root/.orca-remote/orcad-*/.orcad-readiness 2>/dev/null | grep -o 'ws://[0-9.:]*' || true`
+
 test('a host whose port 6768 another runtime holds still runs a managed server', async ({
   orcaPage: page
 }, testInfo) => {
@@ -269,9 +292,7 @@ test('a host whose port 6768 another runtime holds still runs a managed server',
   host.exec!(
     `setsid nohup node -e "require('net').createServer((s) => s.destroy()).listen(6768, '127.0.0.1')" >/dev/null 2>&1 &`
   )
-  await expect
-    .poll(() => host.exec!(`(echo > /dev/tcp/127.0.0.1/6768) 2>/dev/null && echo held || true`))
-    .toContain('held')
+  await expect.poll(() => host.exec!(heldPortProbe)).toContain('held')
   await waitForSessionReady(page)
   const targetId = await page.evaluate(async (input) => {
     const { target } = await window.api.ssh.addTarget({ target: input })
@@ -288,6 +309,9 @@ test('a host whose port 6768 another runtime holds still runs a managed server',
   expect(environment, 'a managed server registered for the host').toBeTruthy()
   // The other listener drops every connection, so this call can only have reached orcad.
   await serverCall(page, environment!.id, 'repo.list')
+  // Without these the case passes vacuously whenever the stand-in is gone before orcad starts.
+  expect(host.exec!(heldPortProbe)).toContain('held')
+  expect(host.exec!(BOUND_ENDPOINTS)).toMatch(/ws:\/\/127\.0\.0\.1:(?!6768\b)\d+/)
 
   // A reconnect reads the bound port again rather than assuming 6768.
   await reconnect(page, targetId)

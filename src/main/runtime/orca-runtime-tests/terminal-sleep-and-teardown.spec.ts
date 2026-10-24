@@ -191,7 +191,8 @@ describe('OrcaRuntimeService', () => {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: targetPtyId })
       }
     })
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    // Sessions are saved to the partition the workspace routes to: its repo's host.
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session, 'ssh:conn-stale')
     const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'conn-stale' }
     runtimeStore.getRepos = () => [repo]
     runtimeStore.getRepo = (id: string) => (id === TEST_REPO_ID ? repo : undefined)

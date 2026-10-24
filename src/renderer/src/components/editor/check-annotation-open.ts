@@ -1,11 +1,12 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import {
   getOpenableAnnotationLine,
   resolveAnnotationPathInsideWorktree
 } from './check-annotation-path'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export { getOpenableAnnotationLine }
 
@@ -13,12 +14,11 @@ export function openAnnotationLocation(params: {
   worktreeId: string
   path: string
   line: number
-  revealRafRef: React.RefObject<number | null>
-  revealInnerRafRef: React.RefObject<number | null>
+  executionHostId?: ExecutionHostId
 }): void {
-  const { worktreeId, path, line, revealRafRef, revealInnerRafRef } = params
+  const { worktreeId, path, line, executionHostId } = params
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+  const worktree = store.getKnownWorktreeById(worktreeId, executionHostId)
   if (!worktree) {
     return
   }
@@ -27,41 +27,18 @@ export function openAnnotationLocation(params: {
     return
   }
   const { absolutePath, relativePath } = resolvedPath
+  const language = detectLanguage(relativePath)
 
   // Why: reuse the shared activation path so an annotation jump lands in the
   // same history stack as sidebar, palette, and terminal-link navigation.
-  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true, executionHostId })
 
-  store.openFile(
-    {
-      filePath: absolutePath,
-      relativePath,
-      worktreeId,
-      language: detectLanguage(relativePath),
-      mode: 'edit'
-    },
+  const fileId = store.openFile(
+    { filePath: absolutePath, relativePath, worktreeId, language, mode: 'edit' },
     { forceContentReload: true }
   )
-
-  cancelAnnotationRevealFrame(revealRafRef)
-  cancelAnnotationRevealFrame(revealInnerRafRef)
-  store.setPendingEditorReveal(null)
-
-  // Why: opening can replace the active tab and mount Monaco asynchronously.
-  // Matching search and terminal-link navigation, wait two frames so the
-  // destination editor owns layout before we ask it to reveal the line.
-  revealRafRef.current = requestAnimationFrame(() => {
-    revealInnerRafRef.current = requestAnimationFrame(() => {
-      store.setPendingEditorReveal({ filePath: absolutePath, line, column: 1, matchLength: 0 })
-      cancelAnnotationRevealFrame(revealRafRef)
-      cancelAnnotationRevealFrame(revealInnerRafRef)
-    })
-  })
-}
-
-export function cancelAnnotationRevealFrame(frameRef: React.RefObject<number | null>): void {
-  if (frameRef.current !== null) {
-    cancelAnimationFrame(frameRef.current)
-    frameRef.current = null
+  if (language === 'markdown') {
+    store.setMarkdownViewMode(fileId, 'source')
   }
+  scheduleEditorLineReveal(useAppStore.getState, absolutePath, line, 1, fileId)
 }

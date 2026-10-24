@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_STATES } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
 import { formatAgentToolPreview, showsAgentToolPreview } from './agent-row-tool-preview'
 
 const TOOL = { toolName: 'bash', toolInput: 'rm -rf build/' }
@@ -37,6 +37,23 @@ describe('formatAgentToolPreview', () => {
 
   it('falls back to the bare tool name when the input is not previewable', () => {
     expect(formatAgentToolPreview({ toolName: 'edit' }, 'waiting')).toBe('edit')
+  })
+
+  it("shows a program's bare message when no tool is named", () => {
+    const program = {
+      agentType: 'brew',
+      toolInput: 'Pouring wget',
+      programStatus: { state: 'working' as const, observedAt: 1 }
+    }
+    expect(formatAgentToolPreview(program, 'working')).toBe('Pouring wget')
+    expect(formatAgentToolPreview(program, 'done')).toBe('')
+  })
+
+  it("hides a real agent's tool input that has no tool name", () => {
+    expect(
+      formatAgentToolPreview({ agentType: 'claude', toolInput: 'src/app.ts' }, 'working')
+    ).toBe('')
+    expect(formatAgentToolPreview({ toolInput: 'src/app.ts' }, 'working')).toBe('')
   })
 
   it('ignores whitespace-only fields', () => {

@@ -102,36 +102,83 @@ describe('copying a chat conversation for the CLI', () => {
     expect(child.closes).toBe(2)
   })
 
-  it('bounds an unanswered fork and closes its temporary process', async () => {
+  it('cancels an unanswered fork after delivery and closes its temporary process', async () => {
     const children: FakeAcpChild[] = []
     const spec = acpLaunchSpecFor('omp')!
-    await expect(
-      copyAcpConversation(
-        {
+    const controller = new AbortController()
+    const cancelled = new Error('copy cancelled')
+    const copying = copyAcpConversation(
+      {
+        spec,
+        dataDirectory: '/orca-data',
+        readLaunch: async () => ({
           spec,
-          readLaunch: async () => ({
-            spec,
-            command: 'fake',
-            args: [],
-            cwd: '/repo',
-            env: {},
-            envToDelete: [],
-            fullAccess: false,
-            resume: null
-          }),
-          connect: (...args: ConstructorParameters<typeof FakeAcpChild>) => {
-            const child = new FakeAcpChild(...args)
-            child.agent.on('initialize', (frame) =>
-              child.agent.reply(frame, { protocolVersion: 1, ...FORKS })
-            )
-            children.push(child)
-            return child
-          }
-        },
-        input,
-        { timeoutMs: 10, track: () => {} }
+          command: 'fake',
+          args: [],
+          cwd: '/repo',
+          env: {},
+          envToDelete: [],
+          fullAccess: false,
+          resume: null
+        }),
+        connect: (...args: ConstructorParameters<typeof FakeAcpChild>) => {
+          const child = new FakeAcpChild(...args)
+          child.agent.on('initialize', (frame) =>
+            child.agent.reply(frame, { protocolVersion: 1, ...FORKS })
+          )
+          children.push(child)
+          return child
+        }
+      },
+      input,
+      { signal: controller.signal, track: () => {} }
+    )
+    const outcome = copying.catch((error: unknown) => error)
+    try {
+      await vi.waitFor(() =>
+        expect(
+          children[0]?.agent.frames
+            .filter((frame) => frame.method === 'session/fork')
+            .map((frame) => frame.params)
+        ).toEqual([{ sessionId: PROVIDER_SESSION, cwd: '/repo', mcpServers: [] }])
       )
-    ).rejects.toThrow('OMP could not copy this chat')
-    expect(children.map((child) => child.closes)).toEqual([1])
+      controller.abort(cancelled)
+      expect(await outcome).toMatchObject({
+        message: 'OMP could not copy this chat.',
+        cause: cancelled
+      })
+      expect(children.map((child) => child.closes)).toEqual([1])
+    } finally {
+      controller.abort(cancelled)
+      await copying.catch(() => {})
+    }
   })
+
+  it.each(['opencode', 'opencode2'] as const)(
+    'refuses to copy a %s chat whose arguments route to a server, before starting OpenCode',
+    async (agent) => {
+      const spec = acpLaunchSpecFor(agent)!
+      const connect = vi.fn()
+      await expect(
+        copyAcpConversation(
+          {
+            spec,
+            dataDirectory: '/orca-data',
+            resolveLaunchArgs: () => ['--server', 'https://other-host:4096'],
+            readLaunch: async () => {
+              throw new Error('not reached')
+            },
+            connect
+          },
+          {
+            ...input,
+            identity: { ...input.identity, agent },
+            accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
+          },
+          { track: () => {} }
+        )
+      ).rejects.toThrow('--server')
+      expect(connect).not.toHaveBeenCalled()
+    }
+  )
 })

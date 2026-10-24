@@ -50,7 +50,7 @@ describe('removeProject cascade', () => {
         tab2: ['pty2']
       },
       suppressedPtyExitIds: { pty1: true, pty2: true },
-      pendingCodexPaneRestartIds: { pty1: true, pty2: true },
+      pendingPaneAccountRestarts: { pty1: 'codex', pty2: 'codex' },
       terminalLayoutsByTabId: {
         tab1: makeLayout(),
         tab2: makeLayout()
@@ -80,8 +80,8 @@ describe('removeProject cascade', () => {
     // Tabs are gone before async exit events fire, so retaining one-shot guards would leak ephemeral PTY ids.
     expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
     expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
-    expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
-    expect(s.pendingCodexPaneRestartIds['pty2']).toBeUndefined()
+    expect(s.pendingPaneAccountRestarts['pty1']).toBeUndefined()
+    expect(s.pendingPaneAccountRestarts['pty2']).toBeUndefined()
 
     store.getState().clearTabPtyId('tab1', 'pty1')
     store.getState().clearTabPtyId('tab2', 'pty2')
@@ -117,10 +117,10 @@ describe('restartCodexTabs', () => {
       pendingStartupByTabId: {}
     })
 
-    store.getState().queueCodexPaneRestarts(['pty-b'])
+    store.getState().queuePaneAccountRestarts(['pty-b'], 'codex')
     const state = store.getState()
 
-    expect(state.pendingCodexPaneRestartIds).toEqual({ 'pty-b': true })
+    expect(state.pendingPaneAccountRestarts).toEqual({ 'pty-b': 'codex' })
     expect(state.pendingStartupByTabId).toEqual({})
     expect(state.suppressedPtyExitIds).toEqual({})
     expect(state.tabsByWorktree[wt1][0].generation).toBe(2)

@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { Socket } from 'node:net'
 import { rmSync } from 'node:fs'
 import {
@@ -63,6 +63,17 @@ export async function startLateExitHarness() {
   const rendererExits: { id: string; code: number; incarnationId?: string }[] = []
   const providerExits: { id: string; code: number; incarnationId?: string }[] = []
   let exitListenerCalls = 0
+  const ipcEvent: IpcMainInvokeEvent = {
+    frameId: 1,
+    processId: 1,
+    type: 'frame',
+    senderFrame: null,
+    defaultPrevented: false,
+    preventDefault() {},
+    get sender(): never {
+      throw new Error('PTY kill handler unexpectedly accessed the IPC sender')
+    }
+  }
   const windowStub = { isDestroyed: () => false, webContents: { send() {} } }
   const session = createPtyIpcSession({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: provider listeners only inspect isDestroyed and webContents.send on this headless fixture.
@@ -81,11 +92,15 @@ export async function startLateExitHarness() {
     rememberSyntheticKillExit(session, id, incarnationId)
   session.sendModelRestoreNeededMarker = () => false
   let killHandler: Parameters<PtyIpcSurface['handle']>[1] | undefined
+  let fencedKillHandler: Parameters<PtyIpcSurface['handle']>[1] | undefined
   setLocalPtyProvider(harness.adapter)
   bindProviderListeners(session)
   setPtyHostBindings({
     ipc: {
       handle: (channel, handler) => {
+        if (channel === 'pty:killFenced') {
+          fencedKillHandler = handler
+        }
         if (channel === 'pty:kill') {
           killHandler = handler
         }
@@ -164,8 +179,13 @@ export async function startLateExitHarness() {
       if (!killHandler) {
         throw new Error('PTY kill handler missing')
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installed renderer-kill handler ignores its Electron event argument.
-      await killHandler({} as never, { id: PTY_ID })
+      await killHandler(ipcEvent, { id: PTY_ID })
+    },
+    killFenced: async (request: unknown): Promise<unknown> => {
+      if (!fencedKillHandler) {
+        throw new Error('Fenced handler missing')
+      }
+      return fencedKillHandler(ipcEvent, request)
     },
     stopAndWait: () => {
       const deps = {

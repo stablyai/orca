@@ -111,9 +111,13 @@ function parseBucket(
     return null
   }
   const usedPercent = Math.min(100, Math.max(0, Math.round((1 - fraction) * 100)))
+  const windowName = readString(raw.name)
   return {
     id,
-    name: formatBucketName(groupName, readString(raw.name), siblings),
+    name: formatBucketName(groupName, windowName, siblings),
+    // Why structured fields: the renderer builds short labels without splitting `name`.
+    group: groupName,
+    ...(windowName ? { windowName } : {}),
     usedPercent,
     // Why 0 and not null: RateLimitWindow requires a number, and an unrecognised agy window still
     // carries a real remaining fraction worth showing as a named bucket.
@@ -181,12 +185,8 @@ export function parseAntigravityUsageEnvelope(value: unknown): AntigravityUsageR
   if (buckets.length === 0) {
     return null
   }
-  // Why drop the id first: the summary is a RateLimitWindow, and the summariser only strips `name`,
-  // so an id left on the bucket would ride into the published window.
-  const windowsOf = (minutes: number): RateLimitBucket[] =>
-    buckets
-      .filter((bucket) => bucket.windowMinutes === minutes)
-      .map(({ id: _id, ...bucket }) => bucket)
+  const windowsOf = (minutes: number): AntigravityUsageBucket[] =>
+    buckets.filter((bucket) => bucket.windowMinutes === minutes)
   return {
     session: deriveMostConstrainedWindow(windowsOf(SESSION_WINDOW_MINUTES)),
     weekly: deriveMostConstrainedWindow(windowsOf(WEEKLY_WINDOW_MINUTES)),

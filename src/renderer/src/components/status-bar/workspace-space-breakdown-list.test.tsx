@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceSpaceBreakdownList } from './workspace-space-breakdown-list'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
+
+const revealInFileManager = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/reveal-in-file-manager', () => ({
+  getRevealInFileManagerLabel: () => 'Reveal in Finder',
+  revealInFileManager
+}))
 
 function item(name: string, sizeBytes: number): WorkspaceSpaceItem {
   return { name, path: `/workspace/${name}`, kind: 'directory', sizeBytes }
@@ -45,9 +51,49 @@ function renderedRowNames(container: HTMLElement): string[] {
   )
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  revealInFileManager.mockReset()
+})
 
 describe('WorkspaceSpaceBreakdownList', () => {
+  it('reveals the selected top-level folder from its context menu', () => {
+    render(
+      <WorkspaceSpaceBreakdownList
+        isScanning={false}
+        worktree={worktree({
+          executionHostId: 'local',
+          topLevelItems: [item('src', 250)]
+        })}
+      />
+    )
+
+    fireEvent.contextMenu(screen.getByText('src'))
+    fireEvent.click(screen.getByText('Reveal in Finder'))
+    expect(revealInFileManager).toHaveBeenCalledWith('/workspace/src', 'local')
+  })
+
+  it('keeps compacted folder details available in the overflow popover', () => {
+    const { container } = render(
+      <WorkspaceSpaceBreakdownList
+        isScanning={false}
+        worktree={worktree({
+          topLevelItems: [
+            item('first', 500),
+            item('second', 400),
+            item('third', 300),
+            item('fourth', 200),
+            item('fifth', 100)
+          ]
+        })}
+      />
+    )
+
+    expect(renderedRowNames(container)).toEqual(['first', 'second', 'third', 'fourth'])
+    fireEvent.click(screen.getByText('Show more folder details'))
+    expect(screen.getAllByText('fifth')).toHaveLength(1)
+  })
+
   it('renders one row per counted top-level item, including the omitted aggregate', () => {
     const { container } = render(
       <WorkspaceSpaceBreakdownList
@@ -97,7 +143,7 @@ describe('WorkspaceSpaceBreakdownList', () => {
     expect(container.textContent).toContain('1 top-level items')
   })
 
-  it('shows the omitted aggregate rather than an empty state when every item was omitted', () => {
+  it('explains how to inspect folders when a saved scan omits every item', () => {
     const { container } = render(
       <WorkspaceSpaceBreakdownList
         isScanning={false}
@@ -106,6 +152,7 @@ describe('WorkspaceSpaceBreakdownList', () => {
     )
 
     expect(container.textContent).not.toContain('No files found.')
-    expect(renderedRowNames(container)).toEqual(['Other top-level items (4)'])
+    expect(renderedRowNames(container)).toEqual([])
+    expect(container.textContent).toContain('Refresh to inspect this workspace.')
   })
 })

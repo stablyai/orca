@@ -56,6 +56,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -175,9 +176,7 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
-  // Why: without this the dirty preflight counts Orca's own shared symlinks as
-  // user work and Create Review tells the user to commit a link they cannot
-  // commit (issue #10451). Nothing else asserts the handler supplies them.
+  // Shared symlinks belong to Orca and must not fail the user's dirty preflight (#10451).
   it('passes the repo shared link paths through local review creation', async () => {
     const localRepo = {
       id: 'repo-local',
@@ -219,8 +218,7 @@ describe('registerHostedReviewHandlers', () => {
     )
   })
 
-  // Why: remote creation never materializes these links, and `repo.path` names a
-  // path on the remote host — resolving it locally would read a stranger's file.
+  // Remote paths must not resolve unrelated local orca.yaml files.
   it('does not resolve shared link paths for an SSH repo', async () => {
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === repo.id ? { ...repo, symlinkPaths: ['node_modules'] } : null
@@ -318,8 +316,7 @@ describe('registerHostedReviewHandlers', () => {
       force: true
     })
 
-    // Why: the right sidebar renders only the selected worktree, so its lookup
-    // earns the per-minute tier instead of the card-list interval (#11532).
+    // Selected-worktree lookups use the faster active tier, unlike O(N) card polling (#11532).
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feature/selected', active: true, force: true })
     )
@@ -410,6 +407,27 @@ describe('registerHostedReviewHandlers', () => {
     expect(resolveRegisteredWorktreePathMock).not.toHaveBeenCalled()
   })
 
+  it('reports an unreachable SSH host as unavailable, not as a foreign worktree', async () => {
+    listRepoWorktreeGraphMock.mockRejectedValueOnce(
+      new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repoPath}: SSH connection "ssh-1" is not connected.`
+      )
+    )
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const result = handlers['hostedReview:getCreationEligibility'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath,
+      branch: 'feature/pr',
+      base: 'main'
+    })
+
+    await expect(result).rejects.toBeInstanceOf(WorktreeCatalogUnavailableError)
+    await expect(result).rejects.not.toThrow('does not belong')
+    expect(getHostedReviewCreationEligibilityMock).not.toHaveBeenCalled()
+  })
+
   it('passes SSH connectionId through pull request creation and records successful creates', async () => {
     createHostedReviewMock.mockResolvedValueOnce({
       ok: true,
@@ -483,8 +501,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
-  // Why: these handlers are the Electron path for every hosted-review gh call — without
-  // the binding they silently run as the ambient login while the RPC path honours it.
+  // Electron and RPC routes must both honor the repo's bound gh account.
   describe('gh account binding', () => {
     const boundRepo = { ...repo, ghAccount: { host: 'github.com', user: 'octocat' } }
 

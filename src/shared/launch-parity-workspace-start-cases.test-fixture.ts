@@ -69,16 +69,15 @@ export const WORKSPACE_START_LAUNCH_CASES: WindowLaunchCase[] = [
     { command: `${POSIX_CLAUDE} --prefill 'fix Bob'"'"'s bug'`, agentCommand: POSIX_CLAUDE },
     ZSH
   ),
-  // main today: the work item quotes for PowerShell on Windows even when cmd.exe is the shell
-  // (C4 keeps it; C4-fix flips this row to cmd.exe quoting).
+  // The work item quotes for the cmd.exe tab it spawns (#27971 passes the local shell).
   start(
     'work item, Windows C: repo, cmd.exe set',
     'win32',
     repo(WIN_PATH),
     draft,
     {
-      command: `${POSIX_CLAUDE} --prefill 'fix Bob''s bug'`,
-      agentCommand: POSIX_CLAUDE,
+      command: `${CMD_CLAUDE} --prefill "fix Bob's bug"`,
+      agentCommand: CMD_CLAUDE,
       ...IN_CMD
     },
     CMD_EXE,

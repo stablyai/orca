@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { getProjectHeaderHostContexts } from '../rows/project-header-host-context'
 import { translate } from '@/i18n/i18n'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
@@ -60,6 +61,28 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const getRepoSshGate = useRepoSshGateResolver()
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const projectHeaderHostContexts = useMemo(
+    () =>
+      getProjectHeaderHostContexts({
+        rows,
+        visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
+        hosts: props.hostOptions ?? [],
+        runtimeEnvironments,
+        sshConnectionStates,
+        repoMap,
+        projectGrouping: props.projectGrouping
+      }),
+    [
+      rows,
+      props.visibleProjectRepoIdsBySection,
+      props.hostOptions,
+      repoMap,
+      props.projectGrouping,
+      runtimeEnvironments,
+      sshConnectionStates
+    ]
+  )
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
 
   const reveal = useSidebarRevealHighlight()
@@ -162,7 +185,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     prCache: props.prCache,
     workspaceStatuses,
     settings,
-    projectGroups,
+    projectGroups: props.visibleProjectGroups ?? projectGroups,
     projectGrouping: props.projectGrouping,
     flashRevealedRow: reveal.flashRevealedRow,
     markRevealScroll: scrollSuppression.markRevealScroll,
@@ -315,6 +338,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     statusDrag,
     nativeDrag,
     headerDrag,
+    projectHeaderHostContexts,
     getCachedFolderWorkspacePathStatus,
     getLineageToggleHandler,
     toggleGroupWithScrollAnchor,

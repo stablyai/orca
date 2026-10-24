@@ -1,37 +1,32 @@
 import type { RuntimeWorkspaceSelectors as WorkspaceSelectors } from '../../workspaces/workspace-selectors'
 import type { OrcaRuntimeWithApplyMobileSessionTabNavigation as MobileSessionNavigation } from './apply-mobile-session-tab-navigation'
+import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as WorktreeTerminalStop } from '../../terminal/stop/worktree-terminal-stop'
-import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
-import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
+import { OrcaRuntimeWithRestoredPaneStart } from './restored-pane-materialize'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabActivationResult } from '../../../../shared/runtime-session-contracts'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 
-export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
-  protected abstract resolveAgentLaunchRuntime(
-    scope: TerminalWorkspaceLaunchScope,
-    agent: TuiAgent | undefined
-  ): AgentLaunchRuntime
+import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   ): ReturnType<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   protected abstract isDeliberatelyParkedPane(
-    ...args: Parameters<MobileSessionNavigation['isDeliberatelyParkedPane']>
-  ): ReturnType<MobileSessionNavigation['isDeliberatelyParkedPane']>
+    ...args: Parameters<AgentSessionResume['isDeliberatelyParkedPane']>
+  ): ReturnType<AgentSessionResume['isDeliberatelyParkedPane']>
   protected abstract isWorktreeTerminalSleepHeld(
     ...args: Parameters<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
   ): ReturnType<WorktreeTerminalStop['isWorktreeTerminalSleepHeld']>
@@ -134,14 +129,15 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       navigation?: RuntimeNavigationTarget
       intent?: TabActivationIntent
     } = {}
-  ): Promise<RuntimeMobileSessionTabsResult> {
+  ): Promise<RuntimeMobileSessionTabActivationResult> {
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
-    const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
-    const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
+    let worktreeId = explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
+    // Why: the renderer can publish the host's spelling while inventory refresh is pending.
+    worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -190,49 +186,29 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
-        const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
-        // Why: a pending agent tab may exist without its startup command ever
-        // having been delivered (the create's renderer stalled, #7587), so a
-        // bare materialize would put a plain shell under the agent icon.
-        // Re-resolve the launch like the create path; providers skip startup
-        // commands when attaching to live sessions, so this cannot double-launch.
-        let agentStartup: MobileTerminalCommand = {}
-        if (tab.launchAgent) {
-          let workspace
-          try {
-            workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-            agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-              agent: tab.launchAgent
-            })
-          } catch {
-            // Why: a disabled or unresolvable agent must not make the tab
-            // untappable; fall back to the plain-shell materialize. A runtime that needs repair
-            // rethrows its message here instead of leaving a plain shell under the agent icon.
-            if (workspace) {
-              this.resolveAgentLaunchRuntime(workspace, tab.launchAgent)
-            }
-          }
-        }
+        const trigger = { automatic, targetsHost, targetGroupId }
+        let startupCwdFallback: RuntimeMobileSessionTabActivationResult['startupCwdFallback']
         try {
-          await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
-            identity: {
-              tabId: tab.parentTabId,
-              leafId: tab.leafId,
-              sessionId
-            },
-            cwd: tab.startupCwd,
-            command: agentStartup.command,
-            env: agentStartup.env,
-            startupCommandDelivery: agentStartup.startupCommandDelivery,
-            launchConfig: agentStartup.launchConfig,
-            launchAgent: tab.launchAgent,
-            launchRuntime: agentStartup.launchRuntime,
-            targetGroupId,
-            ...(automatic ? { refuseSleptWorktree: true } : {})
-          })
+          // Switch point: a pane main holds starts through main's one starter.
+          if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+            const started = await this.ensureRestoredPaneStarted(
+              { worktreeId, tabId: tab.parentTabId, leafId: tab.leafId },
+              trigger
+            )
+            // Main no longer holds the pane, so nothing started for it.
+            if (started === null) {
+              throw new Error('tab_not_found')
+            }
+            startupCwdFallback = started.startupCwdFallback
+          } else {
+            await this.materializePendingMobileSessionTerminal(worktreeId, tab, {
+              ...trigger,
+              sessionId: tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+            }).then((created) => (startupCwdFallback = created.startupCwdFallback))
+          }
         } catch (err) {
           if (automatic && isWorktreeTerminalsSleepingError(err)) {
             // Why: the host slept the worktree while this probe waited for the spawn lock.
@@ -243,19 +219,15 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
               opts.clientNavigationId
             )
           }
-          if (sessionId && parseAppSshPtyId(sessionId)) {
-            // Why: an expired SSH reattach clears durable bindings in the store,
-            // but this in-memory headless snapshot can still carry the old id.
-            this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
-          }
           throw err
         }
-        return this.applyMobileSessionTabNavigation(
+        const activated = this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
           navigation,
           opts.clientNavigationId
         )
+        return startupCwdFallback ? { ...activated, startupCwdFallback } : activated
       }
       const callerSnapshot = this.getMobileSessionTabsForWorktree(
         worktreeId,
@@ -313,5 +285,13 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       navigation,
       opts.clientNavigationId
     )
+  }
+
+  /** Whether a pane may still hold an agent session: a terminal of it not proven exited, or none. */
+  protected paneHoldsSession(paneKey: string): boolean {
+    const panePtyIds = [...this.ptysById.values()].flatMap((pty) =>
+      this.paneOfPty(pty).paneKey === paneKey ? [pty.ptyId] : []
+    )
+    return paneHoldsSession(this, paneKey, panePtyIds, (ptyId) => this.isPtyKnownExited(ptyId))
   }
 }

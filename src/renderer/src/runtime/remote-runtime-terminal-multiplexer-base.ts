@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime-client-error-classification'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import {
   encodeTerminalStreamFrame,
   type TerminalStreamOpcode
@@ -68,6 +68,13 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.nextSnapshotRequestId =
       this.nextSnapshotRequestId >= 0x7fffffff ? 1 : this.nextSnapshotRequestId + 1
     return id
+  }
+
+  /** Opens the shared stream while the caller's create RPC is in flight, so the two round trips
+   *  overlap. The returned release closes it again if the caller never subscribed. */
+  prewarm(): () => void {
+    void this.ensureConnected().catch(() => {})
+    return () => this.closeIfIdle()
   }
 
   protected ensureConnected(): Promise<void> {

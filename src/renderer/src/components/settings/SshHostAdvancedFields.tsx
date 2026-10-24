@@ -16,13 +16,16 @@ export function SshHostAdvancedFields({
   onOpenChange,
   form,
   disabled,
-  onFormChange
+  onFormChange,
+  offerProxyConnectionReuse = false
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   form: EditingTarget
   disabled: boolean
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
+  /** Only for hosts this Windows desktop dials itself; a paired server runs its own ssh. */
+  offerProxyConnectionReuse?: boolean
 }): React.JSX.Element {
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
@@ -108,6 +111,38 @@ export function SshHostAdvancedFields({
               )}
             />
           </div>
+          {offerProxyConnectionReuse && navigator.userAgent.includes('Windows') ? (
+            <div className="flex items-start justify-between gap-4 py-1 text-xs">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                    'Reuse one proxy connection'
+                  )}
+                </Label>
+                <p className="text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SshTargetForm.proxyConnectionReuseHelp',
+                    "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules."
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={form.systemSshProxyConnectionReuse}
+                disabled={disabled || !form.systemSshConnectionReuse}
+                onChange={() =>
+                  onFormChange((f) => ({
+                    ...f,
+                    systemSshProxyConnectionReuse: !f.systemSshProxyConnectionReuse
+                  }))
+                }
+                ariaLabel={translate(
+                  'auto.components.settings.SshTargetForm.proxyConnectionReuse',
+                  'Reuse one proxy connection'
+                )}
+              />
+            </div>
+          ) : null}
           <div className="flex items-start justify-between gap-4 py-1 text-xs">
             <div className="min-w-0 flex-1 space-y-0.5">
               <Label className="text-xs font-medium">
@@ -119,7 +154,7 @@ export function SshHostAdvancedFields({
               <p className="text-muted-foreground">
                 {translate(
                   'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
-                  'When off, orca commands run on this host reach only its own terminals. Turn on to let them reach other hosts, orchestration, files, and integrations on this computer.'
+                  "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server."
                 )}
               </p>
             </div>

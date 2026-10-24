@@ -19,7 +19,7 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
-      // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
+      // Reveal hover-dependent targets before clicking.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
       await sender('Input.dispatchMouseEvent', {
         type: 'mousePressed',
@@ -75,7 +75,7 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
-      // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
+      // Intermediate drag events are required by many drag-and-drop libraries.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })
       await sender('Input.dispatchMouseEvent', {
         type: 'mousePressed',

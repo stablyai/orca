@@ -203,13 +203,13 @@ export const hostViewSettingsSchema = z
   .transform((reply) => reply.ui)
 
 /**
- * The four host-list writes whose reply body no call site reads.
+ * The host-list writes whose reply body no call site reads.
  *
- * The `ui.set` patch, the pin write, the row delete and the activate ping are all decided by the
- * acceptance verdict alone — the pin write never interprets its reply at all, and the delete reads
- * `accepted` and nothing else.
+ * The `ui.set` patch, the card layout `settings.update`, the pin write, the row delete and the
+ * activate ping are all decided by the acceptance verdict alone — the pin write never interprets its
+ * reply at all, and the delete reads `accepted` and nothing else.
  *
- * `worktree.activate` is the one of the four whose payload a *second* consumer looks at, and it is
+ * `worktree.activate` is the one whose payload a *second* consumer looks at, and it is
  * deliberately left opaque: headlessActivationNeedsHostRenderer is a total guard over `unknown`
  * (worktree-activation-result.ts:1), and the session route's second report site
  * (use-mobile-session-startup.ts:170) reports from inside a fire-and-forget `void (async …)()` with

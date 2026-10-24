@@ -2,7 +2,12 @@ import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { createKeyboardEventTarget, keyEvent } from './pty-connection-test-dom'
+import {
+  createKeyboardEventTarget,
+  keyEvent,
+  sendTerminalInputThroughPane,
+  temporarilySetNavigatorUserAgent
+} from './pty-connection-test-dom'
 import {
   LEAF_1,
   createMockTransport,
@@ -549,7 +554,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         prompt: 'ssh style write',
         updatedAt: 1_000,
         stateStartedAt: 900,
-        agentType: 'codex',
+        agentType: 'custom-agent',
         paneKey,
         terminalTitle: 'Codex working',
         stateHistory: []
@@ -566,7 +571,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         throw new Error('expected onData handler to be registered')
       }
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      vi.advanceTimersByTime(500)
+      await vi.advanceTimersByTimeAsync(500)
       await flushAsyncTicks()
 
       expect(transport.sendInput).toHaveBeenCalledWith('\x03', 'query-reply')
@@ -591,7 +596,7 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
         prompt: 'stop then exit',
         updatedAt: 1_000,
         stateStartedAt: 900,
-        agentType: 'codex',
+        agentType: 'custom-agent',
         paneKey,
         terminalTitle: 'Codex working',
         stateHistory: []
@@ -613,8 +618,16 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       await flushAsyncTicks()
-      vi.advanceTimersByTime(500)
+      await vi.advanceTimersByTimeAsync(500)
       await flushAsyncTicks()
+      expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+        paneKey,
+        baselineUpdatedAt: 1_000,
+        baselineStateStartedAt: 900,
+        baselinePrompt: 'stop then exit',
+        baselineAgentType: 'custom-agent',
+        intent: 'ctrl-c'
+      })
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -630,62 +643,71 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       expect(mockStoreState.removeAgentStatus).toHaveBeenCalledWith(paneKey)
     })
 
-    it('ignores repeated and modified terminal interrupt keydowns', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
-      transportFactoryQueue.push(transport)
-      vi.useFakeTimers()
-      vi.setSystemTime(1_100)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
-        state: 'working',
-        prompt: 'keep running',
-        updatedAt: 1_000,
-        stateStartedAt: 900,
-        agentType: 'codex',
-        paneKey,
-        terminalTitle: 'Codex',
-        stateHistory: []
-      }
-      const terminalTarget = createKeyboardEventTarget()
-      const pane = createPane(1)
-      ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
-
-      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
-      for (const event of [
-        {
-          key: 'Escape',
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false,
-          shiftKey: false,
-          repeat: true
-        },
-        {
-          key: 'Escape',
-          ctrlKey: false,
-          metaKey: false,
-          altKey: true,
-          shiftKey: false,
-          repeat: false
-        },
-        {
-          key: 'c',
-          ctrlKey: true,
-          metaKey: false,
-          altKey: false,
-          shiftKey: true,
-          repeat: false
+    it('ignores repeated and Alt-modified Escape input before accepting plain Escape', async () => {
+      const restoreUserAgent = temporarilySetNavigatorUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport()
+        transportFactoryQueue.push(transport)
+        vi.useFakeTimers()
+        vi.setSystemTime(1_100)
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        mockStoreState.agentStatusByPaneKey[paneKey] = {
+          state: 'working',
+          prompt: 'keep running',
+          updatedAt: 1_000,
+          stateStartedAt: 900,
+          agentType: 'custom-agent',
+          paneKey,
+          terminalTitle: 'Codex',
+          stateHistory: []
         }
-      ]) {
-        terminalTarget.dispatch(event as KeyboardEvent)
-      }
-      vi.advanceTimersByTime(500)
+        const terminalTarget = createKeyboardEventTarget()
+        const pane = createPane(1)
+        pane.terminal.element = terminalTarget.target
 
-      expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        // Kitty flags 3 report repeat type and disambiguate Escape without the exact-byte fallback.
+        for (const { event, data } of [
+          { event: keyEvent({ key: 'Escape', repeat: true }), data: '\x1b[27;1:2u' },
+          { event: keyEvent({ key: 'Escape', altKey: true }), data: '\x1b[27;3u' }
+        ]) {
+          terminalTarget.dispatch(event)
+          sendTerminalInputThroughPane(pane, data)
+          await flushAsyncTicks()
+          await vi.advanceTimersByTimeAsync(500)
+          await flushAsyncTicks()
+
+          expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+          expect(transport.sendInput.mock.calls.map(([data]) => data)).toContain(data)
+        }
+
+        // Ctrl+Shift+C belongs to copy on Linux and supplies no terminal input.
+        terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true, shiftKey: true }))
+        await vi.advanceTimersByTimeAsync(500)
+        expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+
+        terminalTarget.dispatch(keyEvent({ key: 'Escape' }))
+        sendTerminalInputThroughPane(pane, '\x1b[27u')
+        await flushAsyncTicks()
+        await vi.advanceTimersByTimeAsync(500)
+        await flushAsyncTicks()
+
+        expect(window.api.agentStatus.inferInterrupt).toHaveBeenCalledWith({
+          paneKey,
+          baselineUpdatedAt: 1_000,
+          baselineStateStartedAt: 900,
+          baselinePrompt: 'keep running',
+          baselineAgentType: 'custom-agent',
+          intent: 'plain-escape'
+        })
+        expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x1b[27u', 'query-reply')
+      } finally {
+        restoreUserAgent()
+      }
     })
 
-    it('does not infer Ctrl+C when terminal selection turns the chord into copy', async () => {
+    it('does not request interrupt inference from a selection-copy keydown without terminal input', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)

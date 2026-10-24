@@ -21,14 +21,17 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+vi.mock('../components/LoadingSpinner', () => ({ LoadingSpinner: 'LoadingSpinner' }))
 vi.mock('./MobileNativeChatReasoningRow', () => ({
   MobileNativeChatReasoningBody: 'ReasoningBody'
 }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
+vi.mock('./MobileNativeChatImageViewer', () => ({ MobileNativeChatImageViewer: 'ImageViewer' }))
 
 import { MobileNativeChatLiveLine } from './MobileNativeChatLiveLine'
+import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHost'
 
 const block: NativeChatLiveReasoning = {
   message: {
@@ -42,6 +45,26 @@ const block: NativeChatLiveReasoning = {
   markdown: 'Weighing two approaches'
 }
 
+/** The chat as it holds the live line; `reasoning: undefined` is a finished turn with no line. */
+const chat = (reasoning: NativeChatLiveReasoning | null | undefined) =>
+  createElement(
+    MobileNativeChatRowOverlaysHost,
+    { conversation: { surfaceId: 'chat', sessionId: 's1' } },
+    reasoning === undefined
+      ? null
+      : createElement(MobileNativeChatLiveLine, {
+          line: {
+            thinking: true,
+            stopping: false,
+            activityText: null,
+            reasoning,
+            reasoningExpanded: true
+          },
+          onToggleReasoning: vi.fn(),
+          fontScale: 1
+        })
+  )
+
 describe('MobileNativeChatLiveLine on Android', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -51,28 +74,16 @@ describe('MobileNativeChatLiveLine on Android', () => {
 
   const byType = (type: string): ReactTestInstance[] =>
     renderer!.root.findAll((node) => String(node.type) === type)
+  const sheetIds = (): string[] =>
+    byType('MessageActionsSheet').map((sheet) => sheet.props.message.id)
 
   it('opens the actions sheet for the live block from a long press on its text', () => {
     act(() => {
-      renderer = create(
-        createElement(MobileNativeChatLiveLine, {
-          line: {
-            thinking: true,
-            stopping: false,
-            activityText: null,
-            reasoning: block,
-            reasoningExpanded: true
-          },
-          onToggleReasoning: vi.fn(),
-          fontScale: 1
-        })
-      )
+      renderer = create(chat(block))
     })
     expect(byType('MessageActionsSheet')).toHaveLength(0)
-    const [body] = byType('ReasoningBody')
-    expect(typeof body?.props.onLongPress).toBe('function')
 
-    act(() => body!.props.onLongPress())
+    act(() => byType('ReasoningBody')[0]!.props.onLongPress())
     const [sheet] = byType('MessageActionsSheet')
     // The sheet copies and selects the message's own text: the block as it stands.
     expect(sheet?.props.message).toBe(block.message)
@@ -81,61 +92,20 @@ describe('MobileNativeChatLiveLine on Android', () => {
     expect(byType('MessageActionsSheet')).toHaveLength(0)
   })
 
-  it('keeps the sheet through the block ending, and never opens one for the next by itself', () => {
-    const line = (reasoning: NativeChatLiveReasoning | null) =>
-      createElement(MobileNativeChatLiveLine, {
-        line: {
-          thinking: true,
-          stopping: false,
-          activityText: null,
-          reasoning,
-          reasoningExpanded: true
-        },
-        onToggleReasoning: vi.fn(),
-        fontScale: 1
-      })
+  it('keeps the sheet open when the turn finishes, and opens none for the next block by itself', () => {
     act(() => {
-      renderer = create(line(block))
+      renderer = create(chat(block))
     })
     act(() => byType('ReasoningBody')[0]!.props.onLongPress())
-    // The block ends while the reader copies or selects it.
-    act(() => renderer!.update(line(null)))
-    expect(byType('MessageActionsSheet').map((sheet) => sheet.props.message)).toEqual([
-      block.message
-    ])
-    act(() => byType('MessageActionsSheet')[0]!.props.onClose())
-    const next: NativeChatLiveReasoning = {
-      message: { ...block.message, id: 'r-2' },
-      markdown: 'Next thought'
-    }
-    act(() => renderer!.update(line(next)))
-    expect(byType('MessageActionsSheet')).toHaveLength(0)
-  })
+    // The turn ends while the reader copies or selects; the live line goes away.
+    act(() => renderer!.update(chat(undefined)))
+    expect(sheetIds()).toEqual(['r-1'])
 
-  it('opens no sheet for the next block when the first ends with the sheet open', () => {
-    const line = (reasoning: NativeChatLiveReasoning | null) =>
-      createElement(MobileNativeChatLiveLine, {
-        line: {
-          thinking: true,
-          stopping: false,
-          activityText: null,
-          reasoning,
-          reasoningExpanded: true
-        },
-        onToggleReasoning: vi.fn(),
-        fontScale: 1
-      })
-    act(() => {
-      renderer = create(line(block))
-    })
-    act(() => byType('ReasoningBody')[0]!.props.onLongPress())
-    act(() => renderer!.update(line(null)))
-    const next: NativeChatLiveReasoning = {
-      message: { ...block.message, id: 'r-2' },
-      markdown: 'Next thought'
-    }
-    act(() => renderer!.update(line(next)))
-    // Still the first block's sheet, the one the reader opened; none for r-2.
-    expect(byType('MessageActionsSheet').map((sheet) => sheet.props.message.id)).toEqual(['r-1'])
+    act(() =>
+      renderer!.update(chat({ message: { ...block.message, id: 'r-2' }, markdown: 'Next thought' }))
+    )
+    expect(sheetIds()).toEqual(['r-1'])
+    act(() => byType('MessageActionsSheet')[0]!.props.onClose())
+    expect(sheetIds()).toEqual([])
   })
 })

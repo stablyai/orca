@@ -158,6 +158,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           markerSeq: 64
         })
 
+        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+
         // Reveal rides the visible-resume backlog recovery hook.
         ;(deps.isVisibleRef as { current: boolean }).current = true
         const { requestTerminalBacklogRecovery } =
@@ -334,44 +336,6 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           facts: [{ kind: '2031-subscribe' }]
         })
         expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-      })
-
-      it('latches model restore from the out-of-band marker and restores on reveal', async () => {
-        enableMainAuthority()
-        const deps = createDeps({ isVisibleRef: { current: false } })
-        const { pane, dataCallback } = await connectHiddenPane(deps)
-        const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-          typeof vi.fn
-        >
-        getMainBufferSnapshot.mockResolvedValue({
-          data: 'dropped bytes snapshot\r\n',
-          cols: 100,
-          rows: 30,
-          seq: 64
-        })
-        // Why: the marker subscription is keyed by the live PTY id — the byte path latches it on the first hidden chunk.
-        dataCallback('pre-drop output\r\n', { seq: 16, rawLength: 17 })
-        const { _dispatchPtyModelRestoreNeededForTest } =
-          await import('./pty-model-restore-channel')
-
-        // Main dropped gated bytes and signalled it out-of-band.
-        _dispatchPtyModelRestoreNeededForTest({
-          id: 'pty-id',
-          reason: 'hidden-drop',
-          markerSeq: 64
-        })
-        expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-        ;(deps.isVisibleRef as { current: boolean }).current = true
-        const { requestTerminalBacklogRecovery } =
-          await import('@/lib/pane-manager/pane-terminal-output-scheduler')
-        requestTerminalBacklogRecovery(pane.terminal as never)
-        await flushAsyncTicks(20)
-
-        expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
-        expect(pane.terminal.write).toHaveBeenCalledWith(
-          expect.stringContaining('dropped bytes snapshot'),
-          expect.any(Function)
-        )
       })
 
       it('never answers a 2031-subscribe fact, hidden or visible', async () => {

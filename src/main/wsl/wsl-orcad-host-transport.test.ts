@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { isWslOrcadHostTarget } from '../ssh/orcad-host-transport'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 

@@ -6,7 +6,6 @@ import {
   MARKDOWN_DOCUMENT_LISTING_ARGS
 } from '../../shared/node-markdown-document-listing'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
-export * from '../../shared/markdown-document-paths'
 
 export async function listMarkdownDocuments(
   rootPath: string,
@@ -24,6 +23,7 @@ export async function listMarkdownDocuments(
     stdio: ['ignore', 'pipe', 'pipe']
   })
   return collectMarkdownDocuments(child, rootPath, Boolean(distro), options.signal, {
+    allowPartialListing: true,
     stopProcess: () => stopBundledRipgrep(child, Boolean(distro))
   })
 }

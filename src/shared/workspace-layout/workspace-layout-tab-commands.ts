@@ -1,7 +1,9 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { filterRecord, omitStoredFields, withoutKey } from './stored-record-fields'
 import { canReplacePreviewContentType, partitionPinnedTabOrder } from './tab-order'
 import { getNextTerminalOrdinal } from './terminal-tab-ordinal'
 import { layoutContainsLeafId } from './terminal-pane-tree'
+import { editorTabShowsFile, keptAfterEditorClose } from './workspace-layout-editor-tab-file'
 import {
   applied,
   boundPtyIds,
@@ -12,7 +14,8 @@ import {
   placeNewTab,
   refuse,
   updateTab,
-  type Applied
+  type Applied,
+  type TabPlacement
 } from './workspace-layout-command-steps'
 import type {
   CommandOf,
@@ -21,12 +24,15 @@ import type {
 } from './workspace-layout-command-types'
 import {
   paneKeyOf,
+  type LayoutClosedTab,
   type LayoutContentTab,
+  type LayoutTab,
   type LayoutTerminalTab,
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from './workspace-layout-model'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
+import { adoptedLeaf, appliedHeldAdoption } from './workspace-layout-terminal-adoption'
 import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
 
 type RefusedClose = NonNullable<LayoutCommandResult['refused']>[number]
@@ -39,6 +45,10 @@ export function createTerminalTab(
   if (command.initial && !admitsInitialSurface(model, command.workspace, command.initial)) {
     return applied(model)
   }
+  const held = command.adopt && appliedHeldAdoption(model, command.workspace, command.adopt)
+  if (held) {
+    return held
+  }
   const workspace = workspaceOrEmpty(model, command.workspace)
   const terminals = workspace.tabs.flatMap((tab) => (tab.kind === 'terminal' ? [tab] : []))
   const ordinal = getNextTerminalOrdinal(
@@ -49,16 +59,23 @@ export function createTerminalTab(
   const tab: LayoutTerminalTab = {
     id,
     entityId: id,
-    createdAt: context.now(),
+    createdAt: command.createdAt ?? context.now(),
     customTitle: command.title ?? null,
     color: command.color ?? null,
+    ...(command.quickCommandLabel ? { quickCommandLabel: command.quickCommandLabel } : {}),
     ...(command.viewMode ? { viewMode: command.viewMode } : {}),
     kind: 'terminal',
     terminal: { defaultTitle: `Terminal ${ordinal}`, ...command.creation },
     panes: { root: { type: 'leaf', leafId } }
   }
-  const placed = placeNewTab(workspace, tab, command, context)
+  const placed = placeNewTab(workspace, command.workspace, tab, command, context)
   const paneKey = paneKeyOf(id, leafId)
+  if (command.adopt) {
+    // Its terminal already runs: the pane binds to it and nothing starts.
+    const leaves = { ...placed.leaves, [leafId]: adoptedLeaf(command.adopt) }
+    const adopted = withWorkspace(model, command.workspace, { ...placed, leaves })
+    return applied(adopted, { tabId: id, leafId, paneKey })
+  }
   return applied(
     withWorkspace(model, command.workspace, placed),
     { tabId: id, leafId, paneKey },
@@ -86,7 +103,12 @@ export function closeTab(
   ) {
     next = {
       ...next,
-      editorFiles: next.editorFiles.filter((file) => file.filePath !== tab.entityId)
+      editorFiles: next.editorFiles.filter(
+        // Why the switch: shipped builds close through this code too.
+        ORCA_LAYOUT_OWNER_IS_MAIN
+          ? keptAfterEditorClose(workspace, next, tab.entityId)
+          : (file) => !editorTabShowsFile(tab.entityId, file, next.worktreeId)
+      )
     }
   }
   if (next.editorViews) {
@@ -98,15 +120,21 @@ export function closeTab(
   return withWorkspace(model, key, next)
 }
 
-export function closeTabs(model: WorkspaceLayoutModel, command: CommandOf<'closeTabs'>): Applied {
+export function closeTabs(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'closeTabs'>,
+  context?: LayoutContext
+): Applied {
   let next = model
   const closed: string[] = []
+  const recorded: string[] = []
   const refused: RefusedClose[] = []
   const stopPtyIds: string[] = []
   for (const tabId of command.tabIds) {
     const tab = findTab(next.workspaces[command.workspace]!, tabId)
     if (!tab) {
       closed.push(tabId)
+      recorded.push(tabId)
       continue
     }
     if (!command.force && command.refusePinned && tab.isPinned) {
@@ -120,8 +148,31 @@ export function closeTabs(model: WorkspaceLayoutModel, command: CommandOf<'close
     stopPtyIds.push(...boundPtyIds(next.workspaces[command.workspace]!, tab))
     next = closeTab(next, command.workspace, tabId)
     closed.push(tabId)
+    if (tab.kind === 'terminal') {
+      recorded.push(tab.entityId)
+    }
+  }
+  if (command.recordClose && context && recorded.length > 0) {
+    next = recordClosedTerminalTabs(next, command.workspace, recorded, {
+      reason: command.recordClose,
+      closedAt: context.now()
+    })
   }
   return applied(next, { closed, refused }, { stopPtyIds })
+}
+
+function recordClosedTerminalTabs(
+  model: WorkspaceLayoutModel,
+  key: string,
+  tabIds: readonly string[],
+  record: LayoutClosedTab
+): WorkspaceLayoutModel {
+  const workspace = model.workspaces[key]!
+  const closedTerminalTabs = { ...workspace.closedTerminalTabs }
+  for (const tabId of tabIds) {
+    closedTerminalTabs[tabId] = record
+  }
+  return withWorkspace(model, key, { ...workspace, closedTerminalTabs })
 }
 
 export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renameTab'>): Applied {
@@ -132,13 +183,14 @@ export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renam
   if (command.kind === 'aiVault') {
     return updateTab(model, command.workspace, { ...tab, aiVaultTitle: command.title })
   }
-  return updateTab(
-    model,
-    command.workspace,
-    command.kind === 'custom'
-      ? { ...tab, customTitle: command.title }
-      : { ...tab, generatedTitle: command.title }
-  )
+  if (command.kind === 'custom') {
+    return updateTab(model, command.workspace, { ...tab, customTitle: command.title })
+  }
+  // As the window's own generated titles: an agent's later prompt does not rename the tab.
+  if (tab.generatedTitle?.trim() && !command.replaceExisting) {
+    return refuse('generated_title_kept')
+  }
+  return updateTab(model, command.workspace, { ...tab, generatedTitle: command.title })
 }
 
 export function setTabProps(
@@ -150,12 +202,18 @@ export function setTabProps(
   if (!tab) {
     return refuse('tab_not_found')
   }
-  const next = {
-    ...tab,
+  if (command.clearLaunchAgent && tab.kind !== 'terminal') {
+    return refuse('invalid_params')
+  }
+  const props = {
     ...(command.color !== undefined ? { color: command.color } : {}),
     ...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {}),
     ...(command.viewMode !== undefined ? { viewMode: command.viewMode } : {})
   }
+  const next: LayoutTab =
+    command.clearLaunchAgent && tab.kind === 'terminal'
+      ? { ...tab, ...props, terminal: omitStoredFields(tab.terminal, ['launchAgent']) }
+      : { ...tab, ...props }
   let updated = {
     ...workspace,
     tabs: workspace.tabs.map((entry) => (entry.id === tab.id ? next : entry))
@@ -207,16 +265,18 @@ export function promotePreviewTab(
 
 /**
  * A new tab replaces the group's preview tab of a compatible kind, as a single click does today,
- * unless closing it is refused like any close (an unsaved draft): then both stay.
+ * unless closing it is refused like any close (an unsaved draft): then both stay. The new tab is
+ * placed first, so closing a group's only tab, its preview, never closes the group.
  */
 export function placeContentTab(
   model: WorkspaceLayoutModel,
   key: string,
   tab: LayoutContentTab,
-  placement: { groupId?: string; dirtyTabIds?: string[] },
+  placement: TabPlacement & { dirtyTabIds?: string[] },
   context: LayoutContext
 ): { model: WorkspaceLayoutModel; refused: RefusedClose[] } {
-  let workspace = workspaceOrEmpty(model, key)
+  const workspace = workspaceOrEmpty(model, key)
+  // A host's open names no group; a window's names one from main's own frame.
   const group =
     workspace.groups.find((entry) => entry.id === placement.groupId) ?? workspace.groups[0]
   const preview = tab.isPreview
@@ -227,21 +287,32 @@ export function placeContentTab(
           canReplacePreviewContentType(tab.kind, entry.kind)
       )
     : undefined
-  let refused: RefusedClose[] = []
-  if (preview) {
-    const closing = closeTabs(withWorkspace(model, key, workspace), {
-      type: 'closeTabs',
-      workspace: key,
-      tabIds: [preview.id],
-      dirtyTabIds: placement.dirtyTabIds
-    })
-    if (closing.ok) {
-      workspace = closing.model.workspaces[key]!
-      refused = closing.result.refused ?? []
-    }
+  const placed = withWorkspace(
+    model,
+    key,
+    placeNewTab(
+      workspace,
+      key,
+      tab,
+      // The sender's group names a workspace's first group.
+      {
+        groupId: group?.id ?? placement.groupId,
+        afterTabId: placement.afterTabId,
+        index: placement.index
+      },
+      context
+    )
+  )
+  if (!preview) {
+    return { model: placed, refused: [] }
   }
-  return {
-    model: withWorkspace(model, key, placeNewTab(workspace, tab, { groupId: group?.id }, context)),
-    refused
-  }
+  const closing = closeTabs(placed, {
+    type: 'closeTabs',
+    workspace: key,
+    tabIds: [preview.id],
+    dirtyTabIds: placement.dirtyTabIds
+  })
+  return closing.ok
+    ? { model: closing.model, refused: closing.result.refused ?? [] }
+    : { model: placed, refused: [] }
 }

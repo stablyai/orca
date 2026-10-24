@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
-import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from './pty-connection-test-constants'
+import {
+  AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
+  AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
+} from './pty-connection-test-constants'
 import {
   temporarilySetNavigatorUserAgent,
   sendTerminalInputThroughPane
@@ -202,7 +205,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       expect(storeSubscribers).toHaveLength(1)
     })
 
-    it('applies accepted hook side effects when every completion alert consumer is disabled', async () => {
+    it('preserves accepted hook effects and shared completion with desktop banners and attention disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
@@ -270,6 +273,22 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         RESET_TERMINAL_CURSOR_STYLE,
         expect.any(Function)
       )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(deps.dispatchNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          paneKey,
+          agentStatusSnapshot: expect.objectContaining({
+            state: 'done',
+            agentType: 'claude',
+            lastAssistantMessage: 'Done.'
+          })
+        })
+      )
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
     })
 
     it.each([

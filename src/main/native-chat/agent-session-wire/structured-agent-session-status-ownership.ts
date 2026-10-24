@@ -4,7 +4,6 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkReconcileOutcome } from '../../../shared/agent-status-child-work-evidence-admission'
 import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import {
@@ -12,6 +11,10 @@ import {
   serializeAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
 } from '../../../shared/agent-status-subject'
+import {
+  StructuredAgentSessionOpenChildWork,
+  type ChildWorkLifetimeToken
+} from './structured-agent-session-open-child-work'
 
 export type StructuredAgentSessionStatusSink = {
   publish: (
@@ -19,36 +22,29 @@ export type StructuredAgentSessionStatusSink = {
     subject: AgentStatusStructuredSessionSubject
   ) => void
   forget: (subject: AgentStatusStructuredSessionSubject) => void
-  /** The session's child-work evidence, addressed by the subject its parent row landed under. */
+  /** Address evidence by the parent row’s landed subject. */
   publishChildWork?: (
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
-  ) => AgentChildWorkReconcileOutcome | null | void
-  /** The child records the sink holds for that subject, as the views every surface reads. */
+  ) => void
   readChildWork?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkView[]
-  /** The records those views project, with the host-only facts no view carries. */
+  /** Includes host-only facts omitted from views. */
   readChildWorkRecords?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkRecord[]
+  readChildWorkHandles?: (subject: AgentStatusStructuredSessionSubject) => ReadonlySet<string>
 }
 
-/** The store's limits refusing a record: the per-session one, and the store's own. */
-const ROOM_REFUSALS: ReadonlySet<string> = new Set(['ingestion-limit', 'store-rejected'])
-/** Refused children remembered per session; past it only the session's end clears the flag. */
-const MAX_REFUSED_CHILDREN = 512
+export type CapturedChildWorkStops = {
+  current: (handleId: string) => boolean
+  acknowledge: (evidence: readonly AgentChildWorkEvidence[]) => void
+}
 
-type RefusedChildren = { handles: Set<string>; overflowed: boolean }
-
-/** Retain the owner address because record removal may precede the final status callback. */
+/** Retain addresses through record removal for final callbacks. */
 export class StructuredAgentSessionStatusOwnership {
   private readonly subjects = new Map<string, AgentStatusStructuredSessionSubject>()
-  // Why separate from `subjects`: the address must survive a throwing publish so teardown can still
-  // forget a row that did land, but "we hold an address" is not evidence the row is there. Only a
-  // publish that returned proves that, and only that proof may suppress the re-offer below.
+  // Retain failed-publish addresses for cleanup, but only returned publication proves landing.
   private readonly landed = new Set<string>()
-  /** Per session, the children the store refused for room, by handle. Each leaves once a later
-   *  report of it is admitted or it reports its own end; the provider session's end, which ends
-   *  every child it ran, clears them all. */
-  private readonly refused = new Map<string, RefusedChildren>()
+  private readonly open = new StructuredAgentSessionOpenChildWork()
 
   constructor(private readonly sink: () => StructuredAgentSessionStatusSink | undefined) {}
 
@@ -91,61 +87,62 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.add(summary.sessionId)
   }
 
-  /** Children ride the address the parent landed under: without that proof the store would
-   *  refuse them anyway, and offering them earlier would race the parent row. */
+  /** Publish children only after parent landing; track all provider edges independently of display admission. */
   publishChildWork(
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ): void {
+    this.open.observe(sessionId, evidence)
     const subject = this.subjects.get(sessionId)
     if (!subject || !this.landed.has(sessionId)) {
       return
     }
-    const outcome = this.sink()?.publishChildWork?.(subject, evidence, provider)
-    if (evidence.some((edge) => edge.type === 'session-ended')) {
-      this.refused.delete(sessionId)
-    } else if (typeof outcome === 'object') {
-      this.followRefusals(sessionId, evidence, outcome)
+    this.sink()?.publishChildWork?.(subject, evidence, provider)
+  }
+
+  /** Capture lifetimes before provider awaits so Stop cannot close replacement runs. */
+  captureChildWorkStops(sessionId: string, handleIds: readonly string[]): CapturedChildWorkStops {
+    const captured = new Map<string, ChildWorkLifetimeToken | undefined>()
+    for (const handleId of handleIds) {
+      captured.set(handleId, this.open.capture(sessionId, handleId))
     }
-  }
-
-  /** Whether some of the session's running child work has no record. */
-  childWorkIncomplete(sessionId: string): boolean {
-    return this.refused.has(sessionId)
-  }
-
-  /** `null`: the sink holds no parent row, so it recorded none of these children. */
-  private followRefusals(
-    sessionId: string,
-    evidence: readonly AgentChildWorkEvidence[],
-    outcome: AgentChildWorkReconcileOutcome | null
-  ): void {
-    const refusedNow = new Set(
-      outcome?.rejected.filter(({ reason }) => ROOM_REFUSALS.has(reason)).map((r) => r.handleId)
-    )
-    const refused = this.refused.get(sessionId) ?? { handles: new Set(), overflowed: false }
-    for (const edge of evidence) {
-      if (edge.type === 'live' && (outcome === null || refusedNow.has(edge.child.handle.id))) {
-        if (refused.handles.size < MAX_REFUSED_CHILDREN) {
-          refused.handles.add(edge.child.handle.id)
-        } else {
-          refused.overflowed = true
+    return {
+      current: (handleId) =>
+        captured.has(handleId) && this.open.matches(sessionId, handleId, captured.get(handleId)),
+      acknowledge: (evidence) => {
+        for (const edge of evidence) {
+          if (edge.type === 'stop-acknowledged') {
+            const token = captured.get(edge.handleId)
+            if (token) {
+              this.open.stopped(sessionId, edge.handleId, token)
+            }
+          }
         }
-      } else if (edge.type === 'live') {
-        refused.handles.delete(edge.child.handle.id)
-      } else if (edge.type === 'ended' || edge.type === 'removed') {
-        refused.handles.delete(edge.handle.id)
       }
     }
-    if (refused.handles.size > 0 || refused.overflowed) {
-      this.refused.set(sessionId, refused)
-    } else {
-      this.refused.delete(sessionId)
-    }
   }
 
-  /** Undefined until the parent row has landed: a sink holds no children for a parent it lacks. */
+  childWorkOpen(sessionId: string): boolean {
+    return this.open.hasOpen(sessionId)
+  }
+
+  /** Includes provider work rejected by display storage. */
+  childWorkIncomplete(sessionId: string): boolean {
+    const open = this.open.handles(sessionId)
+    if (!open) {
+      return false
+    }
+    const read = this.sink()?.readChildWorkHandles
+    if (!read) {
+      return true
+    }
+    const subject = this.subjects.get(sessionId)
+    const recorded = subject && this.landed.has(sessionId) ? read(subject) : new Set<string>()
+    return [...open].some((handleId) => !recorded.has(handleId))
+  }
+
+  /** No parent landing means no stored children to read. */
   readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
     const subject = this.subjects.get(sessionId)
     return subject && this.landed.has(sessionId) ? this.sink()?.readChildWork?.(subject) : undefined
@@ -159,12 +156,12 @@ export class StructuredAgentSessionStatusOwnership {
   }
 
   forget(sessionId: string): void {
+    this.open.forget(sessionId)
     const subject = this.subjects.get(sessionId)
     if (!subject) {
       return
     }
     this.landed.delete(sessionId)
-    this.refused.delete(sessionId)
     this.sink()?.forget(subject)
     this.subjects.delete(sessionId)
   }

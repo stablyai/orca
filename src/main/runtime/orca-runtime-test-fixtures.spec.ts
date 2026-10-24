@@ -1,5 +1,8 @@
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
-import { expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { forgetInstalledPaneSession } from './bind-first-pane.test-fixture'
+import { announceSessionWrites } from './profile-session-store.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -9,7 +12,11 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
+import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
@@ -27,6 +34,7 @@ import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import type { Store } from '../persistence'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
@@ -374,14 +382,14 @@ function createStaleRuntimeWorktreeStore(
   const metaById: Record<string, WorktreeMeta> = {
     [worktreeId]: makeWorktreeMeta(metaOverrides)
   }
-  const removeWorktreeMeta = vi.fn((id: string) => {
+  const removeWorktreeMeta = vi.fn(({ id }: HostWorktreeTarget) => {
     delete metaById[id]
   })
   const runtimeStore = {
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
       return metaById[id]
     },
@@ -405,7 +413,7 @@ const store = {
   getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
   mergeRetiredWorktreeNames: () => false,
   addRepo: () => {},
-  updateRepo: (id: string, updates: Record<string, unknown>) =>
+  updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) =>
     ({
       ...store.getRepo(id),
       ...updates
@@ -427,7 +435,7 @@ const store = {
     }
   }),
   getWorktreeMeta: (worktreeId: string) => store.getAllWorktreeMeta()[worktreeId],
-  setWorktreeMeta: (_worktreeId: string, meta: Record<string, unknown>) =>
+  setWorktreeMeta: (_target: HostWorktreeTarget, meta: Record<string, unknown>) =>
     ({
       ...store.getAllWorktreeMeta()[TEST_WORKTREE_ID],
       ...meta
@@ -568,6 +576,7 @@ function makeRuntimeStoreWithWorkspaceSession(
   ownerHostId = 'local'
 ): {
   runtimeStore: typeof store & {
+    admitTerminalPane: ReturnType<typeof withRuntimePaneAdmission>['admitTerminalPane']
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
     flushOrThrow: ReturnType<typeof vi.fn<() => void>>
@@ -586,6 +595,36 @@ function makeRuntimeStoreWithWorkspaceSession(
       getWorkspaceSession: (hostId?: string) =>
         hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
       setWorkspaceSession: vi.fn(setSession),
+      // As a profile store: the partitions it holds, which main's layout index reads.
+      getWorkspaceSessionHostIds: () => [ownerHostId],
+      // Main's `layout.apply` on this partition, as the Store applies it (switch-on writes).
+      applyLayoutCommand: vi.fn(
+        async (
+          command: LayoutCommand,
+          hostIds?: readonly string[],
+          run: NonNullable<Parameters<Store['applyLayoutCommand']>[2]> = {}
+        ) => {
+          const change = applyCommandToSession(
+            resolveHostId(hostIds?.[0] ?? ownerHostId),
+            session,
+            command,
+            undefined,
+            run.live
+          )
+          if (
+            change.value.ok &&
+            change.effects?.stopPtyIds.length &&
+            run.stopBeforeWrite?.(change.effects.stopPtyIds) === false
+          ) {
+            return { ok: false, code: 'pane_already_bound' } as const
+          }
+          session = change.session ?? session
+          if (change.value.ok && change.effects) {
+            run.onEffects?.(change.effects)
+          }
+          return change.value
+        }
+      ),
       // Headless close is a durable transaction; keep the in-memory fixture's
       // persistence contract equivalent to the production store.
       flushOrThrow: vi.fn(),
@@ -654,6 +693,15 @@ function makeWorkspaceSessionWithHeadlessTerminal(
   }
 }
 
+// Layout-owner tests bind panes into the shared store, which announces its writes as a profile
+// Store does; each test starts without them.
+beforeEach(() => {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    announceSessionWrites(store)
+  }
+})
+afterEach(() => forgetInstalledPaneSession(store))
+
 computeWorktreePathMock.mockImplementation(
   (
     sanitizedName: string,
@@ -687,5 +735,5 @@ export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadless
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
-export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+export { renderGateCapMs, setInMemoryOrchestrationMessages, spawnedPtyEnv, store, syncSinglePty }
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

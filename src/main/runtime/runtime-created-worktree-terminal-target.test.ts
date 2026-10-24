@@ -15,10 +15,12 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -89,9 +91,10 @@ function makeFixture(repos: Repo[] = [owner()], hostId: ExecutionHostId = 'local
     getAllWorktreeMeta: () => metadata,
     getWorktreeMeta: (id) => metadata[id],
     getAllWorktreeLineage: () => lineageById,
-    setWorktreeMeta: (id, patch) => (metadata[id] = { ...meta, ...metadata[id], ...patch }),
-    removeWorktreeMeta: (id) => {
-      delete metadata[id]
+    setWorktreeMeta: (target, patch) =>
+      (metadata[target.id] = { ...meta, ...metadata[target.id], ...patch }),
+    removeWorktreeMeta: (target) => {
+      delete metadata[target.id]
     },
     getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
     getSettings: () => ({
@@ -112,9 +115,11 @@ function makeFixture(repos: Repo[] = [owner()], hostId: ExecutionHostId = 'local
   }
   runtime.lookup.mockResolvedValue(fallback)
   let ptySequence = 0
-  const spawn = vi.fn(async () => ({ id: `new-pty-${++ptySequence}` }))
+  const spawn = vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
+    id: `new-pty-${++ptySequence}`
+  }))
   runtime.setPtyController({
-    spawn,
+    spawn: committingSpawn(runtime, spawn),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -385,8 +390,11 @@ describe('workspace activation and metadata reentry', () => {
     expect(store.getWorktreeMeta(runtime.selectedWorktree.id)?.comment).toBe('updated')
     expect(notify.mock.calls).toEqual([['repo']])
     const otherId = `repo::${join(directory, 'other')}`
-    store.setWorktreeMeta(runtime.selectedWorktree.id, { sortOrder: 0 })
-    store.setWorktreeMeta(otherId, { sortOrder: 0 })
+    store.setWorktreeMeta(
+      hostWorktreeTarget({ id: runtime.selectedWorktree.id, hostId: 'local' }),
+      { sortOrder: 0 }
+    )
+    store.setWorktreeMeta(hostWorktreeTarget({ id: otherId, hostId: 'local' }), { sortOrder: 0 })
     expect(runtime.persistManagedWorktreeSortOrder([runtime.selectedWorktree.id, otherId])).toEqual(
       {
         updated: 2
@@ -394,7 +402,17 @@ describe('workspace activation and metadata reentry', () => {
     )
     expect(notify.mock.calls).toEqual([
       ['repo'],
-      ['repo', { invalidateGitScans: false, sortOrderOnly: true }]
+      [
+        'repo',
+        {
+          invalidateGitScans: false,
+          sortOrderOnly: true,
+          sortOrders: [
+            { worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) },
+            { worktreeId: otherId, sortOrder: expect.any(Number) }
+          ]
+        }
+      ]
     ])
   })
 
@@ -421,11 +439,13 @@ describe('workspace activation and metadata reentry', () => {
   it.each([
     { label: 'absent notifier', notifier: null },
     { label: 'missing optional notifier method', notifier: {} }
-  ])('skips the sleeping workspace ID read for $label', async ({ notifier }) => {
+  ])("still queues main's wake with $label", async ({ notifier }) => {
     const reads = configureMobileActivation()
     Object.defineProperty(runtime, 'notifier', { value: notifier })
-    await runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
-    expect(reads()).toBe(4)
+    await expect(
+      runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
+    ).resolves.toMatchObject({ sleepingAgentWake: 'requested' })
+    expect(reads()).toBe(5)
   })
 
   it('looks up the sleeping callback late and keeps its notifier receiver', async () => {
@@ -446,7 +466,10 @@ describe('workspace activation and metadata reentry', () => {
     })
     await runtime.activateManagedWorktree('selected', { clientKind: 'mobile' })
     expect(reads()).toBe(5)
-    expect(calls).toEqual([{ receiver: notifier, args: [runtime.selectedWorktree.id] }])
+    // The window's callback runs once main's queued resume has.
+    await vi.waitFor(() =>
+      expect(calls).toEqual([{ receiver: notifier, args: [runtime.selectedWorktree.id] }])
+    )
   })
 })
 

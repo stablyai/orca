@@ -3,7 +3,7 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
-import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
+import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
@@ -20,7 +20,7 @@ const sockets = vi.hoisted(() => {
 })
 // Holds every socket open until released, so a test can act while one is still connecting.
 const openGate = vi.hoisted(() => ({ wait: Promise.resolve() }))
-vi.mock('../../../shared/remote-runtime-passthrough-socket', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () => ({
   openRemoteRuntimePassthroughSocket: async (
     _pairing: unknown,
     capabilities: readonly string[],
@@ -56,7 +56,7 @@ function relayWithPhone(
 ) {
   const syncCalls: unknown[] = []
   const server = { capable: true }
-  const desktop = { nativeChatDefault: true }
+  const desktop: { nativeChatDefault: boolean } = { nativeChatDefault: true }
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: [],
@@ -79,7 +79,9 @@ function relayWithPhone(
       return syncResponse()
     },
     hostsBrowserPage: () => false,
-    onEnvironmentRetired: () => () => {}
+    onEnvironmentRetired: () => () => {},
+    onStatusChanged: () => () => {},
+    watchChanges: () => ({ close: () => {}, current: () => true })
   }
   const relay = new MobileDesktopRelay({
     hosts,
@@ -140,7 +142,9 @@ describe('MobileDesktopRelay', () => {
       frame('l3', 'terminal.list', { worktree: 'id:wt-1' })
     )
     await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(3))
-    const sent = sockets[0]!.sent.map((text) => JSON.parse(text))
+    const sent = sockets[0]!.sent
+      .map((text) => JSON.parse(text))
+      .sort((a, b) => a.id.localeCompare(b.id))
     expect(sent[0].params).toEqual({ agent: 'claude', target, nativeChatDefault: true })
     expect(sent[1].params).toEqual({
       agent: 'claude',

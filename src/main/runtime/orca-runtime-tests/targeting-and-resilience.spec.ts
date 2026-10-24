@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -572,7 +574,26 @@ describe('OrcaRuntimeService', () => {
         )
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
+        // Switch point: main's layout gives every pane a UUID leaf and a window leaf vouches for no
+        // terminal (L80), so the live shell is the one its spawn commit registers (as the rescue in
+        // mobile-creation-and-orchestration.spec.ts), and the create keeps it rather than timing out.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          registerBoundPty(runtime, 'pty-stall', TEST_WORKTREE_ID, null, {
+            tabId: 'tab-stall',
+            leafId: '88888888-8888-4888-8888-888888888888'
+          })
+          await vi.advanceTimersByTimeAsync(50)
+          expect(await settled).toEqual({ ok: true })
+          expect(closeTerminal).not.toHaveBeenCalled()
+          return
+        }
         // A live shell backs the tab but its leaf id isn't a terminal UUID, so no pane key registers (stalled renderer publication).
+        bindPaneFirst(runtime, {
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-stall',
+          leafId: 'pane:1',
+          ptyId: 'pty-stall'
+        })
         runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [

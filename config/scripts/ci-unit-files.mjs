@@ -13,6 +13,14 @@ export const UNIT_INCLUDE = [
   'tests/e2e/**/*.unit.test.ts'
 ]
 
+export const UNIT_SETUP_FILES = [
+  'config/scripts/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/vitest-bun-node-builtins.ts',
+  'config/scripts/vitest-dom-setup.ts',
+  'config/scripts/vitest-host-ports-setup.ts',
+  'config/scripts/vitest-caller-identity-env-setup.ts'
+]
+
 export const UNIT_EXCLUDE = [
   ...defaultExclude,
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
@@ -36,6 +44,8 @@ export const UNIT_EXCLUDE = [
   'tests/e2e/relay-region-compatibility.unit.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.
+  'src/main/browser/popup-origin-chrome.electron.test.ts',
+  'src/main/browser/browser-link-materialization.electron.test.ts',
   'src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/browser/browser-route-tcp-egress.electron.test.ts',
   'src/main/browser/browser-route-webrtc-egress.electron.test.ts',
@@ -43,6 +53,7 @@ export const UNIT_EXCLUDE = [
   'src/main/browser/browser-route-dns-prefetch.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
+  'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
   `${CROSS_VERSION_WIRE_DIR}**`

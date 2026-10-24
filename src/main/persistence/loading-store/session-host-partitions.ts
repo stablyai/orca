@@ -7,6 +7,7 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
@@ -112,12 +113,11 @@ export class SessionHostPartitionOperations {
   }
 
   removeWorkspaceSessionStateForWorktree(
-    worktreeId: string,
-    hostId?: ExecutionHostId | null,
+    target: HostWorktreeTarget,
     options: { advanceTerminalTopologyRevision?: boolean } = {}
   ): void {
-    for (const resolved of workspaceSessionPartitionIdsForHost(hostId)) {
-      removeWorkspaceSessionOwnerInPartition(this, worktreeId, resolved, options)
+    for (const resolved of workspaceSessionPartitionIdsForHost(target.hostId)) {
+      removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
   }
 }

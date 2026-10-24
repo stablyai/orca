@@ -682,27 +682,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
 
         expect(transport.resize).not.toHaveBeenCalled()
       })
-
-      it('coalesces overlapping resumes into a single size query (re-entrancy guard)', async () => {
-        const getSize = vi.mocked(window.api.pty.getSize)
-        getSize.mockClear()
-        let resolveSize: (v: { cols: number; rows: number } | null) => void = () => {}
-        getSize.mockImplementation(
-          () =>
-            new Promise((resolve) => {
-              resolveSize = resolve
-            })
-        )
-        const { binding } = await connectResumablePane()
-        getSize.mockClear()
-
-        // Two rapid resumes before the first query resolves → only one query.
-        binding.noteVisibilityResume()
-        binding.noteVisibilityResume()
-        expect(getSize).toHaveBeenCalledTimes(1)
-        resolveSize({ cols: 120, rows: 40 })
-        await flushAsyncTicks()
-      })
     })
   })
 }

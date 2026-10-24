@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ExternalLink, Eye, Pencil } from 'lucide-react'
+import { Eye, Pencil } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,21 +12,14 @@ import {
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getRevealInFileManagerLabel,
-  getWorkspaceFileRevealOwner,
-  revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
-import { useAppStore } from '@/store'
+import { Badge } from '@/components/ui/badge'
 import type { OpenFile } from '@/store/slices/editor'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
+import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
@@ -51,14 +44,6 @@ export function EditorPanelHeaderPath({
   const canCopyHeaderPath = headerCopyState.copyText !== null
   // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
   const isVirtualEditorTab = isVirtualEditorFile(activeFile)
-  const revealOwner = useAppStore((s) =>
-    getWorkspaceFileRevealOwner(s, activeFile.worktreeId, {
-      connectionId:
-        activeFile.externalSshTargetId ?? getConnectionIdFromState(s, activeFile.worktreeId),
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId
-    })
-  )
-  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
     canRename,
@@ -135,6 +120,11 @@ export function EditorPanelHeaderPath({
             <span className="editor-header-path-file">{displayPath.fileName}</span>
           </button>
         )}
+        {!isRenaming && activeFile.readOnly === true && (
+          <Badge variant="outline">
+            {translate('auto.components.editor.EditorPanelHeader.readOnlyBadge', 'Read-only')}
+          </Badge>
+        )}
         {/* Why: the toast is opacity-0 rather than display-none, so leaving it
             mounted reserves ~100px of the row from the rename field for a
             message that cannot fire while renaming. */}
@@ -180,49 +170,20 @@ export function EditorPanelHeaderPath({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {!isVirtualEditorTab && (
-            <>
-              <DropdownMenuItem
-                onSelect={() => {
-                  void window.api.ui.writeClipboardText(activeFile.filePath)
-                }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1.5" />
-                {translate('auto.components.editor.EditorPanelHeader.7c08a1f990', 'Copy Path')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  void window.api.ui.writeClipboardText(activeFile.relativePath)
-                }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1.5" />
-                {translate(
-                  'auto.components.editor.EditorPanelHeader.269ce4842b',
-                  'Copy Relative Path'
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
+            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
           )}
           {canShowMarkdownPreview && (
-            <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
-              <Eye className="w-3.5 h-3.5 mr-1.5" />
-              {translate(
-                'auto.components.editor.EditorPanelHeader.4157f3cbf3',
-                'Open Markdown Preview'
-              )}
-              <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {canShowMarkdownPreview && <DropdownMenuSeparator />}
-          {!isVirtualEditorTab && (
-            <DropdownMenuItem
-              disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(activeFile.filePath, revealOwner)}
-            >
-              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-              {getRevealInFileManagerLabel()}
-              {revealBlocked ? <LocalOnlyMenuHint /> : null}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                {translate(
+                  'auto.components.editor.EditorPanelHeader.4157f3cbf3',
+                  'Open Markdown Preview'
+                )}
+                <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>

@@ -1,8 +1,13 @@
-import { app } from 'electron'
+import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import {
+  listCapableSharedControlSockets,
+  startDesktopPresenceReporter
+} from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
@@ -15,7 +20,7 @@ import { recoverPendingSkillTransactions } from '../skills/skill-transaction-sta
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
-import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
+import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -29,6 +34,22 @@ export function initializeMainProcessObservers(): void {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
+    readAway: () => readDesktopAwayState(powerMonitor),
+    listTargets: listCapableSharedControlSockets,
+    subscribePowerEvents: ({ away, back }) => {
+      powerMonitor.on('suspend', away)
+      powerMonitor.on('lock-screen', away)
+      powerMonitor.on('resume', back)
+      powerMonitor.on('unlock-screen', back)
+      return () => {
+        powerMonitor.off('suspend', away)
+        powerMonitor.off('lock-screen', away)
+        powerMonitor.off('resume', back)
+        powerMonitor.off('unlock-screen', back)
+      }
+    }
+  })
   state.agentAwakeService = new AgentAwakeService()
   state.agentAwakeService.setMode(
     normalizeComputerAwakeMode(
@@ -125,12 +146,7 @@ export function initializeMainProcessObservers(): void {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
-  // Agent-session stats come from hook status transitions, the same truth the
-  // sidebar and dashboard read — never from OSC terminal titles, which miss
-  // hook-only agents and count any spinner TUI as an agent (#10201).
-  const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
-  agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
-  agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
+  feedAgentSessionStats(state.stats, agentHookServer)
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)

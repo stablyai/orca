@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
 import {
@@ -228,7 +229,7 @@ describe('terminal side-effect fact channel', () => {
       { kind: 'title', normalizedTitle: 'Codex working', rawTitle: 'Codex working' },
       { kind: 'agent-working' },
       { kind: 'title', normalizedTitle: 'Codex done', rawTitle: 'Codex done' },
-      { kind: 'agent-idle', title: 'Codex done' },
+      { kind: 'agent-idle', title: 'Codex done', status: 'idle' },
       { kind: 'bell' }
     ])
   })
@@ -283,7 +284,7 @@ describe('terminal side-effect fact channel', () => {
           rawTitle: 'Codex',
           staleWorkingTitleClear: true
         },
-        { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        { kind: 'agent-idle', title: 'Codex', status: 'idle', staleWorkingTitleClear: true }
       ])
     } finally {
       vi.useRealTimers()
@@ -376,7 +377,7 @@ describe('terminal side-effect fact channel', () => {
   it('lets an explicit terminal rename override cached Cursor identity and restores it after clearing', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-1' }))),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

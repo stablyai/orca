@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../src/shared/agent-session-host-status-rows'
 import {
@@ -8,8 +8,8 @@ import {
   type NativeChatNoticeTone
 } from '../../../src/shared/native-chat-notice'
 import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { usageLimitLineText } from '../../../src/shared/agent-session-usage-limit-words'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { MobileSelectableText as Text } from '../components/MobileSelectableText'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
@@ -98,6 +98,7 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
+      const lineText = usageLimitLineText(notice)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
@@ -106,7 +107,7 @@ export function MobileNativeChatNoticeRow({
       if (!look.tone) {
         return (
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
-            {notice.text}
+            {lineText}
           </Text>
         )
       }
@@ -121,7 +122,7 @@ export function MobileNativeChatNoticeRow({
             style={styles.toneIcon}
           />
           <Text selectable={INLINE_TEXT_SELECTION} style={[...textStyle, styles.toneText]}>
-            {notice.text}
+            {lineText}
           </Text>
         </View>
       )

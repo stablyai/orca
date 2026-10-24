@@ -18,11 +18,11 @@ import { buildSections, type Worktree } from './workspace-list-sections'
 // worktree-list-groups-mobile-parity.test.ts: buildRows renders these headers, and main serves
 // PROJECT_SECTION_PARITY_SERVED for the same host answers.
 
-function served(projectOrderBy: 'manual' | 'recent'): ServedProjectSections | null {
+function served(): ServedProjectSections | null {
   const verdict = projectSectionsRead.interpret({
     id: 'sections',
     ok: true,
-    result: { catalog: { ...PROJECT_SECTION_PARITY_SERVED, projectOrderBy } }
+    result: { catalog: PROJECT_SECTION_PARITY_SERVED }
   })
   return verdict.accepted ? verdict.value : null
 }
@@ -70,7 +70,7 @@ describe('Project grouping on the phone', () => {
     "renders the desktop sidebar's %s headers from the catalog the desktop serves",
     (projectOrderBy) => {
       expect(rows()).toHaveLength(PROJECT_SECTION_PARITY_ROWS.length)
-      expect(headers(buildProjectSectionCatalog(served(projectOrderBy), [], null))).toEqual(
+      expect(headers(buildProjectSectionCatalog(served(), [], null, projectOrderBy))).toEqual(
         PROJECT_SECTION_PARITY_HEADERS[projectOrderBy]
       )
     }
@@ -81,11 +81,11 @@ describe('Project grouping on the phone', () => {
       (repo) => repo.executionHostId === 'local'
     )
 
-    expect(headers(buildProjectSectionCatalog(null, desktopRepos, null))).toEqual([
+    expect(headers(buildProjectSectionCatalog(null, desktopRepos, null, 'manual'))).toEqual([
       { key: 'repo:m4-orca-two', label: 'orca' },
       { key: 'repo:win-orca', label: 'orca' },
-      { key: 'repo:local-workspace', label: 'Users/jinwoo/orca/workspaces/orca/orca' },
-      { key: 'repo:local-stably', label: 'Users/jinwoo/stably/orca' },
+      { key: 'repo:local-workspace', label: 'orca/orca' },
+      { key: 'repo:local-stably', label: 'stably/orca' },
       { key: 'repo:m4-orca', label: 'orca' },
       { key: 'repo:local-assets', label: 'design-assets' }
     ])

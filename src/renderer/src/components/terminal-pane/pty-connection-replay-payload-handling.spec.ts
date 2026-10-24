@@ -397,7 +397,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
         )
         await flushAsyncTicks(12)
 
-        expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
         return connection
       })
       disposable.dispose()
@@ -445,7 +445,7 @@ export function registerPtyConnectionReplayPayloadHandlingTests(): void {
           '\x1b[?25h\x1b[?1004l',
           expect.any(Function)
         )
-        expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+        expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
         return connection
       })
       disposable.dispose()

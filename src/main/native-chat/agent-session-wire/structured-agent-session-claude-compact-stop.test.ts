@@ -1,6 +1,3 @@
-// Stop and `/compact` on the shipping Claude adapter, driven by the frames a stream-json child
-// writes: which result ends the command, and what the next message is handed to.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,8 +9,7 @@ import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-s
 import {
   fakeClaude,
   PROVIDER_SESSION_ID,
-  type FakeConnection,
-  claudeStartupSettled
+  type FakeConnection
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -39,14 +35,13 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let adapter: ClaudeStructuredSessionAdapter
 let claude: ReturnType<typeof fakeClaude>
-/** The adapter's clock, which a real child's exit reads at a different instant than the host's. */
+/** Separate adapter/host clocks expose which observer supplies exit time. */
 let adapterNow = NOW
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-compact-stop-'))
   resetHostTestOperationIds()
   adapterNow = NOW + 7
-  // No echo of its own: each test writes the frames Claude would.
   claude = fakeClaude({ replayUuid: null })
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -65,7 +60,6 @@ beforeEach(async () => {
         void host.handleAdapterEvent(mapped)
       }
     },
-    // The runtime's own wiring: the provider's answer is what settles a send it took.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -76,7 +70,7 @@ beforeEach(async () => {
     agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
-    // The production router is what declares create support; the bare adapter only knows locations.
+    // Production routing declares create support; the bare adapter only knows locations.
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
@@ -93,7 +87,7 @@ beforeEach(async () => {
     })
   )
   expect(attached).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
 })
 
 afterEach(async () => {
@@ -129,7 +123,6 @@ function stop(cmid: string) {
   return host.cancel(CALLER, { envelope: envelope('agentSession.cancel', { turnId }), turnId })
 }
 
-/** The uuid of the frame that carried `text` to Claude, and the child it went to. */
 async function sent(text: string): Promise<{ connection: FakeConnection; uuid: string }> {
   return vi.waitFor(() => {
     for (const connection of claude.connections) {
@@ -219,7 +212,6 @@ it('ends a stopped /compact on its own interrupted result, then ends its child; 
   const { connection, uuid: firstUuid } = await sent('/compact')
 
   await expect(stop(first)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
-  // The interrupt was taken: the child waits for Claude to end the command itself.
   expect(connection.closed).toBe(false)
   frame(connection, result(firstUuid, INTERRUPTED))
   await vi.waitFor(() => expect(connection.closed).toBe(true))
@@ -252,7 +244,6 @@ it('settles a /compact whose Claude child exits mid-command through that child, 
   const body = hostTestMessage('after the exit')
   await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
 
-  // Claude sends no end frame at all: its child is gone.
   compacting.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
 
   await vi.waitFor(async () => expect((await commandState(cmid))?.state).toBe('interrupted'))
@@ -263,7 +254,7 @@ it('settles a /compact whose Claude child exits mid-command through that child, 
 it('tells why a /compact ended when its Claude child exits after taking it', async () => {
   const cmid = await compact()
   const { connection, uuid } = await sent('/compact')
-  // Claude echoes the command, so the send is answered; then the child dies with no end frame.
+  // Echo answers the command before child exit without a result frame.
   frame(connection, {
     type: 'user',
     uuid,
@@ -278,7 +269,6 @@ it('tells why a /compact ended when its Claude child exits after taking it', asy
   await vi.waitFor(async () => {
     await host.flushStreamedEvents(SESSION)
     const snapshot = await host.journalSnapshot(SESSION)
-    // The exit's words are the host's sentence, never Claude's log text.
     const exitRow = snapshot.items.find(
       (item) => item.body.kind === 'status' && item.body.failure?.kind === 'providerExited'
     )

@@ -11,7 +11,7 @@ import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-lo
 import { registerPtyHandlers } from './pty/register-handlers'
 import { join } from 'node:path'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+// Wrapper roots are content-addressed.
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -96,7 +96,6 @@ describe('registerPtyHandlers', () => {
         '/bin/zsh',
         '-l'
       ])
-      // The spawn env keeps the real shell so identity/name logic is intact.
       expect(options.env.SHELL).toBe('/bin/zsh')
     } finally {
       resetMacosLoginShellPreflightForTests()

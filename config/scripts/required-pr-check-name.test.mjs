@@ -22,7 +22,6 @@ it('checks context names even when workflow-only changes skip root tests', () =>
     (candidate) => candidate.run === 'bun .github/scripts/check-required-pr-context.mjs'
   )
   expect(step).toBeDefined()
-  expect(job.if).toBeUndefined()
   expect(step.if).toBeUndefined()
   expect(step['continue-on-error']).toBeUndefined()
   const checkout = job.steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'))
@@ -45,7 +44,7 @@ it('rejects aggregate conditions that hide a successful result', () => {
       return workflow
     }
     expect(() => verifyRequiredPrContext(parseChanged), String(condition)).toThrow(
-      'Required PR aggregate must run unless the workflow is cancelled.'
+      'Required PR aggregate must run unless cancelled or the PR is a draft.'
     )
   }
 })

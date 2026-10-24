@@ -1,11 +1,27 @@
-// Execution provenance: the generation whose execution produced an item (`JournalItemRow.ownerFence`),
-// kept apart from each row's writer fence. The write that creates an item states it; every revision
-// keeps it.
+import { journalItemEchoRestatement, type JournalItemEcho } from './journal-item-echo'
+// ownerFence preserves creation provenance; executionOwner tracks later runs resuming reusable children.
 
 import type { JournalReducerState } from './journal-reducer'
 
-/** An existing item keeps its owner whoever revises it: a newer run's start revises the newest saved
- *  turn. Creation states the writer's claim (an observation, carried history), else its fence. */
+export function journalItemExecutionFence(
+  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners'>,
+  itemId: string
+): number | undefined {
+  return state.itemExecutionOwners.get(itemId) ?? state.itemFences.get(itemId)
+}
+
+export function journalItemProvenance(
+  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners' | 'itemEchoes'>,
+  itemId: string
+): JournalItemEcho & { ownerFence?: number; executionOwner?: number } {
+  return {
+    ...journalItemEchoRestatement(state.itemEchoes, itemId),
+    ownerFence: state.itemFences.get(itemId),
+    executionOwner: state.itemExecutionOwners.get(itemId)
+  }
+}
+
+/** Revisions retain the creator's owner; new items use stated provenance or the writer fence. */
 export function journalItemOwnerFence(
   state: Pick<JournalReducerState, 'itemFences' | 'items'>,
   resolvedItemId: string,

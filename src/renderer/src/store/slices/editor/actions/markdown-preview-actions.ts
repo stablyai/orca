@@ -12,6 +12,32 @@ import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
 import { buildEditorActiveResult } from '../tabs/editor-open-target-group'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import type { Tab } from '../../../../../../shared/tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { withPreviewEnded } from '../../tabs/tab-preview-flag'
+import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
+import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  endsPreviewHere,
+  promotePreviewTabsThroughLayoutOwner
+} from '../../tabs/preview-tab-promotion'
+
+type FileReadAuthority = Pick<
+  OpenFile,
+  'externalSshTargetId' | 'terminalArtifactGrantId' | 'readOnly'
+>
+
+/** A preview reads its source's file, so it must read with the same host, grant and client-local flag (#31034). */
+function inheritFileReadAuthority(
+  file: FileReadAuthority,
+  source: FileReadAuthority | undefined
+): FileReadAuthority {
+  return {
+    externalSshTargetId: file.externalSshTargetId ?? source?.externalSshTargetId,
+    terminalArtifactGrantId: file.terminalArtifactGrantId ?? source?.terminalArtifactGrantId,
+    readOnly: file.readOnly === true || source?.readOnly === true ? true : undefined
+  }
+}
 
 export function createMarkdownPreviewActions(
   set: EditorSet,
@@ -89,9 +115,12 @@ export function createMarkdownPreviewActions(
           ['edit']
         )
       const id = `markdown-preview::${sourceFileId}`
-      const externalSshTargetId =
-        file.externalSshTargetId ??
-        initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
+      // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
+      const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
+        file,
+        initialState.openFiles.find((openFile) => openFile.id === sourceFileId) ??
+          initialState.openFiles.find((openFile) => openFile.id === id)
+      )
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -100,11 +129,17 @@ export function createMarkdownPreviewActions(
         const activeResult = buildEditorActiveResult(s, worktreeId, id)
 
         if (existing) {
+          // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
+          const grantChanged =
+            terminalArtifactGrantId !== undefined &&
+            existing.terminalArtifactGrantId !== terminalArtifactGrantId
           const needsUpdate =
             existing.relativePath !== file.relativePath ||
             existing.filePath !== file.filePath ||
             existing.language !== file.language ||
             existing.externalSshTargetId !== externalSshTargetId ||
+            existing.terminalArtifactGrantId !== terminalArtifactGrantId ||
+            existing.readOnly !== readOnly ||
             existing.markdownPreviewSourceFileId !== sourceFileId ||
             existing.markdownPreviewAnchor !== anchor ||
             existing.mode !== 'markdown-preview'
@@ -120,6 +155,11 @@ export function createMarkdownPreviewActions(
                         language: file.language,
                         runtimeEnvironmentId,
                         externalSshTargetId,
+                        terminalArtifactGrantId,
+                        readOnly,
+                        ...(grantChanged
+                          ? { fileContentReloadNonce: (openFile.fileContentReloadNonce ?? 0) + 1 }
+                          : {}),
                         markdownPreviewSourceFileId: sourceFileId,
                         markdownPreviewAnchor: anchor,
                         mode: 'markdown-preview' as const
@@ -140,6 +180,8 @@ export function createMarkdownPreviewActions(
           isDirty: false,
           runtimeEnvironmentId,
           externalSshTargetId,
+          terminalArtifactGrantId,
+          readOnly,
           markdownPreviewSourceFileId: sourceFileId,
           markdownPreviewAnchor: anchor,
           mode: 'markdown-preview'
@@ -162,7 +204,11 @@ export function createMarkdownPreviewActions(
     },
 
     makePreviewFilePermanent: (fileId, tabId) => {
+      const promoted: Tab[] = []
       set((s) => {
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          promoted.push(...previewEditorTabsOf(s.unifiedTabsByWorktree, fileId, tabId))
+        }
         let changed = false
         const openFiles = s.openFiles.map((file) => {
           if (file.id !== fileId || !file.isPreview) {
@@ -177,12 +223,35 @@ export function createMarkdownPreviewActions(
             if (tab.entityId !== fileId || (tabId && tab.id !== tabId) || !tab.isPreview) {
               return tab
             }
+            // Switch point: main's frame ends a preview main owns.
+            if (!endsPreviewHere(s, worktreeId)) {
+              return tab
+            }
             changed = true
-            return { ...tab, isPreview: false }
+            return withPreviewEnded(tab)
           })
         }
         return changed ? { openFiles, unifiedTabsByWorktree } : s
       })
+      // Switch point: main makes the preview tabs the user kept permanent.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
+        promotePreviewTabsThroughLayoutOwner(get(), set, promoted)
+      }
+      // Switch point: a double click keeps a preview main has yet to draw, once its frame does.
+      const worktreeId = get().openFiles.find((file) => file.id === fileId)?.worktreeId
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId && hasPendingEntityTab(worktreeId, fileId)) {
+        // Tabs asked for above are not asked again, even after main answered (or refused) them.
+        const asked = new Set(promoted.map((tab) => tab.id))
+        afterPendingEntityTabs(worktreeId, fileId, () =>
+          promotePreviewTabsThroughLayoutOwner(
+            get(),
+            set,
+            previewEditorTabsOf(get().unifiedTabsByWorktree, fileId, tabId).filter(
+              (tab) => !asked.has(tab.id)
+            )
+          )
+        )
+      }
     },
 
     pinFile: (fileId, tabId) => {

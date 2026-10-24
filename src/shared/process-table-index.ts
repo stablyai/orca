@@ -67,14 +67,16 @@ export function buildProcessTableIndex<Row extends ProcessIdentityRow>(
  */
 export function collectDescendantsFromIndex<Row extends ProcessIdentityRow>(
   index: ProcessTableIndexOf<Row>,
-  rootPid: number
+  rootPid: number,
+  /** Excludes a row and everything below it. */
+  prune?: (row: Row) => boolean
 ): (Row & { depth: number })[] {
   const descendants: (Row & { depth: number })[] = []
   // PID reuse can make a process snapshot cyclic; queue each PID at most once.
   const visited = new Set<number>([rootPid])
   const stack: { row: Row; depth: number }[] = []
   const pushUnvisited = (row: Row, depth: number): void => {
-    if (visited.has(row.pid)) {
+    if (visited.has(row.pid) || prune?.(row)) {
       return
     }
     visited.add(row.pid)

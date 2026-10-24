@@ -4,9 +4,21 @@ import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-in
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { useAppStore } from '@/store'
+import {
+  acquireAgentLaunchChoices,
+  AgentLaunchChoiceCancelled
+} from './host-chat-program-acquisition'
+import { agentChoicePending } from './host-chat-program'
+import { worktreeLaunchWorkspace } from './agent-launch-route-input'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import {
+  adoptAgentSessionLaunchVerdict,
+  planAgentSessionLaunch
+} from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 
 type LaunchAgentSessionContinuationArgs = {
@@ -15,16 +27,26 @@ type LaunchAgentSessionContinuationArgs = {
   worktreeId: string
   groupId?: string | null
   initialCwd?: string | null
+  launchChoice?: AgentLaunchChoice
   launchSource: LaunchSource
+  signal?: AbortSignal
 }
 
-export async function detectAgentSessionContinuationAgents(
-  worktreeId: string
-): Promise<TuiAgent[]> {
-  return ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
+/** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
+export function detectAgentSessionContinuationAgents(worktreeId: string, signal?: AbortSignal) {
+  return acquireAgentLaunchChoices(
+    worktreeLaunchWorkspace(worktreeId),
+    () => ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId),
+    signal
+  )
 }
 
-async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {
+async function ensureAgentAvailable(
+  agent: TuiAgent,
+  worktreeId: string,
+  route: AgentLaunchRoute,
+  signal?: AbortSignal
+): Promise<boolean> {
   const state = useAppStore.getState()
   const label = getAgentLabel(agent)
   if (!isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents)) {
@@ -38,14 +60,23 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
     return false
   }
 
-  let detectedAgents: TuiAgent[]
+  let choices: { detected: readonly TuiAgent[] | null; offered: readonly TuiAgent[] }
   try {
-    detectedAgents = await detectAgentSessionContinuationAgents(worktreeId)
+    choices = await detectAgentSessionContinuationAgents(worktreeId, signal)
   } catch (error) {
+    if (error instanceof AgentLaunchChoiceCancelled) {
+      return false
+    }
     console.error('Agent detection failed for session continuation', error)
-    detectedAgents = []
+    choices = { detected: [], offered: [] }
   }
-  if (detectedAgents.includes(agent)) {
+  // A terminal runs the agent's CLI; only a chat can open through a host-run chat program.
+  if (
+    route === 'terminal-tui'
+      ? choices.detected?.includes(agent)
+      : choices.offered.includes(agent) ||
+        agentChoicePending(useAppStore.getState(), agent, worktreeLaunchWorkspace(worktreeId), null)
+  ) {
     return true
   }
 
@@ -65,24 +96,21 @@ export async function launchAgentSessionContinuation({
   worktreeId,
   groupId,
   initialCwd,
-  launchSource
+  launchChoice,
+  launchSource,
+  signal
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
-  if (!(await ensureAgentAvailable(agent, worktreeId))) {
-    return false
-  }
-
   const label = getAgentLabel(agent)
   // Why: the paste helper writes blind when the agent's composer was never observed, so a
   // written prompt is not a delivered one. Claiming success there is how the whole handoff
   // could vanish silently (#22479).
   let deliveryUnconfirmed = false
-  const result = launchAgentInNewTab({
-    requestId: newAgentLaunchRequestId(),
+  const delivery = {
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),
     prompt,
-    promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready',
+    promptDelivery: agent === 'claude' ? ('draft' as const) : ('submit-after-ready' as const),
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDeliveryUnconfirmed: () => {
@@ -101,7 +129,21 @@ export async function launchAgentSessionContinuation({
         )
       )
     }
-  })
+  }
+  const request = {
+    ...delivery,
+    requestId: newAgentLaunchRequestId(),
+    workspace: worktreeLaunchWorkspace(worktreeId),
+    tuiCustomization: { cwd: initialCwd }
+  }
+  // Capture preference routes before detection awaits; only deliberate picks demand a surface.
+  const plan = launchChoice
+    ? adoptAgentSessionLaunchVerdict({ ...request, ...launchChoice, worktreeId })
+    : planAgentSessionLaunch(useAppStore.getState(), request)
+  if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal))) {
+    return false
+  }
+  const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
   if (!result) {
     notifyLaunchFailed(label)
     return false

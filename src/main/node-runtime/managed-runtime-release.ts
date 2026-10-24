@@ -3,17 +3,19 @@
 // cheap enough for every launch: a full hash is only ever taken by an install.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 export type ManagedRuntimePin = {
   version: string
+  /** A zip holding exactly the members. */
   url: string
   archiveSha256: string
   /** The decoded archive's size. */
   archiveBytes: number
-  /** Archive-relative path, sha256 and size of every executable the release must hold. */
+  /** Name at the archive's top level, sha256 and size of every executable the release holds. */
   members: readonly { path: string; sha256: string; bytes: number }[]
 }
 
@@ -25,6 +27,9 @@ export type ManagedRuntime = {
   root(dataDirectory: string): string
   /** This host's pinned release; null where none is published. */
   pin(): ManagedRuntimePin | null
+  /** Starts the server in `folder` once, without the person's sign-in, and rejects unless it
+   *  answers as the pinned release; Install publishes and reuses only a copy that passes. */
+  validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
 }
 
 export const RUNTIME_RELEASE_RECEIPT = '.install-complete.json'
@@ -105,6 +110,36 @@ export function copyBesidePinnedMembers(
   } catch {
     return null
   }
+}
+
+/** Written into a verified release before it is renamed into place: the release is whole once the
+ *  rename lands, so a folder with this receipt was never published partly. */
+export async function writeRuntimeReleaseReceipt(
+  folder: string,
+  pin: ManagedRuntimePin
+): Promise<void> {
+  const receipt: z.infer<typeof runtimeReleaseReceiptSchema> = {
+    releaseId: pin.archiveSha256,
+    version: pin.version,
+    platform: process.platform,
+    arch: process.arch,
+    members: pin.members.map(({ path, bytes }) => ({ path, bytes }))
+  }
+  await writeFile(join(folder, RUNTIME_RELEASE_RECEIPT), JSON.stringify(receipt), { flag: 'wx' })
+}
+
+/** Removes everything under `root` but the release named `keep`. Safe only when `keep` is what a
+ *  launch resolves and the caller is the only writer, so no chat runs from what it removes.
+ *  Answers the entries it could not remove. */
+export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
+  const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
+    error.code === 'ENOENT' ? [] : Promise.reject(error)
+  )
+  const stale = names.filter((name) => name !== keep)
+  const results = await Promise.allSettled(
+    stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
+  )
+  return stale.filter((_, index) => results[index]?.status === 'rejected')
 }
 
 function readRelease(folder: string, version: string): ReleaseRead {

@@ -47,8 +47,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
     let newestMatch: RuntimePtyWorktreeRecord | null = null
     for (const pty of this.ptysById.values()) {
-      const ptyPane = parsePaneKey(pty.paneKey ?? '')
-      if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
+      const recordedPaneKey = this.paneOfPty(pty).paneKey
+      const ptyPane = parsePaneKey(recordedPaneKey ?? '')
+      if (recordedPaneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
         if (pty.connected) {
           return pty
         }
@@ -59,15 +60,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   protected getPaneKeyForTerminalHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
-    if (livePty?.pty.paneKey) {
-      return livePty.pty.paneKey
+    const livePaneKey = this.paneOfPty(this.getLivePtyForHandle(handle)?.pty).paneKey
+    if (livePaneKey) {
+      return livePaneKey
     }
     const record = this.handles.get(handle)
-    if (!record || record.runtimeId !== this.runtimeId) {
-      return null
-    }
-    if (!isTerminalLeafId(record.leafId)) {
+    if (!record || record.runtimeId !== this.runtimeId || !isTerminalLeafId(record.leafId)) {
       return null
     }
     return makePaneKey(record.tabId, record.leafId)
@@ -195,20 +193,24 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /**
-   * Every structured session's status change reaches here. At its idle edge, retry what is parked
-   * on it and re-derive the mailboxes it owns, so mail it could not take earlier (mid-turn, closed)
-   * is pointed again. Workers and chats alike: this is not per-dispatch.
+   * Every structured session's status change reaches here. At its working and idle edges, retry
+   * what is parked on it; at idle also re-derive the mailboxes it owns, so mail it could not take
+   * earlier (closed) is pointed again. Workers and chats alike: this is not per-dispatch.
    */
   onStructuredSessionStatusForMail(summary: {
     sessionId: string
     status: 'working' | 'attention' | 'idle' | null
   }): void {
-    if (summary.status === 'working' || summary.status === 'attention') {
+    if (summary.status === 'attention') {
       return
     }
     // Logged, never thrown: the same status callback goes on to the first-turn workspace rename.
     try {
+      // Working also follows an answered prompt, so mail held behind the prompt is retried too.
       this.notifyStructuredSessionJournalActivity(summary.sessionId)
+      if (summary.status === 'working') {
+        return
+      }
       const openDb = () => this.getExistingOrchestrationDb()
       const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
       structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)

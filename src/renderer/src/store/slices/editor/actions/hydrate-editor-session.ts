@@ -3,9 +3,10 @@ import type { EditorSlice } from '../types/editor-slice'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
+import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/degraded-repo-worktree-validity'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'
 import { buildHydratedEditorSessionState } from './hydrated-editor-session-state'
+import { selectFolderWorkspaces } from '../../../workspace-record-selectors'
 
 export function createHydrateEditorSession(
   set: EditorSet,
@@ -19,7 +20,7 @@ export function createHydrateEditorSession(
           Object.keys(session.openFilesByWorktree ?? {})
         )
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-        for (const workspace of s.folderWorkspaces) {
+        for (const workspace of selectFolderWorkspaces(s)) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)

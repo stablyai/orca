@@ -1,8 +1,9 @@
+import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {
   ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS,
@@ -37,6 +38,9 @@ export function createSetActiveWorktree(
         set(stateTransition.patch)
       }
       return false
+    }
+    if (!worktreeId) {
+      cancelActiveWorktreeRemoval()
     }
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
     if (worktreeId && shouldDeferActivationTerminalPrep()) {

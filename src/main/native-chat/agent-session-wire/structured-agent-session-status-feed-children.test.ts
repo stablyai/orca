@@ -1,6 +1,3 @@
-// The status summary reads a session's child records from the sink its row landed in, and derives
-// the legacy task list an older client folds from those same records.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,6 +10,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import {
   StructuredAgentSessionStatusFeed,
@@ -32,8 +30,7 @@ const USER_IDENTITY = {
   turnId: 'turn-1',
   ordinal: 1
 } as const
-/** The legacy row an older client reads for `childView()`, derived from it. These sessions are
- *  Codex's, so a subagent keeps the id its row carried before views, which no Stop can name. */
+/** Legacy Codex task IDs retain their old unaddressable-by-Stop prefix. */
 const LEGACY_TASK = {
   id: 'codex-agent:task-1',
   kind: 'agent',
@@ -117,7 +114,6 @@ describe('structured status summary child records', () => {
       session: expect.objectContaining({ backgroundTasks: [LEGACY_TASK], children: views })
     })
 
-    // No journal change: only the record's state moved.
     views = [childView({ state: 'waiting' })]
     const before = events.length
     feed.publish(SESSION, journal)
@@ -129,7 +125,6 @@ describe('structured status summary child records', () => {
       })
     })
 
-    // An identical projection is suppressed.
     feed.publish(SESSION, journal)
     expect(events).toHaveLength(before + 1)
   })
@@ -147,9 +142,7 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION, journal)
     const before = events.length
 
-    // A `task_progress` frame moves usage, which no status-summary reader renders, and the
-    // child's evidence clocks; re-broadcasting the whole summary per frame would cost every
-    // remote subscriber. The chat strip's channel carries both per tick.
+    // Per-tick usage/freshness belongs on the chat channel, avoiding full broadcasts to remote lists.
     views = [
       childView({
         totalTokens: 4_200,
@@ -167,12 +160,10 @@ describe('structured status summary child records', () => {
       })
     })
 
-    // The clock re-broadcasts once it moved far enough to change a "no update" minute.
     views = [childView({ observedAt: 60_101, operation: { ...operation, observedAt: 60_101 } })]
     feed.publish(SESSION, journal)
     expect(events).toHaveLength(before + 1)
 
-    // What the child is doing, or its state, re-broadcasts at once.
     views = [
       childView({
         observedAt: 60_200,
@@ -192,7 +183,6 @@ describe('structured status summary child records', () => {
     })
   })
 
-  // The sidebar and the strip list running children only; a finished one is on neither.
   it('lists only running children on the summary, and no finished one in any of its lists', async () => {
     const { feed, events, views } = await feedWithChildren()
     const failed = childView({
@@ -207,7 +197,7 @@ describe('structured status summary child records', () => {
     })
     views.current = () => [childView(), failed]
     feed.publish(SESSION)
-    // An older client reads a failed task's legacy `blocked` as still running.
+    // Legacy blocked failures would otherwise keep old clients’ parent status working.
     expect(lastSummary(events)).toMatchObject({
       backgroundTasks: [LEGACY_TASK],
       children: [childView()]
@@ -249,7 +239,6 @@ describe('structured status summary child records', () => {
         agentId,
         'codex-command:primary:cmd-1'
       ])
-      // The views name the child as its records do; only the legacy shape is mapped.
       expect(lastSummary(events)?.children?.map((view) => view.providerId)).toEqual([
         'task-1',
         'codex-command:primary:cmd-1'
@@ -301,7 +290,6 @@ describe('structured status summary child records', () => {
     const retirements = () => admitted.flat().filter((edge) => edge.type === 'turn-started')
     feed.publish(SESSION)
     await send('send-1')
-    // Written but not taken: the provider may still refuse it.
     expect(retirements()).toHaveLength(0)
     await accept('send-1')
     expect(retirements()).toHaveLength(1)
@@ -309,7 +297,6 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION)
     await turn('turn-1', 'completed')
     feed.publish(SESSION)
-    // Neither a subagent's turn nor a turn the provider opened on its own is the user's.
     await turn('child-turn', 'running', 'child-thread')
     feed.publish(SESSION)
     await turn('wake-turn', 'running')
@@ -321,7 +308,6 @@ describe('structured status summary child records', () => {
     feed.publish(SESSION)
     expect(retirements()).toHaveLength(2)
 
-    // A rewind replaces the conversation, as the user's own action.
     await journal.replaceEpochItems('handle_forked', 1, [])
     feed.publish(SESSION)
     expect(retirements()).toHaveLength(3)
@@ -344,11 +330,86 @@ describe('structured status summary child records', () => {
     expect(lastSummary(events)?.children).toHaveLength(1)
     feed.forget(SESSION)
     expect(lastSummary(events)).not.toHaveProperty('children')
-    // A reload reads the retained projection: it must not list what the store no longer holds.
+    // Reloads must project retained records after the store retires them.
     feed.subscribe({ id: 'list-2', emit: (event) => events.push(event) })
     const snapshot = events.at(-1)
     expect(snapshot?.type === 'snapshot' ? snapshot.sessions[0] : null).not.toHaveProperty(
       'children'
     )
   })
+})
+
+describe('structured status feed over the real child-record store', () => {
+  it('records every helper of a busy chat, and its next accepted send removes every settled one', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread-1')
+      },
+      stateDirectory: join(root, SESSION)
+    })
+    const { sink, views } = acpChildWorkStatusSink()
+    const feed = new StructuredAgentSessionStatusFeed({
+      logger: createStructuredAgentSessionLogger(),
+      sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
+      getRecord: () => null,
+      now: () => 1_000,
+      statusSink: () => sink
+    })
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    feed.publish(SESSION)
+    const live = (id: string, kind: 'agent' | 'command'): AgentChildWorkEvidence => ({
+      type: 'live',
+      observedAt: 100,
+      child: {
+        handle: { idKind: 'task_id', id },
+        kind,
+        residency: 'background',
+        state: 'working',
+        stoppable: true
+      }
+    })
+    const finished = Array.from({ length: 2_049 }, (_, index) => `finished-${index}`)
+    feed.publishChildWork(SESSION, [
+      ...finished.map((id) => live(id, 'agent')),
+      ...Array.from({ length: 40 }, (_, index) => live(`subagent-${index}`, 'agent')),
+      ...Array.from({ length: 300 }, (_, index) => live(`task-${index}`, 'command'))
+    ])
+    feed.publishChildWork(
+      SESSION,
+      finished.map((id): AgentChildWorkEvidence => ({
+        type: 'ended',
+        observedAt: 200,
+        handle: { idKind: 'task_id', id },
+        outcome: 'succeeded'
+      }))
+    )
+    expect(views()).toHaveLength(2_389)
+    expect(views().filter((view) => view.membership === 'settled')).toHaveLength(2_049)
+    expect(feed.childWorkIncomplete(SESSION)).toBe(false)
+
+    await journal.appendSubmission({
+      clientMessageId: 'send-1',
+      payloadFingerprint: 'send-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'send-1',
+      state: 'accepted',
+      providerIdentity: { ...USER_IDENTITY, ordinal: USER_IDENTITY.ordinal + 1 },
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(views()).toHaveLength(340)
+    expect(views().every((view) => view.membership === 'live')).toBe(true)
+    expect(feed.childWorkIncomplete(SESSION)).toBe(false)
+  }, 60_000)
 })

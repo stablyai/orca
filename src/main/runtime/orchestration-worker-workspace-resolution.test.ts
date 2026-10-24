@@ -27,6 +27,7 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/repo'
@@ -74,7 +75,7 @@ function makeStore(
     getRepos: () => repos,
     getAllWorktreeMeta: () => meta,
     getWorktreeMeta: (id: string) => meta[id],
-    setWorktreeMeta: (id: string, patch: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, patch: Partial<WorktreeMeta>) => {
       meta[id] = { ...(meta[id] ?? makeMeta('')), ...patch }
       return meta[id]
     },

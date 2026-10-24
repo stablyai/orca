@@ -1,4 +1,4 @@
-import { access, mkdir } from 'node:fs/promises'
+import { access, mkdir, open, realpath } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
@@ -7,12 +7,12 @@ import {
   type RuntimeBrowserCommandsFactory,
   type RuntimeBrowserUnavailableCause
 } from '../runtime/runtime-browser-commands-factory'
-import {
-  ExternalChromiumBrowserProcess,
-  type ExternalChromiumLaunch
-} from './external-chromium-browser-process'
+import { ExternalChromiumBrowserProcess } from './external-chromium-browser-process'
+import type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { resolveOrcadAgentBrowserBinary } from './orcad-agent-browser-binary'
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
+import { openOrcadBrowserInstallPark } from './orcad-browser-install-park'
+import { errorMessage } from '../../shared/error-message'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -68,10 +68,6 @@ async function executableExists(path: string): Promise<boolean> {
   return (await probeExecutable(path)) === 'ok'
 }
 
-function errorDetail(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 export function installedElectronCandidates(
   platform: NodeJS.Platform,
   homePath: string,
@@ -100,11 +96,28 @@ export function installedElectronCandidates(
   ]
 }
 
+/** The .deb/AppImage CLI shims (`orca-ide` on PATH) are bash scripts, not Electron. */
+async function isScriptShim(path: string): Promise<boolean> {
+  try {
+    const handle = await open(await realpath(path), 'r')
+    try {
+      const head = Buffer.alloc(2)
+      const { bytesRead } = await handle.read(head, 0, 2, 0)
+      return bytesRead === 2 && head[0] === 0x23 && head[1] === 0x21
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    return true
+  }
+}
+
 /** Only paths with stable installer ownership qualify; never guess arbitrary AppImage locations. */
-export async function resolveInstalledElectronExecutable(): Promise<string | null> {
-  const candidates = installedElectronCandidates(process.platform, homedir(), process.env)
+export async function resolveInstalledElectronExecutable(
+  candidates: string[] = installedElectronCandidates(process.platform, homedir(), process.env)
+): Promise<string | null> {
   for (const candidate of candidates) {
-    if (await executableExists(candidate)) {
+    if ((await executableExists(candidate)) && !(await isScriptShim(candidate))) {
       return candidate
     }
   }
@@ -141,11 +154,26 @@ async function startElectronServeProvider(
   } catch (error) {
     return cleanupFailedProvider(processHandle, error)
   }
+  const installPark = openOrcadBrowserInstallPark(executablePath, {
+    pid: () => processHandle.pid(),
+    stop: () => processHandle.stop(),
+    start: async (restartSignal) => {
+      try {
+        await processHandle.start(restartSignal)
+      } catch (error) {
+        await processHandle.stop()
+        throw error
+      }
+    }
+  })
   return {
     kind: 'electron',
     factory: (host) => processHandle.createCommands(host),
     isAvailable: () => processHandle.isAvailable(),
-    stop: () => processHandle.stop()
+    stop: async () => {
+      await installPark?.close()
+      await processHandle.stop()
+    }
   }
 }
 
@@ -185,7 +213,7 @@ export async function resolveOrcadBrowserProvider(
         return null
       }
       console.warn('[orcad] Installed Electron browser provider unavailable:', error)
-      electronFailure = { reason: 'electron_start_failed', detail: errorDetail(error) }
+      electronFailure = { reason: 'electron_start_failed', detail: errorMessage(error) }
     }
   }
 
@@ -229,6 +257,6 @@ export async function resolveOrcadBrowserProvider(
       return null
     }
     console.warn('[orcad] External Chromium browser provider unavailable:', error)
-    return declined({ reason: 'chromium_start_failed', detail: errorDetail(error) })
+    return declined({ reason: 'chromium_start_failed', detail: errorMessage(error) })
   }
 }

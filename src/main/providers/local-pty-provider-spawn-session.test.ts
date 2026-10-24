@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
+import type { ShellSpawnParams } from './local-pty-utils'
 
 const {
   existsSyncMock,
@@ -52,6 +53,16 @@ vi.mock('electron', () => ({
 vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
+
+// Why: F3's two concurrent first `import('node-pty')` calls race vitest's mock registry, and the
+// loser loads the real addon under the mocked platform; hand the provider the mock directly.
+vi.mock('./local-pty-runtime-spawn', async () => {
+  const { spawnShellWithFallback } = await import('./local-pty-utils')
+  return {
+    loadLocalPtyRuntimeSpawn: async () => (params: Omit<ShellSpawnParams, 'ptySpawn'>) =>
+      spawnShellWithFallback({ ...params, ptySpawn: spawnMock })
+  }
+})
 
 vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),

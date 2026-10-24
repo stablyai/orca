@@ -7,7 +7,10 @@
  * orcad, the bridge survives a dropped SSH connection, and when the old shell exits its pane and
  * lease retire. The other desktop's relay and its shell are never touched.
  *
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+ * When another desktop on the same login already moved that terminal's project to the host's
+ * server, the host stays unmoved but connected, and the old tab keeps its shell until it exits.
+ *
+ * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
  */
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { z } from 'zod'
@@ -16,7 +19,13 @@ import { waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import { managedServer, reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { readPersistedProfileState } from './helpers/persisted-profile-state'
+import {
+  mutateStoppedProfileState,
+  readPersistedProfileState
+} from './helpers/persisted-profile-state'
+import { workspaceSessionStateSchema } from '../../src/shared/workspace-session-schema'
+import { makeTerminalScrollbackSnapshotRef } from '../../src/main/terminal-scrollback-snapshots'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
 import {
@@ -39,6 +48,7 @@ import {
 } from './helpers/paired-host-terminal'
 import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
 import { focusActiveTerminalInput } from './helpers/terminal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
 
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const BRIDGE_TIMEOUT_MS = 4 * 60_000
@@ -103,9 +113,11 @@ function launchUpgraded(session: ReturnType<typeof createRestartSession>) {
   })
 }
 
-test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
-  testRepoPath
-}, testInfo: TestInfo) => {
+async function verifyRunningRelayUpgrade(
+  testRepoPath: string,
+  testInfo: TestInfo,
+  missingScrollback = false
+): Promise<void> {
   test.setTimeout(25 * 60_000)
   host = startDockerSshHostTarget(testInfo)
   const targetId = `ssh-bridge-${Date.now()}`
@@ -139,6 +151,39 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       { targetId, relayPtyId: ours.relayPtyId }
     )
     const terminalTabId = seeded.terminalTabId!
+    if (missingScrollback) {
+      mutateStoppedProfileState(session.userDataDir, (state) => {
+        const partitions = z
+          .record(z.string(), workspaceSessionStateSchema)
+          .parse(state.workspaceSessionsByHostId)
+        const layout =
+          partitions[toSshExecutionHostId(targetId)]?.terminalLayoutsByTabId[terminalTabId]
+        if (!layout) {
+          throw new Error('Expected the released terminal layout')
+        }
+        layout.scrollbackRefsByLeafId = {
+          [seeded.terminalLeafId]: makeTerminalScrollbackSnapshotRef(
+            terminalTabId,
+            seeded.terminalLeafId
+          )
+        }
+        state.workspaceSessionsByHostId = partitions
+        state.sshRemotePtyLeases = [
+          ...z.array(z.unknown()).parse(state.sshRemotePtyLeases),
+          {
+            targetId,
+            ptyId: `old-${ours.relayPtyId}`,
+            tabId: 'closed-tab',
+            leafId: seeded.terminalLeafId,
+            worktreeId: seeded.worktreeId,
+            state: 'expired',
+            supersededBy: ours.relayPtyId,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+        ]
+      })
+    }
 
     const upgraded = await launchUpgraded(session)
     app = upgraded.app
@@ -159,7 +204,25 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       }
     )
 
-    // Never refused: the host converts while its relay terminal is live.
+    if (missingScrollback) {
+      await expect
+        .poll(() => managedServer(page, targetId), { timeout: 120_000 })
+        .toMatchObject({ kind: 'relay', reason: 'refused', canLeaveBehind: true })
+      const move = page.getByRole('button', { name: 'Move anyway…', exact: true })
+      await expect(move).toBeVisible()
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-offered.png')
+      })
+      await move.click()
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toContainText('saved terminal history Orca could not read')
+      await page.screenshot({
+        path: testInfo.outputPath('unreadable-history-recovery-confirm.png'),
+        animations: 'disabled'
+      })
+      await dialog.getByRole('button', { name: 'Move anyway', exact: true }).click()
+    }
+
     await expect
       .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
       .toMatchObject({ kind: 'managed' })
@@ -168,7 +231,7 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
       .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
 
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
     )
     if (!environment) {
       throw new Error('Converted host is missing from the environment catalog')
@@ -382,6 +445,243 @@ test('terminals a 1.4.224 relay keeps running stay usable in their old tabs afte
     expect(
       execDockerSshHostTargetControlCommand(host, `test -d '${relay.dir}' && echo present`)
     ).toBe('present')
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+  }
+}
+
+test('terminals a 1.4.224 relay keeps running stay usable in their old tabs after upgrading', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo))
+
+test('unreadable saved scrollback can be skipped while the original relay shell keeps working', async ({
+  testRepoPath
+}, testInfo) => verifyRunningRelayUpgrade(testRepoPath, testInfo, true))
+
+test('a relay terminal in a project another desktop already moved keeps working until it exits (STA-10604)', async ({
+  testRepoPath
+}, testInfo: TestInfo) => {
+  test.setTimeout(25 * 60_000)
+  host = startDockerSshHostTarget(testInfo)
+  const targetId = `ssh-bridge-joined-${Date.now()}`
+  const relay = await installReleasedRelayOnDockerHost(host, TEMPLATE_SOURCE!)
+  const ours = await startDockerRelayWithShell(host, relay, targetId, 'before-upgrade')
+  const bridgedPtyId = toAppSshPtyId(targetId, ours.relayPtyId)
+  const input = {
+    label: `shared login bridge E2E ${Date.now()}`,
+    host: host.host,
+    port: host.port,
+    username: 'root',
+    identityFile: host.identityFile,
+    identitiesOnly: true,
+    relayGracePeriodSeconds: 1
+  }
+  const desktopA = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  const desktopB = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  let app: ElectronApplication | null = null
+  try {
+    // 1. Desktop A already runs the host's managed server, holding the same repository.
+    const a = await desktopA.launch()
+    app = a.app
+    await waitForSessionReady(a.page)
+    const serverA = await a.page.evaluate(async (target) => {
+      const added = await window.api.ssh.addTarget({ target })
+      return (await window.api.ssh.connect({ targetId: added.target.id }))?.managedServer ?? null
+    }, input)
+    if (serverA?.kind !== 'managed') {
+      throw new Error(`desktop A expected a managed server, got ${JSON.stringify(serverA)}`)
+    }
+    await callEnvironment(a.page, serverA.environmentId, 'repo.add', {
+      path: DOCKER_SSH_HOST_REMOTE_REPO_PATH
+    })
+    await desktopA.close(app)
+    app = null
+
+    // 2. Desktop B upgrades with that repository and a live relay terminal in it.
+    const first = await desktopB.launch()
+    app = first.app
+    await waitForSessionReady(first.page)
+    await first.page.evaluate((repoPath) => window.api.repos.add({ path: repoPath }), testRepoPath)
+    await desktopB.close(app)
+    app = null
+    const seeded = seedRelayEraProfile(
+      desktopB.userDataDir,
+      input,
+      { repoPath: DOCKER_SSH_HOST_REMOTE_REPO_PATH, folderPath: '/tmp' },
+      { targetId, relayPtyId: ours.relayPtyId }
+    )
+    const terminalTabId = seeded.terminalTabId!
+    const b = await launchUpgraded(desktopB)
+    app = b.app
+    const page = b.page
+    await waitForSessionReady(page)
+    // Mounting the relay-era terminal tab dials the host, as the relay-era pane did.
+    await page.evaluate(
+      ({ worktreeId, hostId, tabId }) => {
+        const state = window.__store!.getState()
+        state.setActiveView('terminal')
+        state.setActiveWorktree(worktreeId, hostId)
+        state.setActiveTab(tabId)
+        state.setActiveTabType('terminal', worktreeId)
+      },
+      {
+        worktreeId: seeded.worktreeId,
+        hostId: toSshExecutionHostId(targetId),
+        tabId: terminalTabId
+      }
+    )
+
+    // Not moved, but connected: the card names the project's terminals; the old shell answers.
+    await expect
+      .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
+      .toMatchObject({ kind: 'relay', reason: 'relay_terminals_live', bridged: true })
+    expect(JSON.stringify(await managedServer(page, targetId))).toContain(
+      DOCKER_SSH_HOST_REMOTE_REPO_PATH
+    )
+    expect(
+      await page.evaluate(
+        (id) => window.__store!.getState().sshConnectionStates.get(id)?.status,
+        targetId
+      )
+    ).toBe('connected')
+    await expect
+      .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS })
+      .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
+    await expectTerminalAccessibilityText(
+      page,
+      terminalTabId,
+      'GOT:before-upgrade',
+      BRIDGE_TIMEOUT_MS
+    )
+    await typeIntoActiveTerminal(page, 'still-bridged')
+    await expectTerminalAccessibilityText(page, terminalTabId, 'GOT:still-bridged')
+    await page.screenshot({ path: testInfo.outputPath('unmoved-bridged-terminal.png') })
+
+    // 3. Once the old shell exits, the next connect links the project to A's server.
+    await typeIntoActiveTerminal(page, 'quit')
+    await expect.poll(() => bridgedPanes(page), { timeout: 60_000 }).toEqual([])
+    await reconnect(page, targetId)
+    await expect
+      .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
+      .toMatchObject({ kind: 'managed' })
+    expect(findOrcadMigrationSourceCutoverForTarget(desktopB.userDataDir, targetId)).toMatchObject({
+      linkedRepositoryIds: [seeded.repoId]
+    })
+  } finally {
+    if (app) {
+      // Either session's close quits whichever app is still running.
+      await desktopB.close(app)
+    }
+    await desktopA.dispose()
+    await desktopB.dispose()
+  }
+})
+
+test('a bridged tab closed while disconnected stops its shell even after a restart', async ({
+  testRepoPath
+}, testInfo: TestInfo) => {
+  test.setTimeout(25 * 60_000)
+  host = startDockerSshHostTarget(testInfo)
+  const targetId = `ssh-bridge-close-${Date.now()}`
+  const relay = await installReleasedRelayOnDockerHost(host, TEMPLATE_SOURCE!)
+  const ours = await startDockerRelayWithShell(host, relay, targetId, 'before-upgrade')
+  const theirs = await startDockerRelayWithShell(host, relay, 'another-desktop', 'theirs')
+  const bridgedPtyId = toAppSshPtyId(targetId, ours.relayPtyId)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE_SOURCE! })
+  const ourLease = (): { state?: unknown; pendingKill?: unknown } | undefined => {
+    const leases = readPersistedProfileState(session.userDataDir).sshRemotePtyLeases
+    return (Array.isArray(leases) ? leases : []).find(
+      (lease: { ptyId?: unknown }) => lease.ptyId === ours.relayPtyId
+    )
+  }
+  let app: ElectronApplication | null = null
+  try {
+    const first = await session.launch()
+    app = first.app
+    await waitForSessionReady(first.page)
+    await first.page.evaluate((repoPath) => window.api.repos.add({ path: repoPath }), testRepoPath)
+    await session.close(app)
+    app = null
+    const seeded = seedRelayEraProfile(
+      session.userDataDir,
+      {
+        label: `legacy relay bridge close E2E ${Date.now()}`,
+        host: host.host,
+        port: host.port,
+        username: 'root',
+        identityFile: host.identityFile,
+        identitiesOnly: true,
+        relayGracePeriodSeconds: 1
+      },
+      { repoPath: DOCKER_SSH_HOST_REMOTE_REPO_PATH, folderPath: '/tmp' },
+      { targetId, relayPtyId: ours.relayPtyId }
+    )
+
+    const upgraded = await launchUpgraded(session)
+    app = upgraded.app
+    let page = upgraded.page
+    await waitForSessionReady(page)
+    await page.evaluate(
+      ({ worktreeId, hostId, tabId }) => {
+        const state = window.__store!.getState()
+        state.setActiveWorktree(worktreeId, hostId)
+        state.setActiveTab(tabId)
+        state.setActiveTabType('terminal', worktreeId)
+      },
+      {
+        worktreeId: seeded.worktreeId,
+        hostId: toSshExecutionHostId(targetId),
+        tabId: seeded.terminalTabId!
+      }
+    )
+    await expect
+      .poll(() => managedServer(page, targetId), { timeout: 8 * 60_000 })
+      .toMatchObject({ kind: 'managed' })
+    await expect
+      .poll(() => bridgedPanes(page), { timeout: BRIDGE_TIMEOUT_MS })
+      .toEqual([expect.objectContaining({ ptyId: bridgedPtyId, state: 'live' })])
+
+    // Disconnected, the tab closes through both of its routes: the renderer's PTY kill, which
+    // finds no SSH provider, and then the bridge transport's own close.
+    await page.evaluate((id) => window.api.ssh.disconnect({ targetId: id }), targetId)
+    await page.evaluate(async (ptyId) => {
+      await window.api.pty.kill(ptyId)
+      await window.api.legacyRelayBridge?.close({ ptyId })
+    }, bridgedPtyId)
+    // Loss of contact is never exit: the shell still runs, and its stop is owed.
+    expect(await listDockerRelayPtys(host, relay, ours.sockPath)).toEqual([ours.relayPtyId])
+
+    // Restart before reconnecting: only the persisted stop survives.
+    await session.close(app)
+    app = null
+    expect(ourLease()?.state).not.toBe('terminated')
+    expect(ourLease()?.pendingKill).toBeTruthy()
+
+    const restarted = await launchUpgraded(session)
+    app = restarted.app
+    page = restarted.page
+    await waitForSessionReady(page)
+    await page.evaluate((id) => window.api.ssh.connect({ targetId: id }), targetId)
+    // A failed listing is not absence: only the relay's own empty answer proves the shell stopped.
+    await expect
+      .poll(() => listDockerRelayPtys(host!, relay, ours.sockPath).catch(() => ['<unreachable>']), {
+        timeout: BRIDGE_TIMEOUT_MS,
+        intervals: [2_000]
+      })
+      .toEqual([])
+    // Never offered back as a pane to reattach.
+    expect(await bridgedPanes(page)).toEqual([])
+    await session.close(app)
+    app = null
+    expect(ourLease()?.pendingKill).toBeUndefined()
+
+    // Another desktop's relay keeps running its shell, untouched.
+    expect(await echoThroughDockerRelay(host, relay, theirs, 'still-here')).toContain(
+      'GOT:still-here'
+    )
   } finally {
     if (app) {
       await session.close(app)

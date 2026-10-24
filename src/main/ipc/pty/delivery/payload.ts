@@ -36,7 +36,8 @@ export function sendModelRestoreNeededMarker(
   session: PtyIpcSession,
   id: string,
   reason: PtyModelRestoreReason,
-  markerSeq: number | undefined
+  markerSeq: number | undefined,
+  hiddenDropEpisode?: number
 ): boolean {
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return false
@@ -45,10 +46,11 @@ export function sendModelRestoreNeededMarker(
     session.mainWindow.webContents.send('pty:modelRestoreNeeded', {
       id,
       reason,
-      ...(typeof markerSeq === 'number' ? { markerSeq } : {})
+      ...(typeof markerSeq === 'number' ? { markerSeq } : {}),
+      ...(typeof hiddenDropEpisode === 'number' ? { hiddenDropEpisode } : {})
     })
   } catch (error) {
-    // Why: a disposed render frame throws synchronously here, and this rides the data path.
+    // Disposed frames can throw synchronously on this data path.
     console.error('[pty] renderer model-restore marker send failed', error)
     return false
   }
@@ -113,7 +115,7 @@ export function sendPtyDataToRenderer(
       session.runtime?.getPtyOutputSequence(id)
     )
   ) {
-    // Why cleared only on a successful send: an unsent marker leaves the restore pending.
+    // Failed sends must leave restore pending.
     session.rendererDeliveryRestoreNeededPtys.delete(id)
   }
   return true

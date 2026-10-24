@@ -14,9 +14,10 @@ export function findOptionOccurrence(
   tokens: readonly string[],
   aliases: readonly string[],
   stopAtTerminator: boolean,
-  valueOptions: readonly string[] = []
+  valueOptions: readonly string[] = [],
+  startIndex = 0
 ): { index: number; consumed: number; value?: string } | null {
-  for (let index = 0; index < tokens.length; index += 1) {
+  for (let index = startIndex; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (stopAtTerminator && token === '--') {
       break

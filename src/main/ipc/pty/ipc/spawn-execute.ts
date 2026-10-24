@@ -1,10 +1,15 @@
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import { noteWslDistrosRunning } from '../../../wsl-background-distro-gate'
-import { resolveStablePaneOwner, spawnForStablePane } from '../pane/stable-owner'
-import { excludeReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import { resolveStablePaneOwner } from '../pane/stable-owner'
+import {
+  assertPaneStillExists,
+  excludeAbsentOwnerReplay,
+  PaneOwnerContentionError
+} from '../pane/pane-spawn-operation'
+import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { assertSpawnReplyWasLive } from '../pane/agent-session-owners'
-import { clearProviderPtyState } from '../provider/state-cleanup'
 import { failPtySpawnExecute } from '../spawn-execute-failure'
+import { attachOnlyViewOf, attachViewWithoutOwner } from '../pane/attach-only-view'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
@@ -14,7 +19,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       ctx.deps.trustedTerminalHandleEnv.add(ctx.preAllocatedHandle)
     }
     ctx.spawnTiming.mark('options')
-    // Why exclude: the restart's own stop leaves its binding for the bind to swap, not to reattach.
+    // Restart must replace the stopped owner instead of reattaching its retained binding.
     const resolveOwner = () =>
       excludeReplacedPaneOwner(
         resolveStablePaneOwner(
@@ -26,11 +31,25 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         ),
         ctx.replacedPaneOwner
       )
-    const stablePaneOwnerCandidate = resolveOwner()
-    const expectedPtyId =
-      stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
+    const stablePaneOwnerCandidate = excludeAbsentOwnerReplay(
+      resolveOwner(),
+      ctx.paneSpawnOperation?.absentOwner
+    )
+    if (stablePaneOwnerCandidate) {
+      throw new PaneOwnerContentionError()
+    }
+    if (ctx.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
+      assertPaneStillExists(
+        ctx.deps.store,
+        args.worktreeId,
+        args.tabId,
+        args.leafId,
+        args.connectionId
+      )
+    }
+    const expectedPtyId = ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
     if (expectedPtyId) {
-      ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId
     }
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
@@ -46,44 +65,41 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     if (!ctx.preAdoptedStablePane && ctx.paneAgentLaunch) {
       ctx.paneAgentLaunch.dispatched = true
     }
-    const stablePaneSpawn = ctx.preAdoptedStablePane
-      ? ctx.preAdoptedStablePane
-      : await spawnForStablePane({
-          runtime: ctx.deps.runtime,
-          store: ctx.deps.store,
-          provider: ctx.provider,
-          spawnOptions: ctx.spawnOptions,
-          owner: stablePaneOwnerCandidate,
-          worktreeId: args.worktreeId,
-          connectionId: args.connectionId,
-          resolveOwner
-        })
-    ctx.result = stablePaneSpawn.result
-    ctx.stablePaneOwner = stablePaneSpawn.owner
-    if (
-      ctx.stablePaneOwner &&
-      ctx.isMintedSessionId &&
-      ctx.effectiveSessionAppId &&
-      ctx.effectiveSessionAppId !== ctx.result.id
-    ) {
-      clearProviderPtyState(ctx.effectiveSessionAppId)
-    }
+    ctx.result = attachOnlyViewOf(args)
+      ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
+      : await ctx.provider.spawn(ctx.spawnOptions)
+    ctx.stablePaneOwner = null
     ctx.rejectedRegistrationCandidate = ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {
-        ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
+        ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+          ctx.pendingRegistrationPtyId,
+          undefined,
+          ctx.pendingRegistrationClaim
+        )
       }
-      ctx.deps.runtime?.beginPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
+      ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(
+        ctx.result.id,
+        ctx.result.incarnationId
+      )
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
     assertSpawnReplyWasLive(ctx.result)
+    if (
+      ctx.pendingRegistrationClaim &&
+      !ctx.deps.runtime?.narrowPtyRegistration(
+        ctx.result.id,
+        ctx.pendingRegistrationClaim,
+        ctx.result.incarnationId
+      )
+    ) {
+      throw new PaneOwnerContentionError()
+    }
     ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
-      // Why kept: this is the reattach boundary in the RENDERER's sequence
-      // domain, and the daemon snapshot's kitty flags mean nothing without
-      // the boundary they were proven at.
+      // Preserve the renderer-domain boundary needed to reconcile daemon snapshot kitty flags.
       ctx.reconciledSnapshotSeq =
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,

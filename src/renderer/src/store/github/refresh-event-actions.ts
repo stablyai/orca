@@ -1,9 +1,9 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { getHostedReviewCacheKey } from '../slices/hosted-review-cache-identity'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
-import { debouncedSaveCache } from './cache-persistence'
 import {
   capPrRefreshSequences,
   capPrRefreshStates,
@@ -48,7 +48,6 @@ export const createRefreshEventActions = (
       requestHeadOid: string | null
       executionHostId: string
     }[] = []
-    let didUpdatePRCache = false
     set((s) => {
       let linkedWorktreeLookupIndex: WorktreeLookupIndex | undefined
       const nextSequences = { ...s.prRefreshSequences }
@@ -188,7 +187,6 @@ export const createRefreshEventActions = (
             requestStartedAt: event.requestStartedAt,
             requestStartedEntry
           })
-          didUpdatePRCache = didUpdatePRCache || nextCaches.prCache !== nextPRCache
           nextPRCache = nextCaches.prCache
           nextHostedReviewCache = nextCaches.hostedReviewCache
           continue
@@ -243,40 +241,29 @@ export const createRefreshEventActions = (
           }
         : s
     })
-    if (didUpdatePRCache && event.outcome && event.outcome.kind !== 'upstream-error') {
-      debouncedSaveCache(get())
-    }
     for (const clear of divergedLinkedPRClears) {
-      void get().updateWorktreeMeta(
-        clear.worktreeId,
-        { linkedPR: null },
-        {
-          shouldApply: () =>
-            shouldApplyDivergedLinkedPRClear({
-              worktree:
-                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-              linkedPRNumber: clear.linkedPRNumber,
-              branch: clear.branch,
-              requestHeadOid: clear.requestHeadOid
-            })
-        }
-      )
+      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
+        shouldApply: () =>
+          shouldApplyDivergedLinkedPRClear({
+            worktree:
+              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
+            linkedPRNumber: clear.linkedPRNumber,
+            branch: clear.branch,
+            requestHeadOid: clear.requestHeadOid
+          })
+      })
     }
     for (const clear of branchMismatchedLinkedPRClears) {
-      void get().updateWorktreeMeta(
-        clear.worktreeId,
-        { linkedPR: null },
-        {
-          shouldApply: () =>
-            shouldApplyBranchMismatchedLinkedPRClear({
-              worktree:
-                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-              linkedPRNumber: clear.linkedPRNumber,
-              branch: clear.branch,
-              requestHeadOid: clear.requestHeadOid
-            })
-        }
-      )
+      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
+        shouldApply: () =>
+          shouldApplyBranchMismatchedLinkedPRClear({
+            worktree:
+              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
+            linkedPRNumber: clear.linkedPRNumber,
+            branch: clear.branch,
+            requestHeadOid: clear.requestHeadOid
+          })
+      })
     }
   }
 })

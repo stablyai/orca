@@ -1,6 +1,3 @@
-// What a page or frame publishes of the host's current-work projection
-// (`structuredAgentSessionCurrentWork`), laid over the page the journal reads.
-
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
@@ -9,11 +6,18 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { snapshotLatestTurn } from './agent-session-history-page'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
-/** The newest turn record as clients are told it, and the prompts still waiting on the person.
- *  Absent, a page states the raw record and no prompt ids, as an older host did. */
+/** Absent projection preserves legacy raw-turn behavior without current prompt IDs. */
 export type AgentSessionPublishedWork = Pick<
   StructuredAgentSessionCurrentWork,
-  'publishedLatestTurn' | 'actionablePromptIds' | 'working'
+  | 'publishedLatestTurn'
+  | 'actionablePromptIds'
+  | 'actionablePrompts'
+  | 'working'
+  | 'viewKey'
+  | 'workViewKey'
+  | 'publishedSubmission'
+  | 'restatedSubmissions'
+  | 'requestProjection'
 >
 
 type PublishedWorkFields = Pick<
@@ -25,14 +29,14 @@ function publishedWorkFields(
   latestTurn: AgentSessionHistoryPage['latestTurn'],
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
+  const ids = work.actionablePromptIds()
   return {
     latestTurn: work.publishedLatestTurn(latestTurn ?? null),
-    actionablePromptIds: work.actionablePromptIds(),
+    ...(Buffer.byteLength(JSON.stringify(ids)) <= 8 * 1024 ? { actionablePromptIds: ids } : {}),
     working: work.working()
   }
 }
 
-/** The current-work fields a page carries, for a frame that carries no page. */
 export function agentSessionPublishedWorkFields(
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork
@@ -40,13 +44,19 @@ export function agentSessionPublishedWorkFields(
   return publishedWorkFields(snapshotLatestTurn(journal.snapshot()), work)
 }
 
-/** A page as the host publishes it: its turn record scoped by the projection, an ended
- *  generation's turn running nowhere. */
+/** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */
 export function withPublishedWork(
   page: AgentSessionHistoryPage,
   work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryPage {
-  return work ? { ...page, ...publishedWorkFields(page.latestTurn, work) } : page
+  if (!work) {
+    return page
+  }
+  return {
+    ...page,
+    ...publishedWorkFields(page.latestTurn, work),
+    submissions: page.submissions.map(work.publishedSubmission)
+  }
 }
 
 export function withPublishedWorkResult(

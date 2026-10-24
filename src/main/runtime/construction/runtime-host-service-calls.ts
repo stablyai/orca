@@ -1,5 +1,6 @@
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as MarkPtyLivenessUnverifiable } from '../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as StopTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop'
+import type { OrcaRuntimeWithStopTerminalsForProject as StopTerminalsForProject } from '../terminal/stop/project-terminal-stop'
 import type { OrcaRuntimeWithGetRuntimeId as GetRuntimeId } from '../workspaces/session-hosts/get-runtime-id'
 import type { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity as HasExactPersistedTerminalSurfaceIdentity } from '../workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 import type { OrcaRuntimeWithAutomationOperations as AutomationOperations } from '../workspaces/persisted-surfaces/automation-operations'
@@ -19,6 +20,12 @@ export type StopTerminalsForWorktreeArgs = Parameters<
 >
 export type StopTerminalsForWorktreeResult = ReturnType<
   StopTerminalsForWorktree['stopTerminalsForWorktree']
+>
+export type StopTerminalsForProjectArgs = Parameters<
+  StopTerminalsForProject['stopTerminalsForProject']
+>
+export type StopTerminalsForProjectResult = ReturnType<
+  StopTerminalsForProject['stopTerminalsForProject']
 >
 export type ResolveOrchestrationWorkerServerArgs = Parameters<
   GetRuntimeId['resolveOrchestrationWorkerServer']

@@ -1,6 +1,7 @@
 import { lstat, mkdtemp, readdir, rename, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
+import { isDefinitiveAbsence } from './definitive-filesystem-absence'
 import { removeTree } from './windows-transient-lock-removal'
 
 /**
@@ -61,14 +62,6 @@ export function inheritedObjectStore(
   return alternates ? { inheritedAlternates: alternates } : {}
 }
 
-function isMissingFileError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  )
-}
-
 /**
  * The alternates for a quarantined run, or undefined to run unquarantined. Inherited value first,
  * as Git's own temporary object dirs append. A real store with its own alternates is not
@@ -82,7 +75,7 @@ async function quarantineAlternates(objects: GitObjectsDirectory): Promise<strin
   )
   const hasAlternatesFile = await stat(alternatesFile).then(
     () => true,
-    (error: unknown) => !isMissingFileError(error)
+    (error: unknown) => !isDefinitiveAbsence(error)
   )
   if (hasAlternatesFile) {
     return undefined

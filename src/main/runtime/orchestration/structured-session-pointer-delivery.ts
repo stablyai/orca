@@ -2,7 +2,8 @@
  * What orchestration mail delivery reads of a host-owned structured ("native") agent session.
  *
  * A structured session has no PTY the pointer can be typed into, so the nudge travels as a session
- * turn instead of as bytes, and a busy session's own queue holds it until the turn ends.
+ * turn instead of as bytes: steered into a busy session's running turn, or held by its queue until
+ * the turn ends when its agent cannot take a message mid-turn.
  * Everything here is pure. Orchestration's database stays the source of truth: nothing here
  * consumes mail.
  */

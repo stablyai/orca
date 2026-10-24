@@ -1,8 +1,3 @@
-// One subscriber's catch-up: page it forward to the journal head, or hand it
-// the empty caught-up frame its per-emit fields still owe it. Split from the
-// subscriber registry so the registry stays the bookkeeping and this stays the
-// paging policy.
-
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionSlashCommand,
@@ -12,11 +7,9 @@ import {
 import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import {
-  agentSessionPublishedWorkFields,
-  withPublishedWork,
-  withPublishedWorkResult
-} from './agent-session-published-work'
+import { withPublishedWork, withPublishedWorkResult } from './agent-session-published-work'
+import { refreshPublishedWork } from './agent-session-work-refresh'
+import type { AgentSessionPublishedWork } from './agent-session-published-work'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   createAgentSessionCatchUpReader,
@@ -33,7 +26,6 @@ import type { Subscriber } from './structured-agent-session-subscribers'
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
     readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
-    /** The host's projection of current work, which every frame's turn and prompt fields state. */
     readCurrentWork?: (
       sessionId: string,
       journal: AgentSessionJournal
@@ -42,7 +34,10 @@ export type SubscriberDeliveryPort = {
   emit: (
     subscriber: Subscriber,
     event: AgentSessionSubscribeEvent,
-    options?: { withholdQueued?: boolean }
+    options?: {
+      withholdQueued?: boolean
+      currentWork?: AgentSessionPublishedWork
+    }
   ) => void
   isActive: (subscriber: Subscriber) => boolean
   activity: (sessionId: string) => AgentSessionTurnActivity | null
@@ -66,9 +61,14 @@ export function deliverToSubscriber(
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
   }
   const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
-  // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
+  const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
+    port.emit(target, event, { ...options, currentWork: work })
+  const delivery = { ...port, emit }
   if (sameJournalCursor(subscriber.cursor, journal.cursor())) {
-    emitCaughtUp(port, subscriber, emitCheckpoint, shared, { journal, work })
+    emitCaughtUp(delivery, subscriber, emitCheckpoint, shared, {
+      journal,
+      work
+    })
     return
   }
   const reader = subscriberHistoryReader(subscriber)
@@ -85,7 +85,7 @@ export function deliverToSubscriber(
     )
     if (!result.ok) {
       const page = { ...result.page, fence: subscriber.fence }
-      port.emit(subscriber, {
+      emit(subscriber, {
         type: 'reset',
         sessionId: subscriber.sessionId,
         reset: result.reset,
@@ -94,23 +94,25 @@ export function deliverToSubscriber(
         ...shared
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      subscriber.workView = work?.viewKey()
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
     const page = result.page
     const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
     if (!advanced) {
-      emitCaughtUp(port, subscriber, emitCheckpoint, shared, { journal, work })
+      emitCaughtUp(delivery, subscriber, emitCheckpoint, shared, {
+        journal,
+        work
+      })
       return
     }
-    // A phone's app ends a stream that outruns its unacked window, so a gap of more than one page
-    // arrives as the newest page instead; older rows load on scroll.
-    if (page.hasNewer && subscriber.boundedFrames) {
+    // Bound synchronous catch-up; older history remains available through paging.
+    if (page.hasNewer && subscriber.snapshotCatchUp !== false) {
       const tail = withPublishedWork(
         readAgentSessionHydrationPage(journal, subscriber.fence, reader),
         work
       )
-      port.emit(subscriber, {
+      emit(subscriber, {
         type: 'snapshot',
         sessionId: subscriber.sessionId,
         page: tail,
@@ -119,9 +121,10 @@ export function deliverToSubscriber(
         activity: port.activity(subscriber.sessionId)
       })
       subscriber.cursor = tail.liveCursor ?? tail.window.nextCursor
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
-    port.emit(
+    emit(
       subscriber,
       {
         type: 'batch',
@@ -141,13 +144,12 @@ export function deliverToSubscriber(
         ...(page.hasNewer ? { hasNewer: true as const } : {}),
         ...shared
       },
-      // On a multi-page catch-up the draft list rides only the final page, or a
-      // consumed card would vanish pages before its bubble arrives.
+      // Withhold queue lists until final catch-up so consumed cards do not vanish before their bubbles arrive.
       { withholdQueued: page.hasNewer }
     )
     subscriber.cursor = page.window.nextCursor
-    subscriber.workView = work?.viewKey()
     if (!page.hasNewer || !port.isActive(subscriber)) {
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
   }
@@ -161,31 +163,31 @@ function emitCaughtUp(
     hostNow: number
     activity?: AgentSessionTurnActivity | null
   },
-  current: { journal: AgentSessionJournal; work: StructuredAgentSessionCurrentWork | undefined }
+  current: {
+    journal: AgentSessionJournal
+    work: StructuredAgentSessionCurrentWork | undefined
+  }
 ): void {
   const commandsChanged = subscriberCommandsChanged(port.hooks, subscriber)
   const queuedChanged = subscriberQueuedMessagesChanged(port.hooks, subscriber)
-  // A generation that ended (or began) with no row, or an exit this host saw with no lease write,
-  // changes what is current: the caught-up frame restates the view.
+  // Ownership/exit changes without rows still require current-work restatement.
   const { work } = current
-  const workChanged = work !== undefined && work.viewKey() !== subscriber.workView
-  if (
-    emitCheckpoint ||
-    shared.activity !== undefined ||
-    commandsChanged ||
-    queuedChanged ||
-    workChanged
-  ) {
-    port.emit(subscriber, {
-      type: 'batch',
-      sessionId: subscriber.sessionId,
-      batch: emptyAgentSessionBatch(subscriber.cursor),
-      fence: subscriber.fence,
-      ...(workChanged ? agentSessionPublishedWorkFields(current.journal, work) : {}),
-      ...shared
-    })
-    if (workChanged) {
-      subscriber.workView = work.viewKey()
-    }
+  const workChanged = work !== undefined && work.workViewKey() !== subscriber.workView
+  if (workChanged) {
+    refreshPublishedWork(port, subscriber, current.journal, work, shared)
+    return
+  }
+  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
+    port.emit(
+      subscriber,
+      {
+        type: 'batch',
+        sessionId: subscriber.sessionId,
+        batch: emptyAgentSessionBatch(subscriber.cursor),
+        fence: subscriber.fence,
+        ...shared
+      },
+      { currentWork: work }
+    )
   }
 }

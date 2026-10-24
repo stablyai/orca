@@ -18,13 +18,12 @@ export function acpChildWorkStatusSink() {
     publishChildWork: (subject, evidence, provider) =>
       server.ingestStructuredChildWork(subject, evidence, provider),
     readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
-    readChildWorkRecords: (subject) => server.getStructuredChildWork(subject)
+    readChildWorkRecords: (subject) => server.getStructuredChildWork(subject),
+    readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
   }
   return { sink, views: () => (parent ? server.getStructuredChildWorkViews(parent) : []) }
 }
 
-/** A host holding one working Grok parent: what a translator reported becomes its child records,
- *  the one authority on each subagent. */
 export function acpSubagentRecords() {
   const { sink, views } = acpChildWorkStatusSink()
   const subject = makeStructuredAgentStatusSubject(

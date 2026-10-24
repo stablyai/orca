@@ -68,7 +68,8 @@ describe('foreground commands in the background-task channel', () => {
         forget: (subject) => server.dropStructuredStatus(subject),
         publishChildWork: (subject, evidence, provider) =>
           server.ingestStructuredChildWork(subject, evidence, provider),
-        readChildWork: (subject) => server.getStructuredChildWorkViews(subject)
+        readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
+        readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
       }
     })
     const params = hostTestAttachParams(null, { providerHandle: undefined })

@@ -14,7 +14,12 @@ export type TerminalMultiplexEvent =
       type: 'subscribed'
       streamId: number
       streamGeneration?: string
-      capabilities?: { ackOutputSourceRanges?: 1; outputPause?: 1; inputAck?: 1 }
+      capabilities?: {
+        ackOutputSourceRanges?: 1
+        outputPause?: 1
+        outputPauseDropNotice?: 1
+        inputAck?: 1
+      }
       inputLedgerId?: string
     }
   | { type: 'end'; streamId: number; verdict?: TerminalStreamEndVerdict }
@@ -55,6 +60,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   /** The host installed the stream and named its capabilities; its initial snapshot is still on the way. */
   onSubscribeAcknowledged?: () => void
   onOutputPauseCapability?: () => void
+  /** The host discarded output while this stream was paused (negotiated streams only). */
+  onPausedOutputDropped?: () => void
   onEnd?: (verdict: TerminalStreamEndVerdict) => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
@@ -148,13 +155,15 @@ export type RemoteRuntimeMultiplexedTerminal = {
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean
-  serializeBuffer: (opts?: {
-    scrollbackRows?: number
-  }) => Promise<RemoteRuntimeSnapshotImage | null>
+  // Why: only then does a pause with no drop notice prove nothing was lost.
+  reportsPausedOutputDrops?: () => boolean
+  serializeBuffer: (
+    opts?: RemoteRuntimeSnapshotRequestOptions
+  ) => Promise<RemoteRuntimeSnapshotImage | null>
   // Why: same request as serializeBuffer, but keeps the host's reason for an absent buffer instead of collapsing it to null.
-  serializeBufferOutcome: (opts?: {
-    scrollbackRows?: number
-  }) => Promise<RemoteRuntimeSnapshotOutcome>
+  serializeBufferOutcome: (
+    opts?: RemoteRuntimeSnapshotRequestOptions
+  ) => Promise<RemoteRuntimeSnapshotOutcome>
   close: () => void
 }
 
@@ -166,6 +175,9 @@ export type RemoteRuntimeMultiplexedTerminalState = {
   acknowledgeOutput: boolean
   acknowledgeOutputSourceRanges: boolean
   supportsOutputPause: boolean
+  supportsPausedOutputDropNotice: boolean
+  // Why: the host announced the seq jump the pane's own restore covers, so it must not also trigger a resync.
+  pausedOutputGapExpected: boolean
   supportsInputAck: boolean
   inputLedgerId: string | null
   outputPaused: boolean
@@ -218,8 +230,15 @@ export type RemoteRuntimeSnapshotInfo = {
   pendingEscapeTailAnsi?: string
 }
 
+export type RemoteRuntimeSnapshotRequestOptions = {
+  scrollbackRows?: number
+  /** Client-only: the pane repaints from this image, so live output resumes after its seq. */
+  repaintsPane?: boolean
+}
+
 export type RemoteRuntimeSnapshotRequest = {
   requestId: number
+  repaintsPane?: boolean
   resolve: (outcome: RemoteRuntimeSnapshotOutcome) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>

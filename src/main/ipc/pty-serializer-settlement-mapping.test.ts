@@ -68,6 +68,8 @@ describe('registerPtyHandlers', () => {
         cols: number
         rows: number
         worktreeId?: string
+        tabId?: string
+        leafId?: string
         env?: Record<string, string>
       }): Promise<{ id: string }>
       hasRendererSerializer?(ptyId: string): boolean
@@ -97,6 +99,8 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       worktreeId: 'wt-1',
+      tabId: 'tab-cli',
+      leafId: '11111111-1111-4111-8111-111111111111',
       env: { ORCA_PANE_KEY: ` ${paneKey} ` }
     })
     const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
@@ -117,6 +121,8 @@ describe('registerPtyHandlers', () => {
         cols: number
         rows: number
         worktreeId?: string
+        tabId?: string
+        leafId?: string
         env?: Record<string, string>
       }): Promise<{ id: string }>
       getRendererSerializerGeneration?(ptyId: string): number
@@ -159,6 +165,8 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         worktreeId: 'wt-1',
+        tabId: 'tab-reused',
+        leafId: '33333333-3333-4333-8333-333333333333',
         env: { ORCA_PANE_KEY: paneKey }
       })
     }
@@ -306,7 +314,7 @@ describe('registerPtyHandlers', () => {
         'ORCA_WSL_CLI_DIR/p',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
-        // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
+        // Bare WSL shells expose OMP status without creating ~/.omp (#10196).
         'ORCA_OMP_STATUS_EXTENSION/u',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])

@@ -141,8 +141,8 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       agentArgs:
         request.agentArgs !== undefined
           ? request.agentArgs
-          : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+          : resolveTuiAgentLaunchArgs(request.agent, settings),
+      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
@@ -162,6 +162,9 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
+      // Why: like every host-built resume, the spawn names its session so readers can address it.
+      resumeProviderSession: identity.providerSession,
+      terminalImageViewerSupported: _caller.terminalImageViewerSupported,
       launchRuntime,
       terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
       presentation: request.presentation ?? 'background',

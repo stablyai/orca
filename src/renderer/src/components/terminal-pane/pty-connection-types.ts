@@ -10,7 +10,6 @@ import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
-import type { SetupSplitDirection } from '../../../../shared/worktree/launch-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -45,8 +44,6 @@ export type PtyPaneStartup = {
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   /** Show the restored-session banner when this startup command mounts. */
   showSessionRestoredBanner?: boolean
-  /** Initial startup may be paired with a setup split that changes its grid. */
-  waitForSetupSplitDirection?: SetupSplitDirection
 } | null
 
 export type PaneProcessExit = {

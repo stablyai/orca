@@ -1,15 +1,18 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
   type OrcadMigrationDependencyKind
-} from '../../../shared/orcad-migration-preflight'
+} from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import {
   inspectOrcadMigrationSourceSessions,
   type OrcadMigrationSourceSessionInspection
 } from './orcad-source-session-dependencies'
-import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
+import {
+  collectOrcadMigrationSourceDormantState,
+  orcadMigrationLeavesBehind
+} from './orcad-source-dormant-state'
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,
@@ -56,7 +59,10 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
     'terminal-lease': state.sshRemotePtyLeases.filter(
       (lease) => lease.targetId === scope.targetId && lease.state !== 'terminated'
     ).length,
-    'terminal-recovery': countTerminalRecoveryState(state, scope, sessions)
+    // Left behind, recovery records stay with this desktop; the terminal gate still proves exit.
+    'terminal-recovery': orcadMigrationLeavesBehind(state, scope.targetId)
+      ? 0
+      : countTerminalRecoveryState(state, scope, sessions)
   }
   return {
     counts,
@@ -69,22 +75,18 @@ export function collectOrcadMigrationUntransferredDependencyCensus(
 }
 
 // Consumer recoveries never block: the terminal gate proves before every move that their leases exited.
+// Legacy pane-key aliases never block either: an alias only routes hook events and names a terminal
+// the tab or pane already records, which the lease checks and the terminal gate govern.
 function countTerminalRecoveryState(
   state: PersistedState,
   scope: OrcadMigrationSourceScope,
   sessions: OrcadMigrationSourceSessionInspection
 ): number {
-  const unsupported = state.migrationUnsupportedPtyEntries.filter(
+  return state.migrationUnsupportedPtyEntries.filter(
     (entry) =>
       orcadMigrationOwnerMatchesScope(entry.worktreeId, scope) ||
       (entry.tabId ? sessions.tabIds.has(entry.tabId) : false) ||
       sessions.ptyIds.has(entry.ptyId) ||
       (entry.paneKey ? paneBelongsToTabs(entry.paneKey, sessions.tabIds) : false)
   ).length
-  const aliases = state.legacyPaneKeyAliasEntries.filter(
-    (entry) =>
-      paneBelongsToTabs(entry.legacyPaneKey, sessions.tabIds) ||
-      paneBelongsToTabs(entry.stablePaneKey, sessions.tabIds)
-  ).length
-  return unsupported + aliases
 }

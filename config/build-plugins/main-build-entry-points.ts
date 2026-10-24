@@ -10,7 +10,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
-  'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
+  'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
   'foreign-sqlite-reader-entry': resolve(
@@ -32,6 +32,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   // corpora and read SQLite synchronously; a worker thread keeps that
   // off the main-process event loop.
   'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
+  'workspace-space-scan-worker-entry': resolve('src/main/workspace-space-scan-worker-entry.ts'),
   // Why: a first account setup can merge a large history tree with sync fs calls.
   'claude-profile-setup-worker-entry': resolve(
     'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'

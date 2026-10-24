@@ -153,4 +153,8 @@ export type TerminalLayoutSnapshot = {
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Each pane's last grid, so main starts its terminal at that size. Older builds drop it. */
+  lastGridsByLeafId?: Record<string, TerminalGrid>
 }
+
+export type TerminalGrid = { cols: number; rows: number }

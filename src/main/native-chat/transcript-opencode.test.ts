@@ -32,9 +32,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
   })
 
   it('returns the whole session oldest-first across page boundaries', async () => {
-    // Five messages served in windows of two: pages arrive newest-window-first
-    // (each oldest-first); the full read must concatenate them globally
-    // oldest-first like the JSONL full reader, not in page-fetch order.
+    // Fetch newest windows first; concatenate windows in reverse while preserving each window’s order.
     const ids = ['m1', 'm2', 'm3', 'm4', 'm5']
     const readPage: OpenCodeTranscriptDeps['readPage'] = async (args) => {
       const upper = args.beforeMessageRowId ?? 6
@@ -54,7 +52,7 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
       resolveDbPath: async () => '/fake/opencode.db',
       readPage
     })
-    expect(result).toEqual({ messages: ids.map(message) })
+    expect(result).toEqual({ messages: ids.map(message), sourceEmpty: false })
   })
 
   it('reports notFound when the first page misses', async () => {
@@ -65,6 +63,20 @@ describe('readOpenCodeNativeChatTranscriptFull', () => {
     })
     expect(result).toEqual({ error: 'Transcript unavailable', notFound: true })
   })
+
+  it.each([
+    [null, true],
+    [42, false]
+  ])(
+    'distinguishes no raw rows from undecodable rows at cursor %s',
+    async (cursor, sourceEmpty) => {
+      const result = await readOpenCodeNativeChatTranscriptFull('ses-1', {
+        resolveDbPath: async () => '/fake/opencode.db',
+        readPage: async () => ({ items: [], hasMore: false, beforeMessageRowId: cursor })
+      })
+      expect(result).toEqual({ messages: [], sourceEmpty })
+    }
+  )
 
   it('reads the selected ZCode store on every full-read page', async () => {
     const resolveDbPath = vi.fn(async () => '/fake/zcode.db')
@@ -180,8 +192,6 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
   })
 
   it('returns a retryable error when DB discovery throws', async () => {
-    // Discovery scans the filesystem and can throw (EACCES/EIO) — the
-    // value-error contract must not leak that as a rejection.
     const result = await readOpenCodeNativeChatTranscriptTail(
       { sessionId: 'ses-1', limit: 10 },
       {

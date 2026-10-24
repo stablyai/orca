@@ -5,6 +5,9 @@ import { WORKSPACE_ROW_FILTER_UI_FIELDS } from './workspace-row-filters'
 export const WORKSPACE_VIEW_UI_FIELDS = [
   'groupBy',
   'sortBy',
+  'projectOrderBy',
+  'worktreeCardProperties',
+  'agentActivityDisplayMode',
   'collapsedGroups',
   'workspaceStatuses',
   // The legacy host scope: read when no host list is saved, written with a null or one-host list.

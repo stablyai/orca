@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import type { RelayPlatform } from './relay-protocol'
+import type { RelayPlatform } from './remote-exec/remote-frame-protocol'
 
 function currentAppPath(): string | undefined {
   try {

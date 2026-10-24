@@ -1,8 +1,4 @@
-// The host's one chat journal database: every structured chat on this state directory, in one
-// file, on one connection. The app and orcad instance locks keep a second process off a profile.
-//
-// A chat's store owns no connection. It goes through this object, so there is nothing per chat to
-// open, close, retry or leak, and the connection closes exactly once, last, at host teardown.
+// One connection per profile; instance locks exclude other processes and host teardown closes it last.
 
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,14 +19,11 @@ export function journalDatabasePath(stateDirectory: string): string {
 
 export class JournalHostDatabase {
   private connection: Database.Database | null
-  /** A newer Orca wrote the database: every chat's history reads, and no chat writes. */
   readonly readOnly: boolean
-  /** A failed transaction's ROLLBACK failed too, so the transaction may still be open. */
   private stranded = false
 
   private constructor(
     opened: OpenJournalDatabase,
-    /** Where the database lives; per-runtime end records sit beside it. */
     readonly stateDirectory: string
   ) {
     this.connection = opened.db
@@ -60,25 +53,34 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. */
-  transaction<T>(run: (db: Database.Database) => T): T {
-    return runJournalTransaction(this.db, run, () => {
-      this.stranded = true
-    })
+  /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
+  transaction<T>(run: (db: Database.Database) => T, streamed = false): T {
+    const db = this.db
+    if (!streamed) {
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+    }
+    // Synchronous level changes require no transaction; stranded recovery restores FULL first.
+    db.pragma('synchronous = NORMAL')
+    try {
+      return runJournalTransaction(db, run, () => {
+        this.stranded = true
+      })
+    } finally {
+      if (!db.isTransaction) {
+        db.pragma('synchronous = FULL')
+      }
+    }
   }
 
-  /** Last, after every store has drained. A close that fails keeps the handle, so the retried
-   *  teardown closes this same connection. */
+  /** Close after stores drain; preserve failed-close handles for teardown retry. */
   close(): void {
     this.connection?.close()
     this.connection = null
   }
 
-  /**
-   * A failed transaction whose ROLLBACK failed too is still open: every later BEGIN would fail
-   * inside it and every read would see rows that never committed. Each use retries the ROLLBACK,
-   * and until one goes through every chat is refused the way a journal that will not open is.
-   */
+  /** Retry stranded ROLLBACK before every use; uncommitted shared state must never reach another chat. */
   private rollBackStrandedTransaction(connection: Database.Database): void {
     if (connection.isTransaction) {
       try {
@@ -87,6 +89,7 @@ export class JournalHostDatabase {
         throw journalOpenRefusalError(error)
       }
     }
+    connection.pragma('synchronous = FULL')
     this.stranded = false
   }
 }

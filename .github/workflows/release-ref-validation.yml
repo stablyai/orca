@@ -2,6 +2,7 @@ name: Release ref validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/adhoc-mac-build.yml'
       - '.github/workflows/dev-channel-win-build.yml'
@@ -19,11 +20,12 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
         os: [macos-15, windows-2022]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"macos-15":"blacksmith-6vcpu-macos-15","windows-2022":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6

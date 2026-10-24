@@ -56,7 +56,6 @@ function worktreeAt(repo: Repo, path: string): GitWorktreeInfo {
   return { path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: path === repo.path }
 }
 
-/** A listing whose settlement the test controls, so a mutation can land while it is in flight. */
 function deferredListing(): {
   promise: Promise<GitWorktreeInfo[]>
   settle: (rows: GitWorktreeInfo[]) => void
@@ -86,9 +85,7 @@ const branches: [string, () => ListingBranch][] = [
   ]
 ]
 
-// Why this suite exists: a worktree created while a listing ran is absent from that listing, and an
-// authoritative absence is a deletion to every client. The host re-runs the overtaken scan before it
-// answers.
+// An overtaken scan misses newly created rows; re-scan before clients interpret their absence as deletion.
 describe.each(branches)(
   'detected listing overtaken by a worktree mutation: %s',
   (_name, branch) => {
@@ -106,7 +103,7 @@ describe.each(branches)(
 
       const pending = list()
       await vi.waitFor(() => expect(listMock).toHaveBeenCalledTimes(1))
-      // The create finished while the scan ran: this is what every worktree change invalidator does.
+      // Model create notification while the first listing is in flight.
       invalidateDetectedWorktreeScanCache(repo.id)
       inFlight.settle([worktreeAt(repo, repo.path)])
 

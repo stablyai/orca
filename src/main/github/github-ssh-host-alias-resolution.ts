@@ -1,7 +1,7 @@
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { commandExecFileAsync } from '../git/runner'
 import { parseWslPath } from '../wsl'
-import { resolveWithSshG } from '../ssh/ssh-g-config-resolution'
+import { resolveWithSshG } from '../ssh/config/ssh-g-config-resolution'
 import {
   gitHubSshConfigHostAlias,
   parseGitHubOwnerRepo,
@@ -164,7 +164,6 @@ export async function classifyGitHubOwnerRepoFromRemoteUrl(
     : { kind: 'not-github', cacheWithGitConfigSignature: false }
 }
 
-/** Convenience wrapper for callers that only need owner/repo or null. */
 export async function resolveGitHubOwnerRepoFromRemoteUrl(
   remoteUrl: string,
   context: SshConfigResolutionContext = { repoPath: '' }

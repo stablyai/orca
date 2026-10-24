@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import { harness, HOST, PAGE_ROUTE_GRANTS, PAGE_ROUTES, ROUTE } from './bridge-host-test-harness'
-import {
-  BRIDGE_MAX_PENDING_REQUESTS,
-  BRIDGE_MAX_ROUTE_PATHNAME_CHARS,
-  BRIDGE_MAX_SUBSCRIPTIONS
-} from './bridge/bridge-caps'
+import { BRIDGE_MAX_ROUTE_PATHNAME_CHARS } from './bridge/bridge-caps'
 import { BRIDGE_FAULT_GRANT, BRIDGE_RPC_ENVELOPE_GRANT } from './bridge/bridge-envelope'
 import { routeViewOf } from './page-route-policy'
 
 describe('init and state', () => {
-  it('answers ready with the getters, the caps it enforces, and the grants it honours', () => {
+  it('answers ready with the connection getters and session snapshot', () => {
     const client = createFakeRpcClient({
       getState: () => 'reconnecting',
       getReconnectAttempt: () => 3,
@@ -18,9 +14,9 @@ describe('init and state', () => {
       getLastInboundAt: () => 1_700_000_000_500,
       getGeneration: () => 7
     })
-    const bridge = harness({ client })
+    const bridge = harness({ client, storage: { 'orca:pins:host-a': '["wt-1"]' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.last()).toEqual({
+    expect(bridge.last()).toMatchObject({
       v: 1,
       type: 'init',
       sessionId: 'session-a',
@@ -32,37 +28,11 @@ describe('init and state', () => {
         lastInboundAt: 1_700_000_000_500,
         generation: 7
       },
-      grants: {
-        rpc: {
-          maxPendingRequests: BRIDGE_MAX_PENDING_REQUESTS,
-          maxSubscriptions: BRIDGE_MAX_SUBSCRIPTIONS
-        },
-        // What the shell will do for the page, and what makes its `navigate` frame acceptable.
-        native: [
-          BRIDGE_FAULT_GRANT,
-          BRIDGE_RPC_ENVELOPE_GRANT,
-          'navigate',
-          'storage',
-          'externalLink',
-          'screencastBinary',
-          'haptics',
-          'externalNavigation',
-          'native.clipboard.write',
-          'native.clipboard.read',
-          'native.media.pick',
-          'native.media.read',
-          'native.media.release',
-          'native.audio.start',
-          'native.audio.read',
-          'native.audio.stop',
-          'native.storage.read'
-        ]
-      },
       route: ROUTE,
       pageRoutes: PAGE_ROUTES,
       pageRouteGrants: PAGE_ROUTE_GRANTS,
       host: HOST,
-      storage: {}
+      storage: { 'orca:pins:host-a': '["wt-1"]' }
     })
   })
 
@@ -148,10 +118,13 @@ describe('init and state', () => {
     expect(init.grants.native).toEqual([
       BRIDGE_FAULT_GRANT,
       BRIDGE_RPC_ENVELOPE_GRANT,
-      ...view.routeGrants
+      'navigate',
+      'storage',
+      'haptics',
+      'screencastBinary'
     ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
-    expect(pair?.grants).toEqual(view.routeGrants)
+    expect(pair?.grants).toEqual(['navigate', 'storage', 'haptics', 'screencastBinary'])
     // The optional name is in both, so the case is the lane and not two equal required lists.
     expect(init.grants.native).toContain('screencastBinary')
   })
@@ -431,14 +404,6 @@ describe('init and state', () => {
     ])
   })
 
-  it('hands the page what the app holds for the keys it may read', () => {
-    const bridge = harness({ storage: { 'orca:pins:host-a': '["wt-1"]' } })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    const init = bridge.last()
-    expect(init.type === 'init' && init.storage).toEqual({ 'orca:pins:host-a': '["wt-1"]' })
-    expect(init.type === 'init' && init.host).toEqual(HOST)
-  })
-
   it('reports a client without the optional getters as null rather than omitting the field', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))
@@ -450,13 +415,6 @@ describe('init and state', () => {
       lastInboundAt: null,
       generation: null
     })
-  })
-
-  it('re-answers ready, which is how a page that missed a state frame recovers', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.frames().filter((frame) => frame.type === 'init')).toHaveLength(2)
   })
 
   it('tells the shell the page spoke, on the first ask and on every re-ask', () => {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Check, ChevronDown, LoaderCircle, Pause } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Check, ChevronDown } from 'lucide-react'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { Progress } from '@/components/ui/progress'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useNow } from '@/hooks/use-now'
 import { getIntlLocale, translate } from '@/i18n/i18n'
@@ -15,6 +16,7 @@ import { formatTimeAgo } from './ai-vault-session-time'
 
 // Why: interpolated so locales place the emphasized count; U+0000 never appears in copy.
 const EMPHASIS_TOKEN = '\u0000'
+type StripActivity = { progress: AiVaultScanProgress; active: boolean }
 
 function formatCount(value: number): string {
   return value.toLocaleString(getIntlLocale())
@@ -61,14 +63,8 @@ function stripSentence(progress: AiVaultScanProgress): string {
       )
     case 'reading':
       return translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.reading',
-        'Reading {{value0}} files',
-        { value0 }
-      )
-    case 'stopped':
-      return translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.stoppedAfter',
-        'Stopped after {{value0}}',
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.checking',
+        'Checking {{value0}}',
         { value0 }
       )
     case 'finished':
@@ -84,12 +80,14 @@ function foundCount(agent: AiVaultScanAgentProgress): number {
   return agent.files + agent.databases
 }
 
-function StripText({ progress }: { progress: AiVaultScanProgress }): React.JSX.Element {
+function StripText({ progress, active }: StripActivity): React.JSX.Element {
   const emphasis =
-    progress.stage === 'reading'
-      ? `${formatCount(progress.read.done)} / ${formatCount(progress.read.total)}`
+    active && progress.stage === 'reading'
+      ? `${formatCount(progress.read.done + (progress.read.skipped ?? 0))} / ${formatCount(progress.read.total)}`
       : fileCountLabel(progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0))
-  const [before, after] = stripSentence(progress).split(EMPHASIS_TOKEN)
+  const sentence =
+    active || progress.stage === 'finished' ? stripSentence(progress) : EMPHASIS_TOKEN
+  const [before, after] = sentence.split(EMPHASIS_TOKEN)
   return (
     <span className="min-w-0 truncate">
       {before}
@@ -105,26 +103,14 @@ function formatElapsed(ms: number): string {
 }
 
 // The strip stays muted; status colour lives only in the per-agent rows.
-function StripMark({ progress }: { progress: AiVaultScanProgress }): React.JSX.Element {
-  if (progress.stage === 'stopped') {
-    return <Pause className="size-3 shrink-0" />
+function StripMark({ progress, active }: StripActivity): React.JSX.Element | null {
+  if (active) {
+    return <LoadingSpinner className="size-3 shrink-0" />
   }
-  if (progress.settledAt === null) {
-    return <LoaderCircle className="size-3 shrink-0 animate-spin" />
-  }
-  return <Check className="size-3 shrink-0" />
+  return progress.stage === 'finished' ? <Check className="size-3 shrink-0" /> : null
 }
 
-function agentDetail(agent: AiVaultScanAgentProgress, stopped: boolean): string {
-  if (stopped && agent.walking) {
-    return translate(
-      'auto.components.right.sidebar.AiVaultScanProgressStrip.stoppedAt',
-      'stopped at {{value0}}',
-      {
-        value0: formatCount(agent.files)
-      }
-    )
-  }
+function agentDetail(agent: AiVaultScanAgentProgress): string {
   if (agent.databases > 0) {
     const databases = databaseCountLabel(agent.databases)
     return agent.files > 0 ? `${fileCountLabel(agent.files)} · ${databases}` : databases
@@ -134,25 +120,55 @@ function agentDetail(agent: AiVaultScanAgentProgress, stopped: boolean): string 
 
 function AgentRow({
   agent,
-  stopped
+  current,
+  progress,
+  active
 }: {
   agent: AiVaultScanAgentProgress
-  stopped: boolean
-}): React.JSX.Element {
+  current: boolean
+} & StripActivity): React.JSX.Element {
+  const read = current && progress.stage !== 'finding' ? agent.read : undefined
+  const settled = read ? read.done + (read.skipped ?? 0) : 0
+  const hasWork = read !== undefined && read.total > 0
+  const showBar = hasWork && (active || progress.stage === 'finished')
+  const complete = showBar && settled === read.total
+  const label = agentLabel(agent.agent)
+  const checked = hasWork
+    ? translate(
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.agentChecked',
+        '{{agent}}: {{settled}} of {{total}} history candidates checked',
+        { agent: label, settled: formatCount(settled), total: formatCount(read.total) }
+      )
+    : undefined
   return (
-    <div className="flex h-7 items-center gap-2 px-3 text-xs">
-      {!agent.walking ? (
-        <Check className="size-3.5 shrink-0 text-status-success" />
-      ) : stopped ? (
-        <Pause className="size-3.5 shrink-0 text-status-warning" />
-      ) : (
-        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-      )}
-      <AgentIcon agent={agent.agent} size={14} />
-      <span className="min-w-0 truncate text-foreground">{agentLabel(agent.agent)}</span>
-      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground tabular-nums">
-        {agentDetail(agent, stopped)}
-      </span>
+    <div role="listitem" className="px-3 py-1.5 text-xs">
+      <div className="flex h-5 items-center gap-2">
+        <AgentIcon agent={agent.agent} size={14} />
+        <span className="min-w-0 truncate text-foreground">{label}</span>
+        <span
+          className="ml-auto shrink-0 text-2xs text-muted-foreground tabular-nums"
+          aria-label={checked}
+        >
+          {hasWork ? `${formatCount(settled)} / ${formatCount(read.total)}` : agentDetail(agent)}
+        </span>
+        <span className="flex size-3.5 shrink-0 items-center justify-center">
+          {complete ? (
+            <Check className="size-3.5 text-status-success" />
+          ) : current && active ? (
+            <LoadingSpinner className="size-3.5 text-muted-foreground" />
+          ) : null}
+        </span>
+      </div>
+      <div className="mt-1 h-1 pl-5.5">
+        {showBar && (
+          <Progress
+            value={(settled / read.total) * 100}
+            aria-label={checked}
+            aria-valuetext={checked}
+            className="h-1"
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -160,58 +176,49 @@ function AgentRow({
 /** One line under the search box naming what this computer's scan is doing; opens to one row per agent. */
 export function AiVaultScanProgressStrip({
   progress,
-  onRefresh
+  agents = progress.agents,
+  active = progress.settledAt === null
 }: {
   progress: AiVaultScanProgress
-  onRefresh: () => void
+  agents?: AiVaultScanAgentProgress[]
+  active?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const now = useNow(progress.settledAt === null ? 1_000 : 30_000)
-  const stopped = progress.stage === 'stopped'
+  const finished = progress.stage === 'finished'
+  const now = useNow(active ? 1_000 : 30_000, active || finished)
+  const elapsedAt = active ? now : progress.settledAt
+  const time =
+    finished && progress.settledAt !== null
+      ? formatTimeAgo(progress.settledAt)
+      : elapsedAt !== null
+        ? formatElapsed(elapsedAt - progress.startedAt)
+        : null
   return (
     <div className={cn('shrink-0 border-b border-sidebar-border', open && 'bg-sidebar-accent/35')}>
       <Collapsible open={open} onOpenChange={setOpen}>
-        <div className="flex h-8 items-center text-[11px] text-muted-foreground tabular-nums hover:bg-sidebar-accent/50">
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 pl-3 pr-1.5 text-left outline-none focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30"
-            >
-              <StripMark progress={progress} />
-              <StripText progress={progress} />
-              {stopped ? null : (
-                <span className="ml-auto shrink-0">
-                  {progress.settledAt === null
-                    ? formatElapsed(now - progress.startedAt)
-                    : formatTimeAgo(progress.settledAt)}
-                </span>
-              )}
-            </button>
-          </CollapsibleTrigger>
-          {stopped ? (
-            <Button type="button" variant="link" size="xs" onClick={onRefresh}>
-              {translate(
-                'auto.components.right.sidebar.AiVaultScanProgressStrip.refresh',
-                'Refresh'
-              )}
-            </Button>
-          ) : null}
-          {/* Same toggle for the pointer; the labelled trigger is the keyboard stop. */}
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-hidden
-              className="flex h-full cursor-pointer items-center pl-1 pr-2"
-            >
-              <ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} />
-            </button>
-          </CollapsibleTrigger>
-        </div>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex h-8 w-full cursor-pointer items-center gap-1.5 pl-3 pr-2 text-left text-2xs text-muted-foreground tabular-nums outline-none hover:bg-sidebar-accent/50 focus-visible:ring-[2px] focus-visible:ring-sidebar-ring/30"
+          >
+            <StripMark progress={progress} active={active} />
+            <StripText progress={progress} active={active} />
+            <span className="ml-auto shrink-0">{time}</span>
+            <ChevronDown
+              className={cn('size-3 shrink-0 transition-transform', open && 'rotate-180')}
+            />
+          </button>
+        </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="py-1">
-            {progress.agents.map((agent) => (
-              <AgentRow key={agent.agent} agent={agent} stopped={stopped} />
+          <div role="list" className="py-1">
+            {agents.map((agent) => (
+              <AgentRow
+                key={agent.agent}
+                agent={agent}
+                current={progress.agents.includes(agent)}
+                progress={progress}
+                active={active}
+              />
             ))}
           </div>
         </CollapsibleContent>

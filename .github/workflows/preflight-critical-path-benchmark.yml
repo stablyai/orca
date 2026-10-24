@@ -1,6 +1,7 @@
 name: Preflight critical-path comparison
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - .github/workflows/preflight-critical-path-benchmark.yml
       - config/scripts/benchmark-ci-preflight-critical-path.mjs
@@ -14,6 +15,7 @@ env:
   ORCA_BACKGROUND_LAUNCH: '1'
 jobs:
   compare:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     strategy:
@@ -32,6 +34,8 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: matrix.comparison == 'smoke'
       - name: Compare checks and verify their results
         run: node config/scripts/benchmark-ci-preflight-critical-path.mjs ${{ matrix.comparison }}
       - uses: actions/upload-artifact@v7

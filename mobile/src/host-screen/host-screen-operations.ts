@@ -14,8 +14,9 @@ import {
 //
 // A skip's reader runs only on a reply the policy already admitted, so an unreadable one throws
 // rather than skipping. Both readers that project a list are inside the metadata refresh's own
-// try/catch, which already treats a failed refresh as "retry on the next one"; the four writes read
-// no reply body at all. host-screen-reply-schema.ts says which members each screen actually reads.
+// try/catch, which already treats a failed refresh as "retry on the next one"; the view-settings
+// sync's two reads sit inside its own catch the same way. The five writes read no reply body.
+// host-screen-reply-schema.ts says which members each screen actually reads.
 
 export const hostRepoCatalogRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -72,6 +73,17 @@ export const hostViewSettingsWrite = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('ui-view-settings-written', hostScreenUnreadReplySchema)
+  })
+)
+
+/** Card layout's settings half. Best-effort like the ui.set it pairs with. */
+export const hostCardLayoutWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.update-card-layout-or-skip',
+    method: 'settings.update',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('card-layout-written', hostScreenUnreadReplySchema)
   })
 )
 

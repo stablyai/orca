@@ -11,6 +11,10 @@ import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import {
+  captureAgentTabLaunchContext,
+  type AgentTabLaunchContext
+} from './agent-tab-launch-context'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -44,7 +48,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId,
-          command: shellOverride,
+          shell: shellOverride,
           activate: true
         })
         return
@@ -63,19 +67,17 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
   )
 
   const handleNewAgentTab = useCallback(
-    (agent: TuiAgent) => {
+    (agent: TuiAgent, context?: AgentTabLaunchContext) => {
       if (!activeWorktreeId) {
         return
       }
-      const state = useAppStore.getState()
-      const targetGroupId =
-        state.activeGroupIdByWorktree[activeWorktreeId] ??
-        state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+      const { groupId, focusIntent } = context ?? captureAgentTabLaunchContext(activeWorktreeId)
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
+        focusIntent,
         agent,
         worktreeId: activeWorktreeId,
-        groupId: targetGroupId,
+        groupId,
         launchSource: 'shortcut'
       })
       if (!result) {

@@ -1,8 +1,3 @@
-// The host's "Stopping…": published on the session's status while a person's Stop is still
-// settling, and then while the turn it stopped, or failed to stop, still runs, until that turn ends.
-// A Stop that settles having stopped nothing ends it. Driven through the real host and its status
-// feed, with turn rows named as Codex writes them.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentJournalItemKey,
@@ -49,7 +44,6 @@ function turnIdentity(turnId: string): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId, ordinal: 999 }
 }
 
-/** Turn `turnId`, opened by send `clientMessageId`, running or ended as the provider cut it. */
 async function turn(turnId: string, clientMessageId: string, state: 'running' | 'interrupted') {
   await journal().appendItem(
     turnIdentity(turnId),
@@ -64,7 +58,6 @@ async function turn(turnId: string, clientMessageId: string, state: 'running' | 
   )
 }
 
-/** The session's summaries as a session list receives them. */
 function watchStatus(): () => AgentSessionStatusSummary | undefined {
   const events: AgentSessionStatusEvent[] = []
   rig.host.subscribeStatus({ id: 'list', emit: (event) => events.push(event) })
@@ -81,7 +74,6 @@ function watchStatus(): () => AgentSessionStatusSummary | undefined {
   }
 }
 
-/** The Stop as the phone sends it, naming the turn its journal shows running. */
 function namedStop(turnId: string) {
   return rig.host.cancel(QUEUED_RIG_CALLER, {
     envelope: rig.envelope({ turnId }, 'agentSession.cancel', hostTestOperationId()),
@@ -89,7 +81,6 @@ function namedStop(turnId: string) {
   })
 }
 
-/** What each Stop answered, oldest first. */
 function stopAnswers(): (string | undefined)[] {
   return journal()
     .snapshot()
@@ -97,7 +88,6 @@ function stopAnswers(): (string | undefined)[] {
     .map((item) => (item.body.kind === 'status' ? (item.body.failure?.kind ?? 'took') : undefined))
 }
 
-/** A send whose turn `turn-1` is running, and the session's status. */
 async function runningTurn(options: { stopEndsSession?: true } = {}) {
   rig = await createQueuedMessageTestRig(options)
   const sent = await rig.workingSend()
@@ -150,14 +140,13 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
       const { sent, status } = await runningTurn()
       rig.cancelTurn.mockImplementationOnce(cancel)
       if (cancel === unconfirmed) {
-        // A failed interrupt ends the agent's process; this one cannot be ended either.
         rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
       }
 
       const stopped = naming === 'names the turn' ? namedStop('turn-1') : rig.stop()
       expect(await stopped).toMatchObject({ ok: true })
 
-      // The answer says it stopped nothing, yet the Stop is still the person's: a repeat escalates.
+      // Even a no-op answer leaves the personal Stop eligible for escalation.
       await eventually(() => expect(stopAnswers()).toHaveLength(1))
       expect(stopAnswers()[0]).not.toBe('took')
       expect(status()).toMatchObject({ status: 'working', stopping: true })
@@ -201,7 +190,6 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
     await eventually(() => expect(status()).toMatchObject({ stopping: true }))
   })
 
-  // The newest turn record is the stopped one until the next send's turn opens; it no longer runs.
   it.each(['names its turn', 'names no turn'])(
     'reads a send made after a Stop that %s as Working before its turn opens',
     async (naming) => {
@@ -214,7 +202,6 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
         await eventually(() => expect(status()).toMatchObject({ status: 'working' }))
         expect(await namedStop('turn-1')).toMatchObject({ ok: true })
       } else {
-        // The provider's answer names the turn the send opened, which the Stop waited for.
         rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-1' })
         expect(await rig.stop()).toMatchObject({ ok: true })
         await rig.settleAccepted(stopped, 'stopped')
@@ -247,7 +234,6 @@ describe("a person's Stop reads Stopping until the work it stopped ends", () => 
 })
 
 describe('a Stop that failed before the turn it meant to stop opened', () => {
-  /** Its end, with no verdict of its own, read off the journal. */
   function turnEnd(turnId: string) {
     return journal()
       .snapshot()
@@ -260,13 +246,10 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
     const sent = await rig.workingSend()
     const status = watchStatus()
     if (!options.stopEndsSession) {
-      // Codex could not reach a turn still able to open.
       rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnMayOpen: true } })
     }
-    // The process could not be ended either.
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
-    // A Stop that ends its session ends the child on the session's next step.
     await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
     expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     return { sent, status }
@@ -295,7 +278,6 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
   )
 
   it("never reads Stopping on a send's turn handed over after it", async () => {
-    // A later send needs a child again once the failed end is retried.
     const { sent, status } = await failedBeforeTheTurn({ restartable: true })
     await rig.settleRejected(sent, 'no turn for this one')
     await eventually(() => expect(status()?.status).not.toBe('working'))
@@ -310,7 +292,7 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
 })
 
 describe("a Stop's settle edge", () => {
-  // It writes no row: it republishes the status and wakes the handover, and is no activity.
+  // Row-free settlement must publish status and wake delivery without counting as activity.
   it('republishes Stopping without counting as activity', async () => {
     rig = await createQueuedMessageTestRig()
     await rig.workingSend()
@@ -330,7 +312,6 @@ describe("a Stop's settle edge", () => {
 })
 
 describe('a Stop pressed before its send opened a turn', () => {
-  /** A Stop pressed before the send's turn showed, which opens while the Stop waits for it. */
   async function stopAsTheTurnOpens(answer: AgentSessionCancelOutcome, killFails?: true) {
     rig = await createQueuedMessageTestRig()
     if (killFails) {
@@ -357,14 +338,12 @@ describe('a Stop pressed before its send opened a turn', () => {
   })
 
   it('holds Stopping through the turn a Stop that failed could not stop, until that turn ends', async () => {
-    // The agent refused, and its process could not be ended either.
     const { sent, status } = await stopAsTheTurnOpens({ cancelled: false, refusal: {} }, true)
 
     await eventually(() => expect(status()).toMatchObject({ status: 'working', stopping: true }))
     await turn('turn-1', sent, 'interrupted')
     await eventually(() => expect(status()?.status).toBe('idle'))
     expect(status()).not.toHaveProperty('stopping')
-    // The Stop never stopped it: its own end, with no verdict, reads as a failure, not theirs.
     const ended = journal()
       .snapshot()
       .items.map((item) => item.body)
@@ -385,7 +364,6 @@ describe('a Stop pressed before its send opened a turn', () => {
     answer.resolve({ cancelled: false })
     expect(await stopped).toMatchObject({ ok: true })
 
-    // The settle's close writes no row of its own; it still reaches the status.
     await eventually(() => expect(status()).toMatchObject({ status: 'working' }))
     expect(status()).not.toHaveProperty('stopping')
     await rig.settleAccepted(sent, 'sent')
@@ -437,11 +415,9 @@ describe('a Stop whose provider ends its session', () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
 
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))
-    // Still the person's Stop while the work runs on: Stop stays enabled for the retry.
     expect(status()).toMatchObject({ status: 'working', stopping: true })
 
-    // The retry's child end is held, so the status can be read while it runs. The retry joins the
-    // child's close, which runs the stop again since the last one came back unproven.
+    // Hold the retried close to inspect status while it runs.
     const retried = Promise.withResolvers<boolean>()
     rig.closeSession.mockImplementationOnce(() => retried.promise)
     const retry = rig.stop()
@@ -466,8 +442,7 @@ describe('a Stop whose provider ends its session', () => {
     expect(status()).toMatchObject({ status: 'working', stopping: true })
   })
 
-  // The close lives on the child, in memory, and dies with the host. The new host's settlement,
-  // which ends the turn on a proof of the old owner's death, is what says the Stop took.
+  // Close state dies with the host; restart must prove the old owner dead to settle the turn.
   async function crashAfterUnconfirmedStop(): Promise<void> {
     await runningTurn({ stopEndsSession: true })
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
@@ -483,7 +458,6 @@ describe('a Stop whose provider ends its session', () => {
       .find((turn) => turn?.turnId === 'turn-1')?.state
   }
 
-  /** What the host's restart reconciliation or recovery writes once a probe finds the old pid gone. */
   async function proveOldOwnerGone(): Promise<void> {
     const record = rig.store.getRecord(HOST_TEST_SESSION)!
     await rig.store.evictProvenDeadOwner({
@@ -496,7 +470,6 @@ describe('a Stop whose provider ends its session', () => {
 
   it("says the Stop took once the new host proves the old child's exit after a crash", async () => {
     await crashAfterUnconfirmedStop()
-    // Proven before the chat opens, as the restart's reconciliation does on most machines.
     await proveOldOwnerGone()
     await rig.queuePause()
 
@@ -514,7 +487,6 @@ describe('a Stop whose provider ends its session', () => {
       notes: ['cancelUnconfirmed']
     })
 
-    // A later proof naming the old owner, as recovery writes it, revises the open chat.
     await proveOldOwnerGone()
     await eventually(() =>
       expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
@@ -524,8 +496,6 @@ describe('a Stop whose provider ends its session', () => {
     )
   })
 
-  // A Stop pressed before its turn showed keys its note by itself, with no turn to sit on; once it is
-  // unconfirmed while that turn runs, the note moves onto the turn, so the turn's proven end finds it.
   it('moves a note a Stop wrote before its turn showed onto that turn, which then says the Stop took', async () => {
     rig = await createQueuedMessageTestRig({ stopEndsSession: true })
     const sent = await rig.workingSend()
@@ -538,12 +508,10 @@ describe('a Stop whose provider ends its session', () => {
     kill.reject(new Error('the kill timed out'))
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))
 
-    // A join that fails again neither adds a note nor brings the first one back.
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out again'))
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(stopAnswers()).toEqual(['cancelUnconfirmed'])
 
-    // The next Stop's joined close proves the exit.
     expect(await rig.stop()).toMatchObject({ ok: true })
 
     await eventually(() => expect(stopAnswers()).toEqual(['took']))
@@ -554,7 +522,6 @@ describe('a Stop whose provider ends its session', () => {
     const notes = page.ok
       ? page.page.items.filter((item) => isStructuredAgentSessionStopNote(item.itemId))
       : []
-    // What a client loads: one note, on that turn.
     expect(notes.map((item) => [item.itemId, item.turnScope])).toEqual([
       [
         agentJournalItemKey(structuredAgentSessionStopNoteIdentity('turn-1')),
@@ -563,8 +530,6 @@ describe('a Stop whose provider ends its session', () => {
     ])
   })
 
-  // The kill timed out, then the agent's process exits on its own: the adapter reports the end of
-  // the close Orca began, and nothing else asks to stop.
   it("says the Stop took once the agent's process exits on its own after the kill timed out", async () => {
     await runningTurn({ stopEndsSession: true })
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))

@@ -28,28 +28,19 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
-    const homes = [this.getRuntimeHomePath()]
+    // Transcript polling must resolve the mirror path without creating it.
+    const homes = [resolveOrcaManagedCodexHomePath()]
     if (this.isHostSystemDefaultRealHomeSelected() || this.getSelfContainedManagedHostAccount()) {
-      // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
-      // Per-account lanes no longer bridge real-home history into the shared
-      // mirror, so include the real root for both directly-routed host lanes.
+      // Include real-home history even when nested Orca inherits a managed CODEX_HOME.
       homes.push(getSystemCodexHomePath())
     }
-    // Why: account-scoped rollouts live in each account's own home, including WSL.
     for (const perAccountHome of this.getManagedAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
   }
 
-  /**
-   * The account-owned CODEX_HOME the current HOST selection runs against, or
-   * null when the selection is not routed to one (system default, or a WSL
-   * account, whose home lives inside the distro).
-   *
-   * Read-only on purpose: session discovery ranks homes with this before any
-   * launch prep, so it must create no directories and sync no auth.
-   */
+  /** Read-only host-account home for session discovery; null means no trusted host-account home. */
   getSelectedHostAccountCodexHomePath(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     return selfContainedAccount
@@ -57,13 +48,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       : null
   }
 
-  /**
-   * Same selection, but an unreadable home refuses instead of collapsing to
-   * `null`. Session resume must not read "no managed selection" out of a failed
-   * marker stat: another account's readable alias would then win the legacy
-   * rescan and the pane would resume under that account's credentials while the
-   * UI still shows this one (#STA-4422).
-   */
+  /** Refuse unreadable homes so resume cannot silently select another account's alias (#STA-4422). */
   resolveSelectedHostAccountCodexHomePathForResume(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (!selfContainedAccount) {
@@ -123,9 +108,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     return [...homes.values()]
   }
 
-  // Why: real-home routing applies only to the host system-default selection.
-  // Managed accounts run in their own homes; custom CODEX_HOMEs stay on the
-  // mirror until cleanup can be tracked across old homes.
+  // Custom CODEX_HOME overrides keep system-default launches on the mirror for legacy cleanup.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
     return (
       normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
@@ -141,8 +124,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     syncLegacySharedCodexConfigForRetainedPanes()
   }
 
-  // Why: copies only while the recorded baseline is null (Orca's copy's login never
-  // came from ~/.codex); recording it as the baseline, copied or not, ends that.
+  // A null system baseline allows one mirror-login import; recording the baseline ends eligibility.
   protected copyMirrorLoginIntoEmptySystemHome(): void {
     if (process.platform !== 'win32') {
       return
@@ -159,8 +141,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
         return
       }
       const copied = this.writeSystemDefaultAuth(runtimeAuth, { expectedContents: null })
-      // Why even when declined: a null baseline would let a later ~/.codex logout
-      // pull this stale login in; it also keeps retained panes in step (#5370).
+      // Record even declined copies so a later logout cannot resurrect this stale login (#5370).
       this.persistSharedRuntimeAuthProvenance({ owner: 'system-default', authJson: runtimeAuth })
       if (copied) {
         this.captureSystemDefaultSnapshot({ force: true })
@@ -192,7 +173,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
           ? account.wslDistro?.trim() || null
           : selectedDistroKey.trim() || null
       if (distro) {
-        // Why: a stopped distro has no live legacy pane to drain, and the next launch prep drains anyway.
+        // Stopped distros have no live panes to drain; their next launch drains before spawning.
         drains.push(
           isWslDistroRunning(distro).then((running) =>
             running
@@ -247,7 +228,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!systemHomePath || systemHomePath === runtimeHomePath) {
       return
     }
-    // Why: WSL uses a distro-local CODEX_HOME, so host resource mirroring can't provide the distro user's global instructions.
+    // Distro-local homes need the guest user's instructions, which host resource mirroring cannot supply.
     syncCodexGlobalInstructionsIntoManagedHome({
       systemHomePath,
       managedHomePath: runtimeHomePath
@@ -259,9 +240,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     })
   }
 
-  // Why: `null` is a real value here — it means "use the system-default lane".
-  // A skipped poll needs its own channel or the fetcher silently retargets the
-  // user's real ~/.codex (#STA-4422).
+  // A skipped poll needs a distinct result: null routes the fetcher to system default (#STA-4422).
   prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
@@ -274,14 +253,10 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
-        // Why: the quota fetch reads the account's own auth.json in place; no
-        // shared-home hot-swap or per-poll resource relink (that is launch prep).
+        // Quota probes read account auth in place; resource synchronization belongs to launch prep.
         return { kind: 'ready', codexHomePath: resolved.homePath }
       }
       if (resolved.kind === 'indeterminate') {
-        // Why: returning null here would NOT skip — the fetcher maps null to
-        // ~/.codex and would probe the user's real home with a token-refreshing
-        // app-server. Skip the poll outright and keep the selection.
         return { kind: 'skip' }
       }
       this.clearSelfContainedManagedSelection(selfContainedAccount)
@@ -291,21 +266,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (hasRecordedLegacySharedCodexPane()) {
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
       }
-      // Why: null lets the fetcher fall back to the main process's inherited
-      // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
-      // managed home, restarting the background OAuth conflict (#5370), so
-      // pin this non-interactive lane to the native home explicitly.
+      // Pin the native home so nested Orca cannot inherit a managed-home OAuth conflict (#5370).
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
     this.syncMirrorForReadOnlyAppServer()
     return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
   }
 
-  /**
-   * Before a read-only app-server reads the shared mirror home (the model catalog probe), the
-   * same sync launch prep and the usage poll run, so it reads the login a launch would. Any other
-   * home is left alone: a per-account home holds its own auth, and its sync restarts a bridge.
-   */
+  /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
   prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
     if (
       this.getSelfContainedManagedHostAccount() ||

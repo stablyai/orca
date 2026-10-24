@@ -589,7 +589,11 @@ describe('repo slice runtime routing', () => {
       repos: [{ ...remoteRepo, executionHostId: 'runtime:env-1' }]
     })
 
-    await expect(store.getState().moveProjectToGroup(remoteRepo.id, 'group-1')).resolves.toBe(true)
+    await expect(
+      store
+        .getState()
+        .moveProjectToGroup({ ...remoteRepo, executionHostId: 'runtime:env-1' }, 'group-1')
+    ).resolves.toBe(true)
 
     expect(store.getState().repos).toEqual([
       { ...remoteRepo, projectGroupId: 'group-1', executionHostId: 'runtime:env-1' }
@@ -597,7 +601,7 @@ describe('repo slice runtime routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'projectGroup.moveProject',
-      params: { repo: remoteRepo.id, groupId: 'group-1', order: undefined },
+      params: { repo: remoteRepo.id, groupId: 'group-1', order: undefined, connectionId: null },
       timeoutMs: 15_000
     })
     expect(projectGroupsMoveProject).not.toHaveBeenCalled()
@@ -640,7 +644,10 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: remoteRepo.id,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
@@ -714,7 +721,10 @@ describe('repo slice runtime routing', () => {
       params: { repo: remoteRepo.id },
       timeoutMs: 15_000
     })
-    expect(reposRemoveForHost).not.toHaveBeenCalled()
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: remoteRepo.id,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('evicts GitHub caches for removed repos using repo id and legacy path keys', async () => {

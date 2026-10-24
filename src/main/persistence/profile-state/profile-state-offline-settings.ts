@@ -80,8 +80,10 @@ export function updateAgentHookSettingsInProfileState(
       throw domains.error
     }
     const persistedSettings = domains.values.get('settings')
+    const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
+      getDefaultPersistedState(homedir()).settings
     const settings = {
-      ...getDefaultPersistedState(homedir()).settings,
+      ...settingsDefaults,
       ...(isRecord(persistedSettings) ? persistedSettings : {}),
       agentStatusHooksEnabled: enabled
     }

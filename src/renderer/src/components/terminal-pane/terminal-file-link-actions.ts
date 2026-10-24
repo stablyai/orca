@@ -1,5 +1,6 @@
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { buildHttpLinkActions } from '@/lib/http-link-destinations'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
@@ -8,6 +9,7 @@ import {
   terminalLinkWslDistro,
   type FileOpenFailure
 } from './terminal-file-open-routing'
+import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'
 import {
   requestTerminalLinkAction,
@@ -18,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import { useAppStore } from '@/store'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open-target-group'
 
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
@@ -27,6 +30,8 @@ export type TerminalFileLinkActionDeps = {
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
   onOpenFailure?: (failure: FileOpenFailure) => void
+  /** The tab that owns the link; editor opens place themselves relative to its group. */
+  sourceTabId?: string | null
 }
 
 export type FileLinkActions = Pick<
@@ -148,22 +153,45 @@ export function buildFileLinkActions(
         run: () => revealInFileManager(mappedPath, revealOwner)
       }
     : null
+  // Why: eligibility is unknown until the path resolves, so the row may still be refused then.
+  const openInGroupRow =
+    !worktreeRoot &&
+    fileContext.sourceHostResolved &&
+    canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)
+      ? {
+          label: translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
+            'Open in this group'
+          ),
+          run: () =>
+            openDetectedFilePath(filePath, line, column, { ...deps, openInSourceGroup: true })
+        }
+      : null
+  const secondaryActions = [openInGroupRow, revealRow].filter((row) => row !== null)
+  const rows =
+    !worktreeRoot && canOpenWithSystemDefault && isHtmlFilePath(mappedPath)
+      ? buildHttpLinkActions(localHtmlFileDestinations(), (browserDestination) =>
+          openDetectedFilePath(filePath, line, column, { ...deps, browserDestination })
+        )
+      : {
+          primary: {
+            label: worktreeRoot
+              ? translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
+                  'Switch workspace'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
+                  'Open file'
+                ),
+            run: () => openDetectedFilePath(filePath, line, column, deps)
+          },
+          ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})
+        }
   return {
     destination: mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',
-    primary: {
-      label: worktreeRoot
-        ? translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
-            'Switch workspace'
-          )
-        : translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
-            'Open file'
-          ),
-      run: () => openDetectedFilePath(filePath, line, column, deps)
-    },
-    ...(systemDefaultRow ? { alternate: systemDefaultRow } : {}),
-    ...(revealRow ? { secondaryActions: [revealRow] } : {})
+    ...rows,
+    ...(secondaryActions.length > 0 ? { secondaryActions } : {})
   }
 }

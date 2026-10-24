@@ -8,7 +8,7 @@ import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-pr
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
-import { useNativeChatQuestionNumberKeys } from './use-native-chat-question-number-keys'
+import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
 import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
 
@@ -169,12 +169,7 @@ export function NativeChatQuestionCard({
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
-  useNativeChatQuestionNumberKeys(
-    cardRef,
-    shouldFocus && !isSubmitting,
-    q.options.length,
-    pickOption
-  )
+  useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
 
   // Trailing action (also fired by Enter). On any non-final question this just
   // advances — "Next" when answered, "Skip" when not — so skipping one question
@@ -302,6 +297,7 @@ export function NativeChatQuestionCard({
               <OptionRow
                 key={`${i}:${opt.label}`}
                 badge={String(i + 1)}
+                initialFocus={i === 0}
                 label={opt.label}
                 description={opt.description}
                 selected={(selections[index] ?? []).includes(i)}
@@ -343,6 +339,7 @@ export function NativeChatQuestionCard({
                   ) : (
                     <ImeInput
                       ref={answerInputRef}
+                      data-native-chat-answer-field
                       data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                       disabled={isSubmitting}
                       value={otherText[index]}
@@ -409,6 +406,7 @@ export function NativeChatQuestionCard({
 
 function OptionRow({
   badge,
+  initialFocus,
   label,
   description,
   selected,
@@ -416,6 +414,7 @@ function OptionRow({
   onSelect
 }: {
   badge: string
+  initialFocus: boolean
   label: string
   description?: string
   selected: boolean
@@ -430,8 +429,9 @@ function OptionRow({
       // Selection is otherwise only the visual check/badge swap; expose it to
       // assistive tech.
       aria-pressed={selected}
+      data-native-chat-prompt-card-focus-target={initialFocus || undefined}
       className={cn(
-        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
+        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors focus:bg-accent focus:outline-none disabled:pointer-events-none',
         selected ? 'bg-accent' : 'hover:bg-accent'
       )}
     >

@@ -8,7 +8,7 @@ import {
   getKnownSidebarWorktreeById,
   sidebarWorkspaceStillExists
 } from './folder-reveal'
-import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -141,7 +141,7 @@ describe('worktree list folder reveal', () => {
         getFolderWorkspaceRevealGroupKeys(
           folderWorkspaceKey(folderWorkspace.id),
           [{ ...folderWorkspace, executionHostId: otherHostId }, folderWorkspace],
-          [root, child, otherRoot, otherChild],
+          [otherRoot, otherChild, root, child],
           { executionHostId, defaultHostId: 'local' }
         )
       ).toEqual([
@@ -151,6 +151,31 @@ describe('worktree list folder reveal', () => {
       ])
     }
   )
+
+  it('follows the parents the sidebar draws when same-id group copies disagree (#30045)', () => {
+    // The sidebar draws one header per group id, from the last copy, so reveal must open its parent.
+    const localChild = makeProjectGroup({ id: 'group-child', executionHostId: 'local' })
+    const remoteRoot = makeProjectGroup({ id: 'remote-root', executionHostId: 'runtime:other' })
+    const remoteChild = makeProjectGroup({
+      id: localChild.id,
+      parentGroupId: remoteRoot.id,
+      executionHostId: 'runtime:other'
+    })
+    const folderWorkspace = makeFolderWorkspace({ executionHostId: 'local' })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspaceKey(folderWorkspace.id),
+        [folderWorkspace],
+        [localChild, remoteRoot, remoteChild],
+        { executionHostId: 'local', defaultHostId: 'local' }
+      )
+    ).toEqual([
+      getProjectGroupHeaderKey(remoteRoot.id),
+      getProjectGroupHeaderKey(localChild.id),
+      'host:local'
+    ])
+  })
 })
 
 describe('reveal keys under non-repo grouping', () => {

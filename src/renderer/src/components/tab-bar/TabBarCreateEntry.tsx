@@ -47,6 +47,7 @@ function TabBarCreateEntrySession({
   menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
+  onLaunchAgentOption,
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
@@ -230,7 +231,14 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      onLaunchAgent?.(selectedOption.option.agent)
+      if (selectedOption.option.disabled) {
+        return
+      }
+      if (onLaunchAgentOption) {
+        onLaunchAgentOption(selectedOption.option)
+      } else {
+        onLaunchAgent?.(selectedOption.option.agent)
+      }
       onDidOpenEntry?.()
       return
     }
@@ -378,7 +386,11 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                disabled={disabled || pending}
+                disabled={
+                  disabled ||
+                  pending ||
+                  (option.kind === 'agent' && option.option.disabled === true)
+                }
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

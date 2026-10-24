@@ -1,8 +1,8 @@
-name: Clean closed PR work
+name: Clean obsolete PR work
 
 on:
   pull_request_target:
-    types: [closed]
+    types: [closed, synchronize]
 
 permissions:
   actions: write
@@ -10,37 +10,64 @@ permissions:
 
 jobs:
   clean:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2204
     timeout-minutes: 5
     steps:
-      - name: Cancel checks for an unmerged closed PR
-        if: github.event.pull_request.merged == false
+      - name: Cancel obsolete PR checks
+        if: github.event.action == 'synchronize' || github.event.pull_request.merged == false
         uses: actions/github-script@v8
         with:
           script: |
-            const closed = context.payload.pull_request
+            const pr = context.payload.pull_request
+            const superseded = context.payload.action === 'synchronize'
             const targets = [
               ['pr-checks', 'pr.yml'],
+              ['dependency-security', 'dependency-security.yml'],
               ['node-server', 'node-server-tests.yml'],
               ['ssh-windows-hosts', 'ssh-windows-hosts.yml'],
               ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],
               ['mobile', 'mobile.yml'],
-              ['computer-e2e', 'computer-e2e.yml']
+              ['computer-e2e', 'computer-e2e.yml'],
+              ['wsl-orcad-e2e', 'wsl-orcad-e2e.yml'],
+              ['performance-contracts', 'performance-contracts.yml'],
+              ['pr-test-loc', 'pr-test-loc.yml'],
+              ['preflight-critical-path', 'preflight-critical-path-benchmark.yml'],
+              ['preflight-cli', 'preflight-cli-platforms.yml'],
+              ['macos-updater', 'macos-updater-tests.yml'],
+              ['preflight-comparison', 'preflight-benchmark.yml'],
+              ['windows-typecheck-parity', 'windows-typecheck-parity.yml'],
+              ['zcode-transcript-contract', 'zcode-transcript-contract.yml'],
+              ['release-ref-validation', 'release-ref-validation.yml'],
+              ['docs-pr', 'docs.yml'],
+              ['cloud-verify-refs/pull', 'cloud-verify.yml', '/merge'],
+              ['win-orcad-serve-switch-e2e', 'win-orcad-serve-switch-e2e.yml'],
+              ['pi-provider-runtime', 'pi-provider-runtime.yml'],
+              ['coding-plan-contract', 'zcode-credential-contract.yml', '-credentials'],
+              ['release-javascript-comparison', 'release-javascript-benchmark.yml'],
+              ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
+              ['pi-owner-runtime', 'pi-owner-runtime.yml'],
+              ['git-command-termination', 'git-command-termination-runtime.yml'],
+              ['ci-cache-warmup', 'ci-cache-warmup.yml']
             ]
-            const stillClosed = async () => {
+            const stillCurrent = async () => {
               const { data: current } = await github.rest.pulls.get({
-                ...context.repo, pull_number: closed.number
+                ...context.repo, pull_number: pr.number
               })
+              if (superseded) {
+                return current.state === 'open' && current.head.sha === pr.head.sha
+              }
               return current.state === 'closed' && current.merged_at === null &&
-                current.closed_at === closed.closed_at
+                current.closed_at === pr.closed_at
             }
-            if (!Number.isSafeInteger(closed.number) || closed.number <= 0 ||
-                !Number.isFinite(Date.parse(closed.closed_at))) {
-              throw new Error('Missing closed PR identity')
+            if (!Number.isSafeInteger(pr.number) || pr.number <= 0 ||
+                (superseded ? !/^[a-f0-9]{40}$/.test(pr.head?.sha ?? '') :
+                  !Number.isFinite(Date.parse(pr.closed_at)))) {
+              throw new Error('Missing PR identity')
             }
-            if (!await stillClosed()) return
-            for (const [prefix, workflow] of targets) {
-              const group = `${prefix}-${closed.number}`
+            if (!await stillCurrent()) return
+            for (const [prefix, workflow, suffix = ''] of targets) {
+              const group = prefix === 'cloud-verify-refs/pull'
+                ? `${prefix}/${pr.number}${suffix}` : `${prefix}-${pr.number}${suffix}`
               let data
               try {
                 const response = await github.request(
@@ -65,9 +92,11 @@ jobs:
                 })
                 if (run.event !== 'pull_request' || run.path !== `.github/workflows/${workflow}` ||
                     run.status === 'completed' ||
-                    !Number.isFinite(Date.parse(run.created_at)) ||
-                    Date.parse(run.created_at) > Date.parse(closed.closed_at)) continue
-                if (!await stillClosed()) return
+                    (superseded ? !/^[a-f0-9]{40}$/.test(run.head_sha ?? '') ||
+                      run.head_sha === pr.head.sha :
+                      !Number.isFinite(Date.parse(run.created_at)) ||
+                      Date.parse(run.created_at) > Date.parse(pr.closed_at))) continue
+                if (!await stillCurrent()) return
                 try {
                   await github.rest.actions.cancelWorkflowRun({
                     ...context.repo, run_id: member.run_id
@@ -80,7 +109,7 @@ jobs:
             }
       # No checkout: this runs trusted default-branch code, including for fork PRs.
       - uses: actions/github-script@v8
-        if: '!cancelled()'
+        if: ${{ !cancelled() && github.event.action == 'closed' }}
         with:
           script: |
             const ref = `refs/pull/${context.payload.pull_request.number}/merge`

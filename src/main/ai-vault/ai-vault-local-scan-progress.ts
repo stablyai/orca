@@ -3,22 +3,22 @@ import type {
   AiVaultScanProgressUpdate,
   AiVaultScanWork
 } from '../../shared/ai-vault-scan-progress'
-import {
-  AiVaultServiceDeadlineError,
-  type AiVaultServiceScanListener
-} from './session-scanner-service-request-deadline'
+import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
 
 type Listener = (update: AiVaultScanProgressUpdate) => void
 
-/** One local scan from coordinator creation through its service reply. */
 export type LocalAiVaultScanProgressHandle = AiVaultServiceScanListener & {
   finish: (work: AiVaultScanWork | null) => void
-  fail: (error: unknown) => void
+  fail: () => void
 }
 
 const MAX_PROGRESS_ENTRIES = 8
 const latest = new Map<string, AiVaultScanProgress>()
-const currentHandles = new Map<string, LocalAiVaultScanProgressHandle>()
+// Failed replacements restore the last finished progress for their key.
+const currentScans = new Map<
+  string,
+  { handle: LocalAiVaultScanProgressHandle; fallback: AiVaultScanProgress | null }
+>()
 const listeners = new Set<Listener>()
 
 export function localAiVaultScanProgress(scanKey: string): AiVaultScanProgress | null {
@@ -50,13 +50,15 @@ function publish(scanKey: string, next: AiVaultScanProgress | null): void {
   }
 }
 
-/** A replacement clears its previous entry before roots preparation can yield. */
+/** Replacement takes ownership immediately so refresh never leaves the key empty. */
 export function startLocalAiVaultScanProgress(
   scanKey: string,
   scanId: string,
   now: () => number = Date.now
 ): LocalAiVaultScanProgressHandle {
-  let serviceRequestId: number | null = null
+  const previous = latest.get(scanKey)
+  const fallback =
+    previous?.stage === 'finished' ? previous : (currentScans.get(scanKey)?.fallback ?? null)
   let current: AiVaultScanProgress = {
     scanId,
     stage: 'finding',
@@ -66,45 +68,30 @@ export function startLocalAiVaultScanProgress(
     settledAt: null
   }
   const handle: LocalAiVaultScanProgressHandle = {
-    sent: (requestId) => {
-      serviceRequestId = requestId
-      if (currentHandles.get(scanKey) === handle) {
-        publish(scanKey, current)
-      }
-    },
     work: (work) => {
-      if (currentHandles.get(scanKey) === handle) {
+      if (currentScans.get(scanKey)?.handle === handle) {
         current = { ...current, ...work }
         publish(scanKey, current)
       }
     },
     finish: (work) => {
-      if (currentHandles.get(scanKey) === handle) {
-        currentHandles.delete(scanKey)
+      if (currentScans.get(scanKey)?.handle === handle) {
+        currentScans.delete(scanKey)
         publish(scanKey, { ...current, ...work, stage: 'finished', settledAt: now() })
       }
     },
-    fail: (error) => {
-      if (currentHandles.get(scanKey) === handle) {
-        currentHandles.delete(scanKey)
-        if (
-          error instanceof AiVaultServiceDeadlineError &&
-          error.operation === 'scan' &&
-          error.requestId === serviceRequestId
-        ) {
-          publish(scanKey, { ...current, stage: 'stopped', settledAt: now() })
-        } else {
-          publish(scanKey, null)
-        }
+    fail: () => {
+      if (currentScans.get(scanKey)?.handle === handle) {
+        currentScans.delete(scanKey)
+        publish(scanKey, fallback ?? { ...current, settledAt: now() })
       }
     }
   }
-  currentHandles.set(scanKey, handle)
-  publish(scanKey, null)
+  currentScans.set(scanKey, { handle, fallback })
+  publish(scanKey, current)
   return handle
 }
 
-/** Runs the scanner service request using the coordinator's progress ownership. */
 export async function requestLocalAiVaultScan<T extends { work: AiVaultScanWork | null }>(
   request: (listener: AiVaultServiceScanListener) => Promise<T>,
   options: {
@@ -122,13 +109,13 @@ export async function requestLocalAiVaultScan<T extends { work: AiVaultScanWork 
     progress.finish(value.work)
     return value
   } catch (error) {
-    progress.fail(error)
+    progress.fail()
     throw error
   }
 }
 
 export function resetLocalAiVaultScanProgressForTests(): void {
   latest.clear()
-  currentHandles.clear()
+  currentScans.clear()
   listeners.clear()
 }

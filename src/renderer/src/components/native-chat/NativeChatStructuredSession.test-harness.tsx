@@ -129,6 +129,7 @@ export function createStructuredSessionMocks() {
       }
       isWorking?: boolean
       isStopping?: boolean
+      unavailableHint?: string
       afterStop?: 'queue' | 'send'
       steerQueued?: () => boolean
       onStop?: () => void
@@ -189,6 +190,7 @@ export function createStructuredSessionMocks() {
         }) => {
           mocks.controllerProps = props
           return {
+            contextClear: { clearing: false, clears: 0 },
             journalItems: mocks.journalItems,
             messages: mocks.messages ?? [
               {
@@ -248,6 +250,8 @@ export function createStructuredSessionMocks() {
               steer: mocks.queuedSteer,
               remove: mocks.queuedRemove,
               edit: mocks.queuedEdit,
+              pending: () => null,
+              queuePending: null,
               steerNewest: mocks.queuedSteerNewest
             },
             threadGoal: mocks.threadGoal,
@@ -329,7 +333,8 @@ export function createStructuredSessionMocks() {
         mocks.messageListProps = props
         useImperativeHandle(props?.ref, () => ({
           revealLatest: mocks.revealLatest,
-          revealFindMatch: () => {}
+          revealFindMatch: () => {},
+          messageCopyText: () => null
         }))
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />
       }

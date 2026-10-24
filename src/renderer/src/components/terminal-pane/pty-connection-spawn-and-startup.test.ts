@@ -1,7 +1,7 @@
 import { describe } from 'vitest'
 import { registerPtyConnectionPendingSpawnTests } from './pty-connection-pending-spawn.spec'
 import { registerPtyConnectionFreshSpawnGuardsTests } from './pty-connection-fresh-spawn-guards.spec'
-import { registerPtyConnectionSetupSplitSpawnTests } from './pty-connection-setup-split-spawn.spec'
+import { registerPtyConnectionSplitSpawnTests } from './pty-connection-split-spawn.spec'
 import { registerPtyConnectionRuntimeOwnerSpawnRoutingTests } from './pty-connection-runtime-owner-spawn-routing.spec'
 import { registerPtyConnectionStartupCommandDeliveryTests } from './pty-connection-startup-command-delivery.spec'
 import { registerPtyConnectionStartupDraftDeliveryTests } from './pty-connection-startup-draft-delivery.spec'
@@ -10,7 +10,7 @@ import { registerPtyConnectionRemoteRuntimeAttachTests } from './pty-connection-
 
 describe('pty-connection-pending-spawn', registerPtyConnectionPendingSpawnTests)
 describe('pty-connection-fresh-spawn-guards', registerPtyConnectionFreshSpawnGuardsTests)
-describe('pty-connection-setup-split-spawn', registerPtyConnectionSetupSplitSpawnTests)
+describe('pty-connection-split-spawn', registerPtyConnectionSplitSpawnTests)
 describe(
   'pty-connection-runtime-owner-spawn-routing',
   registerPtyConnectionRuntimeOwnerSpawnRoutingTests

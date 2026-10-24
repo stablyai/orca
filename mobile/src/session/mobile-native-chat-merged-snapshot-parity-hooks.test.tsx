@@ -7,12 +7,13 @@
 
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileNativeChatView } from './MobileNativeChatView'
@@ -44,6 +45,7 @@ vi.mock('react-native', async () => {
     View: 'View'
   }
 })
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
@@ -62,6 +64,9 @@ vi.mock('lucide-react-native', () => ({
   Square: 'Square'
 }))
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
+vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
+  MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
+}))
 vi.mock('./MobileNativeChatLiveLine', () => ({ MobileNativeChatLiveLine: 'LiveStatus' }))
 vi.mock('./MobileNativeChatComposer', () => ({ MobileNativeChatComposer: 'Composer' }))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
@@ -70,9 +75,6 @@ vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionShee
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 
 const STOP_ROW = `stopped-before-start:orca:${NEVER_OPENED}`
 
@@ -93,7 +95,10 @@ const HOST_SUPPORT = {
   statusFeed: true,
   quietRepeatedStop: true,
   sendOptions: false,
-  conversationStop: false
+  conversationStop: false,
+  permissionModes: false,
+  itemDetail: false,
+  phoneAttachments: false
 }
 
 type Phone = {
@@ -231,6 +236,7 @@ async function mountPhone(): Promise<Phone> {
       sendErrorMessage: null,
       onClearSendError: () => {},
       sendSurfaceId: 'host\0workspace\0tab',
+      sessionId: null,
       getSendCompletionGeneration: () => 0,
       keyboardInset: 0
     })
@@ -260,8 +266,12 @@ async function mountPhone(): Promise<Phone> {
   await vi.waitFor(() => expect(listeners.get('agentSession.subscribeStatus')).toBeDefined())
   return {
     renderer: renderer!,
+    // Each frame lands as the coalesced live read applies it, before the list is compared.
     transcript: (event) =>
-      act(() => listeners.get('agentSession.subscribe')!(structuredClone(event))),
+      act(() => {
+        listeners.get('agentSession.subscribe')!(structuredClone(event))
+        vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      }),
     status: (stopping) => {
       const event: AgentSessionStatusEvent = {
         type: 'status',
@@ -299,6 +309,13 @@ async function mountPhone(): Promise<Phone> {
 }
 
 describe("the phone's hooks, from merged frames and from a fresh snapshot", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   const journal = stopJournal(8)
   const last = journal.rows.length
   const stoppingAt = (upTo: number): boolean =>

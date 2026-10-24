@@ -1,3 +1,6 @@
+import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type {
   IPtyProvider,
   PtySpawnOptions,
@@ -12,7 +15,7 @@ import { createPtySpawnTiming } from '../../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
-import type { ReplacedPaneOwner } from '../pane/pane-owner-replacement'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { localProvider } from '../provider/registry'
 import type { AdoptStablePaneResult, PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 import type { PaneAgentLaunch } from './spawn-agent-launch-end'
@@ -26,7 +29,9 @@ export type PtyIpcSpawnState = {
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
   prevalidatedCwd: string | undefined
-  startupCwdFallback: { kind: 'worktree'; cwd: string } | undefined
+  requestedCwd: string | undefined
+  correctStartupCwd?: string
+  startupCwdFallback: StartupCwdFallback | undefined
   earlyStablePaneOwner: StablePaneOwner | null
   earlyWorktreeId: string | undefined
   paneSpawnReservationKey: string | null
@@ -34,19 +39,19 @@ export type PtyIpcSpawnState = {
   replacedPaneOwner: ReplacedPaneOwner | null
   finishTerminalInstall: () => void
   result: PtySpawnResult
+  paneSpawnOperation?: PaneSpawnOperation
   stablePaneOwner: StablePaneOwner | null
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   reconciledSnapshotSeq: number | null
   snapshotKittyFlagsCoverReconciledSeq: boolean
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   provider: IPtyProvider
   preAdoptedStablePane: AdoptStablePaneResult | null
-  /** The agent launch this pane's spawn admitted, until the spawn ends it. */
   paneAgentLaunch: PaneAgentLaunch | null
-  /** The new process exited before it registered; the pane drains it. */
   exitedBeforeRegistration: boolean
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
@@ -108,6 +113,7 @@ export function createPtyIpcSpawnState(
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
     prevalidatedCwd: undefined,
+    requestedCwd: undefined,
     startupCwdFallback: undefined,
     earlyStablePaneOwner: null,
     earlyWorktreeId: undefined,

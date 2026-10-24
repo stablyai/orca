@@ -4,10 +4,10 @@ import {
   getLinearStatus,
   selectLinearWorkspace,
   testLinearConnection,
-  searchLinearIssues,
-  readLinearIssueContext,
-  searchLinearIssuesForAgents
+  searchLinearIssues
 } from './runtime-linear-command-dependencies'
+import { readLinearIssueContext } from '../linear/issue-context/read-context'
+import { searchLinearIssuesForAgents } from '../linear/issue-context/client'
 import type {
   LinearIssueRequest,
   LinearWorkspaceSelection

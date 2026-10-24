@@ -1,8 +1,8 @@
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts
-} from '@/components/sidebar/worktree-list/listing/host-filtering'
-import { getRenderableFolderWorkspaces } from '@/components/sidebar/worktree-list/grouping/folder-workspace-lanes'
+} from '../../../shared/sidebar-list/host-filtering'
+import { getRenderableFolderWorkspaces } from '../../../shared/sidebar-list/folder-workspace-lanes'
 import { worktreeMatchesVisibleHost } from '@/components/sidebar/visible-worktree-host-scope'
 import {
   filterFolderWorkspacesFromOtherDevices,

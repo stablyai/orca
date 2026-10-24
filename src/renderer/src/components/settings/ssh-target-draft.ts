@@ -1,4 +1,5 @@
 import type { SshConfigHostResolution, SshTarget } from '../../../../shared/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 
 export type EditingTarget = {
   label: string
@@ -11,6 +12,7 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   systemSshConnectionReuse: boolean
+  systemSshProxyConnectionReuse: boolean
   allowRemoteCliControl: boolean
 }
 
@@ -25,7 +27,8 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
-  allowRemoteCliControl: false
+  systemSshProxyConnectionReuse: false,
+  allowRemoteCliControl: true
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -43,7 +46,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
-    allowRemoteCliControl: target.allowRemoteCliControl === true
+    systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse === true,
+    allowRemoteCliControl: isRemoteCliControlAllowed(target)
   }
 }
 
@@ -151,7 +155,7 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
-    form.allowRemoteCliControl
+    !form.allowRemoteCliControl
   )
 }
 
@@ -167,6 +171,7 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.systemSshProxyConnectionReuse !== baseline.systemSshProxyConnectionReuse ||
     current.allowRemoteCliControl !== baseline.allowRemoteCliControl
   )
 }

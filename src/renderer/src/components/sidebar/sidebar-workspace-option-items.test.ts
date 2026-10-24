@@ -22,7 +22,7 @@ import {
   PR_GROUP_LABELS,
   PR_GROUP_ORDER
 } from '../../../../shared/workspace-view/workspace-pr-groups'
-import { PR_GROUP_META } from './worktree-list/grouping/group-keys'
+import { getSidebarHeaderVisual } from './worktree-list/rows/header-visuals'
 
 // The desktop's localized copy must read, in English, exactly as the shared copy the phone shows.
 const sharedCopy = (choices: readonly { id: string; label: string; description?: string }[]) =>
@@ -45,7 +45,9 @@ describe('desktop Workspace options copy', () => {
 
   it('labels the PR lanes as the shared table does', () => {
     for (const key of PR_GROUP_ORDER) {
-      expect(PR_GROUP_META[key].label).toBe(PR_GROUP_LABELS[key])
+      expect(getSidebarHeaderVisual({ kind: 'pr-status', prGroup: key }, []).label).toBe(
+        PR_GROUP_LABELS[key]
+      )
     }
   })
 

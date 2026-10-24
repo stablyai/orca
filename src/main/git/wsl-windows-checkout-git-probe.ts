@@ -15,6 +15,7 @@ import {
   isFresh,
   isWslWindowsCheckoutCandidate,
   LINE_ENDING_SAMPLE_LIMIT,
+  LINE_ENDING_SCAN_LIMIT,
   parseHostAutocrlf,
   recordHostAutocrlf,
   recordLineEndingSample,
@@ -29,11 +30,11 @@ const SAMPLE_PROBE_TIMEOUT_MS = 15_000
 const RETRY_BASE_MS = 30_000
 const RETRY_MAX_MS = 10 * 60_000
 const HOST_CONFIG_ARGS = ['config', '--show-origin', '--get-regexp', '^core\\.(autocrlf|eol)$']
-// Exit 3 carries rev-parse's own diagnostic; the pipeline is bounded by head, not by git.
-const SAMPLE_SCRIPT = [
+// Exit 3 preserves rev-parse failure; cap scanned entries even when no sample lines match.
+export const SAMPLE_SCRIPT = [
   'git -C "$1" rev-parse --is-inside-work-tree >/dev/null || exit 3',
   "tab=$(printf '\\t')",
-  'git -C "$1" ls-files --eol | grep "^i/lf  *w/[a-z]*  *attr/ *$tab" | head -n "$2"'
+  'git -C "$1" ls-files --eol | head -n "$3" | grep "^i/lf  *w/[a-z]*  *attr/ *$tab" | head -n "$2"'
 ].join('\n')
 
 export type HostGitResult = {
@@ -102,7 +103,7 @@ async function admitted<T>(
   request: { args: string[]; cwd: string; wslDistro?: string; tier?: GitAdmissionTier },
   work: () => Promise<T>
 ): Promise<T> {
-  // Why: hundreds of cold worktrees must queue behind the git scheduler, not spawn at once.
+  // Queue cold probes behind Git admission rather than spawning every checkout at once.
   const grant = await (deps.admit ?? acquireGitAdmission)(request)
   try {
     return await work()
@@ -132,7 +133,7 @@ async function probeHost(
     }
   }
   if (answer === null) {
-    // Why: no host git, dubious ownership, or a timeout is "unknown", never "not Windows".
+    // Missing host Git, dubious ownership and timeouts leave ownership unknown.
     rememberFailure(`host\0${key}`, now())
     return
   }
@@ -159,7 +160,11 @@ async function probeSample(
       (deps.runWsl ?? runWslProcess)({
         distro: options.wslDistro,
         script: SAMPLE_SCRIPT,
-        args: [translateArgForWsl(options.cwd), String(LINE_ENDING_SAMPLE_LIMIT)],
+        args: [
+          translateArgForWsl(options.cwd),
+          String(LINE_ENDING_SAMPLE_LIMIT),
+          String(LINE_ENDING_SCAN_LIMIT)
+        ],
         loginPath: 'preferred',
         timeoutMs: SAMPLE_PROBE_TIMEOUT_MS,
         maxOutputBytes: 1024 * 1024
@@ -210,7 +215,7 @@ function waitUnlessAborted(
   if (!work || !signal) {
     return work ?? Promise.resolve()
   }
-  // Why: an aborted command stops waiting; the shared probe keeps running for the next caller.
+  // Aborting a command stops only its wait; shared probes serve later callers.
   return new Promise<void>((resolve) => {
     const done = (): void => {
       signal.removeEventListener('abort', done)
@@ -248,7 +253,7 @@ async function settle(
     return
   }
   if (isRead) {
-    // Reads are already correct with the flags; the sample only has to catch up for later writes.
+    // Reads need no sample wait; refresh evidence for later writes in the background.
     if (!isFresh(state.sample, now())) {
       void runStage('sample', key, options, deps)
     }
@@ -268,10 +273,7 @@ async function settle(
   }
 }
 
-/**
- * Settles what a WSL git command on a Windows drive needs to know about its checkout, or null when
- * the command is not one. Never rejects; an unknown answer runs the command unflagged.
- */
+/** Never rejects; unresolved ownership falls back to conservative config, null means no applicable command. */
 export function pendingWslWindowsCheckoutGitConfig(
   args: readonly string[],
   options: {

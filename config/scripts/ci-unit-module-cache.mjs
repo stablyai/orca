@@ -60,7 +60,7 @@ export async function moduleCachePolicyHash(root = ROOT) {
     'pnpm-lock.yaml',
     'pnpm-workspace.yaml',
     '.npmrc',
-    '.pnpmfile.cjs',
+    'config/pnpmfile.cjs',
     'config/.bun-version',
     'config/scripts/ci-unit-module-cache.mjs',
     'config/scripts/ci-unit-module-cache-contents.mjs',

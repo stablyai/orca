@@ -23,6 +23,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   browser: 'host',
   clipboard: 'host',
   computer: 'host',
+  connector: 'host',
+  desktopBrowserBridge: 'host',
   diagnostics: 'host',
   emulator: 'host',
   files: 'host',
@@ -35,6 +37,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   jira: 'scope-picked',
   layout: 'host',
   linear: 'scope-picked',
+  managedRuntime: 'host',
   managedServer: 'host',
   markdown: 'host',
   mobileRelay: 'host',
@@ -56,6 +59,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   session: 'host',
   settings: 'scope-picked',
   shell: 'client',
+  sidebarInputs: 'host',
+  sidebarSession: 'host',
   skills: 'host',
   speech: 'host',
   ssh: 'host',
@@ -69,8 +74,9 @@ export const HOST_OPERATION_OWNERSHIP = {
   worktree: 'host'
 } as const satisfies Record<string, HostOperationOwnership>
 
-/** Methods whose owner differs from their namespace: row-less forge reads use the source picker. */
+/** Method overrides for scope-picked forge reads and streams without a subscription name. */
 const HOST_OPERATION_METHOD_OWNERSHIP = {
+  'desktopBrowserBridge.attach': 'stream',
   'github.project.listAccessible': 'scope-picked',
   'github.project.listViews': 'scope-picked',
   'github.project.resolveRef': 'scope-picked',

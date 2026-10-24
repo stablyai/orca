@@ -65,6 +65,7 @@ let replayVerdict: AgentSessionOwnerVerdict | undefined
 /** A host that answers the proven exit on the first call, not only on replay. */
 let refuseFirstCall = false
 let missingHistory: boolean | 'legacy' = false
+let ownershipRefusal: AgentSessionWireRefusal | null = null
 let failedOperation: string | null = null
 let publishedSessionId: string | null = null
 const createdOperations: string[] = []
@@ -92,7 +93,7 @@ function hostCreate(envelope: AgentSessionMutationEnvelope): unknown {
     message: EXIT_REASON,
     ...(replayVerdict ? { ownerVerdict: replayVerdict } : {})
   }
-  return { ok: false, refusal }
+  return { ok: false, refusal: ownershipRefusal ?? refusal }
 }
 
 async function settle(sessionId: string): Promise<void> {
@@ -116,6 +117,7 @@ beforeEach(() => {
   replayVerdict = 'exited'
   refuseFirstCall = false
   missingHistory = false
+  ownershipRefusal = null
   failedOperation = null
   publishedSessionId = null
   createdOperations.length = 0
@@ -153,6 +155,28 @@ describe('structured launch after a host-failed create', () => {
     // A published launch retires its client state; failed or unknown would linger.
     expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, sessionId)).toBeNull()
   })
+
+  it.each(['agent_session_conflict', 'agent_session_ownership_unknown'] as const)(
+    'settles a proven first-attempt %s with its owner, but keeps an earlier lost reply unknown',
+    async (code) => {
+      const details = {
+        reason: 'conversationHeldElsewhere' as const,
+        owner: { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
+      }
+      ownershipRefusal = { code, details, message: code, createAttemptRefusedBeforeCommit: true }
+      refuseFirstCall = true
+      const started = startStructuredAgentLaunch(WORKTREE, 'codex', { requestId: 'owned-click' })
+      await expect(started.launchResult).rejects.toMatchObject({ refusal: { code, details } })
+      await settle(started.sessionId)
+      expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, started.sessionId)).toBe('failed')
+      refuseFirstCall = false
+      createdOperations.length = 0
+      failedOperation = null
+      const unknown = launch()
+      await settle(unknown)
+      expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE, unknown)).toBe('visibility-unknown')
+    }
+  )
 
   it('retains a missing-history failed tab with Retry, then starts a new attempt', async () => {
     refuseFirstCall = true

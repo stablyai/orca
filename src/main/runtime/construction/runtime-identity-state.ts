@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from '../mobile-session-terminal-retirement-proof'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
+import {
+  headlessMobileSnapshotContentUnchanged,
+  mobileSnapshotIdentityUnchanged
+} from '../mobile-session-snapshot-equality'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { RuntimeStore } from '../runtime-store-contract'
@@ -36,7 +43,7 @@ import type {
   PtyControllerInventory,
   RuntimePtyController
 } from '../runtime-pty-controller-contract'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import type { RuntimeLeafRecord, PtyRegistrationClaim } from '../runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
@@ -55,6 +62,7 @@ import {
 } from '../orca-runtime-postlude'
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
 import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
@@ -110,6 +118,21 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Every write keeps main's order and groups; its rows and their facts stay as written.
+      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
+      // A write main's order wholly overrides (a rebuild from the saved session) changes nothing,
+      // unless it names a new occupant, window publication or retirement proof.
+      if (
+        existing &&
+        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+        headlessMobileSnapshotContentUnchanged(existing, merged) &&
+        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+      ) {
+        return existing
+      }
+      snapshot = merged
+    }
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
@@ -178,15 +201,16 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   protected readonly terminalCreateIdempotency = new RemoteRuntimeTerminalCreateIdempotency()
 
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
-  protected terminalSleepByWorktreeId = new Map<
-    string,
+  // Both sleep maps key on host + workspace (hostSleepKey), never the bare id.
+  protected terminalSleepByHostWorktree = new Map<
+    HostScopedWorktreeKey,
     Promise<RuntimeWorktreeTerminalSleepResult>
   >()
 
   protected readonly terminalMutationLock = new WorktreeTerminalMutationLock()
 
-  protected terminalSleepStateByWorktreeId = new Map<
-    string,
+  protected terminalSleepStateByHostWorktree = new Map<
+    HostScopedWorktreeKey,
     {
       worktreeId: string
       generation: number
@@ -234,10 +258,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   // Why: one watermark per repo replaces per-closed-pane fences while preserving stale-write safety.
   protected terminalTopologyRevisionByRepoId = new Map<string, number>()
 
-  // Why: provider exit can beat surface registration; that exact dead incarnation must never publish.
-  protected earlyExitedPtyIncarnations = new Map<string, PtyIncarnationId | null>()
-
-  protected pendingPtyRegistrationIncarnations = new Map<string, PtyIncarnationId | null>()
+  // The candidate receipt owns its exit evidence until publication or cancellation.
+  protected pendingPtyRegistrationIncarnations = new Map<string, PtyRegistrationClaim>()
 
   // Why public: the PTY IPC layer's stop paths write it and its exit delivery reads it.
   readonly intentionalPtyStops = new TerminalIntentionalStops()
@@ -312,12 +334,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     }
   >()
 
-  // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
-  protected readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
-
-  // Why: a waiter can reserve an older row while a newer row advances the sequence watermark.
-  protected readonly pointedMessageIdsByHandle = new Map<string, Set<string>>()
-
   protected readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )
@@ -378,6 +394,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       ...this.tuiIdleEvidenceSource,
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
       getLivePty: (handle) => this.getLivePtyForHandle(handle),
+      // An exit event of any code settles the wait, as the switch-off rule did.
+      exitUnsettled: (pty) =>
+        pty.lastExitCode === null &&
+        mainBindsUnendedTerminal(this, pty.ptyId, this.ptyLivenessVerdictByPtyId.get(pty.ptyId)),
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
       startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)

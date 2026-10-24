@@ -17,7 +17,7 @@ import { createCodexJournalTranslatorWriters } from './codex-structured-journal-
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
 import { codexProviderRetryRowBody, isCodexProviderRetryFrame } from './codex-provider-retry-row'
 import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
-import { codexThreadStoppedRunning, readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexTurnId } from './codex-structured-thread-facts'
 import {
   observeCodexExecutionFrame,
   readCodexBackgroundTaskFrame
@@ -77,15 +77,6 @@ export function createCodexJournalTranslator(
     commands,
     ...(deps.now ? { now: deps.now } : {})
   })
-  let primaryThreadStoppedRunning = false
-  const reportPrimaryThreadStoppedRunning = (): void => {
-    const primaryThreadId = deps.primaryThreadId?.() ?? null
-    if (!primaryThreadStoppedRunning || !primaryThreadId || activeTurns.current(primaryThreadId)) {
-      return
-    }
-    primaryThreadStoppedRunning = false
-    deps.onPrimaryThreadStoppedRunning?.()
-  }
   const routeThreadItem = createCodexThreadItemRouter({
     deps,
     items,
@@ -118,6 +109,7 @@ export function createCodexJournalTranslator(
       return restoreCodexJournalThread({
         threadId,
         thread,
+        historyImport: deps.historyImport,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) =>
@@ -145,7 +137,7 @@ export function createCodexJournalTranslator(
     handle: (event) => {
       const primaryThreadId = deps.primaryThreadId?.() ?? null
       if (event.type === 'notification' && primaryThreadId !== null) {
-        // Before any row: the rows this frame writes name the child run it starts.
+        // Register execution first so rows from this frame carry the child's run.
         observeCodexExecutionFrame(
           executions,
           readCodexBackgroundTaskFrame(event, primaryThreadId),
@@ -170,8 +162,7 @@ export function createCodexJournalTranslator(
           currentTurnIds: activeTurns.byThread,
           primaryThreadId: deps.primaryThreadId?.() ?? null,
           ordinals: items.ordinals,
-          // The host saw the child go, not what Codex made of the turn: whether it was a person's
-          // Stop is the journal's Stop event to say (`turnEndAfterStop`), else it is news.
+          // Exit supplies no provider verdict; the journal's Stop event determines cancellation.
           settledTurnLifecycle: (threadId, turnId) =>
             turnBoundaries.ownsRecord(threadId, turnId)
               ? turnBoundaries.settled(threadId, turnId, {
@@ -209,24 +200,19 @@ export function createCodexJournalTranslator(
         return suppressionAdmission.accepted ? prompts.handle(event) : suppressionAdmission
       }
       if (event.type === 'server-request') {
-        return genericFrames.appendUnhandled(
-          `request:${event.method}`,
-          event.params,
-          event.threadId
-        )
+        const requestKey = `request:${event.method}`
+        return genericFrames.appendUnhandled(requestKey, event.params, event.threadId)
       }
       if (event.type === 'provider-frame') {
         return genericFrames.appendUnhandled(event.kind, event.payload, event.threadId)
       }
+      if (event.type !== 'notification') {
+        return CODEX_JOURNAL_ADMITTED
+      }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
-        const admission =
-          event.method === 'turn/started'
-            ? turnBoundaries.start(event)
-            : turnBoundaries.complete(event)
-        if (admission.accepted) {
-          reportPrimaryThreadStoppedRunning()
-        }
-        return admission
+        return event.method === 'turn/started'
+          ? turnBoundaries.start(event)
+          : turnBoundaries.complete(event)
       }
       const compaction = compactions.handle(event)
       if (compaction) {
@@ -236,7 +222,7 @@ export function createCodexJournalTranslator(
       if (goal) {
         return publishActivity(event, goal)
       }
-      // The session's own thread fills the window its chat shows; a child's frame measures its own.
+      // Child-thread usage must not replace the session's context reading.
       if (
         event.method === CODEX_TOKEN_USAGE_METHOD &&
         event.threadId === (deps.primaryThreadId?.() ?? null)
@@ -252,15 +238,13 @@ export function createCodexJournalTranslator(
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         const routed = routeThreadItem(event)
-        // Not a bare return: a claimed item must not skip the turn-tail arm,
-        // which is the only publisher of its activity copy.
+        // Claimed items still need to publish turn activity.
         if (routed) {
           return publishActivity(event, routed)
         }
       }
       if (isCodexProviderRetryFrame(event)) {
-        // Always journaled, like any error frame: each attempt is evidence, and its publish is
-        // the activity the idle sweep reads.
+        // Persist each retry as evidence and publish activity for the idle sweep.
         return publishActivity(
           event,
           genericFrames.appendFrameRow(event.threadId, event.params, {
@@ -269,25 +253,11 @@ export function createCodexJournalTranslator(
           })
         )
       }
-      // A thread that stopped running settles no open turn: Codex clears `running`
-      // on every error, and an open turn ends on its `turn/completed`. It releases
-      // a send whose dispatch was never answered, which nothing else re-derives live.
-      if (
-        event.method === 'thread/status/changed' &&
-        codexThreadStoppedRunning(event.params) &&
-        event.threadId === (deps.primaryThreadId?.() ?? null)
-      ) {
-        primaryThreadStoppedRunning = true
-        reportPrimaryThreadStoppedRunning()
-      }
-      // A turn-ending `error` is a row inside the turn it names; the failed
-      // `turn/completed` Codex sends after it is that turn's end. The thread
-      // status was read for state above and prints nothing.
+      // An error adds a row; the subsequent turn/completed ends the turn.
       const unhandled = genericFrames.appendUnhandled(
         `notification:${event.method}`,
         event.params,
-        event.threadId,
-        { coveredByTypedTranslator: event.method === 'thread/status/changed' }
+        event.threadId
       )
       if (unhandled.accepted && event.method === 'error') {
         commands.errorShown(event.params)

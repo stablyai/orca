@@ -16,19 +16,30 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 type SubscribedCapabilities = {
   ackOutputSourceRanges: boolean
   outputPause: boolean
+  outputPauseDropNotice: boolean
   inputAck: boolean
 }
 
 // Why parse: the frame comes off the wire, so a malformed or legacy capabilities value must read as "unsupported".
 function parseSubscribedCapabilities(value: unknown): SubscribedCapabilities {
   if (typeof value !== 'object' || value === null) {
-    return { ackOutputSourceRanges: false, outputPause: false, inputAck: false }
+    return {
+      ackOutputSourceRanges: false,
+      outputPause: false,
+      outputPauseDropNotice: false,
+      inputAck: false
+    }
   }
-  const record: { ackOutputSourceRanges?: unknown; outputPause?: unknown; inputAck?: unknown } =
-    value
+  const record: {
+    ackOutputSourceRanges?: unknown
+    outputPause?: unknown
+    outputPauseDropNotice?: unknown
+    inputAck?: unknown
+  } = value
   return {
     ackOutputSourceRanges: record.ackOutputSourceRanges === 1,
     outputPause: record.outputPause === 1,
+    outputPauseDropNotice: record.outputPause === 1 && record.outputPauseDropNotice === 1,
     inputAck: record.inputAck === 1
   }
 }
@@ -75,6 +86,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
         stream.streamGeneration = event.streamGeneration
       }
       stream.supportsOutputPause = capabilities.outputPause
+      stream.supportsPausedOutputDropNotice = capabilities.outputPauseDropNotice
       // Why require the ledger id: without it a runtime restart could not be told apart, and replay would run input twice.
       stream.inputLedgerId =
         capabilities.inputAck &&

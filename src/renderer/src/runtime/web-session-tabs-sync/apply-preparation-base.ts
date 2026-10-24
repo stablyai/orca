@@ -20,7 +20,7 @@ import {
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
   clearWebAgentSessionHandoff
 } from '../web-agent-session-handoff'
-import { toRemoteRuntimePtyId } from '../runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import {
   isReadyTerminalTab,
@@ -155,6 +155,7 @@ export function prepareWebSessionTabsSnapshotBase(
     environmentId,
     existingTerminalById,
     state.terminalLayoutsByTabId,
+    state.ptyIdsByTabId,
     retainedTerminalTabs.length,
     now,
     callerFocusIntentTab?.type === 'terminal'

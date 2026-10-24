@@ -1,3 +1,4 @@
+import { readStructuredAgentLaunchRecords } from './structured-agent-session-launch-persistence'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
@@ -157,6 +158,11 @@ export function collectWorktreeHydrationRepoIdsFromSession(
   // Why: a repo referenced only by activeRepoId (no active worktree, no tabs) still needs
   // enumeration so hydrateWorkspaceSession can restore its main worktree from worktreesByRepo.
   addWorktreeRepoId(session.activeRepoId)
+  for (const record of readStructuredAgentLaunchRecords()) {
+    if (record.executionHostId === 'local' && record.surfaceAddress) {
+      addWorktreeRepoId(record.surfaceAddress.worktreeId)
+    }
+  }
 
   return [...repoIds].filter(Boolean).sort()
 }

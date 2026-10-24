@@ -18,7 +18,6 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check' }))
-vi.mock('../components/MobileSelectableText', () => ({ MobileSelectableText: 'Text' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
@@ -143,7 +142,10 @@ describe('iOS whole-message copy', () => {
     '::orca-visual{file="usage.html"}'
   ])('copies the entire visible own source %j', async (text) => {
     render({ ...message, role: 'user', blocks: [{ type: 'text', text }] })
-    expect(nodes('Text').some((node) => node.props.children === text)).toBe(true)
+    // Drawn as written: your own message never renders a visual.
+    expect(nodes('MobileMarkdown')).toHaveLength(1)
+    expect(nodes('MobileMarkdown')[0]?.props.content).toBe(text)
+    expect(nodes('MobileMarkdown')[0]?.props.renderVisual).toBeUndefined()
     expect(copyButton().props.accessibilityRole).toBe('button')
     await act(async () => copyButton().props.onPress())
     expect(writeText.mock.calls).toEqual([[text]])

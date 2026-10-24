@@ -25,6 +25,11 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capabilities'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 
@@ -56,6 +61,62 @@ export type AgentLaunchRouteStore = {
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
   Parameters<typeof getConnectionIdFromState>[0]
 
+/** Every slice the route readers take: a publisher that watches these sees every route change. */
+const AGENT_LAUNCH_ROUTE_KEYS = [
+  'settings',
+  'runtimeStatusByEnvironmentId',
+  'worktreesByRepo',
+  'folderWorkspaces',
+  'repos',
+  'detectedWorktreesByRepo',
+  'projectGroups',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'activeWorktreeId',
+  'activeWorkspaceExecutionHostId',
+  'runtimeEnvironments',
+  'runtimeEnvironmentCatalogHydrated',
+  'removedRuntimeEnvironmentIds',
+  'activeRepoId',
+  'projects'
+] as const satisfies readonly (keyof AgentLaunchRouteStore)[]
+type AgentLaunchRouteKey = (typeof AGENT_LAUNCH_ROUTE_KEYS)[number]
+// Completeness, not just membership: a reader input missing from the list fails to compile.
+type AssertNoMissingRouteKey<T extends never> = T
+export type AgentLaunchRouteKeysAreComplete = AssertNoMissingRouteKey<
+  Exclude<keyof AgentLaunchRouteStore, AgentLaunchRouteKey>
+>
+export type AgentLaunchRouteView = { [K in AgentLaunchRouteKey]: AppState[K] }
+
+export const agentLaunchRouteInputsChanged = (
+  next: AgentLaunchRouteView,
+  previous: AgentLaunchRouteView
+): boolean => AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key])
+
+let lastRouteView: AgentLaunchRouteView | undefined
+/** Same object until a route slice changes, so an unrelated write allocates nothing. */
+export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteView {
+  if (!lastRouteView || agentLaunchRouteInputsChanged(state, lastRouteView)) {
+    lastRouteView = {
+      settings: state.settings,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
+      repos: state.repos,
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+      projectGroups: state.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+      activeRepoId: state.activeRepoId,
+      projects: state.projects
+    }
+  }
+  return lastRouteView
+}
+
 export type AgentLaunchRouteArgs = {
   agent: TuiAgent
   workspace: ProspectiveWorkspace
@@ -66,6 +127,10 @@ export type AgentLaunchRouteArgs = {
 }
 
 export { workspaceKindForWorktreeId }
+export const worktreeLaunchWorkspace = (worktreeId: string): ProspectiveWorkspace => ({
+  kind: workspaceKindForWorktreeId(worktreeId),
+  worktreeId
+})
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
@@ -131,23 +196,34 @@ function hostStructuredAgentsInput(
   return agents ? { hostStructuredAgents: agents.map((row) => row.agent) } : {}
 }
 
+/** The execution owner is resolved before agent policy. */
+export function resolveAgentLaunchHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+) {
+  const owner = workspace.worktreeId
+    ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
+    : undefined
+  const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
+  return {
+    owner,
+    executionHostId,
+    hostCapabilities: owner === null ? null : resolveHostCapabilities(store, executionHostId)
+  }
+}
+
 /** The one place that gathers what a launch route decision needs; only the planner resolves on it. */
 export function buildAgentLaunchRouteInput(
   store: AgentLaunchRouteStore,
   args: AgentLaunchRouteArgs
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
-  // The host a chat here would be created on; a workspace the catalog cannot pin to one host has
-  // no host to answer for it yet.
-  const owner = workspace.worktreeId
-    ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
-    : undefined
-  const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
+  const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
   return {
     agent,
     settings: store.settings,
     executionHostId,
-    hostCapabilities: owner === null ? null : resolveHostCapabilities(store, executionHostId),
+    hostCapabilities,
     ...(parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ? { clientCapabilities: pairedHostClientCapabilities() }
       : {}),
@@ -166,10 +242,10 @@ export function buildAgentLaunchRouteInput(
       workspaceId: workspace.worktreeId,
       requestedCwd: tuiCustomization?.cwd,
       workspacePath: workspace.worktreeId
-        ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
+        ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
         : undefined,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+        selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
     }),
     ...hostStructuredAgentsInput(store, executionHostId)
   }

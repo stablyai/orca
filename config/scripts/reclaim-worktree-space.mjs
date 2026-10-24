@@ -43,7 +43,11 @@ export async function reclaimWorktreeSpace({
   let cleanupFailed = false
   let cleanupError
   try {
-    const scripts = ['reclaim-electron-dists.mjs', 'reclaim-dev-electron-bundles.mjs']
+    const scripts = [
+      'reclaim-electron-dists.mjs',
+      'reclaim-dev-electron-bundles.mjs',
+      'reclaim-vite-caches.mjs'
+    ]
     if (!automatic && testsStopped) {
       scripts.unshift('reclaim-release-test-caches.mjs')
     }

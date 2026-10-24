@@ -45,6 +45,14 @@ describe('the SSH connection record', () => {
     })
   })
 
+  it('keeps the record when its managed-server note is malformed', () => {
+    const parsed = sshConnectionStateSchema.safeParse({
+      state: { ...connected, managedServer: { serving: { detail: 7 } } }
+    })
+    expect(parsed.success && parsed.data).toMatchObject({ status: 'connected' })
+    expect(parsed.success && parsed.data?.managedServer?.serving?.detail).toBeUndefined()
+  })
+
   it('answers undefined for a payload with no state member', () => {
     expect(sshConnectionStateSchema.safeParse({})).toMatchObject({ success: true, data: undefined })
   })

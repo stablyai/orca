@@ -166,7 +166,6 @@ describe('Claude live prompt ownership', () => {
       itemId: card,
       fence: 7,
       answer: false,
-      // Claude's own cancel lands mid-commit, as an interrupt's can.
       commit: async () => request.abort()
     })
 
@@ -201,7 +200,6 @@ describe('Claude live prompt ownership', () => {
         itemId: card,
         fence: 7,
         answer: false,
-        // Claude withdraws the request, then the host's record fails.
         commit: async () => {
           request.abort()
           throw new Error('journal write failed')

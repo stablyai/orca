@@ -11,7 +11,8 @@ import {
   identityFor,
   PROVIDER_SESSION_ID,
   tick,
-  claudeStartupSettled
+  claudeStartupSettled,
+  claudeOpened
 } from './claude-structured-session-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import {
@@ -100,7 +101,6 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     ).sessions.get('session-1')
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
-    // The handle follows the proven close as bookkeeping; its callback's failure is reported.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     await vi.waitFor(() =>
       expect(events.filter((event) => event.type === 'handle')).toHaveLength(1)
@@ -119,7 +119,6 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     const adapter = adapterFor(claude, {}, [], [], undefined, persistHandle)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
 
-    // The exit is proven, so the close ends the session; the write after it is bookkeeping.
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
     await vi.waitFor(() => expect(persistHandle).toHaveBeenCalledOnce())
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
@@ -159,7 +158,6 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         fence: 7
       }
     ])
-    // Written after the close already ended the session: its end comes first.
     expect(events.at(-2)).toMatchObject({ type: 'ended', cause: 'requested-close' })
     expect(events.at(-1)).toEqual({
       type: 'handle',
@@ -181,7 +179,6 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       claude.connections[0].handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
     frame({ type: 'assistant', uuid: 'crash-leaf' })
     frame({ type: 'result', uuid: 'result-frame-uuid' })
-    // The next turn's prompt is live, but its turn never completed.
     frame({ type: 'user', uuid: 'half-turn-prompt' })
 
     claude.connections[0].handlers.onExit?.(
@@ -387,7 +384,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
     expect(oldPrompt.settled()).toBe(false)
     expect(events.filter((event) => event.type === 'ended')).toEqual([])
 
-    const replacement = await adapter.acquire({
+    await adapter.acquire({
       identity: {
         ...identityFor(),
         providerHandle: claudeProviderHandle(PROVIDER_SESSION_ID, 'observed-retained-leaf')
@@ -396,6 +393,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
       spawnToken: 'spawn-10',
       events: journalSink
     })
+    const replacement = await claudeOpened(adapter, 'session-1')
 
     expect(disposeTranslator).toHaveBeenCalledOnce()
     expect(settlePrompt).toHaveBeenCalledOnce()

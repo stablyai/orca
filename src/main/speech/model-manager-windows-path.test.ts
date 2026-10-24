@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const { appGetPathMock, netRequestMock } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
@@ -18,6 +20,9 @@ vi.mock('electron', () => ({
     request: netRequestMock
   }
 }))
+
+// ModelManager reads userData through the app environment, which the desktop backs with `app`.
+beforeEach(() => installFakeAppEnvironment({ getPath: (name) => appGetPathMock(name) }))
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const originalProgramData = process.env.PROGRAMDATA
@@ -63,7 +68,7 @@ describe('ModelManager Windows model path handling', () => {
         name === 'userData' ? userDataDir : join(dir, name)
       )
 
-      const manager = new ModelManager()
+      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
 
       expect(manager.getModelsDir()).not.toContain(userDataDir)
       expect(manager.getModelsDir()).toContain(join(programDataDir, 'Orca', 'speech-models'))
@@ -96,7 +101,7 @@ describe('ModelManager Windows model path handling', () => {
         truncateSync(filePath, file.sizeBytes)
       }
 
-      const manager = new ModelManager()
+      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       const migratedModelDir = manager.getModelDir(manifest!.id)
 
       expect(migratedModelDir).not.toContain(userDataDir)
@@ -134,7 +139,7 @@ describe('ModelManager Windows model path handling', () => {
         truncateSync(filePath, file.sizeBytes)
       }
 
-      const manager = new ModelManager()
+      const manager = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
         id: manifest!.id,
         status: 'ready'
@@ -145,7 +150,7 @@ describe('ModelManager Windows model path handling', () => {
       expect(existsSync(legacyModelDir)).toBe(false)
 
       // Simulate an app restart: a fresh manager migrates from the same source.
-      const restarted = new ModelManager()
+      const restarted = new ModelManager(undefined, openElectronSpeechDownloadRequest)
       await expect(restarted.getModelState(manifest!.id)).resolves.toEqual({
         id: manifest!.id,
         status: 'not-downloaded'

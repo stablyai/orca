@@ -27,6 +27,22 @@ function seedSnapshot(branchLineTotal?: GitBranchLineTotal): void {
   })
 }
 
+function runTotalPass(
+  compute: () => Promise<GitBranchLineTotal | null | undefined>,
+  options: { reuse?: boolean; mergeBase?: string; complete?: boolean } = {}
+) {
+  return reuseOrRecomputeGitStatusLineStats({
+    cacheKey: CACHE_KEY,
+    head: 'head-1',
+    entries: entries(4),
+    writeToken: beginGitStatusLineStatsCacheWrite(CACHE_KEY),
+    reuse: options.reuse === true,
+    isAborted: () => false,
+    recompute: async () => options.complete !== false,
+    branchLineTotal: { mergeBase: options.mergeBase ?? MERGE_BASE, compute }
+  })
+}
+
 describe('branch line total inside the status line-stats cache', () => {
   beforeEach(() => {
     clearGitStatusLineStatsCache()
@@ -163,7 +179,7 @@ describe('branch line total inside the status line-stats cache', () => {
     ).toBe(false)
   })
 
-  it('omits the field entirely when the total could not be known exact', async () => {
+  it('omits the field entirely when total computation was deferred', async () => {
     const result = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: CACHE_KEY,
       head: 'head-1',
@@ -180,6 +196,97 @@ describe('branch line total inside the status line-stats cache', () => {
     expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBe(
       undefined
     )
+  })
+
+  it('replaces an exact total with cached unavailability for the same porcelain identity, then recovers', async () => {
+    seedSnapshot(TOTAL)
+    expect(await runTotalPass(async () => null)).toEqual({
+      branchLineTotalUnavailable: MERGE_BASE
+    })
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
+
+    const compute = vi.fn(async () => TOTAL)
+    expect(await runTotalPass(compute, { reuse: true })).toEqual({
+      branchLineTotalUnavailable: MERGE_BASE
+    })
+    expect(compute).not.toHaveBeenCalled()
+
+    expect(await runTotalPass(compute)).toEqual({ branchLineTotal: TOTAL })
+    expect(await runTotalPass(compute, { reuse: true })).toEqual({ branchLineTotal: TOTAL })
+    expect(compute).toHaveBeenCalledTimes(1)
+  })
+
+  it('only republishes cached unavailability for its own merge base', async () => {
+    seedSnapshot(TOTAL)
+    await runTotalPass(async () => null)
+    expect(
+      readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: OTHER_MERGE_BASE })
+    ).toBeUndefined()
+    const otherTotal = { ...TOTAL, mergeBase: OTHER_MERGE_BASE }
+    const compute = vi.fn(async () => otherTotal)
+    expect(await runTotalPass(compute, { reuse: true, mergeBase: OTHER_MERGE_BASE })).toEqual({
+      branchLineTotal: otherTotal
+    })
+    expect(compute).toHaveBeenCalledTimes(1)
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
+  })
+
+  it('carries exact totals or unavailable markers through deferred recomputes', async () => {
+    seedSnapshot(TOTAL)
+    expect(await runTotalPass(async () => undefined)).toEqual({ branchLineTotal: TOTAL })
+    await runTotalPass(async () => null)
+    expect(await runTotalPass(async () => undefined)).toEqual({
+      branchLineTotalUnavailable: MERGE_BASE
+    })
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
+  })
+
+  it.each([false, true])(
+    'keeps a good total when another merge base becomes unavailable (reuse=%s)',
+    async (reuse) => {
+      seedSnapshot(TOTAL)
+      expect(await runTotalPass(async () => null, { mergeBase: OTHER_MERGE_BASE, reuse })).toEqual({
+        branchLineTotalUnavailable: OTHER_MERGE_BASE
+      })
+      expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toEqual(
+        TOTAL
+      )
+      expect(
+        readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: OTHER_MERGE_BASE })
+      ).toBeNull()
+    }
+  )
+
+  it('keeps a newer reuse-only invalidation when an older full scan stores exact totals', async () => {
+    seedSnapshot()
+    const olderToken = beginGitStatusLineStatsCacheWrite(CACHE_KEY)
+    await runTotalPass(async () => null, { reuse: true })
+    storeGitStatusLineStats({
+      cacheKey: CACHE_KEY,
+      head: 'head-1',
+      entries: entries(9),
+      writeToken: olderToken,
+      branchLineTotal: TOTAL
+    })
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
+    const reused = entries()
+    expect(
+      applyCachedGitStatusLineStats({ cacheKey: CACHE_KEY, head: 'head-1', entries: reused })
+    ).toBe(true)
+    expect(reused[0].added).toBe(9)
+  })
+
+  it('invalidates a cached exact total even when per-area stats fail', async () => {
+    seedSnapshot(TOTAL)
+    expect(await runTotalPass(async () => null, { complete: false })).toEqual({
+      branchLineTotalUnavailable: MERGE_BASE
+    })
+    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
+    const reused = entries()
+    expect(
+      applyCachedGitStatusLineStats({ cacheKey: CACHE_KEY, head: 'head-1', entries: reused })
+    ).toBe(true)
+    expect(reused[0].added).toBe(3)
   })
 
   it('rejects instead of returning a partial total when the pass aborts mid-diff', async () => {

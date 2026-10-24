@@ -39,19 +39,26 @@ async function record(bucket: string, file = FILE): Promise<string> {
   return path
 }
 
-function lookup(cwd = '/repo/orca', homeDir = join(root, 'home'), temp = join(root, 'temp')) {
-  return OMP_TRANSCRIPT_IMPORT.findTranscript({
+async function lookup(cwd = '/repo/orca', homeDir = join(root, 'home'), temp = join(root, 'temp')) {
+  const launchEnv = {
+    OMP_CODING_AGENT_DIR: sessionsDir,
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+    TMPDIR: temp,
+    TEMP: temp
+  }
+  const store = OMP_TRANSCRIPT_IMPORT.conversationStore({
     accountHome: { variable: 'PI_CODING_AGENT_DIR', path: join(root, 'account') },
-    providerSessionId: ID,
-    workspaceCwd: cwd,
-    launchEnv: {
-      OMP_CODING_AGENT_DIR: sessionsDir,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
-      TMPDIR: temp,
-      TEMP: temp
-    }
+    launchEnv
   })
+  return store
+    ? OMP_TRANSCRIPT_IMPORT.findTranscript({
+        providerSessionId: ID,
+        store,
+        workspaceCwd: cwd,
+        launchEnv
+      })
+    : null
 }
 
 describe('OMP known-workspace transcript lookup', () => {

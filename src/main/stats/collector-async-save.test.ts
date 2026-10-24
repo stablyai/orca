@@ -83,7 +83,7 @@ describe('StatsCollector async debounced save', () => {
   it('writes valid JSON via the async fs/promises path on the debounced timer, no stray temp files', async () => {
     vi.useFakeTimers()
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
     collector.onAgentStart('pty-1', Date.now(), 'repo-1', 'wt-1')
@@ -107,7 +107,7 @@ describe('StatsCollector async debounced save', () => {
   it('coalesces timer saves while one write is stalled', async () => {
     vi.useFakeTimers()
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
     gate.blocked = true
@@ -134,7 +134,7 @@ describe('StatsCollector async debounced save', () => {
   it('bounds retained events while a stalled write prevents serialization', async () => {
     vi.useFakeTimers()
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
     gate.blocked = true
@@ -173,7 +173,7 @@ describe('StatsCollector async debounced save', () => {
 
   it('retries a queued final snapshot after the active write fails', async () => {
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
     const internals = collector as unknown as { enqueueWrite(): Promise<void> }
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -196,7 +196,7 @@ describe('StatsCollector async debounced save', () => {
 
   it('does not treat a genuine rename ENOENT as a committed snapshot', async () => {
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
     const internals = collector as unknown as { enqueueWrite(): Promise<void> }
     collector.onAgentStart('pty-enoent', 1_000)
@@ -210,7 +210,7 @@ describe('StatsCollector async debounced save', () => {
 
   it('flush() writes synchronously (no timer, immediately on disk)', async () => {
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
 
     collector.onAgentStart('pty-2', Date.now())
@@ -223,7 +223,7 @@ describe('StatsCollector async debounced save', () => {
 
   it('an in-flight async write is vetoed by a shutdown flush (no data-loss clobber)', async () => {
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
     // White-box: drive the two writers directly so the race is deterministic
     const internals = collector as unknown as { enqueueWrite: () => Promise<void> }
@@ -260,7 +260,7 @@ describe('StatsCollector async debounced save', () => {
     // parked on `await rename` has already cleared the guard, so only removing the temp file
     // it would rename keeps the flush's fuller state from being overwritten.
     const { StatsCollector, initStatsPath } = await importCollector()
-    initStatsPath()
+    initStatsPath(userDataDir)
     const collector = new StatsCollector()
     const internals = collector as unknown as { enqueueWrite: () => Promise<void> }
 

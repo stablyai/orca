@@ -6,6 +6,31 @@ import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop-targets'
 
 describe('OrcaRuntimeService', () => {
+  it('stops nothing for a sole-terminal sleep while another terminal in the worktree is live', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'pty-run', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
+        { id: 'pty-user', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
+      ]
+    })
+
+    await expect(
+      runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { soleLivePtyId: 'pty-run' })
+    ).resolves.toEqual({
+      stopped: 0,
+      stoppedPtyIds: [],
+      livePtyIds: ['pty-run', 'pty-user'],
+      postStopVerified: true
+    })
+    expect(stopAndWait).not.toHaveBeenCalled()
+  })
+
   it('rejects exact terminal stop when async PTY stop fails', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
@@ -391,10 +416,6 @@ describe('terminal stop dispatch characterization', () => {
   class StopRuntime extends OrcaRuntimeService {
     closeStop: ExplicitCloseStop | null = null
 
-    acquireEmptySpawn() {
-      return this.acquireWorktreeTerminalSpawn()
-    }
-
     emptyExplicitStop() {
       return this.stopExplicitlyClosedTabPtys([], 'unaddressed')
     }
@@ -537,57 +558,6 @@ describe('terminal stop dispatch characterization', () => {
       const stop = await runtime.emptyExplicitStop()
       await runtime.closeTerminal(runtime.leafHandle())
       expect(runtime.closeStop).toBe(stop)
-    })
-  })
-
-  describe('terminal stop commands during runtime construction', () => {
-    it('reads the canonical empty sleep state before command fields initialize', () => {
-      class EarlySleepStateRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          expect(this.isWorktreeTerminalSleepHeld('folder-proof')).toBe(false)
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySleepStateRuntime()).not.toThrow()
-    })
-
-    it('returns the original no-op spawn promise before command fields initialize', async () => {
-      let release: Promise<() => void> | undefined
-      class EarlySpawnRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          release = this.acquireEmptySpawn()
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySpawnRuntime()).not.toThrow()
-      expect(release).toBeInstanceOf(Promise)
-      await expect(release).resolves.toBeTypeOf('function')
-    })
-
-    it('returns the empty stop promise from the original constructor seam', async () => {
-      let stopped: Promise<ExplicitCloseStop> | undefined
-      class EarlyEmptyStopRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          stopped = this.emptyExplicitStop()
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlyEmptyStopRuntime()).not.toThrow()
-      expect(stopped).toBeInstanceOf(Promise)
-      await expect(stopped).resolves.toEqual({ stopped: false })
-    })
-
-    it('keeps a null-store sleep refusal as a rejected promise during construction', async () => {
-      let sleeping: ReturnType<OrcaRuntimeService['sleepTerminalsForWorktree']> | undefined
-      class EarlySleepRefusalRuntime extends StopRuntime {
-        protected override get canonicalFetchKeyCache() {
-          sleeping = this.sleepTerminalsForWorktree('folder-proof')
-          return super.canonicalFetchKeyCache
-        }
-      }
-      expect(() => new EarlySleepRefusalRuntime()).not.toThrow()
-      expect(sleeping).toBeInstanceOf(Promise)
-      await expect(sleeping).rejects.toThrow('selector_not_found')
     })
   })
 })

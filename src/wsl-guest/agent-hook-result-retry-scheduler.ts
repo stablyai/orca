@@ -11,6 +11,7 @@ import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import { pickHostTurnEnd } from '../shared/agent-status-types'
 import {
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -41,7 +42,7 @@ export type AgentHookResultRetryHost = {
     source: AgentHookSource,
     env?: string,
     version?: string
-  ) => void
+  ) => AgentHookEventPayload | undefined
 }
 
 export class AgentHookResultRetryScheduler {
@@ -136,17 +137,17 @@ export class AgentHookResultRetryScheduler {
     }
     const event =
       source === 'codex'
-        ? pollCodexTranscriptStatus(this.host.state, original)
+        ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env)
         : normalizeHookPayload(this.host.state, source, body, this.host.env)
     if (!event) {
       return
     }
     const update = transcriptPollUpdate(source, original, event)
-    const next = update ?? original
-    if (update) {
-      this.host.applyEvent(update, source, env, version)
+    // Why: the next tick's identity check compares against the stored row, not the update it was copied from.
+    const next = update ? this.host.applyEvent(update, source, env, version) : original
+    if (next) {
+      this.scheduleTranscriptPoll(source, body, next, env, version)
     }
-    this.scheduleTranscriptPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(
@@ -240,6 +241,7 @@ export class AgentHookResultRetryScheduler {
       )
       return
     }
-    this.host.applyEvent(event, source, env, version)
+    // Why: the retry only adds text to the same turn end, so it restates that end instead of minting one.
+    this.host.applyEvent({ ...event, ...pickHostTurnEnd(current) }, source, env, version)
   }
 }

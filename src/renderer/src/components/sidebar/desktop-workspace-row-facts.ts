@@ -22,6 +22,8 @@ export type DesktopWorkspaceRowFactInputs = {
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
   worktreeIdsWithLiveAgent: ReadonlySet<string>
   worktreeIdsWithStructuredChat?: ReadonlySet<string>
+  /** Rows in a PTY-rebind grace window; read as unverifiable, never as asleep (#15996). */
+  sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
 }
 
 /** The desktop's answers to the Workspace options filters, read off its own worktrees and tabs. */
@@ -45,6 +47,7 @@ export function buildDesktopWorkspaceRowFactReader(
     isDetachedHead: isDetachedHeadWorkspace,
     isMainWorktree: (worktree) => worktree.isMainWorktree,
     isSleeping: (worktree) =>
+      inputs.sleepingSweepExemptWorktreeIds?.has(worktree.id) !== true &&
       isInactiveWorkspace(
         worktree.id,
         inputs.tabsByWorktree,

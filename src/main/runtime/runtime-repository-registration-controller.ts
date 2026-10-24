@@ -9,13 +9,15 @@ import {
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
-import { getRepoName, isGitRepoAsync } from '../git/repo'
-import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
+import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
+import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { isENOENT } from '../ipc/filesystem-path-containment'
+import { findProjectAtSameRealPath } from '../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
-import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -40,21 +42,28 @@ export class RuntimeRepositoryRegistrationController {
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
-    if (kind === 'git' && !(await isGitRepoAsync(path))) {
+    const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
+    if (gitInfo && !gitInfo.isRepo) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
-    const existing = store.getRepos().find((repo) => {
-      return (
-        runtimePathsEqual(repo.path, path) && runtimeRepoMatchesExecutionHost(repo, executionHostId)
-      )
-    })
+    // Why: git lists the main checkout at its resolved toplevel; storing a symlink alias or a
+    // subdirectory instead hides that checkout as external, so the project shows no workspaces.
+    const repoPath = gitInfo?.rootPath ?? path
+    const sameHostRepos = store
+      .getRepos()
+      .filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId))
+    // Why: git's toplevel is already resolved through symlinks, so an alias of a tracked checkout finds it.
+    const existing =
+      sameHostRepos.find(
+        (repo) => runtimePathsEqual(repo.path, path) || runtimePathsEqual(repo.path, repoPath)
+      ) ?? (await findProjectAtSameRealPath(sameHostRepos, repoPath))
     if (existing) {
       if (
         existing.executionHostId == null &&
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ) {
         const adopted =
-          store.updateRepo(existing.id, { executionHostId }) ??
+          store.updateRepo(existing, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
         this.invalidate(existing.id)
         return adopted
@@ -65,14 +74,14 @@ export class RuntimeRepositoryRegistrationController {
     // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
     // addresses the row, not a second machine holding the files.
     const detected = await detectRepoIconAndUpstream({
-      repoPath: path,
+      repoPath,
       kind,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path,
-      displayName: displayName?.trim() || getRepoName(path),
+      path: repoPath,
+      displayName: displayName?.trim() || getRepoName(repoPath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),
       ...detected,
@@ -108,7 +117,15 @@ export class RuntimeRepositoryRegistrationController {
       return { error: 'Parent directory must be an absolute path' }
     }
     const targetPath = join(trimmedParentPath, trimmedName)
-    const existing = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    // Why host-qualified: an SSH project at this path string is another machine's directory.
+    const findLocalAtTarget = (): Repo | undefined =>
+      store
+        .getRepos()
+        .find(
+          (repo) =>
+            runtimeRepoIsRegistrationCandidate(repo) && runtimePathsEqual(repo.path, targetPath)
+        )
+    const existing = findLocalAtTarget()
     if (existing) {
       return { repo: existing }
     }
@@ -144,7 +161,7 @@ export class RuntimeRepositoryRegistrationController {
         return { error }
       }
     }
-    const raceWinner = store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    const raceWinner = findLocalAtTarget()
     if (raceWinner) {
       return { repo: raceWinner }
     }

@@ -82,7 +82,7 @@ import {
   ensureActiveOrcaProfile,
   setActiveOrcaProfile
 } from './profile-index-store'
-import { readRelayAuthContext } from '../runtime/relay/relay-auth-context'
+import { readRelayAuthContext } from '../runtime/mobile-cloud-relay/relay-auth-context'
 import { runSkillCloudOperation } from '../skills/skill-cloud-auth'
 
 const cloud = (orgId = 'org-1') => ({

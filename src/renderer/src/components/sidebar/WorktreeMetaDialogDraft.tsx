@@ -286,7 +286,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                     event.currentTarget.dataset.imeComposing = 'true'
                   }}
                   onCompositionEnd={(event) => {
-                    commentIme.setComposing(false)
+                    commentIme.setComposing(false, event.data)
                     delete event.currentTarget.dataset.imeComposing
                   }}
                   onBlur={(event) => {

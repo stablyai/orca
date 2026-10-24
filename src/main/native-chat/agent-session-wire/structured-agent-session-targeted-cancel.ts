@@ -1,7 +1,5 @@
-// A Stop that writes no Stop event of its own: a background-task stop, and a prompt card's own
-// interrupt. Its target is resolved once and its receipt committed before the provider is asked;
-// one that reaches nothing records the no-op it answers. What the provider then says comes back
-// as a note, never a refusal: a task still running, or a stop that could not be confirmed.
+// Targeted Stops commit a fixed target/result before effects, without a whole-agent Stop event.
+// Provider uncertainty becomes a note; retries answer the receipt without retargeting.
 
 import { agentChildWorkStopTargets } from '../../../shared/agent-child-work-stop-targets'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -34,11 +32,12 @@ export async function runTargetedCancel(
   const named = params.turnId !== undefined ? { turnId: params.turnId } : {}
   const { clientOperationId, prompt } = params
   if (params.scope) {
-    // Resolved once, here: a retry is answered from the receipt and never reaches a newer task.
     const children = params.childWork?.()
     const targets = agentChildWorkStopTargets(children, params.taskId)
+    const capturedStops = params.captureStops?.(targets)
     const unreadable = params.childWork !== undefined && children === undefined
-    if (targets.length === 0 && !unreadable && !(params.unlisted?.present() && atRest(ctx))) {
+    const initialUnlisted = params.unlisted?.present() ?? false
+    if (targets.length === 0 && !unreadable && !(initialUnlisted && atRest(ctx))) {
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const accepted = await acceptStopTarget(ctx)
@@ -49,15 +48,18 @@ export async function runTargetedCancel(
       operationId: clientOperationId,
       work: {
         targets,
+        ...(capturedStops ? { targetCurrent: capturedStops.current } : {}),
         ...(unreadable ? { unreadable: true as const } : {}),
-        ...(params.acknowledgeStops ? { acknowledgeStops: params.acknowledgeStops } : {}),
-        ...(params.unlisted ? { unlisted: params.unlisted } : {})
+        acknowledgeStops: (evidence) => {
+          capturedStops?.acknowledge(evidence)
+          params.acknowledgeStops?.(evidence)
+        },
+        ...(initialUnlisted && params.unlisted ? { unlisted: { stop: params.unlisted.stop } } : {})
       },
       backgroundStop: params.taskId ? 'task' : 'all'
     })
     return { ok: true, value: { ...named, cancelled } }
   }
-  // A card already settled is answered as it stands, changing nothing.
   const pending = prompt ? validatePendingPrompt(ctx, prompt) : undefined
   if (!pending || pending.ok) {
     const accepted = await acceptStopTarget(ctx)
@@ -69,7 +71,7 @@ export async function runTargetedCancel(
     return await performCancel(ctx, { clientOperationId, ...named, ...(prompt ? { prompt } : {}) })
   } catch (error) {
     if (ctx.operationReceipt?.isCommitted()) {
-      // Saved, so the answer is its receipt; the card's turn says the cancellation went unconfirmed.
+      // Acceptance is durable; report uncertainty on the captured prompt’s turn.
       const raised = pending?.ok ? pending.item.turnScope : undefined
       const raisedTurnId =
         raised?.kind === 'turn'
@@ -86,13 +88,11 @@ export async function runTargetedCancel(
   }
 }
 
-/** No turn runs, so ending the agent ends only the work no record lists. */
 function atRest(ctx: AgentSessionTurnContext): boolean {
   return !isMainAgentWorking(ctx)
 }
 
-/** Stops the tasks the Stop captured. Tasks outlive the turn they began in, so its note is the
- *  thread's, keyed by this Stop's own id. */
+/** Tasks outlive their opening turn, so feedback is thread-scoped and keyed by Stop operation. */
 async function stopCapturedBackgroundTasks(
   ctx: AgentSessionTurnContext,
   stop: {
@@ -105,7 +105,7 @@ async function stopCapturedBackgroundTasks(
   try {
     result = await stopStructuredAgentSessionBackgroundWork(ctx, stop.work, () => atRest(ctx))
   } catch (error) {
-    // A timeout or lost contact proves nothing about the task: unconfirmed, never "not stopped".
+    // Lost contact proves nothing; report unconfirmed, never “not stopped”.
     await noteStructuredAgentSessionStopUnconfirmed(
       ctx,
       { turnId: null, operationId: stop.operationId },

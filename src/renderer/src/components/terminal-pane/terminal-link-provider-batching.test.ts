@@ -4,7 +4,8 @@ import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fix
 import {
   createProvider,
   createProviderSetup,
-  makeBufferLine
+  makeBufferLine,
+  makeExistsCache
 } from './terminal-link-provider-buffer-fixtures'
 import {
   createDeferred,
@@ -60,7 +61,7 @@ it.each([false, true])('batches all cold hover candidates repeated=%s', async (r
 it('preserves warm positive and negative cache answers across hover turns', async () => {
   const batch = vi.fn(async (paths: string[]) => paths.map((path) => !path.endsWith('missing.ts')))
   window.api.shell.pathsExist = batch
-  const cache = new Map<string, boolean>()
+  const cache = makeExistsCache()
   const { provider } = createProviderSetup([makeBufferLine('./present.ts ./missing.ts')], cache)
   const hover = () =>
     new Promise<ILink[]>((resolve) => provider.provideLinks(1, (links) => resolve(links ?? [])))
@@ -68,7 +69,7 @@ it('preserves warm positive and negative cache answers across hover turns', asyn
   expect((await hover()).map((link) => link.text)).toEqual(['./present.ts'])
   expect(batch).toHaveBeenCalledTimes(1)
   expect(batch.mock.calls[0][0]).toHaveLength(2)
-  expect([...cache.values()].sort()).toEqual([false, true])
+  expect([...cache.values()].map((entry) => entry.exists).sort()).toEqual([false, true])
 })
 
 it('drops stale wrapped links while a batch is pending', async () => {

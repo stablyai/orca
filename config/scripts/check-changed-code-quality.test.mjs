@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
   collectBaseLineBlocks,
+  collectAddedLineRanges,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -74,6 +75,38 @@ describe('changed-code quality line matching', () => {
   it('leaves Cloud source to the independent Cloud quality checks', () => {
     expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
+  })
+
+  it.each([
+    ['Counter.tsx', []],
+    ['Counter.txt', [{ start: 1, end: 2 }]],
+    ['cloud/Counter.tsx', [{ start: 1, end: 2 }]]
+  ])('retains rename subtraction only within the included scope: %s', (source, expected) => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-entry-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const hooks = path.join(repo, '.git', 'test-hooks')
+      mkdirSync(hooks)
+      git('config', 'core.hooksPath', hooks)
+      git('config', 'commit.gpgsign', 'false')
+      mkdirSync(path.dirname(path.join(repo, source)), { recursive: true })
+      writeFileSync(path.join(repo, source), 'const counter = 1\nexport { counter }\n')
+      git('add', source)
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      git('mv', source, 'MovedCounter.tsx')
+
+      expect(collectAddedLineRanges(repo, base).rangesByFile.get('MovedCounter.tsx') ?? []).toEqual(
+        expected
+      )
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
   })
 })
 
@@ -147,6 +180,78 @@ describe('moved-code exemption', () => {
       git('mv', 'old.ts', 'new.ts')
 
       expect(collectBaseLineBlocks(repo, base)).toEqual([['const moved = value as Thing']])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps source boundaries across batches, missing files, and multibyte contents', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-batch-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const files = Array.from({ length: 40 }, (_, index) => `file ${index} é.ts`)
+      const sources = files.map((_, index) =>
+        index === 0 ? '' : `  const café${index} = '🐳'\r\n\r\n// missing\nlastLine()`
+      )
+      files.forEach((file, index) => writeFileSync(path.join(repo, file), sources[index]))
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      const base = git('rev-parse', 'HEAD')
+      const expected = sources.map((_, index) =>
+        index === 0 ? [] : [`const café${index} = '🐳'`, '// missing', 'lastLine()']
+      )
+      expect(
+        collectBaseLineBlocks(repo, base, ['missing.ts', ...files, 'also-missing.ts'])
+      ).toEqual(expected)
+      expect(collectBaseLineBlocks(repo, base, [])).toEqual([])
+      expect(collectBaseLineBlocks(repo, base, ['missing.ts'])).toEqual([])
+      expect(collectBaseLineBlocks(path.join(repo, 'absent'), base, files)).toEqual([])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('reads filenames containing newlines', () => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-newline-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = 'line\nbreak.ts'
+      writeFileSync(path.join(repo, file), 'const kept = true\n')
+      git('add', '--all')
+      git(
+        '-c',
+        'commit.gpgsign=false',
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.invalid',
+        'commit',
+        '-qm',
+        'base'
+      )
+      expect(collectBaseLineBlocks(repo, git('rev-parse', 'HEAD'), [file])).toEqual([
+        ['const kept = true']
+      ])
     } finally {
       rmSync(repo, { recursive: true, force: true })
     }

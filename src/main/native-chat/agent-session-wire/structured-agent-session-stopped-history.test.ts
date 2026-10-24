@@ -1,7 +1,3 @@
-// A message a person sent and then stopped before the agent started on it reaches the agent with
-// their next send, at most once. Against the real host, store and journal, with an agent that stays
-// starting until the test proves its start. The rig's chat is Codex's; every agent carries alike.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -39,19 +35,16 @@ function text(body: AgentJournalMessageItem): string {
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
 }
 
-/** What a send carrying `stopped` ahead of `own` hands the agent. */
 function carrying(stopped: string[], own: string): string {
   return (
     stopped.map((words) => `${words}\n\n${STOPPED_MESSAGE_INTERRUPTED_MARKER}\n\n`).join('') + own
   )
 }
 
-/** Each dispatch's words, as the agent gets them. */
 function dispatched(): string[] {
   return rig.dispatch.mock.calls.map(([input]) => text(input.body))
 }
 
-/** Sent while the agent starts, so the host holds them; none is handed over. */
 async function heldWhileStarting(...texts: string[]): Promise<string[]> {
   const ids: string[] = []
   for (const body of texts) {
@@ -65,7 +58,6 @@ async function heldWhileStarting(...texts: string[]): Promise<string[]> {
   return ids
 }
 
-/** A Stop while the agent starts: its save withdraws what the host held, with the proof. */
 async function stopWhileStarting(...texts: string[]): Promise<string[]> {
   const ids = await heldWhileStarting(...texts)
   expect(await rig.stop()).toMatchObject({ ok: true })
@@ -78,7 +70,6 @@ async function stopWhileStarting(...texts: string[]): Promise<string[]> {
   return ids
 }
 
-/** The person's next send, handed to a child that proved its start. */
 async function nextSend(body: string): Promise<string> {
   const before = rig.dispatch.mock.calls.length
   const { id, result } = rig.send(body)
@@ -90,14 +81,12 @@ async function nextSend(body: string): Promise<string> {
   return id
 }
 
-/** The texts every client draws. */
 async function transcript(): Promise<string[]> {
   const page = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
   if (!page.ok) {
     throw new Error('history refused')
   }
   expect(page.page.submissions.some((entry) => 'carries' in entry)).toBe(false)
-  // A client reads every row, the host's proof included, with the schema it already has.
   page.page.submissions.forEach((entry) => AgentJournalSubmissionSchema.parse(entry))
   return projectStructuredAgentSessionMessages(page.page.items, [], page.page.submissions).map(
     (message) =>
@@ -117,7 +106,6 @@ describe('a Stop withdraws what the agent never got, and the next send delivers 
 
     expect(dispatched()).toEqual([carrying(['first', 'second'], 'what did I send?'), 'after'])
     expect(journal().stoppedHistoryCarried().get(carrier)).toEqual([first, second])
-    // The chat is unchanged: each still reads Stopped manually, the send shows its own words.
     expect(await transcript()).toEqual([
       'first (stopped)',
       'second (stopped)',

@@ -1,11 +1,14 @@
-import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hook-spool'
+import { drainAgentHookSpoolAsync, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
+  private statusHookInitialization: Promise<void> | null = null
+
   setStatusHooksEnabled(enabled: boolean): void {
     if (enabled === this.statusHooksEnabled) {
       return
     }
+    this.statusHookGeneration += 1
     if (!enabled) {
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
@@ -17,31 +20,48 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHooksEnabled = enabled
     if (enabled && this.server) {
-      this.initializeStatusHookOwner()
+      void this.initializeStatusHookOwner().catch((error: unknown) => {
+        console.error('[agent-hooks] status initialization failed', error)
+      })
       this.startOpenCodeBinderLoop()
     }
   }
 
-  protected initializeStatusHookOwner(): void {
+  protected initializeStatusHookOwner(): Promise<void> {
+    this.statusHookInitialization ??= this.loadStatusHookOwner().finally(() => {
+      this.statusHookInitialization = null
+    })
+    return this.statusHookInitialization
+  }
+
+  private async loadStatusHookOwner(): Promise<void> {
+    const token = this.token
+    const statusHookGeneration = this.statusHookGeneration
     if (!this.ownerStateInitialized) {
-      // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
+      // Hydrate before binding so the first live hook sees restored ownership.
       if (this.lastStatusFilePath) {
         this.hydrateLastStatusFromDisk()
       }
       this.captureHydratedAuthorityCommitments()
-      // Drain before binding the listener so replay cannot race a live hook during startup.
+      // Drain before binding so replay cannot race live hooks.
       if (this.endpointDir) {
         const replayedPaneKeys = new Set<string>()
-        drainAgentHookSpool({
+        await drainAgentHookSpoolAsync({
           endpointDir: this.endpointDir,
           getPersistedLaunchTokenHash: (paneKey) =>
             this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-          ingest: (record: SpoolRecord) => {
-            this.ingestSpoolRecord(record)
+          ingest: async (record: SpoolRecord) => {
+            if (this.token !== token || this.statusHookGeneration !== statusHookGeneration) {
+              throw new Error('Status hook spool replay interrupted')
+            }
+            await this.ingestSpoolRecord(record)
             replayedPaneKeys.add(this.resolvePaneKeyAlias(record.paneKey))
           }
         })
-        // Why: the owner may have died while Orca was down; check each replayed pane once.
+        if (this.token !== token || this.statusHookGeneration !== statusHookGeneration) {
+          return
+        }
+        // Replayed owners may have died while Orca was down; probe each pane once.
         for (const paneKey of replayedPaneKeys) {
           void this.checkAgentPresence(paneKey)
         }

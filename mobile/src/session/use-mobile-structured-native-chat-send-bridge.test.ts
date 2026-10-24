@@ -13,7 +13,8 @@ const ORIGIN: MobileNativeChatSendOrigin = {
   normalizedText: 'command',
   baselineOccurrences: 0,
   baselineTailMessageId: null,
-  baselineResolved: true
+  baselineResolved: true,
+  sentAt: 0
 }
 
 describe('useMobileStructuredNativeChatSendBridge', () => {

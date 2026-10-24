@@ -74,6 +74,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
+  const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
     configHost,
@@ -84,7 +85,10 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
-    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {})
+    ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
+    ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
+    // Why explicit both ways: absent means on here, and off on a server from before the default flip.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   try {

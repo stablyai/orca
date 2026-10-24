@@ -7,7 +7,9 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -51,16 +53,15 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
-})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+    {
+      getState: () => mockStore.state,
+      subscribe: () => () => {}
+    }
+  )
+}))
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
@@ -491,6 +492,63 @@ describe('WorktreeList real child WorktreeCard integration', () => {
       'edit-meta',
       expect.objectContaining({ worktreeId: 'parent' })
     )
+  })
+
+  it.each([
+    { pressed: 'option', worktreeId: 'parent' },
+    { pressed: 'option', worktreeId: 'child' },
+    { pressed: 'option', worktreeId: 'folder:folder-workspace' },
+    { pressed: 'card', worktreeId: 'parent' },
+    { pressed: 'card', worktreeId: 'child' },
+    { pressed: 'card', worktreeId: 'folder:folder-workspace' }
+  ])('activating the $worktreeId $pressed activates it once', async ({ pressed, worktreeId }) => {
+    mockStore.state.projectGroups = [
+      {
+        id: 'folder-group',
+        name: 'Folder group',
+        parentPath: '/tmp/lineage-real-card-folder',
+        parentGroupId: null,
+        createdFrom: 'folder-scan',
+        tabOrder: 1,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ] satisfies ProjectGroup[]
+    mockStore.state.folderWorkspaces = [
+      {
+        id: 'folder-workspace',
+        projectGroupId: 'folder-group',
+        name: 'folder workspace',
+        folderPath: '/tmp/lineage-real-card-folder',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ] satisfies FolderWorkspace[]
+    const container = await renderWorktreeList()
+    const option = container.querySelector<HTMLElement>(
+      `[role="option"][data-worktree-id="${worktreeId}"]`
+    )
+    const target =
+      pressed === 'option'
+        ? option
+        : option?.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+
+    expect(target).not.toBeNull()
+    await act(async () => {
+      target!.click()
+    })
+
+    expect(mockStore.activateWorktreeFromSidebar).toHaveBeenCalledTimes(1)
+    expect(mockStore.activateWorktreeFromSidebar).toHaveBeenCalledWith(worktreeId, 'local')
   })
 
   it('does not activate a nested child while it is deleting', async () => {

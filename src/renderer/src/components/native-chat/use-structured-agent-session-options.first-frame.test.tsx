@@ -1,10 +1,16 @@
 // @vitest-environment happy-dom
 
-import { renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
 
-const mocks = vi.hoisted(() => ({ call: vi.fn() }))
+const mocks = vi.hoisted(() => ({ call: vi.fn(), coherent: false }))
 
+vi.mock('@/runtime/structured-agent-session-host-capability', async (original) => ({
+  ...(await original<typeof HostCapability>()),
+  useStructuredAgentSessionHostCapability: (_target: unknown, capability: string) =>
+    capability === 'agent-session.coherent-model-catalog.v1' && mocks.coherent
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -18,7 +24,10 @@ vi.mock('@/lib/structured-agent-session-launch-options', () => ({
 }))
 
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionOptionsResult
+} from '../../../../shared/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -135,8 +144,10 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('a new chat picker’s first frame', () => {
+  afterEach(() => vi.useRealTimers())
   beforeEach(() => {
     mocks.call.mockReset()
+    mocks.coherent = false
     resetHostModelCatalogSnapshotsForTests()
   })
 
@@ -153,6 +164,63 @@ describe('a new chat picker’s first frame', () => {
     // The pane's own read lands the same list: no frame ever showed anything else.
     expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(final))).toBe(true)
     unmount()
+  })
+
+  it('uses installed controls and keeps saved values through a quiet refresh', async () => {
+    mocks.coherent = true
+    const child: AgentSessionOptionsResult = {
+      models: [{ id: 'A', label: 'Old child A', isDefault: false, efforts: EFFORTS }],
+      current: { model: 'A', effort: 'low', permissionMode: 'ask', defaulted: [] }
+    }
+    let raw: Listed = listed([{ id: 'A', label: 'Installed A' }])
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve(child)
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve(raw)
+            : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const effort = () => view.result.current.optionSnapshot.find((row) => row.id === 'effort')
+    await waitFor(() => expect(effort()?.settable).toBe(true))
+    raw = { ...raw, listingInProgress: true }
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    expect(effort()?.settable).toBe(false)
+    await act(async () =>
+      next.resolve({
+        ...raw,
+        listingInProgress: undefined,
+        models: raw.models.map((row) => ({ ...row, efforts: [EFFORTS[1]!] }))
+      })
+    )
+    await waitFor(() =>
+      expect(effort()).toMatchObject({
+        settable: true,
+        kind: { currentValue: 'low', choices: expect.arrayContaining([EFFORTS[1]]) }
+      })
+    )
+    expect(view.result.current.sendSource.optionStateRef.current.record.values).toMatchObject({
+      model: { value: 'A' },
+      effort: { value: 'low' }
+    })
+    view.unmount()
   })
 
   it('codex: the saved list names a saved pick and its effort on the first frame', async () => {

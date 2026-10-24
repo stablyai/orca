@@ -71,7 +71,6 @@ function assistantRecord(index: number, text: string): string {
   })
 }
 
-// Ground truth: what a cold one-shot parse of the current file contents yields.
 async function freshParse(path: string) {
   const candidate = await claudeCandidate(path)
   return parseClaudeSessionFile(candidate.file)
@@ -139,8 +138,7 @@ describe('parseAgentSessionFileCached', () => {
   it('parses an oversized record without quadratic carry copying', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
-    // One tool result far larger than a stream chunk. Re-joining the held-over
-    // partial line per chunk copies O(record^2); the piece list joins once.
+    // Span many chunks to expose quadratic copying from repeatedly joining the carried record prefix.
     const recordBytes = 4 * 1024 * 1024
     await writeFile(
       path,
@@ -170,22 +168,18 @@ describe('parseAgentSessionFileCached', () => {
       Buffer.concat = originalConcat
     }
 
-    // Linear joins the record about once; the quadratic form copied many times
-    // that, growing with the square of the record size.
     expect(concatenatedBytes).toBeLessThan(recordBytes * 4)
   })
 
   it('shows a trailing unterminated line without double-counting it later', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
-    // Final record has no trailing newline (mid-write file).
     await writeFile(path, `${userRecord(0, 'question')}\n${assistantRecord(1, 'partial answer')}`)
 
     const first = await cachedParse(path)
     expect(first?.messageCount).toBe(2)
     expect(first).toEqual(await freshParse(path))
 
-    // The writer finishes the line and appends one more record.
     await appendFile(path, `\n${userRecord(2, 'follow-up')}\n`)
     const second = await cachedParse(path)
     expect(second?.messageCount).toBe(3)
@@ -221,7 +215,6 @@ describe('parseAgentSessionFileCached', () => {
     await writeFile(path, original)
     await cachedParse(path)
 
-    // Larger file whose byte at the old resume point is mid-line, not '\n'.
     const rewritten = `${userRecord(0, 'a much longer rewritten question than before')}\n${assistantRecord(1, 'answer')}\n`
     expect(rewritten.length).toBeGreaterThan(original.length)
     expect(rewritten[original.length - 1]).not.toBe('\n')
@@ -358,7 +351,6 @@ describe('parseAgentSessionFileCached', () => {
     expect(getSessionParseCacheEntry(path)).toBe(before)
     expect(getSessionParseCacheEntry(path)?.resume?.byteOffset).toBe(beforeOffset)
 
-    // The next uncancelled parse resumes from the kept point and matches a cold parse.
     const stats = createSessionParseStats()
     const resumed = await parseAgentSessionFileCached(
       await claudeCandidate(path),
@@ -368,5 +360,42 @@ describe('parseAgentSessionFileCached', () => {
     expect(stats.incremental).toBe(1)
     expect(resumed).toEqual(await freshParse(path))
     expect(resumed?.messageCount).toBe(202)
+  })
+
+  it('keeps one row each when Pi and OMP list the same transcript', async () => {
+    const root = await makeTempDir()
+    const path = join(root, '2026-04-20T00-00-00-000Z_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(
+      path,
+      [
+        JSON.stringify({
+          type: 'session',
+          id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+          timestamp: '2026-04-20T00:00:00.000Z',
+          cwd: '/repo/app'
+        }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-04-20T00:01:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'shared dir prompt' }] }
+        }),
+        ''
+      ].join('\n')
+    )
+    const { file } = await claudeCandidate(path)
+    const stats = createSessionParseStats()
+    const scan = (): Promise<(string | undefined)[]> =>
+      Promise.all(
+        (['omp', 'pi'] as const).map(
+          async (agent) =>
+            (await parseAgentSessionFileCached({ agent, file, codexHome: null }, 'linux', stats))
+              ?.agent
+        )
+      )
+
+    expect(await scan()).toEqual(['omp', 'pi'])
+    expect(await scan()).toEqual(['omp', 'pi'])
+    expect(stats.fullParses).toBe(2)
+    expect(stats.reused).toBe(2)
   })
 })

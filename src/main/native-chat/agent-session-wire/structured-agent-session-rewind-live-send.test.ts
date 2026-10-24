@@ -2,8 +2,6 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-// A Codex rewind left in doubt while its agent keeps running: no attach comes to settle it, so the
-// next send asks the provider as an attach would, and a send refused meanwhile never poisons its id.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -32,6 +30,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
 const caller = { callerKey: 'desktop' }
 const KEPT = { provider: 'codex' as const, threadId: THREAD, turnId: 'kept', ordinal: 0 }
@@ -47,39 +46,45 @@ const rewindSupport = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewindSup
 const dispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>()
 
 function adapter(): StructuredAgentSessionAdapter {
-  return {
-    supportsCreate: (_location, agent) => agent === 'codex',
-    supportsLocation: () => true,
-    acquire: async (input) => {
-      acquires += 1
-      sink = input.events!
-      return {
-        process: {
-          hostId: 'local',
-          pid: 4000 + acquires,
-          processStartTimeMs: HOST_TEST_NOW,
-          spawnToken: input.spawnToken
-        },
-        acquisitionGeneration: `generation-${acquires}`,
-        link: {
-          linkId: `link-${acquires}`,
-          mintedAtFence: input.fence,
-          observedAt: HOST_TEST_NOW,
-          origin: acquires === 1 ? 'created' : 'resumed',
-          handle: codexProviderHandle(THREAD)
+  return startsWhenPublished(
+    {
+      supportsCreate: (_location, agent) => agent === 'codex',
+      supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
+      acquire: async (input) => {
+        acquires += 1
+        sink = input.events!
+        return {
+          process: {
+            hostId: 'local',
+            pid: 4000 + acquires,
+            processStartTimeMs: HOST_TEST_NOW,
+            spawnToken: input.spawnToken
+          },
+          acquisitionGeneration: `generation-${acquires}`,
+          link: {
+            linkId: `link-${acquires}`,
+            mintedAtFence: input.fence,
+            observedAt: HOST_TEST_NOW,
+            origin: acquires === 1 ? 'created' : 'resumed',
+            handle: codexProviderHandle(THREAD)
+          }
         }
-      }
+      },
+      dispatch,
+      cancelTurn: async () => ({ cancelled: false }),
+      answerPrompt: async () => {},
+      setOption: async () => {},
+      rewindSupport,
+      rewind,
+      recoverRewind,
+      releaseAcquisition: async () => true,
+      closeSession: async () => true
     },
-    dispatch,
-    cancelTurn: async () => ({ cancelled: false }),
-    answerPrompt: async () => {},
-    setOption: async () => {},
-    rewindSupport,
-    rewind,
-    recoverRewind,
-    releaseAcquisition: async () => true,
-    closeSession: async () => true
-  }
+    () => host
+  )
 }
 
 function openHost(): StructuredAgentSessionHost {
@@ -100,10 +105,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   acquires = 0
   rewind.mockReset()
-  recoverRewind.mockReset().mockResolvedValue({
-    ok: true,
-    items: [{ identity: KEPT, body: hostTestMessage('verified history') }]
-  })
+  recoverRewind.mockReset().mockResolvedValue({ ok: true })
   rewindSupport.mockReset().mockReturnValue({ supported: true })
   dispatch.mockReset().mockImplementation(async (input): Promise<AgentSessionDispatchOutcome> => ({
     state: 'accepted',
@@ -162,7 +164,6 @@ function sendParams(text: string, clientOperationId = hostTestOperationId()) {
   }
 }
 
-/** A rewind whose provider call threw while the agent stays running. */
 async function rewindInDoubtWithLiveChild(): Promise<void> {
   expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const drop = { ...KEPT, turnId: 'drop' }
@@ -230,7 +231,6 @@ describe('a rewind in doubt while its agent keeps running', () => {
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('prepared')
     expect(dispatch).not.toHaveBeenCalled()
 
-    // The Retry keeps the id; the provider now answers, so the same id is sent.
     expect(await host.send(caller, sendParams('typed during the doubt', id))).toMatchObject({
       ok: true,
       replayed: false

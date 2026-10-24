@@ -1182,6 +1182,17 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
   return isPostgresPoolConnectFailure(error)
 }
 
+// The server ended the session (a terminate, shutdown, dropped database or idle timeout) or the
+// socket died. pg still calls such a client queryable until the socket's end arrives, so one
+// released without an error goes back to the pool and fails the next caller's statement.
+const SESSION_ENDING_CODES = new Set(['57P01', '57P02', '57P03', '57P04', '57P05', '25P03'])
+function endsPostgresSession(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const code = 'code' in error ? String(error.code) : ''
+  if (SESSION_ENDING_CODES.has(code) || code.startsWith('08')) return true
+  return error instanceof Error && error.message.startsWith('Connection terminated')
+}
+
 async function waitForPostgresRetry(random: () => number = Math.random): Promise<void> {
   const delayMs = Math.floor(random() * (POSTGRES_RETRY_MAX_DELAY_MS + 1))
   await new Promise((resolve) => setTimeout(resolve, delayMs))
@@ -1237,6 +1248,7 @@ export class PostgresDatabase implements RelayDatabase {
     } catch (error) {
       markRelayDatabaseError(error)
       if (isPostgresReadTimeout(error)) lostReply = error
+      else if (error instanceof Error && endsPostgresSession(error)) lostReply = error
       reportPostgresQueryFailure({
         error,
         phase,
@@ -1284,6 +1296,7 @@ export class PostgresDatabase implements RelayDatabase {
       const connectionId = this.idOfConnection(client)
       const transaction = new PostgresTransaction(client, connectionId, this.queryTimeout)
       let lostReply: Error | undefined
+      let sessionEnded: Error | undefined
       try {
         await timedQuery(client, connectionId, 'BEGIN', undefined, this.queryTimeout)
         const result = await operation(transaction)
@@ -1301,8 +1314,12 @@ export class PostgresDatabase implements RelayDatabase {
         // No ROLLBACK behind a lost reply: it would queue behind the dead statement. Destroying
         // the client ends the session, and the server drops its locks.
         lostReply = transaction.poisonedBy ?? (isPostgresReadTimeout(error) ? error : undefined)
+        if (error instanceof Error && endsPostgresSession(error)) sessionEnded = error
         const open = transaction.open
-        if (open && !lostReply) await client.query('ROLLBACK').catch(() => undefined)
+        // An ended session cannot roll back; the untimed ROLLBACK would only wait on a dead socket.
+        if (open && !lostReply && !sessionEnded) {
+          await client.query('ROLLBACK').catch(() => undefined)
+        }
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
         // Once the fused commit has ended the transaction, a retry would apply the work twice.
@@ -1335,7 +1352,7 @@ export class PostgresDatabase implements RelayDatabase {
           )
         }
       } finally {
-        client.release(lostReply)
+        client.release(lostReply ?? sessionEnded)
       }
       // A PostgreSQL transaction is unusable after an abort, so retry all work
       // on a fresh pooled client with a small full-jitter delay.

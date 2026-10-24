@@ -69,7 +69,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
-  // app/h/[hostId]/ — Expo route screens
+  // src/accounts/ — the accounts screen
   // Holdout behind two gates. The first is the mount: the screen reads
   // `expo-router.useFocusEffect` and `react-native.ScrollView`, neither is a substituted member, so
   // the trap refuses before any effect runs. Substituting exactly those two clears it and exposes
@@ -79,18 +79,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // driven. The runner itself is no longer the blocker: `ScenarioStep` carries `frame`, and
   // `notifications.desktop-stream` is a recorded stream family. The two members are left out here
   // because the engine gains `useFocusEffect` on its own track.
-  { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
-
-  // app/ — Expo route screens
-  // Holdout: not the screen. It renders to completion under inert reanimated and gesture-handler
-  // substitutes, and then sends nothing: its host list comes from `loadHosts()`, which joins a
-  // device token held in the keychain through expo-secure-store. A scenario can declare the async
-  // store and the notification tray, not a credential, so `loadHosts()` answers with an empty list
-  // and the screen has no client. `notifications.testPush` migrated because its screen reads
-  // `loadHostCatalog()`, which keeps a credential-less entry. Line ~193 also reads `ms` off the
-  // reply envelope instead of off its result, so the value is always undefined; that is a product
-  // defect with its own fix and re-record, not something this migration may quietly repair.
-  { file: 'app/terminal-settings.tsx', references: 3 },
+  { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 
   // src/components/ — shared widgets that fetch their own data. Nothing is left here: the New
   // Workspace drawer's execution target, setup hook, runtime context and Codex capability probe

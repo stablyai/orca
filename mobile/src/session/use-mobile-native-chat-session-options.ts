@@ -9,6 +9,7 @@ import {
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
 import type {
+  SessionOptionsSurface,
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
@@ -31,6 +32,7 @@ import {
 } from '../../../src/shared/native-chat-session-option-state'
 
 export type MobileNativeChatSessionOptionsController = {
+  optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
   optionPickerRequest?: { id: string; sequence: number } | null
   /** Model descriptor first, then the current model's options; empty when the
@@ -108,7 +110,11 @@ export function useMobileNativeChatSessionOptions(args: {
     }
     // OMP reports exact selectors, including models absent from cached discovery.
     const matched =
-      agent === 'omp' ? reportedModel.trim() : matchNativeChatCatalogModelId(catalog, reportedModel)
+      agent === 'omp'
+        ? reportedModel.trim()
+        : matchNativeChatCatalogModelId(catalog, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched) {
       return
     }

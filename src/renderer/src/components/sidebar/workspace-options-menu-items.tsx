@@ -10,7 +10,10 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/workspace-row-filters'
+import {
+  countActiveWorkspaceFilters,
+  formatActiveFilterLabel
+} from '../../../../shared/workspace-view/workspace-row-filters'
 import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
@@ -35,7 +38,6 @@ import {
 } from '../../../../shared/workspace-view/workspace-view-options'
 import { translate } from '@/i18n/i18n'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
-import { formatActiveFilterLabel } from './options-filter-count-badge'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean

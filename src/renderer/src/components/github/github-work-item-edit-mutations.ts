@@ -6,7 +6,7 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { isTwinRepo, runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
 import type { GitHubWorkItemProjectOrigin } from '@/components/github/github-work-item-identity'
@@ -23,9 +23,14 @@ export function getGitHubMutationTarget(
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
 ): RuntimeClientTarget {
   // Why: even slug-addressed project-origin mutations must run on the backing repo's owner host when its id is known.
-  const owner = runtimeTargetForRepoOwner(useAppStore.getState(), repoId)
+  const state = useAppStore.getState()
+  const owner = runtimeTargetForRepoOwner(state, repoId)
   if (owner) {
     return owner
+  }
+  // Why: a twin is tracked on two hosts; only the row's own source may stand in for its owner.
+  if (isTwinRepo(state, repoId) && !projectOrigin) {
+    throw new Error(`No single host owns project ${repoId}.`)
   }
   // Why: an untracked repo's Project row goes to the host that loaded the row; any other
   // slug-addressed edit uses this computer's credentials, never the focused server.

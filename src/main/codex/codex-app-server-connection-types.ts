@@ -8,13 +8,10 @@ export type CodexAppServerConnectionHandlers = {
   onNotification?: (method: string, params: unknown) => void
   onServerRequest?: (request: CodexAppServerServerRequest) => void
   onUnhandledFrame?: (kind: string, payload: unknown) => void
-  /** The root process exited, reported once. `expected`: a close had begun, so it is that close's
-   *  end, even one that gave up first and came back unproven. */
+  /** Root exit, reported once; expected if close began, including after an unproven close. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
-  /** Any stdout or stderr chunk from the child. */
-  onOutput?: () => void
 }
 
 export type CodexAppServerConnection = {
@@ -23,7 +20,8 @@ export type CodexAppServerConnection = {
   request: (
     method: string,
     params?: Record<string, unknown>,
-    options?: { timeoutMs?: number }
+    /** `timeoutMs` null: no deadline; the caller bounds the wait. */
+    options?: { timeoutMs?: number | null; onReply?: () => void }
   ) => Promise<unknown>
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void

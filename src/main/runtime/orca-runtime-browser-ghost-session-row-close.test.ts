@@ -106,6 +106,89 @@ describe('browserTabClose on a session row with no runtime page', () => {
   })
 })
 
+// A host with no browser engine still owns its client-hosted page records and session rows.
+describe('browserTabClose on a host with no browser engine', () => {
+  it('retires a held client-hosted page instead of refusing with browser_unavailable', async () => {
+    const { createRuntimeBrowserCommands, setRuntimeBrowserCommandsFactory } =
+      await import('./runtime-browser-commands-factory')
+    setRuntimeBrowserCommandsFactory(null)
+    const pages = createRestoredPageRegistry()
+    const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
+    const commands = createRuntimeBrowserCommands(
+      createHost({
+        getRuntimeBrowserPageRegistry: () => pages,
+        retireRuntimeOwnedBrowserSessionTab
+      })
+    )
+
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-restored' })
+    ).resolves.toEqual({ closed: true })
+    expect(pages.getPage('page-restored')).toBeUndefined()
+    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-restored')
+  })
+
+  it('retires a ghost session row, and still refuses what it cannot account for', async () => {
+    const { createRuntimeBrowserCommands, setRuntimeBrowserCommandsFactory } =
+      await import('./runtime-browser-commands-factory')
+    setRuntimeBrowserCommandsFactory(null)
+    const retireRuntimeOwnedBrowserSessionTab = vi.fn(
+      (_worktreeId: string, pageId: string) => pageId === 'page-ghost'
+    )
+    const commands = createRuntimeBrowserCommands(
+      createHost({
+        retireRuntimeOwnedBrowserSessionTab,
+        // A folder workspace is not a git worktree, so only the browser-workspace resolver knows it.
+        resolveWorktreeSelector: async () => {
+          throw new Error('selector_not_found')
+        }
+      })
+    )
+
+    await expect(
+      commands.browserTabClose({ worktree: 'id:folder:f-1', page: 'page-ghost' })
+    ).resolves.toEqual({ closed: true })
+    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('folder:f-1', 'page-ghost')
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-unknown' })
+    ).rejects.toMatchObject({ code: 'browser_unavailable' })
+    await expect(Promise.resolve().then(() => commands.browserTabClose({}))).rejects.toMatchObject({
+      code: 'browser_unavailable'
+    })
+  })
+
+  it('refuses a page named under the wrong worktree', async () => {
+    const { createRuntimeBrowserCommands, setRuntimeBrowserCommandsFactory } =
+      await import('./runtime-browser-commands-factory')
+    setRuntimeBrowserCommandsFactory(null)
+    const pages = createRestoredPageRegistry()
+    const commands = createRuntimeBrowserCommands(
+      createHost({ getRuntimeBrowserPageRegistry: () => pages })
+    )
+
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-2', page: 'page-restored' })
+    ).rejects.toMatchObject({ code: 'browser_tab_not_found' })
+    expect(pages.getPage('page-restored')).toBeDefined()
+  })
+})
+
+function createRestoredPageRegistry(): RuntimeBrowserPageRegistry {
+  const pages = new RuntimeBrowserPageRegistry()
+  pages.publishClientPage({
+    browserPageId: 'page-restored',
+    workspaceId: 'wt-1',
+    browserProfileId: 'profile-a',
+    executionHostKey: 'restored-client-host-execution',
+    placement: RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
+    pairedDeviceId: 'device-a',
+    url: 'https://restored.internal/',
+    loading: false,
+    active: false
+  })
+  return pages
+}
+
 function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
   const bridge =

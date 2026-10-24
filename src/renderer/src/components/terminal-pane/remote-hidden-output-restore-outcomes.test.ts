@@ -45,6 +45,7 @@ type MockTransport = {
   sendInputAccepted?: ReturnType<typeof vi.fn>
   claimViewport: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
+  isConnected?: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
@@ -165,6 +166,7 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+  transport.isConnected = vi.fn(() => ptyId !== null)
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
@@ -452,6 +454,8 @@ describe('remote hidden-output restore outcomes', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      terminalPaneStartsByPaneKey: {},
+      terminalPaneResumeOutcomesByPaneKey: {},
       terminalLayoutsByTabId: {
         'tab-1': {
           root: { type: 'leaf', leafId: LEAF_1 },
@@ -591,6 +595,10 @@ describe('remote hidden-output restore outcomes', () => {
     await flushAsyncTicks(20)
 
     expect(serializeBufferOutcome).toHaveBeenCalledTimes(1)
+    // Why: the multiplexer only moves its gap baseline for images a pane repaints from.
+    expect(serializeBufferOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ repaintsPane: true })
+    )
     expect(drive.writtenChunks().join('')).toContain(HOST_SNAPSHOT_MARKER)
     expect(serializeBuffer).not.toHaveBeenCalled()
     drive.disposable.dispose()

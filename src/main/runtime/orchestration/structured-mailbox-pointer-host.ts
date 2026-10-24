@@ -17,7 +17,7 @@ import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-import { sendAgentTurn } from './send-agent-turn'
+import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
 
 /** Names the dispatch a nudge belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -63,8 +63,8 @@ async function readPointerSessionFacts(
   if (!snapshot) {
     return null
   }
-  const boundary =
-    getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  const host = getStructuredAgentSessionHost()
+  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
   return {
     submissions: boundary
       ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
@@ -95,6 +95,10 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       return readPointerSessionFacts(sessionId)
     },
 
+    hasActionablePromptNow(sessionId) {
+      return getStructuredAgentSessionHost()?.currentWork(sessionId)?.hasActionablePrompt() ?? null
+    },
+
     currentFence(sessionId) {
       return (
         getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
@@ -111,21 +115,37 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       if (!host) {
         return { kind: 'unattached' }
       }
-      const outcome = await sendAgentTurn({
-        kind: 'structured-session',
-        host,
-        sessionId: input.sessionId,
-        callerKey: input.dispatchId
-          ? structuredPointerCallerKey(input.dispatchId)
-          : structuredSessionPointerCallerKey(input.sessionId),
-        turn: {
-          body: input.body,
-          // As a person's message is: a busy chat queues it as a card, sent when the turn ends.
-          delivery: 'queue',
-          operationId: input.operationId,
-          expectedRuntimeFence: input.expectedRuntimeFence
+      let outcome: StructuredSessionTurnOutcome
+      try {
+        outcome = await sendAgentTurn({
+          kind: 'structured-session',
+          host,
+          sessionId: input.sessionId,
+          callerKey: input.dispatchId
+            ? structuredPointerCallerKey(input.dispatchId)
+            : structuredSessionPointerCallerKey(input.sessionId),
+          turn: {
+            body: input.body,
+            // A person's plain send: every agent takes it the way it takes their own mid-turn message.
+            delivery: 'now',
+            operationId: input.operationId,
+            expectedRuntimeFence: input.expectedRuntimeFence,
+            beforeRun: () => {
+              if (
+                input.body.from?.orchestration?.message === 'mail-notice' &&
+                host.currentWork(input.sessionId)?.hasActionablePrompt()
+              ) {
+                throw new StructuredMailHeldError()
+              }
+            }
+          }
+        })
+      } catch (error) {
+        if (error instanceof StructuredMailHeldError) {
+          return { kind: 'held' }
         }
-      })
+        throw error
+      }
       switch (outcome.kind) {
         case 'refused':
           return outcome.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
@@ -146,3 +166,5 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     }
   }
 }
+
+class StructuredMailHeldError extends Error {}

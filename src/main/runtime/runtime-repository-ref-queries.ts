@@ -7,6 +7,7 @@ import {
   isRepoSearchRefsRequestLimit
 } from '../../shared/repo-search-limits'
 import { getBaseRefDefault, getRemoteCount, searchBaseRefDetails } from '../git/repo'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 
 type RuntimeRepositoryRefQueryDependencies = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -31,7 +32,7 @@ export class RuntimeRepositoryRefQueries {
       return { refs: [], truncated: false }
     }
     // Why: an `ssh:` repo is not served here; it reports no refs and never searches this machine.
-    const refDetails = repo.connectionId
+    const refDetails = getRepoRoutingConnectionId(repo)
       ? []
       : await searchBaseRefDetails(repo.path, query, probeLimit, includeQualifiedRefs)
     return {
@@ -51,7 +52,7 @@ export class RuntimeRepositoryRefQueries {
     if (isFolderRepo(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
-    if (repo.connectionId) {
+    if (getRepoRoutingConnectionId(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
     const [defaultBaseRef, remoteCount] = await Promise.all([

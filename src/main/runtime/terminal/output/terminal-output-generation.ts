@@ -3,7 +3,6 @@ import type { AgentStatus } from '../../../../shared/agent-detection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import { findLastCompleteOscTitleRange } from '../../orca-runtime-core'
 import { extractLastOscTitle } from '../../../../shared/osc-title-extraction'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
 import type { RuntimeTerminalDataMeta } from '../../runtime-terminal-stream-consumers'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
@@ -58,7 +57,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     if (title === null) {
       return
     }
-    const status = detectAgentStatusFromTitle(title)
+    // Explicit-first, as the title observer classified it: a program's activity outranks the glyph.
+    const status = this.classifyPtyTitleStatus(ptyId, title)
     const current = this.agentPromptLifecycleByPtyId.get(ptyId)
     if (!current || current.status === status) {
       return
@@ -145,6 +145,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         pty.wslDistro = null
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
+        // The replaced process's live facet says nothing about its successor.
+        this.clearLiveProgramStatusFacet(ptyId)
         this.resetTrackedTerminalStateForProviderGeneration(ptyId)
       }
     }

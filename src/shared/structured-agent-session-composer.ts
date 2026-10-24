@@ -4,8 +4,12 @@ import {
 } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
-import type { SlashCommandSuggestion } from './native-chat-slash-commands'
+import {
+  sessionSlashCommandSuggestions,
+  type SlashCommandSuggestion
+} from './native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionSlashCommand } from './agent-session-wire'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
   name: 'model',
@@ -88,6 +92,24 @@ export function structuredSlashCommands(
     ...getTextDrivenNativeChatCommands(agent).filter(
       (entry) => !hostOwned.some((offered) => offered.name === entry.name)
     )
+  ]
+}
+
+/** A structured chat's `/` commands. The host answers its own for every agent, so they stay
+ *  first whatever the session reports; the report adds the agent's commands of other names. */
+export function structuredSessionSlashCommands(
+  agent: AgentType,
+  conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
+  reported: readonly AgentSessionSlashCommand[] | undefined
+): readonly SlashCommandSuggestion[] {
+  const hostOwned = structuredSlashCommands(conversationCommands, agent)
+  if (reported === undefined) {
+    return hostOwned
+  }
+  const offered = new Set(hostOwned.map(({ name }) => name))
+  return [
+    ...hostOwned,
+    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
   ]
 }
 

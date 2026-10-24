@@ -16,15 +16,14 @@ import {
 } from './browser-route-guest-popup-window-options'
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import { allowNativeBrowserPopup, isNativeBrowserPopupRequest } from './browser-popup-native-window'
+import { allowPageUnload } from './browser-guest-unload-policy'
 
-/** Bounded so a page holding a real gesture stream cannot paper the desktop in windows. */
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
 
 export type BrowserRouteGuestPopupDependencies = {
   getPartitionForSession: (session: Session) => string | null
   /** Route guests replace the manager's popup handler, so a denial is otherwise entirely silent. */
   reportBlockedPopup?: (input: { openerWebContentsId: number; url: string }) => void
-  /** Seam for tests; production always opens the shared origin-bar window. */
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -34,7 +33,6 @@ export type BrowserRouteGuestPopupDependencies = {
 
 export type BrowserRouteGuestPopupController = {
   windowOpenHandler: (details?: PopupRequest) => Electron.WindowOpenHandlerResponse
-  /** Fence: opener closed, retired, suspended, or its lease/authority is gone. */
   closeAll: () => void
   dispose: () => void
 }
@@ -61,9 +59,7 @@ export function createBrowserRouteGuestPopupController(input: {
   const popupWebContentsIds = new Set<number>()
   const openerGesture = trackBrowserGuestInputGesture(input.opener)
   gestures.add(openerGesture)
-  // Why only dispose latches: fencing must be reversible, because a reconnected page regains
-  // navigation authority and its OAuth popups have to work again. `isNavigationAllowed` is what
-  // holds new popups shut while the page is fenced.
+  // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
 
   const navigationAllowed = (url: string): boolean =>
@@ -91,21 +87,19 @@ export function createBrowserRouteGuestPopupController(input: {
     ) {
       return false
     }
-    // Fail closed exactly like guest admission: no WebRTC policy, no content — otherwise the STUN
-    // UDP leak the route guests already close reopens through popups.
+    // Reject popups without the route WebRTC policy to prevent direct STUN/UDP egress.
     if (!enforceBrowserRouteWebRtcPolicy(contents, () => {})) {
       return false
     }
     const gesture = trackBrowserGuestInputGesture(contents)
     gestures.add(gesture)
     try {
-      // Descendants inherit the same envelope; nothing about being a popup relaxes it.
       contents.setWindowOpenHandler(buildWindowOpenHandler(contents, gesture))
       contents.on('will-navigate', onPopupNavigate)
       contents.on('will-redirect', onPopupNavigate)
-      // Ownership before first load: a download can start on the popup's very first navigation, and
-      // an unowned route popup fails closed instead of routing to the opener's remote workspace.
-      // Descendants register against the root opener, so a chain never needs walking.
+      // Popups skip attachGuestPolicies, so install its unload rule here.
+      contents.on('will-prevent-unload', allowPageUnload)
+      // Register before first navigation so downloads can resolve the root page.
       registerPopupOwnership(popupWebContentsId)
       if (disposed || !navigationAllowed(ORCA_BROWSER_BLANK_URL)) {
         releasePopupOwnership(popupWebContentsId)
@@ -145,7 +139,7 @@ export function createBrowserRouteGuestPopupController(input: {
         url: typeof rawUrl === 'string' ? rawUrl : ''
       })
     } catch {
-      // A missing notice must never turn a denial into an exception the page can observe.
+      // Notification failure must not expose an exception to the page.
     }
   }
 
@@ -181,7 +175,6 @@ export function createBrowserRouteGuestPopupController(input: {
         !navigationAllowed(normalized) ||
         !clicked
       ) {
-        // Not when disposed: the opener is gone, so there is no pane left to tell.
         if (!disposed) {
           reportBlockedPopup(details?.url)
         }
@@ -191,8 +184,7 @@ export function createBrowserRouteGuestPopupController(input: {
         ...ROUTE_POPUP_WINDOW_OPTIONS,
         webPreferences: {
           ...ROUTE_POPUP_WINDOW_OPTIONS.webPreferences,
-          // Why: the opener's cookie jar AND its fixed SOCKS proxy — egress stays remote even
-          // for contents Chromium creates without an opener relationship.
+          // Inherit the opener's cookies and SOCKS route even without a Chromium opener relationship.
           partition: input.partition
         }
       }
@@ -200,7 +192,6 @@ export function createBrowserRouteGuestPopupController(input: {
         return allowNativeBrowserPopup({
           // Electron reports a script-opened child to the contents whose handler answered.
           opener: source,
-          targetUrl: details?.url ?? normalized,
           options,
           background: details?.disposition === 'background-tab',
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
@@ -214,7 +205,7 @@ export function createBrowserRouteGuestPopupController(input: {
           openPopup(
             {
               ...options,
-              // Why: a Cmd/Ctrl+Shift-click arrives without a page; reopening a POST would drop its body.
+              // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)
             },
@@ -224,7 +215,6 @@ export function createBrowserRouteGuestPopupController(input: {
     }
   }
 
-  // Set iteration tolerates the re-entrant delete that close() triggers through onClosed.
   const closeAll = (): void => {
     for (const popup of popups) {
       popups.delete(popup)
@@ -240,8 +230,7 @@ export function createBrowserRouteGuestPopupController(input: {
     dispose: () => {
       disposed = true
       closeAll()
-      // The opener is gone, so its popups own nothing: drop ownership now rather than waiting for
-      // each popup's `destroyed`, which would leave a window for a download to route to a dead page.
+      // Release ownership before asynchronous destruction so downloads cannot target a retired page.
       for (const popupWebContentsId of popupWebContentsIds) {
         releasePopupOwnership(popupWebContentsId)
       }

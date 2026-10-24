@@ -18,14 +18,6 @@ on:
         required: false
         default: true
         type: boolean
-      shell:
-        description: 'Which shell the binary mounts: native screens, or the web page delivered over the air. Default native; `ota` is the only value that changes it.'
-        required: false
-        default: native
-        type: choice
-        options:
-          - native
-          - ota
 
 jobs:
   android-build:
@@ -54,6 +46,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -80,14 +73,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        env:
-          # The one build-time constant that decides whether this binary mounts the web page or
-          # the native screens. A tag push and a schedule carry no inputs, so both read native.
-          EXPO_PUBLIC_MOBILE_SHELL: ${{ inputs.shell || 'native' }}
-        run: |
-          set -euo pipefail
-          echo "Mobile shell: $EXPO_PUBLIC_MOBILE_SHELL"
-          cd android && ./gradlew assembleRelease
+        run: cd android && ./gradlew assembleRelease
 
       # Why: an install that fails with a missing certificate or a package-parse error is
       # usually a download that died near the end, and the signature block sits in the last
@@ -275,7 +261,7 @@ jobs:
           path: site
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Open the version bump PR
+      - name: Open and merge the version bump PR
         working-directory: site
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -302,6 +288,26 @@ jobs:
               --body "Opened by the [Android release run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for mobile-android-v$VERSION. Merging points /download/android and every APK link on the site at the new APK.")"
           fi
           echo "Android APK download bump: $pr" >> "$GITHUB_STEP_SUMMARY"
+
+          # Why wait for checks: they push a deploy commit onto the branch (merging first fails with
+          # "Head branch was modified"), and a failed site build must not merge. Main's push deploys.
+          sleep 20
+          gh pr checks "$pr" --repo "$SITE_REPO" --watch --interval 15 || true
+          failed="$(gh pr checks "$pr" --repo "$SITE_REPO" --json bucket --jq 'map(select(.bucket == "fail")) | length' 2>/dev/null || true)"
+          # The deploy commit is [skip ci], so the final head may report no checks at all.
+          if [ "${failed:-0}" != "0" ]; then
+            echo "::warning::The site's checks failed on $pr; not merging. Fix and merge it by hand."
+            exit 1
+          fi
+          for _ in 1 2 3; do
+            if gh pr merge "$pr" --repo "$SITE_REPO" --squash --delete-branch; then
+              echo "Merged; the site deploys from main." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::warning::Could not merge $pr; merge it by hand to update /download/android."
+          exit 1
 
       - name: Report a failed bump
         if: failure()

@@ -108,7 +108,7 @@ describe('Windows Claude hook files', () => {
     service.install()
     service.remove()
     expect(JSON.stringify(readHooksJson(settings))).not.toContain('claude-hook.cmd')
-    // Like every other agent's script: a session still holding the old settings keeps answering.
+    // Keep scripts callable for sessions still holding the old hook settings.
     expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())
     rmSync(entry)
     writeFileSync(payload, 'orphan payload')

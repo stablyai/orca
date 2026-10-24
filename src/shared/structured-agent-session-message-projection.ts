@@ -1,11 +1,12 @@
 import type {
+  AgentJournalCursor,
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
-import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
+import { collapseProviderRetryRuns } from './native-chat/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
@@ -25,6 +26,8 @@ export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
   queuedAt: number
+  /** The host's acknowledgement; a read past it supersedes this echo. */
+  recordedCursor?: AgentJournalCursor
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
 }

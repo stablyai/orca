@@ -87,7 +87,8 @@ describe('structured mailbox pointer host', () => {
     const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
     hostRef.current = {
       deps: { store: { getRecord: () => null } },
-      journalSnapshot: () => ({ items: [], submissions })
+      journalSnapshot: () => ({ items: [], submissions }),
+      currentWork: () => null
     }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
       submissions
@@ -115,10 +116,16 @@ describe('structured mailbox pointer host', () => {
           getRecord: () => ({ providerContextBoundary: { operationId: 'clear-1', afterFence: 2 } })
         }
       },
-      journalSnapshot: () => ({ items, submissions: [pointerSubmission('earlier', 2, 6), current] })
+      journalSnapshot: () => ({
+        items,
+        submissions: [pointerSubmission('earlier', 2, 6), current]
+      }),
+      currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({ submissions: [current] })
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
@@ -133,10 +140,13 @@ describe('structured mailbox pointer host', () => {
       journalSnapshot: () => ({
         items: [],
         submissions: [pointerSubmission('earlier', 2, 2), current]
-      })
+      }),
+      currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({ submissions: [current] })
+    expect(await host.readSessionFacts('s1')).toEqual({
+      submissions: [current]
+    })
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
@@ -192,14 +202,11 @@ describe('structured mailbox pointer host', () => {
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
   })
 
-  it('asks a busy chat to queue the pointer as a card, with who it is from', async () => {
+  it('sends the pointer as a plain send for every agent, with who it is from', async () => {
     const send = vi.fn(
       async (_caller: unknown, _payload: { delivery?: string; body?: unknown }) => ({
         ok: true,
-        value: {
-          clientMessageId: 'op1',
-          queued: { messageId: 'op1', position: 0, state: 'waiting' }
-        }
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
       })
     )
     hostRef.current = { send }
@@ -211,11 +218,9 @@ describe('structured mailbox pointer host', () => {
         expectedRuntimeFence: 1,
         body: { kind: 'message', role: 'user', blocks: [], from: NOTICE_SOURCE }
       })
-    ).resolves.toEqual({ kind: 'queued' })
-    expect(send.mock.calls[0]![1]).toMatchObject({
-      delivery: 'queue-if-active',
-      body: { from: NOTICE_SOURCE }
-    })
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
+    expect(send.mock.calls[0]![1]).toMatchObject({ body: { from: NOTICE_SOURCE } })
+    expect(send.mock.calls[0]![1]!.delivery).toBeUndefined()
   })
 
   it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {

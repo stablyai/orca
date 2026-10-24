@@ -34,7 +34,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep,
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
   scheduleTerminalWebglAtlasRecovery: vi.fn(),
@@ -42,7 +42,7 @@ const {
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
   notifyCodexPaneBoundForStaleSweep: vi.fn(),
-  presentPaneViewportPreservingSynchronizedOutput: vi.fn()
+  presentPaneViewport: vi.fn()
 }))
 
 let mockStoreState: StoreState
@@ -61,7 +61,7 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
 
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  presentPaneViewportPreservingSynchronizedOutput
+  presentPaneViewport
 }))
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
@@ -202,13 +202,16 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({
+      scrollbackRows: 5000,
+      repaintsPane: true
+    })
     expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden)
     expect(pane.terminal.write).toHaveBeenCalledWith(
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)
     )
-    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    expect(presentPaneViewport).toHaveBeenCalledWith(pane)
     disposable.dispose()
   })
 

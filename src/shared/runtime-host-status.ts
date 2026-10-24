@@ -1,8 +1,11 @@
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
 
 export const RUNTIME_HOST_STATUS_CHANNEL = 'runtimeEnvironments:statusChanged'
+
+/** Why a host refused this client: its pairing was revoked, or the versions cannot talk. */
+export type RuntimeHostBlockedReason = 'access-revoked' | 'incompatible'
 
 /** Local client state; never exchanged with the paired host. */
 export type RuntimeHostStatusSnapshot = {
@@ -12,6 +15,8 @@ export type RuntimeHostStatusSnapshot = {
   checkedAt: number
   status: RuntimeStatus | null
   verification: 'checking' | 'verified' | 'unavailable' | 'blocked'
+  /** Set only while a refused status probe holds `verification` at blocked. */
+  blockedReason?: RuntimeHostBlockedReason
   transport: 'unknown' | 'connecting' | 'ready' | 'disconnected'
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   retired?: true
@@ -98,14 +103,22 @@ export function runtimeHostStatusError(error: unknown): RuntimeRpcFailure {
   return runtimeHostStatusFailure(code, error instanceof Error ? error.message : String(error))
 }
 
-export function isRuntimeHostStatusBlocked(response: RuntimeRpcFailure): boolean {
+const ACCESS_REVOKED_CODES = ['unauthorized', 'forbidden']
+
+/** Null when the failure is transient and verification should keep retrying. */
+export function runtimeHostStatusBlockedReason(
+  response: RuntimeRpcFailure
+): RuntimeHostBlockedReason | null {
+  if (ACCESS_REVOKED_CODES.includes(response.error.code)) {
+    return 'access-revoked'
+  }
   return [
-    'unauthorized',
-    'forbidden',
     'invalid_argument',
     'invalid_runtime_response',
     'protocol_version_mismatch',
     'method_not_found',
     'unsupported_method'
   ].includes(response.error.code)
+    ? 'incompatible'
+    : null
 }

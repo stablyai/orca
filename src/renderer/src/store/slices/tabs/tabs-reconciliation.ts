@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
@@ -136,15 +137,17 @@ export function projectWorktreeTabModelReconciliation(
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
+    const slots = structuredLaunchSlotIds(worktreeId, group.id)
+    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId))
+    const realOrder = tabOrder.filter((id) => validTabIds.has(id))
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)
         ? group.activeTabId
-        : (tabOrder[0] ?? null)
+        : (realOrder[0] ?? null)
     const tabOrderUnchanged =
       tabOrder.length === group.tabOrder.length &&
       tabOrder.every((tabId, index) => tabId === group.tabOrder[index])
-    const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, tabOrder)
+    const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, realOrder)
     const recentUnchanged =
       recentTabIds.length === (group.recentTabIds ?? []).length &&
       recentTabIds.every((id, index) => id === (group.recentTabIds ?? [])[index])
@@ -154,7 +157,11 @@ export function projectWorktreeTabModelReconciliation(
   })
   const prunedGroups =
     validTabs.length > 0
-      ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
+      ? nextGroupsWithEmpty.filter(
+          // Preserve intentional empty panes; only collapse groups emptied by stale-tab cleanup.
+          (group, index) =>
+            group.tabOrder.length > 0 || reconciledGroups[index].tabOrder.length === 0
+        )
       : nextGroupsWithEmpty
   const groupsChanged =
     prunedGroups.length !== groups.length ||

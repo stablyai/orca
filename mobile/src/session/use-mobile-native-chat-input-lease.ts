@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../src/shared/native-chat-turn-status'
+import {
+  NATIVE_CHAT_COMPOSER_PLACEHOLDER,
+  NATIVE_CHAT_TURN_STATUS_COPY
+} from '../../../src/shared/native-chat-turn-status'
 import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
@@ -95,7 +98,7 @@ export function useSettledMobileNativeChatInputLock(
 }
 
 /** What the composer says while the input lease blocks it, else that a message sent now runs
- *  after a Stop the chat reads as stopping, else its normal prompt. */
+ *  after a Stop the chat reads as stopping, else desktop's normal prompt. */
 export function mobileNativeChatComposerPlaceholder(
   lockReason: MobileNativeChatInputLockReason | null,
   /** While stopping: whether a message sent now is queued, or sent for the host to hold. */
@@ -112,5 +115,5 @@ export function mobileNativeChatComposerPlaceholder(
       ? NATIVE_CHAT_TURN_STATUS_COPY.queueAfterStop
       : NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
   }
-  return 'Message, @files, /commands'
+  return NATIVE_CHAT_COMPOSER_PLACEHOLDER
 }

@@ -1,3 +1,4 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -9,7 +10,7 @@ import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-bui
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
 import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
-import type { JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import type { JournalRow } from './journal-row-schema'
 
 export async function rewindJournalContext(input: {
@@ -22,6 +23,7 @@ export async function rewindJournalContext(input: {
   receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt
 }): Promise<AgentJournalCursor> {
   let receipt: JournalOperationReceipt | undefined
+  let adoption: JournalQueuePlan | undefined
   const rows = await input.writer.enqueueRows(
     () => {
       const state = input.state()
@@ -33,19 +35,29 @@ export async function rewindJournalContext(input: {
         state.latestAcceptedTurnSequence,
         input.cards.pauses()
       ).cleared!
+      const queued = new Set(
+        [...state.submissions.values()]
+          .filter(isQueuedAgentJournalSubmission)
+          .map((entry) => agentJournalSubmissionKey(entry.clientMessageId))
+      )
       const removed = new Map<string, boolean>()
       for (const item of state.items.values()) {
-        if (item.sequence > input.floor.sequence) {
+        if (item.sequence > input.floor.sequence && !queued.has(item.itemId)) {
           removed.set(item.itemId, false)
         }
       }
       for (const submission of state.submissions.values()) {
-        if ((submission.acceptedSequence ?? 0) > input.floor.sequence) {
+        if (
+          (submission.acceptedSequence ?? 0) > input.floor.sequence &&
+          !isQueuedAgentJournalSubmission(submission)
+        ) {
           removed.set(agentJournalSubmissionKey(submission.clientMessageId), true)
         }
       }
+      // Capture adoption before tombstones retire legacy-card handoffs.
+      adoption = input.cards.adoptionOfAll()
       const revisions = new Map<string, number>()
-      const plan: ((seq: number, ts: number) => JournalRow)[] = []
+      const plan: ((seq: number, ts: number) => JournalRow)[] = [...adoption.rows]
       for (const [itemId, retireSubmission] of removed) {
         const row = buildJournalTombstoneRow({ state, itemId, seq: 0, ts: 0, fence: input.fence })
         revisions.set(itemId, row.revision)
@@ -89,8 +101,14 @@ export async function rewindJournalContext(input: {
       return plan
     },
     {
-      write: (db) => receipt!.write(db),
-      committed: () => receipt!.committed()
+      write: (db) => {
+        adoption?.receipt.write(db)
+        receipt!.write(db)
+      },
+      committed: () => {
+        adoption?.receipt.committed()
+        receipt!.committed()
+      }
     }
   )
   const last = rows.at(-1)!

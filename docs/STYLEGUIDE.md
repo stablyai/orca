@@ -156,6 +156,8 @@ Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `ic
 
 Browse `src/renderer/src/components/ui/` for the full list. Most wrap a Radix UI primitive — exceptions are `command` (wraps `cmdk`), `sonner` (wraps `sonner`), and the visual-only wrappers (`badge`, `button-group`, `card`, `input`) which apply tokens and Tailwind utilities directly. Never reimplement headless behavior; extend the existing wrapper.
 
+Use `DialogContent surface="security"` for every dialog that asks the user to trust, approve, run or remove code, including plugin provenance and approval, so plugin themes cannot change the trust surface's tokens. Use its `scrollable` prop when the whole dialog scrolls. Wrap a trust decision outside a dialog, such as an agent approval card or a certificate override, in `SecuritySurface`.
+
 ### Picking the right primitive
 
 When a control has multiple plausible primitives, use this fork:

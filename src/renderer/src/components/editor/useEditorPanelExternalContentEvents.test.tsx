@@ -4,9 +4,17 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_FILE_SAVED_EVENT,
+  notifyEditorFileCacheStale,
+  type EditorFileSavedDetail
+} from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
+
+const markChangedOnDisk = vi.hoisted(() => vi.fn())
+vi.mock('./editor-changed-on-disk-mark', () => ({ markFileChangedOnDisk: markChangedOnDisk }))
 
 type ProbeCalls = {
   invalidate: ReturnType<typeof vi.fn>
@@ -20,14 +28,27 @@ type ProbeProps = {
   calls: ProbeCalls
   isVisible: boolean
   openFiles: OpenFile[]
+  /** Loaded panel content; the probe writes the latest back into `current`. */
+  contents?: { current: Record<string, FileContent> }
 }
 
-function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: ProbeProps): null {
+function ExternalContentProbe({
+  activeFileId,
+  calls,
+  isVisible,
+  openFiles,
+  contents
+}: ProbeProps): null {
   const activeContentFileIdRef = useRef(activeFileId)
   const isVisibleRef = useRef(isVisible)
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef({})
-  const [, setFileContents] = useState<Record<string, FileContent>>({})
+  const [fileContents, setFileContents] = useState<Record<string, FileContent>>(
+    () => contents?.current ?? {}
+  )
+  if (contents) {
+    contents.current = fileContents
+  }
   const [, setDiffContents] = useState<Record<string, DiffContent>>({})
 
   useLayoutEffect(() => {
@@ -100,6 +121,36 @@ describe('useEditorPanelExternalContentEvents', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+  })
+
+  it('reloads an evicted cache at once for the visible active tab, once, and lazily for others', () => {
+    const active = makeFile('active')
+    const hidden = makeFile('hidden')
+    const calls = makeCalls()
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={active.id}
+          calls={calls}
+          isVisible
+          openFiles={[active, hidden]}
+        />
+      )
+    })
+
+    act(() => {
+      notifyEditorFileCacheStale(active.id)
+      notifyEditorFileCacheStale(hidden.id)
+    })
+
+    expect(calls.loadFile).toHaveBeenCalledOnce()
+    expect(calls.loadFile).toHaveBeenCalledWith(
+      active.filePath,
+      active.id,
+      active.worktreeId,
+      active.relativePath,
+      { force: true }
+    )
   })
 
   it('routes one remote change to one visible owner instead of every retained panel', () => {
@@ -238,5 +289,172 @@ describe('useEditorPanelExternalContentEvents', () => {
     const previewOptions = previewCalls.loadFile.mock.calls[0]?.[4]
     expect(sourceOptions?.externalEventGeneration).toBeTypeOf('number')
     expect(previewOptions?.externalEventGeneration).toBe(sourceOptions?.externalEventGeneration)
+  })
+
+  it('keeps one slow watcher read in flight and follows up once with the latest change', async () => {
+    const changedFile = makeFile('changed')
+    const calls = makeCalls()
+    const settles: (() => void)[] = []
+    calls.loadFile.mockImplementation(() => new Promise<void>((resolve) => settles.push(resolve)))
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={changedFile.id}
+          calls={calls}
+          isVisible
+          openFiles={[changedFile]}
+        />
+      )
+    })
+    // Watch batches outpace a slow SSH read: restarting each time would discard every result.
+    for (let i = 0; i < 5; i++) {
+      dispatchExternalChange(changedFile.relativePath)
+    }
+    expect(calls.loadFile).toHaveBeenCalledTimes(1)
+    await act(async () => settles[0]())
+    expect(calls.loadFile).toHaveBeenCalledTimes(2)
+    const firstGeneration = calls.loadFile.mock.calls[0][4].externalEventGeneration
+    expect(calls.loadFile.mock.calls[1][4].externalEventGeneration).toBe(firstGeneration + 4)
+    await act(async () => settles[1]())
+    expect(calls.loadFile).toHaveBeenCalledTimes(2)
+  })
+
+  it('coalesces slow watcher diff reloads separately from content reads', async () => {
+    const diffTab = makeFile('diff', { mode: 'diff', diffSource: 'unstaged' })
+    const calls = makeCalls()
+    const settles: (() => void)[] = []
+    calls.loadDiff.mockImplementation(() => new Promise<void>((resolve) => settles.push(resolve)))
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={diffTab.id}
+          calls={calls}
+          isVisible
+          openFiles={[diffTab]}
+        />
+      )
+    })
+    for (let i = 0; i < 3; i++) {
+      dispatchExternalChange(diffTab.relativePath)
+    }
+    expect(calls.loadDiff).toHaveBeenCalledTimes(1)
+    await act(async () => settles[0]())
+    expect(calls.loadDiff).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['became dirty', (file: OpenFile) => [{ ...file, isDirty: true }]],
+    ['was closed', () => []]
+  ])('skips the follow-up read when the tab %s meanwhile', async (label, nextFiles) => {
+    const changedFile = makeFile('changed')
+    const calls = makeCalls()
+    const settles: (() => void)[] = []
+    calls.loadFile.mockImplementation(() => new Promise<void>((resolve) => settles.push(resolve)))
+    const renderProbe = (openFiles: OpenFile[]): void => {
+      act(() => {
+        root.render(
+          <ExternalContentProbe
+            activeFileId={changedFile.id}
+            calls={calls}
+            isVisible
+            openFiles={openFiles}
+          />
+        )
+      })
+    }
+    renderProbe([changedFile])
+    dispatchExternalChange(changedFile.relativePath)
+    dispatchExternalChange(changedFile.relativePath)
+    markChangedOnDisk.mockClear()
+    renderProbe(nextFiles(changedFile))
+    await act(async () => settles[0]())
+    expect(calls.loadFile).toHaveBeenCalledTimes(1)
+    if (label === 'became dirty') {
+      // The draft stays, but the queued disk change is recorded and the cache marked stale.
+      expect(markChangedOnDisk).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ id: changedFile.id, isDirty: true }),
+        expect.objectContaining({ origin: 'live' })
+      )
+      expect(calls.invalidate).toHaveBeenCalledWith([changedFile.id])
+    } else {
+      expect(markChangedOnDisk).not.toHaveBeenCalled()
+    }
+  })
+
+  it.each([
+    ['content', 'edit', 'loadFile', 'invalidate'],
+    ['diff', 'diff', 'loadDiff', 'invalidateDiff']
+  ] as const)(
+    'invalidates %s when the tab is switched away while a follow-up is queued',
+    async (_label, mode, loader, invalidator) => {
+      const changedFile = makeFile(
+        'changed',
+        mode === 'diff' ? { mode, diffSource: 'unstaged' } : {}
+      )
+      const otherFile = makeFile('other')
+      const calls = makeCalls()
+      const settles: (() => void)[] = []
+      calls[loader].mockImplementation(() => new Promise<void>((resolve) => settles.push(resolve)))
+      const renderProbe = (activeFileId: string): void => {
+        act(() => {
+          root.render(
+            <ExternalContentProbe
+              activeFileId={activeFileId}
+              calls={calls}
+              isVisible
+              openFiles={[changedFile, otherFile]}
+            />
+          )
+        })
+      }
+      renderProbe(changedFile.id)
+      dispatchExternalChange(changedFile.relativePath)
+      dispatchExternalChange(changedFile.relativePath)
+      renderProbe(otherFile.id)
+      await act(async () => settles[0]())
+      // The queued change must not be lost: the reveal path reloads stale content.
+      expect(calls[loader]).toHaveBeenCalledTimes(1)
+      expect(calls[invalidator]).toHaveBeenCalledWith([changedFile.id])
+    }
+  )
+
+  it("moves the record's other loaded views to the saved text when the saving tab closed mid-save", () => {
+    const other = makeFile('other')
+    const preview = makeFile('preview', {
+      mode: 'markdown-preview',
+      markdownPreviewSourceFileId: 'other'
+    })
+    const loaded: Record<string, FileContent> = {
+      other: { content: 'old disk', isBinary: false },
+      preview: { content: 'old disk', isBinary: false },
+      unrelated: { content: 'old disk', isBinary: false }
+    }
+    const contents = { current: loaded }
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={other.id}
+          calls={makeCalls()}
+          isVisible
+          openFiles={[other, preview]}
+          contents={contents}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
+          detail: {
+            fileId: 'closed-saver',
+            content: 'saved',
+            recordViewIds: ['closed-saver', 'other']
+          }
+        })
+      )
+    })
+    expect(contents.current.other?.content).toBe('saved')
+    expect(contents.current.preview?.content).toBe('saved')
+    expect(contents.current.unrelated?.content).toBe('old disk')
   })
 })

@@ -9,12 +9,26 @@ import {
   makeLayout,
   makeOpenFile,
   makeTab,
+  makeUnifiedTab,
   makeWorktree
 } from './store-test-helpers'
 import { purgeOrphanedRuntimeSshProjects } from './worktrees/teardown/orphaned-runtime-ssh-project-purge'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const baseRepo: Repo = {
   id: 'same-repo',
@@ -177,8 +191,8 @@ describe('project removal stays on its owner host (#13071)', () => {
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'ssh:target-1' })
   })
 
-  // Why: removal writes no tab state itself; the host-scoped purge of a twin id must still drop it.
-  it('drops terminal and editor state under a worktree id the other host also publishes', async () => {
+  // Why: the twin id's state is shared, so only the tabs stamped with the removed host go.
+  it('drops the removed host’s terminal and editor state under a worktree id the other host also publishes', async () => {
     const store = createTestStore()
     const worktreeId = 'same-repo::/work/same'
     const sshTwin = makeWorktree({ id: worktreeId, repoId: 'same-repo', hostId: 'ssh:target-1' })
@@ -191,23 +205,46 @@ describe('project removal stays on its owner host (#13071)', () => {
         ]
       },
       tabsByWorktree: { [worktreeId]: [makeTab({ id: 'tab-1', worktreeId })] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({ id: 'tab-1', worktreeId, groupId: 'g', executionHostId: 'local' }),
+          makeUnifiedTab({
+            id: '/work/same/a.ts',
+            worktreeId,
+            groupId: 'g',
+            contentType: 'editor',
+            executionHostId: 'local'
+          })
+        ]
+      },
+      // Main loads the tab bar through its group, so the group record must hold both tabs.
+      groupsByWorktree: {
+        [worktreeId]: [
+          { id: 'g', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1', '/work/same/a.ts'] }
+        ]
+      },
       terminalLayoutsByTabId: { 'tab-1': makeLayout() },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       activeTabId: 'tab-1',
       openFiles: [makeOpenFile({ id: '/work/same/a.ts', worktreeId })],
       activeFileIdByWorktree: { [worktreeId]: '/work/same/a.ts' }
     })
+    const main = await drawTabsFromMain(store)
 
     await store.getState().removeProject('same-repo', { hostId: 'local' })
+    // A layout-owner build closes the editor tab in main; its frame drops the tab.
+    await main.settle()
+    main.close()
 
     const state = store.getState()
     expect(state.worktreesByRepo['same-repo']).toEqual([sshTwin])
-    expect(state.tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(state.tabsByWorktree[worktreeId] ?? []).toEqual([])
+    expect(state.unifiedTabsByWorktree[worktreeId] ?? []).toEqual([])
     expect(state.terminalLayoutsByTabId['tab-1']).toBeUndefined()
     expect(state.ptyIdsByTabId['tab-1']).toBeUndefined()
     expect(state.activeTabId).toBeNull()
     expect(state.openFiles).toEqual([])
-    expect(state.activeFileIdByWorktree[worktreeId]).toBeUndefined()
+    expect(state.activeFileIdByWorktree[worktreeId]).toBeFalsy()
   })
 })
 

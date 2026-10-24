@@ -8,12 +8,16 @@ import {
   parseWslMoveCutover,
   type WslMoveCutover
 } from '../../../shared/wsl-move/wsl-move-cutover'
-import { isRecord } from '../../../shared/orcad-migration-manifest-fields'
+import { isRecord } from '../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { assertOrcadMigrationManifestDigest } from '../../orcad/orcad-migration-manifest-digest'
 import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain
 } from '../migrating-orcad-catalog/migration-journal-directory'
+import {
+  isWslMoveDesktopRewriteRegistryComplete,
+  pendingWslMoveDesktopRewriteStores
+} from './wsl-move-desktop-rewrite-stores'
 
 export class WslMoveJournalUnreadableError extends Error {
   constructor(detail: string) {
@@ -102,6 +106,9 @@ export function writeWslMoveCutover(userDataPath: string, cutover: WslMoveCutove
   if (!existing && parsed.phase !== 'prepared') {
     throw new Error('wsl_move_record_missing')
   }
+  if (!existing && parsed.rewrittenStores.length > 0) {
+    throw new Error('wsl_move_ledger_changed')
+  }
   if (existing) {
     assertWslMoveUpdate(existing, parsed, head)
   } else if (!head) {
@@ -140,6 +147,35 @@ function assertWslMoveUpdate(
   }
   if (head && head.migrationId !== existing.migrationId && next.phase !== existing.phase) {
     throw new Error('wsl_move_superseded')
+  }
+  assertWslMoveLedgerUpdate(existing, next)
+}
+
+/**
+ * The rewrite ledger only grows, and only while the desktop rewrites (`destination-committed`):
+ * append-only and without duplicates, so a stale writer cannot drop another's entry. Leaving that
+ * phase needs a complete registry and every registered store recorded.
+ */
+function assertWslMoveLedgerUpdate(existing: WslMoveCutover, next: WslMoveCutover): void {
+  const before = existing.rewrittenStores
+  const after = next.rewrittenStores
+  const kept = before.every((id, index) => after[index] === id)
+  if (!kept || new Set(after).size !== after.length) {
+    throw new Error('wsl_move_ledger_changed')
+  }
+  if (
+    after.length > before.length &&
+    (existing.phase !== 'destination-committed' || next.phase !== 'destination-committed')
+  ) {
+    throw new Error('wsl_move_ledger_changed')
+  }
+  if (
+    existing.phase === 'destination-committed' &&
+    next.phase === 'client-rewritten' &&
+    (!isWslMoveDesktopRewriteRegistryComplete() ||
+      pendingWslMoveDesktopRewriteStores(after).length > 0)
+  ) {
+    throw new Error('wsl_move_rewrite_incomplete')
   }
 }
 

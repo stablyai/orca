@@ -1,16 +1,17 @@
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { pendingByPaneKey, rendererSerializerReadiness } from './serializer-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function seedHeadlessTerminalFromSpawnResult(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult,
   paneKey: string | null
 ): void {
-  // A mounted renderer owns richer history than the provider snapshot.
+  // Renderer-owned layout prefers its richer history; main-owned layout must seed the host copy every view restores.
   if (
     !runtime ||
-    (paneKey && pendingByPaneKey.has(paneKey)) ||
+    (!ORCA_LAYOUT_OWNER_IS_MAIN && paneKey && pendingByPaneKey.has(paneKey)) ||
     (result.isReattach === true && rendererSerializerReadiness.has(result.id))
   ) {
     return

@@ -46,7 +46,8 @@ const WRITES: AgentSessionWriteKind[] = [
   'command',
   'clear',
   'compact',
-  'goal'
+  'goal',
+  'queued-edit'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
@@ -96,7 +97,8 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   command: 'notDoneCommand',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal'
+  goal: 'notDoneGoal',
+  'queued-edit': 'notDoneQueuedEdit'
 }
 
 function codeOf(failure: AgentSessionWriteFailure): string {
@@ -465,7 +467,10 @@ describe('the notice for every reason a host names', () => {
         failure.details?.reason !== 'hostUnsupported' &&
         write !== 'read-history'
       const saysNotDone =
-        write === 'read-history' && failure.code === 'agent_session_journal_unreadable'
+        write === 'read-history' &&
+        (failure.code === 'agent_session_journal_unreadable' ||
+          (failure.code === 'agent_session_identity_required' &&
+            failure.details?.reason === 'transcriptUnreadable'))
       // "Run /clear when it's done" already says the command has yet to happen.
       const clearWhileWorking = (
         [

@@ -1,6 +1,4 @@
-// Per-cell grid descriptors for the serialize round-trip oracle
-// (serialize-grid-roundtrip.ts): visually effective state only, so a replay
-// is compared on what a user would see, not on internal attribute encoding.
+// Compare visible cell state while ignoring equivalent internal attribute encodings.
 import type { Terminal } from '@xterm/headless'
 
 export type GridDiff = { stage: string; row?: number; expected: unknown; actual: unknown }
@@ -19,7 +17,7 @@ function canonicalColorMode(mode: number, colorValue: number): number {
   return mode === COLOR_MODE_P256 && colorValue >= 0 && colorValue < 16 ? COLOR_MODE_P16 : mode
 }
 
-/** Visually effective cell state, same blank-cell policy as terminal-restore-parity-fixture. */
+/** Use the same visible blank-cell policy as terminal-restore-parity-fixture. */
 export function cellDescriptor(
   line: BufferLine | undefined,
   x: number,
@@ -77,7 +75,7 @@ function sameColor(
   )
 }
 
-// Equal public fields imply identical descriptors; differing fields still use the frozen policy.
+// Avoid descriptor allocation when public fields already prove visible equivalence.
 function sameCellFields(expected: Cell, actual: Cell): boolean {
   if (
     expected.getWidth() !== actual.getWidth() ||
@@ -132,7 +130,7 @@ function sameCellFields(expected: Cell, actual: Cell): boolean {
   )
 }
 
-// Match the frozen default-blank descriptor without formatting every trailing cell.
+// Trim default blanks without allocating a descriptor for every trailing cell.
 function isDefaultBlank(line: BufferLine | undefined, x: number, scratch: Cell): boolean {
   if (!line || x >= line.length) {
     return true
@@ -209,7 +207,7 @@ function lineCellsMatch(
   return true
 }
 
-/** Compares in place and formats only the first differing row, preserving diagnostic bytes. */
+/** Format only the first differing row to keep comparisons cheap and diagnostics stable. */
 export function compareBufferRows(
   stage: string,
   expected: Buffer,

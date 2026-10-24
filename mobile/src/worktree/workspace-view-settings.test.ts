@@ -170,3 +170,50 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
     expect(buildWorkspaceViewSettingsUpdate({}, base)).toEqual({})
   })
 })
+
+describe('card view settings', () => {
+  it('reads the shared card values and writes a hand-picked property set as no longer a preset', () => {
+    const next = applyDesktopViewSettings(base, {
+      projectOrderBy: 'recent',
+      worktreeCardProperties: ['pr'],
+      agentActivityDisplayMode: 'full'
+    })
+    expect([
+      next.projectOrderBy,
+      next.worktreeCardProperties,
+      next.agentActivityDisplayMode
+    ]).toEqual(['recent', ['pr'], 'full'])
+    expect(
+      buildWorkspaceViewSettingsUpdate(
+        { worktreeCardProperties: ['pr', 'host'] },
+        {
+          ...next,
+          worktreeCardProperties: ['pr', 'host']
+        }
+      )
+    ).toEqual({ worktreeCardProperties: ['pr', 'host'], _worktreeCardModeDefaulted: false })
+  })
+
+  it('writes a Card layout preset as one, and leaves the layout setting out of ui.set', () => {
+    const next = {
+      ...base,
+      worktreeCardProperties: ['status'] as const,
+      compactWorktreeCards: true
+    }
+    expect(
+      buildWorkspaceViewSettingsUpdate(
+        { worktreeCardProperties: next.worktreeCardProperties, compactWorktreeCards: true },
+        next,
+        { cardLayoutPreset: true }
+      )
+    ).toEqual({ worktreeCardProperties: ['status'], _worktreeCardModeDefaulted: true })
+  })
+
+  it('keeps the card settings a ui.get does not carry', () => {
+    const current = { ...base, compactWorktreeCards: true, newCardStyle: true }
+    expect(applyDesktopViewSettings(current, { groupBy: 'none' })).toMatchObject({
+      compactWorktreeCards: true,
+      newCardStyle: true
+    })
+  })
+})

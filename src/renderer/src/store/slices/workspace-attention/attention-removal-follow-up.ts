@@ -1,6 +1,6 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
-import { collectLeafIds } from '@/components/terminal-pane/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../../shared/terminal-pane-layout-tree'
 import type { AppState } from '../../types'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { settleWorkspaceUnreadFlag } from './workspace-unread-flag'
@@ -123,9 +123,16 @@ export function settleAttentionRemovedBy(
   set: WorkspaceAttentionSet,
   get: WorkspaceAttentionGet,
   remove: () => void,
-  options?: { settleFlags?: boolean }
+  options?: {
+    settleFlags?: boolean
+    /** Where the tabs were before a removal main's frame already made. */
+    tabsBefore?: Pick<
+      AttentionRemovalSnapshot,
+      'tabsByWorktree' | 'unifiedTabsByWorktree' | 'terminalLayoutsByTabId'
+    >
+  }
 ): void {
-  const before = get()
+  const before = { ...get(), ...options?.tabsBefore }
   remove()
   const removed = collectRemovedAttention(before, get())
   if (!removed) {

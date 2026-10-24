@@ -13,11 +13,12 @@ import {
   getPublishedVisibleWorktreeShortcutTargets
 } from './visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
-import { getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
 import {
   getHostScopedWorktreeLineageInputs,
   getWorktreeLineageAncestors
-} from './worktree-lineage-projection'
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ChildWorkspacesToggleState = Pick<
   AppState,
@@ -91,7 +92,7 @@ export function getRenderedLineageChipKeys(state: AppState): Set<string> {
     )
   }
   const visibleWorktrees = computeVisibleWorktrees(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     [],
     buildVisibleWorktreeOptionsFromState(state, getRepoMapFromState(state))
   )

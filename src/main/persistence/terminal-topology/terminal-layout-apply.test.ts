@@ -14,7 +14,7 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -76,6 +76,53 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     expect(layout?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
   })
 
+  it('records a window’s tab close durably, so a late start of it is refused', async () => {
+    const { store, directory } = await storeWithOneTab()
+    const revision = (key: Store) =>
+      Object.values(key.getWorkspaceSession().terminalTopologyRevisionByRepoId ?? {})[0] ?? 0
+    const revisionBefore = revision(store)
+
+    const reply = await store.applyLayoutCommand({
+      type: 'closeTabs',
+      workspace: WORKTREE,
+      tabIds: [TAB],
+      force: true,
+      recordClose: 'user'
+    })
+
+    expect(reply).toEqual({ ok: true, result: { closed: [TAB], refused: [] } })
+    const session = (await reopenTopologyStore(store, directory)).getWorkspaceSession()
+    expect(session.tabsByWorktree[WORKTREE] ?? []).toEqual([])
+    expect(session.closedTerminalTabTombstonesByTabId?.[TAB]).toMatchObject({
+      worktreeId: WORKTREE,
+      reason: 'user'
+    })
+    // A stale window save cannot bring the tab back.
+    expect(revision(store)).toBeGreaterThan(revisionBefore)
+  })
+
+  it('prunes the partition’s expired close records when it records one, as today', async () => {
+    const { store } = await storeWithOneTab()
+    store.setWorkspaceSession({
+      ...store.getWorkspaceSession(),
+      closedTerminalTabTombstonesByTabId: {
+        'tab-old': { worktreeId: 'repo-other::/x', closedAt: 1, reason: 'user' }
+      }
+    })
+
+    await store.applyLayoutCommand({
+      type: 'closeTabs',
+      workspace: WORKTREE,
+      tabIds: [TAB],
+      force: true,
+      recordClose: 'cleanup'
+    })
+
+    expect(
+      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
+    ).toEqual([TAB])
+  })
+
   it('writes a folder workspace’s split', async () => {
     const { store } = await storeWithOneTab(undefined, FIXTURE_FOLDER_WORKTREE_ID)
 
@@ -126,7 +173,7 @@ describe('Store.applyLayoutCommand (layout.apply)', () => {
     const { store } = await storeWithOneTab('ssh:target-1')
     const local = store.getWorkspaceSession()
 
-    const reply = await store.applyLayoutCommand(split, 'ssh:target-1')
+    const reply = await store.applyLayoutCommand(split, ['ssh:target-1'])
 
     expect(reply.ok).toBe(true)
     const root = store.getWorkspaceSession('ssh:target-1').terminalLayoutsByTabId[TAB]?.root

@@ -15,7 +15,7 @@
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationSessionCaller } from '../../orchestration/orchestration-caller-identity'
-import { isStructuredWorkerHandle } from '../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 
 export async function resolveDispatchCallerWorktreeId(
   runtime: Pick<OrcaRuntimeService, 'showTerminal' | 'getOrchestrationDispatchAuthority'>,

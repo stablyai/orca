@@ -1,10 +1,8 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getExecutionHostIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { parseExecutionHostId } from '../../../shared/execution-host'
@@ -45,12 +43,13 @@ export function getAgentDetectionTargetKeyForWorktree(
     return AGENT_DETECTION_LOCAL_TARGET_KEY
   }
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-    const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(
-      state,
-      worktreeId
-    )
-    if (explicitRuntimeEnvironmentId) {
-      return getRuntimeAgentDetectionTargetKey(explicitRuntimeEnvironmentId, worktreeId)
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+    // Why: probing one twin's agents would show the other host's install state.
+    if (owner.kind === 'ambiguous') {
+      return undefined
+    }
+    if (owner.environmentId) {
+      return getRuntimeAgentDetectionTargetKey(owner.environmentId, worktreeId)
     }
     // Why: a hostless folder can span local and SSH children, so keep the
     // ambiguity gate before applying its focused-runtime fallback.

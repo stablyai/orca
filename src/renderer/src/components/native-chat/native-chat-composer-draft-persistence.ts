@@ -13,7 +13,7 @@ import {
   records,
   refusedScopes,
   unconfirmed,
-  unverifiedScopes,
+  reconcileRestoredImageChecks,
   type AppendBeforeLoad,
   type DraftAppend,
   type DraftRecord,
@@ -242,14 +242,6 @@ export function deleteLoadingNativeChatComposerDraftsWhere(
   }
 }
 
-function addsAnImage(
-  draft: StoredNativeChatComposerDraft,
-  previous: DraftRecord | undefined
-): boolean {
-  const held = new Set(previous?.images.map((image) => `${image.id}\0${image.path}`))
-  return draft.images.some((image) => !held.has(`${image.id}\0${image.path}`))
-}
-
 // Why: another window of the same app (two web-client tabs) can send or edit this draft; its write
 // replaces what this window holds unless this window has a change of its own not yet saved.
 function adoptForeignChange(message: unknown): void {
@@ -268,13 +260,11 @@ function adoptForeignChange(message: unknown): void {
       }
       const draft = parseStoredNativeChatComposerDraft(value)
       if (draft) {
-        // Why: images this window already checked stay checked, so their chips don't flash.
-        if (addsAnImage(draft, records.get(scopeKey))) {
-          unverifiedScopes.add(scopeKey)
-        }
+        reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
         records.set(scopeKey, draft)
       } else {
         records.delete(scopeKey)
+        reconcileRestoredImageChecks(scopeKey, [])
       }
       notifyScope(scopeKey)
     })

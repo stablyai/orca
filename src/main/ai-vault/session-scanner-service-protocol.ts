@@ -32,8 +32,6 @@ export type AiVaultServiceOperation =
   | 'searchReconcile'
   | 'searchClear'
 
-// Typed from the union so a new operation cannot be added without landing here,
-// and held as strings so recognising one costs no assertion.
 const AI_VAULT_SERVICE_OPERATIONS: ReadonlySet<string> = new Set<AiVaultServiceOperation>([
   'scan',
   'titles',
@@ -50,12 +48,7 @@ export type AiVaultServiceSubagentRequest = {
   parentFilePath: string
 }
 
-/**
- * Everything the child needs to own this host's index.
- *
- * Initial roots also support standalone tests. Production asks the parent for
- * a fresh snapshot on each full sweep; the parent owns managed account homes.
- */
+/** Fallback roots for standalone callers; production refreshes parent-owned homes each full sweep. */
 export type AiVaultSessionSearchInit = {
   databasePath: string
   settings: AiVaultSearchSettings
@@ -90,7 +83,7 @@ export type AiVaultServiceRequestBody =
       type: 'request'
       operation: 'searchSessions'
       request: AiVaultSearchRequest
-      /** What the host made of a scope identity; outside `request` so no wire cap applies. */
+      /** Host-resolved scope kept outside the wire request’s size cap. */
       hostScope?: SessionSearchHostScope
     }
   | { type: 'request'; operation: 'searchStatus' }
@@ -104,7 +97,7 @@ export type AiVaultServiceParentMessage =
   | AiVaultServiceRequest
   | { type: 'cancel'; id: number }
   | { type: 'invalidate'; generation: number; paths: string[] }
-  // Fire-and-forget: the child closes the live pair and constructs from this.
+  // Fire-and-forget settings update; root changes replace the search instance.
   | { type: 'sessionSearch'; init: AiVaultSessionSearchInit }
   | {
       type: 'sessionSearchRoots'
@@ -116,7 +109,7 @@ export type AiVaultServiceParentMessage =
 export type AiVaultServiceResultValue =
   | {
       operation: 'scan'
-      // `work` is the scan's final tally, which the throttled progress reports may have skipped.
+      // Throttled progress may omit the final work tally.
       value: {
         result: AiVaultListResult
         durationMs: number
@@ -141,10 +134,9 @@ export type AiVaultServiceChildMessage =
   | ({ type: 'result'; id: number } & AiVaultServiceResultValue)
   | { type: 'error'; id: number; message: string; retryable: boolean }
   | { type: 'invalidated'; generation: number }
-  // `units` only grows within one scan; the parent re-arms that scan's deadline on an advance.
-  | { type: 'progress'; id: number; units: number; work?: AiVaultScanWork }
+  | { type: 'progress'; id: number; work: AiVaultScanWork }
 
-/** Everything but the two bulk reads is interactive: a search must not queue behind a scan. */
+/** Keep interactive requests from queueing behind scans and title reads. */
 export function aiVaultServiceLane(operation: AiVaultServiceOperation): AiVaultServiceLane {
   return operation === 'scan' || operation === 'titles' ? 'cache' : 'interactive'
 }
@@ -180,10 +172,7 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
   }
   if (message.type === 'progress') {
     return (
-      Number.isSafeInteger(message.id) &&
-      typeof message.units === 'number' &&
-      Number.isSafeInteger(message.units) &&
-      message.units > 0
+      Number.isSafeInteger(message.id) && typeof message.work === 'object' && message.work !== null
     )
   }
   return (message.type === 'result' || message.type === 'error') && Number.isSafeInteger(message.id)

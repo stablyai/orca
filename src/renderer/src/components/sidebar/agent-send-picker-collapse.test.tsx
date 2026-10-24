@@ -5,10 +5,10 @@ import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from './worktree-list-lineage-card-test-fixtures'
 import { useEffectiveCollapsedGroups } from './worktree-list/listing/use-collapsed-groups'
 import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
-import { getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../shared/sidebar-list/group-keys'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorktreeGroupBy } from './worktree-list/grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../shared/sidebar-list/row-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
@@ -98,7 +98,6 @@ for (const hostId of ['ssh:builder', 'runtime:builder'] as const) {
         worktreeLineageById: {},
         prCache: null,
         workspaceStatuses,
-        settings,
         projectGroups: [],
         projectGrouping,
         folderWorkspaces: [],
@@ -153,7 +152,6 @@ for (const hostId of ['local', 'ssh:builder', 'runtime:builder'] as const) {
         worktreeLineageById,
         prCache: null,
         workspaceStatuses,
-        settings,
         projectGroups: [],
         projectGrouping,
         folderWorkspaces: [],
@@ -182,7 +180,10 @@ it.each([true, false])('reveals the target with pinned ancestors visible=%s', (v
     capture: { source: 'orchestration-context', confidence: 'explicit' },
     createdAt: 1
   })
-  const worktreeLineageById = { [parent.id]: lineage(parent, root), [child.id]: lineage(child, parent) }
+  const worktreeLineageById = {
+    [parent.id]: lineage(parent, root),
+    [child.id]: lineage(child, parent)
+  }
   const collapsedGroups = new Set([
     'host:ssh:builder',
     'lineage:ssh:builder|remote',
@@ -209,7 +210,6 @@ it.each([true, false])('reveals the target with pinned ancestors visible=%s', (v
         worktreeLineageById,
         prCache: null,
         workspaceStatuses,
-        settings,
         projectGroups: [],
         projectGrouping,
         folderWorkspaces: [],

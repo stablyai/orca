@@ -25,8 +25,7 @@ describe('NativeChatCodeBlock', () => {
       </NativeChatCodeBlock>
     )
     const first = render(block)
-    // Why: cold grammar + WASM load on a saturated CI worker can exceed 10s; stay under testTimeout.
-    expect(await screen.findByText('lastLine', {}, { timeout: 25_000 })).toBeInTheDocument()
+    expect(await screen.findByText('lastLine', {}, { timeout: 10_000 })).toBeInTheDocument()
     expect(first.container.querySelector('pre')?.textContent).toBe(code)
     const colored = first.container.querySelectorAll('span[style*="--syntax-dark"]').length
     expect(colored).toBeGreaterThan(0)

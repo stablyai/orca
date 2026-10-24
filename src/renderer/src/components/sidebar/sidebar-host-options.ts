@@ -12,17 +12,18 @@ import {
   type ExecutionHostHealth
 } from '../../../../shared/execution-host-registry'
 import { getExecutionHostHealthLabel } from '../../../../shared/execution-host-health'
-import {
-  expandEquivalentExecutionHostIds,
-  pickerExecutionHosts
-} from '../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
+import { getCheckedHostRows } from '../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostBlockedReason
+} from '../../../../shared/runtime-host-status'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import {
@@ -41,6 +42,7 @@ export type SidebarHostOption = {
   presence: 'local' | 'configured' | 'project' | 'active'
   // Why: surfaced to the sidebar host-header menu so it can warn on version skew.
   compatibility?: RuntimeCompatVerdict
+  blockedReason?: RuntimeHostBlockedReason
   // Why: lets host headers spell out auth-needed SSH states, not just an icon.
   connectionStatus?: SshConnectionStatus
   aliasHostIds?: readonly ExecutionHostId[]
@@ -202,44 +204,9 @@ export function getSidebarHostVisibilityLabel(
   )
 }
 
-/** Picker rows a saved visibility list selects; a row counts when any id it stands for is saved. */
-export function getCheckedHostRows<T extends SidebarHostOption>(
-  rows: readonly T[],
-  visibleHostIds: readonly ExecutionHostId[]
-): T[] {
-  const visible = new Set(visibleHostIds)
-  return rows.filter(
-    (row) => visible.has(row.id) || (row.aliasHostIds ?? []).some((id) => visible.has(id))
-  )
-}
-
-export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health']): string {
-  return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health)
-}
-
-/**
- * The visibility list after toggling one picker row, or undefined when the toggle is refused (the
- * last checked row). A row writes every id it stands for, so exact-id filters match both owners.
- */
-export function toggleVisibleHostRow(
-  hosts: readonly SidebarHostOption[],
-  visibleHostIds: readonly ExecutionHostId[] | null,
-  row: SidebarHostOption
-): ExecutionHostId[] | null | undefined {
-  const rowIds = expandEquivalentExecutionHostIds(hosts, [row.id])
-  if (!visibleHostIds) {
-    return rowIds
-  }
-  const rows = pickerExecutionHosts(hosts)
-  const checkedRows = getCheckedHostRows(rows, visibleHostIds)
-  const next = new Set(visibleHostIds)
-  if (checkedRows.some((checked) => checked.id === row.id)) {
-    if (checkedRows.length <= 1) {
-      return undefined
-    }
-    rowIds.forEach((id) => next.delete(id))
-  } else {
-    rowIds.forEach((id) => next.add(id))
-  }
-  return getCheckedHostRows(rows, [...next]).length === rows.length ? null : [...next]
+export function getSidebarHostHealthLabel(
+  health: SidebarHostScopeOption['health'],
+  blockedReason?: RuntimeHostBlockedReason
+): string {
+  return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health, blockedReason)
 }

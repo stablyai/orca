@@ -1,25 +1,22 @@
-// Payload bounds for tool output and diffs.
-//
-// A 40 MB tool result must not be inlined into a row that every reconnecting
-// client replays. A bounded payload keeps a head plus the original byte length
-// and digest; the remainder is discarded. Crossing a bound is always marked —
-// never a silent drop.
-
 import { createHash } from 'node:crypto'
 import type { AgentJournalBoundedPayload } from '../../../shared/agent-session-journal-types'
 
 export type JournalPayloadLimits = {
-  /** Bytes of the payload kept inline on the row. */
   inlineHeadBytes: number
 }
 
-export const DEFAULT_JOURNAL_PAYLOAD_LIMITS: JournalPayloadLimits = {
+// Running revisions retain previews; completed content remains whole.
+export const JOURNAL_RUNNING_PREVIEW_LIMITS: JournalPayloadLimits = {
   inlineHeadBytes: 16 * 1024
 }
 
-/** Marker appended to a clipped inline string so the UI never presents a
- *  truncated body as complete. Kept in the text itself because block-level
- *  payloads (tool-result output) have nowhere else to carry the flag. */
+// Unmodeled provider traffic keeps bounded disclosure, not canonical conversation content.
+export const PROVIDER_FRAME_PAYLOAD_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
+
+// Provider errors are untrusted bulk attached to every submission listing (#20654).
+export const JOURNAL_DISPATCH_REASON_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
+
+/** Inline markers prevent plain-string blocks from presenting clipped content as complete. */
 export function journalTruncationMarker(byteLength: number, digest: string): string {
   return `\n[Orca: output truncated — ${byteLength} bytes total, digest ${digest.slice(0, 12)}]`
 }
@@ -28,8 +25,20 @@ export function digestPayload(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }
 
-/** Clip `payload` to the inline head. `truncated` means the remainder was
- *  discarded; `digest` and `byteLength` describe the original. */
+export function journalPayload(payload: string): AgentJournalBoundedPayload {
+  return {
+    head: payload,
+    byteLength: Buffer.byteLength(payload, 'utf8'),
+    digest: digestPayload(payload),
+    truncated: false
+  }
+}
+
+export function journalToolPayload(payload: string, running: boolean): AgentJournalBoundedPayload {
+  return running ? boundPayload(payload, JOURNAL_RUNNING_PREVIEW_LIMITS) : journalPayload(payload)
+}
+
+/** Digest/byteLength describe the original, even when only its head is retained. */
 export function boundPayload(
   payload: string,
   limits: JournalPayloadLimits
@@ -39,27 +48,18 @@ export function boundPayload(
   if (byteLength <= limits.inlineHeadBytes) {
     return { head: payload, byteLength, digest, truncated: false }
   }
-  const boundedBuffer =
-    Number.isSafeInteger(limits.inlineHeadBytes) && limits.inlineHeadBytes >= 0
-      ? Buffer.allocUnsafe(limits.inlineHeadBytes)
-      : null
-  const head = boundedBuffer
-    ? boundedBuffer.toString(
-        'utf8',
-        0,
-        boundedBuffer.write(payload, 0, boundedBuffer.length, 'utf8')
-      )
-    : clipUtf8(Buffer.from(payload, 'utf8'), limits.inlineHeadBytes)
-  return {
-    head,
-    byteLength,
-    digest,
-    truncated: true
-  }
+  return { head: utf8Head(payload, limits.inlineHeadBytes), byteLength, digest, truncated: true }
 }
 
-/** Bound a plain string that must stay a string (a tool-result block's output),
- *  keeping the explicit marker inline. */
+/** Encode only the bounded head without splitting UTF-8 characters. */
+export function utf8Head(text: string, maxBytes: number): string {
+  const boundedBuffer =
+    Number.isSafeInteger(maxBytes) && maxBytes >= 0 ? Buffer.allocUnsafe(maxBytes) : null
+  return boundedBuffer
+    ? boundedBuffer.toString('utf8', 0, boundedBuffer.write(text, 0, boundedBuffer.length, 'utf8'))
+    : clipUtf8(Buffer.from(text, 'utf8'), maxBytes)
+}
+
 export function boundInlineText(
   payload: string,
   limits: JournalPayloadLimits
@@ -74,7 +74,6 @@ export function boundInlineText(
   }
 }
 
-/** Keep arbitrary tool input JSON bounded before it reaches a row. */
 export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
   let encoded: string
   try {
@@ -98,10 +97,9 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
     : input
 }
 
-/** Slice at a byte budget without splitting a multi-byte character. */
 function clipUtf8(buffer: Buffer, maxBytes: number): string {
   let end = maxBytes
-  // A UTF-8 continuation byte is 0b10xxxxxx; walk back off a split sequence.
+  // Backtrack over continuation bytes to avoid splitting a UTF-8 code point.
   while (end > 0 && (buffer[end] & 0b1100_0000) === 0b1000_0000) {
     end -= 1
   }

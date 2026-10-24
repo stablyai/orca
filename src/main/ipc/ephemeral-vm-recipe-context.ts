@@ -110,8 +110,7 @@ export function getRuntimeRecipeContext(
   if (!repo.ok) {
     throw new Error(repo.message)
   }
-  // Pre-snapshot runtimes can only be attributed to repo-owned recipes. Never
-  // substitute a later same-id plugin recipe for an older runtime lifecycle.
+  // Legacy runtimes lack snapshots; never substitute a newer same-ID plugin recipe for their repo-owned recipe.
   const recipe =
     runtime.recipe ??
     (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(

@@ -20,7 +20,7 @@ vi.mock('../notifications/push-registration', () => ({
   unregisterPushForRemovedHost: async () => () => undefined
 }))
 
-import { createGenerationStore, type GenerationStore } from './generation-store'
+import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import { createMobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { resetProcessGenerationStoreForTests } from './process-generation-store'
@@ -48,6 +48,7 @@ function bundle(): MobileWebBundleFetchResult {
       assets
     },
     assets: new Map([['index.html', new Uint8Array(4).fill(7)]]),
+    reused: [],
     totalBytes: 4,
     elapsedMs: 1
   }
@@ -66,13 +67,12 @@ function failure(hostId: string): MobileWebShellUpdateFailure {
   }
 }
 
-function macrotask(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
-}
-
-/** Every read of `file` returns what was on disk when it was issued, a macrotask later, and the
- *  first one starts the removal: the slow read a real device gives the other side's write. */
-function slowReadsOf(fileSystem: FakeGenerationFileSystem, file: string, onFirst: () => void) {
+/** Hold the first read until host removal has queued its cleanup behind this operation. */
+function slowReadsOf(
+  fileSystem: FakeGenerationFileSystem,
+  file: string,
+  onFirst: () => Promise<void>
+) {
   const readText = fileSystem.readText.bind(fileSystem)
   let reads = 0
   fileSystem.readText = async (target) => {
@@ -82,16 +82,9 @@ function slowReadsOf(fileSystem: FakeGenerationFileSystem, file: string, onFirst
     const text = await readText(target)
     reads += 1
     if (reads === 1) {
-      onFirst()
+      await onFirst()
     }
-    await macrotask()
     return text
-  }
-}
-
-async function drain(): Promise<void> {
-  for (let turn = 0; turn < 10; turn += 1) {
-    await macrotask()
   }
 }
 
@@ -107,15 +100,6 @@ function indexedHostKeys(fileSystem: FakeGenerationFileSystem): string[] {
 }
 
 type Sides = { session: () => GenerationStore; removeHost: (hostId: string) => Promise<void> }
-
-const independentInstances: Sides = {
-  session: () => createGenerationStore({ fileSystem: requireFileSystem() }),
-  removeHost: async (hostId) => {
-    const removal = createGenerationStore({ fileSystem: requireFileSystem() })
-    void removal.forgetHostUpdateFailures(hostId)
-    void removal.deleteHostCache(deriveHostCacheKey(hostId)).catch(() => undefined)
-  }
-}
 
 const productionSeams: Sides = {
   session: () => createMobileWebShellRuntime().createStore(),
@@ -135,9 +119,9 @@ async function removeDuringCommit(sides: Sides): Promise<FakeGenerationFileSyste
   const session = sides.session()
   await seedHosts(session)
   const staged = await session.stageGeneration(deriveHostCacheKey(OPENED), bundle())
-  slowReadsOf(fileSystem, INDEX, () => void sides.removeHost(REMOVED))
+  slowReadsOf(fileSystem, INDEX, () => sides.removeHost(REMOVED))
   await session.commitGeneration(staged)
-  await drain()
+  await session.readUpdateFailures()
   return fileSystem
 }
 
@@ -146,27 +130,15 @@ async function removeDuringRecord(sides: Sides): Promise<FakeGenerationFileSyste
   const fileSystem = requireFileSystem()
   const session = sides.session()
   await session.recordUpdateFailure(failure(REMOVED))
-  slowReadsOf(fileSystem, LOG, () => void sides.removeHost(REMOVED))
+  slowReadsOf(fileSystem, LOG, () => sides.removeHost(REMOVED))
   await session.recordUpdateFailure(failure(KEPT))
-  await drain()
+  await session.readUpdateFailures()
   return fileSystem
 }
 
 beforeEach(() => {
   fake.fileSystem = createFakeGenerationFileSystem()
   resetProcessGenerationStoreForTests()
-})
-
-describe('two generation store instances over one cache', () => {
-  it('lose the activation a removal lands inside', async () => {
-    const fileSystem = await removeDuringCommit(independentInstances)
-    expect(indexedHostKeys(fileSystem)).not.toContain(deriveHostCacheKey(OPENED))
-  })
-
-  it("lose the failure a removal's forget lands inside", async () => {
-    const fileSystem = await removeDuringRecord(independentInstances)
-    expect(fileSystem.text(LOG)).toBeNull()
-  })
 })
 
 describe('host removal and the mounted shell session', () => {

@@ -17,6 +17,7 @@ export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
   experimentalPtySourceCreditV1?: unknown
+  allowRemoteCliControlReset?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
@@ -26,6 +27,7 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
+  const systemSshProxyConnectionReuse = target.systemSshProxyConnectionReuse
   const remoteRuntime = target.remoteRuntime
   const remoteRuntimeResolution = normalizeSshRemoteRuntimeResolution(
     target.remoteRuntimeResolution
@@ -35,9 +37,12 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.systemSshProxyConnectionReuse
   delete target.remoteRuntime
   delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
+  // Why: the one-time remote CLI control reset is retired; its notice flag means nothing now.
+  delete target.allowRemoteCliControlReset
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
@@ -57,6 +62,9 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
+  if (systemSshProxyConnectionReuse === true) {
+    normalized.systemSshProxyConnectionReuse = true
+  }
   // Known values survive, so an explicit Host Node choice outlives a later default flip;
   // an unknown value from a newer build must not change the runtime.
   const knownRuntime = SSH_REMOTE_RUNTIMES.find((runtime) => runtime === remoteRuntime)
@@ -66,13 +74,15 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (remoteRuntimeResolution) {
     normalized.remoteRuntimeResolution = remoteRuntimeResolution
   }
-  return normalizeManagedServerMoveOffered(
-    normalizeAppVersionNote(
+  return normalizeManagedServerLeaveBehind(
+    normalizeManagedServerMoveOffered(
       normalizeAppVersionNote(
-        migrateLegacyManagedOrcadOwner(normalized),
-        'managedServerUnavailable'
-      ),
-      'managedServerUpdateFailure'
+        normalizeAppVersionNote(
+          migrateLegacyManagedOrcadOwner(normalized),
+          'managedServerUnavailable'
+        ),
+        'managedServerUpdateFailure'
+      )
     )
   )
 }
@@ -121,6 +131,18 @@ function normalizeManagedServerMoveOffered(target: SshTarget): SshTarget {
     return { ...target, managedServerMoveOffered: { ...note, appVersion: note.appVersion } }
   }
   const { managedServerMoveOffered: _malformed, ...rest } = target
+  return rest
+}
+
+function normalizeManagedServerLeaveBehind(target: SshTarget): SshTarget {
+  if (target.managedServerLeaveBehind === undefined) {
+    return target
+  }
+  const note = noteFields(target.managedServerLeaveBehind)
+  if (typeof note?.confirmedAt === 'string') {
+    return { ...target, managedServerLeaveBehind: { ...note, confirmedAt: note.confirmedAt } }
+  }
+  const { managedServerLeaveBehind: _malformed, ...rest } = target
   return rest
 }
 

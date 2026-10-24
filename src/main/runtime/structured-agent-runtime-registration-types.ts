@@ -57,6 +57,8 @@ export type StructuredAgentAccountHomeServices = {
   prepareCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   readCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
+  /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
+  stateDirectory: string
 }
 
 /** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
@@ -71,12 +73,15 @@ export type StructuredAgentLaunchCheck = {
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
   ) => { command: string; env: Record<string, string> }
-  /** Whether that binary is a release this agent runs a structured chat on. */
-  supportsVersion: (launch: {
-    command: string
-    cwd: string
-    env: Record<string, string>
-  }) => Promise<boolean>
+  /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
+  minimumVersions: readonly string[]
+}
+
+export type StructuredAgentChatProgram = {
+  /** Resolves the binary a chat start from `env` runs, spawning nothing; throws launch refusals. */
+  resolve: StructuredAgentLaunchCheck['resolveLaunch']
+  /** Whether Orca can download this program on this host when none is found. */
+  installable?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
@@ -89,6 +94,8 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
   /** How create asks whether the agent installed on this host runs a structured chat, with the
    *  environment a launch starts from; absent when the location alone decides. */
   launchCheck?: StructuredAgentLaunchCheck
+  /** How the host health snapshot finds this agent's chat program; absent answers unknown. */
+  chatProgram?: StructuredAgentChatProgram
   /** The account a chat of this agent pins; see `StructuredAgentAccountHomeRequest`. */
   resolveAccountHome: (
     request: StructuredAgentAccountHomeRequest,

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
@@ -10,9 +14,6 @@ import {
 } from './agent-model-catalog-store'
 import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavailable'
 import { agentReadsProjectModelConfig } from './agent-project-model-override'
-
-// A client preloads every agent's saved list through `savedOnly`: the answer comes from what the
-// host saved, and no listing, probe or re-check of a held reason starts.
 
 const HOME = { variable: 'GROK_HOME', path: '/homes/grok' } as const
 const FINGERPRINT = agentModelCatalogFingerprint({
@@ -48,6 +49,53 @@ function rig(agent = 'grok') {
 }
 
 describe('a saved-only catalog read', () => {
+  it('does not relaunch a released chat to read models after startup failed', async () => {
+    let now = 1_000
+    const record = {
+      ...agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          claimStatus: 'released',
+          ownerProcess: null,
+          deathEvidence: {
+            kind: 'pid-absent',
+            detail: 'reservation failed before spawn',
+            observedAt: now,
+            ownerFence: 6
+          }
+        })
+      ),
+      provider: 'grok',
+      accountHome: HOME
+    }
+    const store = new AgentModelCatalogStore({ now: () => now })
+    const probe = vi.fn(async () => listing('grok-4.7'))
+    const service = createAgentModelCatalogService({
+      store,
+      getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
+      drivesRecord: () => true,
+      resolveAccountHome: async () => HOME,
+      probes: { grok: probe }
+    })
+
+    expect(
+      await service.read({ agent: 'grok', sessionId: record.sessionId, waitForListing: true })
+    ).toEqual({
+      origin: 'unknown'
+    })
+    expect(probe).not.toHaveBeenCalled()
+
+    store.recordSuccess(FINGERPRINT, 'grok', listing('grok-4.7'), 'discovery')
+    now += AGENT_MODEL_CATALOG_FRESH_MS
+    expect(await service.read({ agent: 'grok', sessionId: record.sessionId })).toMatchObject({
+      origin: 'probe',
+      models: [{ id: 'grok-4.7' }]
+    })
+    expect(probe).not.toHaveBeenCalled()
+
+    await service.read({ agent: 'grok' })
+    expect(probe).toHaveBeenCalledOnce()
+  })
+
   it('answers from the saved entry and starts nothing, however old the entry is', async () => {
     const { store, probe, service, advance } = rig()
     store.recordSuccess(FINGERPRINT, 'grok', listing('grok-4.7'), 'discovery')
@@ -57,7 +105,6 @@ describe('a saved-only catalog read', () => {
     expect(result).not.toHaveProperty('listingInProgress')
     expect(store.pendingListing(FINGERPRINT)).toBeNull()
     expect(probe).not.toHaveBeenCalled()
-    // The same read without `savedOnly` refreshes the aged entry: the probe is what the flag skips.
     await service.read({ agent: 'grok' })
     expect(probe).toHaveBeenCalledTimes(1)
   })
@@ -91,7 +138,7 @@ describe('a saved-only catalog read', () => {
       listingNamesConfiguredModel: true,
       defaultHoldsInEveryWorkspace: true
     })
-    // OpenCode's listing names no default, and a project's own config may pick its model.
+    // Project config can pick OpenCode's default even when model listings name none.
     const opencode = rig('opencode')
     const opencodeKey = agentModelCatalogFingerprint({
       agent: 'opencode',

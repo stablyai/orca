@@ -1,4 +1,5 @@
 import { buildWebSessionExistingTabIndex } from '../web-session-existing-tab-index'
+import { resolveWebSessionVisibleTabId } from '../web-session-focus-intent'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
 import {
   buildMirroredBrowserTabs,
@@ -20,6 +21,7 @@ import {
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
+import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -34,7 +36,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     mirroredTerminalIds,
     removedTerminalIds,
     reconcilesNonAgentTabs,
-    batchContext
+    batchContext,
+    navigationIntentTab
   } = base
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
@@ -122,7 +125,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
     now,
-    (fileId) => state.editorDrafts?.[fileId] !== undefined
+    (fileId) => state.editorDrafts?.[fileId] !== undefined,
+    navigationIntentTab?.id ?? resolveWebSessionVisibleTabId(state, worktreeId)
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,
@@ -185,7 +189,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
       return (
         !publishedAgentSessionIds.has(tab.entityId) &&
         (!agentSessionsAffirmed ||
-          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId))
+          shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
+          isUnlistedCreatedChat(worktreeId, tab.entityId))
       )
     }
     if (tab.contentType === 'browser') {

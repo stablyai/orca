@@ -24,6 +24,7 @@ import {
   RESTORED_AUTHORITY_TOKEN,
   RESTORED_AUTHORITY_TOKEN_HASH,
   TEST_FOLDER_WORKSPACE_KEY,
+  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -33,6 +34,7 @@ import {
   makeFolderWorkspace,
   makeHeadlessTerminalLayout,
   makeWorkspaceSessionWithHeadlessTerminal,
+  spawnedPtyEnv,
   store
 } from '../orca-runtime-test-fixtures.spec'
 
@@ -85,8 +87,15 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(
       {
         ...store,
+        // The worker's repo lives on the SSH target whose partition holds its session.
+        getRepos: () => [{ ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }],
+        getRepo: (id: string) =>
+          id === TEST_REPO_ID
+            ? { ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }
+            : undefined,
         getWorkspaceSession: (hostId?: string | null) =>
-          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession()
+          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession(),
+        getWorkspaceSessionHostIds: () => ['local', `ssh:${targetId}`]
       },
       undefined,
       {
@@ -392,7 +401,11 @@ describe('OrcaRuntimeService', () => {
       spawnIntent: 'automatic-restore'
     })
     expect(spawn).toHaveBeenLastCalledWith(
-      expect.objectContaining({ spawnIntent: 'automatic-restore' })
+      expect.objectContaining({
+        spawnIntent: 'automatic-restore',
+        // The spawn names the session it resumes, so the host can publish it before a hook.
+        resumeProviderSession: expect.objectContaining({ id: 'provider-session-intent' })
+      })
     )
 
     await runtime.ensureAgentSession({
@@ -493,7 +506,7 @@ describe('OrcaRuntimeService', () => {
       | { command?: string; launchAgent?: string; env?: Record<string, string> }
       | undefined
     expect(spawnCall?.command).toBe("codex '--dangerously-bypass-approvals-and-sandbox'")
-    expect(spawnCall?.env).toMatchObject({
+    expect(spawnedPtyEnv(spawnCall)).toMatchObject({
       CODEX_PROFILE: 'captured',
       ORCA_WORKTREE_ID: TEST_WORKTREE_ID
     })

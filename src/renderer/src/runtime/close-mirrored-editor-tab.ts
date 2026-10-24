@@ -1,18 +1,20 @@
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
+import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import type { OpenFile } from '@/store/slices/editor'
 import type { Tab } from '../../../shared/tab-types'
 
-export type MirroredEditorCloseState = WorktreeRuntimeOwnerState & {
+export type MirroredEditorCloseState = WorktreeOperationRouteState & {
   openFiles: readonly OpenFile[]
   unifiedTabsByWorktree: Record<string, Tab[]>
 }
 
 // A mirrored editor file is owned by the host, which republishes its open files, so a local-only close is undone by the next
 // snapshot. Tell the host to close its own tab; the RPC's close intent suppresses re-mirroring until the snapshot catches up.
-// Side-effecting only (callers still run their local close); no-op for non-mirrored files, so the host's own closes are untouched.
+// Side-effecting only (callers still run their local close); no-op for a file neither mirrored nor in a workspace a
+// server's frames draw, so the host's own closes are untouched.
 export function notifyHostOfMirroredEditorClose(
   state: MirroredEditorCloseState,
   worktreeId: string | null | undefined,
@@ -22,13 +24,18 @@ export function notifyHostOfMirroredEditorClose(
     return false
   }
   const file = state.openFiles.find((candidate) => candidate.id === fileId)
-  if (!file?.mirroredFromRuntimeSession) {
+  // A server's frames list only its own tabs, so every editor tab they draw is the server's.
+  const frameDrawn =
+    file?.runtimeEnvironmentId != null &&
+    isServerFrameDrawnWorkspace(file.runtimeEnvironmentId, worktreeId)
+  if (!file || (!file.mirroredFromRuntimeSession && !frameDrawn)) {
     return false
   }
   // Only legacy records need catalog inference; snapshots capture their authoritative runtime owner.
   const runtimeEnvironmentId =
     file.runtimeEnvironmentId === undefined
-      ? getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? // Why: closing on a guessed twin would retire the other host's tab; the local close still runs.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId, 'close a mirrored editor tab on its host')
       : file.runtimeEnvironmentId
   if (!runtimeEnvironmentId?.trim()) {
     return false
@@ -42,7 +49,8 @@ export function notifyHostOfMirroredEditorClose(
   }
   // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
   // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
-  for (const tab of unifiedTabs) {
+  // Frames drop a closed tab themselves; the mirror's intent ledger skips a frame-drawn workspace.
+  for (const tab of frameDrawn ? [] : unifiedTabs) {
     recordWebSessionCloseIntent(
       { environmentId: runtimeEnvironmentId },
       worktreeId,

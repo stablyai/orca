@@ -13,7 +13,10 @@ import {
 } from '../slices/terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
+import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
+import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
@@ -23,6 +26,7 @@ import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -49,6 +53,10 @@ export function createTerminalTabCloseActions(
           state: get(),
           tabId
         })
+        if (opts?.localPtyTeardownOwnedExternally !== true) {
+          // Why regardless of a host-owned close: the managed server never ran a relay-era shell.
+          void stopLegacyRelayBridgedShellsForTab(get(), tabId, retirementPlan)
+        }
       }
       settleAttentionRemovedBy(set, get, () =>
         set((s) => {
@@ -146,7 +154,6 @@ export function createTerminalTabCloseActions(
           const nextNativeChatLaunchPromptByTabId = omitByTabId(s.nativeChatLaunchPromptByTabId)
           const nextNativeChatLaunchDraftByTabId = omitByTabId(s.nativeChatLaunchDraftByTabId)
           const nextPendingInitialCwdByTabId = omitByTabId(s.pendingInitialCwdByTabId)
-          const nextPendingSetupSplitByTabId = omitByTabId(s.pendingSetupSplitByTabId)
           const nextPendingIssueCommandSplitByTabId = omitByTabId(s.pendingIssueCommandSplitByTabId)
           // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
           const nextCacheTimer = removePaneKeysByTabPrefix(s.cacheTimerByKey, tabId)
@@ -221,7 +228,6 @@ export function createTerminalTabCloseActions(
             nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
             nativeChatLaunchDraftByTabId: nextNativeChatLaunchDraftByTabId,
             pendingInitialCwdByTabId: nextPendingInitialCwdByTabId,
-            pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
             pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
             cacheTimerByKey: nextCacheTimer,
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
@@ -245,7 +251,13 @@ export function createTerminalTabCloseActions(
         })
       )
       if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
-        commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+        // Switch point: main records the close through layout.apply.
+        if (
+          !ORCA_LAYOUT_OWNER_IS_MAIN ||
+          !recordTerminalTabCloseThroughLayoutOwner(get(), closingWorktreeId, tabId, intentReason)
+        ) {
+          commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId }, intentReason)
+        }
       }
       // Why only a user close: it is the explicit abandon. Other closes keep the drafts until their
       // workspace is removed in Orca; drafts have no budget that retires them.
@@ -260,10 +272,17 @@ export function createTerminalTabCloseActions(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
         )
         if (workspaceItem) {
-          get().closeUnifiedTab(workspaceItem.id, {
-            recordInteraction: opts?.recordInteraction,
-            terminalRetirementHandled: true
-          })
+          const closeUnifiedTab = (): void => {
+            get().closeUnifiedTab(workspaceItem.id, {
+              recordInteraction: opts?.recordInteraction,
+              terminalRetirementHandled: true
+            })
+          }
+          if (closeReason === 'pty-exit') {
+            runAsAutomaticDeselection(closeUnifiedTab)
+          } else {
+            closeUnifiedTab()
+          }
         }
       }
     }

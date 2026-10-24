@@ -17,6 +17,12 @@ import { resolveVisibleWorkspaceHostIds } from '../../../src/shared/workspace-vi
 import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
 import type { WORKSPACE_VIEW_UI_FIELDS } from '../../../src/shared/workspace-view/workspace-view-ui-fields'
 import type { FilterState } from './workspace-list-types'
+import type {
+  AgentActivityDisplayMode,
+  ProjectOrderBy,
+  WorktreeCardProperty
+} from '../../../src/shared/ui-chrome-types'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../src/shared/worktree/card-properties'
 import {
   WORKSPACE_GROUP_BY_CHOICES,
   WORKSPACE_SORT_BY_CHOICES
@@ -31,7 +37,14 @@ export type WorkspaceViewSettings = {
     : Key extends 'visibleHostIds'
       ? string[] | null
       : FilterState[Key]
-} & Partial<Pick<PersistedUIState, (typeof WORKSPACE_VIEW_UI_FIELDS)[number]>>
+} & Partial<
+  Pick<
+    PersistedUIState,
+    | (typeof WORKSPACE_VIEW_UI_FIELDS)[number]
+    // Written with the card properties only: whether they are a Card layout preset.
+    | '_worktreeCardModeDefaulted'
+  >
+>
 
 export type MobileViewState = {
   groupBy: PersistedUIState['groupBy']
@@ -39,12 +52,20 @@ export type MobileViewState = {
   filters: FilterState
   collapsedGroups: readonly string[]
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  /** Null until the desktop's value is read; the served project list's order stands in. */
+  projectOrderBy: ProjectOrderBy | null
+  /** May hold a property a newer desktop added; it is carried back unchanged. */
+  worktreeCardProperties: readonly WorktreeCardProperty[]
+  agentActivityDisplayMode: AgentActivityDisplayMode
   /**
    * Whether the desktop shares "Hide other-client workspaces" with this phone. One that does not
    * (before #28986) marks a row other-client only while its own filter hides it. Null until the
    * first ui.get, so a new desktop's marks don't hide rows before its filter value arrives.
    */
   sharesOtherClientFilter: boolean | null
+  /** Desktop settings, not UI state: read with settings.get; Card layout writes the first. */
+  compactWorktreeCards: boolean
+  newCardStyle: boolean
 }
 
 /** What the screen shows until the desktop's own values arrive. */
@@ -54,12 +75,20 @@ export const INITIAL_MOBILE_VIEW: MobileViewState = {
   filters: NO_WORKSPACE_ROW_FILTERS,
   collapsedGroups: [],
   workspaceStatuses: DEFAULT_WORKSPACE_STATUSES,
-  sharesOtherClientFilter: null
+  projectOrderBy: null,
+  worktreeCardProperties: DEFAULT_WORKTREE_CARD_PROPERTIES,
+  agentActivityDisplayMode: 'compact',
+  sharesOtherClientFilter: null,
+  compactWorktreeCards: false,
+  newCardStyle: false
 }
 
-/** An edit: the fields it sets, and for filters only the filters it touches. */
+/**
+ * An edit: the fields it sets, and for filters only the filters it touches. compactWorktreeCards
+ * is a desktop setting, not ui.set state: only setCardLayout patches it, once the host accepted the setting.
+ */
 export type MobileViewPatch = Partial<
-  Omit<MobileViewState, 'filters' | 'sharesOtherClientFilter'>
+  Omit<MobileViewState, 'filters' | 'sharesOtherClientFilter' | 'newCardStyle'>
 > & {
   filters?: Partial<FilterState>
 }
@@ -91,7 +120,8 @@ export function rowFiltersForView(view: MobileViewState): FilterState {
  */
 export function buildWorkspaceViewSettingsUpdate(
   patch: MobileViewPatch,
-  next: MobileViewState
+  next: MobileViewState,
+  options: { cardLayoutPreset?: boolean } = {}
 ): WorkspaceViewSettings {
   const update: WorkspaceViewSettings = {}
   if ('groupBy' in patch) {
@@ -112,6 +142,17 @@ export function buildWorkspaceViewSettingsUpdate(
   // An older desktop reads its legacy scope when the list is null, so "all" must be written too.
   if (patch.filters && 'visibleHostIds' in patch.filters && (hostIds?.length ?? 1) === 1) {
     update.workspaceHostScope = hostIds?.[0] ?? 'all'
+  }
+  if ('projectOrderBy' in patch && next.projectOrderBy) {
+    update.projectOrderBy = next.projectOrderBy
+  }
+  if ('worktreeCardProperties' in patch) {
+    update.worktreeCardProperties = [...next.worktreeCardProperties]
+    // As the desktop's own edit: a hand-picked set is no longer a Card layout preset.
+    update._worktreeCardModeDefaulted = options.cardLayoutPreset === true
+  }
+  if ('agentActivityDisplayMode' in patch) {
+    update.agentActivityDisplayMode = next.agentActivityDisplayMode
   }
   if ('collapsedGroups' in patch) {
     update.collapsedGroups = [...next.collapsedGroups]
@@ -153,7 +194,12 @@ export function applyDesktopViewSettings(
     filters,
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses,
+    projectOrderBy: settings.projectOrderBy ?? current.projectOrderBy,
+    worktreeCardProperties: settings.worktreeCardProperties ?? current.worktreeCardProperties,
+    agentActivityDisplayMode: settings.agentActivityDisplayMode ?? current.agentActivityDisplayMode,
     // Each ui.get is the desktop's whole state, so the field's absence means it keeps the filter.
-    sharesOtherClientFilter: settings.hideWorkspacesFromOtherDevices !== undefined
+    sharesOtherClientFilter: settings.hideWorkspacesFromOtherDevices !== undefined,
+    compactWorktreeCards: current.compactWorktreeCards,
+    newCardStyle: current.newCardStyle
   }
 }

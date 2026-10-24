@@ -9,7 +9,7 @@ import {
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { openProviderTimelineRig } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
-import type { AcpRequestPresentation } from './acp-dialects/acp-dialect'
+import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
@@ -69,15 +69,13 @@ function fixtureAnswer(
   }
 }
 
-/** Captured frames go through translation, assembly and the real serialized journal. */
-export async function openAcpFixtureRig() {
+export async function openAcpFixtureRig(dialect: AcpDialect = GROK_ACP_DIALECT) {
   const rig = await openProviderTimelineRig()
   let providerSessionId = 'session-1'
-  const translator = () =>
-    new AcpTimelineTranslator({ sessionId: providerSessionId, dialect: GROK_ACP_DIALECT })
+  const translator = () => new AcpTimelineTranslator({ sessionId: providerSessionId, dialect })
   let lane = translator()
   const records = acpSubagentRecords()
-  // What each subagent's saved row last said: its host record, kept past the record's retirement.
+  // Preserve the host's last saved view after record retirement.
   const latest = new Map<string, AgentChildWorkView>()
   const report = (evidence: AgentChildWorkEvidence[]) => {
     for (const view of records(evidence)) {
@@ -93,12 +91,12 @@ export async function openAcpFixtureRig() {
     for (const event of events) {
       expect(rig.assembler.apply(event).admission.accepted).toBe(true)
       if (event.type === 'turn.open') {
-        // As the host retires finished records when the user's next send is accepted.
+        // Retire finished host records on the next accepted turn.
         drain()
         report([{ type: 'turn-started', observedAt: event.at }])
       }
       if (event.type === 'session.ended') {
-        // As the lane reports a session end once the journal admitted it.
+        // Publish session end only after journal admission.
         drain()
         report([{ type: 'session-ended', observedAt: 9_000 }])
       }
@@ -182,13 +180,11 @@ export async function openAcpFixtureRig() {
     apply,
     feed,
     lane: () => lane,
-    /** A new provider child: the sweep, a new generation's assembler and a new translator. */
     restart: async () => {
       await rig.restart()
       drain()
       lane = translator()
     },
-    /** Every subagent reported so far, as its host record last read. */
     subagents: () => {
       drain()
       return [...latest.values()]

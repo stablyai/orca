@@ -13,6 +13,7 @@ import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 type Props = {
   preview: MobileFilePreviewResult
   client?: MobileFilePreviewRpcSender | null
+  worktreeId?: string
   relativePath: string
   title: string
   editable: boolean
@@ -23,6 +24,7 @@ type Props = {
   imageHeight: number
   onDraftChange: (content: string) => void
   onImageError: () => void
+  onOpenFile?: (pathText: string) => void
   /** Null where the only retry is a re-dial this document cannot make. */
   onRetry: (() => void) | null
 }
@@ -84,10 +86,13 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     ) : (
       <MobileFileMarkdownPreview
         relativePath={options.relativePath}
+        client={options.client}
+        worktreeId={options.worktreeId}
         content={preview.content}
         truncated={preview.truncated}
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
+        onOpenFile={options.onOpenFile}
       />
     )
   }

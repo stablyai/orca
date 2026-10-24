@@ -156,8 +156,6 @@ describe('createChromiumCookieSnapshot', () => {
     expect(readdirSync(snapshotsRoot)).toEqual([])
   })
 
-  // Why: #9355 — the attempt loop only reacts to a `false` return, so before the retry a
-  // transient AV/EDR lock on the main copy threw straight out of the snapshot.
   it('retries a transient Windows lock on the main database copy', () => {
     const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
     createChromiumCookieTestDatabase(sourcePath, [{ name: 'sid', value: 'locked-value' }]).close()
@@ -189,7 +187,6 @@ describe('createChromiumCookieSnapshot', () => {
     }
   })
 
-  // Why: the retry is Windows-scoped, so POSIX keeps failing fast instead of sleeping.
   it('does not retry a locked copy off Windows', () => {
     const sourcePath = join(root, 'Chrome', 'Default', 'Cookies')
     const snapshotsRoot = join(root, 'snapshots')

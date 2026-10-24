@@ -6,17 +6,7 @@ import {
   readPersistedStateJson,
   writePersistedStateJson
 } from './persistence-test-harness'
-/**
- * A folder workspace can be re-pointed at another SSH host outside the automation
- * editor — the workspace's scope connection moves, and every record inside it
- * moves with it. The capture on those records names the registration they were
- * attached to, so it has to follow the pin or the record reads as a replaced
- * orphan on a host that was never replaced.
- *
- * Following is gated on positive evidence: a live registration carrying the
- * capture proves which pin it came from. Without that the capture stays put, so
- * a host removed and re-added under the same id still cannot re-adopt the record.
- */
+// Repinning moves automation ownership only when a live registration proves the prior capture’s source.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -55,7 +45,7 @@ function target(id: string, generation: number): SshTarget {
   } as SshTarget
 }
 
-/** Local project outside the pinned folder scope: only the pin makes the record SSH-owned. */
+// Keep the project local so only the workspace pin establishes SSH ownership.
 function localRepo(): Repo {
   return {
     id: 'repo-1',
@@ -156,7 +146,6 @@ async function loadStore(state: Record<string, unknown>) {
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
-/** The workspace's execution host changes without any automation being edited. */
 function repinWorkspace(connectionId: string, sshTargets?: SshTarget[]): void {
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readPersistedStateJson(file))
@@ -212,8 +201,7 @@ describe('a workspace re-pinned outside the automation editor', () => {
     expect(reloaded.automationCapturedHostIssue(reloaded.listAutomations()[0])).toBeNull()
   })
 
-  // No live registration carries the capture, so nothing proves it came from the old pin
-  // rather than from this one before it was replaced. The record stays fenced.
+  // Without a live prior registration, repinning cannot distinguish relocation from host replacement.
   it('keeps the record fenced when the pin it left is gone too', async () => {
     const store = await loadStore(initialState())
     store.flush()

@@ -16,6 +16,7 @@ import {
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import { pickedSkillsInText } from '../../../../shared/structured-agent-session-send-mutation'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },
@@ -101,11 +102,51 @@ describe('deriveComposerAutocomplete — mention', () => {
 })
 
 describe('deriveComposerAutocomplete — one grammar for every agent', () => {
+  it('keeps selected files in intact punctuated mentions but drops deleted or longer tokens', () => {
+    const picked = [{ name: 'review', path: '/review/SKILL.md' }]
+    expect(pickedSkillsInText('($review), **$review**', picked)).toEqual(picked)
+    expect(pickedSkillsInText('$reviewer deleted', picked)).toEqual([])
+  })
   const skills = [
     skill({ name: 'typescript' }),
     skill({ name: 'react-useeffect', directoryPath: '/repo/.agents/skills/react-useeffect' })
   ]
   const codex = getNativeChatAgentProfile('codex')
+
+  it('lists each skill Codex reported by its file, so a shared name stays two picks', () => {
+    const reported = [
+      { name: 'review', path: '/home/me/.agents/skills/review/SKILL.md' },
+      { name: 'review', path: '/repo/.agents/skills/review/SKILL.md' },
+      { name: 'work-pets:create-pet', path: '/plugins/pets/create-pet/SKILL.md' }
+    ]
+    const discovery = { status: 'ready' as const, skills }
+    const result = deriveComposerAutocomplete('$', 1, [], skills, codex, discovery, null, reported)
+    expect(result.mode === 'slash' ? result.items : []).toEqual(
+      reported.map(({ name, path }) =>
+        expect.objectContaining({
+          token: `$${name}`,
+          path,
+          ...(name === 'review' ? { location: path } : {})
+        })
+      )
+    )
+  })
+
+  it('uses provider authority, including empty, instead of scanner loading or failure', () => {
+    for (const status of ['loading', 'error'] as const) {
+      const discovery = { status, skills: [], errorKind: 'host' as const }
+      for (const reported of [[], [{ name: 'review', path: '/review/SKILL.md' }]]) {
+        const result = deriveComposerAutocomplete('$', 1, [], [], codex, discovery, null, reported)
+        expect(result).toMatchObject({ mode: 'slash', skillStatus: 'ready' })
+        expect(result).not.toHaveProperty('skillErrorKind')
+      }
+      expect(deriveComposerAutocomplete('$', 1, [], [], codex, discovery)).toMatchObject({
+        mode: 'slash',
+        skillStatus: status,
+        skillErrorKind: 'host'
+      })
+    }
+  })
 
   it('offers Codex skills under `/`, tokenised as the form Codex invokes', () => {
     const result = deriveComposerAutocomplete('use /type', 9, COMMANDS, skills, codex)
@@ -117,13 +158,81 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(result.items.map((entry) => entry.token)).toEqual(['$typescript'])
   })
 
-  it('no longer treats `$` as a composer trigger', () => {
-    expect(deriveComposerAutocomplete('use $type', 9, COMMANDS, skills, codex).mode).toBe('none')
-    expect(deriveComposerAutocomplete('$react', 6, COMMANDS, skills, codex).mode).toBe('none')
+  it('tokenises Pi skills as `/skill:<name>`, before and after its session reports them', () => {
+    const pi = getNativeChatAgentProfile('pi')
+    const scanned = [skill({ name: 'caveman', description: 'On disk', sourceKind: 'home' })]
+    const tokens = (sessionSkills?: { name: string }[]) => {
+      const result = deriveComposerAutocomplete(
+        '/cave',
+        5,
+        [],
+        scanned,
+        pi,
+        undefined,
+        null,
+        sessionSkills
+      )
+      return result.mode === 'slash'
+        ? result.items.map((entry) => [entry.token, entry.kind === 'skill' && entry.description])
+        : []
+    }
+    expect(tokens()).toEqual([['/skill:caveman', 'On disk']])
+    expect(tokens([{ name: 'skill:caveman' }])).toEqual([['/skill:caveman', 'On disk']])
+  })
+
+  it('opens only Codex skills under `$`, and a pick keeps Codex `$` token', () => {
+    for (const [draft, query] of [
+      ['use $type', 'type'],
+      ['$', '']
+    ] as const) {
+      const result = deriveComposerAutocomplete(draft, draft.length, COMMANDS, skills, codex)
+      expect(result).toMatchObject({ mode: 'slash', prefix: '$', query, dispatchable: false })
+      if (result.mode !== 'slash') {
+        return
+      }
+      expect(result.items.every((entry) => entry.kind === 'skill')).toBe(true)
+    }
+    const picked = applyPickerSuggestion('use $typ now', 8, {
+      kind: 'skill',
+      id: 'skill:typescript',
+      name: 'typescript',
+      token: '$typescript',
+      description: null,
+      sources: []
+    })
+    expect(picked.draft).toBe('use $typescript  now')
+  })
+
+  it('leaves `$` as prose for agents whose skills use `/`', () => {
+    const claude = getNativeChatAgentProfile('claude')
+    expect(deriveComposerAutocomplete('use $type', 9, COMMANDS, skills, claude).mode).toBe('none')
   })
 
   it('does not fire inside shell-style text', () => {
     expect(deriveComposerAutocomplete('price$tag', 9, COMMANDS, skills, codex).mode).toBe('none')
+  })
+
+  // `echo $HOME` + Enter once swapped `$HOME` for a skill whose description named $CODEX_HOME.
+  it.each(['echo $HOME', 'costs $5', 'run $(pwd)'])('leaves shell `$` in %j as prose', (draft) => {
+    expect(isSkillPickerTriggered(draft, codex)).toBe(false)
+    expect(deriveComposerAutocomplete(draft, draft.length, COMMANDS, skills, codex).mode).toBe(
+      'none'
+    )
+  })
+
+  it('matches `$` on skill names only, while `/` still searches descriptions', () => {
+    const installer = [
+      skill({
+        name: 'skill-installer',
+        description: 'Install Codex skills into $CODEX_HOME/skills'
+      })
+    ]
+    const dollar = deriveComposerAutocomplete('echo $CODEX_HOME', 16, [], installer, codex)
+    expect(dollar.mode === 'slash' && dollar.items).toEqual([])
+    const slash = deriveComposerAutocomplete('use /codex_home', 15, [], installer, codex)
+    expect(slash.mode === 'slash' && slash.items.map((entry) => entry.name)).toEqual([
+      'skill-installer'
+    ])
   })
 })
 
@@ -291,7 +400,7 @@ describe('native skill and command picker', () => {
       expect(isSkillPickerTriggered('validate it with /elec', profile)).toBe(true)
       expect(isSkillPickerTriggered('open /Users/me', profile)).toBe(false)
       // Without a catalog fetch the menu would sit on a permanent loading row.
-      expect(isSkillPickerTriggered('use $elec', profile)).toBe(false)
+      expect(isSkillPickerTriggered('use $elec', profile)).toBe(agent === 'codex')
     }
   )
 
@@ -338,13 +447,26 @@ describe('native skill and command picker', () => {
       ],
       '',
       '/',
-      ['dataviz', 'ref-oss']
+      [{ name: 'dataviz' }, { name: 'ref-oss' }]
     )
     // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
     // offered without a scope, and sorts after the one the scan located.
     expect(items.map((item) => item.name)).toEqual(['ref-oss', 'dataviz'])
     expect(items[0]).toMatchObject({ kind: 'skill', description: 'On disk' })
     expect(items[1]).toMatchObject({ kind: 'skill', description: null, sources: [] })
+  })
+
+  it('keeps the first reported description for duplicate unlocated skill names', () => {
+    const items = buildNativeChatPickerItems([], [], '', '/', [
+      { name: 'missing' },
+      { name: 'missing', description: 'Later description' },
+      { name: 'present', description: 'First description' },
+      { name: 'present', description: 'Later description' }
+    ])
+    expect(items).toMatchObject([
+      { name: 'missing', description: null },
+      { name: 'present', description: 'First description' }
+    ])
   })
 
   it('keeps the disk scan only when a session report is absent', () => {
@@ -360,7 +482,11 @@ describe('native skill and command picker', () => {
   })
 
   it('rejects a session-reported name that is not a safe insertion token', () => {
-    const items = buildNativeChatPickerItems([], [], '', '/', ['ok', 'two words', 'cle\u200bar'])
+    const items = buildNativeChatPickerItems([], [], '', '/', [
+      { name: 'ok' },
+      { name: 'two words' },
+      { name: 'cle\u200bar' }
+    ])
     expect(items.map((item) => item.name)).toEqual(['ok'])
   })
 

@@ -20,14 +20,15 @@ import { restoreProfileStateJsonExport } from './persistence/profile-state/legac
 import { acquireProfileStateMaintenance } from './persistence/profile-state/profile-state-access'
 import type { Repo } from '../shared/repo-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -73,25 +74,22 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── getAllWorktreeMeta ─────────────────────────────────────────────
 
   it('getAllWorktreeMeta returns all entries', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('a', { displayName: 'A' })
-    store.setWorktreeMeta('b', { displayName: 'B' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
     const all = store.getAllWorktreeMeta()
     expect(Object.keys(all)).toHaveLength(2)
     expect(all['a'].displayName).toBe('A')
     expect(all['b'].displayName).toBe('B')
   })
 
-  // ── removeWorktreeMeta ─────────────────────────────────────────────
-
   it('removeWorktreeMeta deletes a single entry', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('a', { displayName: 'A' })
-    store.setWorktreeMeta('b', { displayName: 'B' })
-    store.removeWorktreeMeta('a')
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
+    removeWorktreeMetaRow(store, 'a', undefined)
     expect(store.getWorktreeMeta('a')).toBeUndefined()
     expect(store.getWorktreeMeta('b')).toBeDefined()
   })
@@ -100,13 +98,18 @@ describe('Store', () => {
     const store = await createStore()
     const lineage = makeWorktreeLineage()
 
-    store.setWorktreeMeta(lineage.worktreeId, { displayName: 'child' })
-    store.setWorktreeLineage(lineage.worktreeId, lineage)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
+      displayName: 'child'
+    })
+    store.setWorktreeLineage(
+      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
+      lineage
+    )
 
     expect(store.getWorktreeLineage(lineage.worktreeId)).toEqual(lineage)
     expect(store.getAllWorktreeLineage()).toEqual({ [lineage.worktreeId]: lineage })
 
-    store.removeWorktreeLineage(lineage.worktreeId)
+    store.removeWorktreeLineage(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }))
 
     expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
     expect(store.getWorktreeMeta(lineage.worktreeId)).toBeDefined()
@@ -116,10 +119,15 @@ describe('Store', () => {
     const store = await createStore()
     const lineage = makeWorktreeLineage()
 
-    store.setWorktreeMeta(lineage.worktreeId, { displayName: 'child' })
-    store.setWorktreeLineage(lineage.worktreeId, lineage)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
+      displayName: 'child'
+    })
+    store.setWorktreeLineage(
+      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
+      lineage
+    )
 
-    store.removeWorktreeMeta(lineage.worktreeId)
+    removeWorktreeMetaRow(store, lineage.worktreeId, undefined)
 
     expect(store.getWorktreeMeta(lineage.worktreeId)).toBeUndefined()
     expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
@@ -129,13 +137,15 @@ describe('Store', () => {
     const store = await createStore()
     const lineage = makeWorkspaceLineage()
 
-    store.setWorktreeMeta('r1::/path/child', { displayName: 'child' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'r1::/path/child', hostId: 'local' }), {
+      displayName: 'child'
+    })
     store.setWorkspaceLineage(lineage)
 
     expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
     expect(store.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
 
-    store.removeWorktreeMeta('r1::/path/child')
+    removeWorktreeMetaRow(store, 'r1::/path/child', undefined)
 
     expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toBeUndefined()
   })
@@ -168,12 +178,10 @@ describe('Store', () => {
     expect(store.getWorkspaceLineage(unrelatedLineage.childWorkspaceKey)).toEqual(unrelatedLineage)
   })
 
-  // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
-
   describe('mobileClientTabSelectionsByDeviceId', () => {
     it('persists device tab selections across reloads and drops malformed payloads', async () => {
       const store = await createStore()
-      // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+      // Register the owner so orphan cleanup cannot erase the fixture on reload.
       store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
       store.setMobileClientTabSelections({
         'device-a': {
@@ -213,7 +221,7 @@ describe('Store', () => {
         }
       })
 
-      store.removeProjectForHost('r1', 'local')
+      store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
       store.flush()
 
       expect(store.getMobileClientTabSelections()['device-a']).toEqual({
@@ -403,8 +411,6 @@ describe('Store', () => {
       expect(store.getSettings().theme).toBe('dark')
     })
   })
-
-  // ── Concurrent write serialization (issue #1158) ───────────────────
 
   describe('concurrent write serialization', () => {
     it('chains debounced writes via pendingWrite so they run sequentially', async () => {

@@ -24,10 +24,8 @@ import {
   isAgentLaunchReservationTakenRefusal
 } from '../../../src/shared/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../tasks/replay-on-ambiguous-delivery'
-import {
-  structuredSessionOperationId,
-  structuredSessionRandomUuid
-} from './structured-session-operation-id'
+import { structuredSessionOperationId } from './structured-session-operation-id'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
@@ -65,7 +63,7 @@ export type MobileAgentLaunchReservation = {
 
 export function reserveMobileAgentLaunch(
   agent: TuiAgent,
-  randomUuid: () => string = structuredSessionRandomUuid
+  randomUuid: () => string = randomV4Uuid
 ): MobileAgentLaunchReservation {
   return {
     pane: { tabId: randomUuid(), leafId: randomUuid() },

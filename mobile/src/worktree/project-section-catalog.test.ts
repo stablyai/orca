@@ -19,6 +19,8 @@ function repo(
     addedAt: undefined,
     connectionId: undefined,
     executionHostId,
+    projectGroupId: undefined,
+    projectGroupOrder: undefined,
     ...(repoIcon ? { repoIcon } : {})
   }
 }
@@ -29,9 +31,15 @@ describe('buildProjectSectionCatalog', () => {
       repos: [repo('r1'), repo('r1', 'runtime:m4air')],
       projects: [],
       setups: [],
-      projectOrderBy: 'manual'
+      projectOrderBy: 'manual',
+      projectGroups: undefined
     }
-    const catalog = buildProjectSectionCatalog(served, [repo('r1', undefined, uploaded)], null)
+    const catalog = buildProjectSectionCatalog(
+      served,
+      [repo('r1', undefined, uploaded)],
+      null,
+      'manual'
+    )
     expect(catalog.repos.map((entry) => entry.repoIcon)).toEqual([uploaded, undefined])
   })
 })

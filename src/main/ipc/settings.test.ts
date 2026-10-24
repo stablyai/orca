@@ -70,6 +70,8 @@ vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: applySessionSearchSettingsChangeMock
 }))
 
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
@@ -162,8 +164,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('answers the synchronous settings read with the persisted settings', () => {
-    // Why: panes can bind PTYs before async hydration; the side-effect
-    // authority kill switch needs the persisted value synchronously.
+    // PTYs can bind before hydration; authority selection needs persisted settings synchronously.
     store.getSettings.mockReturnValue({ terminalMainSideEffectAuthority: false })
     registerSettingsHandlers(store as never)
 
@@ -254,6 +255,23 @@ describe('registerSettingsHandlers', () => {
     ).rejects.toThrow('Disk full')
     expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
       { alwaysForceDeleteWorktrees: true, editorWordWrap: false },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('flushes the preserved-branch deletion preference before returning', async () => {
+    store.getSettings.mockReturnValue({ alwaysForceDeletePreservedBranches: false })
+    store.updateSettingsAndFlush.mockRejectedValue(new Error('Disk full'))
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1]
+    if (typeof handler !== 'function') {
+      throw new Error('Missing settings:set handler')
+    }
+    await expect(
+      handler(settingsInvokeEvent, { alwaysForceDeletePreservedBranches: true })
+    ).rejects.toThrow('Disk full')
+    expect(store.updateSettingsAndFlush).toHaveBeenCalledWith(
+      { alwaysForceDeletePreservedBranches: true },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })
@@ -880,8 +898,6 @@ describe('registerSettingsHandlers', () => {
     expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 
-  // 3b stores the two booleans and nothing else; the consent copy and the
-  // history picker are PR 8's. A profile that has never opted in has no key.
   it('normalizes an agent-session-search write and hands the change to the index', async () => {
     const before = { aiVaultSearch: { enabled: false, historyDays: null } }
     store.getSettings.mockReturnValue(before)

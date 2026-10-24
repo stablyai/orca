@@ -82,6 +82,17 @@ describe('shouldRetainDisposedPaneSpawn', () => {
     ).toBe(true)
   })
 
+  it('keeps the PTY while its worktree is only queued behind other deletes', () => {
+    expect(
+      shouldRetainDisposedPaneSpawn(
+        state({ deleting: { [WT]: { ...deleting, phase: 'queued' } } }),
+        WT,
+        TAB,
+        LEAF
+      )
+    ).toBe(true)
+  })
+
   it.each(['local', 'ssh:target', 'runtime:paired'] as const)(
     'retires a disposed spawn when its %s workspace is being deleted',
     (executionHostId) => {

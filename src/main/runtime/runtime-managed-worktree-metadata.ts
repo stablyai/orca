@@ -1,10 +1,16 @@
+import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../folder-workspace-meta-presence'
+import { worktreeRowTarget } from '../persistence/host-qualified-worktree-meta'
+import {
+  writeWorktreeSortOrder,
+  type WorktreeSortOrderRequest
+} from '../persistence/worktree-sort-order-write'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
   isWslMoveSourceHost,
@@ -52,6 +58,10 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   ) {
     return worktree
   }
+  const target = worktreeRowTarget(args.store, { id: worktree.id, hostId: executionHostId })
+  if (!target) {
+    throw new Error('selector_ambiguous')
+  }
   if (lineage?.parentWorktree) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
@@ -74,8 +84,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
     persisted.pushTarget = undefined
   }
   if (lineage?.noParent === true) {
-    args.store.removeWorktreeLineage?.(worktree.id)
-    args.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
+    args.store.removeWorktreeLineage?.(target)
   } else if (lineage?.parentWorktree) {
     const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
     args.ports.validateParent(worktree, parent)
@@ -93,7 +102,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       )
     }
     const createdAt = Date.now()
-    args.store.setWorktreeLineage(worktree.id, {
+    const recorded = args.store.setWorktreeLineage(target, {
       worktreeId: worktree.id,
       worktreeInstanceId: worktree.instanceId,
       parentWorktreeId: parent.id,
@@ -102,6 +111,12 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       capture: { source: 'manual-action', confidence: 'explicit' },
       createdAt
     })
+    if (!recorded) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'A same-id workspace on another host owns this lineage.'
+      )
+    }
     args.store.setWorkspaceLineage?.({
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
       childInstanceId: worktree.instanceId,
@@ -117,11 +132,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
     throw new Error('selector_not_found')
   }
-  if (executionHostId && args.store.setWorktreeMetaForHost) {
-    args.store.setWorktreeMetaForHost(worktree.id, executionHostId, metadataUpdates)
-  } else {
-    args.store.setWorktreeMeta(worktree.id, metadataUpdates)
-  }
+  args.store.setWorktreeMeta(target, metadataUpdates)
   // Why: CLI callers need an explicit push for metadata changed outside the renderer's optimistic update path.
   args.ports.invalidateResolved()
   args.ports.notifyChanged(worktree.repoId)
@@ -136,32 +147,35 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }
 
 export function persistRuntimeManagedWorktreeSortOrder(args: {
-  orderedIds: string[]
+  orderedIds: WorktreeSortOrderRequest['orderedIds']
+  hostIds?: WorktreeSortOrderRequest['hostIds']
   store: RuntimeStore
   invalidateResolved: () => void
-  notifyChanged: (repoId: string) => void
+  /** `sortOrders` omitted: the repo has same-id copies, which an id-keyed patch cannot tell apart. */
+  notifyChanged: (repoId: string, sortOrders?: WorktreeSortOrderUpdate[]) => void
 }): { updated: number } {
-  // A moving project keeps its old order; the rest of the batch still lands.
-  const updates = planWorktreeSortOrderUpdates(
-    args.orderedIds,
-    (worktreeId) => args.store.getWorktreeMeta(worktreeId),
+  // A moving project keeps its old order; the rest of the batch still lands. Only what was saved
+  // is reported and published.
+  const updates = writeWorktreeSortOrder(
+    args.store,
+    { orderedIds: args.orderedIds, hostIds: args.hostIds },
+    (worktreeId) => isWslMoveWorkspaceBlocked(args.store, worktreeId),
     Date.now()
-  ).filter((update) => !isWslMoveWorkspaceBlocked(args.store, update.worktreeId))
-  for (const update of updates) {
-    args.store.setWorktreeMeta(update.worktreeId, { sortOrder: update.sortOrder })
-  }
+  )
   if (updates.length === 0) {
     return { updated: 0 }
   }
   args.invalidateResolved()
-  const repoIds = new Set(
-    updates.flatMap(({ worktreeId }) => {
-      const parsed = splitWorktreeId(worktreeId)
-      return parsed ? [parsed.repoId] : []
-    })
-  )
-  for (const repoId of repoIds) {
-    args.notifyChanged(repoId)
+  const updatesByRepo = new Map<string, WorktreeSortOrderUpdate[]>()
+  for (const update of updates) {
+    const repoId = splitWorktreeId(update.worktreeId)?.repoId
+    if (repoId) {
+      updatesByRepo.set(repoId, [...(updatesByRepo.get(repoId) ?? []), update])
+    }
+  }
+  for (const [repoId, sortOrders] of updatesByRepo) {
+    const isTwin = getRepoRegistrationHostIds(args.store.getRepos(), repoId).size > 1
+    args.notifyChanged(repoId, isTwin ? undefined : sortOrders)
   }
   return { updated: updates.length }
 }

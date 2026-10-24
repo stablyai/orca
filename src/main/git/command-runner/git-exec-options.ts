@@ -1,7 +1,6 @@
-// Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
+// Bound output to avoid V8 string overflow; match the relay's MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
-// Why: the admission tier is a wire value, so it is declared with its params schema.
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 
 export type { GitAdmissionTier }
@@ -29,4 +28,8 @@ export type GitExecOptions = {
   admissionTier?: GitAdmissionTier
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
   admissionExempt?: true
+  /** Native macOS deletion spawns use the shared process worker. */
+  spawnOnWorkerThread?: boolean
+  /** Observe stderr without changing capture/errors; incompatible with terminationBarrier. */
+  onStderr?: (chunk: string) => void
 }

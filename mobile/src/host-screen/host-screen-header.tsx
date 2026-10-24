@@ -1,14 +1,15 @@
 import { Pressable, Text, View } from 'react-native'
-import { workspaceGroupChipLabel } from '../worktree/workspace-list-picker-options'
+import {
+  workspaceOptionsAccessibilityLabel,
+  WORKSPACE_OPTIONS_TITLE
+} from '../worktree/workspace-options-copy'
+import { WorkspaceOptionsCountBadge } from './workspace-options-count-badge'
 import {
   ChevronLeft,
-  Filter,
-  Layers,
   List,
   PanelLeftClose,
   Plus,
   Search,
-  SlidersHorizontal,
   SquareTerminal,
   UserCircle,
   X
@@ -36,7 +37,6 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,
-    settings,
     state
   } = controller
 
@@ -145,14 +145,10 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 styles.embeddedFilterChip,
                 controller.activeFilterCount > 0 && styles.filterChipActive
               ]}
-              onPress={() => state.setShowFilterModal(true)}
+              onPress={() => state.setShowWorkspaceOptions(true)}
               accessibilityRole="button"
-              accessibilityLabel={`Filter workspaces${controller.activeFilterCount > 0 ? `, ${controller.activeFilterCount} active` : ''}`}
+              accessibilityLabel={workspaceOptionsAccessibilityLabel(controller.activeFilterCount)}
             >
-              <Filter
-                size={12}
-                color={controller.activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-              />
               <Text
                 style={[
                   styles.filterChipText,
@@ -160,32 +156,9 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                 ]}
                 numberOfLines={1}
               >
-                Filter{controller.activeFilterCount > 0 ? ` ${controller.activeFilterCount}` : ''}
+                {WORKSPACE_OPTIONS_TITLE}
               </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.modeButton, styles.embeddedModeButton]}
-              onPress={() => state.setShowSortPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Sort by ${settings.selectedSortLabel}`}
-            >
-              <SlidersHorizontal size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {settings.selectedSortLabel}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.modeButton, styles.embeddedModeButton]}
-              onPress={() => state.setShowGroupPicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Group workspaces"
-            >
-              <Layers size={14} color={colors.textSecondary} />
-              <Text style={styles.sortLabel} numberOfLines={1}>
-                {workspaceGroupChipLabel(state.view.groupBy)}
-              </Text>
+              <WorkspaceOptionsCountBadge count={controller.activeFilterCount} />
             </Pressable>
           </View>
 
@@ -276,46 +249,19 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
         <View style={styles.toolbar}>
           <Pressable
             style={[styles.filterChip, controller.activeFilterCount > 0 && styles.filterChipActive]}
-            onPress={() => state.setShowFilterModal(true)}
+            onPress={() => state.setShowWorkspaceOptions(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Filter workspaces${controller.activeFilterCount > 0 ? `, ${controller.activeFilterCount} active` : ''}`}
+            accessibilityLabel={workspaceOptionsAccessibilityLabel(controller.activeFilterCount)}
           >
-            <Filter
-              size={12}
-              color={controller.activeFilterCount > 0 ? colors.textPrimary : colors.textSecondary}
-            />
             <Text
               style={[
                 styles.filterChipText,
                 controller.activeFilterCount > 0 && styles.filterChipTextActive
               ]}
             >
-              Filter{controller.activeFilterCount > 0 ? ` (${controller.activeFilterCount})` : ''}
+              {WORKSPACE_OPTIONS_TITLE}
             </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.modeButton}
-            onPress={() => state.setShowSortPicker(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Sort by ${settings.selectedSortLabel}`}
-          >
-            <SlidersHorizontal size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel} numberOfLines={1}>
-              {settings.selectedSortLabel}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.modeButton}
-            onPress={() => state.setShowGroupPicker(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Group workspaces"
-          >
-            <Layers size={14} color={colors.textSecondary} />
-            <Text style={styles.sortLabel} numberOfLines={1}>
-              {workspaceGroupChipLabel(state.view.groupBy)}
-            </Text>
+            <WorkspaceOptionsCountBadge count={controller.activeFilterCount} />
           </Pressable>
 
           <View style={styles.toolbarSpacer} />

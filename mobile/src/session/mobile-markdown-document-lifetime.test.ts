@@ -37,6 +37,11 @@ function mountDocuments(readReply: () => Promise<RpcResponse>) {
     readers = useMobileSessionDocumentReaders(
       mountFixture<ReaderScope>({
         worktreeId: 'folder-workspace',
+        markdownDocsRef: {
+          get current() {
+            return docs
+          }
+        },
         client,
         setMarkdownDocs: setDocs,
         setFileDocs: () => {}

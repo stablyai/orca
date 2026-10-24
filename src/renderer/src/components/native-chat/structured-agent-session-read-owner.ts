@@ -3,15 +3,13 @@ import type { AgentProviderSessionMetadata } from '../../../../shared/agent-sess
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryPage,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
-  type StructuredAgentSessionAction,
-  type StructuredAgentSessionState
+  type StructuredAgentSessionAction
 } from '../../../../shared/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -22,25 +20,14 @@ import {
 } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
-export type StructuredAgentSessionReadSnapshot = {
-  state: StructuredAgentSessionState
-  loadingOlder: boolean
-  /** Bumped whenever older-page reads are invalidated (open, snapshot, reset, dispose). */
-  olderHistoryGeneration: number
-  providerSession?: AgentProviderSessionMetadata
-  /** Whether `state` is the host's present: false from when reading stops or contact is lost
-   *  until the read has caught up again. */
-  current: boolean
-}
-
-export type StructuredAgentSessionReadOwner = {
-  publishCreated: (page: AgentSessionHistoryPage) => void
-  activate: () => () => void
-  dispose: () => void
-  getSnapshot: () => StructuredAgentSessionReadSnapshot
-  loadOlder: () => Promise<NativeChatOlderPageResult>
-  subscribe: (listener: () => void) => () => void
-}
+import type {
+  StructuredAgentSessionReadSnapshot,
+  StructuredAgentSessionReadOwner
+} from './structured-agent-session-read-owner-contract'
+export type {
+  StructuredAgentSessionReadSnapshot,
+  StructuredAgentSessionReadOwner
+} from './structured-agent-session-read-owner-contract'
 
 import {
   adoptStructuredReadOwner,
@@ -198,14 +185,17 @@ function createReadOwner(
     }
   }
 
-  let olderPage: { shouldStop: () => boolean; promise: Promise<NativeChatOlderPageResult> } | null =
-    null
+  let olderPage: {
+    shouldStop: () => boolean
+    promise: Promise<NativeChatOlderPageResult>
+  } | null = null
 
   const start = (): void => {
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      applyRequests: apply,
       applyEvent: (event, options) => apply({ type: 'event', event, ...options }),
       applyError: (message, refusal) => {
         // Once loaded, a failure with no host refusal attached is treated as lost contact: the

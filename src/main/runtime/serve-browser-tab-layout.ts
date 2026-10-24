@@ -61,13 +61,7 @@ export function withOpenedServeBrowserTab(
   }
   const { facts } = loaded
   const state = { ...BLANK_BROWSER_TAB_STATE, url: page.url, title: page.title }
-  const savedPage: BrowserPage = {
-    ...state,
-    id: page.pageId,
-    workspaceId: page.pageId,
-    worktreeId: page.worktreeId,
-    createdAt: now
-  }
+  const savedPage = servePageRecord(page, now)
   return saveWorkspaceLayout({
     ...loaded,
     layout: applied.model,
@@ -80,6 +74,71 @@ export function withOpenedServeBrowserTab(
       browserPagesByWorkspace: { ...facts.browserPagesByWorkspace, [page.pageId]: [savedPage] }
     }
   })
+}
+
+function servePageRecord(page: ServeBrowserPageState, createdAt: number): BrowserPage {
+  return {
+    ...BLANK_BROWSER_TAB_STATE,
+    url: page.url,
+    title: page.title,
+    id: page.pageId,
+    workspaceId: page.pageId,
+    worktreeId: page.worktreeId,
+    createdAt
+  }
+}
+
+/**
+ * The partition with the page record of a tab `openBrowserTab` just wrote under the page's id, and
+ * the tab's address; null when that tab is gone or its page is saved already.
+ */
+export function withServeBrowserPageRecord(
+  session: WorkspaceSessionState,
+  page: ServeBrowserPageState
+): WorkspaceSessionState | null {
+  const tabs = session.browserTabsByWorktree?.[page.worktreeId] ?? []
+  const tab = tabs.find((entry) => entry.id === page.pageId)
+  if (!tab || findSavedBrowserPage(session, page.worktreeId, page.pageId)) {
+    return null
+  }
+  return {
+    ...session,
+    browserTabsByWorktree: {
+      ...session.browserTabsByWorktree,
+      [page.worktreeId]: tabs.map((entry) =>
+        entry === tab ? { ...entry, url: page.url, title: page.title } : entry
+      )
+    },
+    browserPagesByWorkspace: {
+      ...session.browserPagesByWorkspace,
+      [page.pageId]: [servePageRecord(page, tab.createdAt)]
+    }
+  }
+}
+
+/** The partition without a closed tab's page records; null when it holds none. */
+export function withoutServeBrowserPages(
+  session: WorkspaceSessionState,
+  browserTabId: string
+): WorkspaceSessionState | null {
+  if (!session.browserPagesByWorkspace?.[browserTabId]) {
+    return null
+  }
+  const { [browserTabId]: _closed, ...pages } = session.browserPagesByWorkspace
+  return { ...session, browserPagesByWorkspace: pages }
+}
+
+/** The tab-bar entry showing a saved browser tab: a window's has its own id, a host's the tab's. */
+export function savedBrowserTabEntryId(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  browserTabId: string
+): string {
+  return (
+    session.unifiedTabs?.[worktreeId]?.find(
+      (entry) => entry.contentType === 'browser' && entry.entityId === browserTabId
+    )?.id ?? browserTabId
+  )
 }
 
 /**

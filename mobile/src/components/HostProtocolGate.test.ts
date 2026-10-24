@@ -35,7 +35,7 @@ vi.mock('expo-router', () => ({
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => hostClient.current
 }))
 // The wall's release offer: the native hook imports the update checker module.

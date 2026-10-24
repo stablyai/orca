@@ -1,13 +1,3 @@
-/**
- * The executor's ordering contract, which is the defect this module exists to remove.
- *
- * The old shape created a new worktree agent-first, so its startup terminal WAS the agent and the
- * structured branch below it could not be reached for any new worktree. The assertions that matter
- * here are therefore about *order and arguments*, not just the returned mode: a structured launch
- * must create the worktree with `startupAgent: undefined`, and it must ask the host only after the
- * workspace exists.
- */
-
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
@@ -27,13 +17,11 @@ function harness(options: {
   terminalCreateError?: Error
   deliveredMessageId?: string | null
   terminalPromptDelivered?: boolean
-  /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
   worktreeCreateError?: Error
   onStructuredCreate?: () => void
   onStructuredPromptDelivery?: () => void
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
-  /** A worktree-only factory, as orchestration workers and `worktree.create` pass. */
   worktreeOnlyFactory?: boolean
 }) {
   const calls: string[] = []
@@ -54,6 +42,7 @@ function harness(options: {
       }
       return {
         worktreeId: 'wt-new',
+        workspacePath: '/repo/task',
         connectionId: null,
         startupTerminalHandle: args.startupAgent ? 'term_agent_first' : undefined,
         ...carried(args.startupPrompt)
@@ -62,7 +51,7 @@ function harness(options: {
   )
   const createFolderWorkspace = vi.fn(async (_args: { create: Record<string, unknown> }) => {
     calls.push('createFolderWorkspace')
-    return { worktreeId: 'folder:fw-new', connectionId: null }
+    return { worktreeId: 'folder:fw-new', workspacePath: '/repo/task', connectionId: null }
   })
   const createRecoveryShell = vi.fn(async (_worktreeId: string) => {
     calls.push('createRecoveryShell')
@@ -99,8 +88,9 @@ function harness(options: {
     return options.terminalPromptDelivered ?? true
   })
   const runtime = {
-    getClientSettings: () =>
-      options.settings === undefined ? STRUCTURED_PREFERENCE : options.settings,
+    requireStore: () => ({
+      getSettings: () => (options.settings === undefined ? STRUCTURED_PREFERENCE : options.settings)
+    }),
     getStructuredAgentSessionCreateSupport
   }
   return {
@@ -165,7 +155,6 @@ describe('a structured launch that creates its own worktree', () => {
     const h = harness({})
     const result = await h.run(CREATE_INTENT)
 
-    // The whole defect in one assertion: the worktree must not be created agent-first.
     expect(h.calls).toEqual([
       'createWorktree(startupAgent=undefined)',
       'createSupport',
@@ -183,28 +172,23 @@ describe('a structured launch that creates its own worktree', () => {
     )
   })
 
-  it('asks the host only after the workspace exists, never before', async () => {
-    const h = harness({})
-    await h.run(CREATE_INTENT)
-    expect(h.calls.indexOf('createSupport')).toBeGreaterThan(
-      h.calls.indexOf('createWorktree(startupAgent=undefined)')
-    )
-  })
+  it.each([undefined, 'chat'] as const)(
+    'keeps the created worktree on host refusal (%s)',
+    async (surface) => {
+      const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
+      const result = await h.run({ ...CREATE_INTENT, surface })
 
-  it('falls back to a terminal in the worktree it just created when the host refuses', async () => {
-    const h = harness({ createSupport: { supported: false, reason: 'wsl' } })
-    const result = await h.run(CREATE_INTENT)
-
-    expect(h.calls).toEqual([
-      'createWorktree(startupAgent=undefined)',
-      'createSupport',
-      'createTerminalAgent'
-    ])
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
-    // Not a failed launch, and the workspace is the one just created.
-    expect(result.worktreeId).toBe('wt-new')
-    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'wsl_execution_runtime' })
-  })
+      expect(h.calls).toEqual([
+        'createWorktree(startupAgent=undefined)',
+        'createSupport',
+        'createTerminalAgent'
+      ])
+      expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
+      expect(result.worktreeId).toBe('wt-new')
+      expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'wsl_execution_runtime' })
+      expect(result.receipt.detail).toContain(surface ? 'You asked for' : 'Your default is')
+    }
+  )
 
   it('falls back to a terminal when the host cannot be reached at all', async () => {
     const h = harness({ createSupportThrows: true })
@@ -338,7 +322,6 @@ describe('a structured launch that creates its own worktree', () => {
       agent: 'claude',
       target: {
         kind: 'create-worktree',
-        // Exactly what mobile sends `worktree.create` today.
         create: { repo: 'id:repo-1', name: 'task', startupAgent: 'claude', startupDraft: 'url' }
       }
     })
@@ -354,8 +337,6 @@ describe('a launch the user did not ask to be structured', () => {
     const h = harness({ settings: null })
     const result = await h.run(CREATE_INTENT)
 
-    // Agent-first is preserved for PTY launches: it is what sequences the agent's startup command
-    // behind the setup runner, so the wait-for-setup gate comes for free.
     expect(h.calls).toEqual(['createWorktree(startupAgent=claude)'])
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_agent_first' })
     expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'user_default' })
@@ -398,17 +379,20 @@ describe('a launch into a workspace that already exists', () => {
     expect(result.worktreeId).toBe('wt-7')
   })
 
-  it('reuses a running terminal without creating or asking', async () => {
-    const h = harness({})
-    const result = await h.run({
-      agent: 'claude',
-      target: { kind: 'existing', worktree: 'wt-7' },
-      reuseTerminal: { handle: 'term_live' }
-    })
-    expect(h.calls).toEqual([])
-    expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_live' })
-    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'reused_terminal' })
-  })
+  it.each(['claude', 'grok'] as const)(
+    'reuses a running %s terminal without creating or asking',
+    async (agent) => {
+      const h = harness({})
+      const result = await h.run({
+        agent,
+        target: { kind: 'existing', worktree: 'wt-7' },
+        reuseTerminal: { handle: 'term_live' }
+      })
+      expect(h.calls).toEqual([])
+      expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_live' })
+      expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'reused_terminal' })
+    }
+  )
 })
 
 describe('an agent with no structured session', () => {
@@ -439,14 +423,12 @@ describe('the prompt receipt', () => {
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
-    // Delivery is sequenced after the surface exists; there is nothing to send into before that.
     expect(h.calls).toEqual([
       'createWorktree(startupAgent=undefined)',
       'createSupport',
       'createStructuredSession',
       'deliverStructuredPrompt'
     ])
-    // The send carries the create's own fence; nothing re-reads the session for it.
     expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
       sessionId: 'sess-1',
       fence: 4,
@@ -457,7 +439,6 @@ describe('the prompt receipt', () => {
   it('under-claims as not delivered when nothing was committed', async () => {
     const h = harness({ deliveredMessageId: null })
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
-    // A resend costs a duplicate; claiming a row that does not exist loses the text silently.
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
   })
 
@@ -477,12 +458,6 @@ describe('the prompt receipt', () => {
   })
 })
 
-/**
- * A terminal takes its prompt one of two ways. An agent whose CLI accepts a prompt argument is
- * offered it on the launch command, and the surface that types that line reports whether it rode;
- * everything else is written as keystrokes once the agent is ready. `claude` is argv-mode, `aider`
- * is `stdin-after-start` — the two halves of the table.
- */
 describe('delivering a launch prompt to a terminal agent', () => {
   const SUBMIT = { text: 'do the thing', delivery: 'submit' } as const
 
@@ -495,7 +470,6 @@ describe('delivering a launch prompt to a terminal agent', () => {
     expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
       startupPrompt: 'do the thing'
     })
-    // The text was in the process's argv at exec time; a paste on top would be a second copy.
     expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
@@ -514,7 +488,6 @@ describe('delivering a launch prompt to a terminal agent', () => {
       freshLaunch: true,
       prompt: SUBMIT
     })
-    // Folding it into argv would have appended it as an argument the CLI does not accept.
     expect(h.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty('startupPrompt')
   })
 
@@ -539,7 +512,6 @@ describe('delivering a launch prompt to a terminal agent', () => {
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
 
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-    // Offered to the launch command; the surface, not the executor, decided it did not ride.
     expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
       startupPrompt: 'do the thing'
     })
@@ -573,7 +545,6 @@ describe('delivering a launch prompt to a terminal agent', () => {
       prompt: SUBMIT
     })
 
-    // Argv is unreachable here however argv-friendly the agent is: the process already exists.
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
     expect(h.deliverTerminalPrompt).toHaveBeenCalledWith({
       handle: 'term_existing',
@@ -590,7 +561,6 @@ describe('delivering a launch prompt to a terminal agent', () => {
       target: { kind: 'existing', worktree: 'wt-7' },
       prompt: SUBMIT
     })
-    // A launch whose agent is running must not fail because its text did not; the caller resends.
     expect(result.outcome.kind).toBe('terminal')
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
   })
@@ -603,15 +573,10 @@ describe('delivering a launch prompt to a terminal agent', () => {
     })
     expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
     expect(h.deliverTerminalPrompt).not.toHaveBeenCalled()
-    // A draft must not be submitted as a turn by riding the launch command either.
     expect(h.createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('startupPrompt')
   })
 })
 
-/**
- * The kind is read off the resolved workspace id. Every kind, the floating workspace included, now
- * has a directory a session can run in, so none downgrades a launch on its own.
- */
 describe('a launch into an existing workspace, by workspace kind', () => {
   it('opens a structured session in the floating workspace', async () => {
     const h = harness({})
@@ -620,8 +585,6 @@ describe('a launch into an existing workspace, by workspace kind', () => {
       target: { kind: 'existing', worktree: FLOATING_TERMINAL_WORKTREE_ID }
     })
 
-    // Why this changed: the floating workspace resolves to its configured directory, so a session
-    // has somewhere to run and be filed under. Kind alone no longer downgrades a launch.
     expect(h.createStructuredSession).toHaveBeenCalled()
     expect(result.outcome).toMatchObject({ kind: 'structured' })
   })
@@ -633,7 +596,6 @@ describe('a launch into an existing workspace, by workspace kind', () => {
       target: { kind: 'existing', worktree: 'folder:fw-1' }
     })
 
-    // A folder workspace has no git worktree either; it must not be swept up with the sentinel.
     expect(h.createTerminalAgent).not.toHaveBeenCalled()
     expect(result.outcome).toEqual({
       kind: 'structured',
@@ -652,14 +614,6 @@ describe('a launch into an existing workspace, by workspace kind', () => {
   })
 })
 
-/**
- * The launch inputs the host cannot derive for itself.
- *
- * The pair is deliberately asymmetric and the asymmetry is the contract: a requested `cwd` is
- * something only a terminal can apply, so it decides the route; launch arguments are a TUI concern
- * the structured providers version independently, so they do NOT decide the route and a structured
- * launch that received some has to admit it ignored them.
- */
 describe('caller-supplied launch inputs', () => {
   const EXISTING = { kind: 'existing' as const, worktree: 'wt-7' }
 
@@ -667,8 +621,6 @@ describe('caller-supplied launch inputs', () => {
     const h = harness({})
     const result = await h.run({ agent: 'claude', target: EXISTING, cwd: '/repo/packages/api' })
 
-    // A structured session runs in its workspace, so honouring the cwd and honouring the
-    // preference are mutually exclusive; the receipt has to say which one lost.
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     expect(result.receipt).toEqual({
       mode: 'terminal',
@@ -680,7 +632,6 @@ describe('caller-supplied launch inputs', () => {
     expect(h.createStructuredSession).not.toHaveBeenCalled()
   })
 
-  // Command values never change the selected chat surface.
   it.each([
     ['claude', 'claude-wrapper'],
     ['codex', 'codex-nightly'],
@@ -700,8 +651,6 @@ describe('caller-supplied launch inputs', () => {
   })
 
   it('still opens a structured session when the cwd names the workspace root', async () => {
-    // The root the RPC layer resolved rides on the target, so a cwd spelled as the root is not a
-    // custom directory and does not decide the route.
     const h = harness({})
     const result = await h.run({
       agent: 'claude',
@@ -750,8 +699,6 @@ describe('caller-supplied launch inputs', () => {
     const h = harness({ settings: null })
     await h.run({ agent: 'claude', target: EXISTING, agentArgs: null })
 
-    // `null` means the caller wants none; dropping it here would silently restore the user's
-    // configured default, which is the opposite of what was asked.
     expect(h.createTerminalAgent.mock.calls[0]?.[0]).toHaveProperty('agentArgs', null)
   })
 
@@ -774,9 +721,6 @@ describe('caller-supplied launch inputs', () => {
     const h = harness({})
     const result = await h.run({ agent: 'claude', target: EXISTING, agentArgs: null })
 
-    // The structured path reads the bypass-permissions bit from the user's SETTINGS default, so a
-    // caller that asked for no arguments can still get a session with more permission than it asked
-    // for. Staying silent about that is the failure mode worth a test.
     expect(result.warning).toContain('per-launch argument override was ignored')
   })
 
@@ -818,7 +762,6 @@ describe('the surface is published as the launch stands, before its prompt is de
         outcome: { kind: 'terminal', handle: 'term_1' },
         worktreeId: 'wt-7',
         receipt: result.receipt,
-        // A host that stops mid-paste cannot say whether it landed, so it must not say "not sent".
         prompt: { delivery: 'submit', outcome: 'unconfirmed' }
       }
     ])
@@ -873,6 +816,7 @@ describe('a new local worktree whose startup terminal did not come up', () => {
     })
     h.createWorktree.mockImplementationOnce(async () => ({
       worktreeId: 'wt-new',
+      workspacePath: '/repo/task',
       connectionId: null,
       startupTerminalHandle: undefined
     }))
@@ -881,5 +825,54 @@ describe('a new local worktree whose startup terminal did not come up', () => {
 
     expect(h.createStructuredSession).toHaveBeenCalled()
     expect(h.createTerminalAgent).not.toHaveBeenCalled()
+  })
+})
+
+describe('explicit chat settlement uses resolved facts and launch effects', () => {
+  it.each(['create-worktree', 'create-folder-workspace'] as const)(
+    'settles root and custom cwd after %s without losing launch inputs',
+    async (kind) => {
+      for (const cwd of ['.', '/repo/task', 'packages/api']) {
+        const h = harness({ settings: {} })
+        const result = await h.run({
+          agent: 'claude',
+          surface: 'chat',
+          cwd,
+          target: { kind, create: {} },
+          sessionOptions: { model: 'opus' },
+          prompt: { text: 'do the task', delivery: 'submit' }
+        })
+        expect(result.outcome.kind).toBe(cwd === 'packages/api' ? 'terminal' : 'structured')
+        if (cwd === 'packages/api') {
+          expect(result.receipt.detail).toContain('You asked for')
+          expect(h.createTerminalAgent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              cwd,
+              options: { model: 'opus' },
+              startupPrompt: 'do the task'
+            })
+          )
+          expect(h.createStructuredSession).not.toHaveBeenCalled()
+        }
+      }
+    }
+  )
+
+  it('refuses a definitive no-session factory answer only before workspace creation', async () => {
+    const options = {
+      structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
+        'structured_agent_session_unsupported',
+        'unsupported'
+      )
+    }
+    const existing = harness(options)
+    await expect(
+      existing.run({
+        agent: 'claude',
+        surface: 'chat',
+        target: { kind: 'existing', worktree: 'wt-7' }
+      })
+    ).rejects.toMatchObject({ code: 'agent_launch_surface_unavailable' })
+    expect(existing.createTerminalAgent).not.toHaveBeenCalled()
   })
 })

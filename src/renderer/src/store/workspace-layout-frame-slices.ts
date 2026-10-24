@@ -14,6 +14,7 @@ import type {
   LayoutContentFacts
 } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { workspaceLayoutModelFromPublished } from '../../../shared/workspace-layout/workspace-layout-from-published'
+import { editorTabShowsFile } from '../../../shared/workspace-layout/workspace-layout-editor-tab-file'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
@@ -22,6 +23,11 @@ import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { projectHydratedBrowserSession } from './slices/browser/browser-hydration-state'
 import { buildHydratedEditorSessionState } from './slices/editor/actions/hydrated-editor-session-state'
+import { openFileOfLayoutEditorView } from './slices/editor/tabs/open-file-layout-view'
+import type { OpenFile } from './slices/editor/types/open-file'
+import { editorTabLabelOf } from './slices/editor/tabs/editor-tab-label'
+import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
+import type { EditorTabView } from '../../../shared/editor-tab-view-types'
 import { migrateHydratedEditorTabsAndGroups } from './slices/editor/file-ids/hydrated-editor-file-ids'
 import { buildHydratedTabState } from './slices/tabs-hydration'
 import { buildByIdIndex } from './slices/worktree-by-id-index'
@@ -74,17 +80,28 @@ export function shownLiveTitle(
   return (panes.find((pane) => pane.leafId === focusedLeafId) ?? panes[0])?.liveTitle
 }
 
-function withLiveTitles(
+/** Terminal entity id → the live title main reports for the pane this view focuses. */
+function liveTitlesByTabId(
   layouts: WorkspaceLayoutCache,
-  facts: LayoutContentFacts,
   view: DesktopLayoutView
-): LayoutContentFacts {
-  const terminalRows = { ...facts.terminalRows }
+): Map<string, string> {
+  const titles = new Map<string, string>()
   for (const tab of Object.values(layouts).flatMap((layout) => layout.tabs)) {
     const liveTitle = shownLiveTitle(tab, view.panes[tab.entityId]?.activeLeafId)
     if (liveTitle !== undefined) {
-      terminalRows[tab.entityId] = { ...terminalRows[tab.entityId], title: liveTitle }
+      titles.set(tab.entityId, liveTitle)
     }
+  }
+  return titles
+}
+
+function withLiveTitles(
+  facts: LayoutContentFacts,
+  liveTitles: ReadonlyMap<string, string>
+): LayoutContentFacts {
+  const terminalRows = { ...facts.terminalRows }
+  for (const [tabId, title] of liveTitles) {
+    terminalRows[tabId] = { ...terminalRows[tabId], title }
   }
   return { ...facts, terminalRows }
 }
@@ -124,22 +141,100 @@ function withShownTabs(
   )
 }
 
+const fileKey = (worktreeId: string, fileId: string): string => `${worktreeId}\0${fileId}`
+
+type FramedViewFile = { view: EditorTabView; file: OpenFile }
+
+/** Each editor tab's open file as its frame's view rebuilds it, by workspace and file id. */
+function framedViewFiles(layouts: WorkspaceLayoutCache): Map<string, FramedViewFile> {
+  const files = new Map<string, FramedViewFile>()
+  for (const [key, layout] of Object.entries(layouts)) {
+    for (const tab of layout.tabs) {
+      if (tab.editorView && !files.has(fileKey(key, tab.entityId))) {
+        files.set(fileKey(key, tab.entityId), {
+          view: tab.editorView.view,
+          file: openFileOfLayoutEditorView(tab.editorView, { ...tab, worktreeId: key })
+        })
+      }
+    }
+  }
+  return files
+}
+
+/** A file a frame's view shows: its saved record takes the view, else the view rebuilds it. */
+function withFramedViewFiles(
+  openFiles: OpenFile[],
+  framed: ReadonlyMap<string, FramedViewFile>
+): OpenFile[] {
+  if (framed.size === 0) {
+    return openFiles
+  }
+  const placed = new Set<string>()
+  const files = openFiles.map((file) => {
+    const framedFile = framed.get(fileKey(file.worktreeId, file.id))
+    if (!framedFile) {
+      return file
+    }
+    placed.add(fileKey(file.worktreeId, file.id))
+    // An edit tab on a conflicted file: the saved record is the file, the view its conflict.
+    return { ...file, ...framedFile.view }
+  })
+  const rebuilt = [...framed].flatMap(([key, { file }]) => (placed.has(key) ? [] : [file]))
+  return [...files, ...rebuilt]
+}
+
+/** The label the window's own open gives a frame's editor tab, from its view or its file record. */
+function frameEditorTabLabel(tab: PublishedTab, layout: PublishedWorkspaceLayout): string | null {
+  if (tab.editorView) {
+    return editorTabLabelOf({
+      mode: tab.editorView.view.mode,
+      relativePath: tab.editorView.file.relativePath
+    })
+  }
+  const file = layout.editorFiles.find((entry) =>
+    editorTabShowsFile(tab.entityId, entry, layout.worktreeId)
+  )
+  return file ? file.relativePath : null
+}
+
+/** An editor tab only a frame drew (the window never opened it) takes the label its open would. */
+function withEditorTabLabels(
+  facts: LayoutContentFacts,
+  layouts: WorkspaceLayoutCache
+): LayoutContentFacts {
+  const tabLabels = { ...facts.tabLabels }
+  for (const [key, layout] of Object.entries(layouts)) {
+    for (const tab of layout.tabs) {
+      const label =
+        isEditorTabContentType(tab.kind) && !tabLabels[key]?.[tab.id]
+          ? frameEditorTabLabel(tab, layout)
+          : null
+      if (label) {
+        tabLabels[key] = { ...tabLabels[key], [tab.id]: label }
+      }
+    }
+  }
+  return { ...facts, tabLabels }
+}
+
 export function buildLayoutFrameSlices({
   layouts,
   facts,
   view
 }: LayoutFrameSliceInput): LayoutFrameSlices {
+  const liveTitles = liveTitlesByTabId(layouts, view)
   const saved = saveWorkspaceLayout({
     layout: workspaceLayoutModelFromPublished(LOCAL_EXECUTION_HOST_ID, layouts),
     desktopView: view,
-    facts: withLiveTitles(layouts, facts, view),
+    facts: withEditorTabLabels(withLiveTitles(facts, liveTitles), layouts),
     carried: NOTHING_CARRIED
   })
   const session = { ...saved, unifiedTabs: stampExecutionHosts(saved.unifiedTabs ?? {}, layouts) }
   // The frames are the catalog: main publishes only workspaces it holds.
   const workspaceKeys = new Set(Object.keys(layouts))
 
-  const rows = buildWorkspaceTerminalRowPlan(session, workspaceKeys)
+  // Restore resets agent titles because a prior session's agents have exited; a live one has not.
+  const rows = buildWorkspaceTerminalRowPlan(session, workspaceKeys, liveTitles)
   const terminalLayoutsByTabId = buildWorkspaceTerminalLayoutPlan({
     ownershipTransfersByTabId: new Map(),
     ownershipTransferTabIds: new Set(),
@@ -163,18 +258,25 @@ export function buildLayoutFrameSlices({
       view.activeTabId && rows.validTabIds.has(view.activeTabId) ? view.activeTabId : null
   })
 
-  const tabs = buildHydratedTabState(session, workspaceKeys)
+  const framed = framedViewFiles(layouts)
+  // A diff, conflict or check tab is drawn from its view: every window open sends one.
+  const tabs = buildHydratedTabState(session, workspaceKeys, (worktreeId, fileId) =>
+    framed.has(fileKey(worktreeId, fileId))
+  )
   const editor = buildHydratedEditorSessionState(session, workspaceKeys, null)
+  const openFiles = withFramedViewFiles(editor.state.openFiles, framed)
   const browser = projectHydratedBrowserSession(
     {
       activeWorktreeId: null,
       activeTabType: 'terminal',
       activeTabTypeByWorktree: editor.state.activeTabTypeByWorktree,
-      openFiles: editor.state.openFiles,
+      openFiles,
       tabsByWorktree: rows.tabsByWorktree
     },
     session,
-    workspaceKeys
+    workspaceKeys,
+    // A frame redraws the window's own selection: one it never made stays none.
+    { unchosenStaysUnset: true }
   )
   const editorTabs = {
     ...tabs,
@@ -186,7 +288,7 @@ export function buildLayoutFrameSlices({
     activeTabIdByWorktree,
     ...editorTabs,
     groupsByWorktree: withShownTabs(editorTabs.groupsByWorktree),
-    openFiles: editor.state.openFiles,
+    openFiles,
     editorDrafts: editor.state.editorDrafts,
     markdownFrontmatterVisible: editor.state.markdownFrontmatterVisible,
     activeFileIdByWorktree: editor.state.activeFileIdByWorktree,

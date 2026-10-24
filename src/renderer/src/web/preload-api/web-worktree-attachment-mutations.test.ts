@@ -18,11 +18,7 @@ vi.mock('./web-runtime-session', () => ({
   requireActiveEnvironment: () => ({ id: 'env' }),
   assertActiveEnvironment: mocks.assertEnvironment
 }))
-vi.mock('./web-runtime-worktree-catalog', () => ({
-  WEB_RUNTIME_WORKTREE_LIST_LIMIT: 500,
-  callRuntimeDetectedWorktrees: vi.fn(),
-  listAllRuntimeWorktrees: vi.fn()
-}))
+vi.mock('./web-runtime-worktree-catalog', () => ({ callRuntimeDetectedWorktrees: vi.fn() }))
 
 beforeEach(() => {
   vi.clearAllMocks()

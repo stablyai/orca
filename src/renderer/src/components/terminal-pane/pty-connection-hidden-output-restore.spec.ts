@@ -488,7 +488,10 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       await flushAsyncTicks(20)
 
       expect(transport.setOutputPaused).toHaveBeenLastCalledWith(false)
-      expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+      expect(transport.serializeBuffer).toHaveBeenCalledWith({
+        scrollbackRows: 5000,
+        repaintsPane: true
+      })
       expect(transport.setOutputPaused.mock.invocationCallOrder.at(-1)).toBeLessThan(
         transport.serializeBuffer.mock.invocationCallOrder[0]
       )
@@ -564,7 +567,10 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       await flushAsyncTicks(20)
 
       expect(transport.setOutputPaused).toHaveBeenLastCalledWith(false)
-      expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+      expect(transport.serializeBuffer).toHaveBeenCalledWith({
+        scrollbackRows: 5000,
+        repaintsPane: true
+      })
       callbacks.onData?.(live, {
         seq: hidden.length + live.length,
         rawLength: live.length

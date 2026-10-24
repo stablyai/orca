@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema,
@@ -17,36 +16,20 @@ import {
 } from '../../shared/runtime-environment-ssh-access-store'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
-import { runTargetLifecycle } from '../ipc/ssh-target-lifecycle-queue'
-import { requireManagedOrcadInfrastructure } from './orcad-managed-runtime-context'
+import { runTargetLifecycle } from '../ipc/ssh/ssh-target-lifecycle-queue'
+import { requireManagedOrcadInfrastructure } from '../managed-server/lifecycle/orcad-managed-runtime-context'
 import {
   closeOrcadManagedTunnel,
   ensureOrcadManagedTunnel,
   startOrcadManagedTunnel
-} from './orcad-managed-tunnel'
+} from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyRuntimeEnvironmentSshTunnel } from './runtime-ssh-access-verification'
+import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
+import { orcadTargetBlockerMessage } from './targets/ssh-target-orcad-claims'
+import { dependentStateSummary } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationBlocker } from '../../shared/orcad-migration/orcad-migration-preflight'
 
 type TargetClaims = ReturnType<typeof requireManagedOrcadInfrastructure>['claims']
-
-export function fingerprintRuntimeSshTarget(target: SshTarget): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify({
-        host: target.host,
-        port: target.port,
-        username: target.username,
-        configHost: target.configHost,
-        identityFile: target.identityFile,
-        identityAgent: target.identityAgent,
-        identitiesOnly: target.identitiesOnly,
-        gssapiAuthentication: target.gssapiAuthentication,
-        proxyCommand: target.proxyCommand,
-        jumpHost: target.jumpHost,
-        systemSshConnectionReuse: target.systemSshConnectionReuse
-      })
-    )
-    .digest('hex')
-}
 
 function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { generation: number } {
   const target = claims.listTargets().find((entry) => entry.id === targetId)
@@ -58,6 +41,26 @@ function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { ge
     throw new Error('This SSH target has pending server provisioning.')
   }
   return { ...target, generation }
+}
+
+// Why: the code alone gave users nothing to act on, and the host-conversion copy does not fit a link.
+function sshAccessBlockerMessage(targetId: string, blocker: OrcadMigrationBlocker): string {
+  switch (blocker.code) {
+    case 'orcad_migration_dependent_state':
+      return `This SSH target is still used by saved Orca state: ${dependentStateSummary(blocker.dependencies)}. Remove it, or link SSH access through an SSH target with nothing saved.`
+    case 'orcad_migration_direct_ssh_repositories':
+    case 'orcad_migration_direct_ssh_folder_workspaces':
+      return 'This SSH target already has direct SSH projects. Remove them, or link SSH access through another SSH target.'
+    case 'orcad_migration_direct_ssh_terminal_leases':
+      return 'This SSH target still owns terminal sessions. Close them before linking SSH access.'
+    case 'orcad_migration_saved_port_forwards':
+      return 'This SSH target has saved port forwards. Remove them, or link SSH access through another SSH target.'
+    case 'orcad_migration_target_not_found':
+    case 'orcad_migration_target_owned':
+    case 'orcad_migration_owner_unrecorded':
+    case 'orcad_migration_dependency_unverifiable':
+      return orcadTargetBlockerMessage(targetId, blocker)
+  }
 }
 
 function requireAccessOnlyTarget(claims: TargetClaims, targetId: string, environmentId: string) {
@@ -73,7 +76,9 @@ function requireAccessOnlyTarget(claims: TargetClaims, targetId: string, environ
         )
     )
   if (blockers.length) {
-    throw new Error(`SSH access cannot claim direct SSH authority: ${blockers[0].code}`)
+    throw new Error(
+      `SSH access cannot claim direct SSH authority: ${blockers[0].code}. ${sshAccessBlockerMessage(targetId, blockers[0])}`
+    )
   }
   return target
 }

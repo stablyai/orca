@@ -1,7 +1,7 @@
 import type { Tab } from '../../../../shared/tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import {
-  resolveEditorFileIdForOwner,
+  buildOwnedEditorFileId,
   runtimeOwnerKey
 } from '../../store/slices/editor/file-ids/editor-file-ids'
 import type { ReadyEditorSurface } from './state'
@@ -9,7 +9,6 @@ import type { ReadyEditorSurface } from './state'
 type FileIndex = {
   byId: Map<string, OpenFile>
   byOwner: Map<string, OpenFile>
-  reservedSourceIds: Map<string, OpenFile>
 }
 const indexes = new WeakMap<readonly OpenFile[], FileIndex>()
 
@@ -27,7 +26,7 @@ function fileIndex(files: readonly OpenFile[]): FileIndex {
   if (cached) {
     return cached
   }
-  const index: FileIndex = { byId: new Map(), byOwner: new Map(), reservedSourceIds: new Map() }
+  const index: FileIndex = { byId: new Map(), byOwner: new Map() }
   for (const file of files) {
     if (!index.byId.has(file.id)) {
       index.byId.set(file.id, file)
@@ -35,12 +34,6 @@ function fileIndex(files: readonly OpenFile[]): FileIndex {
     const key = ownerKey(file.filePath, file.worktreeId, file.runtimeEnvironmentId, file.mode)
     if (!index.byOwner.has(key)) {
       index.byOwner.set(key, file)
-    }
-    if (
-      file.markdownPreviewSourceFileId &&
-      !index.reservedSourceIds.has(file.markdownPreviewSourceFileId)
-    ) {
-      index.reservedSourceIds.set(file.markdownPreviewSourceFileId, file)
     }
   }
   indexes.set(files, index)
@@ -65,14 +58,8 @@ export function createMirroredEditorFileResolver(
     if (previewSourceId) {
       return previewSourceId
     }
-    const reserved = index.byId.get(filePath) ?? index.reservedSourceIds.get(filePath)
-    return resolveEditorFileIdForOwner(
-      { openFiles: reserved ? [reserved] : [] },
-      filePath,
-      worktreeId,
-      environmentId,
-      ['edit']
-    )
+    // A server's file never takes its bare path, so no other owner's id can collide with it.
+    return buildOwnedEditorFileId(filePath, worktreeId, environmentId)
   }
   return (tab: ReadyEditorSurface, existingTab: Tab | null) => {
     const mode = tab.type === 'markdown' ? tab.mode : 'edit'

@@ -170,4 +170,17 @@ describe('parseJiraConnectionStatus', () => {
       ]
     })
   })
+
+  it('ignores the Keychain fields an older host still sends', () => {
+    const status = parseJiraConnectionStatus({
+      connected: true,
+      viewer: null,
+      credentialError: 'Could not decrypt saved Jira credential.',
+      credentialErrorReason: 'keychain_locked',
+      canMoveCredentialKeyToFile: true
+    })
+    expect(status.credentialError).toBe('Could not decrypt saved Jira credential.')
+    expect(status).not.toHaveProperty('credentialErrorReason')
+    expect(status).not.toHaveProperty('canMoveCredentialKeyToFile')
+  })
 })

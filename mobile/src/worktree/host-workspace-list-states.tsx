@@ -45,11 +45,27 @@ export function HostWorkspaceListStates(
   return null
 }
 
+/** A list this page cannot build; shown above the rows it already holds, so it never blanks. */
+export function HostWorkspaceListReopen({ aboveRows }: { aboveRows: boolean }) {
+  return (
+    <View style={aboveRows ? styles.aboveRows : styles.centered}>
+      <Text style={styles.emptyText}>Reopen to update</Text>
+      <Text style={styles.catalogErrorDetail}>
+        This host lists workspaces in a way this page does not know yet.
+      </Text>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  aboveRows: {
+    alignItems: 'center',
+    paddingVertical: spacing.md
   },
   emptyText: {
     color: colors.textSecondary,

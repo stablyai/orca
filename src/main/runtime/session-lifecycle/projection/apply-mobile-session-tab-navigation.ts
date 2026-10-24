@@ -12,9 +12,7 @@ import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
-} from '../../client-session-tab-selection'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { runtimeWorktreeIdsEqual } from '../../runtime-worktree-path-identity'
+} from '../../client-session-tab-selection-projection'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
@@ -102,29 +100,6 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     }
     this.applyMobileSessionTabNavigation(snapshot, tab.id, 'caller', clientNavigationId)
     return true
-  }
-
-  /**
-   * Whether persistence proves this pane's PTY was deliberately taken down and parked
-   * (workspace sleep or completed-agent hibernation) rather than lost and awaiting reconnect.
-   * Why: `pending-handle` alone cannot tell those apart — a parked pane publishes it
-   * indefinitely — and respawning a parked pane re-launches its agent behind the user.
-   * Only an automatic activation consults this; a user opening the tab is the wake gesture.
-   */
-  protected isDeliberatelyParkedPane(
-    worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
-  ): boolean {
-    const record =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
-        makePaneKey(tab.parentTabId, tab.leafId)
-      ]
-    // Why: 'live'/'quit' captures describe a pane that was still running, so a reconnect
-    // must still mint its replacement PTY (#11542). Only a worktree-owned capture records
-    // a deliberate takedown the user did not ask to undo.
-    return (
-      record?.origin === 'worktree-sleep' && runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)
-    )
   }
 
   protected shouldMaterializeHeadlessMobileSessionTab(

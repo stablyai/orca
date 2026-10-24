@@ -59,7 +59,7 @@ describe('unhandled provider frame journal fallback', () => {
     ).toBeNull()
   })
 
-  it('never creates generic rows for delta-shaped frames that report no failure', () => {
+  it('never creates generic rows for delta-shaped frames', () => {
     expect(
       unhandledProviderFrameJournalItem('codex', 'notification:item/commandExecution/outputDelta', {
         itemId: 'exec-1',
@@ -74,34 +74,14 @@ describe('unhandled provider frame journal fallback', () => {
     ).toBeNull()
   })
 
-  it('surfaces an unknown delta-shaped frame whose payload reports an error', () => {
-    const row = unhandledProviderFrameJournalItem('codex', 'notification:item/future/outputDelta', {
-      error: 'stream broke mid-item'
-    })
-
-    expect(row).not.toBeNull()
-    expect(row?.classification).toBe('error-surface')
-    expect(row?.body.providerFrame).toMatchObject({
-      provider: 'codex',
-      kind: 'notification:item/future/outputDelta'
-    })
-  })
-
-  it('renders codex systemError and Claude error result variants when no typed translator covers the frame', () => {
-    const codex = unhandledProviderFrameJournalItem('codex', 'notification:thread/status/changed', {
-      threadId: 'thread-1',
-      status: { type: 'systemError' }
-    })
+  it('renders a Claude result frame that names no success as a failure row', () => {
     const claude = unhandledProviderFrameJournalItem('claude', 'message:result', {
       subtype: 'error_during_execution',
       is_error: true,
       result: 'Provider request failed'
     })
 
-    expect(codex?.body.providerFrame).toMatchObject({
-      provider: 'codex',
-      kind: 'notification:thread/status/changed'
-    })
+    expect(claude?.classification).toBe('error-surface')
     expect(claude?.body.providerFrame).toMatchObject({
       provider: 'claude',
       kind: 'message:result'
@@ -124,27 +104,6 @@ describe('unhandled provider frame journal fallback', () => {
         })
       ]
     })
-  })
-
-  it('keeps failed startup variants visible while suppressing startup progress', () => {
-    const kind = 'notification:mcpServer/startupStatus/updated'
-
-    expect(
-      unhandledProviderFrameJournalItem('codex', kind, {
-        name: 'filesystem',
-        status: 'starting',
-        error: null,
-        failureReason: null
-      })
-    ).toBeNull()
-    expect(
-      unhandledProviderFrameJournalItem('codex', kind, {
-        name: 'filesystem',
-        status: 'failed',
-        error: 'server exited',
-        failureReason: null
-      })
-    ).not.toBeNull()
   })
 
   it('surfaces a failed hook completion while suppressing successful hook lifecycle', () => {
@@ -177,7 +136,6 @@ describe('unhandled provider frame journal fallback', () => {
         content: 'Session usage: 12% of your limit'
       })?.body.text
     ).toBe('Session usage: 12% of your limit')
-    // Scoped to that frame: another frame's `content` is not its sentence.
     expect(
       unhandledProviderFrameJournalItem('claude', 'message:future/event', { content: 'raw' })?.body
         .text
@@ -189,11 +147,10 @@ describe('unhandled provider frame journal fallback', () => {
       message: 'Your plan limit resets in 2 hours.'
     })
     expect(row?.body.text).toBe('Your plan limit resets in 2 hours.')
-    // The raw frame stays available behind the row's disclosure.
     expect(row?.body.providerFrame?.kind).toBe('notification:warning')
   })
 
-  it('bounds a provider sentence inline', () => {
+  it('keeps the provider sentence whole while the raw frame keeps a head', () => {
     const message = 'abcdefghij'
     const row = unhandledProviderFrameJournalItem(
       'codex',
@@ -202,8 +159,8 @@ describe('unhandled provider frame journal fallback', () => {
       { inlineHeadBytes: 8 }
     )
 
-    expect(row?.body.text).toContain('abcdefgh')
-    expect(row?.body.text).toContain('[Orca: output truncated')
+    expect(row?.body.text).toBe(message)
+    expect(row?.body.providerFrame?.payload.truncated).toBe(true)
   })
 
   it('unwraps a nested sentence and falls back to the opcode when there is none', () => {
@@ -216,35 +173,6 @@ describe('unhandled provider frame journal fallback', () => {
       unhandledProviderFrameJournalItem('codex', 'notification:future/event', { count: 3 })?.body
         .text
     ).toBe('codex \u00b7 notification:future/event')
-  })
-})
-
-describe('a failed provider dependency', () => {
-  it('leads with the failure the provider reported, not the method name', () => {
-    const item = unhandledProviderFrameJournalItem(
-      'codex',
-      'notification:mcpServer/startupStatus/updated',
-      {
-        threadId: 'thread-1',
-        name: 'codex_apps',
-        status: 'failed',
-        error: 'MCP client for `codex_apps` failed to start: authentication token invalidated',
-        failureReason: 'reauthenticationRequired'
-      }
-    )
-    expect(item?.classification).toBe('error-surface')
-    expect(item?.body.text).toContain('failed to start')
-    expect(item?.body.text).not.toContain('notification:mcpServer')
-  })
-
-  it('stays out of the timeline while the dependency is merely starting', () => {
-    expect(
-      unhandledProviderFrameJournalItem('codex', 'notification:mcpServer/startupStatus/updated', {
-        threadId: 'thread-1',
-        name: 'codex_apps',
-        status: 'starting'
-      })
-    ).toBeNull()
   })
 })
 

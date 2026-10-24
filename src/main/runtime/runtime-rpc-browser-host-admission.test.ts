@@ -8,7 +8,8 @@ import type { WebSocket } from 'ws'
 import { DeviceRegistry } from './device-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { defineStreamingMethod, type RpcRequest } from './rpc/core'
-import { classifyRuntimeLongPoll, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
+import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
 
 const request = (method: string, params?: unknown): RpcRequest => ({

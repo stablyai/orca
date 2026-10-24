@@ -54,8 +54,7 @@ describe('route guest OAuth popups', () => {
     expect(guest.openWindow('https://accounts.example.com/oauth')).toEqual({ action: 'deny' })
   })
 
-  // Literal offsets, not the exported constant: deriving them from it would keep a widened
-  // gesture window green.
+  // Pin elapsed times independently of the gesture-window constant to catch widening.
   it('still honors a gesture 1s after the click', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(GESTURE_CLICK_AT)
@@ -296,7 +295,6 @@ describe('route guest OAuth popups', () => {
     contents
       .openWindow('https://accounts.example.com/step-2')
       .createWindow?.(popupOptions(descendant))
-    // Descendants belong to the root page, not to the popup that opened them.
     expect(resolveBrowserRouteGuestPopupOpener(descendant.id)).toBe(page.webContentsId)
 
     guest.destroy()
@@ -314,6 +312,16 @@ describe('route guest OAuth popups', () => {
     expect(contents.openWindow('https://accounts.example.com/step-2')).toEqual({ action: 'deny' })
     contents.emitInput('mouseDown')
     expect(contents.openWindow('https://accounts.example.com/step-2').action).toBe('allow')
+  })
+
+  it('lets a popup page leave when it asks to confirm', () => {
+    const { guest } = attachRegisteredGuest()
+    guest.emitInput('mouseDown')
+    const contents = createPopupContents()
+    guest.openWindow('https://accounts.example.com/oauth').createWindow?.(popupOptions(contents))
+
+    // preventDefault() permits navigation for will-prevent-unload.
+    expect(contents.navigate('https://accounts.example.com/next', 'will-prevent-unload')).toBe(true)
   })
 
   it('guards blank descendants and redirects after the root loses authority', () => {

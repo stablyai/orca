@@ -6,7 +6,18 @@
 // derived rather than read — last candidate wins. So a failed turn ends on its
 // error, and an error the agent recovered from folds behind the answer after it.
 
-import type { NativeChatRole } from './native-chat-types'
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from './agent-session-compaction'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from './agent-session-orca-stop'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
+import { nativeChatRowRendersContent } from './native-chat-row-content'
+import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
+import { nativeChatRowRendersProse } from './native-chat-trailing-run'
+import {
+  isBackgroundTaskBlock,
+  isSubagentGroupBlock,
+  type NativeChatMessage,
+  type NativeChatRole
+} from './native-chat-types'
 
 /** What the fold needs to know about one transcript row. Deliberately not a
  *  `NativeChatMessage`: each surface derives "renders prose" through its own
@@ -27,10 +38,47 @@ export type NativeChatTurnFoldRow = {
   /** Whether a system row reports a failure. It competes with prose to be the
    *  turn's answer, so a turn that failed shows the error as its end. */
   reportsFailure: boolean
-  /** Whether the row explains what became of the turn: a compaction's result, or
-   *  that the response was interrupted. It never folds: hiding it would leave the
-   *  turn's status as the only trace of it. */
+  /** Whether the row explains what became of the turn: a compaction's result, that
+   *  the response was interrupted, or a `turn-notice` row. It never folds: hiding
+   *  it would leave the turn's status as the only trace of it. */
   explainsTurn: boolean
+}
+
+/** How the fold reads a transcript row, with the same derivation the row renders from. */
+export function nativeChatTurnFoldRow(
+  message: NativeChatMessage,
+  turnKey: string | undefined,
+  hasReceipt: boolean
+): NativeChatTurnFoldRow {
+  return {
+    turnKey,
+    role: message.role,
+    rendersProse: nativeChatRowRendersProse(message),
+    draws: hasReceipt || nativeChatRowRendersContent(message.blocks),
+    // The raw blocks, not the renderable ones: a childless roster draws no row
+    // and its plain-text twin is then the only record the spawn happened.
+    outlivesTurn: message.blocks.some(
+      (block) =>
+        isSubagentGroupBlock(block) ||
+        isBackgroundTaskBlock(block) ||
+        isStoppedBeforeStartBlock(block)
+    ),
+    // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
+    reportsFailure: message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
+        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
+    ),
+    explainsTurn: message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        (block.presentation === 'compaction' ||
+          block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
+          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
+          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION)
+    )
+  }
 }
 
 export type NativeChatTurnFold = {

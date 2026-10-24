@@ -9,9 +9,9 @@ on:
         type: string
 
       runner:
-        description: Hosted runner for the unit shards; relay integration keeps its x86 host.
+        description: Hosted runner for the unit shards.
         required: false
-        default: ubuntu-latest
+        default: blacksmith-4vcpu-ubuntu-2404
         type: string
 
       browser_contract:
@@ -91,6 +91,11 @@ jobs:
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
+      - name: Verify Blacksmith unit runner environment
+        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
+        run: |
+          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
@@ -145,7 +150,7 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'ubuntu-24.04-arm' && '--maxWorkers=4' || '' }}
+            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal
@@ -183,7 +188,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ${{ fromJSON(inputs.node_versions) }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
 
     steps:
@@ -230,8 +235,8 @@ jobs:
         if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
         working-directory: cloud
         run: |
-          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
-          npx --yes pnpm@10.34.6 --filter '@orca-cloud/relay^...' build
+          pnpm --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          pnpm --filter '@orca-cloud/relay^...' build
 
       - name: Test relay integration contracts
         if: ${{ !cancelled() && steps.relay_dependencies.outcome == 'success' }}

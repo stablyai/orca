@@ -12,6 +12,7 @@ import {
 } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { worktreeRowSurface } from './worktree-row-locators'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import type {
@@ -81,10 +82,17 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     await expect
       .poll(
         async () => {
-          const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
-            worktree: `id:${worktreeId}`
+          // The pane's terminal can still be binding; the host then says it can't answer yet.
+          const listed = await readFreshTerminalInventory(async () => {
+            const response = await client.call<RuntimeTerminalListResult>('terminal.list', {
+              worktree: `id:${worktreeId}`
+            })
+            return response.result
           })
-          const matching = listed.result.terminals.filter(
+          if (!listed) {
+            return null
+          }
+          const matching = listed.terminals.filter(
             (terminal) => terminal.worktreeId === worktreeId && terminal.tabId === closedTabId
           )
           activeHandle = matching.length === 1 ? (matching[0]?.handle ?? null) : null
@@ -120,10 +128,13 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     await expect
       .poll(
         async () => {
-          const afterClose = await client.call<RuntimeTerminalListResult>('terminal.list', {
-            worktree: `id:${worktreeId}`
+          const afterClose = await readFreshTerminalInventory(async () => {
+            const response = await client.call<RuntimeTerminalListResult>('terminal.list', {
+              worktree: `id:${worktreeId}`
+            })
+            return response.result
           })
-          return afterClose.result.terminals
+          return afterClose?.terminals
             .filter((terminal) => terminal.tabId === closedTabId)
             .map((terminal) => terminal.handle)
         },

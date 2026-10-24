@@ -1,5 +1,5 @@
-import { getSecretStore } from '../../shared/secret-store'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { unlinkSync } from 'node:fs'
+import { writeEncryptedCredential } from '../integration-credential-file'
 import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
@@ -26,30 +26,15 @@ import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { readCredentialFileProtection } from '../credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
-function writeEncryptedToken(path: string, apiKey: string): void {
-  if (getSecretStore().isEncryptionAvailable()) {
-    const encrypted = getSecretStore().encryptString(apiKey)
-    writeFileSync(path, encrypted, { mode: 0o600 })
-    return
-  }
-
-  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
-}
-
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
   ensureOrcaDir()
   if (workspaceId !== LEGACY_WORKSPACE_ID) {
     ensureWorkspaceTokenDir()
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
-  writeEncryptedToken(tokenPath, apiKey)
+  // Credential writes restore existing file permissions and publish without truncating live contents.
+  writeEncryptedCredential('Linear', tokenPath, apiKey)
   workspaceTokenFileCache.forget(workspaceId)
-}
-
-// Backward-compatible export for the legacy single-workspace storage path.
-export function saveToken(apiKey: string): void {
-  saveWorkspaceToken(LEGACY_WORKSPACE_ID, apiKey)
 }
 
 export function loadToken(options: { force?: boolean; workspaceId?: string } = {}): string | null {
@@ -60,7 +45,6 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   return workspaceTokenFileCache.read(workspaceId, options.force === true)
 }
 
-/** How a workspace's stored token sits on disk, or null when none is stored. */
 export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
   return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
@@ -70,7 +54,7 @@ export function clearTokenFile(workspaceId: string): void {
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {
-    // File may not exist — safe to ignore.
+    // Token cleanup is best-effort when storage is absent or unavailable.
   }
 }
 

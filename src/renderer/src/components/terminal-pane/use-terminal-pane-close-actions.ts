@@ -19,6 +19,8 @@ import { retireUnboundIpcTerminalPane } from './retire-unbound-ipc-terminal-pane
 import { capturePendingTerminalPaneClose } from './terminal-pane-close-admission'
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-command'
 
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
@@ -38,53 +40,58 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     updateSettings,
     worktreeId
   } = controller
-  const executeClosePane = useCallback(
-    (paneId: number) => {
+  // The window's half of a split pane's close: its transport, status and pane go.
+  const closePaneLocally = useCallback(
+    (paneId: number, committedLeafId?: string) => {
       const manager = managerRef.current
-      if (!manager) {
+      // Why the pane check: main's answer can land after the pane already went.
+      if (!manager || (committedLeafId && manager.getLeafId(paneId) !== committedLeafId)) {
         return
       }
-      if (manager.getPanes().length <= 1) {
+      // A sibling went while main answered: this pane is now the tab's last, so the tab closes.
+      if (committedLeafId && manager.getPanes().length <= 1) {
         onCloseTab()
-      } else {
-        const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
-        closeWebRuntimeTerminal(ptyId)
-        clearSessionRestoredBannerForPane(paneId)
-        const leafId = manager.getLeafId(paneId)
-        if (leafId) {
-          const launchPane = useAppStore
-            .getState()
-            .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
-          if (launchPane?.leafId === leafId && !launchPane.outcome) {
-            // The user closed a launch pane whose agent is still starting; main stops that launch.
-            noteAgentLaunchPaneClosedByUser(tabId, leafId)
-          }
-          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
-          retireUnboundIpcTerminalPane({
-            getState: useAppStore.getState,
-            tabId,
-            leafId,
-            transport: paneTransportsRef.current.get(paneId),
-            getTransports: () => paneTransportsRef.current
-          })
-          useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
-          useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
-        }
-        setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
-        if (leafId) {
-          retireUnboundRuntimeTerminalPane({
-            getState: useAppStore.getState,
-            tabId,
-            leafId,
-            transport: paneTransportsRef.current.get(paneId),
-            getTransports: () => paneTransportsRef.current
-          })
-          syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
-        } else {
-          syncPanePtyLayoutBinding(paneId, null)
-        }
-        manager.closePane(paneId)
+        return
       }
+      const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
+      closeWebRuntimeTerminal(ptyId, worktreeId)
+      clearSessionRestoredBannerForPane(paneId)
+      const leafId = manager.getLeafId(paneId)
+      if (leafId) {
+        const launchPane = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.agentLaunchPane
+        if (launchPane?.leafId === leafId && !launchPane.outcome) {
+          // The user closed a launch pane whose agent is still starting; main stops that launch.
+          noteAgentLaunchPaneClosedByUser(tabId, leafId)
+        }
+        if (!committedLeafId) {
+          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
+        }
+        retireUnboundIpcTerminalPane({
+          getState: useAppStore.getState,
+          tabId,
+          leafId,
+          transport: paneTransportsRef.current.get(paneId),
+          getTransports: () => paneTransportsRef.current
+        })
+        useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
+        useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
+      }
+      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+      if (leafId) {
+        retireUnboundRuntimeTerminalPane({
+          getState: useAppStore.getState,
+          tabId,
+          leafId,
+          transport: paneTransportsRef.current.get(paneId),
+          getTransports: () => paneTransportsRef.current
+        })
+        syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
+      } else {
+        syncPanePtyLayoutBinding(paneId, null)
+      }
+      manager.closePane(paneId)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
@@ -95,6 +102,33 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       tabId,
       worktreeId
     ]
+  )
+  const executeClosePane = useCallback(
+    (paneId: number) => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      if (manager.getPanes().length <= 1) {
+        onCloseTab()
+        return
+      }
+      const leafId = manager.getLeafId(paneId)
+      // Switch point: main closes the pane first; the window removes it when main's frame does.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        leafId &&
+        sendUserPaneCloseToLayoutOwner(
+          { worktreeId, tabId, leafId, paneId },
+          { getManager: () => managerRef.current, closeTab: onCloseTab, closePaneLocally }
+        )
+      ) {
+        return
+      }
+      closePaneLocally(paneId)
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
+    [closePaneLocally, onCloseTab, tabId, worktreeId]
   )
   const getCloseDialogCopyKind = useCallback(
     (paneId: number) => resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
@@ -262,6 +296,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
   )
 
   return {
+    closePaneLocally,
     executeClosePane,
     getCloseDialogCopyKind,
     handleRequestClosePane,

@@ -1,7 +1,8 @@
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
-  parseExecutionHostId
+  parseExecutionHostId,
+  type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -13,29 +14,42 @@ export type RepoRuntimeOwnerState = {
   settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 }
 
+/** The only row with this id; a twin names no owner, as `resolveOwner` reads it, so callers refuse. */
 function findRepoOwner(
   state: RepoRuntimeOwnerState,
   repoId: string
 ): Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null {
   const matchingRepos = state.repos?.filter((entry) => entry.id === repoId) ?? []
-  if (matchingRepos.length === 0) {
-    return null
+  return matchingRepos.length === 1 ? matchingRepos[0] : null
+}
+
+/**
+ * GitHub routing's twin pick: the caller's host when it names one, else the Active Server focus.
+ * Why the focus fallback stays: the routing target can't refuse, and dropping it would send a twin
+ * on two servers to local IPC with this machine's credentials.
+ */
+function findTwinRepoOwner(
+  state: RepoRuntimeOwnerState,
+  repoId: string,
+  hostId: ExecutionHostId | null | undefined
+): Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null {
+  const matchingRepos = state.repos?.filter((entry) => entry.id === repoId) ?? []
+  if (matchingRepos.length < 2) {
+    return matchingRepos[0] ?? null
   }
-  if (matchingRepos.length === 1) {
-    return matchingRepos[0]
-  }
-  const focusedHostId = getSettingsFocusedExecutionHostId(state.settings)
-  const focusedMatches = matchingRepos.filter(
-    (entry) => getRepoExecutionHostId(entry) === focusedHostId
-  )
-  // Why: duplicate bare repo ids are only safe to route when focus selects one
-  // owner unambiguously; otherwise callers must avoid guessing a host.
-  return focusedMatches.length === 1 ? focusedMatches[0] : null
+  const pickHostId = hostId ?? getSettingsFocusedExecutionHostId(state.settings)
+  const hostMatches = matchingRepos.filter((entry) => getRepoExecutionHostId(entry) === pickHostId)
+  return hostMatches.length === 1 ? hostMatches[0] : null
+}
+
+/** Whether two rows (hosts) publish this repo id, so no host-less caller may pick one. */
+export function isTwinRepo(state: RepoRuntimeOwnerState, repoId: string | null | undefined) {
+  return (state.repos?.filter((entry) => entry.id === repoId).length ?? 0) > 1
 }
 
 /**
  * Transport to a repo row's owner; a row with no owner stamp is local. `null` when no row, or no
- * single row among duplicates, names the repo.
+ * single row among duplicates, names the repo — {@link isTwinRepo} tells the two apart.
  */
 export function runtimeTargetForRepoOwner(
   state: RepoRuntimeOwnerState,
@@ -53,25 +67,29 @@ export function getRuntimeEnvironmentIdForRepo(
     return null
   }
   const repo = findRepoOwner(state, repoId)
-  const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
-  if (repo && hasExplicitOwner) {
+  if (repo) {
+    // Why: an unstamped row is local; the client stamps every server row on arrival.
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
     return parsed?.kind === 'runtime' ? parsed.environmentId : null
   }
-  return state.settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: only a repo with no row yet follows focus; a twin names no server rather than a guessed one.
+  return isTwinRepo(state, repoId)
+    ? null
+    : state.settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
-// Why: PR mutations must not fall back to the globally focused runtime — a
-// repo without an explicit owner is a local repo, and routing it to the
-// focused runtime sends the mutation to a host that does not own it (#6957).
+// Why: a repo without an explicit owner is a local repo; routing it to the focused
+// runtime sends the mutation to a host that does not own it (#6957). Only a twin with
+// no caller host still reads focus (findTwinRepoOwner).
 export function getExplicitRuntimeOwnerEnvironmentId(
   state: RepoRuntimeOwnerState,
-  repoId: string | null | undefined
+  repoId: string | null | undefined,
+  hostId?: ExecutionHostId | null
 ): string | null {
   if (!repoId) {
     return null
   }
-  const repo = findRepoOwner(state, repoId)
+  const repo = findTwinRepoOwner(state, repoId, hostId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
   if (!repo || !hasExplicitOwner) {
     return null

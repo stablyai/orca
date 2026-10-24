@@ -16,7 +16,8 @@ import { createTestStore } from '../store/slices/store-test-helpers'
 import {
   ACCEPTED_DIFFERENCES,
   GIT,
-  KNOWN_DIFFERENCES
+  KNOWN_DIFFERENCES,
+  sweptAtStartup
 } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -24,6 +25,13 @@ import {
   projectStartupWindowView
 } from './startup-window-view.test-fixture'
 
+// The window boots as today's (the oracle); main loads as it does once it owns the layout.
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -32,14 +40,19 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 createStoreSessionMockApi()
 
-/** The shared Loader's round trip, as main would persist it. */
+/** Main's startup sweep, then the shared Loader's round trip, as main would persist it. */
 function normalize(hostId: ExecutionHostId, session: WorkspaceSessionState): WorkspaceSessionState {
   let next = 0
-  const loaded = loadWorkspaceLayout(hostId, structuredClone(session), {
-    mintId: () => `minted-${++next}`,
-    mintLeafId: () => `00000000-0000-4000-9000-${String(++next).padStart(12, '0')}`
-  })
-  return saveWorkspaceLayout(loaded)
+  layoutOwner.isMain = true
+  try {
+    const loaded = loadWorkspaceLayout(hostId, sweptAtStartup(hostId, structuredClone(session)), {
+      mintId: () => `minted-${++next}`,
+      mintLeafId: () => `00000000-0000-4000-9000-${String(++next).padStart(12, '0')}`
+    })
+    return saveWorkspaceLayout(loaded)
+  } finally {
+    layoutOwner.isMain = false
+  }
 }
 
 const PROFILES = [...WORKSPACE_LAYOUT_PROFILES, ...LEGACY_WORKSPACE_LAYOUT_PROFILES]

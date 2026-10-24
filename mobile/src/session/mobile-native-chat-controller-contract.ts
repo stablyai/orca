@@ -1,3 +1,5 @@
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { MobileSessionView } from '../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
@@ -22,8 +24,11 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 
 export type MobileNativeChatController = {
+  /** Whether the saved default view and this workspace's per-tab views have been read. */
+  sessionViewReady: boolean
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
+  setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
@@ -39,6 +44,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
   nativeChatVisualSource: MobileNativeChatVisualSource | null
+  /** The same chat, where its host serves whole items; null before that host. */
+  nativeChatItemSource: MobileNativeChatVisualSource | null
   nativeChatAgentWorking: boolean
   /** What labels the live turn's one indicator row; null off the structured lane. */
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null
@@ -96,16 +103,14 @@ export type MobileNativeChatController = {
   /** Outcome-preserving send: callers that pasted terminal input beforehand
    *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
    *  caller passes its own `deadline` so the paste it already spent and this text
-   *  body share one budget instead of holding the composer for two. */
+   *  body share one budget instead of holding the composer for two, and `sentAt`,
+   *  when Send was pressed, so the sent message is timed before the paste. */
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly {
-      id?: string
-      path: string
-      previewUri: string
-    }[]
+    attachments?: readonly StructuredMobileSendAttachment[],
+    sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */

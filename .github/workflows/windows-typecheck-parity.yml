@@ -2,6 +2,7 @@ name: Windows typecheck parity
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -25,8 +26,9 @@ concurrency:
 
 jobs:
   parity:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Windows compiler diagnostics and file selection
-    runs-on: windows-2022
+    runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 40
     env:
       ORCA_BACKGROUND_LAUNCH: '1'

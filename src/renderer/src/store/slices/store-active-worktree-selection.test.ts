@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
+import { buildWorktreeComparator } from '../../../../shared/sidebar-list/smart-sort'
 import {
   createTestStore,
   makeOpenFile,

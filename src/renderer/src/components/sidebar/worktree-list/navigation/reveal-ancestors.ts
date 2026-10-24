@@ -1,6 +1,6 @@
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 
 function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
@@ -72,7 +72,8 @@ export function getSidebarRowRevealAncestorKeys(args: {
 }): string[] {
   if (args.rowKey.startsWith('project-group:')) {
     const groupId = args.rowKey.slice('project-group:'.length)
-    const group = args.projectGroups.find((candidate) => candidate.id === groupId)
+    // Why the last copy: same-id host copies render as that one (getDistinctProjectGroups).
+    const group = args.projectGroups.findLast((candidate) => candidate.id === groupId)
     return getProjectGroupAncestorKeys(group?.parentGroupId, args.projectGroups)
   }
   const keys = new Set<string>()

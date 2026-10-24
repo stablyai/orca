@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { isHeadlessBuiltPublication } from '../mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
@@ -44,8 +45,21 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     const incomingIds = new Set(
       incoming?.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
     )
+    // Why: a headless-built base preserves every terminal, so a renderer publication over it
+    // (the first after a restart) must still drop the tabs the renderer durably closed (STA-4897).
+    const retiredTabIds =
+      incoming && this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
+        ? new Set(this.listRendererRetiredTerminalTabs(incoming, existing).map(({ tab }) => tab.id))
+        : null
     return existing.tabs.filter((tab) => {
       if (getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
+        return false
+      }
+      if (
+        tab.type === 'terminal' &&
+        retiredTabIds?.has(tab.id) &&
+        !this.hasLiveOrPersistedServeOrSshOwnedPtyBinding(existing.worktree, tab)
+      ) {
         return false
       }
       return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
@@ -117,8 +131,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   // snapshot must not be classified as headless-built, or its renderer tabs
   // read as runtime-owned.
   protected isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
-    const base = publicationEpoch.split(':headless-merge:')[0]
-    return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
+    return isHeadlessBuiltPublication(publicationEpoch)
   }
 
   protected getMergedMobileSessionPublicationEpoch(

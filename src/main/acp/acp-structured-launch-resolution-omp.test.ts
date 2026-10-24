@@ -32,7 +32,6 @@ function resolver(
   record: AgentSessionRecord,
   options: {
     launchEnv?: Record<string, string>
-    fullAccess?: boolean
     probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
   } = {}
 ) {
@@ -42,17 +41,17 @@ function resolver(
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
     resolveLaunchEnv: () => options.launchEnv ?? {},
-    resolveFullAccess: () => options.fullAccess ?? false,
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
-    probeVersion: options.probeVersion ?? (async (_input, supports) => supports('17.0.5'))
+    probeVersion: options.probeVersion ?? (async () => ({ version: '17.0.5' }))
   })
 }
 
 describe('OMP ACP launch resolution', () => {
-  it('runs `omp acp` pointed at the agent directory the chat pinned, with or without full access', async () => {
-    for (const fullAccess of [false, true]) {
-      const launch = await resolver(ompRecord(), { fullAccess })({ identity })
+  it("runs `omp acp` pointed at the agent directory the chat pinned, in the chat's own mode", async () => {
+    for (const permissionMode of ['ask', 'full-access'] as const) {
+      const launch = await resolver(ompRecord())({ identity, spawnToken: 'token', permissionMode })
+      const fullAccess = permissionMode === 'full-access'
       expect(launch).toMatchObject({ command: '/resolved/omp', args: ['acp'], fullAccess })
       expect(launch.env.PI_CODING_AGENT_DIR).toBe('/home/user/.omp/agent')
     }
@@ -66,7 +65,6 @@ describe('OMP ACP launch resolution', () => {
       ANTHROPIC_API_KEY: 'sk-test'
     }
     const launch = await resolver(ompRecord(), { launchEnv: userEnv })({ identity })
-    // Only the shared pane and hook keys, and an inherited scratch folder: this chat has none.
     expect(launch.envToDelete).toEqual([
       ...STRUCTURED_CHILD_ENV_TO_DELETE,
       NATIVE_CHAT_SCRATCH_DIR_ENV,
@@ -83,7 +81,7 @@ describe('OMP ACP launch resolution', () => {
       'darwin'
     ).env
     expect(child).toMatchObject(userEnv)
-    // A pane's identity would let OMP's Orca status extension report for this chat too.
+    // Pane identity would let the terminal extension report status for this chat.
     expect(child.ORCA_PANE_KEY).toBeUndefined()
   })
 
@@ -100,32 +98,15 @@ describe('OMP ACP launch resolution', () => {
     ).rejects.toThrow(/pin PI_CODING_AGENT_DIR/)
   })
 
-  it.each(['17.0.5', '17.2.12', '18.4.5'])('admits OMP %s', async (version) => {
-    const launch = resolver(ompRecord(), {
-      probeVersion: async (_input, supports) => supports(version)
-    })
+  it.each(['17.0.5', '17.2.12', '18.4.5', '18.0.0-beta.1'])('admits OMP %s', async (version) => {
+    const launch = resolver(ompRecord(), { probeVersion: async () => ({ version }) })
     await expect(launch({ identity })).resolves.toMatchObject({ args: ['acp'] })
   })
 
-  it.each(['17.0.4', '16.9.0', '18.0.0-beta.1'])(
-    'refuses OMP %s before spawning it, as a host that cannot run the chat',
-    async (version) => {
-      const launch = resolver(ompRecord(), {
-        probeVersion: async (_input, supports) => supports(version)
-      })
-      await expect(launch({ identity })).rejects.toMatchObject({
-        refusal: {
-          code: 'structured_agent_session_unsupported',
-          details: { reason: 'hostUnsupported' }
-        }
-      })
-    }
-  )
-
-  it('refuses when the version cannot be read', async () => {
-    const launch = resolver(ompRecord(), { probeVersion: async () => false })
+  it.each(['17.0.4', '16.9.0'])('refuses OMP %s before spawning it as too old', async (version) => {
+    const launch = resolver(ompRecord(), { probeVersion: async () => ({ version }) })
     await expect(launch({ identity })).rejects.toMatchObject({
-      refusal: { code: 'structured_agent_session_unsupported' }
+      installation: { agent: 'omp', installedVersion: version, minimumVersion: '17.0.5' }
     })
   })
 
@@ -134,7 +115,7 @@ describe('OMP ACP launch resolution', () => {
       NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
     >[0][] = []
     const launch = await resolver(ompRecord(), {
-      probeVersion: async (input, supports) => (asked.push(input), supports('17.0.5'))
+      probeVersion: async (input) => (asked.push(input), { version: '17.0.5' })
     })({ identity })
     expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
   })

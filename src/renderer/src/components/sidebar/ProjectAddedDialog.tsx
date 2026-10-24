@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ProjectAddedModalData = {
   repoId?: string
@@ -80,7 +81,7 @@ export default function ProjectAddedDialog(): null {
         if (cancelled) {
           return
         }
-        const folderWorktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
+        const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repoId]?.[0]
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }

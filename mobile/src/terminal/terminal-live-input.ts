@@ -86,8 +86,12 @@ export type TerminalLiveInputDefaultResult = {
 
 export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
 
+export function getTerminalLiveSpecialKeyId(key: string): TerminalLiveSpecialKeyId | null {
+  return TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key) ?? null
+}
+
 export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
-  const shortcutKey = TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key)
+  const shortcutKey = getTerminalLiveSpecialKeyId(key)
   if (!shortcutKey) {
     return null
   }

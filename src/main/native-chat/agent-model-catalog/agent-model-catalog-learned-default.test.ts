@@ -15,9 +15,6 @@ import {
   workspaceMayOverrideDefaultModel
 } from './agent-project-model-override'
 
-// OpenCode and OMP list no default. A chat started with no pick in a workspace whose own config
-// picks nothing runs the account's default, so the host names it for the next new chat there.
-
 let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-learned-default-'))
@@ -63,8 +60,6 @@ function record(agent: string, workspacePath: string): AgentSessionRecord {
   } as AgentSessionRecord
 }
 
-/** A host whose saved list names no default, and one chat started with no pick in `workspacePath`
- *  that reports what it runs. */
 async function afterNoPickChat(agent: string, workspacePath: string, picked = false) {
   const chat = record(agent, workspacePath)
   const store = new AgentModelCatalogStore()
@@ -133,7 +128,7 @@ describe('a default learned from a chat with no pick', () => {
       const catalog = await afterNoPickChat(agent, clean)
       const answer = await catalog.read({ agent, workspacePath: clean })
       expect(named(answer)).toBe('github-copilot/claude-fable-5')
-      // Its own project config may still pick the model, so it is not every workspace's.
+      // Project config can override this default; do not promote it to every workspace.
       expect(answer).not.toHaveProperty('defaultHoldsInEveryWorkspace')
       expect(named(await catalog.read({ agent, workspacePath: workspace('other') }))).toBe(
         'github-copilot/claude-fable-5'

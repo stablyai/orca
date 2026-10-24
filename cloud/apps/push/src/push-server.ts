@@ -279,6 +279,7 @@ export function createPushServer(
       observability.record('send_queued')
       results.push({ registrationId, status: 'queued' })
     }
+    if (results.some((result) => result.status === 'queued')) worker.wake()
     return context.json({ results })
   })
 

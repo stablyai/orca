@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, relative } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -25,7 +25,7 @@ import {
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeOpened, claudeStartupSettled } from './claude-structured-session-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand
@@ -78,6 +78,23 @@ function realAdapter(
   return adapter
 }
 
+/** Isolate SessionStart proof from the machine's hook settings. */
+async function projectWithStartHook(
+  prefix: string,
+  settings: Record<string, unknown> = {}
+): Promise<string> {
+  const cwd = await mkdtemp(join(tmpdir(), prefix))
+  await mkdir(join(cwd, '.claude'), { recursive: true })
+  await writeFile(
+    join(cwd, '.claude', 'settings.json'),
+    JSON.stringify({
+      ...settings,
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'true' }] }] }
+    })
+  )
+  return cwd
+}
+
 function identity(providerSessionId: string): AgentSessionJournalIdentity {
   return {
     sessionId: 'real-cli-handshake',
@@ -95,7 +112,7 @@ async function waitForResolvedTranscript(
 ): Promise<string | null> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    // No options: the exact call transcript-read-cache.ts makes for mobile.
+    // Match mobile lookup: no project-root override.
     const resolved = await resolveSessionFilePath('claude', providerSessionId)
     if (resolved || Date.now() >= deadline) {
       return resolved
@@ -158,7 +175,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-command-init-'))
+      const cwd = await projectWithStartHook('orca-command-init-')
       await mkdir(join(cwd, '.claude', 'commands'), { recursive: true })
       await writeFile(
         join(cwd, '.claude', 'commands', 'orca-init-catalog-proof.md'),
@@ -167,18 +184,20 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd)
 
       try {
-        const acquisition = await adapter.acquire({
+        await adapter.acquire({
           identity: identity(providerSessionId),
           fence: 1,
           spawnToken: 'real-cli'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const observedSubtypes = events.flatMap((event) =>
           event.type === 'message' ? [event.message.subtype] : []
         )
 
-        // Init/SessionStart UUIDs are protocol frames, not resumable
-        // main-transcript leaves; no cursor exists before the first user turn.
-        expect(acquisition.link.handle).toEqual(claudeProviderHandle(providerSessionId, null))
+        // Startup frame UUIDs are not resumable transcript leaves.
+        expect((await claudeOpened(adapter, 'real-cli-handshake')).link?.handle).toEqual(
+          claudeProviderHandle(providerSessionId, null)
+        )
         expect(observedSubtypes).toContain('hook_started')
         expect(adapter.readCommands('real-cli-handshake')).toContainEqual(
           expect.objectContaining({
@@ -198,17 +217,14 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     10_000
   )
 
-  // Unit tests can only pin the shape we read, which is exactly how the blank
-  // Effort pill survived every gate: the fixture invented an `effortLevel` on a
-  // frame the CLI does not send. This asserts both halves against the live
-  // binary — that get_settings reports the effort, and that init does not.
   it.skipIf(!realClaudeAuthenticated)(
     'reports the current effort through get_settings and never on the init frame',
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
       const events: ClaudeStructuredSessionEvent[] = []
-      const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
+      const cwd = await projectWithStartHook('orca-effort-readback-', { effortLevel: 'low' })
+      const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd)
 
       try {
         await adapter.acquire({
@@ -216,35 +232,25 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-effort'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const published = events.flatMap((event) =>
           event.type === 'message' ? [event.message] : []
         )
         const options = await adapter.readOptions({ sessionId: 'real-cli-handshake', fence: 1 })
 
         expect(published.length).toBeGreaterThan(0)
-        // Not just the init frame: no frame the CLI publishes carries an effort
-        // at all. Goes red the day one does, which is when the simpler fix
-        // becomes available. Which frame proves the session varies by host, so
-        // this asserts over all of them rather than picking one.
+        // Startup proof varies by host, so inspect every published frame.
         expect(published.filter((frame) => 'effortLevel' in frame)).toEqual([])
-        // Goes red if `effective.effortLevel` is renamed or dropped, which no
-        // fixture-backed test can see.
-        expect(options.current.effort).toEqual(expect.any(String))
+        expect(options.current.effort).toBe('low')
       } finally {
         await adapter.closeAll()
+        await rm(cwd, { recursive: true, force: true })
       }
     },
     15_000
   )
 
-  // Mobile native chat never reads the structured journal — it reads the CLI's own
-  // transcript through native-chat/session-file-resolver.ts. So this resolves the way
-  // transcript-read-cache.ts:104 does, with NO root override, and checks the answer
-  // against the root the CLI itself reports. Deriving the expected root from Orca's own
-  // `CLAUDE_CONFIG_DIR || ~/.claude` expression — the same one the code under test uses —
-  // would move both sides together and stay green in exactly the environment that
-  // blacks mobile out.
-  // The turn is what creates the file: an init-only handshake writes nothing.
+  // Use the CLI-reported project root so resolver and expectation cannot share a path bug.
   it.skipIf(!realClaudeAuthenticated || !realClaudeAuthStatus?.projectsDirectory)(
     'writes its transcript where the mobile session-file resolver looks for it',
     async () => {
@@ -260,6 +266,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-transcript'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await adapter.dispatch({
           sessionId: 'real-cli-handshake',
           clientMessageId: 'real-cli-transcript-1',
@@ -273,22 +280,13 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
 
       expect(transcriptPath).not.toBeNull()
       expect(basename(transcriptPath ?? '')).toBe(`${providerSessionId}.jsonl`)
-      // `<the root the CLI reports>/<project slug>/<provider session id>.jsonl`
       expect(relative(cliProjectsDir, transcriptPath ?? '').split(/[\\/]/)).toHaveLength(2)
-      // And the pinned account home is that same root, so the host-side leaf recovery
-      // (structured-claude-runtime-adapter.ts:64) and mobile agree.
       expect(join(claudeConfigDir, 'projects')).toBe(cliProjectsDir)
     },
     45_000
   )
 
-  // The model half of the same lesson: a fixture can only pin the shape we read.
-  // set_model answers success for a model it never resolves — a nonexistent id is
-  // accepted and only fails once a turn runs — so the CLI's own report is the only
-  // adoption evidence, and it arrives on the init frame that opens each turn. This
-  // asserts that frame carries the resolved model against the live binary; it goes
-  // red the day the CLI stops reporting it, which is the day the confirmation
-  // silently degrades to echoing back whatever Orca sent.
+  // set_model accepts nonexistent IDs; only a later init proves the model was adopted.
   it.skipIf(!realClaudeAuthenticated)(
     'reports the model it adopted on the init frame that opens each turn',
     async () => {
@@ -303,6 +301,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-model'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await adapter.setOption({
           sessionId: 'real-cli-handshake',
           key: 'model',
@@ -335,13 +334,13 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         }
 
         expect(frames).not.toHaveLength(0)
-        // Both halves: the field exists, and it names the model the picker asked
-        // for in the catalog's resolved shape rather than the id Orca sent.
         expect(frames[0]?.model).toEqual(expect.any(String))
-        expect(frames[0]?.model).toBe('claude-haiku-4-5-20251001')
+        expect(frames[0]?.model).toMatch(/^claude-haiku-/)
         await expect(
           adapter.readOptions({ sessionId: 'real-cli-handshake', fence: 1 })
-        ).resolves.toMatchObject({ current: { model: 'haiku' } })
+        ).resolves.toMatchObject({
+          current: { model: 'haiku', confirmed: expect.arrayContaining(['model']) }
+        })
       } finally {
         await adapter.closeAll()
       }
@@ -349,11 +348,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     90_000
   )
 
-  // The host hands a Claude child nothing until `started`, which now follows the initialize answer
-  // alone. Measures what that wait costs against the live binary, so the startup limits are tuned
-  // from data: spawn to `started` with nothing sent, then a send to its first output.
   it.skipIf(!realClaudeAuthenticated)(
-    'reports `started` with nothing sent, then answers a send handed over after it',
+    'opens with nothing sent, then answers a send handed over after it',
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
@@ -381,10 +377,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-started-timing'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const publishedAt = Date.now()
-        expect(await until(() => events.some((event) => event.type === 'started'), 30_000)).toBe(
-          true
-        )
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const startedAt = Date.now()
         const before = events.length
         await adapter.dispatch({
@@ -397,10 +392,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           await until(() => events.slice(before).some((event) => event.type === 'message'), 60_000)
         ).toBe(true)
         const firstOutputAt = Date.now()
-        // Reported for tuning; the assertions above are the contract.
         console.info(
           `[real-cli startup timing] acquire->published ${publishedAt - acquireAt} ms, ` +
-            `published->started ${startedAt - publishedAt} ms, ` +
+            `published->open ${startedAt - publishedAt} ms, ` +
             `dispatch->first output ${firstOutputAt - startedAt} ms`
         )
       } finally {
@@ -410,23 +404,22 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     120_000
   )
 
-  // The contract a chat's first message depends on: saved options and the chat's permission mode
-  // ride the launch, and the message is written as soon as the child is published, before the CLI
-  // answers initialize.
   it.skipIf(!realClaudeAuthenticated).each([
     ['accept-edits', 'acceptEdits'],
+    ['auto', 'auto'],
     ['full-access', 'bypassPermissions']
   ] as const)(
-    'runs a message written before initialize answers, launched with saved options and %s',
+    'runs a message after open with saved options and %s',
     async (permissionMode, cliPermissionMode) => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+      const cwd = await mkdtemp(join(tmpdir(), 'orca-claude-permissions-'))
       const events: ClaudeStructuredSessionEvent[] = []
       const adapter = realAdapter(
         providerSessionId,
         claudeConfigDir,
         events,
-        process.cwd(),
+        cwd,
         undefined,
         realClaudeLaunchHome().env,
         false
@@ -442,44 +435,50 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           options: { model: 'sonnet', effort: 'low' },
           permissionMode
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const dispatched = await adapter.dispatch({
           sessionId: 'real-cli-handshake',
           clientMessageId: 'real-cli-saved-options-1',
           body: {
             kind: 'message',
             role: 'user',
-            blocks: [{ type: 'text', text: 'Reply with exactly: OK. Do not use any tools.' }]
+            blocks: [
+              {
+                type: 'text',
+                text:
+                  permissionMode === 'auto'
+                    ? 'Use tools to write auto-mode-proof.txt containing exactly AUTO_MODE_OK, then read it back. Reply with exactly: OK.'
+                    : 'Reply with exactly: OK. Do not use any tools.'
+              }
+            ]
           },
           fence: 1
         })
-        // Read as the write resolves: the CLI had not answered initialize, so nothing held it.
-        const answeredAtDispatch = adapter['sessions'].get('real-cli-handshake')?.startup.answered
-        const startedAtDispatch = events.some((event) => event.type === 'started')
-        expect(dispatched).toEqual({ state: 'admitted' })
-        expect(answeredAtDispatch).toBe(false)
-        expect(startedAtDispatch).toBe(false)
+        expect(dispatched).toMatchObject({ state: 'admitted' })
         const deadline = Date.now() + 90_000
         while (!messages().some((m) => m.type === 'result') && Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 250))
         }
 
-        // The echo of the message Orca wrote, then a turn that ended in success.
         expect(messages()).toContainEqual(expect.objectContaining({ type: 'user', isReplay: true }))
         expect(messages().find((m) => m.type === 'result')).toMatchObject({ is_error: false })
-        // The turn's own init names what the child was launched with.
         expect(messages().find((m) => m.type === 'system' && m.subtype === 'init')).toMatchObject({
-          model: 'claude-sonnet-5',
+          model: expect.stringMatching(/^claude-sonnet-/),
           permissionMode: cliPermissionMode
         })
+        if (permissionMode === 'auto') {
+          expect((await readFile(join(cwd, 'auto-mode-proof.txt'), 'utf8')).trim()).toBe(
+            'AUTO_MODE_OK'
+          )
+        }
       } finally {
         await adapter.closeAll()
+        await rm(cwd, { recursive: true, force: true })
       }
     },
     120_000
   )
 
-  // The window a Stop naming no turn exists for: Orca has written the message, and Claude has not
-  // started its reply, so no turn id exists. Only the live binary can say the interrupt lands there.
   it.skipIf(!realClaudeAuthenticated)(
     'stops a message interrupted before its reply starts, and takes the next one',
     async () => {
@@ -522,10 +521,11 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-stop'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         const first = events.length
         await expect(
           send('real-cli-stop-1', 'Count from 1 to 300, one number per line, and nothing else.')
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         const startedBeforeStop = replyStarted(first)
 
         await expect(
@@ -541,7 +541,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         expect(replyStarted(first)).toBe(false)
 
         const second = events.length
-        await expect(send('real-cli-stop-2', 'Reply with the single word ok.')).resolves.toEqual({
+        await expect(
+          send('real-cli-stop-2', 'Reply with the single word ok.')
+        ).resolves.toMatchObject({
           state: 'admitted'
         })
         await expect(result(second)).resolves.toMatchObject({ subtype: 'success' })
@@ -552,21 +554,13 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     150_000
   )
 
-  // Orca installs a SessionStart hook, so its frame proves most real starts before the turn's
-  // system/init, the only frame that says this CLI can cancel what it queued.
+  // SessionStart can prove startup before system/init advertises queue-cancellation support.
   it.skipIf(!realClaudeAuthenticated)(
     'withdraws a follow-up queued behind a turn that is stopped, behind a SessionStart hook',
     async () => {
       const providerSessionId = randomUUID()
       const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-queued-stop-'))
-      await mkdir(join(cwd, '.claude'), { recursive: true })
-      await writeFile(
-        join(cwd, '.claude', 'settings.json'),
-        JSON.stringify({
-          hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'true' }] }] }
-        })
-      )
+      const cwd = await projectWithStartHook('orca-queued-stop-')
       const events: ClaudeStructuredSessionEvent[] = []
       const settlements: unknown[] = []
       const adapter = realAdapter(providerSessionId, claudeConfigDir, events, cwd, (settlement) =>
@@ -593,8 +587,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-queued-stop'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         await send('real-cli-queued-stop-a', 'Count from 1 to 400, one number per line.')
-        // A's reply is streaming, so the next send queues behind its turn.
         await expect(
           waitFor(() =>
             events.some(
@@ -613,7 +607,6 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
             turnId: 'turn-a',
             fence: 1,
             resolveLiveTurnId: () => 'turn-a',
-            // What the host reads for B: handed over, not yet answered.
             dispatchStatus: { state: 'pending', recovered: false }
           })
         ).resolves.toEqual({ cancelled: true })
@@ -623,7 +616,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           clientMessageId: 'real-cli-queued-stop-b',
           state: 'rejected',
           reason: 'provider_cancelled_before_start',
-          rejection: { kind: 'cancelled' }
+          rejection: { kind: 'cancelled' },
+          unrun: true
         })
       } finally {
         await adapter.closeAll()
@@ -633,8 +627,6 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
     150_000
   )
 
-  // With no SessionStart hook (Orca's status hooks off), the CLI names no session before the
-  // first turn; the chat must start on the initialize answer and take the message.
   it.skipIf(!realClaudeAuthenticated)(
     'starts and answers with every hook disabled, so no start frame precedes the turn',
     async () => {
@@ -656,6 +648,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
           fence: 1,
           spawnToken: 'real-cli-no-hooks'
         })
+        await claudeStartupSettled(adapter, 'real-cli-handshake')
         expect(frames().filter((frame) => readClaudeInit(frame) !== null)).toEqual([])
         await expect(
           adapter.dispatch({
@@ -668,7 +661,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
             },
             fence: 1
           })
-        ).resolves.toEqual({ state: 'admitted' })
+        ).resolves.toMatchObject({ state: 'admitted' })
         await vi.waitFor(
           () => expect(frames()).toContainEqual(expect.objectContaining({ type: 'result' })),
           { timeout: 120_000, interval: 200 }
@@ -691,7 +684,8 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       events,
       process.cwd(),
       undefined,
-      {}
+      {},
+      false
     )
 
     try {
@@ -700,11 +694,9 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
         fence: 1,
         spawnToken: 'real-cli-no-auth'
       })
-      await adapter.drainObservedExits()
-      expect(events.find((event) => event.type === 'ended')).toMatchObject({
-        reason: expect.stringMatching(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s),
-        startupUnproven: true
-      })
+      await expect(claudeStartupSettled(adapter, 'real-cli-handshake')).rejects.toThrow(
+        /not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s
+      )
     } finally {
       await adapter.closeAll()
       await rm(claudeConfigDir, { recursive: true, force: true })

@@ -2,9 +2,11 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { NativeChatPickerItem } from './native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat-picker-items'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache,
@@ -38,11 +40,13 @@ function harness(options: {
   imageAttachments?: NativeChatComposerImageAttachment[]
   /** The PTY lane has no structured transport at all. */
   lane?: 'pty'
+  capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit reads only threadGoal, onError and onSubmitted.
   const structuredTransport = {
+    capturePresentation: options.capturePresentation ?? (() => () => true),
     onError,
     onSubmitted,
     ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
@@ -76,6 +80,42 @@ function harness(options: {
 }
 
 describe('composer goal mode', () => {
+  it.each([false, true])(
+    'admits the actual ordinary/goal candidate only after completion, goal=%s',
+    async (goal) => {
+      const setObjective = vi.fn(async () => true)
+      const { hook, calls, onError, type } = harness({
+        draft: '/go',
+        threadGoal: { setObjective }
+      })
+      if (goal) {
+        act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
+      }
+      const token = '[Pasted text](orca-paste:00000000-0000-4000-8000-000000000000)'
+      type(token, 0)
+      const id = '00000000-0000-4000-8000-000000000000'
+      nativeChatPastedTextOperations.set(id, { scopeKey: SCOPE, text: 'original' })
+      act(() => hook.result.current.send())
+      expect(onError).not.toHaveBeenCalled()
+      nativeChatPastedTextOperations.clear()
+      act(() => hook.result.current.send())
+      expect(onError).toHaveBeenCalledWith('This paste was not saved. Paste it again or remove it.')
+      expect(calls.sendStructured).not.toHaveBeenCalled()
+      expect(readNativeChatDraftCache(SCOPE)).toBe(token)
+      updateNativeChatComposerDraft(
+        SCOPE,
+        { pastedTextFiles: { [id]: '/p/saved.txt' } },
+        'immediate'
+      )
+      await act(async () => hook.result.current.send())
+      if (goal) {
+        expect(setObjective).toHaveBeenCalledWith('@/p/saved.txt')
+      } else {
+        expect(calls.sendStructured).toHaveBeenCalledWith(token, [])
+      }
+    }
+  )
+
   it('enters goal mode on a /goal pick and drops the token from the draft', () => {
     const { hook, calls } = harness({ draft: '/go', threadGoal: { setObjective: vi.fn() } })
     const pick = vi.fn()
@@ -215,6 +255,26 @@ describe('composer goal mode', () => {
     expect(setObjective).toHaveBeenCalledWith('Ship the parser')
     expect(readNativeChatDraftCache(SCOPE)).toBe('Ship the parser and its tests')
     expect(hook.result.current.goalMode.active).toBe(true)
+  })
+
+  it('consumes an accepted captured goal after closure without touching local controls', async () => {
+    const reply = Promise.withResolvers<boolean>()
+    let current = true
+    const { hook, calls, type, onError } = harness({
+      draft: '/go',
+      threadGoal: { setObjective: () => reply.promise },
+      capturePresentation: () => () => current
+    })
+    act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
+    type('Ship it', 0)
+    act(() => hook.result.current.send())
+    calls.setCaret.mockClear()
+    hook.unmount()
+    current = false
+    await act(async () => reply.resolve(true))
+    expect(readNativeChatDraftCache(SCOPE)).toBe('')
+    expect(calls.setCaret).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
   })
 
   it('does not send while an image waits to be attached again', () => {

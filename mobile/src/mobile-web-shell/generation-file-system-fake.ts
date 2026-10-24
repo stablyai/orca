@@ -19,8 +19,6 @@ export type FakeGenerationFileSystem = GenerationFileSystem & {
   seed(path: string, node: FakeNode): void
   failWritesAt(path: string | null): void
   failReadsAt(path: string | null): void
-  failDeletesAt(path: string | null): void
-  failFileMovesTo(path: string | null): void
   loseContentsOnMove(): void
   text(path: string): string | null
   bytes(path: string): Uint8Array | null
@@ -32,8 +30,6 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
   const writes: string[] = []
   let failAt: string | null = null
   let failReadAt: string | null = null
-  let failDeleteAt: string | null = null
-  let failMoveTo: string | null = null
   let moveKeepsContents = true
   const uri = (path: string): string => `${ROOT}/${path}`
   const parentOf = (target: string): string => target.slice(0, target.lastIndexOf('/'))
@@ -69,12 +65,6 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     },
     failReadsAt: (path) => {
       failReadAt = path
-    },
-    failDeletesAt: (path) => {
-      failDeleteAt = path
-    },
-    failFileMovesTo: (path) => {
-      failMoveTo = path
     },
     loseContentsOnMove: () => {
       moveKeepsContents = false
@@ -119,30 +109,29 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
     },
-    async delete(target) {
-      if (failDeleteAt !== null && target === uri(failDeleteAt)) {
-        throw new Error('simulated undeletable file')
+    async fileSize(target) {
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? node.bytes.byteLength : null
+    },
+    async copyFile(fromUri, toUri) {
+      if (failReadAt !== null && fromUri === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
       }
+      const node = nodes.get(fromUri)
+      if (node?.kind !== 'file') {
+        throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      if (nodes.has(toUri)) {
+        throw new Error(`fake filesystem refuses to copy onto ${toUri}`)
+      }
+      write(toUri, node.bytes)
+    },
+    async delete(target) {
       for (const key of Array.from(nodes.keys())) {
         if (key === target || key.startsWith(`${target}/`)) {
           nodes.delete(key)
         }
       }
-    },
-    async moveFile(fromUri, toUri) {
-      // The adapter's own ordering, and the worst case of it: expo refuses a destination that
-      // exists, so the destination goes first and the failure is injected after it. A fake that
-      // threw before that delete would never exercise the window the adapter really leaves.
-      const node = nodes.get(fromUri)
-      if (node?.kind !== 'file') {
-        throw new Error(`fake filesystem has no file at ${fromUri}`)
-      }
-      nodes.delete(toUri)
-      if (failMoveTo !== null && toUri === uri(failMoveTo)) {
-        throw new Error('simulated interrupted rename')
-      }
-      nodes.delete(fromUri)
-      nodes.set(toUri, node)
     },
     async moveDirectory(fromUri, toUri) {
       if (nodes.has(toUri)) {

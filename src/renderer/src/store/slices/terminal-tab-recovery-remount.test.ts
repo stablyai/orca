@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { isTerminalTabPresent } from './terminal-tab-retirement'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { createStoreSessionMockApi } from './store-session-test-harness'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function seedWorktreeWithTab(store: ReturnType<typeof createTestStore>): string {
   seedStore(store, {

@@ -6,7 +6,12 @@ import { useMobileSessionImageAttachments } from './use-mobile-session-image-att
 
 const mocks = vi.hoisted(() => ({
   useMobileImageAttachment: vi.fn(),
-  useMobileNativeChatImageAttachments: vi.fn()
+  useMobileNativeChatImageAttachments: vi.fn(),
+  useMobileNativeChatFileAttachments: vi.fn(() => ({
+    files: [],
+    attachFiles: vi.fn(),
+    removeFiles: vi.fn()
+  }))
 }))
 
 vi.mock('./use-mobile-image-attachment', () => ({
@@ -15,6 +20,10 @@ vi.mock('./use-mobile-image-attachment', () => ({
 
 vi.mock('./use-mobile-native-chat-image-attachments', () => ({
   useMobileNativeChatImageAttachments: mocks.useMobileNativeChatImageAttachments
+}))
+
+vi.mock('./use-mobile-native-chat-file-attachments', () => ({
+  useMobileNativeChatFileAttachments: mocks.useMobileNativeChatFileAttachments
 }))
 
 type HookArgs = Parameters<typeof useMobileSessionImageAttachments>[0]
@@ -29,10 +38,12 @@ function baseArgs(overrides: Partial<HookArgs> = {}): HookArgs {
     deviceTokenRef: { current: null },
     nativeChatScopeKey: 'scope-1',
     nativeChatInputLeaseReady: false,
+    nativeChatAgentConfirmed: true,
     getActiveWorktreeConnectionId: async () => 'conn-1',
     beforeTerminalSend: async () => true,
     nativeChatBaseSend: vi.fn().mockResolvedValue('accepted'),
     structuredNativeChat: true,
+    nativeChatSessionId: 'session-1',
     readSeededLaunchDraft: () => null,
     showToast: vi.fn(),
     onNativeChatSendError: vi.fn(),
@@ -118,6 +129,22 @@ describe('useMobileSessionImageAttachments', () => {
         enabled: false,
         structuredNativeChat: true
       })
+    )
+  })
+
+  // A remembered-only chat may sit on a bare shell, where a pasted image path would run as input.
+  it('keeps terminal-backed native-chat image sends off until the live agent is confirmed', () => {
+    render(
+      baseArgs({
+        activeHandleRef: { current: 'term-1' },
+        nativeChatInputLeaseReady: true,
+        nativeChatAgentConfirmed: false,
+        structuredNativeChat: false
+      })
+    )
+
+    expect(mocks.useMobileNativeChatImageAttachments).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, structuredNativeChat: false })
     )
   })
 })

@@ -46,7 +46,7 @@ describe('AgentStateDot', () => {
 
     expect(markup).toContain('aria-label="Monitoring background tasks"')
     expect(markup).toContain('lucide-activity')
-    expect(markup).toContain('text-yellow-500')
+    expect(markup).toContain('text-agent-working')
     expect(markup).not.toContain('data-agent-spinner')
   })
 

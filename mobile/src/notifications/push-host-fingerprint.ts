@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha256'
 // Why: a push arrives from the gateway, so it can only name the host by something
 // both sides derive independently — base64url(sha256(hostPublicKey)) truncated to
 // 16 chars, identical to deriveRelayHostId in
-// src/main/runtime/relay/relay-http-client.ts. The phone maps it back to its own
+// src/main/runtime/mobile-cloud-relay/relay-http-client.ts. The phone maps it back to its own
 // hostId by re-deriving over each stored host's publicKeyB64.
 //
 // Base64 is inlined rather than imported (same call as mobile-relay-credential-hash.ts):

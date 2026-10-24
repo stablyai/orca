@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { bindPaneFirst, committingSpawn, registerBoundPty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   electronMocks,
@@ -50,18 +51,26 @@ describe('OrcaRuntimeService', () => {
       )
     }
 
-    function makeParkedRuntime(runtimeStore: unknown): {
+    function makeParkedRuntime(
+      runtimeStore: unknown,
+      host: {
+        deps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
+        livePtyIds?: string[]
+      } = {}
+    ): {
       runtime: OrcaRuntimeService
       spawn: ReturnType<typeof vi.fn>
     } {
       const spawn = vi.fn().mockResolvedValue({ id: 'persisted-pty' })
-      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements the runtime store methods these tests reach.
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, host.deps)
       runtime.setPtyController({
         spawn,
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null,
-        listProcesses: async () => []
+        listProcesses: async () =>
+          (host.livePtyIds ?? []).map((id) => ({ id, cwd: '/tmp', title: 'Claude' }))
       })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       return { runtime, spawn }
@@ -81,13 +90,27 @@ describe('OrcaRuntimeService', () => {
         renameTerminal: vi.fn(),
         focusTerminal: vi.fn(),
         closeTerminal: vi.fn(),
-        sleepWorktree: vi.fn(),
         resumeSleepingAgents,
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
       runtime.attachWindow(TEST_WINDOW_ID)
       runtime.markGraphReady(TEST_WINDOW_ID)
+    }
+
+    function firstSpawnArgs(spawn: ReturnType<typeof vi.fn>): {
+      command?: string
+      sessionId?: string
+    } {
+      const args: unknown = spawn.mock.calls[0]?.[0]
+      if (typeof args !== 'object' || args === null) {
+        return {}
+      }
+      const command =
+        'command' in args && typeof args.command === 'string' ? args.command : undefined
+      const sessionId =
+        'sessionId' in args && typeof args.sessionId === 'string' ? args.sessionId : undefined
+      return { command, sessionId }
     }
 
     const userActivate = (
@@ -188,6 +211,238 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawn).toHaveBeenCalledOnce()
       expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    // #27147 / #27777: the tap used to start a bare shell (or a fresh agent), which lost the
+    // conversation the host recorded for this pane. The host window resumes it; so must this.
+    it('resumes the slept agent session when a paired client opens the pane', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
+        launchConfig: { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+      setParkedRuntimeNotifier(runtime, vi.fn())
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only isDestroyed from the window mock.
+      electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
+      await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+        notifyClients: false,
+        clientKind: 'runtime'
+      })
+
+      const activated = await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      const spawnArgs = firstSpawnArgs(spawn)
+      expect(spawnArgs.sessionId).toBe('persisted-pty')
+      expect(spawnArgs.command).toContain('--resume')
+      expect(spawnArgs.command).toContain('provider-session-1')
+      expect(spawnArgs.command).toContain('--dangerously-skip-permissions')
+      expect(activated.tabs[0]).toMatchObject({ status: 'ready' })
+    })
+
+    it('resumes from a live anchor when the pane was lost while its agent ran', async () => {
+      const { runtimeStore } = makeParkedSessionStore('live')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command).toContain('provider-session-1')
+    })
+
+    // Why: Codex resume routing keys off the launch agent, so it must name the resumed agent.
+    it('labels the spawn with the recorded agent, not the agent the tab first launched', async () => {
+      const { runtimeStore, getSession, setSession } = makeParkedSessionStore('worktree-sleep', {
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'codex-session-1' }
+      })
+      const session = structuredClone(getSession())
+      const tab = session.tabsByWorktree[TEST_WORKTREE_ID]?.[0]
+      if (tab) {
+        tab.launchAgent = 'claude'
+      }
+      setSession(session)
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command).toContain('codex-session-1')
+      expect(spawn.mock.calls[0]?.[0]).toMatchObject({ launchAgent: 'codex' })
+    })
+
+    it('does not resume a session another pane also records', async () => {
+      const { runtimeStore, getSession, setSession } = makeParkedSessionStore('worktree-sleep')
+      const session = structuredClone(getSession())
+      const records = session.sleepingAgentSessionsByPaneKey ?? {}
+      const own = records[`host-tab:${HEADLESS_LEAF_ID}`]
+      if (own) {
+        records[`host-tab:${HEADLESS_SECOND_LEAF_ID}`] = {
+          ...own,
+          paneKey: `host-tab:${HEADLESS_SECOND_LEAF_ID}`
+        }
+      }
+      setSession(session)
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+    })
+
+    // Why: a resume is restore work; paused or rate-limited restore admission must see it.
+    it('declares a reconnect resume as automatic restore and a tap as a user resume', async () => {
+      const automatic = makeParkedRuntime(makeParkedSessionStore('live').runtimeStore)
+      await automaticActivate(automatic.runtime)
+      expect(automatic.spawn.mock.calls[0]?.[0]).toMatchObject({
+        spawnIntent: 'automatic-restore'
+      })
+
+      const tap = makeParkedRuntime(makeParkedSessionStore('live').runtimeStore)
+      await userActivate(tap.runtime)
+      expect(tap.spawn.mock.calls[0]?.[0]).toMatchObject({ spawnIntent: 'user-resume' })
+    })
+
+    function makeRuntimeWithOtherPaneHolder(
+      ptyIds: string[],
+      verdict?: 'exited' | 'unverifiable',
+      registered = true
+    ) {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
+      const parked = makeParkedRuntime(runtimeStore, {
+        livePtyIds: ptyIds,
+        deps: {
+          checkHookAgentPresence: async () => verdict ?? null,
+          getAgentProviderSessionSnapshot: () => [
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guard reads only paneKey and providerSession.
+            {
+              paneKey: `other-tab:${HEADLESS_SECOND_LEAF_ID}`,
+              providerSession: { key: 'session_id', id: 'provider-session-1' }
+            } as never
+          ]
+        }
+      })
+      const otherPane = { tabId: 'other-tab', leafId: HEADLESS_SECOND_LEAF_ID }
+      if (registered) {
+        registerBoundPty(parked.runtime, 'other-pty', TEST_WORKTREE_ID, null, otherPane)
+      } else {
+        // A restart: main's layout saved the pane; its terminal has not re-registered yet.
+        bindPaneFirst(parked.runtime, {
+          ...otherPane,
+          worktreeId: TEST_WORKTREE_ID,
+          ptyId: 'other-pty'
+        })
+      }
+      return parked
+    }
+
+    it('does not resume a session the hook store places in another live pane', async () => {
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder(['other-pty'])
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+    })
+
+    // Why: the agent can exit to a shell that keeps the PTY alive; only the hook store proves that.
+    it.each([
+      ['exited', true],
+      ['unverifiable', false]
+    ] as const)('live-PTY holder agent %s: resumes %s', async (verdict, resumes) => {
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder(['other-pty'], verdict)
+      await userActivate(runtime)
+      expect((firstSpawnArgs(spawn).command ?? '').includes('provider-session-1')).toBe(resumes)
+    })
+
+    // Why: losing sight of the holder (a dropped SSH relay) is not evidence it stopped writing.
+    it('does not resume while the other pane holding the session is unverifiable', async () => {
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder([])
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+    })
+
+    it('does not resume while the other holder has no host terminal record yet', async () => {
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder([], undefined, false)
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+    })
+
+    it('resumes once the other pane holding the session has proven exited', async () => {
+      const { runtime, spawn } = makeRuntimeWithOtherPaneHolder([])
+      runtime.onPtyExit('other-pty', 0)
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command).toContain('provider-session-1')
+    })
+
+    it('does not resume a record older than the pane conversation the hook store names', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep')
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore, {
+        deps: {
+          getAgentProviderSessionRowsForPane: (paneKey) =>
+            paneKey === `host-tab:${HEADLESS_LEAF_ID}`
+              ? [
+                  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guard reads only providerSession.
+                  { paneKey, providerSession: { key: 'session_id', id: 'newer-session' } } as never
+                ]
+              : []
+        }
+      })
+
+      await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+    })
+
+    // Why: Pi identities are id plus transcript; a shared id alone does not name one conversation.
+    it('does not treat another Pi transcript with the same id as this pane session', async () => {
+      const piSession = { key: 'session_id', id: 'pi-1', transcriptPath: '/t/a.jsonl' } as const
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
+        agent: 'pi',
+        providerSession: piSession
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore, {
+        deps: {
+          getAgentProviderSessionRowsForPane: (paneKey) => [
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guard reads only providerSession.
+            { paneKey, providerSession: { ...piSession, transcriptPath: '/t/b.jsonl' } } as never
+          ]
+        }
+      })
+
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('/t/a.jsonl')
+    })
+
+    it('does not resume an originless legacy record, and keeps it', async () => {
+      const { runtimeStore, getSession } = makeParkedSessionStore(undefined)
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      await automaticActivate(runtime)
+      await userActivate(runtime)
+
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
+      expect(
+        getSession().sleepingAgentSessionsByPaneKey?.[`host-tab:${HEADLESS_LEAF_ID}`]
+      ).toBeDefined()
+    })
+
+    // Why: a session id names a transcript on the machine that captured it.
+    it('does not resume a record captured on another execution host', async () => {
+      const { runtimeStore } = makeParkedSessionStore('worktree-sleep', {
+        connectionId: 'ssh-elsewhere'
+      })
+      const { runtime, spawn } = makeParkedRuntime(runtimeStore)
+
+      await userActivate(runtime)
+
+      expect(spawn).toHaveBeenCalledOnce()
+      expect(firstSpawnArgs(spawn).command ?? '').not.toContain('provider-session-1')
     })
 
     // Why: manual sleep of a finished agent stamps restoreOnTabOpenOnly, which the
@@ -456,7 +711,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockImplementation(async () => ({ id: `headless-pty-${++nextPty}` }))
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -507,7 +762,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'headless-pty-solo' })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -530,7 +785,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockImplementation(async () => ({ id: `attached-pty-${++nextPty}` }))
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

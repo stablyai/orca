@@ -4,7 +4,7 @@ import {
   forgetSshConnectionGeneration,
   resetSshConnectionGenerations,
   setSshConnectionGeneration
-} from './ssh-connection-generation'
+} from './connection/ssh-connection-generation'
 import {
   getSshProviderAuthority,
   isCurrentSshProviderAuthority,

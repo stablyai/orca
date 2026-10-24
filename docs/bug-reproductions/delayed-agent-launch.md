@@ -59,14 +59,14 @@ sleep-length polling was added.
 
 ## Coverage and remaining gaps
 
-| Surface | Evidence |
-| --- | --- |
-| Local and daemon preparation | Plugin files, account environment and host spawn tests |
-| Renderer replies and routing | Hidden query-delivery and captured late-title tests |
-| macOS real Claude | Hidden Electron/CDP launch and completed prompt |
-| SSH/remote-runtime | Shared classification; existing fenced process reads retained; no physical delayed launch |
-| WSL | Shared Pi/OMP and OpenCode preparation; physical guest launch unproved |
-| Linux/Windows | Platform-neutral classification and existing mock coverage; physical delayed launch unproved |
+| Surface                      | Evidence                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Local and daemon preparation | Plugin files, account environment and host spawn tests                                       |
+| Renderer replies and routing | Hidden query-delivery and captured late-title tests                                          |
+| macOS real Claude            | Hidden Electron/CDP launch and completed prompt                                              |
+| SSH/remote-runtime           | Shared classification; existing fenced process reads retained; no physical delayed launch    |
+| WSL                          | Shared Pi/OMP and OpenCode preparation; physical guest launch unproved                       |
+| Linux/Windows                | Platform-neutral classification and existing mock coverage; physical delayed launch unproved |
 
 The scanner intentionally does not parse arbitrary shell programs, variables,
 pipelines or background jobs. A late agent emitting neither a recognizable title

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getPinnedSectionWorktrees, isPinnedSectionWorktree } from './pinned-section-worktrees'
+import {
+  getPinnedSectionWorktrees,
+  isPinnedSectionWorktree
+} from '../../../../shared/sidebar-list/pinned-section-worktrees'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 
 function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -110,17 +113,41 @@ describe('getPinnedSectionWorktrees', () => {
     const visible = { ...grandchild, repoId: 'visible-project' }
     const map = new Map([pinnedParent, hidden, visible].map((row) => [row.id, row]))
     const allowed = [pinnedParent.repoId, visible.repoId]
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map, allowed))
-      .toEqual([pinnedParent])
-    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map))
-      .toEqual([pinnedParent, visible])
+    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map, allowed)).toEqual([
+      pinnedParent
+    ])
+    expect(getPinnedSectionWorktrees([pinnedParent, visible], lineageById, map)).toEqual([
+      pinnedParent,
+      visible
+    ])
     const rows = buildRows(
-      'repo', [pinnedParent, visible], repoMap, null, new Set(), undefined, undefined,
-      undefined, lineageById, map, true, undefined, [], new Set(), new Map(), new Map(),
-      [], undefined, [], undefined, 'local', 'single-location', allowed
+      'repo',
+      [pinnedParent, visible],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      lineageById,
+      map,
+      true,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      undefined,
+      'local',
+      'single-location',
+      allowed
     )
-    expect(rows.find((row) => row.type === 'item' && row.worktree.id === visible.id))
-      .toMatchObject({ sectionKey: 'repo:visible-project', depth: 0 })
+    expect(rows.find((row) => row.type === 'item' && row.worktree.id === visible.id)).toMatchObject(
+      { sectionKey: 'repo:visible-project', depth: 0 }
+    )
   })
 
   it('does not collect descendants of a pinned parent that is not itself visible', () => {

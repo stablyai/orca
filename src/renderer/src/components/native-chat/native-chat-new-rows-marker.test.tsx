@@ -29,9 +29,12 @@ function row(
 }
 
 /** The rows as one turn: still `working`, or settled after `worked` seconds, or neither. */
-type Turn = { working?: boolean; worked?: number }
+type Turn = { working?: boolean; worked?: number; expanded?: boolean }
 
-function slotsOf(messages: NativeChatMessage[], { working = false, worked }: Turn = {}) {
+function slotsOf(
+  messages: NativeChatMessage[],
+  { working = false, worked, expanded = false }: Turn = {}
+) {
   const turnKey = working || worked !== undefined ? 'prompt' : undefined
   return buildNativeChatTranscriptSlots({
     messages,
@@ -46,7 +49,7 @@ function slotsOf(messages: NativeChatMessage[], { working = false, worked }: Tur
           : { prompt: { startedAt: null, thinking: false, workedSeconds: worked } }
     },
     turnDiffs: new Map(),
-    expandedTurnKeys: new Set(),
+    expandedTurnKeys: new Set(expanded && turnKey ? [turnKey] : []),
     isWorking: working,
     lifecycleWorking: working
   })
@@ -54,10 +57,19 @@ function slotsOf(messages: NativeChatMessage[], { working = false, worked }: Tur
 
 const SEEN = [row('prompt', 1, 'user'), row('reply', 2)]
 const LATER = [...SEEN, row('answer', 3), row('more', 4)]
+/** The reader asks, then the agent works a step and answers. */
+const ASKED = [row('prompt', 1, 'user')]
+const DONE = [...ASKED, row('step', 2), row('answer', 3)]
+
+const missed = (key: string, after: number, through: number) => ({
+  key,
+  after: at(after),
+  through: at(through)
+})
 
 describe('where the "New" marker draws', () => {
   it('is above the first row that came while the reader was away', () => {
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(LATER), 'answer')).toEqual({
+    expect(nativeChatNewRowsMarkerPlacement(slotsOf(LATER), missed('answer', 2, 4))).toEqual({
       key: 'answer',
       place: 'above-row'
     })
@@ -66,15 +78,36 @@ describe('where the "New" marker draws', () => {
   // The bar's own line would otherwise sit against the marker's.
   it("is above the turn bar when only that bar parts the row from the reader's prompt", () => {
     const asked = [row('prompt', 1, 'user'), row('answer', 2)]
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(asked, { worked: 17 }), 'answer')).toEqual({
-      key: 'prompt',
-      place: 'above-turn-bar'
-    })
+    expect(
+      nativeChatNewRowsMarkerPlacement(slotsOf(asked, { worked: 17 }), missed('answer', 1, 2))
+    ).toEqual({ key: 'prompt', place: 'above-turn-bar' })
+  })
+
+  it('stays under the rows of an opened turn the reader had already seen', () => {
+    expect(
+      nativeChatNewRowsMarkerPlacement(
+        slotsOf(DONE, { worked: 17, expanded: true }),
+        missed('answer', 2, 3)
+      )
+    ).toEqual({ key: 'answer', place: 'above-row' })
+  })
+
+  // With no prompt of the reader's, the turn's bar draws above its first row, folded or not.
+  it('is above the bar of a turn the agent opened, whether the turn is open or shut', () => {
+    const turn = DONE.slice(1)
+    for (const expanded of [false, true]) {
+      expect(
+        nativeChatNewRowsMarkerPlacement(
+          slotsOf(turn, { worked: 17, expanded }),
+          missed('answer', 1, 3)
+        )
+      ).toEqual({ key: 'step', place: 'above-row' })
+    }
   })
 
   it('is absent when nothing came, or the row that did is gone', () => {
     expect(nativeChatNewRowsMarkerPlacement(slotsOf(LATER), null)).toBeUndefined()
-    expect(nativeChatNewRowsMarkerPlacement(slotsOf(SEEN), 'answer')).toBeUndefined()
+    expect(nativeChatNewRowsMarkerPlacement(slotsOf(SEEN), missed('answer', 2, 4))).toBeUndefined()
   })
 })
 
@@ -89,6 +122,7 @@ describe('useNativeChatNewRowsMarker', () => {
     messages: NativeChatMessage[]
     showing: boolean
     waiting?: NativeChatMessage[]
+    turn?: Turn
   }
 
   function chat(messages: NativeChatMessage[], turn?: Turn) {
@@ -96,7 +130,7 @@ describe('useNativeChatNewRowsMarker', () => {
     return renderHook(
       (props: ChatProps) =>
         useNativeChatNewRowsMarker(
-          slotsOf(props.messages, turn),
+          slotsOf(props.messages, props.turn ?? turn),
           slotsOf(props.waiting ?? []),
           props.showing
         ),
@@ -228,6 +262,23 @@ describe('useNativeChatNewRowsMarker', () => {
 
     view.rerender({ messages: [...SEEN, row('live', 4), queued], showing: true })
     expect(view.result.current.marker?.key).toBe('held')
+  })
+
+  it('keeps its place when the reader opens the turn that came while they were away', () => {
+    const view = leaveAndReturn(ASKED, DONE, { worked: 17 })
+    expect(view.result.current.marker).toMatchObject({ key: 'prompt', place: 'above-turn-bar' })
+
+    view.rerender({ messages: DONE, showing: true, turn: { worked: 17, expanded: true } })
+    expect(view.result.current.marker).toMatchObject({ key: 'prompt', place: 'above-turn-bar' })
+  })
+
+  it('stays through another look away after the reader shuts the turn they opened', () => {
+    const shut = { worked: 17 }
+    const view = leaveAndReturn(ASKED, DONE, { worked: 17, expanded: true })
+    view.rerender({ messages: DONE, showing: true, turn: shut })
+    view.rerender({ messages: DONE, showing: false, turn: shut })
+    view.rerender({ messages: DONE, showing: true, turn: shut })
+    expect(view.result.current.marker).toMatchObject({ key: 'prompt', place: 'above-turn-bar' })
   })
 
   describe('a reply still being written when the reader left', () => {

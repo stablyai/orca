@@ -19,7 +19,8 @@ import {
 import type {
   RemoteRuntimeMultiplexedTerminalState,
   RemoteRuntimeSnapshotImage,
-  RemoteRuntimeSnapshotOutcome
+  RemoteRuntimeSnapshotOutcome,
+  RemoteRuntimeSnapshotRequestOptions
 } from './remote-runtime-terminal-multiplexer-types'
 
 export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRuntimeTerminalMultiplexerBase {
@@ -151,7 +152,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
 
   protected async requestSnapshot(
     stream: RemoteRuntimeMultiplexedTerminalState,
-    opts?: { scrollbackRows?: number }
+    opts?: RemoteRuntimeSnapshotRequestOptions
   ): Promise<RemoteRuntimeSnapshotImage | null> {
     const outcome = await this.requestSnapshotOutcome(stream, opts)
     // Why: the concurrent-request guard used to reject before the outcome existed; keep that contract for legacy callers.
@@ -166,7 +167,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
 
   protected requestSnapshotOutcome(
     stream: RemoteRuntimeMultiplexedTerminalState,
-    opts?: { scrollbackRows?: number }
+    opts?: RemoteRuntimeSnapshotRequestOptions
   ): Promise<RemoteRuntimeSnapshotOutcome> {
     if (this.streams.get(stream.streamId) !== stream) {
       return Promise.resolve(retryWorthySnapshotOutcome('stream-detached'))
@@ -194,7 +195,13 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       if (typeof timer.unref === 'function') {
         timer.unref()
       }
-      stream.pendingSnapshotRequest = { requestId, resolve, reject, timer }
+      stream.pendingSnapshotRequest = {
+        requestId,
+        resolve,
+        reject,
+        timer,
+        ...(opts?.repaintsPane ? { repaintsPane: true } : {})
+      }
       if (
         !this.sendFrame(
           stream.streamId,

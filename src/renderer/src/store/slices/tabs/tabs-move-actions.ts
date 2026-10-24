@@ -59,7 +59,12 @@ export function createTabsMoveActions(
               activeTabId:
                 group.activeTabId === tabId
                   ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    pickNextActiveTab(
+                      dedupedSourceGroupOrder,
+                      sourceGroup.recentTabIds,
+                      tabId,
+                      state.unifiedTabsByWorktree[worktreeId]
+                    )
                   : group.activeTabId,
               tabOrder: sourceOrder,
               recentTabIds: sourceRecentTabIds

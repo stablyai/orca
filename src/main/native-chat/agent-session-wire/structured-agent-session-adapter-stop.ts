@@ -1,6 +1,4 @@
-// How a provider's Stop, and a prompt card's own Cancel, end what they end. Every member is
-// optional: a provider that declares none keeps its child after a Stop it took, and its card's
-// Cancel interrupts the turn holding the card.
+// Default Stop keeps successfully interrupted children; default prompt Cancel interrupts their turn.
 
 import type {
   AgentJournalApprovalItem,
@@ -8,38 +6,26 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
 
-/** `refusal`: the provider answered the Stop and declined it, in its own words when it gave any.
- *  `turnNotRunning`: its refusal is the kind it gives for a turn not running there, so the Stop keeps
- *  the child; absent, it could not interrupt that turn, which may run on. `turnMayOpen`: no turn
- *  was there to interrupt, but one a send is owed may still open. `turnId`: the journal turn a Stop
- *  that took interrupted, which the Stop then binds. */
+/** Distinguish refused interrupts, absent turns with possible pending openers, and the journal turn actually stopped. */
 export type AgentSessionCancelOutcome = {
   cancelled: boolean
   refusal?: { detail?: ProviderDiagnostic; turnNotRunning?: true; turnMayOpen?: true }
   turnId?: string
 }
 
-/** Where a card's Cancel goes: a dismissal (`dismissPrompt`), or the chat's Stop. */
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
 export type StructuredAgentSessionAdapterStop = {
-  /** A Stop ends this provider's child after `cancelTurn`, whatever it answered, unless it named a
-   *  turn that is no longer live and the cancel answered that it did not take it; the next send
-   *  resumes the conversation. Absent or false keeps the child after a Stop the provider took; a
-   *  failed interrupt still ends a child running the turn the Stop meant. */
+  /** Opt into child termination after Stop; stale-target refusals keep it, failed interrupts of live targets end it. */
   stopEndsSession?(sessionId: string): boolean
-  /** What a Stop that ends the session waits on before it ends the child: resolves once the provider
-   *  has nothing in flight, a send it has not answered included, or when its grace, counted from
-   *  `stoppedAt` (when the interrupt went out), runs out. */
+  /** Wait for in-flight work or grace expiry measured from interrupt issuance. */
   awaitStoppedRequestEnd?(sessionId: string, stoppedAt: number): Promise<void>
-  /** Where the pending card's own Cancel goes. Undefined: `cancelTurn` with the prompt. */
+  /** Undefined routes through cancelTurn with the prompt. */
   routePromptCancel?(input: {
     sessionId: string
     prompt: AgentJournalApprovalItem | AgentJournalQuestionItem
   }): AgentSessionPromptCancelRoute | undefined
-  /** The user dismissed the pending card; `commit` records it as cancelled, with the claim held.
-   *  `answer` then declines the provider's request; without it the request is left to end with the
-   *  child a Stop ends. Either way the provider records nothing more for the card. */
+  /** Claim and commit dismissal before optional provider reply; Cancel/answer must share the claim. */
   dismissPrompt?(input: {
     sessionId: string
     itemId: string

@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
@@ -107,19 +107,11 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
 // identity is a correct cache key; without this every keystroke re-lowercases a large
 // string per thread. WeakMap so dropped threads release their text.
 const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
-let threadSearchTextComputeCount = 0
-
-/** Test hook: how many times search text was actually (re)built. */
-export function getThreadSearchTextComputeCount(): number {
-  return threadSearchTextComputeCount
-}
-
 function threadSearchText(thread: AgentPaneThread): string {
   const cached = threadSearchTextCache.get(thread)
   if (cached !== undefined) {
     return cached
   }
-  threadSearchTextComputeCount += 1
   const text = buildThreadSearchText(thread)
   threadSearchTextCache.set(thread, text)
   return text

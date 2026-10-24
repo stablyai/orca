@@ -228,6 +228,7 @@ export function readWorkspaceFileDragPaths(
   options: {
     maxPathBytes?: number
     maxPaths?: number
+    collapseDescendantsForMove?: boolean
   } = {}
 ): WorkspaceFileDragPathsReadResult {
   const maxPathBytes = options.maxPathBytes ?? NATIVE_FILE_DROP_MAX_PATH_BYTES
@@ -269,7 +270,10 @@ export function readWorkspaceFileDragPaths(
     }
   }
 
-  const paths = getTopLevelWorkspaceFilePaths(decodedPaths)
+  const paths =
+    options.collapseDescendantsForMove === false
+      ? getUniqueWorkspaceFilePathEntries(decodedPaths).map((entry) => entry.path)
+      : getTopLevelWorkspaceFilePaths(decodedPaths)
   return {
     byteLength: validation.byteLength,
     pathCount: paths.length,

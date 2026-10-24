@@ -74,9 +74,16 @@ describe('projectResolvedWorktreeLineage', () => {
   const child = worktree('child', 'child-instance')
 
   it('projects exact instance-aware metadata across projects on one host', () => {
-    const foreignParent = { ...parent, repoId: 'other', projectId: 'parent', hostId: 'local' as const }
+    const foreignParent = {
+      ...parent,
+      repoId: 'other',
+      projectId: 'parent',
+      hostId: 'local' as const
+    }
     const ownedChild = { ...child, projectId: 'child', hostId: 'local' as const }
-    const projected = projectResolvedWorktreeLineage([ownedChild, foreignParent], { child: lineage() })
+    const projected = projectResolvedWorktreeLineage([ownedChild, foreignParent], {
+      child: lineage()
+    })
 
     expect(projected).toMatchObject([
       { id: 'child', parentWorktreeId: 'parent', childWorktreeIds: [], lineage: lineage() },

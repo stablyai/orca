@@ -28,9 +28,15 @@ function rawUpgrade(port: number, target: string): Promise<{ status: string; clo
     socket.on('data', (chunk) => {
       data += chunk.toString()
     })
-    socket.once('close', () => resolve({ status: data.split('\r\n')[0] ?? '', closed: true }))
-    socket.once('error', reject)
-    setTimeout(() => {
+    socket.once('close', () => {
+      clearTimeout(deadline)
+      resolve({ status: data.split('\r\n')[0] ?? '', closed: true })
+    })
+    socket.once('error', (error) => {
+      clearTimeout(deadline)
+      reject(error)
+    })
+    const deadline = setTimeout(() => {
       socket.destroy()
       resolve({ status: data.split('\r\n')[0] ?? '', closed: false })
     }, 1_500).unref()
@@ -114,6 +120,7 @@ describe('relay upgrade with a malformed request target', () => {
     expect(uncaught).toEqual([])
     for (const result of results) {
       expect(result.status).toMatch(/^HTTP\/1\.1 4\d\d/)
+      expect(result.closed).toBe(true)
     }
     // The server must still serve a well-formed upgrade afterwards.
     const after = await rawUpgrade(port, '/v1/connect/abcdefghijklmnop')

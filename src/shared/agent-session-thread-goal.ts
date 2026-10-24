@@ -88,12 +88,6 @@ export function currentAgentSessionThreadGoalSourceBySequence<T extends GoalCand
   return latest === null ? undefined : { item: latest, goal: goalFromRow(latest.body) }
 }
 
-export function currentAgentSessionThreadGoalBySequence(
-  items: Iterable<GoalCandidate>
-): AgentJournalThreadGoal | null | undefined {
-  return currentAgentSessionThreadGoalSourceBySequence(items)?.goal
-}
-
 /** Goal statuses that still describe work in progress, so readers keep them in view. */
 export function isAgentSessionThreadGoalOpen(goal: AgentJournalThreadGoal | null): boolean {
   return goal !== null && goal.status !== 'complete'

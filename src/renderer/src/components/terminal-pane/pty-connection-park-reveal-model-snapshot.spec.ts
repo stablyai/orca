@@ -95,7 +95,10 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
         await flushAsyncTicks(2)
       }
 
-      expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+      expect(transport.serializeBuffer).toHaveBeenCalledWith({
+        scrollbackRows: 5000,
+        repaintsPane: true
+      })
       expect(transport.attach).not.toHaveBeenCalled()
       expect(writes.join('')).toContain('DEEP_PAIRED_SCROLLBACK')
       expect(writes.join('')).toContain('current screen from initial subscribe')

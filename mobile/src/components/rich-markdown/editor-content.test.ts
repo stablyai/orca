@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -18,18 +19,17 @@ const started: RichMarkdownEditorDocument[] = []
 function editorDocument() {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
-  const cleared: (number | null)[] = []
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: (message) => posted.push(message),
-    keyboardInsetSource: () => null,
-    clearTimer: (handle) => cleared.push(handle)
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: (message) => posted.push(message),
+      keyboardInsetSource: () => null
+    })
+  )
   started.push(document_)
   posted.length = 0
   return {
     handle: document_.send,
     posted,
-    cleared,
     editor: document.getElementById('editor')!,
     type: () => document.getElementById('editor')!.dispatchEvent(new Event('input'))
   }
@@ -63,8 +63,6 @@ describe('the editor document content', () => {
   })
 
   it('posts the change on the spot, with no timer between the edit and the host', () => {
-    // There is no debounce, and the pending handle is cleared before every replacement so that
-    // adding one later cannot leak a change from the content it has already replaced.
     const editor = editorDocument()
     vi.useFakeTimers()
     try {
@@ -75,7 +73,6 @@ describe('the editor document content', () => {
     } finally {
       vi.useRealTimers()
     }
-    expect(editor.cleared).toEqual([null, null])
   })
 
   it('says nothing while it is rewriting itself', () => {

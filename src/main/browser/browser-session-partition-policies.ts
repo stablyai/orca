@@ -9,6 +9,14 @@ import {
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
+import {
+  browserSitePermissionRequestingOrigin,
+  browserSitePermissionsFor,
+  decideBrowserSitePermissions,
+  isBrowserSitePermissionAllowed,
+  savedBrowserSitePermissions,
+  sessionBrowserSitePermissions
+} from './browser-site-permission-prompt'
 import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import {
@@ -17,8 +25,8 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-notice'
+import { isRemoteCliDrivenGuest } from './desktop-browser-bridge/remote-cli-driven-workspaces'
 
-// Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
 const userAgentPolicyDisposerBySession = new WeakMap<Session, () => void>()
 
@@ -48,32 +56,36 @@ function configureBrowserSessionUserAgentPolicy(sess: Session, installExceptions
   )
 }
 
+// SSH-driven pages must not read the desktop clipboard.
+function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
+  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+}
+
 /** Drop only the installer memo; retired-session guards remain fail-closed. */
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
   configuredPartitions.delete(partition)
 }
 const handleWillDownload = (
-  _event: Electron.Event,
+  event: Electron.Event,
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
+  // Prevent SSH-driven pages from writing host-chosen files into desktop Downloads.
+  if (isRemoteCliDrivenGuest(webContents.id)) {
+    event.preventDefault()
+    console.info('[desktop-browser-bridge] refused a download from a page an SSH host drives')
+    return
+  }
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
 }
 
-/**
- * Why a second listener instead of a branch inside the shared one: `will-download` is a session
- * event that names no partition, so the only place the decision can be keyed by partition is which
- * listener that partition's session got. A workspace-document guest has no page of its own to
- * attribute a download to, so routing one lands it in this desktop's Downloads folder under a
- * remote-authored name that nothing in the UI accounts for.
- */
+// will-download omits the partition; attach each partition's selected policy to its session.
 const handleDeniedWillDownload = (
   event: Electron.Event,
   _item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
   event.preventDefault()
-  // The page gets nothing back; the reader gets a sentence, or a pressed button just does nothing.
   noticeDocPreviewDownloadBlocked(webContents)
 }
 
@@ -92,14 +104,10 @@ function resolvePermissionNoticeUrl(
   }
 }
 
-/** `route` hands the item to the owning page's download flow; `deny` cancels it before it starts. */
 export type BrowserPartitionDownloadPolicy = 'route' | 'deny'
 export type BrowserPartitionPermissionPolicy = 'browser' | 'deny'
 
-// Why async despite no await: the user agent policy is configured before the first suspension, and
-// getBrowserProcessUserAgentIdentity throws when the process identity was never initialized. Callers
-// report failure through the promise (`void install(...).catch(...)`), so a synchronous throw would
-// escape every one of them and gate browser-session startup on bookkeeping that is allowed to fail.
+// Keep async so initialization errors reach callers through the returned promise.
 export async function installBrowserSessionPartitionPolicies(
   profile: BrowserSessionProfile,
   options: {
@@ -107,12 +115,14 @@ export async function installBrowserSessionPartitionPolicies(
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
+    /** Session-only answers are not persisted to a browser profile. */
+    sitePermissions?: 'saved' | 'session'
   } = {}
 ): Promise<void> {
   const { partition } = profile
   const sess = session.fromPartition(partition)
   configureBrowserSessionUserAgentPolicy(sess, options.userAgentExceptions !== false)
-  // Why: route partitions own a SOCKS transport policy that the app proxy must not overwrite.
+  // Route partitions own a SOCKS policy that the app proxy must not overwrite.
   const proxyReady = (
     options.applyAppWideProxy === false ? Promise.resolve() : applyProxyToBrowserSession(sess)
   ).catch((error: unknown) => {
@@ -129,53 +139,93 @@ export async function installBrowserSessionPartitionPolicies(
     sess.setPermissionCheckHandler(() => false)
     clearBrowserWebAuthnAccessHandlers(sess)
   } else {
+    const siteMemory =
+      options.sitePermissions === 'session'
+        ? sessionBrowserSitePermissions(partition)
+        : savedBrowserSitePermissions(profile.id)
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
-      // Why: defer media to macOS TCC; denying at the session layer throws NotAllowedError even after the user granted Camera/Mic to the OS.
-      if (permission === 'media') {
-        // Capture before async handling; opaque frames cannot be attributed to a named site.
-        const rawUrl = resolvePermissionNoticeUrl(webContents, details)
-        void requestSystemMediaAccess(
-          details as Electron.MediaAccessPermissionRequest | undefined
-        ).then(
-          (granted) => {
-            if (!granted) {
-              browserManager.notifyPermissionDenied({
-                guestWebContentsId: webContents.id,
-                permission,
-                rawUrl
-              })
-            }
-            callback(granted)
-          },
-          (error: unknown) => {
-            console.error('[permissions] Browser media access failed:', error)
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl
-            })
-            callback(false)
-          }
+      if (
+        permission === 'openExternal' &&
+        browserManager.requestExternalAppLaunch(
+          webContents,
+          'externalURL' in details ? details.externalURL : undefined,
+          () => resolvePermissionNoticeUrl(webContents, details) || null
         )
+      ) {
+        // Orca launches approved apps itself; deny Chromium's duplicate launch.
+        callback(false)
         return
       }
-      const allowed = isAutoGrantedBrowserSessionPermission(permission)
-      if (!allowed) {
-        const rawUrl = resolvePermissionNoticeUrl(webContents, details)
+      // Capture the requesting URL before async handling; opaque frames have no named site.
+      const rawUrl = resolvePermissionNoticeUrl(webContents, details)
+      const notifyDenied = (): void =>
         browserManager.notifyPermissionDenied({
           guestWebContentsId: webContents.id,
           permission,
           rawUrl
         })
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents.id)) {
+        notifyDenied()
+        callback(false)
+        return
       }
-      callback(allowed)
+      const mediaRequest = 'mediaTypes' in details ? details : undefined
+      const sitePermissions = browserSitePermissionsFor(permission, mediaRequest?.mediaTypes)
+      if (!sitePermissions) {
+        const allowed = isAutoGrantedBrowserSessionPermission(permission)
+        if (!allowed) {
+          notifyDenied()
+        }
+        callback(allowed)
+        return
+      }
+      const decide = async (): Promise<boolean> => {
+        const allowed = await decideBrowserSitePermissions({
+          requester: webContents,
+          frameOrigin: browserSitePermissionRequestingOrigin(webContents, details),
+          memory: siteMemory,
+          permissions: sitePermissions
+        })
+        if (!allowed || permission !== 'media') {
+          return allowed
+        }
+        // macOS also gates camera and mic per app; distinguish OS refusal from a site decision.
+        const granted = await requestSystemMediaAccess(mediaRequest)
+        if (!granted) {
+          notifyDenied()
+        }
+        return granted
+      }
+      void decide().then(callback, (error: unknown) => {
+        console.error('[permissions] Browser site permission failed:', error)
+        callback(false)
+      })
     })
-    sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-      if (permission === 'media') {
-        return hasSystemMediaAccess(details?.mediaType)
+    sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+        return false
       }
       if (allowsBrowserWebAuthnPermission(permission, details)) {
         return true
+      }
+      const sitePermissions = browserSitePermissionsFor(
+        permission,
+        details?.mediaType ? [details.mediaType] : undefined
+      )
+      if (sitePermissions) {
+        return (
+          isBrowserSitePermissionAllowed({
+            // Service-worker checks have no WebContents; use their requesting origin.
+            source: {
+              pageUrl: webContents?.getURL() ?? requestingOrigin,
+              // Checks supply the frame's inherited origin.
+              frameOrigin: requestingOrigin
+            },
+            memory: siteMemory,
+            permissions: sitePermissions
+          }) &&
+          (permission !== 'media' || hasSystemMediaAccess(details?.mediaType))
+        )
       }
       return isAutoGrantedBrowserSessionPermission(permission)
     })
@@ -195,7 +245,7 @@ export async function installBrowserSessionPartitionPolicies(
 }
 
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {
-  // Why: the Electron Session survives partition deletion; clear callbacks/listeners so removed profiles don't retain closures.
+  // Electron Sessions outlive removed partitions; release their callbacks and listeners.
   invalidateBrowserSessionProxyApplication(sess)
   retireBrowserSessionUserAgentPolicy(sess)
   configuredPartitions.delete(partition)

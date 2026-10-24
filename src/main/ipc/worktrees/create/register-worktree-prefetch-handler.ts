@@ -24,7 +24,7 @@ export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): vo
             prepareWorktreeCreateForRepo(store, repo, base, beforeMaterialization)
         })
       } catch {
-        // Why: optimistic warm-up; the real create path awaits the same refresh and reports failures there.
+        // Speculative failure is reported by the real create path when it retries this refresh.
       }
     }
   )

@@ -95,8 +95,10 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         // Two separate PTY chunks. xterm would parse both in one batch and see only the net result.
         emit('\x1b[?2031h')
         expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+        expect(deps.paneLastThemeModeRef.current.get(1)).toBe('light')
         emit('\x1b[?2031l')
         expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
+        expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
         expect(replies(transport)).toEqual([])
         dispose()
       })
@@ -182,18 +184,6 @@ export function registerPtyConnectionMode2031SubscriptionsTests(): void {
         emit('painting the ui')
         expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
         expect(replies(transport)).toEqual([])
-        dispose()
-      })
-
-      it('drops a live subscription when a later chunk withdraws it', async () => {
-        const { deps, emit, dispose } = await connectVisiblePane()
-        // A TUI that exits: the earlier chunk really did register, so the withdrawal has
-        // state to undo — otherwise a theme flip pushes CSI 997 at the shell that replaced it.
-        emit('\x1b[?2031h')
-        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
-        emit('\x1b[?2031l')
-        expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
-        expect(deps.paneLastThemeModeRef.current.get(1)).toBeUndefined()
         dispose()
       })
 

@@ -29,6 +29,7 @@ export function nodeServerTestPaths({
     'src/main/orcad/orcad-stop-request-listener.test.ts',
     'src/main/orcad/orcad-managed-stop.test.ts',
     'src/main/orcad/orcad-managed-stop-cancellation.test.ts',
+    'src/main/orcad/orcad-daemon-teardown-linux.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
     'src/main/daemon/pty-subprocess/',
     'src/main/daemon/pty-subprocess-spawn-file-foreground.test.ts',

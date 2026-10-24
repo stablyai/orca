@@ -1,9 +1,8 @@
-// Real children (plain Node, never an agent CLI) behind the real connection. One stops talking
-// mid-turn by closing its stdout while the process keeps running: nothing exited and Orca can still
-// write to it, so, as in the common pattern, the turn runs on until a Stop or close ends the agent.
-// The other exits while a process it started still holds its stdout open: the exit alone ends it.
+import { spawnProcess } from '@orca/process-host'
+// Real Node children: direct stdout EOF at the connection boundary, then supervised root exit
+// while a descendant holds stdout. POSIX supervisors keep their own stdout open after provider EOF.
 
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -24,7 +23,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-// Answers the handshake and echoes one reply chunk for the prompt, then runs `onPrompt`.
 const agentScript = (onPrompt: string): string => String.raw`
   const fs = require('node:fs')
   fs.writeFileSync(process.env.ORCA_TEST_PID_FILE, String(process.pid))
@@ -40,6 +38,14 @@ const agentScript = (onPrompt: string): string => String.raw`
         send({ id: frame.id, result: { protocolVersion: 1, agentCapabilities: {} } })
       } else if (frame.method === 'session/new') {
         send({ id: frame.id, result: JSON.parse(process.env.ORCA_TEST_SESSION) })
+      } else if (frame.method === '_x.ai/subagent/cancel') {
+        send({ id: frame.id, error: {
+          code: -32602, message: 'Invalid params', data: 'invalid params: missing field \`subagentId\`'
+        } })
+      } else if (frame.method === '_x.ai/task/kill') {
+        send({ id: frame.id, error: {
+          code: -32602, message: 'Invalid params', data: 'invalid params: missing field \`sessionId\`'
+        } })
       } else if (frame.method === 'session/prompt') {
         const update = { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'partial' } }
         send({
@@ -54,14 +60,17 @@ const agentScript = (onPrompt: string): string => String.raw`
   })
   setInterval(() => {}, 60000)
 `
-const CLOSES_STDOUT_MID_TURN = agentScript('fs.closeSync(1)')
-// Starts a process that inherits its stdout and outlives it, records that process, then exits.
+const CLOSES_STDOUT_MID_TURN = `
+  if (process.connected) process.disconnect()
+  process.stdin.once('end', () => process.exit(0))
+  ${agentScript('fs.closeSync(1)')}
+`
 const EXITS_HOLDING_STDOUT = agentScript(String.raw`
-  const held = require('node:child_process').spawn(
-    process.execPath,
-    ['-e', 'setInterval(() => {}, 60000)'],
-    { stdio: ['ignore', 'inherit', 'ignore'] }
-  )
+  const held = require('@orca/process-host').spawnProcess({
+    program: process.execPath,
+    args: ['-e', 'setInterval(() => {}, 60000)'],
+    stdio: ['ignore', 'inherit', 'ignore']
+  })
   fs.writeFileSync(process.env.ORCA_TEST_PID_FILE + '.held', String(held.pid))
   process.exit(3)
 `)
@@ -75,9 +84,46 @@ function alive(pid: number): boolean {
   }
 }
 
-describe('ACP agent that closes its stdout but keeps running', () => {
+function ownedPidFile(prefix: string) {
+  const directory = mkdtempSync(join(tmpdir(), prefix))
+  const pidFile = join(directory, 'pid')
+  let close = async () => {}
+  onTestFinished(async () => {
+    try {
+      await close()
+    } finally {
+      try {
+        for (const file of [pidFile, `${pidFile}.held`]) {
+          if (!existsSync(file)) {
+            continue
+          }
+          const pid = Number(readFileSync(file, 'utf8'))
+          if (!Number.isInteger(pid) || pid <= 0) {
+            continue
+          }
+          if (alive(pid)) {
+            process.kill(pid)
+          }
+          await vi.waitFor(() => expect(alive(pid)).toBe(false), { timeout: 10_000, interval: 20 })
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  })
+  return {
+    pidFile,
+    closeWith: (shutdown: () => Promise<void>) => {
+      close = shutdown
+    }
+  }
+}
+
+describe('ACP connection to a directly launched agent that closes stdout but keeps running', () => {
   it('leaves the turn running and the agent alive until Orca closes it', async () => {
-    const pidFile = join(mkdtempSync(join(tmpdir(), 'orca-acp-broken-stream-')), 'pid')
+    const owned = ownedPidFile('orca-acp-broken-stream-')
+    const { pidFile } = owned
+    let stdoutEnded = false
     const rig = await openAcpAdapterRig({
       deps: {
         stopGraceMs: 20,
@@ -95,13 +141,23 @@ describe('ACP agent that closes its stdout but keeps running', () => {
                 })
               }
             },
-            options
+            options,
+            (spec) => {
+              const child = spawnProcess({
+                ...spec,
+                program: process.execPath,
+                args: ['-e', CLOSES_STDOUT_MID_TURN],
+                env: { ...spec.env, ORCA_PROVIDER_SUPERVISOR_SPEC: undefined }
+              })
+              child.stdout.once('end', () => {
+                stdoutEnded = true
+              })
+              return child
+            }
           )
       }
     })
-    onTestFinished(async () => {
-      await rig.adapter.closeAll().catch(() => {})
-    })
+    owned.closeWith(() => rig.adapter.closeAll())
     await rig.acquire()
     await sendHello(rig, 'broken')
     const turns = async () =>
@@ -111,20 +167,20 @@ describe('ACP agent that closes its stdout but keeps running', () => {
       { timeout: 10_000, interval: 20 }
     )
     const pid = Number(readFileSync(pidFile, 'utf8'))
-    // Long enough for a closed stream to have reached the adapter.
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await vi.waitFor(() => expect(stdoutEnded).toBe(true), { timeout: 2_000, interval: 20 })
     expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
-    expect(rig.lifecycle).toEqual([])
+    expect(rig.ended).toEqual([])
     expect(alive(pid)).toBe(true)
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
     expect(alive(pid)).toBe(false)
-    expect(rig.lifecycle).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
+    expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
   }, 30_000)
 })
 
 describe('ACP agent that exits while a process it started holds its stdout open', () => {
   it('ends the session at the exit, with the turn interrupted', async () => {
-    const pidFile = join(mkdtempSync(join(tmpdir(), 'orca-acp-held-stdout-')), 'pid')
+    const owned = ownedPidFile('orca-acp-held-stdout-')
+    const { pidFile } = owned
     const rig = await openAcpAdapterRig({
       deps: {
         connect: (_launch, options) =>
@@ -145,17 +201,11 @@ describe('ACP agent that exits while a process it started holds its stdout open'
           )
       }
     })
-    onTestFinished(async () => {
-      await rig.adapter.closeAll().catch(() => {})
-      const held = Number(readFileSync(`${pidFile}.held`, 'utf8'))
-      if (alive(held)) {
-        process.kill(held)
-      }
-    })
+    owned.closeWith(() => rig.adapter.closeAll())
     await rig.acquire()
     await sendHello(rig, 'held')
-    await vi.waitFor(() => expect(rig.lifecycle).toHaveLength(1), { timeout: 10_000, interval: 20 })
-    expect(rig.lifecycle[0]).toMatchObject({ type: 'ended', cause: 'unexpected-exit' })
+    await vi.waitFor(() => expect(rig.ended).toHaveLength(1), { timeout: 10_000, interval: 20 })
+    expect(rig.ended[0]).toMatchObject({ type: 'ended', cause: 'unexpected-exit' })
     expect(alive(Number(readFileSync(pidFile, 'utf8')))).toBe(false)
     const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
     expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })

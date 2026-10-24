@@ -70,6 +70,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

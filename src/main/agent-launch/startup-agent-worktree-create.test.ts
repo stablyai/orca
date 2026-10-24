@@ -22,7 +22,7 @@ function harness(
     ...options.created
   }
   const runtime = {
-    getClientSettings: () => CHAT_DEFAULT_ON,
+    requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({
       supported: true
     })),
@@ -54,7 +54,6 @@ const BASE: RuntimeManagedWorktreeCreateArgs = {
   lineage: { noParent: true }
 }
 
-/** Every non-agent field a startup create can carry, so an entry that drops one fails exactly. */
 const FULL: RuntimeManagedWorktreeCreateArgs = {
   ...BASE,
   navigation: 'caller',
@@ -96,8 +95,6 @@ describe('createWorktreeWithStartupAgent', () => {
     const result = await create(args)
 
     expect(result).toBe(created)
-    // Exactly the request: no field dropped, and nothing `worktree.create` never sent — no typed-line
-    // measuring (`onStartupPromptCarry`), no waiting on setup before the reply.
     expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(args)
     expect(runtime.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
@@ -133,8 +130,6 @@ describe('createWorktreeWithStartupAgent', () => {
       { id: 'repo-1', connectionId: null, executionHostId: null },
       undefined
     )
-    // The resolved agent steers only the draft: it is not recorded as the agent the caller asked
-    // for, and a `startupAgent` would override the draft and start the agent with no URL in it.
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith({
       ...request,
       startupDraft: draft,

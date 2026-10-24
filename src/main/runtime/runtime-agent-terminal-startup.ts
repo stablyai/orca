@@ -10,7 +10,10 @@ import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
-import { planExecutionHostStartupWithPromptCandidate } from '../opencode/opencode-model-startup-plan'
+import {
+  buildExecutionHostAgentStartupPlan,
+  planExecutionHostStartupWithPromptCandidate
+} from '../opencode/opencode-model-startup-plan'
 import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
 import {
   launchHostProvesAgentInFront,
@@ -33,6 +36,9 @@ import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution
 import { resolveStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+
+/** No launch command could be built for a requested `startupAgent`. */
+export class AgentLaunchUnbuildableError extends Error {}
 
 type AgentTerminalPlanHost = {
   store: RuntimeStore | null | undefined
@@ -166,12 +172,14 @@ async function buildRuntimeAgentTerminalStartupOptions(
   // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
   // shape must match the PTY route this scope already resolved.
   const isRemote = Boolean(workspace.connectionId)
+  const forceLine = opts.startupPromptCarry === 'force-line'
   // A prompt this launch command cannot carry has nowhere to go from here — the create returns
-  // options, not a live PTY — so refuse rather than spawn the agent and drop the text.
-  if (opts.startupPrompt && !agentPromptRidesLaunchCommand(agent)) {
+  // options, not a live PTY — so refuse rather than spawn the agent and drop the text. `force-line`
+  // keeps createAgentSession's clean launch instead.
+  if (opts.startupPrompt && !forceLine && !agentPromptRidesLaunchCommand(agent)) {
     throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
   }
-  const { plan: startupPlan, promptCarried } = await planExecutionHostStartupWithPromptCandidate({
+  const scope = {
     inputs: resolveAgentStartupPlanInputs({
       agent,
       settings,
@@ -184,22 +192,38 @@ async function buildRuntimeAgentTerminalStartupOptions(
     prompt: opts.startupPrompt ?? '',
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     hostIdentity: host.hostIdentity,
-    host: {
-      shellName: nameLocalTypedLineShell({
-        isRemote,
-        ...(runtime.pty.shellOverride ? { shellOverride: runtime.pty.shellOverride } : {})
-      }),
-      provesAgentInFront: launchHostProvesAgentInFront({
-        isRemote,
-        launchPlatform: runtime.platform
-      })
-    }
-  })
+    signal: opts.signal
+  }
+  // TEMPORARY (createAgentSession parity, removed with force-line): a draft skips the carry rule.
+  const { plan: startupPlan, promptCarried } =
+    opts.startupPromptDelivery === 'draft' || forceLine
+      ? {
+          plan: await buildExecutionHostAgentStartupPlan({
+            ...scope,
+            promptDelivery: opts.startupPromptDelivery
+          }),
+          promptCarried: agentPromptRidesLaunchCommand(agent)
+        }
+      : await planExecutionHostStartupWithPromptCandidate({
+          ...scope,
+          host: {
+            shellName: nameLocalTypedLineShell({
+              isRemote,
+              ...(runtime.pty.shellOverride ? { shellOverride: runtime.pty.shellOverride } : {})
+            }),
+            provesAgentInFront: launchHostProvesAgentInFront({
+              isRemote,
+              launchPlatform: runtime.platform
+            })
+          }
+        })
   if (!startupPlan) {
     // Why: an explicit agent that yields no plan would otherwise spawn a bare
     // shell that never reaches agent readiness.
     if (opts.startupAgent) {
-      throw new Error(`Could not build launch command for ${opts.startupAgent}.`)
+      throw new AgentLaunchUnbuildableError(
+        `Could not build launch command for ${opts.startupAgent}.`
+      )
     }
     return opts
   }

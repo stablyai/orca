@@ -10,15 +10,15 @@
  * candidates, or a label would appear and disappear with the sidebar filter.
  */
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getNoticeHostContextLabels } from './worktree-list/grouping/host-labels'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import { getNoticeHostContextLabels } from '../../../../shared/sidebar-list/host-labels'
 import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import { repo, worktree, project, projectHostSetups } from './worktree-list-groups-test-fixtures'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
-import type { Row } from './worktree-list/grouping/row-types'
+import type { Row } from '../../../../shared/sidebar-list/row-types'
 
 const SSH_HOST_ID: ExecutionHostId = 'ssh:openclaw-target'
 const ENV_HOST_ID: ExecutionHostId = 'runtime:openclaw-env'

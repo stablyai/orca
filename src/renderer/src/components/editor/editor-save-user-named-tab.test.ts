@@ -6,12 +6,15 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-save-events'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
+import { emptyTabLayoutState } from '../../store/slices/editor-slice-test-harness'
+import { withLoadedBaselines } from './editor-autosave-controller-test-fixture'
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
 function createEditorStore(): StoreApi<AppState> {
   // oxlint-disable-next-line typescript/consistent-type-assertions, typescript/no-explicit-any -- SAFETY: the editor save path reads only the slice and fields built here.
   return createStore<any>()((...args: any[]) => ({
+    ...emptyTabLayoutState(),
     settings: { editorAutoSave: false },
     repos: [],
     worktreesByRepo: {
@@ -71,9 +74,11 @@ describe('saving a restored tab', () => {
     store
       .getState()
       .openFile({ filePath, relativePath, worktreeId, language: 'markdown', mode: 'edit' })
-    store.getState().setEditorDraft(filePath, 'edited')
-    store.getState().markFileDirty(filePath, true)
-    const detach = attachEditorAutosaveController(store)
+    // The file's own id: its path, or an owned id when main owns the layout.
+    const fileId = store.getState().openFiles.find((file) => file.filePath === filePath)!.id
+    store.getState().setEditorDraft(fileId, 'edited')
+    store.getState().markFileDirty(fileId, true)
+    const detach = attachEditorAutosaveController(withLoadedBaselines(store))
     try {
       await saveDirtyFiles()
 
@@ -96,7 +101,7 @@ describe('saving a restored tab', () => {
     })
     store.getState().setEditorDraft('/repo/a.ts', 'edited')
     store.getState().markFileDirty('/repo/a.ts', true)
-    const detach = attachEditorAutosaveController(store)
+    const detach = attachEditorAutosaveController(withLoadedBaselines(store))
     try {
       await saveDirtyFiles()
 

@@ -16,6 +16,10 @@ import { seedTestAgentSessionRecordStore } from './agent-session-record-store-te
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session-tab-layout'
 import {
+  chatTabCommandsSettled as settled,
+  layoutApplyOn
+} from './session-layout-apply.test-fixture'
+import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
@@ -85,7 +89,11 @@ async function runtimeWithSavedChats(
       } else {
         partitions.set(hostId, next)
       }
-    }
+    },
+    applyLayoutCommand: layoutApplyOn(
+      (hostId) => (hostId === 'local' ? state.session : (partitions.get(hostId) ?? null)),
+      (next, hostId) => store.setWorkspaceSession(next, hostId)
+    )
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these store methods on these paths.
   const runtime = new OrcaRuntimeService(store as never)
@@ -97,6 +105,7 @@ async function runtimeWithSavedChats(
       activate: false
     })
   }
+  await settled()
   return { runtime, state }
 }
 
@@ -152,6 +161,7 @@ describe('a windowless chat tab against the chat host', () => {
     expect(host.deps.store.getRecord(CHAT_A)).not.toBeNull()
 
     await host.setSessionTabVisibility(CHAT_A, false)
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -166,6 +176,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -189,6 +200,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])
   })
@@ -203,6 +215,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual(['short', CHAT_B])
   })
@@ -225,6 +238,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B, CHAT_SSH])
   })
@@ -252,6 +266,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(partitions.get('runtime:env-y')?.unifiedTabs?.[WT]?.map((tab) => tab.entityId)).toEqual([
       CHAT_REMOTE
@@ -264,6 +279,7 @@ describe('a windowless chat tab against the chat host', () => {
     restoringRuntime(runtime)
 
     await runtime.restoreStructuredAgentSessionTabs()
+    await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_GONE, CHAT_B])
   })

@@ -5,6 +5,7 @@ import { loadWorkspaceLayout } from './workspace-layout-load'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { checkWorkspaceLayoutRules } from './workspace-layout-rules'
 import { saveWorkspaceLayout } from './workspace-layout-save'
+import { editorFileKey } from './workspace-layout-editor-tab-file'
 import {
   localDesktopSession,
   WORKSPACE_LAYOUT_PROFILES
@@ -94,7 +95,8 @@ describe('workspace layout Loader and Serializer', () => {
     // round trip above saved its pane records under the terminal id.
     expect(workspace.leaves?.[leaf(3)]).toMatchObject({
       incarnationId: 'inc-3',
-      sleeping: { agent: 'claude' }
+      // The fixture's record is a quit capture: a running agent's resume record, not a sleep.
+      resume: { agent: 'claude' }
     })
     expect(workspace.groups.map((group) => group.tabOrder)).toEqual([
       ['tab-shell', 'tab-agent', 'editor:src/app.ts'],
@@ -104,8 +106,9 @@ describe('workspace layout Loader and Serializer', () => {
       activeTabId: 'tab-agent',
       recentTabIds: ['tab-shell', 'tab-agent']
     })
+    // Keyed as editorFileKey keys it: a layout-owner build keys by owned file id.
     expect(loaded.desktopView.editorDrafts['repo-1::/Users/dev/orca']).toEqual({
-      '/Users/dev/orca/src/app.ts': {
+      [editorFileKey({ filePath: '/Users/dev/orca/src/app.ts' })]: {
         dirtyDraftContent: 'export {}\n',
         lastKnownDiskSignature: 'sig-1'
       }

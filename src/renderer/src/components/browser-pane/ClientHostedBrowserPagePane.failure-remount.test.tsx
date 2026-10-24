@@ -62,14 +62,14 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
     const view = render(<StoreDrivenPane />)
     failLoad()
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
 
     act(() => view.unmount())
     render(<StoreDrivenPane />)
 
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
   })
 
   it('keeps both records when the guest is parked on the Chromium error page', () => {
@@ -84,7 +84,7 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
 
     expect(storedPage().loadError?.validatedUrl).toBe(FAILED_URL)
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).not.toBeNull()
+    expect(screen.getByRole('heading', { name: "Connection isn't secure" })).not.toBeNull()
   })
 
   it('clears both records when the guest moved on while the pane was unmounted', () => {
@@ -99,7 +99,7 @@ describe('ClientHostedBrowserPagePane failure records across a remount', () => {
 
     expect(storedPage().loadError).toBeNull()
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
-    expect(screen.queryByRole('button', { name: 'Copy Address' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: "Connection isn't secure" })).toBeNull()
   })
 })
 

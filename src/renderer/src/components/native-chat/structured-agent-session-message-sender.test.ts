@@ -137,16 +137,22 @@ describe('structured agent session message sender', () => {
 
   it('carries the options read at the send on its request, and nothing without them', async () => {
     const calls = deferredCalls()
-    const a = send('a', { options: { model: 'opus', effort: 'high' } })
+    const a = send('a', {
+      options: { model: 'opus', effort: 'high' },
+      usageLimitContinuationOfTurnItemId: 'limited-turn',
+      callerKeepsText: true
+    })
     await flush()
     expect(mocks.call.mock.calls[0][2]).toMatchObject({
-      options: { model: 'opus', effort: 'high' }
+      options: { model: 'opus', effort: 'high' },
+      usageLimitContinuationOfTurnItemId: 'limited-turn'
     })
     calls[0].resolve(okSubmission(a.clientMessageId, 'accepted'))
     await a.outcome
     send('b')
     await flush()
     expect(mocks.call.mock.calls[1][2]).not.toHaveProperty('options')
+    expect(mocks.call.mock.calls[1][2]).not.toHaveProperty('usageLimitContinuationOfTurnItemId')
   })
 
   it.each([
@@ -186,6 +192,16 @@ describe('structured agent session message sender', () => {
     expect(mocks.compatible).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS)
     expect(mocks.compatible).toHaveBeenCalledOnce()
+    expect(sendCalls()).toBe(0)
+  })
+
+  // The host refuses an oversized message without a reason; sending it again would fail the same way.
+  it('gives back a message over the size limit, saying so, without sending it', async () => {
+    const a = send('x'.repeat(256 * 1024))
+    expect(await a.outcome).toBe('returned')
+    const notice = getStructuredAgentSessionSendNotice(SESSION) ?? ''
+    expect(notice).toContain('over the 256 KB limit')
+    expect(notice).not.toContain('Send it again.')
     expect(sendCalls()).toBe(0)
   })
 
@@ -283,21 +299,23 @@ describe('structured agent session message sender', () => {
     expect(sendCalls()).toBe(1)
   })
 
-  it('keeps an open chat drawing a recorded send until its row arrives', async () => {
+  it('keeps an open chat drawing a send until a read covers its acknowledgement', async () => {
     const stop = subscribeToStructuredAgentSessionPendingSends(SESSION, () => {})
     const calls = deferredCalls()
     const a = send('a')
     await flush()
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 5 })
+    expect(phases()).toEqual(['a:sending'])
     calls[0].resolve(okSubmission(a.clientMessageId, 'accepted'))
     expect(await a.outcome).toBe('recorded')
     // The reply beat the history: the bubble stays, without blocking the next send.
     expect(phases()).toEqual(['a:recorded'])
     expect(structuredAgentSessionSendOut(SESSION)).toBe(false)
-    settleStructuredAgentSessionSendsFromJournal(
-      SESSION,
-      [submission(a.clientMessageId, 'accepted')],
-      []
-    )
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 0 })
+    expect(phases()).toEqual(['a:recorded'])
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'other', sequence: 5 })
+    expect(phases()).toEqual(['a:recorded'])
+    settleStructuredAgentSessionSendsFromJournal(SESSION, [], [], { epoch: 'e', sequence: 5 })
     expect(phases()).toEqual([])
     stop()
   })

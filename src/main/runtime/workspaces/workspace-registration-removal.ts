@@ -6,11 +6,12 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorktreeTeardownRuntime } from '../worktree-teardown'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { invalidateAuthorizedRootsCache } from '../../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCache } from '../../ipc/registered-worktree-roots-cache'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { getRuntimeFolderWorkspaceRootId } from '../runtime-folder-workspace'
 import { killAllProcessesForWorktree } from '../worktree-teardown'
 import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
+import { teardownStops } from '../owned-session-teardown-policy'
 
 type WorkspaceRegistrationRemovalRuntime = WorktreeTeardownRuntime &
   Pick<
@@ -62,7 +63,7 @@ export async function removeOrphanOrFolderWorktree({
         onPtyStopped: runtime.onPtyStopped ?? undefined,
         // A structured session is on no PTY surface, so the sweeps above leave it attached to a
         // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
-        closeStructuredSessions: true,
+        closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
         ...(externalOrphanHost
           ? { includeProviderInventory: false, includeLocalRegistry: false }
           : {})

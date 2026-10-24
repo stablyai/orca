@@ -1,9 +1,13 @@
 import { createElement, Fragment, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Section, Worktree } from '../worktree/workspace-list-types'
 
-const { rowRenders } = vi.hoisted(() => ({ rowRenders: vi.fn() }))
+const { rowRenders, agentRenders } = vi.hoisted(() => ({
+  rowRenders: vi.fn(),
+  agentRenders: vi.fn()
+}))
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -32,12 +36,17 @@ vi.mock('lucide-react-native', () => ({}))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
 vi.mock('../components/AgentSpinner', () => ({ AgentSpinner: () => null }))
 vi.mock('../components/MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
-vi.mock('../components/WorktreeAgentList', () => ({ WorktreeAgentList: () => null }))
-// The row always renders the glyphs, so each call is one row render, named by its comment.
+vi.mock('../components/WorktreeAgentList', () => ({
+  WorktreeAgentList: (props: unknown) => {
+    agentRenders(props)
+    return null
+  }
+}))
+// The row always renders the glyphs, so each call is one row render.
 vi.mock('../components/WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
-  WorktreeMetaGlyphs: ({ comment }: { comment?: string }) => {
-    rowRenders(comment)
+  WorktreeMetaGlyphs: () => {
+    rowRenders()
     return null
   }
 }))
@@ -48,6 +57,22 @@ vi.mock('../components/NewWorkspaceFab', () => ({ FAB_SIZE: 56 }))
 import { buildSections } from '../worktree/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { HostWorkspaceList } from './host-workspace-list'
+import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
+
+const renderers = new Set<ReturnType<typeof createRenderer>>()
+function create(...args: Parameters<typeof createRenderer>): ReturnType<typeof createRenderer> {
+  const renderer = createRenderer(...args)
+  renderers.add(renderer)
+  return renderer
+}
+function unmountRenderers(): void {
+  act(() => {
+    for (const renderer of renderers) {
+      renderer.unmount()
+    }
+  })
+  renderers.clear()
+}
 
 function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -62,7 +87,6 @@ function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
     unread: false,
     isPinned: false,
     linkedPR: null,
-    comment: id,
     status: 'active',
     ...overrides
   }
@@ -88,11 +112,15 @@ function listProps(worktrees: Worktree[]) {
     reconnectAttempts: 0,
     relayRecovery: { pairingRejected: false },
     sectionsResult: { rawSections: sections, sections, repoById: stable.repoById },
-    settings: { activeFilterCount: 0, toggleWorktreeLineage: noop },
+    settings: {
+      activeFilterCount: 0,
+      toggleWorktreeLineage: noop,
+      pendingViewChanges: { pending: [], stale: false }
+    },
     state: {
       actionError: '',
       setActionTarget: noop,
-      view: { groupBy: 'none' },
+      view: { ...INITIAL_MOBILE_VIEW, groupBy: 'none' },
       search: '',
       showSearch: false,
       worktreesLoaded: true
@@ -114,7 +142,58 @@ describe('host list rows across polls', () => {
     const changed = [rows[0]!, { ...rows[1]!, branch: 'feature/b-renamed' }, rows[2]!]
     act(() => tree!.update(createElement(HostWorkspaceList, listProps(changed))))
 
-    expect(rowRenders.mock.calls.map(([comment]) => comment)).toEqual(['b'])
+    expect(rowRenders).toHaveBeenCalledTimes(1)
+    expect(
+      tree!.root
+        .findAll((node) => String(node.type) === 'Text')
+        .flatMap((node) => node.props.children)
+    ).toContain('feature/b-renamed')
+    act(() => tree!.unmount())
+  })
+  it('re-renders only the workspace whose child roster changed', () => {
+    const row = worktree('a', {
+      agents: [
+        {
+          paneKey: 'parent',
+          parentPaneKey: null,
+          state: 'working',
+          agentType: 'codex',
+          prompt: '',
+          taskTitle: null,
+          displayName: null,
+          lastAssistantMessage: null,
+          toolName: null,
+          toolInput: null,
+          interrupted: false,
+          stateStartedAt: 1,
+          updatedAt: 1,
+          subagents: [{ id: 'child', state: 'working', startedAt: 1 }]
+        }
+      ]
+    })
+    let tree: ReactTestRenderer | null = null
+    act(() => {
+      tree = create(createElement(HostWorkspaceList, listProps([row, worktree('b')])))
+    })
+    rowRenders.mockClear()
+    agentRenders.mockClear()
+    const changed = {
+      ...row,
+      agents: [
+        {
+          ...row.agents![0]!,
+          subagents: [{ id: 'child', state: 'waiting' as const, startedAt: 1 }]
+        }
+      ]
+    }
+    act(() => tree!.update(createElement(HostWorkspaceList, listProps([changed, worktree('b')]))))
+    expect(rowRenders).toHaveBeenCalledTimes(1)
+    expect(agentRenders).toHaveBeenCalledTimes(1)
+    expect(agentRenders.mock.calls[0]?.[0]).toMatchObject({
+      agents: [{ paneKey: 'parent', subagents: [{ id: 'child', state: 'waiting', startedAt: 1 }] }]
+    })
     act(() => tree!.unmount())
   })
 })
+
+afterEach(unmountRenderers)

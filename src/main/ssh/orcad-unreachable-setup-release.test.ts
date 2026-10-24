@@ -14,7 +14,7 @@ import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-jour
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
 import { fenceOrcadMigrationSource } from './orcad-migration-source-fence'
 import { releaseUnreachableOrcadSetup } from './orcad-unreachable-setup-release'
-import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 const TARGET: SshTarget = {
   id: 'ssh-locked',

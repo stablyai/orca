@@ -9,6 +9,10 @@
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from './agent-session-journal-types'
 import {
+  readAgentCliInstallationProblem,
+  type AgentCliInstallationProblem
+} from './agent-cli-installation-problem'
+import {
   readCodexInstallationProblem,
   type CodexInstallationProblem
 } from './codex-cli-installation'
@@ -48,6 +52,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'conversationCommandInFlight',
     'handoffInFlight',
     'turnActive',
+    'continuationSuperseded',
     'promptPending',
     'backgroundTasksRunning',
     'messagesUnsettled',
@@ -167,6 +172,10 @@ type PromptFacts = {
 
 type NoFacts = Record<never, never>
 
+export type AgentSessionConversationOwner = { sessionId: string; workspaceId: string }
+
+type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner }
+
 /** The facts a code carries beside its reason. */
 type AgentSessionRefusalFactsByCode = {
   agent_session_operation_invalid: RewindFacts & {
@@ -174,6 +183,8 @@ type AgentSessionRefusalFactsByCode = {
     argumentProblem?: AgentSessionArgumentProblem
     /** The chat's agent a `stopFailed` Stop could not stop. */
     agent?: TuiAgent
+    agentInstallation?: AgentCliInstallationProblem
+    /** Codex's binary problem as builds before `agentInstallation` send and read it. */
     codexInstallation?: CodexInstallationProblem
   }
   agent_session_operation_unknown: RewindFacts
@@ -183,8 +194,8 @@ type AgentSessionRefusalFactsByCode = {
   }
   agent_session_item_revision_stale: PromptFacts
   agent_session_already_resolved: PromptFacts
-  agent_session_ownership_unknown: NoFacts
-  agent_session_conflict: NoFacts
+  agent_session_ownership_unknown: ConversationOwnerFacts
+  agent_session_conflict: ConversationOwnerFacts
   execution_owner_reconciling: NoFacts
   agent_session_identity_required: NoFacts
   agent_session_operation_conflict: NoFacts
@@ -301,13 +312,28 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     code === 'agent_session_operation_invalid'
       ? readAgentSessionArgumentProblem(value.argumentProblem)
       : undefined
+  const agentInstallation =
+    code === 'agent_session_operation_invalid'
+      ? readAgentCliInstallationProblem(value.agentInstallation)
+      : undefined
   const codexInstallation =
     code === 'agent_session_operation_invalid'
       ? readCodexInstallationProblem(value.codexInstallation)
       : undefined
+  const owner =
+    (code === 'agent_session_conflict' || code === 'agent_session_ownership_unknown') &&
+    value.reason === 'conversationHeldElsewhere' &&
+    isRecord(value.owner) &&
+    typeof value.owner.sessionId === 'string' &&
+    value.owner.sessionId.trim().length > 0 &&
+    typeof value.owner.workspaceId === 'string' &&
+    value.owner.workspaceId.trim().length > 0
+      ? { sessionId: value.owner.sessionId, workspaceId: value.owner.workspaceId }
+      : undefined
   const read = {
     ...(isAgentSessionRefusalReason(code, value.reason) ? { reason: value.reason } : {}),
     ...facts,
+    ...(owner ? { owner } : {}),
     ...(code === 'agent_session_operation_invalid' &&
     value.reason === 'notSignedIn' &&
     (value.account === 'managed' || value.account === 'system')
@@ -319,6 +345,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     isNamedAgent(value.agent)
       ? { agent: value.agent }
       : {}),
+    ...(agentInstallation ? { agentInstallation } : {}),
     ...(codexInstallation ? { codexInstallation } : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.

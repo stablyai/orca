@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import { collectAiVaultTitleRequests } from '@/lib/ai-vault-tab-title-requests'
+import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -23,6 +24,7 @@ import {
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
+  resolveNativeChatCliForkIdentity,
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
 } from './tab-session-history-switch'
@@ -114,10 +116,10 @@ function makeState(
   return useAppStore.getState()
 }
 
-// What the Session History panel sends for this workspace: every path of its project, at the
-// panel's default depth, on the workspace's own host.
+// What the Session History panel sends for its default Workspace scope, at the panel's default
+// depth, on the workspace's own host.
 const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt', '/repo/sibling', '/repos/repo-1'],
+  scopePaths: ['/repo/wt'],
   executionHostScope: 'local',
   sessionLimit: 250
 } as const
@@ -186,6 +188,39 @@ const exitedAgentRecords: Record<string, Partial<AppState>> = {
 }
 
 describe('resolveTabSessionHistorySubject', () => {
+  it('retains the chosen pane in the direct CLI create identity without a History row', () => {
+    expect(
+      resolveCliChatResumeSource(makeState(liveClaudeEntry), {
+        tab: { id: 'term-1', worktreeId: WORKTREE_ID }
+      })
+    ).toMatchObject({
+      tabId: 'term-1',
+      workspaceId: WORKTREE_ID,
+      paneKey: 'term-1:leaf-1',
+      agent: 'claude',
+      providerSessionId: 'claude-session-1',
+      executionHostId: 'local'
+    })
+  })
+  it.each(['local', 'runtime:server-1', 'ssh:dev-box', null] as const)(
+    'keeps lightweight native eligibility and the public request on workspace host %s',
+    (executionHostId) => {
+      const state = makeState({}, executionHostId ? { executionHostId } : {})
+      if (!executionHostId) {
+        state.repos = []
+      }
+      const args = {
+        tab: { id: 'chat-tab', worktreeId: WORKTREE_ID },
+        nativeChat: { sessionId: 'chat-1', agent: 'claude' as const }
+      }
+      const expected = executionHostId === 'ssh:dev-box' ? null : executionHostId
+      const identity = resolveNativeChatCliForkIdentity(state, args)
+      const full = resolveTabSessionHistorySubject(state, args)
+      expect(identity?.executionHostScope ?? null).toBe(expected)
+      expect(full?.request.executionHostScope ?? null).toBe(expected)
+    }
+  )
+
   it('finds a native chat tab by the chat it shows', () => {
     expect(
       resolveTabSessionHistorySubject(makeState(), {
@@ -515,14 +550,14 @@ describe('resolveTabSessionSwitch', () => {
     structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
   })
 
-  it('offers Resume in New CLI on a chat tab whose row can fork', () => {
+  it('offers Switch to Terminal on a chat tab whose row can fork', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toEqual({
       action: 'resume-in-new-cli',
       worktreeId: WORKTREE_ID
     })
   })
 
-  it('hides Resume in New CLI for an empty or unresumable chat', () => {
+  it('hides Switch to Terminal for an empty or unresumable chat', () => {
     expect(
       resolveTabSessionSwitch(
         makeState(),
@@ -534,7 +569,7 @@ describe('resolveTabSessionSwitch', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toBeNull()
   })
 
-  it('offers Resume in New Native Chat where the row is eligible, in the workspace it names', () => {
+  it('offers Switch to Chat where the row is eligible, in the workspace it names', () => {
     mocks.resumeInChat.mockReturnValue({
       available: true,
       workspaceId: WORKTREE_ID

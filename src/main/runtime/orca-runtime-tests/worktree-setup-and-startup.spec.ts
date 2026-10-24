@@ -12,7 +12,12 @@ import {
   setPlatform,
   shouldRunSetupForCreate
 } from '../orca-runtime-test-mocks.spec'
-import { UUID_RE, expectStablePaneKeyEnv, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  UUID_RE,
+  expectStablePaneKeyEnv,
+  spawnedPtyEnv,
+  store
+} from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('returns a setup launch payload for CLI-created worktrees when hooks are explicitly enabled', async () => {
@@ -27,7 +32,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -117,7 +121,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -185,7 +188,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -270,7 +272,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -338,19 +339,17 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-hook-skip',
         command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
-        // Why: createTerminal stamps ORCA_PANE_KEY/TAB_ID/WORKTREE_ID so hook-based agent status can attribute events to a stable pane.
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
-          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-hook-skip',
-          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
-          ORCA_PANE_KEY: expect.any(String),
-          ORCA_WORKTREE_ID: result.worktree.id
+          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-hook-skip'
         }),
+        // Why: the spawn step stamps ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from these ids for hook status.
+        tabId: expect.stringMatching(UUID_RE),
+        leafId: expect.any(String),
         worktreeId: result.worktree.id
       })
     )
-    const setupSpawnEnv =
-      (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const setupSpawnEnv = spawnedPtyEnv(spawn.mock.calls[1]?.[0])
     expectStablePaneKeyEnv(setupSpawnEnv)
     const setupLeafId = setupSpawnEnv.ORCA_PANE_KEY.slice(`${setupSpawnEnv.ORCA_TAB_ID}:`.length)
     // Why: a background CLI create adopts its tabs silently — surfaceOwner:false
@@ -389,7 +388,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -434,11 +432,10 @@ describe('OrcaRuntimeService', () => {
         command: 'bash /mnt/c/repo/.git/orca/setup-runner.sh',
         env: expect.objectContaining({
           ORCA_ROOT_PATH: 'C:\\repo',
-          ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-wsl',
-          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
-          ORCA_PANE_KEY: expect.any(String),
-          ORCA_WORKTREE_ID: result.worktree.id
+          ORCA_WORKTREE_PATH: 'C:\\workspaces\\runtime-hook-wsl'
         }),
+        tabId: expect.stringMatching(UUID_RE),
+        leafId: expect.any(String),
         worktreeId: result.worktree.id
       })
     )
@@ -471,7 +468,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -543,7 +539,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })

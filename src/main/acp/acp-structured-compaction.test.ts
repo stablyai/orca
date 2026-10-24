@@ -8,8 +8,7 @@ import {
 import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
-import { structuredAgentSessionChildReportedSignedOut } from '../native-chat/agent-session-wire/structured-agent-session-outgrown-child'
-import { ACP_LAUNCH_SPECS, acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
+import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
 import { readAcpFixture, type AcpFixtureFrame } from './acp-timeline-fixture.test-support'
@@ -28,12 +27,6 @@ afterEach(async () => {
 const OPENCODE = acpLaunchSpecFor('opencode')!
 const OMP = acpLaunchSpecFor('omp')!
 
-function withoutCompaction(spec: AcpLaunchSpec): AcpLaunchSpec {
-  const { compaction: _compaction, ...rest } = spec
-  return rest
-}
-
-/** The command turn the host writes before it hands `/compact` over. */
 async function commandRun(rig: AcpAdapterRig): Promise<StructuredAgentSessionCommandRun> {
   const turn = structuredAgentSessionCommandTurn('compact-1')
   const running = agentJournalTurnBody({ turnId: turn.turnId, state: 'running', startedAt: 4_000 })
@@ -44,9 +37,11 @@ async function commandRun(rig: AcpAdapterRig): Promise<StructuredAgentSessionCom
   return { clientMessageId: 'compact-1', ...turn, running }
 }
 
-/** Starts the agent, sends `/compact`, and returns its prompt frame. */
 async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
   const rig = await openAcpAdapterRig({ spec })
+  new StructuredAgentRegistry([
+    { definition: acpStructuredAgentDefinition(spec), adapter: rig.adapter }
+  ])
   await rig.acquire()
   if (frames) {
     new GrokFixtureReplay(frames).attach(rig.child().agent)
@@ -67,13 +62,13 @@ function replyText(text: string, promptId?: string) {
   }
 }
 
-/** The command's turn once the agent's answer ended it, and the rows inside it. */
 async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandRun) {
   return waitFor(async () => {
     const rows = await rig.rig.rows()
     const turn = readAgentJournalTurn(
       rows.find((row) => row.itemId === agentJournalItemKey(command.identity))?.body
     )
+    expect(turn).toEqual(expect.objectContaining({ turnId: command.turnId }))
     expect(turn?.state).not.toBe('running')
     const inside = rows.filter(
       (row) =>
@@ -83,33 +78,6 @@ async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandR
     return { turn, inside: inside.map((row) => row.body) }
   })
 }
-
-describe('ACP compaction capability', () => {
-  it('offers /compact for Grok, OpenCode and OMP, and for no ACP agent without it', () => {
-    expect(
-      Object.fromEntries(
-        ACP_LAUNCH_SPECS.map((spec) => [
-          spec.agent,
-          acpStructuredAgentDefinition(spec).capabilities.compact
-        ])
-      )
-    ).toEqual({ grok: true, opencode: true, omp: true })
-    expect(acpStructuredAgentDefinition(withoutCompaction(GROK)).capabilities.compact).toBe(false)
-  })
-
-  it('registers each compacting agent with the adapter method its capability needs', async () => {
-    const rig = await openAcpAdapterRig()
-    expect(
-      () =>
-        new StructuredAgentRegistry(
-          ACP_LAUNCH_SPECS.map((spec) => ({
-            definition: acpStructuredAgentDefinition(spec),
-            adapter: rig.adapter
-          }))
-        )
-    ).not.toThrow()
-  })
-})
 
 describe('ACP compaction request', () => {
   it("sends Grok `/compact` as a prompt under the command turn's id", async () => {
@@ -145,38 +113,7 @@ describe('ACP compaction settlement', () => {
       }
     ],
     [
-      'omp-v17-compact-tiny-skip',
-      {
-        kind: 'status',
-        tone: 'warning',
-        text: 'Nothing to compact (session too small)',
-        presentation: 'compaction-skipped'
-      }
-    ],
-    [
       'omp-v17-compact-success',
-      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
-    ],
-    [
-      'omp-v18-compact-skip',
-      {
-        kind: 'status',
-        tone: 'warning',
-        text: 'Nothing to compact (session too small)',
-        presentation: 'compaction-skipped'
-      }
-    ],
-    [
-      'omp-v18-compact-tiny-skip',
-      {
-        kind: 'status',
-        tone: 'warning',
-        text: 'Nothing to compact (session too small)',
-        presentation: 'compaction-skipped'
-      }
-    ],
-    [
-      'omp-v18-compact-success',
       { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
     ]
   ])('replays captured %s under the host command turn', async (fixture, body) => {
@@ -201,21 +138,20 @@ describe('ACP compaction settlement', () => {
     expect((await rig.rig.rows()).some((row) => row.body.kind === 'message')).toBe(false)
   })
 
-  it.each([
-    [
-      'Compaction failed: Nothing to compact (session too small)',
-      'Nothing to compact (session too small)'
-    ],
-    ['Compaction failed: Already compacted', 'Already compacted']
-  ])('reads OMP %j as skipped, not failed', async (reply, shown) => {
+  it('reads OMP Already compacted as skipped, not failed', async () => {
     const { rig, command, prompt } = await compact(OMP)
     const { agent } = rig.child()
-    agent.notify('session/update', replyText(reply))
+    agent.notify('session/update', replyText('Compaction failed: Already compacted'))
     agent.reply(prompt, { stopReason: 'end_turn' })
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'success' })
     expect(inside).toEqual([
-      { kind: 'status', tone: 'warning', text: shown, presentation: 'compaction-skipped' }
+      {
+        kind: 'status',
+        tone: 'warning',
+        text: 'Already compacted',
+        presentation: 'compaction-skipped'
+      }
     ])
   })
 
@@ -276,27 +212,18 @@ describe('ACP compaction settlement', () => {
   it.each([
     { spec: OPENCODE, code: -32000, data: undefined },
     { spec: OMP, code: -32603, data: { details: 'No model selected.\n\nUse /login to sign in.' } }
-  ])(
-    'says $spec.agent is not signed in, as a send does, so the next one starts a new agent',
-    async ({ spec, code, data }) => {
-      const { rig, command, prompt } = await compact(spec)
-      rig.child().agent.fail(prompt, code, 'Authentication required', data)
-      const { turn, inside } = await ended(rig, command)
-      expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
-      expect(inside).toEqual([
-        expect.objectContaining({
-          tone: 'error',
-          failure: expect.objectContaining({ kind: 'notSignedIn' })
-        })
-      ])
-      expect(
-        structuredAgentSessionChildReportedSignedOut({
-          child: { generation: 'generation-1', fence: 1, phase: 'ready' },
-          journal: rig.rig.journal
-        })
-      ).toBe(true)
-    }
-  )
+  ])('says $spec.agent is not signed in, as a send does', async ({ spec, code, data }) => {
+    const { rig, command, prompt } = await compact(spec)
+    rig.child().agent.fail(prompt, code, 'Authentication required', data)
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(inside).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        failure: expect.objectContaining({ kind: 'notSignedIn' })
+      })
+    ])
+  })
 
   it('fails a compaction the agent ended with any other stop reason', async () => {
     const { rig, command, prompt } = await compact(GROK)

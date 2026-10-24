@@ -1,9 +1,9 @@
-import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration-source-kind'
+import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,

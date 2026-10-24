@@ -1,9 +1,11 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState,
+  workspaceRepos,
+  writeDataFile
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -13,13 +15,12 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -68,7 +69,7 @@ describe('Store', () => {
   it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -320,6 +321,7 @@ describe('Store', () => {
 
   it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
     const store = await createStore()
+    registerWorkspaceRepos(store, 'wt1')
     const paneKey = `tab1:${TEST_LEAF_1}`
     store.setWorkspaceSession({
       ...getDefaultWorkspaceSession(),

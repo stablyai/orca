@@ -5,14 +5,8 @@ import type * as CodexManagedTrustReconciliation from './codex-managed-trust-rec
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Follow-up to STA-4823: two more reads on the Codex hook paths acted on
-// "absent" when the real answer was "could not read". Both were found while
-// reviewing #15417 and are not covered by it.
-//
-// The denial shape here is the MEASURED one: chmod 000 / icacls deny leave
-// existsSync true and stat succeeding, and fail only the content read
-// (EACCES -13 on macOS, EPERM -4048 on Windows). No mode fakes existsSync,
-// because no platform does.
+// Measured chmod/icacls denials leave exists/stat successful but fail content reads
+// (macOS EACCES -13, Windows EPERM -4048); do not fake absence.
 
 const denials = vi.hoisted(() => {
   const state = {
@@ -53,8 +47,6 @@ vi.mock('node:fs', async (importOriginal) => {
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: guardRead(actual.readFileSync, 'read'),
-    // Why: existsSync and stat stay HEALTHY. That is the whole point — a
-    // permission denial does not hide the file, it only refuses its contents.
     openSync: Object.assign((...args: unknown[]): unknown => {
       const flags = args[1]
       if (flags === undefined || (typeof flags === 'string' && flags.startsWith('r'))) {
@@ -123,8 +115,7 @@ describe('an unreadable legacy hooks.json must not clear managed trust or its le
       return { ...actual, removeCodexManagedHookTrustEntries: removeSpy }
     })
     try {
-      // The removal only fires when a real-home grant is on record — without
-      // this the branch is inert and the test proves nothing either way.
+      // Seed a grant so accidental removal would be observable.
       const ledger = await import('./codex-trust-grant-ledger')
       ledger.writeCodexTrustGrantLedgerHome(
         join(fakeHomeDir, '.codex'),
@@ -137,11 +128,7 @@ describe('an unreadable legacy hooks.json must not clear managed trust or its le
 
       hookService._internals.cleanupLegacySystemManagedHooks()
 
-      // `readHooksJsonWithRaw` catches the denial and reports {raw:null,
-      // config:null} — "could not read". Before the fix that fell into the same
-      // branch as "no hooks configured", which removes the managed trust
-      // entries AND their grant-ledger record. A read that failed is not
-      // permission to discard approvals the user already gave.
+      // Unreadable hooks must preserve existing trust and its ownership ledger.
       expect(removeSpy).not.toHaveBeenCalled()
     } finally {
       vi.doUnmock('./codex-managed-trust-reconciliation')

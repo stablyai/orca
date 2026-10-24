@@ -1,16 +1,19 @@
-import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-types'
-import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { OrcaRuntimeWithAgentGeneratedTabTitles } from '../layout/agent-generated-tab-titles-runtime'
 import {
   includeTargetResolvedWorktree,
-  runtimeWorktreeIdentityKey
+  type ResolvedWorktree
 } from '../../runtime-worktree-path-identity'
-import { teardownRpcDeadline } from '../../worktree-teardown'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-types'
+import { WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { teardownRpcDeadline } from '../../worktree-teardown-deadline'
+import { sleptNothing } from './worktree-terminal-sleep-result'
+import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
 
-export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithStopTerminalsForWorktree {
+export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithAgentGeneratedTabTitles {
   protected async sleepResolvedWorktreeTerminals(
-    worktree: ResolvedWorktree
+    worktree: ResolvedWorktree,
+    scope: WorktreeSleepScope,
+    soleLivePtyId?: string
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
     const releaseMutation = await this.acquireWorktreeTerminalMutation(
@@ -18,8 +21,11 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       'exclusive',
       sleepDeadline
     )
-    const key = runtimeWorktreeIdentityKey(worktree.id)
-    const existingSleepState = this.terminalSleepStateByWorktreeId.get(key)
+    const { key } = scope
+    // Why fenced: a same-id twin's PTYs are another host's to sleep, never filed under `key`.
+    const liveHere = (fresh: ReadonlySet<string>) =>
+      this.getLivePtyIdsForWorktree(worktree.id, fresh, scope.fence)
+    const existingSleepState = this.terminalSleepStateByHostWorktree.get(key)
     if (existingSleepState?.phase === 'sleeping') {
       try {
         const resolvedWorktrees = includeTargetResolvedWorktree(
@@ -34,14 +40,9 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         if (!refreshedPtyLiveness) {
           throw new Error('terminal_liveness_unavailable')
         }
-        if (this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness).size === 0) {
+        if (liveHere(refreshedPtyLiveness).size === 0) {
           releaseMutation()
-          return {
-            stopped: 0,
-            stoppedPtyIds: [],
-            livePtyIds: [],
-            postStopVerified: true
-          }
+          return sleptNothing()
         }
         this.emitClientEvent({
           type: 'worktreeTerminalSleepState',
@@ -51,7 +52,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           ptyIds: existingSleepState.ptyIds,
           terminalHandles: existingSleepState.terminalHandles
         })
-        this.terminalSleepStateByWorktreeId.delete(key)
+        this.terminalSleepStateByHostWorktree.delete(key)
       } catch (error) {
         releaseMutation()
         throw error
@@ -77,7 +78,11 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
       if (!refreshedPtyLiveness) {
         throw new Error('terminal_liveness_unavailable')
       }
-      const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+      const livePtyIds = liveHere(refreshedPtyLiveness)
+      // Why under the lock: any other live terminal here is a user's, and no spawn can slip in now.
+      if (soleLivePtyId && [...livePtyIds].some((ptyId) => ptyId !== soleLivePtyId)) {
+        return sleptNothing(livePtyIds)
+      }
       generation = ++this.terminalSleepGeneration
       for (const ptyId of livePtyIds) {
         pendingPtyIds.add(ptyId)
@@ -87,7 +92,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         livePtyIds,
         terminalHandlesByPtyId
       )
-      this.terminalSleepStateByWorktreeId.set(key, {
+      this.terminalSleepStateByHostWorktree.set(key, {
         worktreeId: worktree.id,
         generation,
         phase: 'stopping',
@@ -124,7 +129,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           committedPtyIds,
           terminalHandlesByPtyId
         )
-        this.terminalSleepStateByWorktreeId.set(key, {
+        this.terminalSleepStateByHostWorktree.set(key, {
           worktreeId: worktree.id,
           generation,
           phase: 'sleeping',
@@ -133,13 +138,10 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           terminalHandlesByPtyId
         })
         fullyCommitted = true
-        return {
-          stopped: 0,
-          stoppedPtyIds: [],
-          livePtyIds: [],
-          postStopVerified: true
-        }
+        return sleptNothing()
       }
+      // Why before the stop: a PTY's exit clears its hook rows, and with them the session ids.
+      const resumeCapture = await this.sleepResumeRecords.capture(worktree.id, livePtyIds)
       const ptyController = this.ptyController
       if (!ptyController?.stopAndWait) {
         throw new Error('terminal_worktree_sleep_unavailable')
@@ -189,6 +191,8 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           committedPtyIds,
           terminalHandlesByPtyId
         })
+        // Why: the stops were acknowledged and their hook rows are gone; a retry has nothing to capture.
+        await this.sleepResumeRecords.persist(worktree.id, resumeCapture, successfulStopPtyIds)
         if (failedStopIndex !== -1) {
           const failedStop = stopResults[failedStopIndex]
           throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
@@ -204,7 +208,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           postStopFailure: 'terminal_liveness_unavailable'
         }
       }
-      const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+      const remainingLivePtyIds = liveHere(postStopLiveness)
       const provenStoppedPtyIds = orderedLivePtyIds.filter(
         (ptyId) => !remainingLivePtyIds.has(ptyId)
       )
@@ -216,6 +220,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         committedPtyIds,
         terminalHandlesByPtyId
       })
+      await this.sleepResumeRecords.persist(worktree.id, resumeCapture, provenStoppedPtyIds)
       if (failedStopIndex !== -1 && remainingLivePtyIds.size > 0) {
         const failedStop = stopResults[failedStopIndex]
         console.error('[runtime] worktree terminal sleep physical stop failed', {
@@ -243,7 +248,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         committedPtyIds,
         terminalHandlesByPtyId
       )
-      this.terminalSleepStateByWorktreeId.set(key, {
+      this.terminalSleepStateByHostWorktree.set(key, {
         worktreeId: worktree.id,
         generation,
         phase: 'sleeping',
@@ -282,7 +287,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
             committedPtyIds,
             terminalHandlesByPtyId
           )
-          this.terminalSleepStateByWorktreeId.set(key, {
+          this.terminalSleepStateByHostWorktree.set(key, {
             worktreeId: worktree.id,
             generation,
             phase: 'partial',
@@ -291,7 +296,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
             terminalHandlesByPtyId
           })
         } else {
-          this.terminalSleepStateByWorktreeId.delete(key)
+          this.terminalSleepStateByHostWorktree.delete(key)
         }
       }
       releaseMutation()

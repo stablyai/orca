@@ -284,14 +284,20 @@ function readDaemonPidFiles(userDataDir: string): number[] {
     if (!entry.endsWith('.pid')) {
       continue
     }
+    let raw: string
     try {
-      const raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
+      raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
+    } catch {
+      // Why: an exiting daemon removes its pid file between readdir and read.
+      continue
+    }
+    try {
       const parsed = JSON.parse(raw) as { pid?: unknown }
       if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
         pids.push(parsed.pid)
       }
     } catch {
-      const pid = Number(readFileSync(path.join(daemonDir, entry), 'utf8').trim())
+      const pid = Number(raw)
       if (Number.isInteger(pid)) {
         pids.push(pid)
       }

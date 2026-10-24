@@ -367,6 +367,10 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           stateHistory: []
         }
         notifyStoreSubscribers()
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          RESET_TERMINAL_CURSOR_STYLE,
+          expect.any(Function)
+        )
         const writesAfterDone = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.length
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {

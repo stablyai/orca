@@ -12,6 +12,10 @@ export type AgentProcessPresence = {
   agent: AgentType
   process?: AgentProcessIdentity
   ended?: true
+  /** This host verifies process ownership before accepting a different provider. */
+  sessionOwner?: true
+  /** Positive host observation of suspension, distinct from an unavailable process read. */
+  suspended?: true
 }
 
 export type AgentProcessVerdict = 'live' | 'unverifiable' | 'exited'
@@ -46,6 +50,14 @@ export function readAgentProcessIdentity(value: unknown): AgentProcessIdentity |
   return { pid, platform, startTime }
 }
 
+// Why: only Claude's hook command captures its agent's process; other hooks cannot speak for liveness.
+export function readHookAgentProcess(
+  source: string,
+  value: unknown
+): AgentProcessIdentity | undefined {
+  return source === 'claude' ? readAgentProcessIdentity(value) : undefined
+}
+
 export function readAgentProcessPresence(value: unknown): AgentProcessPresence | undefined {
   if (
     !value ||
@@ -61,10 +73,30 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
   return {
     agent: value.agent,
     ...(process ? { process } : {}),
-    ...('ended' in value && value.ended === true ? { ended: true as const } : {})
+    ...('ended' in value && value.ended === true ? { ended: true as const } : {}),
+    ...('sessionOwner' in value && value.sessionOwner === true
+      ? { sessionOwner: true as const }
+      : {}),
+    ...('suspended' in value && value.suspended === true ? { suspended: true as const } : {})
   }
 }
 
 export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdentity): boolean {
   return a.pid === b.pid && a.platform === b.platform && a.startTime === b.startTime
+}
+
+/** A hook without a process identity can only be told apart from the owner by its provider. */
+export function hasOtherAgentProcessOwner(
+  presence: AgentProcessPresence | undefined,
+  incoming: { agent: string; process?: AgentProcessIdentity }
+): boolean {
+  return Boolean(
+    presence?.process &&
+    presence.sessionOwner &&
+    !presence.ended &&
+    !presence.suspended &&
+    presence.agent !== 'unknown' &&
+    (presence.agent !== incoming.agent ||
+      (incoming.process && !isSameAgentProcess(presence.process, incoming.process)))
+  )
 }

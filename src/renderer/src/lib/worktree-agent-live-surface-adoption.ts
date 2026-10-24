@@ -1,22 +1,30 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
+import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import {
+  layoutFramesHoldTerminalPane,
+  layoutFrameTerminalTab
+} from '@/runtime/layout-frame-terminal-panes'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { resolveTerminalTabPtyOwnership } from './terminal-tab-for-pty-id'
 import type {
   LiveTerminalSurfaceOwner,
   LiveTerminalSurfaceOwnerIndex
 } from './worktree-live-terminal-surface-owners'
 
-export type LiveSurfaceAdoptionStore = Pick<
-  ReturnType<typeof useAppStore.getState>,
-  | 'createTab'
-  | 'ptyIdsByTabId'
-  | 'setTabLayout'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'updateTabPtyId'
-  | 'replaceTerminalLayoutPanePtyId'
->
+export type LiveSurfaceAdoptionStore = WorktreeOperationRouteState &
+  Pick<
+    ReturnType<typeof useAppStore.getState>,
+    | 'createTab'
+    | 'ptyIdsByTabId'
+    | 'setTabLayout'
+    | 'tabsByWorktree'
+    | 'terminalLayoutsByTabId'
+    | 'updateTabPtyId'
+    | 'replaceTerminalLayoutPanePtyId'
+  >
 
 function layoutContainsLeaf(
   root: LiveSurfaceAdoptionStore['terminalLayoutsByTabId'][string]['root'],
@@ -105,6 +113,11 @@ function adoptHostOwnedSurface(
 ): boolean {
   const store = getState()
   const known = tabExists(store, owner.tabId)
+  // Switch point, a paired server's workspace (the gate blocks those before any sweep today; a
+  // local one returns before this): frames draw the server's pane; the window makes none.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && !known) {
+    return framesShowRecordedPane(worktreeId, owner)
+  }
   if (bindLivePtyToExactSurface(store, worktreeId, owner)) {
     if (!known) {
       materializedTabIds.add(owner.tabId)
@@ -134,6 +147,26 @@ function adoptHostOwnedSurface(
   })
   current.updateTabPtyId(owner.tabId, owner.ptyId)
   return true
+}
+
+/** Whether main's frames show the terminal in the pane main recorded for it. */
+function framesShowRecordedPane(worktreeId: string, recorded: LiveTerminalSurfaceOwner): boolean {
+  const pane = parsePaneKey(recorded.paneKey)
+  return (
+    pane?.tabId === recorded.tabId &&
+    layoutFramesHoldTerminalPane(worktreeId, { ...recorded, leafId: pane.leafId })
+  )
+}
+
+/** Whether main holds the terminal bound in the pane it recorded, drawn by this window yet or not. */
+function mainHoldsRecordedPane(worktreeId: string, recorded: LiveTerminalSurfaceOwner): boolean {
+  const pane = parsePaneKey(recorded.paneKey)
+  return Boolean(
+    pane?.tabId === recorded.tabId &&
+    layoutFrameTerminalTab(worktreeId, recorded.tabId)?.terminal?.panes.some(
+      (held) => held.leafId === pane.leafId && held.ptyId === recorded.ptyId
+    )
+  )
 }
 
 /**
@@ -182,8 +215,27 @@ export async function adoptLiveWorkspacePtySurfaces(
       declinedPtyIds.push(ptyId)
       continue
     }
+    const mainPlaces =
+      ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentIdUnlessTwin(getState(), worktreeId) === null
+    // Switch point: main placed the workspace's unshown terminals before answering (the listing's
+    // placeUnshownLiveTerminals), so a pane main names is the surface and main's frames draw it.
+    // The window writes nothing. A paired server's workspace keeps today's path.
+    if (mainPlaces && !('unowned' in owner)) {
+      surfaced = true
+      continue
+    }
     if (!('unowned' in owner)) {
       if (adoptHostOwnedSurface(getState, worktreeId, owner, materializedTabIds)) {
+        surfaced = true
+      } else {
+        declinedPtyIds.push(ptyId)
+      }
+      continue
+    }
+    // Switch point: one main could not place stays unshown, unless main's frames already show it
+    // in the pane main recorded (main's graph not yet reinstalled when it answered).
+    if (mainPlaces) {
+      if (owner.recorded && mainHoldsRecordedPane(worktreeId, owner.recorded)) {
         surfaced = true
       } else {
         declinedPtyIds.push(ptyId)

@@ -270,39 +270,6 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
-  it('sends the missing-cwd fallback flag only for local IPC spawns', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-
-    const transport = createIpcPtyTransport({ cwdFallback: 'worktree' })
-    await transport.connect({ url: '', callbacks: {} })
-
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ cwdFallback: 'worktree' }))
-    transport.disconnect()
-  })
-
-  it('omits the missing-cwd fallback flag when the IPC transport is SSH-tagged', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-
-    const transport = createIpcPtyTransport({ connectionId: 'ssh-1', cwdFallback: 'worktree' })
-    await transport.connect({ url: '', callbacks: {} })
-
-    expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ cwdFallback: 'worktree' }))
-    transport.disconnect()
-  })
-
-  it('omits the missing-cwd fallback flag for session reattach spawns', async () => {
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
-
-    const transport = createIpcPtyTransport({ cwdFallback: 'worktree' })
-    await transport.connect({ url: '', callbacks: {}, sessionId: 'session-1' })
-
-    expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ cwdFallback: 'worktree' }))
-    transport.disconnect()
-  })
-
   it('sends placement on a fresh spawn but not on a session reattach', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -331,7 +298,7 @@ describe('createIpcPtyTransport', () => {
       startupCwdFallback: { kind: 'worktree', cwd: '/repo/app' }
     })
 
-    const transport = createIpcPtyTransport({ cwdFallback: 'worktree' })
+    const transport = createIpcPtyTransport({})
 
     await expect(transport.connect({ url: '', callbacks: {} })).resolves.toEqual({
       id: 'pty-1',

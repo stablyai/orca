@@ -65,6 +65,7 @@ export type ListPanelProps = {
   selectExternalKey: (entryKey: string | null) => void
   onOpenDetail: () => void
   onRefresh: () => void
+  onOpenRuns: () => void
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
@@ -199,6 +200,7 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
+        <button onClick={props.onOpenRuns}>Runs</button>
         {props.sortedListItems.map((item) =>
           item.kind === 'local' ? (
             <button
