@@ -3,7 +3,6 @@ import { parseSchedule, type ParsedRrule } from './automation-schedule-parsing'
 import { cronMatches, floorToMinute, startOfLocalDay } from './automation-cron-occurrence'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const HOUR_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
 const CRON_SCAN_DAYS = 9 * 366
@@ -108,14 +107,20 @@ export function nextAutomationOccurrenceAfter(
     throw new Error('Unable to compute next automation run.')
   }
   if (rule.freq === 'HOURLY') {
+    // Why: recomposing local fields via setMinutes resolves an ambiguous fall-back minute
+    // to the earlier offset, which can return `after` itself (#20154). Walk absolute minutes.
     const start = Math.max(dtstart, after)
-    const base = new Date(start)
-    base.setMinutes(rule.byMinute, 0, 0)
-    let candidate = base.getTime()
+    let candidate = floorToMinute(start)
     if (candidate <= after || candidate < dtstart) {
-      candidate += HOUR_MS
+      candidate += MINUTE_MS
     }
-    return candidate
+    for (let i = 0; i < 120; i += 1) {
+      if (new Date(candidate).getMinutes() === rule.byMinute) {
+        return candidate
+      }
+      candidate += MINUTE_MS
+    }
+    throw new Error('Unable to compute next automation run.')
   }
   const candidate = scanDayCandidates(rule, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {
@@ -144,13 +149,16 @@ export function latestAutomationOccurrenceAtOrBefore(
     return null
   }
   if (rule.freq === 'HOURLY') {
-    const base = new Date(now)
-    base.setMinutes(rule.byMinute, 0, 0)
-    let candidate = base.getTime()
-    if (candidate > now) {
-      candidate -= HOUR_MS
+    // Why: walk absolute minutes backward — setMinutes recomposition resolves an
+    // ambiguous fall-back minute to the earlier offset (#20154).
+    let candidate = floorToMinute(now)
+    for (let i = 0; i < 120 && candidate >= dtstart; i += 1) {
+      if (new Date(candidate).getMinutes() === rule.byMinute) {
+        return candidate
+      }
+      candidate -= MINUTE_MS
     }
-    return candidate >= dtstart ? candidate : null
+    return null
   }
   const candidate = scanDayCandidates(rule, now, -1)
   return candidate !== null && candidate >= dtstart ? candidate : null
