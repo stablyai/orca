@@ -16,16 +16,20 @@ import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
+import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
+/** Formats clipboard image paste errors for notification display. */
 export function formatClipboardImagePasteError(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `Image paste failed: ${detail}`
 }
 
+/** Creates terminal pane paste execution handlers for clipboard and text pastes. */
 export function createTerminalPanePasteExecution(
   controller: TerminalPaneCloseController,
   shortcutPlatform: NodeJS.Platform
@@ -101,6 +105,27 @@ export function createTerminalPanePasteExecution(
     }
   }
 
+  /** Resolves protected multiline paste encoding options for a pane. */
+  const resolvePaneProtectedMultilinePasteOptions = (
+    pane: ManagedPane
+  ): TerminalPasteTextOptions | undefined => {
+    const state = useAppStore.getState()
+    const transport = paneTransportsRef.current.get(pane.id) ?? null
+    return resolveProtectedMultilinePasteOptionsForPane({
+      isWindowsClient: forceBracketedMultilineTextPaste,
+      hostPlatform: resolveTerminalInputHostPlatform({
+        clientPlatform: shortcutPlatform,
+        state,
+        worktreeId,
+        transport
+      }),
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+      tabId,
+      leafId: pane.leafId
+    })
+  }
+
   const pasteFromClipboard = (
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -120,6 +145,7 @@ export function createTerminalPanePasteExecution(
       connectionId,
       runtimeEnvironmentId,
       forceBracketedMultilineTextPaste,
+      protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),
       onTextPasteError: () =>
@@ -130,5 +156,9 @@ export function createTerminalPanePasteExecution(
     })
   }
 
-  return { executePanePasteText, pasteFromClipboard }
+  return {
+    executePanePasteText,
+    pasteFromClipboard,
+    resolvePaneProtectedMultilinePasteOptions
+  }
 }
