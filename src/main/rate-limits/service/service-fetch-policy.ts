@@ -99,8 +99,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
           getClaudeProfileRouter()?.userConfigDir() ??
           readUserClaudeConfigDir(process.env)
       ),
-      provenance: authPreparation?.provenance ?? 'system'
+      provenance: authPreparation?.provenance ?? 'system',
+      credentialsConfigDir: authPreparation?.configDir
     }
+    this.updateClaudeCredentialWatch()
   }
 
   /** Live usage windows forwarded from a Claude session's statusLine command. */

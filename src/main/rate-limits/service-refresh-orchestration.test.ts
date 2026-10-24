@@ -1,3 +1,4 @@
+import { watchClaudeCredentials } from './claude-credential-watcher'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
@@ -18,6 +19,8 @@ import {
   okProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
+
+vi.mock('./claude-credential-watcher', () => ({ watchClaudeCredentials: vi.fn(() => vi.fn()) }))
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -677,5 +680,69 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
+})
+
+describe('Claude credential-change recovery', () => {
+  beforeEach(() => resetRateLimitProviderMocks())
+
+  it('retries after external login without waiting for focus or the polling interval', async () => {
+    vi.mocked(fetchClaudeRateLimits)
+      .mockResolvedValueOnce(errorProvider('claude', 'stale token'))
+      .mockResolvedValue(okProvider('claude', 32))
+    const service = new RateLimitService()
+    await service.refresh()
+    service.start({ fetchImmediately: false })
+    try {
+      const onChange = vi.mocked(watchClaudeCredentials).mock.calls.at(-1)?.[1]
+      expect(onChange).toBeTypeOf('function')
+      onChange?.()
+      await vi.waitFor(() => expect(service.getState().claude?.status).toBe('ok'))
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+      onChange?.()
+      await flushMicrotasks()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('fences an old-token result and queues one retry behind the active cycle', async () => {
+    const old = deferred<ProviderRateLimits>()
+    vi.mocked(fetchClaudeRateLimits)
+      .mockResolvedValueOnce(errorProvider('claude', 'stale token'))
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValue(okProvider('claude', 17))
+    const service = new RateLimitService()
+    await service.refresh()
+    service.start({ fetchImmediately: false })
+    try {
+      const pending = service.refresh()
+      await vi.waitFor(() => expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2))
+      vi.mocked(watchClaudeCredentials).mock.calls.at(-1)?.[1]()
+      old.resolve(errorProvider('claude', 'old token rejected'))
+      await pending
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+      expect(service.getState().claude?.session?.usedPercent).toBe(17)
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('disposes the host watch on a WSL switch and ignores its late event after stop', async () => {
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(errorProvider('claude', 'stale token'))
+    const service = new RateLimitService()
+    await service.refresh()
+    service.start({ fetchImmediately: false })
+    const onChange = vi.mocked(watchClaudeCredentials).mock.calls.at(-1)?.[1]
+    const close = vi.mocked(watchClaudeCredentials).mock.results.at(-1)?.value
+    service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(close).toHaveBeenCalledTimes(1)
+    onChange?.()
+    service.stop()
+    onChange?.()
+    await flushMicrotasks()
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
   })
 })
