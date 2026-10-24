@@ -1,4 +1,5 @@
 export type SelectionIntent = 'replace' | 'toggle' | 'range'
+export type SelectionGesture = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
 
 export type SelectionResult = {
   selectedIds: Set<string>
@@ -10,10 +11,7 @@ export type AreaSelectionResult = {
   anchorId: string | null
 }
 
-export function getSelectionIntent(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
-  isMac: boolean
-): SelectionIntent {
+export function getSelectionIntent(event: SelectionGesture, isMac: boolean): SelectionIntent {
   if (event.shiftKey) {
     return 'range'
   }

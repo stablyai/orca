@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type React from 'react'
 import {
   areSelectionsEqual,
   getSelectionIntent,
   pruneSelection,
-  updateSelection
+  updateSelection,
+  type SelectionGesture
 } from '@/lib/list-multi-selection'
 import { useReusedArrayIdentity } from '@/components/sidebar/worktree-list/listing/use-reused-array-identity'
 
@@ -13,10 +13,7 @@ export type ListMultiSelection<T> = {
   selectedKeys: Set<string>
   selectedItems: T[]
   /** Returns true for selection-only gestures (Cmd/Ctrl/Shift), which must not navigate. */
-  updateSelectionForGesture: (
-    event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
-    item: T
-  ) => boolean
+  updateSelectionForGesture: (event: SelectionGesture, item: T) => boolean
   /** Right-click inside a 2+ selection acts on all of it; elsewhere it resets to the item. */
   selectForContextMenu: (item: T) => readonly T[]
 }
@@ -91,7 +88,7 @@ export function useListMultiSelection<T>({
   }, [selectedKeys.size, getScope])
 
   const updateSelectionForGesture = useCallback(
-    (event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>, item: T): boolean => {
+    (event: SelectionGesture, item: T): boolean => {
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       const result = updateSelection({
         visibleIds: visibleKeys,

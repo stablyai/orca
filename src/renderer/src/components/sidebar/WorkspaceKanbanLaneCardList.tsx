@@ -1,4 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
@@ -26,7 +27,7 @@ type WorkspaceKanbanLaneCardListProps = {
   selectedWorktrees: readonly Worktree[]
   nativeDragEnabled: boolean
   onActivate: () => void
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktreeId: string) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

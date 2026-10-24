@@ -1,4 +1,5 @@
 import React, { useMemo, useRef } from 'react'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import { Plus } from 'lucide-react'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
@@ -38,7 +39,7 @@ type WorkspaceKanbanStatusLaneProps = {
   onDragLeave: (event: React.DragEvent) => void
   onDrop: (event: React.DragEvent, statusId: string) => void
   onActivate: () => void
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktreeId: string) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

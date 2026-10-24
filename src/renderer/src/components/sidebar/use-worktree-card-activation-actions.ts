@@ -44,19 +44,20 @@ export function useWorktreeCardActivationActions({
   > &
   Pick<LinkedDetails, 'isDeleting'>) {
   const worktreeRef = useRef(worktree)
+  const activationSurfaceRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     worktreeRef.current = worktree
   }, [worktree])
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+    (event: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
+      const card = event.currentTarget
+      if (!isEventTargetInsideCurrentTarget(card, event.target)) {
         return
       }
       const selection = window.getSelection()
       // Why: only suppress the click for a selection inside this card; a foreign selection must not block worktree switching.
       if (selection && selection.toString().length > 0) {
-        const card = event.currentTarget
         const anchor = selection.anchorNode
         const focus = selection.focusNode
         const selectionInsideCard =
@@ -111,6 +112,23 @@ export function useWorktreeCardActivationActions({
     ]
   )
 
+  useLayoutEffect(() => {
+    const option = activationSurfaceRef.current?.closest<HTMLElement>(
+      '[role="option"][data-worktree-row-key]'
+    )
+    if (!option || option.dataset.worktreeRowKey !== activationRowKey) {
+      return
+    }
+    // Assistive tools press the option itself; descendant card clicks already activate.
+    const handleOptionClick = (event: MouseEvent): void => {
+      if (event.target === option) {
+        handleClick(event)
+      }
+    }
+    option.addEventListener('click', handleOptionClick)
+    return () => option.removeEventListener('click', handleOptionClick)
+  }, [activationRowKey, handleClick])
+
   const handleRenameTitle = useCallback(
     // Inline rename has no surface for the failure; the store already logs and
     // refetches, which reverts the optimistic title in place.
@@ -164,5 +182,11 @@ export function useWorktreeCardActivationActions({
     [worktree.hostId, worktree.id, worktree.isUnread, setWorkspaceUnreadByUser]
   )
 
-  return { handleClick, handleRenameTitle, handleDoubleClick, handleToggleUnreadQuick }
+  return {
+    handleClick,
+    activationSurfaceRef,
+    handleRenameTitle,
+    handleDoubleClick,
+    handleToggleUnreadQuick
+  }
 }

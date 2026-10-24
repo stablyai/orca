@@ -1,7 +1,7 @@
 export function isEventTargetInsideCurrentTarget(
   currentTarget: EventTarget | null,
   target: EventTarget | null
-): boolean {
+): currentTarget is Node {
   if (!(currentTarget instanceof Node) || !(target instanceof Node)) {
     return false
   }

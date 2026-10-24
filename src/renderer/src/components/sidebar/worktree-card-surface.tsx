@@ -33,6 +33,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     isQueuedForDeletion,
     deleteLabel,
     handleClick,
+    activationSurfaceRef,
     handleDoubleClick,
     handleDragStart,
     handleDragEnd,
@@ -47,6 +48,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
 
   const cardBody = (
     <div
+      ref={activationSurfaceRef}
       className={cn(
         'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',

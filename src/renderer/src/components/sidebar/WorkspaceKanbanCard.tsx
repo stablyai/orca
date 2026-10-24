@@ -1,4 +1,5 @@
 import React from 'react'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import { Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Repo } from '../../../../shared/repo-types'
@@ -18,7 +19,7 @@ type WorkspaceKanbanCardProps = {
   selectedWorktrees?: readonly Worktree[]
   nativeDragEnabled?: boolean
   onActivate: () => void
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktreeId: string) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

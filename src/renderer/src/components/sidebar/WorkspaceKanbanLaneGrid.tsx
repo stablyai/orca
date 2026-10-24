@@ -8,6 +8,7 @@ import React, {
   useState
 } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
   WorkspaceStatus,
@@ -42,7 +43,7 @@ type WorkspaceKanbanLaneGridProps = {
   onDragLeave: (event: React.DragEvent) => void
   onDrop: (event: React.DragEvent, statusId: string) => void
   onActivate: () => void
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktreeId: string) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

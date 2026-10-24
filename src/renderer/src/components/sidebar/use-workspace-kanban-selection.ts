@@ -6,7 +6,8 @@ import {
   getSelectionIntent,
   pruneSelection,
   updateAreaSelection,
-  updateSelection
+  updateSelection,
+  type SelectionGesture
 } from '@/lib/list-multi-selection'
 
 /** Returns the first still-rendered selected id, or `null` if the anchor is fine. */
@@ -68,7 +69,7 @@ export function useWorkspaceKanbanSelection(
   }
 
   const updateSelectionForGesture = useCallback(
-    (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
+    (event: SelectionGesture, worktreeId: string): boolean => {
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       // Why: a search can hide the anchor while leaving the rest of the
       // selection on screen. updateSelection reads an anchor missing

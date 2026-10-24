@@ -1,4 +1,5 @@
 import React from 'react'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -39,7 +40,7 @@ export type FolderWorkspaceRowContext = {
     scope: 'folder-workspace'
     folderWorkspaceId: string
   }) => FolderWorkspacePathStatus | null
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktree: Worktree) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

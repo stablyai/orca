@@ -1,5 +1,6 @@
 import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
+import type { SelectionGesture } from '@/lib/list-multi-selection'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -41,7 +42,7 @@ export type WorktreeItemRowContext = {
   selectedWorktrees: readonly Worktree[]
   getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
-  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
+  onSelectionGesture: (event: SelectionGesture, worktree: Worktree) => boolean
   onWorktreeCardClick?: () => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
