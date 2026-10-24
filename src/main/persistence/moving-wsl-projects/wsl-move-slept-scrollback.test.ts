@@ -121,7 +121,7 @@ describe("a paused pane's daemon history", () => {
       spoolRoot()
     )
     const document = documentOf(slept)
-    expect(document.checkpoint.snapshotAnsi).toBe(buffer)
+    expect(document.checkpoint.snapshotAnsi).toBe(`${buffer}\r\n`)
     expect(document.checkpoint.scrollbackAnsi).toBe('')
     expect(daemonHistoryLeafOf(slept)?.(TAB, LEAF)).toBe(true)
     slept.dispose()
@@ -217,7 +217,7 @@ describe("a paused pane's daemon history", () => {
     if (restoredHere.status !== 'restored') {
       return
     }
-    expect(restoredHere.restoreInfo.snapshotAnsi).toBe(lines)
+    expect(restoredHere.restoreInfo.snapshotAnsi).toBe(`${lines}\r\n`)
     expect(restoredHere.restoreInfo.cwd).toBe('/home/me/deep')
 
     // A retry after the pane started never rewinds it to the moved history.
