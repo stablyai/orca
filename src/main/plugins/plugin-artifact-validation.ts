@@ -2,7 +2,10 @@ import { createReadStream } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
-import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
+import {
+  parsePluginVmRecipeArtifact,
+  pluginVmRecipeArtifactId
+} from '../../shared/plugins/plugin-vm-recipe-artifact'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
@@ -147,17 +150,19 @@ export async function validatePluginInstallContent(
   const vmRecipeIds = new Set<string>()
   for (const contribution of manifest.contributes.vmRecipes) {
     try {
-      const recipe = parsePluginVmRecipeArtifact(
-        await readContainedPluginArtifactText(
-          rootDir,
-          contribution.path,
-          PLUGIN_VM_RECIPE_MAX_BYTES
+      const id = pluginVmRecipeArtifactId(
+        parsePluginVmRecipeArtifact(
+          await readContainedPluginArtifactText(
+            rootDir,
+            contribution.path,
+            PLUGIN_VM_RECIPE_MAX_BYTES
+          )
         )
       )
-      if (vmRecipeIds.has(recipe.id)) {
-        throw new Error(`duplicate VM recipe id "${recipe.id}"`)
+      if (vmRecipeIds.has(id)) {
+        throw new Error(`duplicate VM recipe id "${id}"`)
       }
-      vmRecipeIds.add(recipe.id)
+      vmRecipeIds.add(id)
     } catch (error) {
       return {
         ok: false,

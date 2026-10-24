@@ -90,6 +90,42 @@ describe('PluginVmRecipeRegistry', () => {
     expect(registry.list()).toMatchObject([{ recipe: { id: 'cloud' } }])
   })
 
+  it('registers machine providers separately from lifecycle recipes', async () => {
+    const plugin = await recipePlugin('machines', [
+      { path: 'recipes/cloud.json', recipe: artifact('cloud') },
+      {
+        path: 'recipes/omarchy.json',
+        recipe: {
+          schemaVersion: 2,
+          id: 'omarchy',
+          name: 'Omarchy box',
+          machines: { command: ['ssh', 'omarchy', 'orca-sandbox'] }
+        }
+      }
+    ])
+    const registry = new PluginVmRecipeRegistry()
+
+    await registry.reconcile([plugin], () => false)
+    expect(registry.listMachineProviders()).toEqual([])
+    expect(registry.previewMachineProviders(plugin.pluginKey)).toMatchObject([
+      { provider: { id: 'omarchy', command: ['ssh', 'omarchy', 'orca-sandbox'] } }
+    ])
+
+    await registry.reconcile([plugin], () => true)
+    expect(registry.list()).toMatchObject([{ recipe: { id: 'cloud' } }])
+    expect(registry.listMachineProviders()).toEqual([
+      {
+        pluginKey: plugin.pluginKey,
+        pluginRootDir: plugin.rootDir,
+        provider: {
+          id: 'omarchy',
+          name: 'Omarchy box',
+          command: ['ssh', 'omarchy', 'orca-sandbox']
+        }
+      }
+    ])
+  })
+
   it('rejects malformed artifacts and duplicate ids within one plugin', async () => {
     const malformed = await recipePlugin('malformed', [
       {
