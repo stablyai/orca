@@ -83,6 +83,7 @@ export async function launchNewTabAgentThroughHost(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     reservation,
+    nativeChatDefault: true,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),
     ...(options?.agentPrompt

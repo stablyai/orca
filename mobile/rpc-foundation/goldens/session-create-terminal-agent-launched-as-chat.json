@@ -4,9 +4,9 @@
   "family": "session.create-terminal",
   "namedDeltas": [],
   "values": {
-    "0dec6eece95b": {
+    "007cc32ada0f": {
       "name": "agent.launchReplay#1",
-      "ordinal": 1,
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -16,6 +16,46 @@
           "name": "params",
           "value": {
             "agent": "claude",
+            "nativeChatDefault": true,
+            "operationId": "1767225600000-00000000000040008000000000000004",
+            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:wt-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "21e2b9cf755e": {
+      "name": "fetch-session-tabs",
+      "ordinal": 5,
+      "value": {}
+    },
+    "49d8ea724bec": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "nativeChatDefault": true,
             "operationId": "1767225600000-00000000000040008000000000000004",
             "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
             "sessionId": "claude_00000000_0000_4000_8000_000000000003",
@@ -37,7 +77,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "outcome": {
@@ -55,11 +95,6 @@
           }
         }
       }
-    },
-    "4e536fd51d5d": {
-      "name": "agent.launchReplay#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000004\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:wt-1\"},\"paneKey\":\"00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002\",\"sessionId\":\"claude_00000000_0000_4000_8000_000000000003\"}}"
     },
     "58c784334dd1": {
       "activeHandle": "terminal-0",
@@ -85,47 +120,54 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "6248a3dd0710": {
-      "name": "fetch-session-tabs",
-      "ordinal": 3,
-      "value": {}
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "c7778ace6ed5": {
-      "name": "agent.launchReplay#1",
+    "5d070bb4709c": {
+      "name": "agentSession.createSupport#1",
       "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "agent.launchReplay"
+          "value": "agentSession.createSupport"
         },
         {
           "name": "params",
           "value": {
             "agent": "claude",
-            "operationId": "1767225600000-00000000000040008000000000000004",
-            "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
-            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
-            "target": {
-              "kind": "existing",
-              "worktree": "id:wt-1"
-            }
+            "worktree": "id:wt-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "undefined"
+            "$rpc": "absent"
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "supported": false
+          }
+        }
       }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "b167d7e8009f": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"nativeChatDefault\":true,\"operationId\":\"1767225600000-00000000000040008000000000000004\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:wt-1\"},\"paneKey\":\"00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002\",\"sessionId\":\"claude_00000000_0000_4000_8000_000000000003\"}}"
+    },
+    "de22c0c0d724": {
+      "name": "agentSession.createSupport#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:wt-1\",\"agent\":\"claude\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -168,8 +210,8 @@
       {
         "id": "creating",
         "observation": {
-          "sender": ["c7778ace6ed5"],
-          "payloads": ["4e536fd51d5d"],
+          "sender": ["5d070bb4709c", "007cc32ada0f"],
+          "payloads": ["de22c0c0d724", "b167d7e8009f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
@@ -181,27 +223,27 @@
       {
         "id": "launched",
         "observation": {
-          "sender": ["0dec6eece95b"],
-          "payloads": ["4e536fd51d5d"],
+          "sender": ["5d070bb4709c", "49d8ea724bec"],
+          "payloads": ["de22c0c0d724", "b167d7e8009f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "58c784334dd1",
-          "effects": ["6248a3dd0710"]
+          "effects": ["21e2b9cf755e"]
         }
       },
       {
         "id": "tabs-refreshed",
         "observation": {
-          "sender": ["0dec6eece95b"],
-          "payloads": ["4e536fd51d5d"],
+          "sender": ["5d070bb4709c", "49d8ea724bec"],
+          "payloads": ["de22c0c0d724", "b167d7e8009f"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
           "state": "58c784334dd1",
-          "effects": ["6248a3dd0710"]
+          "effects": ["21e2b9cf755e"]
         }
       }
     ]

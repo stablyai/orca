@@ -114,6 +114,27 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     }
 
     try {
+      // Older SSH runtimes drop agent.launch's mode field; create is client-controlled.
+      if (isAgentSessionHandleProvider(agent) && options === undefined) {
+        pendingSelectionRef.current = launchedSelection(clientMutationId, {}, null)
+        const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
+        if (!isCurrent()) {
+          return sourceOutcome('accepted')
+        }
+        if (structured.kind === 'created') {
+          pendingSelectionRef.current = withLaunchReply(
+            pendingSelectionRef.current,
+            clientMutationId,
+            { sessionId: structured.sessionId }
+          )
+          void fetchSessionTabs()
+          return sourceOutcome('accepted')
+        }
+        if (structured.kind === 'unknown' || structured.kind === 'failed') {
+          reportCreateFailure(structured.message)
+          return sourceOutcome('reported-failure')
+        }
+      }
       if (
         agent &&
         launchesThroughHost(options) &&
@@ -134,32 +155,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         }))
       ) {
         return sourceOutcome('accepted')
-      }
-      // COMPAT(agent.launch.v2): hosts before v1.4.206 keep the paths below; remove once none remain.
-      // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
-      if (isAgentSessionHandleProvider(agent) && options === undefined) {
-        // Armed before asking with nothing to match yet, so a tab picked meanwhile still wins.
-        pendingSelectionRef.current = launchedSelection(clientMutationId, {}, null)
-        const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
-        if (structured.kind === 'created') {
-          // Found by session in the next snapshot, never by a predicted tab id; the current tab stays
-          // live until then, as on the launch path above.
-          const reply = { sessionId: structured.sessionId }
-          pendingSelectionRef.current = withLaunchReply(
-            pendingSelectionRef.current,
-            clientMutationId,
-            reply
-          )
-          void fetchSessionTabs()
-          return sourceOutcome('accepted')
-        }
-        if (structured.kind === 'unknown') {
-          // Never create a legacy sibling when the host may already have committed.
-          setCreateError(structured.message)
-          triggerError()
-          showToast(structured.message, 1800)
-          return sourceOutcome('reported-failure')
-        }
       }
       const afterTabId = activeSessionTabId ?? undefined
       const hostSupportsGroupedPlacement =

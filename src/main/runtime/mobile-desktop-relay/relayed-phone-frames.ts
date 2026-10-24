@@ -52,17 +52,21 @@ export function declareRelayedPhoneCapabilities(frame: string): string {
 const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
 
 // Why: a server picks a launch's surface from its own chat setting, but a relayed phone's user is
-// this desktop's, so the desktop's default rides along. Older servers strip the field.
+// this desktop's, so legacy phones inherit its default. Capable phones choose their own mode.
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
-  nativeChatDefaultFor: (agent: string) => boolean
+  nativeChatDefaultFor: (agent: string) => boolean,
+  clientChoosesLaunchMode = false
 ): string {
   if (!LAUNCH_METHODS_READING_CHAT_DEFAULT.has(method)) {
     return frame
   }
   const parsed: unknown = JSON.parse(frame)
   if (!isRecord(parsed) || !isRecord(parsed.params)) {
+    return frame
+  }
+  if (clientChoosesLaunchMode && typeof parsed.params.nativeChatDefault === 'boolean') {
     return frame
   }
   const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''

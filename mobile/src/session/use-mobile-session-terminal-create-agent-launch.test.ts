@@ -1,3 +1,5 @@
+const sessionView = vi.hoisted(() => ({ load: vi.fn(async () => 'terminal') }))
+vi.mock('../storage/session-view-preferences', () => ({ loadDefaultSessionView: sessionView.load }))
 import { createElement } from 'react'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -179,6 +181,50 @@ function awaitingReply(surface: Record<string, unknown>): unknown {
 }
 
 describe('the + menu', () => {
+  it('creates a native chat on an SSH runtime predating the launch-mode field', async () => {
+    const created: string[] = []
+    const client = requestPortRpcClient(async (method, params) => {
+      // The deployed SSH runtime strips nativeChatDefault and uses its own terminal default.
+      if (method === 'agent.launchReplay') {
+        created.push('terminal')
+        return launchReply({ kind: 'terminal', handle: 'ssh-terminal' })
+      }
+      if (method === 'agentSession.createSupport') {
+        return ok({ supported: true })
+      }
+      if (
+        method === 'agentSession.create' &&
+        params &&
+        typeof params === 'object' &&
+        'envelope' in params
+      ) {
+        created.push('structured')
+        return ok({ ok: true, value: { sessionId: 'codex_devbox_chat' } })
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const state = scope(client, [...LAUNCH_CAPABILITIES, 'agent-session.structured.v1'])
+    await create_(state, 'codex')
+    expect(created).toEqual(['structured'])
+    expect(state.pendingSelectionRef.current).toEqual(
+      awaitingReply({ sessionId: 'codex_devbox_chat' })
+    )
+    expect(state.subscribeToTerminal).not.toHaveBeenCalled()
+  })
+
+  it.each(['chat', 'terminal'])(
+    'creates a structured chat even when the legacy transcript view is %s',
+    async (view) => {
+      sessionView.load.mockResolvedValueOnce(view)
+      const { client, sendRequest } = scriptedClient(
+        launchReply({ kind: 'structured', sessionId: 'chat-1', handle: 'h' })
+      )
+      await create_(scope(client), 'codex')
+      expect(launchParams(sendRequest)).toMatchObject({ agent: 'codex', nativeChatDefault: true })
+      expect(methods(sendRequest)).toEqual(['agentSession.createSupport', 'agent.launchReplay'])
+    }
+  )
+
   it('asks the host to start the agent and waits for its terminal by handle', async () => {
     const { client, sendRequest } = scriptedClient(
       launchReply({ kind: 'terminal', handle: 'term_7' })
@@ -187,7 +233,7 @@ describe('the + menu', () => {
 
     await create_(state, 'claude')
 
-    expect(methods(sendRequest)).toEqual(['agent.launchReplay'])
+    expect(methods(sendRequest)).toEqual(['agentSession.createSupport', 'agent.launchReplay'])
     expect(launchParams(sendRequest)).toMatchObject({
       agent: 'claude',
       target: { kind: 'existing', worktree: 'id:workspace-1' }
@@ -250,6 +296,7 @@ describe('the + menu', () => {
     const sendRequest = vi.fn(
       async (_method: string, _params?: unknown, _options?: unknown) => reply
     )
+    sendRequest.mockResolvedValueOnce(ok({ supported: false }))
     sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('response lost')))
     const state = scope(requestPortRpcClient(sendRequest))
 
@@ -349,6 +396,7 @@ describe('the + menu', () => {
     const sendRequest = vi.fn(async (_method: string, _params?: unknown, _options?: unknown) =>
       refusal('agent_launch_pane_already_live')
     )
+    sendRequest.mockResolvedValueOnce(ok({ supported: false }))
     sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('response lost')))
     const state = scope(requestPortRpcClient(sendRequest))
 
@@ -410,7 +458,7 @@ describe('the + menu', () => {
 
     await create_(state, 'claude')
 
-    expect(methods(sendRequest)).toEqual(['agent.launchReplay'])
+    expect(methods(sendRequest)).toEqual(['agentSession.createSupport', 'agent.launchReplay'])
     expect(state.showToast).toHaveBeenCalledWith(
       'Agent claude is disabled. Choose an enabled agent.',
       1800
@@ -432,7 +480,7 @@ describe('the + menu', () => {
 
     await create_(state, 'claude')
 
-    expect(methods(sendRequest)).toEqual(['agent.launchReplay'])
+    expect(methods(sendRequest)).toEqual(['agentSession.createSupport', 'agent.launchReplay'])
     expect(state.showToast).toHaveBeenCalledWith(
       "Couldn't confirm the agent started. Check the workspace before trying again.",
       1800
