@@ -10,6 +10,7 @@ import type {
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
+import { getCachedViewerId, sortMembersViewerFirst } from './team-member-order'
 import {
   fetchAllTeamLabels,
   fetchAllTeamMembers,
@@ -140,6 +141,20 @@ async function readTeamResource<T>(
   }
 }
 
+async function readTeamMembersViewerFirst(
+  teamId: string,
+  workspaceId: string | null | undefined,
+  fallbackWarning?: string
+): Promise<LinearMember[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return []
+  }
+  const viewerId = await getCachedViewerId(entry)
+  const members = await readTeamResource(teamId, workspaceId, fetchAllTeamMembers, fallbackWarning)
+  return sortMembersViewerFirst(members, viewerId)
+}
+
 export async function getTeamStates(
   teamId: string,
   workspaceId?: string | null
@@ -172,14 +187,14 @@ export async function getTeamMembers(
   teamId: string,
   workspaceId?: string | null
 ): Promise<LinearMember[]> {
-  return readTeamResource(teamId, workspaceId, fetchAllTeamMembers, 'getTeamMembers')
+  return readTeamMembersViewerFirst(teamId, workspaceId, 'getTeamMembers')
 }
 
 export async function getTeamMembersOrThrow(
   teamId: string,
   workspaceId?: string | null
 ): Promise<LinearMember[]> {
-  return readTeamResource(teamId, workspaceId, fetchAllTeamMembers)
+  return readTeamMembersViewerFirst(teamId, workspaceId)
 }
 
 export async function getViewerForWorkspaceOrThrow(
