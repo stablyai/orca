@@ -27,6 +27,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       first.result.current.setGroup('folder')
       first.result.current.setHideEmptySessions(true)
       first.result.current.setSessionLimit('unlimited')
+      first.result.current.setGroupSessionLimit(5)
     })
     first.unmount()
 
@@ -36,6 +37,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.group).toBe('folder')
     expect(restored.result.current.hideEmptySessions).toBe(true)
     expect(restored.result.current.sessionLimit).toBe('unlimited')
+    expect(restored.result.current.groupSessionLimit).toBe(5)
   })
 
   it("shares view options between panels but keeps a dialog's agent filter to itself", () => {
@@ -105,6 +107,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       hook.result.current.setGroup('agent')
       hook.result.current.setHideEmptySessions(true)
       hook.result.current.setSessionLimit(1000)
+      hook.result.current.setGroupSessionLimit(3)
       hook.result.current.resetViewOptions()
     })
 
@@ -113,6 +116,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.group).toBe('project')
     expect(hook.result.current.hideEmptySessions).toBe(false)
     expect(hook.result.current.sessionLimit).toBe(250)
+    expect(hook.result.current.groupSessionLimit).toBe('all')
 
     hook.unmount()
     const restored = renderHook(() => usePersistedAiVaultViewOptions())
@@ -121,5 +125,6 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.group).toBe('project')
     expect(restored.result.current.hideEmptySessions).toBe(false)
     expect(restored.result.current.sessionLimit).toBe(250)
+    expect(restored.result.current.groupSessionLimit).toBe('all')
   })
 })

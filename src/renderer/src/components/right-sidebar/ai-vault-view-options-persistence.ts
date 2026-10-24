@@ -17,6 +17,11 @@ import {
   normalizeAiVaultSessionLimit,
   type AiVaultSessionLimit
 } from './ai-vault-session-limit'
+import {
+  DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT,
+  normalizeAiVaultGroupSessionLimit,
+  type AiVaultGroupSessionLimit
+} from './ai-vault-group-session-limit'
 
 export const AI_VAULT_VIEW_OPTIONS_STORAGE_KEY = 'orca.aiVault.viewOptions.v1'
 
@@ -27,6 +32,7 @@ export type AiVaultViewOptions = {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  groupSessionLimit: AiVaultGroupSessionLimit
 }
 
 type AiVaultViewOptionsStorage = {
@@ -41,7 +47,8 @@ export function createDefaultAiVaultViewOptions(): AiVaultViewOptions {
     searchSort: DEFAULT_AI_VAULT_SEARCH_SORT,
     group: DEFAULT_AI_VAULT_GROUP,
     hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+    groupSessionLimit: DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT
   }
 }
 
@@ -83,7 +90,9 @@ export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions 
       typeof record.hideEmptySessions === 'boolean'
         ? record.hideEmptySessions
         : DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit)
+    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit),
+    // Why: options saved before this field existed fall back to All, the pre-cap behavior.
+    groupSessionLimit: normalizeAiVaultGroupSessionLimit(record.groupSessionLimit)
   }
 }
 

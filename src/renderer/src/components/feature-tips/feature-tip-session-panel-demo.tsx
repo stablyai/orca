@@ -9,6 +9,7 @@ import { AgentSessionHistoryIcon } from '@/components/right-sidebar/agent-sessio
 import { AiVaultPanelHeader } from '@/components/right-sidebar/AiVaultPanelHeader'
 import { highlightedSearchSnippet } from '@/components/right-sidebar/AiVaultSearchEvidence'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '@/components/right-sidebar/ai-vault-session-limit'
+import { DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT } from '@/components/right-sidebar/ai-vault-group-session-limit'
 import {
   DEFAULT_AI_VAULT_GROUP,
   DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS
@@ -33,6 +34,7 @@ const DEMO_HEADER_PROPS = {
   group: DEFAULT_AI_VAULT_GROUP,
   hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
   sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+  groupSessionLimit: DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT,
   adjustmentCount: 0,
   onQueryChange: noop,
   onScopeChange: noop,
@@ -42,6 +44,7 @@ const DEMO_HEADER_PROPS = {
   onGroupChange: noop,
   onHideEmptySessionsChange: noop,
   onSessionLimitChange: noop,
+  onGroupSessionLimitChange: noop,
   onReset: noop,
   onRefresh: noop
 } as const

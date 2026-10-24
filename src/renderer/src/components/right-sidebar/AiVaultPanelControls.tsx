@@ -34,6 +34,8 @@ import { translate } from '@/i18n/i18n'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from './AiVaultSessionLimitMenu'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
+import { AiVaultGroupSessionLimitMenu } from './AiVaultGroupSessionLimitMenu'
+import type { AiVaultGroupSessionLimit } from './ai-vault-group-session-limit'
 
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
 
@@ -206,12 +208,14 @@ export function VaultViewMenu({
   group,
   hideEmptySessions,
   sessionLimit,
+  groupSessionLimit,
   adjustmentCount,
   onAgentEnabledChange,
   onAllAgentsEnabledChange,
   onGroupChange,
   onHideEmptySessionsChange,
   onSessionLimitChange,
+  onGroupSessionLimitChange,
   onReset
 }: {
   searching?: boolean
@@ -219,12 +223,14 @@ export function VaultViewMenu({
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  groupSessionLimit: AiVaultGroupSessionLimit
   adjustmentCount: number
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
   onAllAgentsEnabledChange: (enabled: boolean) => void
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
+  onGroupSessionLimitChange: (limit: AiVaultGroupSessionLimit) => void
   onReset: () => void
 }): React.JSX.Element {
   const allAgentsSelected = agents.length === AI_VAULT_AGENTS.length
@@ -331,6 +337,10 @@ export function VaultViewMenu({
                 {translate('auto.components.right.sidebar.AiVaultPanelControls.agent', 'Agent')}
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
+            <AiVaultGroupSessionLimitMenu
+              groupSessionLimit={groupSessionLimit}
+              onGroupSessionLimitChange={onGroupSessionLimitChange}
+            />
             <DropdownMenuSeparator />
             <DropdownMenuCheckboxItem
               checked={hideEmptySessions}

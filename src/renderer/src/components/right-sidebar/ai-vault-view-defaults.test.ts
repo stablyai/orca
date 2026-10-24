@@ -6,6 +6,7 @@ import {
   DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS
 } from './ai-vault-view-defaults'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from './ai-vault-session-limit'
+import { DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT } from './ai-vault-group-session-limit'
 
 describe('ai-vault-view-defaults', () => {
   it('shows empty sessions by default', () => {
@@ -18,7 +19,8 @@ describe('ai-vault-view-defaults', () => {
         agents: [...AI_VAULT_AGENTS],
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+        groupSessionLimit: DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT
       })
     ).toBe(0)
   })
@@ -29,7 +31,8 @@ describe('ai-vault-view-defaults', () => {
         agents: [...AI_VAULT_AGENTS],
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: true,
-        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+        groupSessionLimit: DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT
       })
     ).toBe(1)
   })
@@ -43,7 +46,8 @@ describe('ai-vault-view-defaults', () => {
         agents: swapped,
         group: DEFAULT_AI_VAULT_GROUP,
         hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+        groupSessionLimit: DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT
       })
     ).toBe(1)
   })
@@ -54,8 +58,22 @@ describe('ai-vault-view-defaults', () => {
         agents: ['claude'],
         group: 'agent',
         hideEmptySessions: true,
-        sessionLimit: 1000
+        sessionLimit: 1000,
+        groupSessionLimit: 5
       })
-    ).toBe(4)
+    ).toBe(5)
+  })
+
+  it('counts a capped Sessions per group as an adjustment so Reset view appears', () => {
+    expect(DEFAULT_AI_VAULT_GROUP_SESSION_LIMIT).toBe('all')
+    expect(
+      countAiVaultViewAdjustments({
+        agents: [...AI_VAULT_AGENTS],
+        group: DEFAULT_AI_VAULT_GROUP,
+        hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
+        sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+        groupSessionLimit: 3
+      })
+    ).toBe(1)
   })
 })
