@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { migrateAgentYoloDefaults, migrateDshAgentPermission } from './terminal-settings-migrations'
+import { migrateAgentYoloDefaults } from './terminal-settings-migrations'
+import { migrateDshAgentPermission } from '../../../shared/tui-agent-permission-lift'
 
 describe('migrateAgentYoloDefaults', () => {
   it('keeps newly added agent defaults manual for already migrated profiles', () => {

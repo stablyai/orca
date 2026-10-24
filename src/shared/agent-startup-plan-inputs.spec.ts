@@ -187,16 +187,21 @@ describe('DSH permission env reaches every startup path', () => {
     ).toEqual({ DSH_PERMISSION_MODE: 'danger-full-access' })
   })
 
-  it('sends no permission pin when DSH is on its own settings', () => {
-    const inputs = resolveAgentStartupPlanInputs({
-      agent: 'dsh',
-      settings: { ...fullAccess, agentPermissionOverrides: { dsh: 'own' } },
-      platform: 'darwin',
-      isRemote: false,
-      shell: undefined
-    })
-    expect(inputs.agentEnv).toEqual({})
-  })
+  // DSH 0.2.1 ignores this pin on win32 (its profile hardcodes full access); Orca still
+  // removes its own pin when the choice is own, which is all this side can control.
+  it.each(['darwin', 'win32'] as const)(
+    'sends no permission pin when DSH is on its own settings on %s',
+    (platform) => {
+      const inputs = resolveAgentStartupPlanInputs({
+        agent: 'dsh',
+        settings: { ...fullAccess, agentPermissionOverrides: { dsh: 'own' } },
+        platform,
+        isRemote: false,
+        shell: undefined
+      })
+      expect(inputs.agentEnv).toEqual({})
+    }
+  )
 
   it('keeps unrelated user env beside the pin', () => {
     const inputs = resolveAgentStartupPlanInputs({

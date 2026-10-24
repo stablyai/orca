@@ -46,8 +46,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
   goose: { GOOSE_MODE: 'auto' },
-  // Why: DSH pins its launch permission through env; the official preset is sandbox
-  // danger-full-access with approval never.
+  // Why: DSH reads its launch permission from env on non-Windows hosts; the official preset is
+  // sandbox danger-full-access with approval never. Its Windows profile ignores this pin.
   dsh: { DSH_PERMISSION_MODE: 'danger-full-access' }
 }
 

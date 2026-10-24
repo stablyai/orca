@@ -28,7 +28,10 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
 import { hasTypedAgentPermission } from '../../../../shared/tui-agent-permission-choice'
-import { migrateAgentPermissionChoice } from '../../../../shared/tui-agent-permission-lift'
+import {
+  migrateAgentPermissionChoice,
+  migrateDshAgentPermission
+} from '../../../../shared/tui-agent-permission-lift'
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -150,11 +153,31 @@ export function mergeOsc52ClipboardNoticePending(
   )
 }
 
+function migrateBrowserSavedPermissions(stored: Partial<GlobalSettings>) {
+  if (hasTypedAgentPermission(stored)) {
+    return migrateDshAgentPermission(stored, true)
+  }
+  const migrated = migrateBrowserSavedAgentPermission(stored)
+  return {
+    ...migrated,
+    // Stamp the one-shot marker so the converted profile is not read as an old typed profile
+    // on the next load, which would add a DSH override this conversion did not intend.
+    ...migrateDshAgentPermission(
+      {
+        agentPermissionDefault: migrated.agentPermissionDefault,
+        agentPermissionOverrides: migrated.agentPermissionOverrides,
+        dshAgentPermissionMigrated: stored.dshAgentPermissionMigrated
+      },
+      false
+    )
+  }
+}
+
 /** A browser-saved settings blob with each load-time migration applied. */
 export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Partial<GlobalSettings> {
   return {
     ...stored,
-    ...migrateBrowserSavedAgentPermission(stored),
+    ...migrateBrowserSavedPermissions(stored),
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
@@ -165,7 +188,14 @@ export function migrateStoredWebSettings(stored: Partial<GlobalSettings>): Parti
 
 /** Browser-saved Arguments from before the stored permission carry their flags; moved so the
  *  stored default can't add a second one. A missing key launched with the shipped default. */
-function migrateBrowserSavedAgentPermission(stored: Partial<GlobalSettings>) {
+function migrateBrowserSavedAgentPermission(
+  stored: Partial<GlobalSettings>
+): Partial<
+  Pick<
+    GlobalSettings,
+    'agentDefaultArgs' | 'agentDefaultEnv' | 'agentPermissionDefault' | 'agentPermissionOverrides'
+  >
+> {
   if (hasTypedAgentPermission(stored) || (!stored.agentDefaultArgs && !stored.agentDefaultEnv)) {
     return {}
   }

@@ -1,8 +1,10 @@
 import { expect, it } from 'vitest'
 import {
+  mergeSettings,
   migrateStoredWebSettings,
   runtimeChatPermissionSetting
 } from './web-preference-normalization'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveAgentPermission } from '../../../../shared/tui-agent-permission-choice'
 import {
@@ -65,4 +67,53 @@ it('never adds scoped overrides to the legacy settings.update strict schema', ()
       false
     )
   ).toEqual({ nativeChatPermissionMode: 'ask' })
+})
+
+it('keeps an old typed browser profile on its own DSH settings before defaults merge', () => {
+  const stored: Partial<GlobalSettings> = {
+    agentPermissionDefault: 'full-access',
+    agentPermissionOverrides: {},
+    agentDefaultArgs: {},
+    agentDefaultEnv: {}
+  }
+  const loaded = mergeSettings(getDefaultSettings('~'), migrateStoredWebSettings(stored))
+
+  expect(loaded.dshAgentPermissionMigrated).toBe(true)
+  expect(loaded.agentPermissionOverrides?.dsh).toBe('own')
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('own')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({})
+  expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
+})
+
+it('leaves a fresh typed browser profile following the global full-access choice', () => {
+  const loaded = mergeSettings(
+    getDefaultSettings('~'),
+    migrateStoredWebSettings({
+      agentPermissionDefault: 'full-access',
+      agentPermissionOverrides: {},
+      dshAgentPermissionMigrated: true
+    })
+  )
+
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('full-access')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({
+    DSH_PERMISSION_MODE: 'danger-full-access'
+  })
+})
+
+it('preserves an explicit DSH choice and custom env in a typed browser profile', () => {
+  const loaded = mergeSettings(
+    getDefaultSettings('~'),
+    migrateStoredWebSettings({
+      agentPermissionDefault: 'full-access',
+      agentPermissionOverrides: { dsh: 'full-access' },
+      agentDefaultEnv: { dsh: { DSH_TUI_THEME: 'dark' } }
+    })
+  )
+
+  expect(resolveAgentPermission('dsh', loaded).choice).toBe('full-access')
+  expect(resolveTuiAgentLaunchEnv('dsh', loaded)).toEqual({
+    DSH_PERMISSION_MODE: 'danger-full-access',
+    DSH_TUI_THEME: 'dark'
+  })
 })

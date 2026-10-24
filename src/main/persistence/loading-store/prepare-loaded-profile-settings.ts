@@ -16,12 +16,12 @@ import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-def
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
-import {
-  migrateAgentYoloDefaults,
-  migrateDshAgentPermission
-} from '../applying-settings/terminal-settings-migrations'
+import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
 import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
-import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
+import {
+  migrateAgentPermissionChoice,
+  migrateDshAgentPermission
+} from '../../../shared/tui-agent-permission-lift'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,

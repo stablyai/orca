@@ -34,7 +34,8 @@ export function getStoredSettings(): GlobalSettings {
   const migratedStored = migrateStoredWebSettings(stored)
   if (
     rawStoredSettings &&
-    (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
+    (stored.dshAgentPermissionMigrated !== migratedStored.dshAgentPermissionMigrated ||
+      stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
         migratedStored.autoRenameBranchFromWorkDefaultedOn ||
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
