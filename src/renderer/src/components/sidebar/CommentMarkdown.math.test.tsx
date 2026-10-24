@@ -2,13 +2,14 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Processor } from 'unified'
+import { unified, type Processor } from 'unified'
 import type { Construct, Effects } from 'micromark-util-types'
-import type remarkParsePlugin from 'remark-parse'
+import remarkParsePlugin from 'remark-parse'
 import { fromMarkdown, type CompileContext } from 'mdast-util-from-markdown'
 import { visit } from 'unist-util-visit'
 import type { Code } from 'mdast'
 import { chatMathFromMarkdown } from './chat-markdown-math-nodes'
+import { remarkChatMath } from './chat-markdown-math'
 import CommentMarkdown from './CommentMarkdown'
 import { splitMarkdownTopLevelBlocks, type MarkdownBlockSplit } from './markdown-top-level-blocks'
 import { NativeChatMarkdown } from '../native-chat/NativeChatMarkdown'
@@ -505,6 +506,114 @@ b\]`,
       expect(tenN).toBeLessThan(n * 12)
     }
   )
+
+  it.each([
+    String.raw`\(x `,
+    String.raw`\[x `,
+    String.raw`\(x \[y `,
+    '\\(x \nq ',
+    '\\[x `code` q ',
+    'distinct'
+  ])('bounds exhausted searches: %j', (fragment) => {
+    function work(size: number): number {
+      const source = `p ${fragment === 'distinct' ? Array.from({ length: size }, (_, i) => `${'$'.repeat(i + 2)}x `).join('') : fragment.repeat(size)}`
+      const streamed = render(<CommentMarkdown content="" math growing />)
+      let maps = 0
+      parsing.operations = 0
+      const mapGet = Map.prototype.get
+      const mapSet = Map.prototype.set
+      const weakGet = WeakMap.prototype.get
+      const weakSet = WeakMap.prototype.set
+      Map.prototype.get = function (this: Map<unknown, unknown>, key) {
+        maps++
+        return mapGet.call(this, key)
+      }
+      Map.prototype.set = function (this: Map<unknown, unknown>, key, value) {
+        maps++
+        return mapSet.call(this, key, value)
+      }
+      WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key) {
+        maps++
+        return weakGet.call(this, key)
+      }
+      WeakMap.prototype.set = function (this: WeakMap<object, unknown>, key, value) {
+        maps++
+        return weakSet.call(this, key, value)
+      }
+      try {
+        streamed.rerender(<CommentMarkdown content={source} math growing />)
+      } finally {
+        Map.prototype.get = mapGet
+        Map.prototype.set = mapSet
+        WeakMap.prototype.get = weakGet
+        WeakMap.prototype.set = weakSet
+      }
+      expect(streamed.container.querySelector('.katex')).toBeNull()
+      const operations = parsing.operations + maps
+      process.stdout.write(
+        `Exhausted search ${JSON.stringify({ fragment, size, characters: source.length, consumes: parsing.operations, maps, operations })}\n`
+      )
+      expect(operations).toBeLessThan(source.length * 80)
+      streamed.unmount()
+      return operations
+    }
+    const n = fragment === 'distinct' ? 4 : 20
+    const small = work(n)
+    const large = work(n * 10)
+    expect(large).toBeLessThan(small * (fragment === 'distinct' ? 100 : 12))
+  })
+
+  it('preserves raw first-close semantics and actions across reused processor/source lifetimes', () => {
+    const parser = unified().use(remarkParsePlugin).use(remarkChatMath).freeze()
+    const streamed = render(<CommentMarkdown content="" math growing variant="document" />)
+    let split: MarkdownBlockSplit | null = null
+    for (const [source, values, rendered] of [
+      [String.raw`p \(x`, [], []],
+      [String.raw`p \(x\)`, ['x'], ['x']],
+      [String.raw`p \[y\]`, ['y'], ['y']],
+      [String.raw`p $$$$ A $b $$c$ d $$e$$`, ['b $$c', 'e'], ['e']],
+      [String.raw`p $$$$ A \$$x$ and \\$$y$$`, ['x', 'y'], ['x', 'y']],
+      [String.raw`p \[1, 2\] and $10 and $20 then $x$ \[y\]`, ['x', 'y'], ['x', 'y']],
+      ['p \\(x\nq \\(y\\)', ['y'], ['y']],
+      ['p \\[x `code` q \\[y\\]', ['y'], ['y']],
+      [String.raw`p \(x \[y\]`, ['y'], ['y']],
+      [String.raw`p \[x \(y\)`, ['y'], ['y']],
+      ['p $x\nq $$y$$', ['y'], ['y']],
+      ['p $$$$ x `code` q $$$$z$$$$', ['z'], ['z']],
+      [
+        String.raw`p \(a **b** &amp; [x](https://example.com/\)) after \)`,
+        ['a **b** &amp; [x](https://example.com/'],
+        []
+      ],
+      [String.raw`p \(x \[y [Donate $5](https://example.com) ![pic](image.png) **bold**.`, [], []]
+    ] as const) {
+      const formulas: string[] = []
+      const sources: string[] = []
+      visit(parser.parse(source), 'inlineMath', (node) => {
+        formulas.push(node.value)
+        sources.push(source.slice(node.position?.start.offset, node.position?.end.offset))
+      })
+      expect(formulas).toEqual(values)
+      split = splitMarkdownTopLevelBlocks(source, split, true)
+      expect(split.blocks.map((block) => block.text).join('')).toBe(source)
+      streamed.rerender(<CommentMarkdown content={source} math growing variant="document" />)
+      expect(annotations(streamed.container)).toEqual(rendered)
+      expect(annotations(documentOf(source))).toEqual(rendered)
+      expect(
+        Array.from(
+          streamed.container.querySelectorAll<HTMLElement>('[data-math-source]'),
+          (node) => node.dataset.mathSource
+        )
+      ).toEqual(sources)
+      if (source.includes('Donate')) {
+        expect(streamed.container.querySelector('a')?.getAttribute('href')).toBe(
+          'https://example.com'
+        )
+        expect(streamed.container.querySelector('img')?.getAttribute('src')).toBe('image.png')
+        expect(streamed.container.querySelector('strong')?.textContent).toBe('bold')
+      }
+    }
+  })
 
   it('copies selected formulas as source once and keeps surrounding prose', () => {
     const source = 'Before $x^2$ after.'

@@ -1,5 +1,12 @@
 import type { Root } from 'mdast'
-import type { Code, Construct, State, Token, Tokenizer } from 'micromark-util-types'
+import type {
+  Code,
+  Construct,
+  State,
+  Token,
+  TokenizeContext,
+  Tokenizer
+} from 'micromark-util-types'
 import type { Processor } from 'unified'
 import type { VFile } from 'vfile'
 import type {} from 'remark-parse'
@@ -22,8 +29,17 @@ const lineEnding = (code: Code): boolean => code !== null && code < -2
 const whitespace = (code: Code): boolean => code === null || code < 0 || code === 32
 const digit = (code: Code): boolean => code !== null && code >= 48 && code <= 57
 
+type ExhaustedSearch = { from: number; to: number; last: Map<number, number> }
+
 function construct(flow: boolean): Construct {
+  const searches = new WeakMap<TokenizeContext, Map<string, ExhaustedSearch>>()
   const tokenize: Tokenizer = function (effects, ok, nok) {
+    const knowledge = flow ? undefined : (searches.get(this) ?? new Map<string, ExhaustedSearch>())
+    if (knowledge) {
+      searches.set(this, knowledge)
+    }
+    const observed = new Map<number, number>()
+    let family = ''
     let opener = ''
     let closer = ''
     let body = ''
@@ -44,6 +60,25 @@ function construct(flow: boolean): Construct {
       }
     }
     const closing: Construct = { partial: true, tokenize: tokenizeClose }
+    const exhausted = (code: Code): State | undefined => {
+      if (knowledge) {
+        const end = this.now().offset
+        const previous = knowledge.get(family)
+        if (!previous) {
+          knowledge.set(family, { from: token.start.offset, to: end, last: observed })
+        } else {
+          for (const [length, position] of observed) {
+            previous.last.set(length, Math.max(previous.last.get(length) ?? -1, position))
+          }
+          if (end >= previous.to) {
+            previous.from =
+              end === previous.to ? Math.min(previous.from, token.start.offset) : token.start.offset
+            previous.to = end
+          }
+        }
+      }
+      return nok(code)
+    }
     return start
 
     function start(code: Code): State | undefined {
@@ -74,6 +109,16 @@ function construct(flow: boolean): Construct {
       }
       effects.exit('chatMathMarker')
       token.chatMath = { opener, closer, flow, closed: false }
+      family = opener.startsWith('$') && opener.length > 1 ? '$$' : opener
+      const searched = knowledge?.get(family)
+      if (
+        searched &&
+        token.start.offset >= searched.from &&
+        token.start.offset < searched.to &&
+        (!opener.startsWith('$') || (searched.last.get(opener.length) ?? -1) <= token.start.offset)
+      ) {
+        return nok(code)
+      }
       return opener.startsWith('$') ? afterOpen(code) : between
     }
     function afterOpen(code: Code): State | undefined {
@@ -84,14 +129,14 @@ function construct(flow: boolean): Construct {
     }
     function between(code: Code): State | undefined {
       if (code === null) {
-        return finish(code)
+        return flow ? finish(code) : exhausted(code)
       }
       if (lineEnding(code)) {
         if (flow) {
           return effects.attempt(continuation, continued, finish)(code)
         }
         if (opener === '$' || opener === '\\(') {
-          return nok(code)
+          return exhausted(code)
         }
         effects.enter('lineEnding')
         effects.consume(code)
@@ -120,6 +165,9 @@ function construct(flow: boolean): Construct {
         return dollarClose
       }
       if (closeSize !== closer.length) {
+        if (!flow) {
+          observed.set(closeSize, candidate.start.offset)
+        }
         candidate.type = 'chatMathData'
         effects.exit('chatMathData')
         body += '$'.repeat(closeSize)
@@ -158,7 +206,7 @@ function construct(flow: boolean): Construct {
         return data(code)
       }
       if (!flow && code === 96) {
-        return nok(code)
+        return exhausted(code)
       }
       effects.consume(code)
       body += code < 0 ? ' ' : String.fromCharCode(code)
@@ -171,7 +219,7 @@ function construct(flow: boolean): Construct {
         return between(code)
       }
       if (!flow && code === 96) {
-        return nok(code)
+        return exhausted(code)
       }
       effects.consume(code)
       body += code < 0 ? ' ' : String.fromCharCode(code)
