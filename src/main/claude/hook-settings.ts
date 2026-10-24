@@ -4,6 +4,7 @@ import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
+  hookHasManagedCommand,
   isPlainObject,
   isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
@@ -223,10 +224,26 @@ export function applyManagedHooks(
 
   for (const event of plan.install) {
     const current = nextHooks[event.eventName]
+    const previousDirectAsync = (Array.isArray(current) ? current : []).find(
+      (definition) =>
+        typeof definition.async === 'boolean' &&
+        [definition.command, definition.bash, definition.powershell].some(isManagedCommand)
+    )?.async
+    const previousAsync =
+      typeof previousDirectAsync === 'boolean'
+        ? previousDirectAsync
+        : (Array.isArray(current) ? current : [])
+            .flatMap((definition) => (Array.isArray(definition?.hooks) ? definition.hooks : []))
+            .find(
+              (previous) =>
+                typeof previous?.async === 'boolean' &&
+                hookHasManagedCommand(previous, isManagedCommand)
+            )?.async
     const cleaned = Array.isArray(current) ? removeManagedCommands(current, isManagedCommand) : []
+    const hook = hookForEvent(event.eventName)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [hookForEvent(event.eventName)]
+      hooks: [previousAsync === undefined ? hook : { ...hook, async: previousAsync }]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }
