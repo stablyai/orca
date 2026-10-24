@@ -149,6 +149,34 @@ export async function getProjectViewTable(
     }
   }
 
+  // Fallback: #12648 is about unfiltered views. Orca still sends query:"" for
+  // those, which routes through GitHub's lagging search index. Retry once with
+  // the query argument omitted so a populated board does not render as empty.
+  let rows = items.rows
+  let totalCount = items.totalCount
+  let parentFieldDropped = items.parentFieldDropped
+  if (totalCount === 0 && rows.length === 0 && !effectiveQuery) {
+    const unfiltered = await fetchAllItems({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: null,
+      host: args.host
+    })
+    if (!unfiltered.ok) {
+      return {
+        ok: false,
+        error: unfiltered.error,
+        ...(typeof unfiltered.totalCount === 'number' ? { totalCount: unfiltered.totalCount } : {})
+      }
+    }
+    if (unfiltered.rows.length > 0) {
+      rows = unfiltered.rows
+      totalCount = unfiltered.totalCount
+      parentFieldDropped = unfiltered.parentFieldDropped
+    }
+  }
+
   const table: GitHubProjectTable = {
     project: {
       id: project.id,
@@ -160,9 +188,9 @@ export async function getProjectViewTable(
       url: project.url
     },
     selectedView,
-    rows: items.rows,
-    totalCount: items.totalCount,
-    parentFieldDropped: items.parentFieldDropped
+    rows,
+    totalCount,
+    parentFieldDropped
   }
   return { ok: true, data: table }
 }

@@ -35,7 +35,7 @@ export async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
-  query: string
+  query?: string | null
   first: number
   after: string | null
   includeParent: boolean
@@ -56,11 +56,13 @@ export async function fetchItemsPageWithRaw(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+  const queryArg = args.query == null ? '' : ', query:$q'
+  const queryVar = args.query == null ? '' : '$q:String!, '
   const query = `
-    query(${afterVar}$owner:String!, $num:Int!, $q:String!, $first:Int!) {
+    query(${afterVar}${queryVar}$owner:String!, $num:Int!, $first:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
-          items(first:$first${afterArg}, query:$q, orderBy:{ field: POSITION, direction: ASC }) {
+          items(first:$first${afterArg}${queryArg}, orderBy:{ field: POSITION, direction: ASC }) {
             totalCount
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -79,7 +81,9 @@ export async function fetchItemsPageWithRaw(args: {
   const argsArr: string[] = ['api', 'graphql', '-f', `query=${query}`]
   argsArr.push('-f', `owner=${args.owner}`)
   argsArr.push('-F', `num=${args.projectNumber}`)
-  argsArr.push('-f', `q=${args.query}`)
+  if (args.query != null) {
+    argsArr.push('-f', `q=${args.query}`)
+  }
   argsArr.push('-F', `first=${args.first}`)
   if (args.after) {
     argsArr.push('-f', `after=${args.after}`)
