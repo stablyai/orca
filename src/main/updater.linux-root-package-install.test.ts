@@ -194,11 +194,11 @@ describe('updater Linux root packages', () => {
     }
   )
 
-  it('keeps interactive install-on-quit and remote control for non-root packages', async () => {
+  it('requires explicit installation and keeps remote control for non-root packages', async () => {
     autoUpdaterMock.autoInstallOnAppQuit = false
     const { updater } = await startUpdater(null)
 
-    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
     expect(updater.getRemoteServerUpdateSupport()).toEqual({
       installMode: 'interactive',
       automatic: true,
