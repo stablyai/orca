@@ -5,6 +5,8 @@ import {
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
   PLUGIN_ICON_THEME_LIMIT,
+  PLUGIN_SYNTAX_LIMIT,
+  pluginSyntaxContributionSchema,
   PLUGIN_TERMINAL_THEME_LIMIT,
   PLUGIN_THEME_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
@@ -124,7 +126,8 @@ const pluginManifestV1Object = z.object({
         .array(pluginThemeContributionSchema)
         .max(PLUGIN_TERMINAL_THEME_LIMIT)
         .default([]),
-      iconThemes: z.array(pluginThemeContributionSchema).max(PLUGIN_ICON_THEME_LIMIT).default([])
+      iconThemes: z.array(pluginThemeContributionSchema).max(PLUGIN_ICON_THEME_LIMIT).default([]),
+      syntaxes: z.array(pluginSyntaxContributionSchema).max(PLUGIN_SYNTAX_LIMIT).default([])
     })
     .strict()
     // Why prefault: runs `{}` through the schema, so every family's own default applies.

@@ -13,6 +13,8 @@ import { PluginCatalogAvatar } from '../plugin-catalog/PluginCatalogAvatar'
 import { invalidPluginErrorMessage } from './plugin-error-presentation'
 import { cn } from '@/lib/utils'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
+import { hasPluginSyntaxFailure, usePluginSyntaxFailureStore } from '@/store/plugin-syntax-failures'
+import { usePluginSyntaxStore } from '@/store/plugin-syntax-packs'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -140,6 +142,10 @@ export function PluginSettingsRow({
   onRemoveRequest
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
+  const syntaxFailures = usePluginSyntaxFailureStore((state) => state.failures)
+  // Why the raw store: a row must not start a syntax list load.
+  const installedSyntaxes = usePluginSyntaxStore((state) => state.entries)
+  const syntaxFailed = hasPluginSyntaxFailure(syntaxFailures, installedSyntaxes, plugin.pluginKey)
   // Why the raw store: I18nProvider already loads language packs; a row must not start a load.
   const languagePacks = usePluginLanguagePackStore((state) => state.entries).filter(
     (pack) => pack.pluginKey === plugin.pluginKey
@@ -229,6 +235,15 @@ export function PluginSettingsRow({
                 'No description provided.'
               )}
           </p>
+          {syntaxFailed ? (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-destructive">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              {translate(
+                'auto.components.settings.PluginSettingsRow.syntaxFailed',
+                'Highlighting stopped: this grammar failed.'
+              )}
+            </p>
+          ) : null}
           {plugin.blockedByKillList ? (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-5 text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />

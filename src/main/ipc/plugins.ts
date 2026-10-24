@@ -128,6 +128,14 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     return typeof id === 'string' ? pluginService.contentPacks.iconThemes.load(id) : null
   })
+  ipcMain.handle('plugins:listSyntaxes', async () => {
+    await pluginService.whenReady()
+    return pluginService.contentPacks.syntaxes.list()
+  })
+  ipcMain.handle('plugins:loadSyntax', async (_event, id: unknown) => {
+    await pluginService.whenReady()
+    return typeof id === 'string' ? pluginService.contentPacks.syntaxes.load(id) : null
+  })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)

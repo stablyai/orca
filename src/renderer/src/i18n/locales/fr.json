@@ -12202,7 +12202,15 @@
           "close": "Fermer",
           "cancel": "Annuler",
           "update": "Mettre à jour le plugin",
-          "install": "Installer le plugin"
+          "install": "Installer le plugin",
+          "themesOne": "1 thème d'application",
+          "themes": "{{value0}} thèmes d'application",
+          "terminalThemesOne": "1 thème de terminal",
+          "terminalThemes": "{{value0}} thèmes de terminal",
+          "iconThemesOne": "1 thème d'icônes",
+          "iconThemes": "{{value0}} thèmes d'icônes",
+          "syntaxesOne": "1 syntaxe",
+          "syntaxes": "{{value0}} syntaxes"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Impossible d'ajouter ce marketplace. Vérifiez l'URL, la ref et l'accès Git.",
@@ -12285,7 +12293,8 @@
           "disableLabel": "Désactiver {{value0}}",
           "enableLabel": "Activer {{value0}}",
           "invalidPluginError": "Les fichiers de ce plugin ne sont pas valides. Corrigez-les, puis actualisez.",
-          "languageCoverage": "{{value0}} traduit à {{value1}} %"
+          "languageCoverage": "{{value0}} traduit à {{value1}} %",
+          "syntaxFailed": "Coloration arrêtée : cette grammaire a échoué."
         },
         "PluginVmRecipeConsentPreview": {
           "create": "Créer",

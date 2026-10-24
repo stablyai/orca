@@ -3,6 +3,10 @@ import type {
   PluginIconThemeRegistration
 } from '../../shared/plugins/plugin-icon-theme-artifact'
 import type { PluginThemeRegistration } from '../../shared/plugins/plugin-theme-artifact'
+import type {
+  PluginSyntaxMetadata,
+  PluginSyntaxPayload
+} from '../../shared/plugins/plugin-syntax-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/plugin-terminal-theme-artifact'
 import type {
   PluginPanelActionOutcome,
@@ -150,6 +154,9 @@ export type PluginsApi = {
   listIconThemes: () => Promise<PluginIconThemeMetadata[]>
   /** One icon theme's images, read only once it is selected. */
   loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>
+  listSyntaxes: () => Promise<PluginSyntaxMetadata[]>
+  /** One language's grammars, read only once a matching file opens. */
+  loadSyntax: (id: string) => Promise<PluginSyntaxPayload | null>
   /** Approval is bound to the current capability and trusted-worker fingerprint. */
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>

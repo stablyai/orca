@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 2,
+  "execution": "data",
+  "id": "orca-gleam-syntax",
+  "publisher": "stablyai",
+  "name": "Gleam",
+  "version": "1.0.0",
+  "description": "Syntax highlighting for Gleam files.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "syntaxes": [
+      {
+        "id": "gleam",
+        "label": "Gleam",
+        "scopeName": "source.gleam",
+        "path": "syntaxes/gleam.tmLanguage.json",
+        "configuration": "syntaxes/language-configuration.json",
+        "extensions": [".gleam"]
+      }
+    ]
+  }
+}

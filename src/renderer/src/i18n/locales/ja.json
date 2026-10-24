@@ -12051,7 +12051,15 @@
           "close": "閉じる",
           "cancel": "キャンセル",
           "update": "プラグインを更新",
-          "install": "プラグインをインストール"
+          "install": "プラグインをインストール",
+          "themesOne": "アプリテーマ 1 件",
+          "themes": "アプリテーマ {{value0}} 件",
+          "terminalThemesOne": "ターミナルテーマ 1 件",
+          "terminalThemes": "ターミナルテーマ {{value0}} 件",
+          "iconThemesOne": "アイコンテーマ 1 件",
+          "iconThemes": "アイコンテーマ {{value0}} 件",
+          "syntaxesOne": "構文 1 件",
+          "syntaxes": "構文 {{value0}} 件"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "このマーケットプレイスを追加できませんでした。URL、ref、Git のアクセス権を確認してください。",
@@ -12134,7 +12142,8 @@
           "disableLabel": "{{value0}}を無効にする",
           "enableLabel": "{{value0}}を有効にする",
           "invalidPluginError": "このプラグインのファイルが無効です。修正してから更新してください。",
-          "languageCoverage": "{{value0}} {{value1}}% 翻訳済み"
+          "languageCoverage": "{{value0}} {{value1}}% 翻訳済み",
+          "syntaxFailed": "ハイライトを停止しました: この文法でエラーが発生しました。"
         },
         "PluginVmRecipeConsentPreview": {
           "create": "作成",

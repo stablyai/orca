@@ -2,6 +2,10 @@ import { createReadStream } from 'node:fs'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
+import {
+  PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES,
+  PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
+} from '../../shared/plugins/plugin-syntax-artifact'
 import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
@@ -51,7 +55,19 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
     ),
     ...c.iconThemes.flatMap((theme) =>
       declaredFile(`icon theme "${theme.id}"`, theme.path, PLUGIN_ICON_THEME_MAX_BYTES)
-    )
+    ),
+    ...c.syntaxes.flatMap((syntax) => [
+      ...declaredFile(
+        `syntax "${syntax.id}" grammar`,
+        syntax.path,
+        PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES
+      ),
+      ...declaredFile(
+        `syntax "${syntax.id}" configuration`,
+        syntax.configuration,
+        PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES
+      )
+    ])
   ]
 }
 

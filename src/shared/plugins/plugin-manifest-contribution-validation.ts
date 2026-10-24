@@ -18,6 +18,7 @@ type ContributionValidationManifest = {
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
+    syntaxes: (IdentifiedContribution & { scopeName: string })[]
   }
   capabilities: { kind: string }[]
 }
@@ -47,7 +48,14 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands', 'themes', 'terminalThemes', 'iconThemes'] as const) {
+  for (const path of [
+    'panels',
+    'commands',
+    'themes',
+    'terminalThemes',
+    'iconThemes',
+    'syntaxes'
+  ] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,
@@ -56,6 +64,13 @@ export function validatePluginManifestContributions(
       ctx
     )
   }
+  rejectDuplicateValues(
+    manifest.contributes.syntaxes.map((syntax) => syntax.scopeName),
+    String,
+    'syntaxes',
+    'syntax scope name',
+    ctx
+  )
   rejectDuplicateValues(
     manifest.contributes.languagePacks,
     (entry) => (entry as { locale: string }).locale.toLowerCase(),

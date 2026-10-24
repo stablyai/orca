@@ -12355,7 +12355,15 @@
           "close": "Close",
           "cancel": "Cancel",
           "update": "Update plugin",
-          "install": "Install plugin"
+          "install": "Install plugin",
+          "themesOne": "1 app theme",
+          "themes": "{{value0}} app themes",
+          "terminalThemesOne": "1 terminal theme",
+          "terminalThemes": "{{value0}} terminal themes",
+          "iconThemesOne": "1 icon theme",
+          "iconThemes": "{{value0}} icon themes",
+          "syntaxesOne": "1 syntax",
+          "syntaxes": "{{value0}} syntaxes"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Couldn't add this marketplace. Check the URL, ref, and Git access.",
@@ -12438,7 +12446,8 @@
           "disableLabel": "Disable {{value0}}",
           "enableLabel": "Enable {{value0}}",
           "invalidPluginError": "This plugin's files are invalid. Fix them, then refresh.",
-          "languageCoverage": "{{value0}} {{value1}}% translated"
+          "languageCoverage": "{{value0}} {{value1}}% translated",
+          "syntaxFailed": "Highlighting stopped: this grammar failed."
         },
         "PluginVmRecipeConsentPreview": {
           "create": "Create",

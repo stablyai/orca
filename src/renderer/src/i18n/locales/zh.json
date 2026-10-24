@@ -12051,7 +12051,15 @@
           "close": "关闭",
           "cancel": "取消",
           "update": "更新插件",
-          "install": "安装插件"
+          "install": "安装插件",
+          "themesOne": "1 个应用主题",
+          "themes": "{{value0}} 个应用主题",
+          "terminalThemesOne": "1 个终端主题",
+          "terminalThemes": "{{value0}} 个终端主题",
+          "iconThemesOne": "1 个图标主题",
+          "iconThemes": "{{value0}} 个图标主题",
+          "syntaxesOne": "1 种语法",
+          "syntaxes": "{{value0}} 种语法"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "无法添加此插件市场。请检查 URL、ref 和 Git 访问权限。",
@@ -12134,7 +12142,8 @@
           "disableLabel": "禁用 {{value0}}",
           "enableLabel": "启用 {{value0}}",
           "invalidPluginError": "此插件的文件无效。修复后请刷新。",
-          "languageCoverage": "{{value0}} 已翻译 {{value1}}%"
+          "languageCoverage": "{{value0}} 已翻译 {{value1}}%",
+          "syntaxFailed": "高亮已停止：此语法出错。"
         },
         "PluginVmRecipeConsentPreview": {
           "create": "创建",

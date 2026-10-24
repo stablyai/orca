@@ -18,6 +18,11 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -50,7 +55,7 @@ export function DiffSectionBody({
   isBranchMode,
   sideBySide,
   isDark,
-  language,
+  language: coreLanguage,
   modelPathBase,
   isEditable,
   diffEditorFontSize,
@@ -62,6 +67,7 @@ export function DiffSectionBody({
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const language = usePluginSyntaxLanguage(section.path, coreLanguage)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
@@ -70,8 +76,13 @@ export function DiffSectionBody({
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [language])
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
+    applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
       cleanupShiftWheelScroll()
@@ -224,6 +235,7 @@ export function DiffSectionBody({
             renderSideBySide: sideBySide,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
+            ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
             fontSize: diffEditorFontSize,
             fontFamily: editorFontFamily || 'monospace',
             lineNumbers: 'on',

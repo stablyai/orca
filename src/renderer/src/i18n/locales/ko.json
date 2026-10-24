@@ -12051,7 +12051,15 @@
           "close": "닫기",
           "cancel": "취소",
           "update": "플러그인 업데이트",
-          "install": "플러그인 설치"
+          "install": "플러그인 설치",
+          "themesOne": "앱 테마 1개",
+          "themes": "앱 테마 {{value0}}개",
+          "terminalThemesOne": "터미널 테마 1개",
+          "terminalThemes": "터미널 테마 {{value0}}개",
+          "iconThemesOne": "아이콘 테마 1개",
+          "iconThemes": "아이콘 테마 {{value0}}개",
+          "syntaxesOne": "구문 1개",
+          "syntaxes": "구문 {{value0}}개"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "이 마켓플레이스를 추가할 수 없습니다. URL, ref, Git 접근 권한을 확인하세요.",
@@ -12134,7 +12142,8 @@
           "disableLabel": "{{value0}} 비활성화",
           "enableLabel": "{{value0}} 활성화",
           "invalidPluginError": "이 플러그인의 파일이 유효하지 않습니다. 수정한 후 새로 고치세요.",
-          "languageCoverage": "{{value0}} {{value1}}% 번역됨"
+          "languageCoverage": "{{value0}} {{value1}}% 번역됨",
+          "syntaxFailed": "강조 표시가 중지됨: 이 문법에 오류가 발생했습니다."
         },
         "PluginVmRecipeConsentPreview": {
           "create": "생성",

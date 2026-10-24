@@ -52,7 +52,8 @@ describe('content-pack manifest contributions', () => {
       agents: [],
       themes: [],
       terminalThemes: [],
-      iconThemes: []
+      iconThemes: [],
+      syntaxes: []
     })
   })
 

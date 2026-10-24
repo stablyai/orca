@@ -20,6 +20,8 @@ export const pluginsApi = {
   listTerminalThemes: () => ipcRenderer.invoke('plugins:listTerminalThemes'),
   listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
   loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
+  listSyntaxes: () => ipcRenderer.invoke('plugins:listSyntaxes'),
+  loadSyntax: (id) => ipcRenderer.invoke('plugins:loadSyntax', id),
   consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:consent', args),
   setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>

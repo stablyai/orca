@@ -49,6 +49,66 @@ function contributionSummary(
       )
     },
     {
+      key: 'themes',
+      count: contributes.themes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.themesOne',
+        '1 app theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.themes',
+        '{{value0}} app themes',
+        {
+          value0: contributes.themes.length
+        }
+      )
+    },
+    {
+      key: 'terminalThemes',
+      count: contributes.terminalThemes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.terminalThemesOne',
+        '1 terminal theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.terminalThemes',
+        '{{value0}} terminal themes',
+        {
+          value0: contributes.terminalThemes.length
+        }
+      )
+    },
+    {
+      key: 'iconThemes',
+      count: contributes.iconThemes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.iconThemesOne',
+        '1 icon theme'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.iconThemes',
+        '{{value0}} icon themes',
+        {
+          value0: contributes.iconThemes.length
+        }
+      )
+    },
+    {
+      key: 'syntaxes',
+      count: contributes.syntaxes.length,
+      one: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.syntaxesOne',
+        '1 syntax'
+      ),
+      many: translate(
+        'auto.components.settings.PluginMarketplacePreviewDialog.syntaxes',
+        '{{value0}} syntaxes',
+        {
+          value0: contributes.syntaxes.length
+        }
+      )
+    },
+    {
       key: 'commands',
       count: contributes.commands.length,
       one: translate(
