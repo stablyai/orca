@@ -111,12 +111,21 @@ export function WslMoveResultBody({
           </>
         ) : null}
         {result.outcome === 'reset' ? (
-          <p>
-            {translate(
-              'wslMove.result.reset',
-              'The move stopped and everything was put back. The projects work on this computer as before; paused terminals start again when you open them.'
-            )}
-          </p>
+          <>
+            <p>
+              {translate(
+                'wslMove.result.reset',
+                'The move stopped and everything was put back. The projects work on this computer as before; paused terminals start again when you open them.'
+              )}
+            </p>
+            {result.detail ? (
+              <p className="text-xs text-muted-foreground" data-testid="wsl-move-reset-reason">
+                {translate('wslMove.result.resetReason', 'Why it stopped: {{detail}}', {
+                  detail: result.detail
+                })}
+              </p>
+            ) : null}
+          </>
         ) : null}
         {result.outcome === 'waiting-for-host' ? (
           <p>

@@ -34,7 +34,7 @@ import { compareKeys } from '../migrating-orcad-catalog/orcad-source-key-order'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { withoutWindowsShellChoices } from './wsl-move-windows-shell-choices'
-import { withoutPtyBindings } from './wsl-move-session-rewrite'
+import { withoutDesktopFocus, withoutPtyBindings } from './wsl-move-session-rewrite'
 
 export type WslMoveManifestExportRequest = {
   migrationId: string
@@ -156,7 +156,9 @@ export function exportWslMoveManifest(
   // Desktop PTY ids name no host terminal: a moved pane bound to one never reads its history.
   const workspaceSession =
     inspection.payload.workspaceSession &&
-    withoutWindowsShellChoices(withoutPtyBindings(inspection.payload.workspaceSession))
+    withoutDesktopFocus(
+      withoutWindowsShellChoices(withoutPtyBindings(inspection.payload.workspaceSession))
+    )
   const dormantState = workspaceSession
     ? { ...inspection.payload, workspaceSession }
     : inspection.payload

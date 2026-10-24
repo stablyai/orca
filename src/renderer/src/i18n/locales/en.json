@@ -21227,6 +21227,7 @@
       "automationsPendingMany": "{{n}} automations are off on the host for now. Orca keeps asking the host to turn them back on.",
       "undoHint": "Changed your mind? After the reload, the sidebar lists these projects as “Moved to {{distro}} host”. Choose “Use on this computer again” there to bring them back as they were before the move.",
       "reset": "The move stopped and everything was put back. The projects work on this computer as before; paused terminals start again when you open them.",
+      "resetReason": "Why it stopped: {{detail}}",
       "waiting": "The move may have reached the {{distro}} host, but the host is not answering. These projects stay read-only here until it does. Connect the host in Settings, then open this dialog again and start a move: Orca finishes or undoes this one first.",
       "reloading": "Reloading…",
       "reload": "Reload now",
