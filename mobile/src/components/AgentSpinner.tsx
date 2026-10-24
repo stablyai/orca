@@ -1,13 +1,12 @@
 import { Activity } from 'lucide-react-native'
-import { Animated, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
-import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
 // Why: colors and sizing are 1:1 with the desktop StatusIndicator
 // (src/renderer/src/components/sidebar/StatusIndicator.tsx) so the mobile
-// worktree list reads identically to the sidebar — same yellow spinner for
+// worktree list reads identically to the sidebar — same yellow ring for
 // 'working', same emerald dot for 'active'/'done', same neutral-500 @ 40%
 // for 'inactive', same red for 'permission'. Diverging palettes here lose
 // the design intent ('moving' vs 'alive' vs 'completed') the desktop encodes.
@@ -27,8 +26,6 @@ export function AgentSpinner({
   workingMode?: AgentWorkingMode
 }) {
   const monitoring = status === 'working' && workingMode === 'monitoring'
-  const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
-
   const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
 
   if (monitoring) {
@@ -42,7 +39,7 @@ export function AgentSpinner({
   if (status === 'working') {
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />
+        <View style={[styles.spinner, { borderColor: color }]} />
       </View>
     )
   }
@@ -75,6 +72,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     borderWidth: 2,
-    borderTopColor: 'transparent'
+    borderTopColor: 'transparent',
+    transform: [{ rotate: '225deg' }]
   }
 })

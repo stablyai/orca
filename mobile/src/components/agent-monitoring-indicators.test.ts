@@ -79,16 +79,7 @@ describe('mobile monitoring indicators', () => {
     expect(animationLoop).not.toHaveBeenCalled()
   })
 
-  it('keeps the spinner fallback when workingMode is absent', async () => {
-    await act(async () => {
-      renderer = create(createElement(AgentSpinner, { status: 'working' }))
-    })
-
-    expect(animationTiming).toHaveBeenCalledOnce()
-    expect(animationLoop).toHaveBeenCalledOnce()
-  })
-
-  it('keeps both native working rings off the interaction queue', async () => {
+  it('renders a static yellow hollow circle for working indicators without continuous animation loops', async () => {
     await act(async () => {
       renderer = create(
         createElement('View', null, [
@@ -98,13 +89,25 @@ describe('mobile monitoring indicators', () => {
       )
     })
 
-    expect(animationTiming).toHaveBeenCalledTimes(2)
-    for (const call of animationTiming.mock.calls) {
-      expect(call).toEqual([
-        expect.anything(),
-        expect.objectContaining({ useNativeDriver: true, isInteraction: false })
-      ])
-    }
+    expect(animationTiming).not.toHaveBeenCalled()
+    expect(animationLoop).not.toHaveBeenCalled()
+    const views = renderer?.root.findAllByType('View') ?? []
+    expect(
+      views.some(
+        (v) =>
+          Array.isArray(v.props.style) &&
+          v.props.style.some(
+            (s: Record<string, unknown>) => s?.borderColor === DESKTOP_WORKING_COLOR
+          )
+      )
+    ).toBe(true)
+    expect(
+      views.some(
+        (v) =>
+          !Array.isArray(v.props.style) &&
+          (v.props.style as Record<string, unknown>)?.borderColor === DESKTOP_WORKING_COLOR
+      )
+    ).toBe(true)
   })
 
   it.each([
