@@ -3,6 +3,10 @@ import type { RefObject } from 'react'
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   buildAddProjectFromFolderModalData,
@@ -20,11 +24,14 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
+import { shouldShowOpenInDefaultAppAction } from './file-explorer-row-action-visibility'
+import { openFileInDefaultApp } from './file-explorer-row-file-transfer'
 
 type UseFileExplorerNodeCommandsParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
   activeRepo: Repo | null
+  runtimeDownloadContext: RuntimeFileOperationArgs | null
   containerRef: RefObject<HTMLDivElement | null>
   rowProjection: FileExplorerRowProjection
   rowExpandedPaths: Set<string>
@@ -62,6 +69,7 @@ export function useFileExplorerNodeCommands({
   activeWorktreeId,
   worktreePath,
   activeRepo,
+  runtimeDownloadContext,
   containerRef,
   rowProjection,
   rowExpandedPaths,
@@ -96,6 +104,35 @@ export function useFileExplorerNodeCommands({
     },
     [handleClick]
   )
+  const handleOpenInDefaultApp = useCallback(
+    (node: TreeNode): boolean => {
+      if (
+        !shouldShowOpenInDefaultAppAction(
+          node,
+          activeRepo?.connectionId ?? null,
+          runtimeDownloadContext
+        )
+      ) {
+        return false
+      }
+      const state = useAppStore.getState()
+      const owner = getWorkspaceFileRevealOwner(state, activeWorktreeId, {
+        connectionId: activeRepo?.connectionId ?? null,
+        runtimeEnvironmentId: runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+          state,
+          activeWorktreeId
+        )
+      })
+      if (isLocalPathOpenBlocked(owner)) {
+        showLocalPathOpenBlockedToast()
+        return false
+      }
+      void openFileInDefaultApp(node, owner)
+      return true
+    },
+    [activeRepo?.connectionId, activeWorktreeId, runtimeDownloadContext]
+  )
+
   useFileExplorerKeys({
     containerRef,
     rowProjection,
@@ -108,6 +145,7 @@ export function useFileExplorerNodeCommands({
     moveSelection,
     toggleDir,
     startRename,
+    openInDefaultApp: handleOpenInDefaultApp,
     requestDelete,
     requestDeleteAll,
     scrollToIndex,

@@ -265,6 +265,7 @@ export function useFileExplorerTreePaneState({
     activeWorktreeId,
     worktreePath,
     activeRepo,
+    runtimeDownloadContext,
     containerRef: rowScrolling.explorerShellRef,
     rowProjection,
     rowExpandedPaths,

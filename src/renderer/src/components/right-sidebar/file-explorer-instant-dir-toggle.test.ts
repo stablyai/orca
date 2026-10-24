@@ -74,6 +74,7 @@ function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: stri
       activeWorktreeId: 'wt-1',
       worktreePath: '/repo',
       activeRepo: null,
+      runtimeDownloadContext: null,
       containerRef: createRef<HTMLDivElement>(),
       rowProjection: createFileExplorerRowProjection([node]),
       rowExpandedPaths: new Set(),
