@@ -92,7 +92,7 @@ export type WslMoveDriverDeps = {
   shellCwds?: (panes: readonly WslMoveRestoreHintPane[]) => Promise<ReadonlyMap<string, string>>
   quiesce: Pick<
     WslMoveQuiesceDeps,
-    'sleepWorkspaces' | 'livePtyIds' | 'captureRestoreHints' | 'proveExited'
+    'sleepWorkspaces' | 'livePtyIds' | 'captureRestoreHints' | 'proveExited' | 'wait'
   >
   snapshots: OrcadMigrationSnapshotSource
   /**

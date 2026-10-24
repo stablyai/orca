@@ -17,7 +17,8 @@ function deps(shellCwds?: WslMoveDriverDeps['shellCwds']): Parameters<typeof pau
       sleepWorkspaces: vi.fn(async () => ({ failedWorktreeIds: [] })),
       livePtyIds: () => [],
       captureRestoreHints: vi.fn(),
-      proveExited: vi.fn()
+      proveExited: vi.fn(),
+      wait: async () => {}
     },
     ...(shellCwds ? { shellCwds } : {})
   }
@@ -48,5 +49,17 @@ describe('pauseWslMoveScope', () => {
       scope
     )
     expect(paused).toEqual({ panes: [pane] })
+  })
+
+  // awin verify-8, 6e: a workspace that failed the first Sleep of a move refused it at once.
+  it('sleeps a failed workspace again before refusing', async () => {
+    const d = deps()
+    const asked: string[][] = []
+    d.quiesce.sleepWorkspaces = async (ids) => {
+      asked.push([...ids])
+      return { failedWorktreeIds: asked.length === 1 ? ['wt'] : [] }
+    }
+    expect(await pauseWslMoveScope(d, scope)).toEqual({ panes: [pane] })
+    expect(asked).toEqual([['wt'], ['wt']])
   })
 })
