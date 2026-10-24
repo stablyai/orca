@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 import type { ConfigParseResult, HermesConfig } from './hermes-config-yaml'
 import { parseHermesConfig } from './hermes-config-yaml'
@@ -13,9 +13,61 @@ import {
   getPluginManifest
 } from './hermes-managed-plugin-source'
 
-export function getHermesHome(env: NodeJS.ProcessEnv = process.env): string {
+const HERMES_HOME_MAX_LENGTH = 32_768
+
+type DefaultHermesHomeOptions = {
+  homeDir?: string
+  platform?: NodeJS.Platform
+  directoryExists?: (candidate: string) => boolean
+}
+
+function normalizedAbsolute(value: string | undefined): string | null {
+  const candidate = value?.trim()
+  if (
+    !candidate ||
+    candidate.length > HERMES_HOME_MAX_LENGTH ||
+    candidate.includes('\0') ||
+    !isAbsolute(candidate)
+  ) {
+    return null
+  }
+  return resolve(candidate)
+}
+
+function isDirectory(candidate: string): boolean {
+  return statSync(candidate, { throwIfNoEntry: false })?.isDirectory() === true
+}
+
+/** Hermes home when `HERMES_HOME` is unset. Matches skill discovery's default root. */
+export function resolveDefaultHermesHome(
+  env: NodeJS.ProcessEnv = process.env,
+  options: DefaultHermesHomeOptions = {}
+): string {
+  const homeDir = options.homeDir ?? homedir()
+  const dotfolderHome = join(homeDir, '.hermes')
+  if ((options.platform ?? process.platform) !== 'win32') {
+    return dotfolderHome
+  }
+  const localAppData = normalizedAbsolute(env.LOCALAPPDATA)
+  if (!localAppData) {
+    return dotfolderHome
+  }
+  const localAppDataHome = join(localAppData, 'hermes')
+  const directoryExists = options.directoryExists ?? isDirectory
+  // Why: a pre-LOCALAPPDATA install stays at ~/.hermes when that is the only tree (#24966).
+  return !directoryExists(localAppDataHome) && directoryExists(dotfolderHome)
+    ? dotfolderHome
+    : localAppDataHome
+}
+
+export function getHermesHome(
+  env: NodeJS.ProcessEnv = process.env,
+  options: DefaultHermesHomeOptions = {}
+): string {
   const explicit = env.HERMES_HOME?.trim()
-  return explicit ? explicit : join(homedir(), '.hermes')
+  // Why: an explicit profile still wins. The Windows default matches skill discovery so hook
+  // status does not report not_installed for %LOCALAPPDATA%\hermes (#24966).
+  return explicit ? explicit : resolveDefaultHermesHome(env, options)
 }
 
 export function getConfigPath(): string {
