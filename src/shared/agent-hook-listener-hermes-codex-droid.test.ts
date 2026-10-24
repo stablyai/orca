@@ -296,4 +296,21 @@ describe('shared agent-hook-listener', () => {
     expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
   })
+
+  it('carries the Hermes plugin session_id as provider session so cold restore can resume', () => {
+    const event = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_llm_call',
+          session_id: '20261020_221305_5e3a1c',
+          user_message: 'keep going'
+        }
+      },
+      'production'
+    )
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: '20261020_221305_5e3a1c' })
+  })
 })

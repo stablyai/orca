@@ -90,7 +90,8 @@ function stripOrcaOwnedHermesArgs(args: readonly string[]): string[] {
 function normalizeHermesArgv(
   baseArgv: string[],
   configuredArgv: string[],
-  shell: AgentStartupShell
+  shell: AgentStartupShell,
+  chatArgs: readonly string[]
 ): string[] | null {
   const executableCandidates: number[] = []
   for (let index = 0; index < baseArgv.length; index += 1) {
@@ -132,7 +133,7 @@ function normalizeHermesArgv(
   return [
     ...commandPrefix,
     'chat',
-    QUERY_ARG_PLACEHOLDER,
+    ...chatArgs,
     ...stripOrcaOwnedHermesArgs(baseArgsWithoutChat),
     ...stripOrcaOwnedHermesArgs(configuredArgsWithoutChat),
     '--tui'
@@ -180,7 +181,7 @@ export function planHermesStartupQuery(args: {
   if (!baseArgv || !configuredArgv) {
     return null
   }
-  const argv = normalizeHermesArgv(baseArgv, configuredArgv, args.shell)
+  const argv = normalizeHermesArgv(baseArgv, configuredArgv, args.shell, [QUERY_ARG_PLACEHOLDER])
   if (!argv) {
     return null
   }
@@ -200,4 +201,15 @@ export function planHermesStartupQuery(args: {
   // Why: WSL plans execute as Linux but cross the Windows environment block;
   // the conservative shared bound is safe for every transport host.
   return commandSize + envSize <= QUERY_ENV_LIMIT ? { command, env } : null
+}
+
+/** The recorded Hermes launch put back in TUI chat form, so a resume keeps the user's
+ *  profile/provider flags but never their `--cli` or a stale startup `--query`. */
+export function normalizeHermesResumeBaseCommand(
+  command: string,
+  shell: AgentStartupShell
+): string | null {
+  const baseArgv = tokenizeCommand(command, shell)
+  const argv = baseArgv ? normalizeHermesArgv(baseArgv, [], shell, []) : null
+  return argv ? buildShellCommandFromArgv(argv, shell) : null
 }

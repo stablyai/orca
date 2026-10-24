@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan } from './tui-agent-startup'
+import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-startup'
 import {
   unwrapPosixShellScript,
   unwrapPowerShellScript
@@ -226,5 +226,62 @@ describe('hermes startup plans', () => {
 
     expect(plan?.launchCommand).toBe('hermes --tui')
     expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('cold-restores a Hermes pane into its exact session', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: '20261020_221305_5e3a1c' },
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe("'hermes' 'chat' '--tui' '--resume' '20261020_221305_5e3a1c'")
+  })
+
+  it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {
+    const launch = buildAgentStartupPlan({
+      agent: 'hermes',
+      prompt: 'start work',
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      agentArgs: '--yolo',
+      platform: 'linux'
+    })
+    const resume = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { hermes: 'hermes --profile work' },
+      platform: 'linux',
+      agentCommand: launch?.launchConfig.agentCommand,
+      agentArgs: launch?.launchConfig.agentArgs
+    })
+
+    expect(resume?.launchCommand).toBe(
+      "'hermes' 'chat' '--profile' 'work' '--yolo' '--tui' '--resume' 's1'"
+    )
+  })
+
+  it('resumes a classic-CLI Hermes override in the TUI without a stale query', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux',
+      agentCommand: 'hermes --cli --query old-prompt'
+    })
+
+    expect(plan?.launchCommand).toBe("'hermes' 'chat' '--tui' '--resume' 's1'")
+  })
+
+  it('refuses to resume through a wrapper whose Hermes executable it cannot find', () => {
+    expect(
+      buildAgentResumeStartupPlan({
+        agent: 'hermes',
+        providerSession: { key: 'session_id', id: 's1' },
+        cmdOverrides: {},
+        platform: 'linux',
+        agentCommand: "sh -c 'hermes --tui'"
+      })
+    ).toBeNull()
   })
 })
