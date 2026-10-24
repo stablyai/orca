@@ -21,7 +21,10 @@ type PasteTextIntoTerminalPaneArgs = {
   canContinue: () => boolean
   planOptions?: Pick<
     TerminalPasteTextOptions,
-    'forceBracketedPaste' | 'forceBracketedPasteForMultiline' | 'windowsInputRecordNewline'
+    | 'forceBracketedPaste'
+    | 'forceBracketedPasteForMultiline'
+    | 'windowsInputRecordNewline'
+    | 'separateFromDraft'
   >
 }
 
@@ -44,6 +47,7 @@ export async function pasteTextIntoTerminalPane({
     forceBracketedPaste: planOptions?.forceBracketedPaste,
     forceBracketedPasteForMultiline: planOptions?.forceBracketedPasteForMultiline,
     windowsInputRecordNewline: planOptions?.windowsInputRecordNewline,
+    separateFromDraft: planOptions?.separateFromDraft,
     terminalBracketedPasteMode: pane.terminal.modes?.bracketedPasteMode === true
   })
   return executeTerminalPastePlan(plan, {

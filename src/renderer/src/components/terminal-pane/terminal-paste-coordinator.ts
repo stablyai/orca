@@ -23,6 +23,7 @@ type PlanTerminalPasteArgs = {
   forceBracketedPaste?: boolean
   forceBracketedPasteForMultiline?: boolean
   windowsInputRecordNewline?: WindowsInputRecordNewline
+  separateFromDraft?: boolean
   terminalBracketedPasteMode?: boolean
   hasRichText?: boolean
   maxDirectBytes?: number
@@ -65,6 +66,7 @@ export function planTerminalPaste({
   forceBracketedPaste = false,
   forceBracketedPasteForMultiline = false,
   windowsInputRecordNewline,
+  separateFromDraft = false,
   terminalBracketedPasteMode = false,
   hasRichText = false,
   maxDirectBytes = TERMINAL_PASTE_DIRECT_MAX_BYTES,
@@ -76,6 +78,7 @@ export function planTerminalPaste({
     forceBracketedPaste,
     forceBracketedPasteForMultiline,
     windowsInputRecordNewline,
+    separateFromDraft,
     maxBytes,
     maxChunkBytes,
     maxDirectBytes,
@@ -92,6 +95,7 @@ export async function planTerminalPasteWithYield({
   forceBracketedPaste = false,
   forceBracketedPasteForMultiline = false,
   windowsInputRecordNewline,
+  separateFromDraft = false,
   terminalBracketedPasteMode = false,
   hasRichText = false,
   maxDirectBytes = TERMINAL_PASTE_DIRECT_MAX_BYTES,
@@ -118,6 +122,7 @@ export async function planTerminalPasteWithYield({
     forceBracketedPaste,
     forceBracketedPasteForMultiline,
     windowsInputRecordNewline,
+    separateFromDraft,
     maxBytes,
     maxChunkBytes,
     maxDirectBytes,
@@ -133,6 +138,7 @@ function buildTerminalPastePlan({
   forceBracketedPaste,
   forceBracketedPasteForMultiline,
   windowsInputRecordNewline,
+  separateFromDraft,
   terminalBracketedPasteMode,
   maxDirectBytes,
   maxChunkBytes,
@@ -143,6 +149,7 @@ function buildTerminalPastePlan({
   forceBracketedPaste: boolean
   forceBracketedPasteForMultiline: boolean
   windowsInputRecordNewline?: WindowsInputRecordNewline
+  separateFromDraft: boolean
   terminalBracketedPasteMode: boolean
   maxDirectBytes: number
   maxChunkBytes: number
@@ -187,6 +194,7 @@ function buildTerminalPastePlan({
     runtimeKey: target.runtime.runtimeKey,
     ...(shouldChunk ? { maxChunkBytes } : {}),
     bracketed: mode === 'bracketed-terminal' || (mode === 'chunked' && shouldBracketChunk),
+    ...(separateFromDraft ? { separateFromDraft: true } : {}),
     redactedDiagnostic: '',
     ...(mode === 'reject' ? { rejectReason: 'payload-too-large' } : {})
   }

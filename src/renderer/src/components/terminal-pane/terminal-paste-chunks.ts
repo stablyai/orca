@@ -21,6 +21,9 @@ export function* iterateTerminalPastePlanChunks(plan: TerminalPastePlan): Genera
     plan.windowsInputRecordNewline === 'csi-u' ? 8 : 4,
     plan.maxChunkBytes ?? TERMINAL_PASTE_CHUNK_MAX_BYTES
   )
+  if (plan.separateFromDraft) {
+    yield ' '
+  }
   if (plan.bracketed) {
     yield BRACKETED_PASTE_START
   }

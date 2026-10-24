@@ -43,6 +43,7 @@ export type TerminalPastePlan = {
   runtimeKey: string
   maxChunkBytes?: number
   bracketed: boolean
+  separateFromDraft?: boolean
   redactedDiagnostic: string
   rejectReason?: TerminalPasteExecutionReason
 }
@@ -52,6 +53,9 @@ export type TerminalPasteTextOptions = {
   forceBracketedPasteForMultiline?: boolean
   windowsInputRecordNewline?: WindowsInputRecordNewline
   recoverImagePasteWebglAtlas?: boolean
+  // Why: a leading space keeps a pasted path its own token after typed text; it
+  // is sent outside the paste frame so the TUI still receives the bare path.
+  separateFromDraft?: boolean
 }
 
 export type WindowsInputRecordNewline = 'alt-enter' | 'csi-u'
