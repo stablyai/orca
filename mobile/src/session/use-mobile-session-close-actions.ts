@@ -5,10 +5,12 @@ import {
   sessionTerminalRename
 } from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import { removeRecentSessionCard } from './recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     setTerminals,
@@ -75,6 +77,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         await sessionTerminalClose.request(client, { terminal: target.handle })
       )
       if (response.accepted) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+        }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         clearTerminalLiveInputDefault(target.handle)
@@ -117,6 +122,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(
+            hostId,
+            worktreeId,
+            tab.id,
+            tab.type === 'terminal' ? tab.terminal : undefined
+          )
+        }
         if (tab.type === 'markdown') {
           setMarkdownDocs((prev) => {
             const doc = prev.get(tab.id)

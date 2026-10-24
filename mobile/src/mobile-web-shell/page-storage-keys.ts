@@ -19,6 +19,8 @@
 export const PAGE_STORAGE_EXACT_KEYS = [
   /** The repo the New Workspace drawer opens on. */
   'orca:last-visited-worktree',
+  /** Recent session cards. Also copied onto last-visited so an OTA shell keeps them. */
+  'orca:recent-session-cards',
   /** The worktree-list sidebar's width, which `app/h/_layout.tsx` renders above every page route. */
   'orca:hostSidebarWidth',
   /** The session screen's docked panel width, dragged by `use-mobile-dock-resize.ts`. */

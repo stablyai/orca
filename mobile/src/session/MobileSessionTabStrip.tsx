@@ -5,10 +5,11 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { agentDotState, agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
+  resolveMobileSessionTabDotState,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
@@ -66,11 +67,9 @@ export function MobileSessionTabStrip({
   const tabStates = useMemo(() => {
     const states = new Map<string, AgentDotState>()
     for (const tab of visibleTabs) {
-      // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
-      if (tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed) {
-        states.set(tab.id, agentDotState(tab.agentStatus, now))
-      } else if (tab.type === 'agent-session' && tab.chatStatus) {
-        states.set(tab.id, agentDotState(tab.chatStatus, now))
+      const state = resolveMobileSessionTabDotState(tab, now)
+      if (state) {
+        states.set(tab.id, state)
       }
     }
     return states

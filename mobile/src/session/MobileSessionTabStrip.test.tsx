@@ -30,7 +30,9 @@ vi.mock('../platform/keyboard-occlusion', () => ({
 vi.mock('../terminal/terminal-viewport-refit', () => ({
   useTerminalViewportRefit: () => ({ notifyKeyboardVisibility: () => {} })
 }))
-vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
+vi.mock('../worktree/last-visited-worktree-by-host', () => ({
+  writeLastVisitedWorktree: async () => {}
+}))
 
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
 import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-state'

@@ -1,11 +1,19 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import {
+  buildRecentSessionCardFromTab,
+  hydrateRecentSessionCards,
+  reconcileRecentSessionCardsForWorktree,
+  recordRecentSessionCardVisit
+} from './recent-session-cards'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
+
+const EMPTY_SESSION_TABS: MobileSessionLifecycleModel['sessionTabs'] = []
 
 /**
  * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
@@ -38,12 +46,15 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
->
+> &
+  Partial<Pick<MobileSessionLifecycleModel, 'sessionTabs' | 'worktreeName'>>
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
+    worktreeName,
+    sessionTabs = EMPTY_SESSION_TABS,
     router,
     connState,
     terminals,
@@ -158,6 +169,45 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
     }
   }, [hostId, worktreeId, executionHost])
+
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+  }, [])
+
+  const lastRecordedCardKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!hostId || !worktreeId) {
+      return
+    }
+    if (sessionTabs.length > 0) {
+      reconcileRecentSessionCardsForWorktree({
+        hostId,
+        worktreeId,
+        liveTabs: sessionTabs
+      })
+    }
+    if (!activeSessionTabId) {
+      return
+    }
+    const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
+    if (!activeTab) {
+      return
+    }
+    // Why: status receipts rewrite sessionTabs without a new visit.
+    const recordedKey = [hostId, worktreeId, activeTab.id, activeTab.title, worktreeName].join('\0')
+    if (lastRecordedCardKeyRef.current === recordedKey) {
+      return
+    }
+    lastRecordedCardKeyRef.current = recordedKey
+    recordRecentSessionCardVisit(
+      buildRecentSessionCardFromTab({
+        hostId,
+        worktreeId,
+        worktreeName: worktreeName || '',
+        tab: activeTab
+      })
+    )
+  }, [activeSessionTabId, hostId, sessionTabs, worktreeId, worktreeName])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

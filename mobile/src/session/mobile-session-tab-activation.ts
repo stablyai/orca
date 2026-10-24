@@ -82,6 +82,40 @@ export function focusMobileTerminal(
   )
 }
 
+export type PendingCrossWorktreeTabTarget = {
+  worktreeId: string
+  tabId: string
+  leafId?: string
+  terminalHandle?: string
+}
+
+let pendingCrossWorktreeTabTarget: PendingCrossWorktreeTabTarget | null = null
+
+export function setPendingCrossWorktreeTabTarget(
+  target: PendingCrossWorktreeTabTarget | null
+): void {
+  if (!target) {
+    pendingCrossWorktreeTabTarget = null
+    return
+  }
+  const worktreeId = target.worktreeId.startsWith('id:')
+    ? target.worktreeId.slice(3)
+    : target.worktreeId
+  pendingCrossWorktreeTabTarget = worktreeId ? { ...target, worktreeId } : null
+}
+
+export function consumePendingCrossWorktreeTabTarget(
+  worktree: string
+): PendingCrossWorktreeTabTarget | null {
+  const normalized = worktree.startsWith('id:') ? worktree.slice(3) : worktree
+  if (!normalized || pendingCrossWorktreeTabTarget?.worktreeId !== normalized) {
+    return null
+  }
+  const target = pendingCrossWorktreeTabTarget
+  pendingCrossWorktreeTabTarget = null
+  return target
+}
+
 export function activateMobileSessionTab(
   client: ActivationClient,
   params: MobileSessionTabActivationParams
