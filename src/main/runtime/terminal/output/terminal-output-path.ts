@@ -31,8 +31,28 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
       return true
     }
     const candidates = ptyId ? this.recentPtyPathCandidatesById.get(ptyId) : null
-    return candidates
-      ? recentTerminalPathCandidatesIncludePath(candidates, pathText, absolutePath)
+    if (
+      candidates &&
+      recentTerminalPathCandidatesIncludePath(candidates, pathText, absolutePath)
+    ) {
+      return true
+    }
+    const headlessLines = ptyId
+      ? this.headlessTerminals.get(ptyId)?.emulator.getBufferTailLines(500)
+      : null
+    if (
+      headlessLines &&
+      headlessLines.length > 0 &&
+      recentTerminalOutputIncludesPath(headlessLines.join('\n'), pathText, absolutePath)
+    ) {
+      return true
+    }
+    const pty = ptyId ? this.ptysById.get(ptyId) : null
+    const tailText = pty
+      ? [...pty.tailBuffer, ...(pty.tailPartialLine ? [pty.tailPartialLine] : [])].join('\n')
+      : ''
+    return tailText.length > 0
+      ? recentTerminalOutputIncludesPath(tailText, pathText, absolutePath)
       : false
   }
 

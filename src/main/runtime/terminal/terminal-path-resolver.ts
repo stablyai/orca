@@ -160,14 +160,21 @@ export class RuntimeTerminalPathResolver {
       ) {
         return { ...empty, relativePath, absolutePath }
       }
-      const artifactPath = await this.artifacts.resolveAllowedTerminalArtifactPath({
+      const editableArtifactPath = await this.artifacts.resolveAllowedTerminalArtifactPath({
         absolutePath,
         connectionId,
         worktreePath: worktree.path
       })
-      if (!artifactPath) {
+      if (
+        editableArtifactPath === null &&
+        process.platform !== 'win32' &&
+        absolutePath.startsWith('//')
+      ) {
         return { ...empty, relativePath, absolutePath }
       }
+      const artifactPath =
+        editableArtifactPath ??
+        (await this.artifacts.resolveNativeChatArtifactPath(absolutePath, connectionId))
       if (
         !(await this.host.hasRecentTerminalOutputPath?.(
           normalizedTerminalHandle,
@@ -181,7 +188,8 @@ export class RuntimeTerminalPathResolver {
         worktreeId: worktree.id,
         artifactPath,
         rejectedAbsolutePath: absolutePath,
-        clientId
+        clientId,
+        readOnly: editableArtifactPath === null
       })
     } catch (error) {
       // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.

@@ -163,6 +163,125 @@ function matchSpacedFilePathAtColumn(lineText: string, col: number): TappedFileP
   return null
 }
 
+export type TerminalWrappedLineRow = { text: string; isWrapped?: boolean }
+
+type WrappedRowSlice = {
+  content: string
+  contentStart: number
+  contentEnd: number
+  leadingToken: string
+  trailingToken: string
+}
+
+function sliceWrappedRow(text: string): WrappedRowSlice {
+  const contentStart = /^[ \t]*[│┃║╎╏┆┇┊┋|]?[ \t]*/.exec(text)?.[0].length ?? 0
+  const rightTrim = /[ \t]*[│┃║╎╏┆┇┊┋|]?[ \t]*$/.exec(text)?.[0].length ?? 0
+  const contentEnd = Math.max(contentStart, text.length - rightTrim)
+  const content = text.slice(contentStart, contentEnd)
+  return {
+    content,
+    contentStart,
+    contentEnd,
+    leadingToken: /^[A-Za-z0-9._~\-/%+@:\\()[\]]+/.exec(content)?.[0] ?? '',
+    trailingToken: /[A-Za-z0-9._~\-/%+@:\\()[\]]+$/.exec(content)?.[0] ?? ''
+  }
+}
+
+function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice): boolean {
+  if (
+    !prev.trailingToken ||
+    !next.leadingToken ||
+    (next.leadingToken === '-' && (next.content.length === 1 || /\s/.test(next.content.charAt(1)))) ||
+    /^(?:~[\\/]|\/{2}|\\\\|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(next.leadingToken)
+  ) {
+    return false
+  }
+  if (
+    /\.[A-Za-z0-9_+-]+(?::\d+)*$/.test(prev.trailingToken) &&
+    !/[\\/]\.[A-Za-z0-9_+-]+$/.test(prev.trailingToken)
+  ) {
+    return (
+      prev.contentEnd >= 35 &&
+      /\.[a-z0-9]{1,2}$/.test(prev.trailingToken) &&
+      /^[a-z0-9]{1,4}(?::\d+)*$/.test(next.leadingToken)
+    )
+  }
+  return true
+}
+
+export function matchWrappedFilePathAtRowColumn(
+  rows: readonly TerminalWrappedLineRow[],
+  tappedRowIndex: number,
+  tappedCol: number
+): TappedFilePath | null {
+  const tappedRow = rows[tappedRowIndex]
+  if (!tappedRow) {
+    return null
+  }
+  let softStart = tappedRowIndex
+  while (softStart > 0 && rows[softStart]?.isWrapped) {
+    softStart -= 1
+  }
+  let softEnd = tappedRowIndex
+  while (softEnd + 1 < rows.length && rows[softEnd + 1]?.isWrapped) {
+    softEnd += 1
+  }
+  if (softEnd > softStart) {
+    let joinedText = ''
+    let joinedCol = tappedCol
+    for (let i = softStart; i <= softEnd; i += 1) {
+      const rowText = rows[i]?.text ?? ''
+      const segment = i < softEnd ? rowText.replace(/\s+$/, '') : rowText
+      if (i === tappedRowIndex) {
+        joinedCol = joinedText.length + Math.min(tappedCol, segment.length)
+      }
+      joinedText += segment
+    }
+    const softMatched = matchFilePathAtColumn(joinedText, joinedCol)
+    if (softMatched) {
+      return softMatched
+    }
+  }
+  const slices = rows.map((row) => sliceWrappedRow(row.text))
+  const tappedSlice = slices[tappedRowIndex]
+  if (tappedSlice && tappedCol >= tappedSlice.contentStart && tappedCol < tappedSlice.contentEnd) {
+    let hardStart = tappedRowIndex
+    while (
+      hardStart > 0 &&
+      canRowContinueWrappedPath(slices[hardStart - 1]!, slices[hardStart]!) &&
+      (hardStart === tappedRowIndex ||
+        slices[hardStart]!.leadingToken.length === slices[hardStart]!.content.length)
+    ) {
+      hardStart -= 1
+    }
+    let hardEnd = tappedRowIndex
+    while (
+      hardEnd + 1 < slices.length &&
+      canRowContinueWrappedPath(slices[hardEnd]!, slices[hardEnd + 1]!) &&
+      (hardEnd === hardStart ||
+        slices[hardEnd]!.trailingToken.length === slices[hardEnd]!.content.length)
+    ) {
+      hardEnd += 1
+    }
+    if (hardEnd > hardStart) {
+      let joinedText = ''
+      let joinedCol = 0
+      for (let i = hardStart; i <= hardEnd; i += 1) {
+        const slice = slices[i]!
+        if (i === tappedRowIndex) {
+          joinedCol = joinedText.length + (tappedCol - slice.contentStart)
+        }
+        joinedText += slice.content
+      }
+      const hardMatched = matchFilePathAtColumn(joinedText, joinedCol)
+      if (hardMatched && /[\\/]/.test(hardMatched.pathText)) {
+        return hardMatched
+      }
+    }
+  }
+  return matchFilePathAtColumn(tappedRow.text, tappedCol)
+}
+
 // Returns the file-path span (after punctuation trim) that contains `col`, or
 // null when the tap isn't on a path.
 export function matchFilePathAtColumn(lineText: string, col: number): TappedFilePath | null {

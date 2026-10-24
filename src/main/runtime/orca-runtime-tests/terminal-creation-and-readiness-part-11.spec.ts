@@ -284,6 +284,24 @@ describe('OrcaRuntimeService', () => {
     ).toBe(true)
   })
 
+  it('matches Windows drive paths across slash styles and wrapped TUI lines', () => {
+    const forwardPath =
+      'C:/Users/zhangxaochen260423/.gemini/antigravity-cli/brain/0b183352-a8fd-43fe-ab03-3ff674bc67a9/ai_era_early_childhood_education.md'
+    const backslashPath = forwardPath.replace(/\//g, '\\')
+    const candidates = appendRecentPtyPathCandidates(undefined, `wrote ${forwardPath}\n`)
+    expect(
+      recentTerminalPathCandidatesIncludePath(candidates, forwardPath, backslashPath)
+    ).toBe(true)
+
+    const wrappedOutput = [
+      '│ • C:/Users/zhangxaochen260423/.gemini/antigravity- │',
+      '│   cli/brain/0b183352-a8fd-43fe-ab03-3ff674bc67a9/a │',
+      '│   i_era_early_childhood_education.md               │',
+      '│   Done                                             │'
+    ].join('\r\n')
+    expect(recentTerminalOutputIncludesPath(wrappedOutput, forwardPath, backslashPath)).toBe(true)
+  })
+
   it('matches terminal artifact paths inside loopback file URI output', () => {
     expect(
       recentTerminalOutputIncludesPath(

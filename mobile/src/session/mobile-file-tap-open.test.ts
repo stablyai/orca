@@ -746,4 +746,66 @@ describe('openMobileFileTap', () => {
 
     expect(pushPreviewRoute).not.toHaveBeenCalled()
   })
+
+  it('gates opening behind confirmResolvedOpen when provided and completes on proceed', async () => {
+    const client = createClient([
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'src/note.md',
+        absolutePath: 'C:/repo/src/note.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'worktree-file',
+          provider: 'local',
+          relativePath: 'src/note.md',
+          absolutePath: 'C:/repo/src/note.md'
+        }
+      })
+    ])
+    const pushPreviewRoute = vi.fn()
+    const triggerOpenFeedback = vi.fn()
+    let proceedOpen: (() => void) | null = null
+    const confirmResolvedOpen = vi.fn((_target, proceed: () => void) => {
+      proceedOpen = proceed
+    })
+
+    openMobileFileTap({
+      client,
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      pathText: 'src/note.md',
+      terminalHandle: 'terminal-1',
+      line: 15,
+      column: 2,
+      pushPreviewRoute,
+      openBrowser: vi.fn(),
+      triggerOpenFeedback,
+      fetchSessionTabs: vi.fn(),
+      getSessionTabs: () => [],
+      getActiveSessionTabId: () => null,
+      getActivationState: activeTerminalState,
+      switchSessionTab: vi.fn(),
+      scheduleDelayedAction: vi.fn(),
+      confirmResolvedOpen
+    })
+    await Promise.resolve()
+
+    expect(confirmResolvedOpen).toHaveBeenCalledWith(
+      {
+        title: 'note.md',
+        displayPath: 'src/note.md:15:2',
+        copyPath: 'C:/repo/src/note.md'
+      },
+      expect.any(Function)
+    )
+    expect(pushPreviewRoute).not.toHaveBeenCalled()
+    expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
+
+    proceedOpen!()
+    await Promise.resolve()
+
+    expect(pushPreviewRoute).toHaveBeenCalledTimes(1)
+    expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
+  })
 })
