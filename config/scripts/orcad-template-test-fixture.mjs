@@ -1,3 +1,4 @@
+import { CLAUDE_RICH_OUTPUT_MANIFEST } from '../../src/shared/claude-rich-output-artifacts.ts'
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -35,13 +36,18 @@ function targetFileContents(target, filename) {
 export async function writeOrcadTemplateTestFixture(resourcesDir, { compat = false } = {}) {
   const templateDir = join(resourcesDir, 'orcad-template')
   const commonSha256 = {}
-  for (const filename of orcadTemplateCommonFilenames(['out/mobile-web/index.html'])) {
+  for (const filename of orcadTemplateCommonFilenames([
+    'out/mobile-web/index.html',
+    'claude-rich-output/reply-media/hooks/register.tsx'
+  ])) {
     commonSha256[filename] = await write(
       join(templateDir, ...filename.split('/')),
       Buffer.from(
-        filename === ORCAD_MOBILE_WEB_MANIFEST
-          ? JSON.stringify({ assets: [{ path: 'index.html' }] })
-          : `common:${filename}`
+        filename === CLAUDE_RICH_OUTPUT_MANIFEST
+          ? JSON.stringify({ assets: ['claude-rich-output/reply-media/hooks/register.tsx'] })
+          : filename === ORCAD_MOBILE_WEB_MANIFEST
+            ? JSON.stringify({ assets: [{ path: 'index.html' }] })
+            : `common:${filename}`
       )
     )
   }

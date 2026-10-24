@@ -319,7 +319,9 @@
         "openManageSessions": "Open Manage Sessions",
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
         "administratorApproval": "Windows will ask for approval. Use your usual account."
-      }
+      },
+      "claudeRichOutput": "Claude Rich Output",
+      "claudeRichOutputDescription": "Experimental NeonCoat Markdown, formulas, diagrams, images and video in new Claude terminals. Requires a compatible Claude CLI, Node 24, librsvg and ffmpeg on the execution host. Existing sessions are unchanged."
     },
     "appearance": {
       "language": {

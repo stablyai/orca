@@ -1,3 +1,8 @@
+import {
+  CLAUDE_RICH_OUTPUT_DIR,
+  CLAUDE_RICH_OUTPUT_MANIFEST,
+  isClaudeRichOutputAsset
+} from '../../shared/claude-rich-output-artifacts'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
@@ -90,7 +95,16 @@ export async function assembleOrcadArtifact(args: {
 }): Promise<string> {
   const trust = args.trustVerificationRecord === true
   const manifest = args.manifest ?? (await readTemplateManifest(args.templateDir))
-  const mobileWebAssets = templateMobileWebAssets(manifest)
+  const richAssets = Object.keys(manifest.commonSha256)
+    .filter(
+      (path) =>
+        path.startsWith(`${CLAUDE_RICH_OUTPUT_DIR}/`) && path !== CLAUDE_RICH_OUTPUT_MANIFEST
+    )
+    .sort(compareCodeUnits)
+  if (richAssets.some((path) => !isClaudeRichOutputAsset(path))) {
+    throw new Error('Packaged orcad template names an unsafe rich output asset')
+  }
+  const mobileWebAssets = [...templateMobileWebAssets(manifest), ...richAssets]
   const sources = artifactSources(args.templateDir, args.target, manifest, mobileWebAssets)
   const expected = expectedTemplateSha256(args.target, manifest, mobileWebAssets)
   const targetRoot = join(args.cacheRoot, args.target)

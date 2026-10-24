@@ -208,6 +208,9 @@ if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !==
 cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 'licenses'), {
   recursive: true
 })
+cpSync(join(ROOT, 'out', 'claude-rich-output'), join(OUT_DIR, 'claude-rich-output'), {
+  recursive: true
+})
 cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
   recursive: true
 })

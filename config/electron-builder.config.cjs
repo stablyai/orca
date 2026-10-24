@@ -162,6 +162,7 @@ const commonExtraResources = [
   bundledPluginResources,
   skillFreshnessResources,
   nativeChatVisualsResource,
+  { from: 'out/claude-rich-output', to: 'claude-rich-output' },
   emojiShortcodeDatasetResource
 ]
 // Why: native speech addons must be real files outside app.asar; copy only the
@@ -325,6 +326,8 @@ module.exports = {
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
     '!resources/native-chat-visuals/**',
+    '!resources/claude-rich-output/**',
+    '!out/claude-rich-output{,/**/*}',
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',

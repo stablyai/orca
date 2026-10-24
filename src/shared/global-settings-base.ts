@@ -1,5 +1,6 @@
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
+import type { ClaudeRichOutputSettings } from './claude-rich-output-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
@@ -11,4 +12,5 @@ export type GlobalSettingsBase = NativeChatGlobalSettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
-  BrowserLinkOpeningSettings
+  BrowserLinkOpeningSettings &
+  ClaudeRichOutputSettings

@@ -1,3 +1,4 @@
+import { CLAUDE_RICH_OUTPUT_MANIFEST } from '../../src/shared/claude-rich-output-artifacts.ts'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -21,22 +22,42 @@ afterEach(() => {
   }
 })
 
+const RICH_ASSET = 'claude-rich-output/reply-media/render/math.mjs'
 const PAGE_ASSET = 'out/mobile-web/index.html'
 const PAGE_MANIFEST = JSON.stringify({ assets: [{ path: 'index.html' }] })
 
 function createArtifactDirectory(target = 'linux-x64-glibc') {
   const directory = mkdtempSync(join(tmpdir(), 'orcad-version-'))
   directories.push(directory)
-  for (const filename of orcadArtifactFilenames(target, [PAGE_ASSET])) {
+  for (const filename of orcadArtifactFilenames(target, [PAGE_ASSET, RICH_ASSET])) {
     const path = join(directory, filename)
     mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, filename === ORCAD_MOBILE_WEB_MANIFEST ? PAGE_MANIFEST : filename)
+    writeFileSync(
+      path,
+      filename === CLAUDE_RICH_OUTPUT_MANIFEST
+        ? JSON.stringify({ assets: [RICH_ASSET] })
+        : filename === ORCAD_MOBILE_WEB_MANIFEST
+          ? PAGE_MANIFEST
+          : filename
+    )
   }
   writeFileSync(join(directory, ORCAD_SERVER_TARGET_FILENAME), `${target}\n`)
   return directory
 }
 
 describe('standalone runtime version', () => {
+  it('delivers rich output changes as a new remote version and rejects missing assets', async () => {
+    const target = 'linux-x64-glibc'
+    const dir = createArtifactDirectory(target)
+    const before = computeOrcadFullVersion(dir, { target })
+    writeFileSync(join(dir, RICH_ASSET), 'updated renderer')
+    const after = computeOrcadFullVersion(dir, { target })
+    expect(after).not.toBe(before)
+    expect(after).toBe(await readOrcadArtifactIdentity(dir))
+    rmSync(join(dir, RICH_ASSET))
+    expect(() => computeOrcadFullVersion(dir, { target })).toThrow(RICH_ASSET)
+  })
+
   it('changes when a shipped search binary changes and rejects a missing binary', () => {
     const target = 'linux-x64-glibc'
     const dir = createArtifactDirectory(target)

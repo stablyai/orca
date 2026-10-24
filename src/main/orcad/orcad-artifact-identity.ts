@@ -1,3 +1,7 @@
+import {
+  CLAUDE_RICH_OUTPUT_MANIFEST,
+  claudeRichOutputAssetFilenames
+} from '../../shared/claude-rich-output-artifacts'
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -28,10 +32,14 @@ export async function readOrcadArtifactIdentity(directory: string): Promise<stri
     target.split('-')[1] ?? '',
     target.endsWith('-musl') ? 'musl' : 'glibc'
   )
-  const filenames = orcadArtifactFilenames(
-    target,
-    orcadMobileWebAssetFilenames(await readFile(join(directory, ORCAD_MOBILE_WEB_MANIFEST), 'utf8'))
-  )
+  const filenames = orcadArtifactFilenames(target, [
+    ...orcadMobileWebAssetFilenames(
+      await readFile(join(directory, ORCAD_MOBILE_WEB_MANIFEST), 'utf8')
+    ),
+    ...claudeRichOutputAssetFilenames(
+      await readFile(join(directory, CLAUDE_RICH_OUTPUT_MANIFEST), 'utf8')
+    )
+  ])
   if (existsSync(join(directory, browser))) {
     filenames.push(browser)
   }

@@ -1,0 +1,1 @@
+{ "extends": "./.claude-plugin/types/tsconfig.json" }

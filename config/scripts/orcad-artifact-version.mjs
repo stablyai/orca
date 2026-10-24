@@ -1,3 +1,4 @@
+import { readOrcadRichOutputAssetFilenames } from './orcad-rich-output-bundle.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -7,10 +8,10 @@ import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
 /** The runtime enters through `.runtime-node`'s executableSha256 string, never its bytes (design D2). */
 export function computeOrcadFullVersion(artifactDir, { target, agentBrowserFilename }) {
   const hash = createHash('sha256')
-  for (const filename of orcadArtifactFilenames(
-    target,
-    readOrcadMobileWebAssetFilenames(artifactDir)
-  )) {
+  for (const filename of orcadArtifactFilenames(target, [
+    ...readOrcadMobileWebAssetFilenames(artifactDir),
+    ...readOrcadRichOutputAssetFilenames(artifactDir)
+  ])) {
     const artifactPath = join(artifactDir, filename)
     if (!existsSync(artifactPath)) {
       throw new Error(

@@ -1,0 +1,3 @@
+# reply-media
+
+Renders display formulas, selected Mermaid diagram types, local images, and bounded silent video previews in Claude terminal replies. Requires Node 24, librsvg and ffmpeg on the execution host. Inline formulas and remote image URLs stay textual. Bundled by Orca as an optional module derived from NeonCoat by Nate Chia (MIT). Enable Claude Rich Output in Orca Terminal settings and start a new Claude session. Existing sessions and global Claude settings are not changed. Compatible experimental Claude function hooks are required. See the parent README for compatibility, limits, and provenance.
