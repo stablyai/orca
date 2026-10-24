@@ -274,6 +274,7 @@ function setAgentLineageState(options: {
     // toggleCollapsedGroup; mutate the live Set so the next manual re-render
     // (store isn't reactive in this harness) reflects the user's toggle.
     collapsedGroups: options.collapsedGroups ?? new Set<string>(),
+    setSidebarCollapsibleGroupKeys: vi.fn(),
     toggleCollapsedGroup: vi.fn((key: string) => {
       // Why: mirror the real store's IMMUTABLE update — a fresh Set reference is
       // what makes WorktreeList's `rows` useMemo (keyed on the Set identity)

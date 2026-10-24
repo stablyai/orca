@@ -125,7 +125,7 @@ export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
  * Order project header entries by the user's project-order preference. Manual
  * follows the canonical repoOrder; Recent follows each project's most recent
  * visible workspace activity (descending), with empty/imported-only projects
- * sorting after active ones, then by manual rank, then label.
+ * sorting after active ones, then by manual rank, then label. Name sorts by label.
  */
 export function sortProjectEntries<
   T extends readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]
@@ -151,6 +151,11 @@ export function sortProjectEntries<
       }
       return compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
     })
+  }
+  if (projectOrderBy === 'name') {
+    return [...entries].sort(
+      (a, b) => compareSidebarText(a[1].label, b[1].label) || compareCodePoints(a[0], b[0])
+    )
   }
   if (!repoOrder) {
     return entries

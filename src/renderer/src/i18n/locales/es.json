@@ -5668,7 +5668,9 @@
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
           "spaces": "Espacios",
           "views": "Vista de la barra lateral",
-          "addProject": "Agregar proyecto"
+          "addProject": "Agregar proyecto",
+          "collapseAll": "Contraer todo",
+          "expandAll": "Expandir todo"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -5751,6 +5753,7 @@
           "af9249c505": "Actividad más reciente en el espacio de trabajo",
           "b451c8b162": "Reciente",
           "6664282a7b": "Arrastra proyectos para organizarlos",
+          "ed82ad03f8": "Orden alfabético por nombre de proyecto",
           "7b316bdd51": "Manual",
           "7153d07485": "Arrastra los espacios de trabajo para organizarlos dentro de cada grupo.",
           "2170d553cf": "Proyecto",

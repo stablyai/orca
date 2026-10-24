@@ -43,7 +43,8 @@ export const WORKSPACE_SORT_BY_CHOICES = [
 
 export const WORKSPACE_PROJECT_ORDER_CHOICES = [
   { id: 'manual', label: 'Manual', description: 'Drag projects to arrange them' },
-  { id: 'recent', label: 'Recent', description: 'Most recent workspace activity' }
+  { id: 'recent', label: 'Recent', description: 'Most recent workspace activity' },
+  { id: 'name', label: 'Name', description: 'Alphabetical by project name' }
 ] as const satisfies readonly WorkspaceViewChoice<ProjectOrderBy>[]
 
 /** Card layout is the `compactWorktreeCards` setting, not UI state. */

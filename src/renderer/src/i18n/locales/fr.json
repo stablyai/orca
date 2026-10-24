@@ -5829,6 +5829,8 @@
           "5c9c7c16aa": "Ajoutez un projet pour créer des espaces de travail",
           "a30e34eb5c": "Fermer le tableau des espaces de travail",
           "addProject": "Ajouter un projet",
+          "collapseAll": "Tout réduire",
+          "expandAll": "Tout développer",
           "projects": "Projets",
           "spaces": "Espaces",
           "views": "Vue de la barre latérale"
@@ -5930,6 +5932,7 @@
           "af9249c505": "Activité d'espace de travail la plus récente",
           "b451c8b162": "Récents",
           "6664282a7b": "Glissez les projets pour les ranger",
+          "ed82ad03f8": "Ordre alphabétique par nom de projet",
           "7b316bdd51": "Manuel",
           "7153d07485": "Glissez les espaces de travail pour les ranger au sein de chaque groupe.",
           "2170d553cf": "Projet",

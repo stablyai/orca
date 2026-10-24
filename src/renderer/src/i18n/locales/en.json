@@ -5956,7 +5956,9 @@
           "5c9c7c16aa": "Add a project to create workspaces",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "addProject": "Add project"
+          "addProject": "Add project",
+          "collapseAll": "Collapse all",
+          "expandAll": "Expand all"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -6055,6 +6057,7 @@
           "af9249c505": "Most recent workspace activity",
           "b451c8b162": "Recent",
           "6664282a7b": "Drag projects to arrange them",
+          "ed82ad03f8": "Alphabetical by project name",
           "7b316bdd51": "Manual",
           "7153d07485": "Drag workspaces to arrange them within each group.",
           "2170d553cf": "Project",

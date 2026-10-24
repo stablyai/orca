@@ -89,6 +89,10 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) => void
+  /** Collapse keys of the section headers the sidebar list currently renders. */
+  sidebarCollapsibleGroupKeys: readonly string[]
+  setSidebarCollapsibleGroupKeys: (keys: readonly string[]) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void

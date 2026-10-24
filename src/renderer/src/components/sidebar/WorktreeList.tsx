@@ -27,6 +27,7 @@ import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
 import { useSidebarRevealRequests } from './worktree-list/navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
+import { usePublishCollapsibleGroupKeys } from './worktree-list/listing/use-publish-collapsible-group-keys'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
 import { useWindowSidebarListModel } from './worktree-list/listing/use-window-list-model'
 import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
@@ -147,6 +148,7 @@ const WorktreeList = React.memo(function WorktreeList({
     [rowModel.occurrencePlan]
   )
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
+  usePublishCollapsibleGroupKeys(rowModel.sectionRows)
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy

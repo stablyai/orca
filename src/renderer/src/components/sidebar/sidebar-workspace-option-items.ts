@@ -44,6 +44,8 @@ const manualLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual')
 const recentLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent')
+const nameLabel = (): string =>
+  translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name')
 const compactLabel = (): string =>
   translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
 
@@ -62,7 +64,7 @@ export const GROUP_BY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_GROUP_
 export const SORT_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_SORT_BY_CHOICES>>(
   WORKSPACE_SORT_BY_CHOICES,
   {
-    name: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name'),
+    name: nameLabel,
     smart: () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.503462f2b4', 'Agent Activity'),
     recent: recentLabel,
@@ -87,7 +89,7 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
   ChoiceId<typeof WORKSPACE_PROJECT_ORDER_CHOICES>
 >(
   WORKSPACE_PROJECT_ORDER_CHOICES,
-  { manual: manualLabel, recent: recentLabel },
+  { manual: manualLabel, recent: recentLabel, name: nameLabel },
   {
     manual: () =>
       translate(
@@ -98,6 +100,11 @@ export const PROJECT_ORDER_OPTIONS = localizeChoices<
       translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
         'Most recent workspace activity'
+      ),
+    name: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ed82ad03f8',
+        'Alphabetical by project name'
       )
   }
 )

@@ -1,8 +1,10 @@
+import type { ProjectOrderBy } from '../../../../shared/ui-chrome-types'
+
 export function shouldShowProjectOrderManualDefaultNotice(args: {
   persistedUIReady: boolean
   projectOrderManualDefaultNoticeDismissed: boolean
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
-  projectOrderBy: 'manual' | 'recent'
+  projectOrderBy: ProjectOrderBy
   repoCount: number
 }): boolean {
   return (

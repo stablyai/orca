@@ -50,6 +50,12 @@ export function appendProjectGroupSections(
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
     }
+    if (projectOrderBy === 'name') {
+      return [...entries].sort(
+        (left, right) =>
+          compareSidebarText(left[1].label, right[1].label) || compareCodePoints(left[0], right[0])
+      )
+    }
     // Manual: within a Project Group, projects order by their per-group rank
     // (projectGroupOrder), falling back to global repoOrder when unset so drag
     // midpoint commits and the rendered order stay aligned.
