@@ -169,7 +169,10 @@ test('a moved pane shows its own history once, in its folder, across three reloa
   const marker = `MOVED-${randomUUID().slice(0, 8)}`
   const host = await launchHeadlessPairedRuntimeHost({
     pinnedServePort: true,
-    withoutBrowser: true
+    withoutBrowser: true,
+    // Why: CI runners' login profile cds into GITHUB_WORKSPACE, which moves every login shell,
+    // restored or not; a distro's profile does not. Measure where Orca starts the pane.
+    extraEnv: { GITHUB_WORKSPACE: '' }
   })
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
