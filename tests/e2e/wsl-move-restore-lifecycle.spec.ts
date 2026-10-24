@@ -486,22 +486,21 @@ test('"Use on this computer again" after reloads and a restart brings back slept
     launched = undefined
     // Hermetic resume: the agent command echoes its arguments instead of running Codex.
     mutateStoppedProfileState(session.userDataDir, (state) => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test owns the persisted fixture; the record is checked below.
-      const records = (
-        state.workspaceSession as {
-          sleepingAgentSessionsByPaneKey?: Record<
-            string,
-            { providerSession?: { id?: unknown }; launchConfig?: unknown }
-          >
-        }
-      ).sleepingAgentSessionsByPaneKey
-      const record = Object.values(records ?? {}).find(
-        (candidate) => candidate.providerSession?.id === UNDO_AGENT_SESSION
+      const session: unknown = state.workspaceSession
+      const records: unknown =
+        session && typeof session === 'object'
+          ? Reflect.get(session, 'sleepingAgentSessionsByPaneKey')
+          : undefined
+      const record = Object.values(records && typeof records === 'object' ? records : {}).find(
+        (candidate: unknown) =>
+          candidate !== null &&
+          typeof candidate === 'object' &&
+          Reflect.get(Reflect.get(candidate, 'providerSession') ?? {}, 'id') === UNDO_AGENT_SESSION
       )
-      if (!record) {
+      if (!record || typeof record !== 'object') {
         throw new Error('the pause kept no resumable agent for pane A')
       }
-      record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
+      Reflect.set(record, 'launchConfig', { agentCommand: 'echo', agentArgs: '', agentEnv: {} })
     })
 
     // The move committed: startup runs its desktop rewrite and retention, as after a real move.
