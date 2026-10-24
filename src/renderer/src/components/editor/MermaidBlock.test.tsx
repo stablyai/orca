@@ -162,4 +162,18 @@ describe('MermaidBlock rendering', () => {
     await act(async () => second.resolve({ svg: diagram }))
     await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(3))
   })
+
+  it('shows a diagram error again if the source becomes invalid after a successful render', async () => {
+    const { container, rerender } = render(<MermaidBlock content={complete} isDark={false} />)
+    await waitFor(() => expect(container.querySelector('svg')).not.toBeNull())
+
+    mermaid.render.mockRejectedValueOnce(new Error('Syntax error in text'))
+    rerender(<MermaidBlock content={partial} isDark={false} />)
+
+    await waitFor(() => {
+      expect(container.querySelector('.mermaid-error')).not.toBeNull()
+      expect(container.querySelector('svg')).toBeNull()
+    })
+    expect(container.querySelector('code')?.textContent).toBe(partial)
+  })
 })
