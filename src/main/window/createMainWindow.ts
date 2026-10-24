@@ -57,6 +57,7 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
   )
 }
 
+/** Constructs, secures, and initializes the main application BrowserWindow. */
 export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
@@ -143,8 +144,6 @@ export function createMainWindow(
   })
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
-  // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
-  setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
@@ -198,14 +197,28 @@ export function createMainWindow(
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
-  const closeLifecycle = installMainWindowCloseLifecycle({
-    focus,
-    mainWindow,
-    opts,
-    rendererWebContentsId,
-    state,
-    store
-  })
+  let closeLifecycle: ReturnType<typeof installMainWindowCloseLifecycle>
+  try {
+    closeLifecycle = installMainWindowCloseLifecycle({
+      focus,
+      mainWindow,
+      opts,
+      rendererWebContentsId,
+      state,
+      store
+    })
+  } catch (error) {
+    // A failed registration must not leave a blank window or its reveal timer alive.
+    state.freezeBoundsOnQuit()
+    state.clearInitialRevealFallbackTimer()
+    state.dispose()
+    focus.dispose()
+    powerMonitor.removeListener('resume', onSystemResume)
+    mainWindow.destroy()
+    throw error
+  }
+  // Publish privileged UI ownership only after initialization succeeds.
+  setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   mainWindow.on('closed', () => {
     closeDashboardPopout()
