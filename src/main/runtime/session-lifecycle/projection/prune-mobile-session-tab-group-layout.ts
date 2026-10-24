@@ -51,18 +51,12 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
   ): TabGroupLayoutNode | null {
-    if (!layout) {
-      return null
-    }
-    if (layout.type === 'leaf') {
-      return validGroupIds.has(layout.groupId) ? layout : null
+    if (!layout || layout.type === 'leaf') {
+      return layout && validGroupIds.has(layout.groupId) ? layout : null
     }
     const first = this.pruneMobileSessionTabGroupLayout(layout.first, validGroupIds)
     const second = this.pruneMobileSessionTabGroupLayout(layout.second, validGroupIds)
-    if (first && second) {
-      return { ...layout, first, second }
-    }
-    return first ?? second
+    return first && second ? { ...layout, first, second } : (first ?? second)
   }
 
   // Instance seams over the tab-group projections so callers (and tests) can
@@ -219,50 +213,49 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   ): RuntimePtyWorktreeRecord | null {
     const candidatePtyIds = [...new Set(this.getMobileTerminalLeafPtyIds(tab))]
     const paneKey = this.getMobileTerminalPaneKey(tab)
-    let disconnectedCandidateMatch: RuntimePtyWorktreeRecord | null = null
+    let worktreeOnly: RuntimePtyWorktreeRecord | null = null
+    let disconnectedPane: RuntimePtyWorktreeRecord | null = null
+    let disconnectedWorktreeOnly: RuntimePtyWorktreeRecord | null = null
     for (const candidatePtyId of candidatePtyIds) {
       const pty = this.ptysById.get(candidatePtyId)
-      if (!pty) {
-        continue
-      }
+      const recorded = pty ? this.paneOfPty(pty) : null
       // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
-      const recorded = this.paneOfPty(pty)
-      const matchesTab =
-        this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey) ||
-        (options.allowWorktreeOnlyMatch === true &&
-          pty.worktreeId === worktreeId &&
-          recorded.tabId === null &&
-          recorded.paneKey === null)
-      if (!matchesTab) {
-        continue
+      if (pty && this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
+        if (pty.connected) {
+          return pty
+        }
+        disconnectedPane ??= pty
+      } else if (
+        pty &&
+        options.allowWorktreeOnlyMatch === true &&
+        pty.worktreeId === worktreeId &&
+        recorded?.tabId === null &&
+        recorded.paneKey === null
+      ) {
+        worktreeOnly ??= pty.connected ? pty : null
+        disconnectedWorktreeOnly ??= pty.connected ? null : pty
       }
-      if (pty.connected) {
-        return pty
-      }
-      disconnectedCandidateMatch ??= pty
     }
-    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
-    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
-      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
-    }
-    let fallbackPaneMatch: RuntimePtyWorktreeRecord | null = null
+    const paneKeys = new Set([
+      `${tab.parentTabId}:${tab.leafId}`,
+      ...(tab.leafId === `pane:${FIRST_PANE_ID}` ? [`${tab.parentTabId}:${FIRST_PANE_ID}`] : [])
+    ])
+    let fallbackPane: RuntimePtyWorktreeRecord | null = null
     for (const pty of this.ptysById.values()) {
       const recorded = this.paneOfPty(pty)
       if (
-        recorded.tabId !== tab.parentTabId ||
-        !recorded.paneKey ||
-        !paneKeys.has(recorded.paneKey)
+        pty.worktreeId === worktreeId &&
+        recorded.tabId === tab.parentTabId &&
+        recorded.paneKey &&
+        paneKeys.has(recorded.paneKey)
       ) {
-        continue
-      }
-      if (pty.worktreeId === worktreeId && pty.connected) {
-        return pty
-      }
-      if (candidatePtyIds.length === 0) {
-        fallbackPaneMatch ??= pty
+        if (pty.connected) {
+          return pty
+        }
+        fallbackPane ??= candidatePtyIds.length === 0 ? pty : null
       }
     }
-    return disconnectedCandidateMatch ?? fallbackPaneMatch
+    return worktreeOnly ?? disconnectedPane ?? disconnectedWorktreeOnly ?? fallbackPane
   }
 
   protected getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): string[] {
@@ -272,11 +265,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   }
 
   protected getMobileTerminalPaneKey(tab: RuntimeMobileSessionTerminalTab): string {
-    if (isTerminalLeafId(tab.leafId)) {
-      return makePaneKey(tab.parentTabId, tab.leafId)
-    }
-    const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
-    return `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+    return isTerminalLeafId(tab.leafId)
+      ? makePaneKey(tab.parentTabId, tab.leafId)
+      : `${tab.parentTabId}:${/^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? tab.leafId}`
   }
 
   protected mobileTerminalTabMatchesPty(
@@ -333,9 +324,6 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (panePty?.connected) {
       return this.issuePtyHandle(panePty)
     }
-    if (leaf?.ptyId) {
-      return this.issueHandle(leaf)
-    }
-    return panePty ? this.issuePtyHandle(panePty) : null
+    return leaf?.ptyId ? this.issueHandle(leaf) : panePty ? this.issuePtyHandle(panePty) : null
   }
 }
