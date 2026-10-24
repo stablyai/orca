@@ -1,6 +1,7 @@
 import { settleSessionPreferenceRead } from './session-preference-read'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 import {
   loadDefaultSessionView,
   readSessionViewOverridesPreference,
@@ -121,23 +122,37 @@ export function useMobileSessionViewMode(args: {
     }
   }, [ensureViewOverridesRuntime, hostId, worktreeId, scope])
 
-  // Why: reload on focus so returning from Settings picks up a changed default.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
-      void settleSessionPreferenceRead(loadDefaultSessionView()).then((view) => {
-        if (active) {
-          if (view) {
-            setDefaultView(view)
-          }
-          setDefaultViewReady(true)
-        }
-      })
-      return () => {
-        active = false
+  const defaultViewReadRevisionRef = useRef(0)
+  const refreshDefaultView = useCallback(() => {
+    const revision = ++defaultViewReadRevisionRef.current
+    void settleSessionPreferenceRead(loadDefaultSessionView()).then((view) => {
+      if (defaultViewReadRevisionRef.current !== revision) {
+        return
       }
-    }, [])
-  )
+      if (view) {
+        setDefaultView(view)
+      }
+      setDefaultViewReady(true)
+    })
+    return () => {
+      if (defaultViewReadRevisionRef.current === revision) {
+        defaultViewReadRevisionRef.current += 1
+      }
+    }
+  }, [])
+
+  // Why: reload on focus so returning from Settings picks up a changed default.
+  useFocusEffect(refreshDefaultView)
+
+  useEffect(() => {
+    const unsubscribe = subscribeMirroredKey('orca:defaultSessionView', () => {
+      refreshDefaultView()
+    })
+    return () => {
+      defaultViewReadRevisionRef.current += 1
+      unsubscribe()
+    }
+  }, [refreshDefaultView])
 
   const isTabChatView = useCallback(
     (tabId: string): boolean => {

@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_ACCESSORY_KEYS } from '../terminal/terminal-accessory-keys'
+import { persistMirrored } from '../storage/mirrored-storage-keys'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
 import { useMobileSessionPreferenceFocus } from './use-mobile-session-preference-focus'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
@@ -37,7 +38,7 @@ vi.mock('expo-router', async () => {
   }
 })
 vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: { getItem: vi.fn() }
+  default: { getItem: vi.fn(), setItem: vi.fn().mockResolvedValue(undefined) }
 }))
 vi.mock('../transport/host-store', () => ({ loadHosts: vi.fn().mockResolvedValue([]) }))
 vi.mock('../terminal/terminal-foreground-recovery', () => ({
@@ -328,5 +329,29 @@ describe('saved session settings before the first render', () => {
     expect(scope.setVisibleBuiltInIds).toHaveBeenCalledWith(
       TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
     )
+  })
+
+  it('reloads custom keys and shortcut layout when mirrored storage updates without a new focus event', async () => {
+    const store = new Map<string, string>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => store.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      store.set(key, value)
+    })
+    const scope = sessionScope()
+    function Harness() {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lifecycle reads only the supplied session members.
+      useMobileSessionLifecycle(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith([])
+
+    const added = [{ id: 'custom-1', label: 'Build', bytes: 'pnpm build\r', enter: true }]
+    await act(async () => {
+      await persistMirrored('orca:custom-accessory-keys', JSON.stringify(added))
+    })
+    expect(scope.setCustomKeys).toHaveBeenLastCalledWith(added)
   })
 })

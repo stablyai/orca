@@ -2,8 +2,12 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 import { loadHosts } from '../transport/host-store'
-import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
+import {
+  TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
+  loadTerminalAccessoryLayout
+} from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
@@ -48,10 +52,11 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [hostId])
 
-  useEffect(() => {
-    let active = true
+  const customKeysReadRevisionRef = useRef(0)
+  const refreshCustomKeys = useCallback(() => {
+    const revision = ++customKeysReadRevisionRef.current
     void settleSessionPreferenceRead(loadCustomKeys()).then((keys) => {
-      if (active) {
+      if (customKeysReadRevisionRef.current === revision) {
         if (keys) {
           setCustomKeys(keys)
         }
@@ -59,7 +64,9 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       }
     })
     return () => {
-      active = false
+      if (customKeysReadRevisionRef.current === revision) {
+        customKeysReadRevisionRef.current += 1
+      }
     }
   }, [])
 
@@ -81,19 +88,38 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [])
 
-  useFocusEffect(refreshAccessoryLayout)
+  useFocusEffect(
+    useCallback(() => {
+      const cleanupLayout = refreshAccessoryLayout()
+      const cleanupCustomKeys = refreshCustomKeys()
+      return () => {
+        cleanupLayout()
+        cleanupCustomKeys()
+      }
+    }, [refreshAccessoryLayout, refreshCustomKeys])
+  )
 
   useEffect(() => {
+    const unsubscribeLayout = subscribeMirroredKey(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, () => {
+      refreshAccessoryLayout()
+    })
+    const unsubscribeKeys = subscribeMirroredKey('orca:custom-accessory-keys', () => {
+      refreshCustomKeys()
+    })
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refreshAccessoryLayout()
+        refreshCustomKeys()
       }
     })
     return () => {
       layoutReadRevisionRef.current += 1
+      customKeysReadRevisionRef.current += 1
+      unsubscribeLayout()
+      unsubscribeKeys()
       sub.remove()
     }
-  }, [refreshAccessoryLayout])
+  }, [refreshAccessoryLayout, refreshCustomKeys])
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {

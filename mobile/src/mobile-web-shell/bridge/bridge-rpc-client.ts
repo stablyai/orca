@@ -8,7 +8,10 @@ import {
 } from './bridge-caps'
 import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
-import { createBridgeClientShellSession } from './bridge-client-shell-session'
+import {
+  createBridgeClientShellSession,
+  type BridgeStorageUpdateListener
+} from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
 import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
@@ -82,6 +85,8 @@ export type BridgeRpcClient = RpcClient & {
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   /** Fires when an `init` moved the keyboard height; the value itself is on `getShellSession`. */
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  /** Fires when an `init` moved the storage snapshot; the value itself is on `getShellSession`. */
+  onStorageUpdate: (listener: BridgeStorageUpdateListener) => () => void
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -222,15 +227,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => posted(frame),
-    onDroppedBinaryFrame: () => {
-      report({ kind: 'binary-frame-dropped' })
-    }
+    send: posted,
+    onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
-  const handshake = createBridgeInitHandshake(() => {
-    sendFrame(createPageReadyFrame())
-  })
+  const handshake = createBridgeInitHandshake(() => sendFrame(createPageReadyFrame()))
 
   /**
    * A call before `init` is a mount-order bug and throws. A call after `close` is not: an unmounting
@@ -270,9 +271,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     },
-    prime: (connection) => {
-      cache.prime(connection)
-    }
+    prime: (connection) => cache.prime(connection)
   })
 
   /** A shell rebuilt under the page: what the cache holds is for a client that is already gone. */
@@ -474,6 +473,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onRouteUpdate: shellSession.onRouteUpdate,
     onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
     onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
+    onStorageUpdate: shellSession.onStorageUpdate,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       posted({

@@ -13,6 +13,22 @@ import type {
 
 type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
 
+function sameStorageEntries(
+  a: Readonly<Record<string, string>>,
+  b: Readonly<Record<string, string>>
+): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  return (
+    aKeys.length === bKeys.length &&
+    aKeys.every((key) => Object.hasOwn(b, key) && a[key] === b[key])
+  )
+}
+
+function sameStringList(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
 /**
  * The session the page holds, and who it tells when `init` changes it.
  *
@@ -21,6 +37,11 @@ type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
  * the requests and streams of the session before it, and each case has its own listeners to fire
  * in its own order. The client keeps the frames and the ports; this keeps what they are for.
  */
+export type BridgeStorageUpdateListener = (
+  storage: Readonly<Record<string, string>>,
+  storageOversize: readonly string[]
+) => void
+
 export type BridgeClientShellSession = {
   current: () => BridgeShellSession | null
   /** Reads one `init`: updates or replaces the session, then fires what that change is owed. */
@@ -33,6 +54,8 @@ export type BridgeClientShellSession = {
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   /** Fires when an `init` moved the keyboard height the page holds, including a replacement's. */
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
+  /** Fires when an `init` moved the storage snapshot the page holds, including a replacement's. */
+  onStorageUpdate: (listener: BridgeStorageUpdateListener) => () => void
   /** Drops the session and every listener waiting on one, which `close` is the only caller of. */
   close: () => void
 }
@@ -48,6 +71,9 @@ export function createBridgeClientShellSession(args: {
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
   const keyboardListeners = new Set<(height: number) => void>()
+  const storageListeners = new Set<
+    (storage: Readonly<Record<string, string>>, storageOversize: readonly string[]) => void
+  >()
 
   return {
     current: () => session,
@@ -67,10 +93,25 @@ export function createBridgeClientShellSession(args: {
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
       const keyboardInset = message.keyboardInset ?? 0
       const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
+      const nextSession = readShellSession(message)
+      const movedStorage =
+        held !== null &&
+        (!sameStorageEntries(held.storage, nextSession.storage) ||
+          !sameStringList(held.storageOversize, nextSession.storageOversize))
+      const storage = held === null || movedStorage ? nextSession.storage : held.storage
+      const storageOversize =
+        held === null || movedStorage ? nextSession.storageOversize : held.storageOversize
       session =
         update === null
-          ? { ...readShellSession(message), safeAreaInsets }
-          : { ...update, route: message.route ?? null, safeAreaInsets, keyboardInset }
+          ? { ...nextSession, safeAreaInsets, storage, storageOversize }
+          : {
+              ...update,
+              route: message.route ?? null,
+              safeAreaInsets,
+              keyboardInset,
+              storage,
+              storageOversize
+            }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
       // own is newer than, and this frame is what puts the two back in step. A pane update carries
@@ -88,6 +129,11 @@ export function createBridgeClientShellSession(args: {
       if (movedKeyboard) {
         for (const listener of keyboardListeners) {
           listener(keyboardInset)
+        }
+      }
+      if (movedStorage) {
+        for (const listener of storageListeners) {
+          listener(storage, storageOversize)
         }
       }
       // Only a route that moved is an update. The shell answers every `ready` with the route it
@@ -128,6 +174,12 @@ export function createBridgeClientShellSession(args: {
       keyboardListeners.add(listener)
       return () => {
         keyboardListeners.delete(listener)
+      }
+    },
+    onStorageUpdate: (listener) => {
+      storageListeners.add(listener)
+      return () => {
+        storageListeners.delete(listener)
       }
     },
     close: () => {
