@@ -1,0 +1,4 @@
+System-wide power settings:
+Currently in use:
+ foo                  1
+ bar                  2

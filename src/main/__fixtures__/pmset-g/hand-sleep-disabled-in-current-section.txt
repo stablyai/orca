@@ -1,0 +1,5 @@
+System-wide power settings:
+Currently in use:
+ SleepDisabled		1
+ standby              1
+ sleep                1

@@ -23,7 +23,19 @@ import {
   normalizeComputerAwakeMode,
   type ComputerAwakeStatus
 } from '../../../../shared/computer-awake-mode'
+import { useSystemSleepHold } from '@/hooks/system-sleep-hold-status'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+import {
+  appendHoldSentence,
+  endHoldSentence,
+  getOrcaOwnStatus,
+  getSleepHoldLabel,
+  getSleepHoldLidClosed,
+  getSleepHoldSentence,
+  getSleepHoldUnchecked,
+  isSleepHeld,
+  joinHoldSentences
+} from './system-sleep-hold-copy'
 
 const INACTIVE_STATUS: ComputerAwakeStatus = {
   mode: 'off',
@@ -48,6 +60,7 @@ export function CaffeinateStatusSegment({
     settings?.keepComputerAwakeWhileAgentsRun
   )
   const [serviceStatus, setServiceStatus] = useState<ComputerAwakeStatus>(INACTIVE_STATUS)
+  const { state: holdState, refresh: refreshSleepHold } = useSystemSleepHold()
 
   useEffect(() => {
     let mounted = true
@@ -75,22 +88,63 @@ export function CaffeinateStatusSegment({
   }
 
   const mode = serviceStatus.mode === configuredMode ? serviceStatus.mode : configuredMode
-  const active =
+  const orcaActive =
     serviceStatus.mode === configuredMode ? serviceStatus.active : configuredMode === 'on'
+  const held = isSleepHeld(holdState)
+  const active = held || orcaActive
   const title = getAgentAwakeTitle()
-  const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(active)}`
+  const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(orcaActive)}`
+  const unchecked = holdState === 'unchecked'
+  const holdSentence = held ? getSleepHoldSentence() : unchecked ? getSleepHoldUnchecked() : ''
+  // Why: the same template twice keeps each locale's own separator between the three parts.
+  const heldStatusText = holdSentence
+    ? translate(
+        'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
+        '{{title}}, {{status}}',
+        {
+          title: holdSentence,
+          status: statusText
+        }
+      )
+    : statusText
   const ariaLabel = translate(
+    'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
+    '{{title}}, {{status}}',
+    { title, status: heldStatusText }
+  )
+  const barLabel = held ? getSleepHoldLabel() : getAgentAwakeModeLabel(mode)
+  const menuHoldNote = held
+    ? joinHoldSentences(holdSentence, getSleepHoldLidClosed())
+    : unchecked
+      ? holdSentence
+      : null
+  const todayAriaLabel = translate(
     'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
     '{{title}}, {{status}}',
     { title, status: statusText }
   )
+  const tooltipText = held
+    ? appendHoldSentence(
+        joinHoldSentences(holdSentence, getSleepHoldLidClosed()),
+        getOrcaOwnStatus(statusText)
+      )
+    : unchecked
+      ? joinHoldSentences(todayAriaLabel, endHoldSentence(holdSentence))
+      : `${todayAriaLabel}. ${getAgentAwakeLidNote()}`
 
   const setMode = (nextMode: string): void => {
     void updateSettings(computerAwakeSettingsForMode(normalizeComputerAwakeMode(nextMode)))
   }
 
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu
+      modal={false}
+      onOpenChange={(open) => {
+        if (open) {
+          refreshSleepHold()
+        }
+      }}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -101,9 +155,7 @@ export function CaffeinateStatusSegment({
               aria-label={ariaLabel}
             >
               <Coffee className={`size-3 ${active ? 'text-foreground' : ''}`} />
-              {!iconOnly ? (
-                <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode)}</span>
-              ) : null}
+              {!iconOnly ? <span className="text-[11px] font-medium">{barLabel}</span> : null}
               <span
                 aria-hidden
                 className={`size-1.5 rounded-full ${
@@ -114,7 +166,7 @@ export function CaffeinateStatusSegment({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {ariaLabel}. {getAgentAwakeLidNote()}
+          {tooltipText}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -128,6 +180,9 @@ export function CaffeinateStatusSegment({
           <span>{title}</span>
           <span className="font-normal text-muted-foreground">{statusText}</span>
         </DropdownMenuLabel>
+        {menuHoldNote ? (
+          <div className="px-2 pb-1.5 text-[11px] text-muted-foreground">{menuHoldNote}</div>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={mode} onValueChange={setMode}>
           <DropdownMenuRadioItem value="on" className="py-1.5">
