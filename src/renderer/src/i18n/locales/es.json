@@ -20494,6 +20494,8 @@
       "useHereConfirm": "Usar en este equipo",
       "useHereSuperseded": "Un traslado posterior al host {{distro}} incluye este proyecto. Trae ese de vuelta primero.",
       "useHereMoveRunning": "Todavía hay un traslado al host {{distro}} en curso. Inténtalo de nuevo cuando termine.",
+      "useHereHostUnreachable": "El host {{distro}} no responde, así que Orca no puede detener su copia de este proyecto y sus agentes podrían seguir ejecutándose allí. Conecta el host en Configuración, o quítalo, e inténtalo de nuevo.",
+      "useHereHostStillRunning": "La copia de este proyecto en el host {{distro}} todavía tiene terminales en ejecución, así que sus agentes podrían ejecutarse dos veces. Espera un momento e inténtalo de nuevo.",
       "useHereFailed": "No se pudo devolver este proyecto a este equipo.",
       "useHereUnsavedTitle": "Guarda primero tus archivos",
       "useHereUnsavedDescription": "Recuperar {{name}} recarga esta ventana. Guarda o cierra primero estos archivos: {{files}}"

@@ -109,6 +109,20 @@ function wslMoveUseHereRefusalMessage(
       { distro }
     )
   }
+  if (reason === 'host-unreachable') {
+    return translate(
+      'sidebar.wslMoved.useHereHostUnreachable',
+      "The {{distro}} host isn't answering, so Orca can't stop its copy of this project, and its agents may still be running there. Connect the host in Settings, or remove it, then try again.",
+      { distro }
+    )
+  }
+  if (reason === 'host-still-running') {
+    return translate(
+      'sidebar.wslMoved.useHereHostStillRunning',
+      "The {{distro}} host's copy of this project is still running terminals, so its agents could run twice. Wait a moment, then try again.",
+      { distro }
+    )
+  }
   return translate(
     'sidebar.wslMoved.useHereFailed',
     'Could not bring this project back to this computer.'

@@ -20207,6 +20207,8 @@
       "useHereConfirm": "在此电脑上使用",
       "useHereSuperseded": "之后一次移动到 {{distro}} 主机的操作包含此项目。请先将那次移动恢复。",
       "useHereMoveRunning": "移动到 {{distro}} 主机的操作仍在进行。请在其结束后重试。",
+      "useHereHostUnreachable": "{{distro}} 主机没有响应，Orca 无法停止它上面的此项目副本，其代理可能仍在运行。请在设置中连接或移除该主机，然后重试。",
+      "useHereHostStillRunning": "{{distro}} 主机上的此项目副本仍有终端在运行，其代理可能会运行两次。请稍候再试。",
       "useHereFailed": "无法将此项目恢复到此电脑。",
       "useHereUnsavedTitle": "请先保存文件",
       "useHereUnsavedDescription": "将 {{name}} 恢复到此电脑会重新加载此窗口。请先保存或关闭以下文件：{{files}}"
