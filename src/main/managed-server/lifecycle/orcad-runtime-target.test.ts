@@ -40,6 +40,10 @@ describe('managed orcad runtime target', () => {
       name: 'OrcadHostUnsupportedError',
       message: expect.stringContaining('linux-arm64-glibc with glibc 2.17')
     })
+    // There is no fallback, so the refusal names what to change.
+    await expect(resolveOn('linux-arm64', 'ldd (GNU libc) 2.27')).rejects.toMatchObject({
+      message: expect.stringContaining('glibc 2.28 or newer')
+    })
     await expect(resolveOn('linux-x64', 'ldd (GNU libc) 2.12')).rejects.toMatchObject({
       name: 'OrcadHostUnsupportedError'
     })

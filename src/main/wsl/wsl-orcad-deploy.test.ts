@@ -206,7 +206,25 @@ describe('deployAndLaunchWslOrcad', () => {
 
   it('refuses a WSL 1 distro before holding it or touching its files', async () => {
     await expect(launch('4.4.0-19041-Microsoft')).rejects.toMatchObject({
-      name: 'OrcadHostUnsupportedError'
+      name: 'OrcadHostUnsupportedError',
+      message: expect.stringContaining('wsl --set-version Ubuntu-24.04 2')
+    })
+    expect(mocks.steps).toEqual(['uname'])
+  })
+
+  it('tells an unregistered distro how to find the installed ones, before holding anything', async () => {
+    mocks.exec.mockImplementation(async () => {
+      mocks.steps.push('uname')
+      throw new Error(
+        'Command "uname -r" failed (exit 1): There is no distribution with the supplied name.\n' +
+          'Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND'
+      )
+    })
+    await expect(
+      deployAndLaunchWslOrcad('Gone', { holder: holder(), createTransport: transport })
+    ).rejects.toMatchObject({
+      name: 'OrcadHostUnsupportedError',
+      message: expect.stringContaining('wsl --list --verbose')
     })
     expect(mocks.steps).toEqual(['uname'])
   })

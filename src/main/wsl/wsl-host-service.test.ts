@@ -11,6 +11,8 @@ import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { WslHostServerStop, WslHostStatus } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
+import { RemoteNodeRuntimeSelfTestError } from '../ssh/orcad-remote-node-runtime-report'
+import { wsl1DistroMessage, WslDistroVersion1Error } from './wsl-distro-unsupported'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { WslHostService, type WslHostConnector } from './wsl-host-service'
 import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
@@ -533,10 +535,17 @@ describe('WslHostService', () => {
   })
 
   it.each([
+    ['unsupported-wsl1', () => new WslDistroVersion1Error('Ubuntu'), wsl1DistroMessage('Ubuntu')],
     [
-      'unsupported-wsl1',
-      () => new OrcadHostUnsupportedError('WSL 1 cannot run the Orca server.'),
-      'WSL 1 cannot run the Orca server.'
+      'unsupported-distro',
+      () => new OrcadHostUnsupportedError('No Orca runtime supports linux-arm64-glibc.'),
+      'No Orca runtime supports linux-arm64-glibc.'
+    ],
+    [
+      'unsupported-distro',
+      () =>
+        new RemoteNodeRuntimeSelfTestError(127, 'libstdc++.so.6: cannot open shared object file'),
+      expect.stringContaining('apk add libstdc++')
     ],
     ['failed', () => new Error('bridge refused'), 'bridge refused']
   ])(

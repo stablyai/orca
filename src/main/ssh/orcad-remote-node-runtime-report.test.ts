@@ -45,6 +45,21 @@ describe('RemoteNodeRuntimeSelfTestError', () => {
     expect(error.message).toContain('apk add libstdc++')
   })
 
+  it('tells a NixOS host to turn on nix-ld when its stub loader refuses the runtime', () => {
+    const error = thrown(
+      selfTestFailure(
+        'Could not start dynamically linked executable: node\n' +
+          'NixOS cannot run dynamically linked executables intended for generic\n' +
+          'linux environments out of the box. For more information, see:\n' +
+          'https://nix.dev/permalink/stub-ld'
+      )
+    )
+    expect(error.message).toMatch(/^NixOS can’t run Orca’s Node runtime/)
+    expect(error.message).toContain('programs.nix-ld.enable = true;')
+    expect(error.message).toContain('then reconnect')
+    expect(error.message).toContain('stub-ld')
+  })
+
   it('keeps the generic wording when the loader names no library', () => {
     const error = thrown(selfTestFailure('Segmentation fault'))
     expect(error.message).toMatch(/^The pinned Node runtime did not run on the host \(exit 127\)/)
