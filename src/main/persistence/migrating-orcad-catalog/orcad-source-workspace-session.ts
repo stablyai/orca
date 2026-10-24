@@ -11,7 +11,7 @@ import {
 } from '../../orca-profiles/profile-session-owner-transfer'
 import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope,
   unqualifyOrcadMigrationOwnerKey
@@ -100,7 +100,7 @@ function collectWorkspaceSession(
   storage: TerminalScrollbackSnapshotStorage | undefined,
   leaveBehind: boolean
 ): OrcadMigrationSourceWorkspaceSessionInspection {
-  const sourceScope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const sourceScope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const fragments: SessionFragment[] = []
   const blockedItems: string[] = []
   const leftBehindItems: string[] = []

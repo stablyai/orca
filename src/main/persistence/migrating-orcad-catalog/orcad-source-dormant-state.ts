@@ -14,7 +14,7 @@ import { collectOrcadMigrationRetiredWorktreeNamespaces } from './orcad-source-r
 import { collectOrcadMigrationSourceAutomationState } from './orcad-source-automation-state'
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
@@ -45,12 +45,21 @@ export type OrcadMigrationSourceDormantInspection = {
   blockedSessionItems: string[]
   /** What a confirmed "Move anyway" leaves in this desktop's retained profile. */
   leftBehindItems: string[]
+  /** Automations a local WSL move carries disabled, to re-enable on the host once it commits. */
+  automationsEnabledAtSource: string[]
 }
 
 /** The user confirmed "Move anyway" for this host: what can't move stays on this desktop. */
-export function orcadMigrationLeavesBehind(state: PersistedState, targetId: string): boolean {
-  return state.sshTargets.some(
-    (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+export function orcadMigrationLeavesBehind(
+  state: PersistedState,
+  targetId: string | null
+): boolean {
+  // A local WSL move has no "Move anyway": what can't move blocks it.
+  return (
+    targetId !== null &&
+    state.sshTargets.some(
+      (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+    )
   )
 }
 
@@ -61,7 +70,7 @@ export function collectOrcadMigrationSourceDormantState(
   storage?: TerminalScrollbackSnapshotStorage,
   destinationEnvironmentId?: string
 ): OrcadMigrationSourceDormantInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(
@@ -237,7 +246,8 @@ export function collectOrcadMigrationSourceDormantState(
     },
     blockedCounts,
     blockedSessionItems,
-    leftBehindItems
+    leftBehindItems,
+    automationsEnabledAtSource: automationState.enabledAtSourceIds
   }
 }
 

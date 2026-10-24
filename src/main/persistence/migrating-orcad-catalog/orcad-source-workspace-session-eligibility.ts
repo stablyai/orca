@@ -43,7 +43,9 @@ export function collectUnsupportedSessionItems(
   // PTY bindings, remote session ids and shutdown markers are not counted: whether their terminals
   // still run is the terminal gate's verdict, taken before every move; the move drops them.
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    const touchesSource = matches(record.worktreeId) || record.connectionId === scope.targetId
+    const touchesSource =
+      matches(record.worktreeId) ||
+      (scope.targetId !== null && record.connectionId === scope.targetId)
     if (
       touchesSource &&
       !transferableSleepingAgentSession(record, session, scope, terminalTabIds) &&

@@ -207,7 +207,7 @@ function restrictCatalog(
   }
 }
 
-function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
+export function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
   return (
     state.worktreeMeta.length > 0 ||
     state.worktreeLineage.length > 0 ||
