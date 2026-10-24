@@ -1,6 +1,4 @@
-// Why: the disk baseline guards against silently overwriting external writes
-// (issue #7265), where a hash collision means a missed conflict — so it gets
-// two independent FNV lanes plus the length instead of a single 32-bit lane.
+// Two independent FNV lanes plus length reduce collisions that could hide external writes and permit silent overwrite (#7265).
 export function getDiskBaselineSignature(content: string): string {
   return new DiskBaselineSignatureBuilder().update(content).digest()
 }

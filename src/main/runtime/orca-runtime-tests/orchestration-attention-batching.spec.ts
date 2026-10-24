@@ -63,7 +63,6 @@ describe('OrcaRuntimeService', () => {
       getWorkerAttentionFacts.mockClear()
       const unchanged = runtime.syncWindowGraph(1, graph)
 
-      // Two statements for twelve panes: the facts join and the observation read, each once.
       const attentionSql = prepare.mock.calls
         .map(([sql]) => sql)
         .filter(

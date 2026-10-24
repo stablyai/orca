@@ -7,7 +7,7 @@ import {
 } from './workspace-port-scan-timeout-backoff'
 
 const SLOW_SPAWN_SKIP_METADATA_MS = 2_000
-/** Re-probe a remembered listener every Nth scan (~5 min at 30s) so a cwd change cannot go stale forever. */
+// Reprobe periodically so a listening process's changed cwd cannot stay cached forever.
 const METADATA_REPROBE_INTERVAL_SCANS = 10
 const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
 let loggedWorkerUnavailable = false
@@ -85,18 +85,17 @@ export function shouldSkipMetadataCommands(
   return skip
 }
 
-// dedupeRawPorts already collapses rows by connectHost:port:pid, so this key is unique per row.
 function listenerMetadataKey(port: RawListeningPort): string {
   return `${port.pid ?? 'unknown'}:${port.host}:${port.port}`
 }
 
-/** Call after partitionListenersNeedingMetadata: it consumes the reuse set that call recorded. */
+/** Consume reuse keys recorded by partitionListenersNeedingMetadata in this scan. */
 export function rememberListenerMetadata(ports: readonly RawListeningPort[]): void {
   const previous = lastListenerMetadata
   lastListenerMetadata = new Map()
   for (const port of ports) {
     const key = listenerMetadataKey(port)
-    // Why: a reused entry keeps its original probe time so the staleness ceiling still expires it.
+    // Reuse must preserve original probe age or the staleness limit never expires.
     const probedAtScan = reusedListenerKeys.has(key)
       ? (previous.get(key)?.probedAtScan ?? metadataScanSequence)
       : metadataScanSequence
@@ -111,26 +110,14 @@ export function rememberListenerMetadata(ports: readonly RawListeningPort[]): vo
   reusedListenerKeys = new Set()
 }
 
-/**
- * Split listeners into those a previous scan already resolved and the pids still needing a probe.
- *
- * Records which keys were reused; rememberListenerMetadata reads and clears that on the same scan.
- *
- * Why: the metadata commands are the expensive half of a macOS scan, and a listener that is still
- * the same process on the same address has the same command line it had 30s ago. A remembered
- * entry is only trusted when the free `lsof -F c` process name and `-F d` socket identity from
- * this scan still match, so a recycled pid re-probes instead of inheriting the dead process's
- * metadata; and every entry is re-probed after METADATA_REPROBE_INTERVAL_SCANS so a process that
- * chdir'd while listening cannot keep a stale cwd forever.
- */
+/** Reuse name/socket-matching metadata until its age limit; record reused keys for rememberListenerMetadata. */
 export function partitionListenersNeedingMetadata(
   ports: readonly RawListeningPort[],
   options: WorkspacePortScanOptions = {}
 ): { hydrated: RawListeningPort[]; pidsNeedingMetadata: Set<number> } {
   metadataScanSequence += 1
   reusedListenerKeys = new Set()
-  // Why requireMetadata opts out: that caller is the SIGTERM authorization re-scan, so it must
-  // attribute the owner from this cycle's probe and never from a remembered cwd.
+  // SIGTERM authorization requires fresh attribution; cached cwd cannot prove ownership.
   if (options.requireMetadata) {
     return {
       hydrated: [...ports],
@@ -142,7 +129,7 @@ export function partitionListenersNeedingMetadata(
   const reusableByPort = new Map<RawListeningPort, ProcessMetadata>()
   for (const port of ports) {
     const remembered = lastListenerMetadata.get(listenerMetadataKey(port))
-    // Why require commandLine: a probe that returned nothing must not be cached as an answer.
+    // Empty probe results cannot count as reusable metadata.
     if (
       remembered?.commandLine !== undefined &&
       remembered.processName === port.processName &&
@@ -157,9 +144,7 @@ export function partitionListenersNeedingMetadata(
       pidsNeedingMetadata.add(port.pid)
     }
   }
-  // Why the second pass: if any of a pid's sockets needs a probe, none of its sockets may be
-  // served from cache — otherwise one process reports a fresh cwd on one row and a remembered
-  // cwd on another, i.e. two different workspace attributions.
+  // Reprobe every socket for a PID together, or one process could appear in two workspaces.
   for (const port of ports) {
     const remembered =
       port.pid !== undefined && !pidsNeedingMetadata.has(port.pid)

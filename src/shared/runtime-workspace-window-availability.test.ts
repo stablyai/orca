@@ -28,8 +28,7 @@ describe('isRuntimeWorkspaceWindowClosed', () => {
   })
 
   it('leaves graph-ready headless servers alone', () => {
-    // Why: #6844 headless serve owns a graph without a desktop window — it must
-    // never read as degraded just because a window could be opened.
+    // Headless serve owns a ready graph without a window; window absence must not degrade it (#6844).
     expect(
       isRuntimeWorkspaceWindowClosed(
         makeStatus({ graphStatus: 'ready', desktopWindowStatus: 'openable' })
@@ -46,8 +45,7 @@ describe('isRuntimeWorkspaceWindowClosed', () => {
   })
 
   it('flags a reload whose window disappeared before the graph was marked unavailable', () => {
-    // Why: 'openable' already means no live renderer window, so a mid-reload window
-    // teardown is just as unusable as 'unavailable'.
+    // openable also means no live renderer; treat mid-reload teardown like unavailable.
     expect(
       isRuntimeWorkspaceWindowClosed(
         makeStatus({ graphStatus: 'reloading', desktopWindowStatus: 'openable' })

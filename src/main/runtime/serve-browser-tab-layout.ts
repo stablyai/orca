@@ -1,6 +1,4 @@
-// A browser tab a host with no window runs, saved as a window saves its own: the tab, its page and
-// the page's last address. A restarted host lists it and starts the page when something first
-// uses it, as a window restores its browser tabs.
+// Persist headless browser tabs/pages like window-owned tabs; restart lists saved tabs but restores pages only on first use.
 
 import type { BrowserPage } from '../../shared/browser-workspace-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -88,10 +86,7 @@ function servePageRecord(page: ServeBrowserPageState, createdAt: number): Browse
   }
 }
 
-/**
- * The partition with the page record of a tab `openBrowserTab` just wrote under the page's id, and
- * the tab's address; null when that tab is gone or its page is saved already.
- */
+/** Attach the page record/address after openBrowserTab; null if the tab vanished or its page was already saved. */
 export function withServeBrowserPageRecord(
   session: WorkspaceSessionState,
   page: ServeBrowserPageState
@@ -141,10 +136,7 @@ export function savedBrowserTabEntryId(
   )
 }
 
-/**
- * The partition with the page's last address, or null when no saved tab shows the page or it is
- * unchanged. Only address fields change, so the layout is not reloaded.
- */
+/** Update only address fields without reloading layout; null if absent or unchanged. */
 export function withServeBrowserPageState(
   session: WorkspaceSessionState,
   page: ServeBrowserPageState

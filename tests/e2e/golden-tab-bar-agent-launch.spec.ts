@@ -79,6 +79,15 @@ test.describe('Windows runtimes', () => {
       // WSL must retarget both agent detection and the PTY.
       await useWslRuntimeForActiveProject(orcaPage, distro!)
       await configureGoldenStubAgent(orcaPage, { agent: 'codex' })
+      // The staged CLI needs a fresh inventory for the newly selected runtime.
+      const detectedAgents = await orcaPage.evaluate(async () => {
+        const state = window.__store?.getState()
+        if (!state?.activeWorktreeId) {
+          throw new Error('No active worktree for WSL agent discovery')
+        }
+        return state.refreshDetectedAgents(state.activeWorktreeId)
+      })
+      expect(detectedAgents).toContain('codex')
       await launchGoldenStubAgentFromNewTab(orcaPage)
 
       // The distro-only marker proves the agent ran in WSL.

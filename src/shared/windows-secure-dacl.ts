@@ -11,24 +11,14 @@ export const CONTAINER_INHERIT_ACE = 0x2
 export const INHERIT_ONLY_ACE = 0x8
 const GENERIC_ALL = 0x10000000
 
-/**
- * The DACL Orca installs on a secure path: protected, full control to the user, SYSTEM and
- * Administrators only. A directory's rules are inheritable so files created inside it start
- * restricted too.
- */
+/** Install protected user/SYSTEM/Administrators full control; directory rules inherit so newly created children start restricted. */
 export function hardenedDaclSddl(userSid: string, isDirectory: boolean): string {
   const flags = isDirectory ? 'OICI' : ''
   return `D:P(A;${flags};FA;;;${LOCAL_SYSTEM_SID})(A;${flags};FA;;;${BUILTIN_ADMINISTRATORS_SID})(A;${flags};FA;;;${userSid})`
 }
 
-/**
- * OpenSSH's ACE rule (only the user, SYSTEM and Administrators may be allowed anything, inherited
- * or explicit) plus two of Orca's own: the DACL is protected, so loosening a parent cannot reach
- * the path, and the user can still use it. Returns why the DACL fails, or null when it passes.
- *
- * Why not "exactly the DACL Orca writes": what older builds wrote is just as private and must not
- * be rewritten.
- */
+/** Allow only user/SYSTEM/Administrators, require parent-inheritance protection and usable user access.
+ * Accept equivalent private legacy DACLs instead of rewriting them to exactly match the current recipe. */
 export function findSecureDaclViolation(
   dacl: WindowsDacl | null,
   userSid: string,

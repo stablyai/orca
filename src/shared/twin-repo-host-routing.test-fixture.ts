@@ -1,5 +1,4 @@
-// One repo id registered on two hosts, each case with the partition the window saves the worktree
-// to. Main's router and the window's save routing are both checked against this one table.
+// Share twin-host repo cases across main routing and window save-routing tests so both select the same session partition.
 import { getDefaultWorkspaceSession } from './constants'
 import type { ExecutionHostId } from './execution-host'
 import type { Repo } from './repo-types'
@@ -84,8 +83,7 @@ const PAIRS: [string, TwinRepoRow, ExecutionHostId, TwinRepoRow, ExecutionHostId
   ['ssh+runtime', SSH_ROW, 'ssh:box', RUNTIME_ROW, 'runtime:env-1']
 ]
 
-// The window: a contested id goes to the shared primary, a runtime-owned one to its runtime, and
-// any other (SSH-only, local-only, unknown) to local, because the twin repo names no single host.
+// Contested IDs use the shared primary and runtime-owned IDs use that runtime; other twin-repo cases stay local because the repo has no single host.
 function windowFresh(hosts: ExecutionHostId[]): ExecutionHostId {
   if (hosts.length > 1) {
     return hosts.includes('local')

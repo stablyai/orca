@@ -22,13 +22,13 @@ export type LegacyAdoptedMailboxOwner = {
   terminalHandle: string
 }
 
-// Why: hoisted and wildcard-free so the per-publish run lookups hit the SyncDatabase statement cache.
+// Hoist explicit projections so per-publish queries hit the statement cache.
 const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid`
-// Why: one statement so pane and Orca session id matches keep a single rowid order; the JS predicate decides.
+// Use one query to preserve rowid order across pane and session matches; filter identity in JavaScript.
 const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND (
            (coordinator_pane_key IS NOT NULL AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?)
@@ -120,8 +120,7 @@ export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): Ru
   return run ? exposeRunTimestamps(run) : undefined
 }
 
-// Why: the indexed suffix only narrows candidates; isEquivalentPaneKey still decides, so
-// reminted tab halves keep matching and unparseable keys keep requiring an exact match.
+// The indexed suffix narrows candidates; pane equivalence still checks remints and exact legacy keys.
 export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[] {
   return (
     this.db.prepare(RUNS_BOUND_TO_PANE_SQL).all(paneKeyMatchSuffix(paneKey)) as RunRow[]

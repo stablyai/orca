@@ -67,9 +67,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!waiters || waiters.size === 0) {
       return
     }
-    // Why re-rank rather than resolve outright: the transition that brought us here is only a
-    // title sample. Weak ready (a name-only title, #6011) cannot see a dialog the tail lost,
-    // so it is left to the poll, which settles it only after a rendered-screen read.
+    // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
     const verdict = this.evaluateTuiIdleForLeaf(leaf)
     for (const waiter of Array.from(waiters)) {
       if (waiter.condition !== 'tui-idle') {
@@ -139,17 +137,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     )
   }
 
-  /**
-   * Settled-enough-to-type check that also arms a retry when it says no.
-   *
-   * Why the retry: the wait path POLLS, so weak evidence that only becomes valid with the
-   * passage of time (a pane going quiet) eventually satisfies it. Delivery is edge-driven —
-   * a title transition, a graph sync, a new message — with no poll behind it, so a refusal
-   * at an edge is final unless another edge happens to arrive. A hookless Codex pane never
-   * emits an explicit `X ready`, so the refusal below would strand the queued message
-   * permanently once the pane fell quiet. One-shot timer, armed only for a leaf that
-   * actually refused, cleared as soon as any path delivers.
-   */
+  /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */
   protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     if (this.isAgentSettledForDelivery(leaf)) {
@@ -173,9 +161,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     const live = this.leaves.get(leafKey)
-    // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
-    // stream to go quiet, so wake just after the window could have elapsed. A pane that is
-    // still producing output re-arms from its own fresher timestamp rather than spinning.
+    // Only quiet-window refusal expires with time; schedule just beyond it and re-arm from fresher output if still streaming.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
     const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
@@ -184,9 +170,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       if (!current) {
         return
       }
-      // Why the gate again here: delivery sites gate at the CALL, not inside
-      // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
-      // very injection the gate exists to prevent. A pane that went busy again re-arms.
+      // Recheck settlement before retry delivery; the pane may have become busy again.
       if (this.checkDeliverySettledAndArmRecheck(current)) {
         this.deliverPendingMessagesForLeaf(current)
       }
@@ -195,15 +179,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
   }
 
-  /**
-   * Whether this pane is settled enough to TYPE INTO.
-   *
-   * Why the same ranking as the wait path: mailbox delivery writes the pointer plus Enter
-   * into the pane, so acting on a name-only `Codex` title mid-turn injects keystrokes into
-   * a running agent's session. That is the #6011 mis-settlement in a path with a worse
-   * failure mode than a racing script. Liveness stays a separate requirement — callers
-   * keep their own `lastAgentStatusObservedLive` checks.
-   */
+  /** Pointer plus Enter requires the same readiness ranking as waits; name-only titles can occur mid-turn (#6011). Callers separately require live status evidence. */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!live) {

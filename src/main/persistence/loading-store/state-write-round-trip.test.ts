@@ -4,13 +4,7 @@ import {
   readPersistedStateJson,
   writePersistedStateJson
 } from '../../persistence-test-harness'
-/**
- * The write path now hands the file a Buffer it built in one pass instead of a string it rebuilt
- * per secret. Drives the real `Store` end to end — encrypted settings, a local session and a remote
- * host partition — and reloads from the file it actually wrote, because the failure this guards
- * against (a mis-sliced segment, a re-encoded payload, a dropped sentinel) is invisible until
- * something reads the bytes back.
- */
+// Verify actual persisted UTF-8 bytes round-trip through secrets, local sessions and remote partitions.
 import { getSecretStore } from '../../../shared/secret-store'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,7 +22,7 @@ vi.mock('electron', () => ({
     whenReady: () => Promise.resolve()
   },
   safeStorage: {
-    // Encryption ON, so the secret slots really do mint sentinels and the substitution pass runs.
+    // Enable encryption so the save exercises sentinel substitution.
     isEncryptionAvailable: () => true,
     encryptString: (value: string) => Buffer.from(`enc:${value}`),
     decryptString: (value: Buffer) => value.toString().slice(4)
@@ -107,14 +101,13 @@ describe('persisted state survives a save/load round trip', () => {
     first.updateSettings({ opencodeWorkspaceId: 'wrk_test' })
     first.flush()
     const persisted = JSON.parse(readPersistedStateJson(dataFile))
-    // Sealed exactly as #22551's protected-secret slot wrote it.
     const sealed = getSecretStore().encryptString('fake-legacy-key').toString('base64')
     persisted.settings.opencodeGoApiKey = sealed
     writePersistedStateJson(dataFile, JSON.stringify(persisted))
     const onDiskKey = (): unknown =>
       JSON.parse(readPersistedStateJson(dataFile)).settings.opencodeGoApiKey
 
-    // orcad-style consumer: loads and flushes the profile but never runs the migration.
+    // Headless stores load/save the legacy slot without running its desktop migration.
     const daemon = createSqliteTestStore(Store, { dataFile })
     stores.push(daemon)
     expect(daemon.getSettings()).not.toHaveProperty('opencodeGoApiKey')
@@ -137,7 +130,6 @@ describe('persisted state survives a save/load round trip', () => {
     loaded.flush()
     expect(onDiskKey()).toBe(sealed)
 
-    // Why: an older paired client can still send the retired field; it must not be stored.
     const updates = { opencodeGoApiKey: 'fake-remote-key', opencodeWorkspaceId: 'wrk_next' }
     expect(loaded.updateSettings(updates)).not.toHaveProperty('opencodeGoApiKey')
     loaded.flush()
@@ -167,7 +159,6 @@ describe('persisted state survives a save/load round trip', () => {
     )
     const written = openStore(dataFile)
     written.updateSettings({
-      // Three secret slots, i.e. three sentinels in one save — the case the old loop paid 7 copies for.
       opencodeSessionCookie: 'cookie-é-value',
       httpProxyUrl: 'http://proxy.example:8080/?a=b&c=$&'
     })
@@ -183,7 +174,6 @@ describe('persisted state survives a save/load round trip', () => {
       remote: written.getWorkspaceSession(HOST_ID)
     }
 
-    // The file is valid UTF-8 JSON and holds ciphertext, not the plaintext secrets.
     const bytes = Buffer.from(readPersistedStateJson(dataFile))
     const onDisk = JSON.parse(bytes.toString('utf8'))
     expect(onDisk.settings.opencodeSessionCookie).not.toBe('cookie-é-value')
@@ -196,16 +186,12 @@ describe('persisted state survives a save/load round trip', () => {
     expect(reloaded.getSettings().opencodeSessionCookie).toBe(before.settings.opencodeSessionCookie)
     expect(reloaded.getSettings().httpProxyUrl).toBe(before.settings.httpProxyUrl)
     expect(reloaded.getUI().browserKagiSessionLink).toBe(before.ui.browserKagiSessionLink)
-    // `toMatchObject`: the load path spreads session defaults over what was written, so the
-    // reloaded slice is a superset. Exact deep equality is asserted on the second trip below.
+    // First-load defaults extend the fixture; exact equality follows a settled second round-trip.
     expect(reloaded.getWorkspaceSession()).toMatchObject(before.local)
-    // The remote partition keeps everything it owns; only globals local already holds are dropped,
-    // and `browserUrlHistory` comes back at its default from the same spread as before.
     expect(reloaded.getWorkspaceSession(HOST_ID).activeTabId).toBe('remote-tab')
     expect(reloaded.getWorkspaceSession(HOST_ID).browserUrlHistory).toEqual([])
 
-    // Deep equality of the whole reloaded state, taken across a second round trip so the assertion
-    // is not comparing against the first load's one-time settings migrations.
+    // Compare after startup migrations settle.
     reloaded.flush()
     const bytesAfterReload = Buffer.from(readPersistedStateJson(dataFile))
     const again = openStore(dataFile)
@@ -213,7 +199,6 @@ describe('persisted state survives a save/load round trip', () => {
     expect(again.getUI()).toEqual(reloaded.getUI())
     expect(again.getWorkspaceSession()).toEqual(reloaded.getWorkspaceSession())
     expect(again.getWorkspaceSession(HOST_ID)).toEqual(reloaded.getWorkspaceSession(HOST_ID))
-    // ...and the bytes are stable, so a quiet app is not rewriting a 4 MB file with new content.
     again.flush()
     expect(Buffer.from(readPersistedStateJson(dataFile)).equals(bytesAfterReload)).toBe(true)
   })

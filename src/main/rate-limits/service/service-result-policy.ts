@@ -12,7 +12,6 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     fresh: ProviderRateLimits,
     previous: ProviderRateLimits | null
   ): ProviderRateLimits {
-    // Fresh data is fine — use it
     if (fresh.status === 'ok') {
       return {
         ...fresh,
@@ -24,7 +23,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       }
     }
 
-    // Explicitly unavailable (e.g. setting cleared): discard stale data so the UI shows the provider as disabled/unconfigured.
+    // Explicit unavailability clears stale usage, including removed settings.
     if (fresh.status === 'unavailable') {
       return fresh
     }
@@ -37,12 +36,10 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       (previous?.buckets && previous.buckets.length > 0)
     )
 
-    // No previous data to fall back on
     if (!previous || !previousHasData) {
       return fresh
     }
 
-    // Previous data is too old — don't show stale data
     const staleThresholdMs =
       fresh.usageMetadata?.failureKind === 'rate-limited'
         ? RATE_LIMITED_STALE_THRESHOLD_MS
@@ -51,7 +48,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       return fresh
     }
 
-    // Why: keep showing a recent snapshot through repeated transient failures until it ages out, so the bar doesn't flap to empty.
+    // Preserve recent display through transient errors until stale expiry, avoiding empty-bar flashes.
     return {
       ...previous,
       error: fresh.error,
@@ -59,7 +56,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       usageMetadata: {
         ...previous.usageMetadata,
         ...fresh.usageMetadata,
-        // Why: the kind describes this error; an earlier failure's kind must not relabel it.
+        // Error kind belongs to this failure, not an older snapshot.
         failureKind: fresh.usageMetadata?.failureKind,
         lastSuccessfulSource:
           previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
@@ -97,7 +94,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
         status: 'fetching'
       }
     }
-    // Why: keep a settled chip visible during background refetch so a persistently failing provider doesn't flash "…" → error each cycle.
+    // Keep settled chips visible during background retries to avoid loading/error flashes.
     if (current.status === 'ok' || current.status === 'error' || current.status === 'unavailable') {
       return current
     }

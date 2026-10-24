@@ -1,8 +1,4 @@
-/**
- * Perf regression (#26785): every remote pane remount re-sends the layout the host gave it. A
- * headless host used to persist the workspace and republish the whole workspace's tabs to every
- * paired client for each of those identical writes.
- */
+// #26785: identical remote remount layouts must not persist and fan out to every paired client.
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import {
@@ -22,7 +18,6 @@ async function setup() {
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The shared fixture implements RuntimeStore; its annotation erases the Vitest mock call signatures.
   const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
-  // Hydrate the live snapshot the way the first list/subscribe does.
   await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
   const published: unknown[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
@@ -60,7 +55,6 @@ describe('headless pane layout writes', () => {
     await update({ expandedLeafId: HEADLESS_LEAF_ID, titlesByLeafId: { [HEADLESS_LEAF_ID]: 'a' } })
     await update({ expandedLeafId: HEADLESS_LEAF_ID, titlesByLeafId: { [HEADLESS_LEAF_ID]: 'a' } })
     await update({ expandedLeafId: HEADLESS_LEAF_ID, chatLeafId: HEADLESS_LEAF_ID })
-    // An older client that omits the owner leaves it alone, so this is a no-op too.
     await update({ expandedLeafId: HEADLESS_LEAF_ID })
     expect(runtimeStore.setWorkspaceSession).toHaveBeenCalledTimes(3)
     expect(published).toHaveLength(3)

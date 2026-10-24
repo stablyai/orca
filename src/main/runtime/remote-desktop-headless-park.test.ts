@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { publishHeadlessRuntimeGraph } from './headless-runtime-graph'
 
-// A parked paired pane closes its stream, the PTY's last viewer. On a windowless host the PTY must
-// keep that viewer's grid, while other viewers and phones can still take it (#15997).
+// Headless hosts keep a parked viewer's grid until another viewer or phone takes it (#15997).
 
 const PTY = 'pty-1'
 const SPAWN_GRID = { cols: 120, rows: 40 }

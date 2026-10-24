@@ -48,17 +48,12 @@ export class RuntimeTerminalAgentPresence {
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
   ): Promise<boolean> {
-    // Before every PTY probe below, because none of them can answer for a session that has no
-    // pane: `getLiveLeaf` threw, the catch turned that into `false`, and a coordinator running
-    // `dispatch --inject` concluded its structured worker was a bare shell — `no_agent_detected`.
-    // A structured session IS the agent; there is no foreground process to recognise.
+    // Resolve structured sessions before PTY probes: they are agents without panes and otherwise falsely become no_agent_detected on inject.
     if (this.deps.isLiveStructuredAgent?.(handle)) {
       return true
     }
     try {
-      // Why display records: presence reads what the pane shows, as before the stale-working
-      // clear stopped rewriting records. A cwd spinner clears to a neutral title, so the
-      // foreground process decides for an agent that exited behind it.
+      // Presence follows display records; after stale cwd-spinner clearing, foreground evidence decides whether an agent remains.
       const pty = this.deps.getLivePty(handle)
       if (pty) {
         const clear = this.deps.getTitleDisplayClear(pty.ptyId)

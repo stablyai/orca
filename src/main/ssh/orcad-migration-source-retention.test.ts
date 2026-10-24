@@ -186,7 +186,7 @@ describe('renaming unsaved drafts to the server on commit', () => {
     await retainUnretainedOrcadMigrationSources(userDataPath, store)
     expect(serverFiles()?.map((file) => file.dirtyDraftContent)).toEqual(['source A'])
     expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.sourceRetainedAt).toBeDefined()
-    // Closed before any connect: neither the connect's retain nor a later start brings it back.
+    // Later retain/start must not resurrect a draft closed before connect.
     saveFiles(SERVER_HOST, [])
     await retainOrcadMigrationSource(userDataPath, 'm-1', store)
     await retainUnretainedOrcadMigrationSources(userDataPath, store)
@@ -232,7 +232,7 @@ describe('renaming unsaved drafts to the server on commit', () => {
     await restart()
     await retainUnretainedOrcadMigrationSources(userDataPath, store)
     expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.sourceRetainedAt).toBeDefined()
-    // A crash now: a second reader sees only what reached disk.
+    // Reopen from disk to model a crash before pending writes land.
     const crashed = createSqliteTestStore(Store, { dataFile: join(userDataPath, 'orca-data.json') })
     expect(
       crashed.getWorkspaceSession(SERVER_HOST).openFilesByWorktree?.[WORKTREE]?.[0]

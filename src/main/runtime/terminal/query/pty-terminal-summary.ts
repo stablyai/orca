@@ -104,10 +104,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     this.assertGraphReady()
     const record = this.handles.get(handle)
     if (!record || record.runtimeId !== this.runtimeId) {
-      // A structured worker's handle is not stale — nothing went dead. It names a live agent
-      // session that simply has no terminal, and saying `terminal_handle_stale` sent callers
-      // hunting for a remint that will never exist. Read paths (`terminal read`,
-      // `isTerminalRunningAgent`, the identity probe) answer for it BEFORE reaching here.
+      // Structured workers are live sessions without terminals; read paths answer before this refusal, and stale-handle errors would send callers hunting nonexistent remints.
       throw structuredWorkerTerminalRefusal(handle, this._orchestrationDb)
     }
     if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
@@ -156,11 +153,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return { record, pty }
   }
 
-  /**
-   * Layout-owner builds: the pane main binds a terminal to adopts the terminal's own handle (the
-   * one it was created under), and that handle keeps naming the terminal, with or without a window.
-   * The own-handle check stands in for the pane's epoch fence: a new incarnation drops it.
-   */
+  /** Main-owned panes adopt the terminal's original handle; own-handle checks fence epochs because replacement incarnations drop that handle. */
   private mainPaneOwnHandle(handle: string, record: TerminalHandleRecord): boolean {
     if (
       !ORCA_LAYOUT_OWNER_IS_MAIN ||

@@ -148,7 +148,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(service.getState().claude?.fableWeekly?.usedPercent).toBe(18)
 
-      // Statusline posts land every minute, so the live snapshot never ages past the freshness window.
+      // Minute-by-minute receipts keep live display fresh.
       for (let minute = 0; minute < 15; minute += 1) {
         service.ingestLiveClaudeRateLimits({
           configDir: null,
@@ -192,7 +192,7 @@ describe('RateLimitService', () => {
       service.start({ fetchImmediately: false })
       await vi.advanceTimersByTimeAsync(1000)
 
-      // The Fable account keeps polling under live posts; the second poll is a 429 with a one-hour Retry-After.
+      // Live posts must not prevent the Fable poll from applying a one-hour 429 gate.
       for (let minute = 0; minute < 60; minute += 1) {
         service.ingestLiveClaudeRateLimits({
           configDir: null,
@@ -234,11 +234,10 @@ describe('RateLimitService', () => {
       })
       expect(service.getState().claude?.status).toBe('ok')
 
-      // Two poll cycles inside the Retry-After window, long after the live post went stale: no OAuth call.
+      // Even stale live display must respect OAuth Retry-After.
       await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
-      // Once Retry-After expires, polling resumes.
       await vi.advanceTimersByTimeAsync(30 * 60 * 1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
@@ -256,7 +255,7 @@ describe('RateLimitService', () => {
 
       const service = new RateLimitService()
 
-      // No fetch cycle has captured the selected account's config dir yet.
+      // No cycle has established selected-account attribution yet.
       service.ingestLiveClaudeRateLimits({
         configDir: null,
         fiveHour: { used_percentage: 50 },
@@ -267,7 +266,6 @@ describe('RateLimitService', () => {
       await service.refresh()
       expect(service.getState().claude?.session?.usedPercent).toBe(18)
 
-      // A managed-account session must not overwrite the system-default bar.
       service.ingestLiveClaudeRateLimits({
         configDir: '/some/managed/dir',
         fiveHour: { used_percentage: 99 },
@@ -354,7 +352,7 @@ describe('RateLimitService', () => {
       })
       expect(service.getState().claude?.weekly?.usedPercent).toBe(41)
 
-      // A later post reporting only the 5h window must not wipe the weekly bar.
+      // Missing windows mean no update, not deletion.
       await vi.advanceTimersByTimeAsync(1000)
       service.ingestLiveClaudeRateLimits({
         configDir: null,
@@ -390,7 +388,6 @@ describe('RateLimitService', () => {
       service.ingestLiveClaudeRateLimits(event)
       expect(service.getState().claude?.updatedAt).toBe(firstUpdatedAt)
 
-      // A changed window updates immediately despite the throttle.
       service.ingestLiveClaudeRateLimits({
         ...event,
         fiveHour: { used_percentage: 21, resets_at: 1738425600 }
@@ -500,7 +497,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
-      // Other providers become stale first; their full cycle cannot move Claude's gated clock.
+      // Sibling full cycles must not advance Claude's gated check clock.
       await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
       await service.refreshIfStale()
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(3)
@@ -515,14 +512,13 @@ describe('RateLimitService', () => {
       await service.refreshIfStale()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(1)
-      // Only Claude is due, despite a fresh equal receipt and fresh other providers.
       await activate()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
       expect(service.getState().claude?.session?.usedPercent).toBe(8)
       await service.refreshIfStale()
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
 
-      // A second failure keeps Claude gated beyond its five-minute check age.
+      // Repeated failure must remain gated beyond ordinary check age.
       const cooldownFetch = deferred<ProviderRateLimits>()
       vi.mocked(fetchClaudeRateLimits).mockImplementationOnce(() => cooldownFetch.promise)
       const cooldownRefresh = service.refresh()
@@ -546,7 +542,7 @@ describe('RateLimitService', () => {
       expect(service.getState().claude?.status).toBe('ok')
       expect(service.getState().claude?.usageMetadata?.retryAtMs).toBe(cooldownRetryAtMs)
       const siblingCallsBefore = vi.mocked(fetchCodexRateLimits).mock.calls.length
-      // Legitimately stale siblings refresh during cooldown without stamping Claude.
+      // Sibling refreshes during cooldown must leave Claude's check clock alone.
       await vi.advanceTimersByTimeAsync(4 * 60 * 1000)
       await activate()
       const siblingCalls = siblingCallsBefore + 1
@@ -563,12 +559,11 @@ describe('RateLimitService', () => {
         expect(service.claudeCheckCompletedAt).toBe(cooldownCompletedAt)
         expect(service.getState().claude).toEqual(live)
       }
-      // Continuing the sibling scan must still admit independently due work.
       await vi.advanceTimersByTimeAsync(60 * 1000)
       await activate()
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(siblingCalls + 1)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
-      // Freshen siblings just before expiry, so only Claude is due at the deadline.
+      // Freshen siblings so only Claude is due at the deadline.
       await vi.advanceTimersByTimeAsync(cooldownRetryAtMs - Date.now() - 1)
       postLive()
       await activate()
@@ -624,7 +619,7 @@ describe('RateLimitService', () => {
         }
       })
 
-      // The first cycle is parked inside the outgoing account's resolver await when the switch lands.
+      // Switch while the outgoing account resolver is suspended.
       const firstRefresh = cycle === 'full' ? service.refresh() : service.refreshClaudeForTarget()
       await flushMicrotasks()
       const switchPromise =
@@ -635,8 +630,7 @@ describe('RateLimitService', () => {
       authGate.resolve()
       await flushMicrotasks(8)
 
-      // The stale cycle resumed after the switch; while its Claude fetch is still in flight,
-      // a live post from the outgoing session must not land on the incoming account's bar.
+      // The stale resumed cycle must not authorize outgoing live posts on the new account.
       const beforeOutgoingPost = service.getState().claude?.session?.usedPercent
       service.ingestLiveClaudeRateLimits({
         configDir: '/outgoing/.claude',
@@ -649,7 +643,6 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(service.claudeCheckCompletedAt).toBeNull()
 
-      // The incoming account's own sessions still attribute correctly.
       service.ingestLiveClaudeRateLimits({
         configDir: '/incoming/.claude',
         fiveHour: { used_percentage: 55 },
@@ -669,7 +662,7 @@ describe('RateLimitService', () => {
   it('keeps the newer weekly value when an idle session re-posts an older one for the same window', async () => {
     vi.useFakeTimers()
     try {
-      // OAuth resets carry sub-second precision; the statusline reports whole seconds.
+      // OAuth and statusline reset timestamps differ in precision.
       const sessionReset = Date.now() + 128 * 60 * 1000 + 123
       const weeklyReset = Date.now() + 125 * 60 * 60 * 1000 + 456
       const win = (usedPercent: number, resetsAt: number, windowMinutes: number) => ({
@@ -697,8 +690,7 @@ describe('RateLimitService', () => {
           sevenDay: { used_percentage: weekly, resets_at: Math.floor(weeklyResetAt / 1000) }
         })
 
-      // An idle session last saw the API days ago: Claude Code drops its passed 5-hour window but
-      // still reports the current weekly window at the old value. Dropped whole, so the OAuth poll is not deferred.
+      // Idle sessions can drop the expired 5h window while repeating stale weekly data; discard the whole stale post.
       await vi.advanceTimersByTimeAsync(60 * 1000)
       post(null, 8)
       expect(service.getState().claude).toEqual(fetched)
@@ -728,7 +720,6 @@ describe('RateLimitService', () => {
       expect(service.getState().claude?.session?.resetsAt).toBe(grownSessionReset)
       expect(service.getState().claude?.weekly?.usedPercent).toBe(26)
 
-      // A new weekly window's lower value is taken.
       post(null, 1, weeklyReset + 7 * 24 * 60 * 60 * 1000)
       expect(service.getState().claude?.weekly?.usedPercent).toBe(1)
       service.ingestLiveClaudeRateLimits({

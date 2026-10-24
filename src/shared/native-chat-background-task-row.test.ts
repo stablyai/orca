@@ -35,9 +35,7 @@ describe('background task row text', () => {
   })
 
   it('claims only that a live task was started, never that it is still running', () => {
-    // The clients reading this instead of the block reconcile nothing and cannot
-    // re-check the task, so a frozen "running" would assert a liveness only the
-    // dead process could have observed.
+    // Plain-text clients cannot reconcile task liveness; a frozen running claim would outlive its observer.
     expect(backgroundTaskFallbackText(task())).toBe('Started background command "sleep 20"')
     expect(backgroundTaskFallbackText(task())).not.toContain('running')
   })

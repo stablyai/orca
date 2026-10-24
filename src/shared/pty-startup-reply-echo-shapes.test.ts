@@ -1,13 +1,5 @@
-/**
- * The echo shapes here are TRANSCRIBED FROM A LIVE PTY, not derived from the spec: each
- * `echo` is what `/bin/bash` actually emitted after the reply was written to the master,
- * captured under node-pty at a readline prompt (tty raw, readline echoes in software) and
- * under a `read` builtin (tty cooked, kernel ECHOCTL echoes).
- *
- * Two shapes matched nothing before this file existed: an OSC reply on a cooked tty (its
- * trailing BEL prints as `^G`, and only ESC was caret-encoded) and any private DSR at a
- * readline prompt (the readline projection was gated on an OSC introducer).
- */
+/** Echo fixtures captured from live bash PTYs: raw readline software echoes and cooked read/kernel ECHOCTL.
+ * Old guesses missed BEL→^G and private-DSR readline projections; keep recorded bytes independent of the implementation. */
 import { describe, expect, it } from 'vitest'
 import { locateEcho, replyEchoProjections } from './pty-startup-reply-echo-shapes'
 
@@ -37,8 +29,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     expect(match).toEqual({ kind: 'complete', offset: 0, length: echo.length })
   })
 
-  // The tty coalesces its echo with surrounding shell output, so anchoring at offset 0
-  // would recognize almost no real echo.
+  // Coalesced echo follows shell output, so offset-zero anchors miss real cases.
   it.each(LIVE_ECHOES)('finds the $name echo embedded in output', ({ reply, echo }) => {
     const match = locateEcho(replyEchoProjections(reply, 'posix-pty'), `user@host:~$ ${echo} `)
     expect(match).toEqual({ kind: 'complete', offset: 13, length: echo.length })
@@ -55,9 +46,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     expect(kernel?.needle).not.toContain('\x07')
   })
 
-  // ECHOCTL passes TAB/LF/CR through literally and renders DEL as `^?`. No reply grammar
-  // carries one today; this pins the encoder so a future grammar cannot silently
-  // over-predict. Table matches the caret notation `vis(3)` defines.
+  // ECHOCTL leaves TAB/LF/CR literal and maps DEL→^? (vis(3)); pin future grammar behavior even though current replies lack them.
   it.each([
     { name: 'TAB stays literal', input: '\t', encoded: '\t' },
     { name: 'LF stays literal', input: '\n', encoded: '\n' },
@@ -71,9 +60,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     expect(kernel?.needle).toBe(`^[[?9${encoded}n`)
   })
 
-  // DA1 shares the `ESC [ ?` prefix but is not a cooked-echo-risk reply. Keeping this off
-  // the readline path here, rather than relying on the caller's predicate, means widening
-  // that predicate cannot silently arm a holdable `BEL 1;2c` needle.
+  // Guard the private-DSR grammar locally: widening a caller must not arm DA1’s shared-prefix BEL needle.
   it.each(['\x1b[?1;2c', '\x1b[?0u', '\x1b[?2026;2$y', '\x1b[?12;5R'])(
     'projects no readline needle for %j, which is not a private DSR',
     (reply) => {
@@ -84,9 +71,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     }
   )
 
-  // The containment grammar accepts an empty parameter list and `answerLiveQueryReply`
-  // takes client-supplied bytes on the relay path, so a peer could otherwise arm a two-byte
-  // `BEL n` needle and delete the first bell-then-`n` in ordinary output.
+  // Peer-supplied empty/short DSR parameters could otherwise arm BEL+n and delete ordinary output.
   it.each(['\x1b[?n', '\x1b[?;n', '\x1b[?5n'])(
     'projects no readline needle for %j, which would be too short to be safe',
     (reply) => {
@@ -104,8 +89,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     expect(needles).toContain('\x07997;1n')
   })
 
-  // A needle starting with ESC must never be held as a partial: a read ending on a bare
-  // ESC is a strict prefix of it, and an expired hold would release a stolen query raw.
+  // Never hold ESC-led partials: a bare ESC could belong to a torn query and would escape unanswered when the hold expires.
   it('holds a partial only for needles that do not start with ESC', () => {
     for (const { reply } of LIVE_ECHOES) {
       for (const projection of replyEchoProjections(reply, 'posix-pty')) {
@@ -122,10 +106,7 @@ describe('replyEchoProjections on other backends', () => {
     ])
   })
 
-  // Documents current behaviour, and is NOT a claim that it is right: conhost's echo of a
-  // BEL-terminated reply has never been captured, so the needle keeps a raw BEL exactly as
-  // the POSIX caret form used to. Unreachable in-tree (every OSC reply Orca emits is
-  // ST-terminated) and deliberately not corrected blind — see the branch comment.
+  // ConPTY BEL echo is unmeasured; preserve current raw-BEL needle rather than guessing. In-tree OSC replies all use ST.
   it('leaves a BEL literal in the ConPTY needle, which is unverified', () => {
     const [conpty] = replyEchoProjections(OSC11_BEL, 'windows-conpty')
     expect(conpty?.needle).toBe(']11;rgb:2e2e/3434/3434\x07')

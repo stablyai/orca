@@ -1,17 +1,6 @@
-/**
- * Where a worker's agent comes from: the terminal the caller passed, or a fresh launch through the
- * shared executor — into a worktree this start creates or into an existing one.
- *
- * The executor owns the sequencing: a structured worker's worktree is created with no startup
- * agent, the host is then asked about the workspace that now exists, and only then is the session
- * created. What stays here is what makes it a worker: the worktree is created with the dispatch's
- * lineage and effects, and the surface is a background session or a `worker-<task>` terminal that
- * does not take the sidebar. The mode was decided before the dispatch record existed, so it is
- * handed in rather than decided again.
- *
- * A refused structured session fails the start: the worker factory throws its own error, never the
- * executor's downgrade signal, so a dispatch that asked for a chat does not quietly get a terminal.
- */
+/** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
+ * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
+ * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -33,8 +22,7 @@ import {
 } from './worker-topology'
 import { createWorkerWorktree } from './worker-worktree-creation'
 
-/** Only what the placement itself reads. The runtime's own worktree accessors are untyped, so
- *  naming the two fields keeps `any` out of this module's unions. */
+/** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
@@ -68,8 +56,7 @@ type WorkerAgentPlacementArgs = {
   onStage: (stage: string) => void
 }
 
-/** The setup receipt for a placement that creates no worktree, and the one a start reports if it
- *  fails before a placement exists. */
+/** Setup evidence for existing placements and failures before placement creation. */
 export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
   requested: 'not_applicable',
   effective: 'not_applicable',
@@ -182,8 +169,7 @@ async function launchWorkerAgent(
   }
 }
 
-/** A worker's surface in a worktree that exists: a background session with the dispatch's redrive
- *  and mailbox, or a `worker-<task>` terminal that leaves the sidebar where the user has it. */
+/** Create worker-specific background chat/redrive/mailbox or worker-task terminal without moving the sidebar. */
 function workerSurfaceFactory(
   args: WorkerAgentPlacementArgs,
   agent: TuiAgent,
@@ -237,7 +223,6 @@ function requireWorktree(worktree: PlacedWorktree | undefined): PlacedWorktree {
   return worktree
 }
 
-/** Validation refuses a fresh launch with no agent; this only narrows the type. */
 function requireAgent(agent: TuiAgent | undefined): TuiAgent {
   if (!agent) {
     throw new Error('Worker topology did not resolve an agent.')

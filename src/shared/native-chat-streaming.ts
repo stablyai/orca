@@ -1,13 +1,8 @@
-// Shared derivation for the in-flight "streaming" assistant bubble. While an
-// agent works, its hook preview (lastAssistantMessage) is shown as a synthetic
-// assistant message so the user sees the reply build in real time, before the
-// completed turn is flushed to the transcript. Desktop and mobile both use this
-// so the show/hide rule can't drift between platforms.
+// Use status previews until transcript replies catch up; share desktop/mobile visibility to avoid duplicate bubbles.
 
 import type { NativeChatMessage } from './native-chat-types'
 
-/** The synthetic streaming bubble's stable id (kept stable so the list keys it
- *  consistently across ticks and the real turn can replace it cleanly). */
+/** Stable preview id across ticks lets the real turn replace it without key churn. */
 export const NATIVE_CHAT_STREAMING_ID = 'streaming'
 
 /** Concatenated text of an assistant message's text blocks, trimmed. */
@@ -41,20 +36,8 @@ export function latestNativeChatReplyText(
   return ''
 }
 
-/**
- * Decide the streaming text to show, or null to show nothing. Returns the
- * preview only while it leads the transcript — i.e. it's longer than (and not
- * already contained in) the last assistant turn. Once the real turn lands with
- * the same (or more) text, the preview is suppressed so the bubble doesn't
- * duplicate or flicker as the transcript catches up.
- *
- * `working` gates it: a stale preview from a finished turn never shows.
- *
- * `previewIsToolOutput` hard-gates it: several providers publish a tool's stdout or
- * error as `lastAssistantMessage` so status cards can preview it. That text is not the
- * reply, and it never appears in a transcript assistant block — so the catch-up rules
- * below can never retire it and it would sit in the chat until the turn ended.
- */
+/** Show previews only while working and ahead of transcript text; suppress caught-up duplicates.
+ * Always reject previewIsToolOutput: status stdout/errors never become assistant blocks and cannot retire through transcript catch-up. */
 export function deriveNativeChatStreamingText(args: {
   messages: readonly NativeChatMessage[]
   previewText: string | null | undefined

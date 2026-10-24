@@ -49,13 +49,10 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
       state = createWaitBlockedCheckState()
       this.waitBlockedCheckStateByPtyId.set(ptyId, state)
     }
-    // Why lowercase the joined window and not the chunk: the carry is already
-    // lowercase, so this is one folded copy instead of a discarded per-chunk copy
-    // plus the concatenation the pattern flattens anyway.
+    // Fold carry and chunk once; per-chunk lowercasing would add another full copy.
     const keywordWindow = `${state.keywordCarry}${appendedText}`.toLowerCase()
     const keywordHit = WAIT_BLOCKED_KEYWORD_PATTERN.test(keywordWindow)
-    // Why own: this 31-char carry lives per PTY until the next chunk, and un-owned it pins the
-    // whole lowercased window — a full copy of the chunk.
+    // Own the tiny retained carry so it cannot pin the full lowercased output window.
     state.keywordCarry = ownRetainedString(keywordWindow.slice(-WAIT_BLOCKED_KEYWORD_CARRY_CHARS))
     appendWaitBlockedCarry(state.appended, appendedText)
     const elapsed = at - state.lastAt
@@ -105,11 +102,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     resetWaitBlockedCarry(state.appended)
   }
 
-  // Why: the scanner's first run after a restore seed compares against a null
-  // baseline, so a permission prompt visible only in seeded HISTORY would read
-  // as newly gained and stamp waitBlockedAt "now" on the next benign chunk.
-  // Store the seeded tail's wait state as the baseline WITHOUT stamping; only
-  // a signal that appears in genuinely new output counts as gained.
+  // Prime seeded history without timestamps; only newly gained prompts in live output may stamp waitBlockedAt.
   protected primeWaitBlockedBaselineFromSeededTail(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
@@ -174,15 +167,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     run()
   }
 
-  /** Feed a main-fabricated OSC title/BEL frame (agent hook spinners) through
-   *  the per-PTY tracker — NOT onPtyData, so emulator state, tails,
-   *  transcripts, and stats never see synthetic bytes. Parsed via the
-   *  tracker's stateless synthetic path: the shared chunk bell detector must
-   *  never observe fabricated bytes, or a tick interleaved with a split real
-   *  OSC corrupts its escape state (phantom/swallowed bells). While the
-   *  side-effect kill switch is off the legacy pty:data copy still drives
-   *  renderer parsers; this ingest keeps main's facts and records
-   *  authoritative. */
+  /** Synthetic title/bell frames update the stateless title path only, never emulator/tail/stats or the real escape scanner, which may hold a split OSC. Legacy byte delivery still applies when side effects are off. */
   ingestSyntheticTitleFrame(ptyId: string, data: string): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.applyingChunk = true
@@ -198,11 +183,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     }
   }
 
-  /** Scan-authority handoff for a backgrounded PTY (daemon keep-tail
-   *  thinning): while delegated, the daemon relays bell/133/pr-link/2031
-   *  facts itself and the delivered bytes may be gapped — feeding them to
-   *  main's transient scanners would mint phantom or duplicate facts. Title
-   *  processing stays main-side either way. */
+  /** When daemon scan authority thins output, suppress main transient scans of gapped bytes to avoid duplicate/phantom facts; titles remain main-owned. */
   setPtyTransientFactDelegation(
     ptyId: string,
     delegated: boolean,
@@ -212,10 +193,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
-      // Prime the freshly reset scanner carry with the emulator's dangling
-      // incomplete escape at the handoff position — a sequence split across
-      // the un-background toggle must not mint a phantom bell or lose its
-      // fact. titleScanData:'' keeps titles out (they were never suppressed).
+      // Seed scanner carry at authority handoff so a split escape cannot mint/swallow bells; suppress title scanning because titles were never delegated.
       entry.tracker.handleChunk(scanSeedAnsi, {
         titleScanData: '',
         mode2031PendingSubscribe

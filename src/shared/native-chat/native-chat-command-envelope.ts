@@ -1,9 +1,5 @@
-// Claude-family harnesses record a slash input's user turn as a command
-// envelope (`<command-name>/x</command-name>…`), not as the typed text. The
-// noise filter rightly hides those for catalog commands — Orca shows a local
-// `Ran /x` line instead — but a skill invocation IS the user's chat turn, so
-// dropping its envelope makes the assistant appear to answer an empty
-// conversation. Surface non-catalog envelopes back as plain user text.
+// Claude-family skill envelopes must resurface as user text or replies lose their prompt. Catalog commands remain noise,
+// with local Ran /x feedback; ordinary non-catalog envelopes recover typed /name args.
 
 import { isTextBlock, type NativeChatMessage } from '../native-chat-types'
 
@@ -12,8 +8,7 @@ const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/
 
 export type NativeChatCommandEnvelope = { name: string; args: string }
 
-/** Parse a user turn recorded as a command envelope. Returns null for any text
- *  that does not lead with an envelope tag (ordinary prompts, XML pastes). */
+/** Parse only leading envelope tags so ordinary prompts/XML pastes remain literal. */
 export function parseNativeChatCommandEnvelope(text: string): NativeChatCommandEnvelope | null {
   const trimmed = text.trimStart()
   if (!trimmed.toLowerCase().startsWith('<command-')) {
@@ -26,12 +21,7 @@ export function parseNativeChatCommandEnvelope(text: string): NativeChatCommandE
   return { name, args: COMMAND_ARGS.exec(trimmed)?.[1]?.trim() ?? '' }
 }
 
-/**
- * Replace skill-invocation envelopes with the token the user sent (`/name
- * args`) so the turn renders as their message and the optimistic echo can
- * reconcile against it. Catalog commands stay untouched — the noise filter
- * hides them and the local `Ran /name` marker is their feedback.
- */
+/** Restore skill /name args for visible user turns and optimistic-echo matching. Keep catalog command envelopes hidden behind local Ran markers. */
 export function surfaceSkillInvocationUserTurns(
   messages: readonly NativeChatMessage[],
   catalogCommandNames: ReadonlySet<string>
@@ -47,10 +37,7 @@ export function surfaceSkillInvocationUserTurns(
     if (!envelope || catalogCommandNames.has(envelope.name.replace(/^\//, ''))) {
       return message
     }
-    // Why: the harness canonicalizes a plugin skill to `/plugin:name`, but the
-    // user (and the picker) sent the short frontmatter name. Render the short
-    // token so the bubble shows what was typed and the optimistic echo prunes
-    // instead of duplicating the turn.
+    // Plugin envelopes canonicalize /plugin:name; restore the picked short name so the bubble matches typed input and prunes its optimistic echo.
     const shortName = envelope.name.replace(/^\//, '').split(':').at(-1) ?? ''
     const token = `/${shortName}`
     changed = true

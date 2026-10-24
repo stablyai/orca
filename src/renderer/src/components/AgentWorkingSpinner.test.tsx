@@ -48,10 +48,7 @@ describe('AgentWorkingSpinner', () => {
     }
   })
 
-  // Why: animationstart fires on the first start and on every restart (class
-  // re-add, display:none reveal), so it alone keeps every ring phase-locked.
-  // A negative animation-delay cannot — it is static, so a restart replays the
-  // stale mount-time offset and the rings fan out across steps.
+  // Anchor every animationstart, including reveals/restarts. Static negative delays replay stale mount offsets and break phase sync.
   it('anchors every animation start to the shared document epoch', async () => {
     const animation = {
       animationName: 'agent-spinner-rotate',
@@ -81,8 +78,7 @@ describe('AgentWorkingSpinner', () => {
       await act(async () => {
         root.render(<AgentWorkingSpinner />)
       })
-      // Why: mount must not query animations — that forces a synchronous style
-      // recalc per ring for a phase the first animationstart sets anyway.
+      // Mount-time animation queries force style recalculation; the first animationstart establishes phase.
       expect(getAnimations).not.toHaveBeenCalled()
 
       await fireAnimationStart()
@@ -103,9 +99,7 @@ describe('AgentWorkingSpinner', () => {
     }
   })
 
-  // Why: reduced motion resolves the rule to `animation: none`, so no animation
-  // exists to start and none to anchor. Pins that dropping the ref-time anchor
-  // adds no exposure here — both paths were already no-ops.
+  // Reduced motion has no animation to anchor; preserve that no-op.
   it('anchors nothing when reduced motion leaves no animation to start', async () => {
     const getAnimations = vi.fn(() => [] as Animation[])
     const originalGetAnimations = Object.getOwnPropertyDescriptor(

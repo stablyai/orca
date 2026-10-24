@@ -192,7 +192,7 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() =>
       expect(waitSignal?.aborted || readTerminal.mock.calls.length > 0).toBe(true)
     )
-    // Why: a closed pane must not become a hidden live-output consumer when its late PTY appears.
+    // Closed panes must not become hidden output consumers when their late PTY appears.
     expect(waitSignal?.aborted).toBe(true)
     expect(readTerminal).not.toHaveBeenCalled()
     expect(subscribeToTerminalData).not.toHaveBeenCalled()
@@ -419,7 +419,7 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() =>
       expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
-    // Why: the wait past the running cap queues instead of failing the restore (STA-2886).
+    // Queue beyond the running cap instead of failing restore (STA-2886).
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
 
@@ -588,8 +588,7 @@ describe('terminal multiplex RPC', () => {
       { connectionId: 'conn-desktop-legacy' }
     )
     await dispatchPromise
-    // Widened gate: a desktop client must mount + await its late PTY, not skip
-    // straight to the bare scrollback path the way it did under the mobile-only gate.
+    // Desktop must also mount and await late PTYs; the old mobile-only gate skipped to bare scrollback.
     expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
     expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith(
       'terminal-1',

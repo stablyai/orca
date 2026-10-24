@@ -1,10 +1,4 @@
-// A Claude chat is published the moment its child spawns, before the CLI has answered initialize,
-// and launched with the chat's saved options. A send in that window — into a fresh start, or into
-// the restart the delivery loop makes for a send after a start that failed — is accepted at once and
-// held by the host until the start proves itself, then written once. When the CLI dies before
-// answering, the never-written message is rejected with the CLI's own diagnostic, the chat shows the
-// cause once, and nothing is left as a delivery nobody can confirm. Against the production runtime,
-// adapter, record store and host, with only the CLI process scripted.
+// Accept sends during startup, then dispatch once initialize proves the start; reject never-written sends on failure.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -44,7 +38,6 @@ async function send(host: StructuredAgentSessionHost, text: string): Promise<str
     },
     body
   })
-  // Accepted, never refused: the message shows as sent.
   expect(sent, JSON.stringify(sent)).toMatchObject({
     ok: true,
     replayed: false,
@@ -57,7 +50,6 @@ function fence(host: StructuredAgentSessionHost): number {
   return host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 }
 
-/** Whether the CLI was written a message while the host is waiting on its open. */
 async function written(host: StructuredAgentSessionHost): Promise<boolean> {
   await vi.waitFor(() =>
     expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(true)
@@ -77,7 +69,6 @@ async function submission(host: StructuredAgentSessionHost, clientMessageId: str
   )
 }
 
-/** The CLI keeps dying at startup: the latest child exits with the diagnostic once it exists. */
 async function failLatestStart(host: StructuredAgentSessionHost, count: number): Promise<void> {
   await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(count))
   claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
@@ -98,8 +89,6 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
     expect(await statusRows(host)).toEqual([STARTUP_TEXT])
     const releasedFence = fence(host)
 
-    // The delivery loop asks for the child back and holds the message for it; the CLI dies again
-    // before it answers initialize, so it was never written.
     const held = await send(host, 'hello?')
     await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(2))
     await vi.waitFor(() =>
@@ -108,21 +97,18 @@ describe('a send into a Claude chat whose CLI keeps failing at startup', () => {
     expect(await written(host)).toBe(false)
     await failLatestStart(host, 2)
 
-    // Rejected with the cause, not left in doubt; one row for this attempt names it.
     await vi.waitFor(async () =>
       expect(await submission(host, held)).toMatchObject({
         dispatchState: 'rejected',
-        // Worded for the user: the red line under the composer shows it as it stands.
         reason: STARTUP_TEXT,
         rejection: { kind: 'providerStartFailed' }
       })
     )
     expect(await statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
-    // The restart moved the fence twice: its acquisition, and the exit that released it.
+    // Restart acquisition and exit release each advance the fence.
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
 
-    // The user signs in and retries: one restart, proven, written to the CLI.
     claude.behave(SESSION, {})
     await send(host, 'hello again')
     await vi.waitFor(() => expect(claude.children(SESSION)).toHaveLength(3))
@@ -145,7 +131,6 @@ describe('a send while the first Claude start is still answering initialize', ()
     expect(await written(host)).toBe(false)
     expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
 
-    // The CLI answers: the start lands, and the held message is written to it, once.
     claude.child(SESSION).answerInit()
 
     await vi.waitFor(() =>
@@ -158,8 +143,7 @@ describe('a send while the first Claude start is still answering initialize', ()
     expect(await statusRows(host)).toEqual([])
   })
 
-  // Only a SessionStart hook makes the CLI name its session before the first turn, and that hook
-  // comes from status hooks a user can turn off; the initialize answer alone starts the chat.
+  // SessionStart depends on optional status hooks; initialize alone must establish startup.
   it('lands its start and is written, with no start frame before the first turn', async () => {
     claude.behave(SESSION, { initHangs: true, sendsNoStartFrame: true })
     const host = await claude.install()
@@ -190,7 +174,6 @@ describe('a send while the first Claude start is still answering initialize', ()
     await vi.waitFor(async () =>
       expect(await submission(host, held)).toMatchObject({
         dispatchState: 'rejected',
-        // Worded for the user: the red line under the composer shows it as it stands.
         reason: STARTUP_TEXT,
         rejection: { kind: 'providerStartFailed' }
       })

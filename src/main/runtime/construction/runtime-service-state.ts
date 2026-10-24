@@ -97,7 +97,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
 
-  /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
+  /** Bound abandoned Git-admin filesystem probes to one per repo. */
   protected worktreeAdminFingerprintProbes = new Set<string>()
 
   protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
@@ -175,7 +175,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
     isObservablePty: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
-      // Why: SSH and WSL foregrounds live on another host or in the guest.
+      // SSH/WSL foregrounds belong to the host/guest, not this process.
       return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
     },
     isStatusEnabled: (agent) =>
@@ -186,8 +186,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     },
     readForegroundCommandLine: (ptyId, foregroundProcess) =>
       readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
-    // Why after the chunk's facts: the renderer drops an exited agent's row on command-finished
-    // unless the row changed after it, so the run's Done must arrive after that fact.
+    // Renderer command-finished can drop unchanged status rows; publish Done after that fact.
     publish: (ptyId, payload, yieldsToHookSince) =>
       this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
         this.emitTerminalAgentStatusEvents(
@@ -267,7 +266,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       host: createStructuredMailboxPointerHost()
     })
 
-  /** What Orca calls an agent that sends through it; public for every such send site. */
   readonly orchestrationSenderNames = new RuntimeOrchestrationSenderNames({
     getDb: () => this._orchestrationDb,
     getHandleRecord: (handle) => this.handles.get(handle),
@@ -305,13 +303,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly skillCommands!: RuntimeSkillCommands
 
-  // Why: mobile clients subscribe to terminal output via terminal.subscribe.
-  // These listeners fire on every onPtyData call, enabling real-time streaming
-  // without polling. Keyed by ptyId for O(1) lookup per data event.
   protected readonly terminalStreamConsumers = new RuntimeTerminalStreamConsumers()
 
-  // Why: startup draft paste can subscribe after the agent already emitted its
-  // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
+  // Replay bounded startup bytes when draft paste subscribes after the ready marker.
   protected recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
 
   protected setupCompletionTokenByPtyId = new Map<string, string>()

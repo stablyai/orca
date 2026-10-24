@@ -1,8 +1,4 @@
-/**
- * Editor tabs a headless host persisted, such as those a converted SSH host's migration carried
- * in. No renderer publishes them there, so the host projects and retires them itself; a paired
- * desktop mirrors what it lists.
- */
+/** Headless hosts project/retire persisted editors themselves; paired desktops mirror them without a publishing renderer. */
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
@@ -40,7 +36,6 @@ function editorUnifiedTab(
   )
 }
 
-/** A file's phone tab id: its unified tab's, else its path. */
 function listedTabId(unifiedTab: Tab | undefined, file: PersistedOpenFile): string {
   return unifiedTab?.id ?? file.filePath
 }
@@ -91,7 +86,7 @@ export function buildHeadlessMobileSessionEditorTabs(
   )
 }
 
-/** The record the phone's tab names: two owners can hold one path, so by the id it was listed under. */
+/** Resolve by listed id: multiple owners can hold the same path. */
 export function findListedEditorFile(
   files: readonly PersistedOpenFile[],
   session: WorkspaceSessionState,
@@ -99,7 +94,7 @@ export function findListedEditorFile(
   tab: Pick<HeadlessEditorTab, 'id' | 'filePath'>
 ): PersistedOpenFile | undefined {
   const samePath = files.filter((candidate) => candidate.filePath === tab.filePath)
-  // Why no fallback for two: a stale id would retire the other owner's record.
+  // Ambiguous path fallback could retire another owner's record.
   return samePath.length < 2
     ? samePath[0]
     : samePath.find(
@@ -108,7 +103,6 @@ export function findListedEditorFile(
       )
 }
 
-/** The session without one persisted editor tab, or null when it holds no such tab. */
 export function retireHeadlessEditorTab(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -172,7 +166,6 @@ export type HeadlessEditorRetirementHost = {
   storeMobileSessionSnapshot(worktreeId: string, snapshot: RuntimeMobileSessionTabsSnapshot): void
 }
 
-/** Retires a listed editor from the host's own session and republishes; false when not found. */
 export function retireHeadlessMobileSessionEditorTab(
   host: HeadlessEditorRetirementHost,
   worktreeId: string,
@@ -188,7 +181,7 @@ export function retireHeadlessMobileSessionEditorTab(
     return false
   }
   host.setWorkspaceSessionForWorktree(worktreeId, next)
-  // Why drop it first: a rebuild that finds no tabs left keeps the old snapshot.
+  // Clear first: an empty rebuild otherwise retains the old snapshot.
   const existing = host.mobileSessionTabsByWorktree.get(worktreeId)
   if (existing) {
     host.storeMobileSessionSnapshot(worktreeId, {

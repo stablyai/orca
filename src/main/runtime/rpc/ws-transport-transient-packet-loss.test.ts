@@ -1,14 +1,11 @@
-// Real ws server + real ws client over loopback: a live, well-behaved peer whose pong is swallowed by
-// a transient blackhole must not be terminated (STA-3320).
+// Real loopback peers must survive one swallowed pong, as with transient cellular/Tailscale loss (STA-3320).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 
 const PROBE_INTERVAL_MS = 150
 
-// Why: the heartbeat calls now() exactly once per sweep, so a per-call step makes elapsed exactly one
-// interval every sweep — real scheduler jitter can never be mistaken for a suspended loop, and no
-// assertion in this file depends on wall time.
+// Advance now once per sweep to eliminate scheduler jitter from suspend detection; assertions count probes, not wall time.
 function createStepClock(stepMs: number): () => number {
   let calls = 0
   return () => 1_000_000 + calls++ * stepMs
@@ -34,7 +31,7 @@ describe('WebSocketTransport under transient packet loss', () => {
       port: 0,
       heartbeatIntervalMs: PROBE_INTERVAL_MS,
       heartbeatNow: createStepClock(PROBE_INTERVAL_MS),
-      // Why: this test is about liveness, not the auth handshake; keep the pre-auth reaper out of it.
+      // Keep pre-auth expiry outside this liveness test.
       preAuthTimeoutMs: 600_000
     })
     transports.push(transport)
@@ -44,8 +41,7 @@ describe('WebSocketTransport under transient packet loss', () => {
 
   it('keeps a live client whose pong is swallowed for a single probe', async () => {
     const transport = await startTransport()
-    // autoPong:false hands us the protocol-level pong so we can drop exactly one, the way a
-    // cellular/Tailscale blackhole drops exactly the frames in flight during the stall.
+    // Disable autoPong to drop exactly one protocol reply.
     const client = new WebSocket(`ws://127.0.0.1:${transport.resolvedPort}`, { autoPong: false })
     sockets.push(client)
 
@@ -68,8 +64,7 @@ describe('WebSocketTransport under transient packet loss', () => {
       client.once('open', resolve)
       client.once('error', reject)
     })
-    // Heartbeats intentionally begin after authentication; stamp this synthetic peer as authenticated
-    // so the liveness oracle exercises the production heartbeat path rather than pre-auth expiry.
+    // Mark the synthetic peer authenticated so production heartbeat runs instead of pre-auth expiry.
     const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
     for (const serverSocket of wss.clients) {
       transport.setClientId(serverSocket, 'test-client')

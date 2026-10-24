@@ -15,7 +15,7 @@ export type ProfileStateStartupRecoveryDialogDeps = {
   copyToClipboard: (text: string) => void
 }
 
-/** Present the only safe desktop recovery action without changing the failed authority. */
+/** Present recovery without mutating the failed authority. */
 export async function presentProfileStateStartupRecoveryDialog(
   deps: ProfileStateStartupRecoveryDialogDeps
 ): Promise<void> {
@@ -46,7 +46,7 @@ export type ProfileStateCopyChoiceDialogDeps = {
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 }
 
-/** Best-effort save times; SQLite's latest commit may live only in its WAL, and -shm changes on every open. */
+/** Best effort: WAL can hold the latest commit; shm mtimes reflect opens, not saves. */
 export function readProfileStateCopySavedTimes(userDataPath: string): {
   sqliteSavedAt?: Date
   jsonSavedAt?: Date
@@ -76,7 +76,7 @@ function modifiedAt(path: string): Date | undefined {
   return statSync(path, { throwIfNoEntry: false })?.mtime
 }
 
-/** Ask which diverged copy to keep; undefined means quit without changing either. */
+/** Undefined quits without changing either diverged copy. */
 export async function chooseProfileStateCopy(
   deps: ProfileStateCopyChoiceDialogDeps
 ): Promise<ProfileStateCopyChoice | undefined> {
@@ -110,7 +110,7 @@ export type ProfileStateRepairChoiceDialogDeps = {
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 }
 
-/** Ask before replacing damaged sections with older copies; false means quit unchanged. */
+/** Confirm replacement with older sections; false quits unchanged. */
 export async function chooseProfileStateRepair(
   deps: ProfileStateRepairChoiceDialogDeps
 ): Promise<boolean> {

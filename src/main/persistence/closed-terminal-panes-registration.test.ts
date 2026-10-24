@@ -1,5 +1,3 @@
-// Main's closed-pane record (L80 Q2) is a session field every per-field table must place, and one
-// a build that predates it drops without losing anything else.
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -50,8 +48,7 @@ describe('main’s closed-pane record', () => {
   })
 
   it('is dropped, alone, by a build that predates it', () => {
-    // A build before L80 reads the field as one it does not know: its session parse strips unknown
-    // fields and keeps the rest, as this build's does for a field from a newer one.
+    // Simulate an older reader by renaming this field to an unknown key.
     const { [FIELD]: records, ...rest } = session
     const asOlder = { ...rest, closedTerminalPanesFromANewerBuild: records }
     const parsed = parseWorkspaceSession(asOlder)
@@ -60,7 +57,6 @@ describe('main’s closed-pane record', () => {
   })
 
   it('is written only by a live edit of main’s layout', () => {
-    // Load, restore, a peer's merge and WSL or profile moves never declare a live edit.
     const declaring = [...sourceFiles('src/main'), ...sourceFiles('src/shared')].filter((file) =>
       readFileSync(path.join(ROOT, file), 'utf8').includes("droppedLeafReason: 'live-edit'")
     )

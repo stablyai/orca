@@ -2,13 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 
-// Why: node-pty's cached foreground name is p_comm on macOS, which reports the native Claude
-// install as its version directory (`2.1.258`). Reading that as "no agent" silently downgraded
-// `terminal.send --enter` from the atomic bracketed-paste route to unframed 16 KiB chunks,
-// which Claude's composer truncates for large prompts (STA-4577).
+// Confirm unfamiliar foreground names before downgrading atomic paste; unframed chunks truncated Claude prompts (STA-4577).
 describe('isTerminalRunningSettledPromptAgent foreground confirmation', () => {
-  // `2.1.258`: macOS p_comm for the native Claude install. `bash.exe`: the Windows daemon
-  // tracker answers with the shell fallback until its async scan lands.
+  // macOS p_comm may report the Claude version directory; Windows may report bash.exe until its scan finishes.
   it.each(['2.1.258', 'bash.exe'])(
     'confirms an unrecognized foreground (%s) before refusing the settled route',
     async (cachedForeground) => {
@@ -26,7 +22,6 @@ describe('isTerminalRunningSettledPromptAgent foreground confirmation', () => {
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(true)
       expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
-      // The confirmed identity is reused; the cached read must not be re-consulted and win.
       expect(getForegroundProcess).toHaveBeenCalledTimes(1)
     }
   )

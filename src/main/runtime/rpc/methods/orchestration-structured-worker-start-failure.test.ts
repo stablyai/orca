@@ -1,11 +1,4 @@
-/**
- * A worker start that fails AFTER its structured session exists is the fourth settlement path.
- *
- * The create publishes a "Claude Chat"/"Codex Chat" tab and writes it into the durable restore
- * index before the start can fail on the authority gate or on the preamble turn. Dropping only the
- * dispatch hold there left one dead tab per failed start, re-published on every app launch and
- * re-attaching a session no dispatch owns.
- */
+/** Post-create authority/preamble failure must retire both live and durable chat tabs; dropping only the dispatch hold restores an unowned dead tab after restart. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -144,8 +137,7 @@ describe('a structured worker-start that fails after the session exists', () => 
     expect(receipt).toMatchObject({ state: 'failed', stage: 'dispatch_input' })
     expect(host.closed).toHaveLength(1)
     const sessionId = host.closed[0] as string
-    // Durable restore index first, then the live snapshot; without both, the dead tab comes back
-    // on the next launch.
+    // Hide durable restore before retiring live state, or the dead tab returns next launch.
     expect(host.visibility).toContainEqual([sessionId, false])
     expect(retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(sessionId)
   })

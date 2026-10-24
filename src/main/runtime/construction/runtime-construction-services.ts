@@ -110,7 +110,7 @@ export abstract class RuntimeConstructionServices {
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
   protected abstract getLeafKey(tabId: string, leafId: string): string
-  /** The tab and pane that hold a terminal: the one reader of a record's pane copies (L80). */
+  /** L80: sole reader of a PTY record's tab/pane copies. */
   protected abstract paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane
   protected abstract getLivePtyForHandle(handle: string): {
     record: TerminalHandleRecord

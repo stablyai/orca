@@ -14,10 +14,7 @@ export const SIDEBAR_INPUTS_SEMANTICS_VERSION = 3
 export const SIDEBAR_INPUTS_PAGE_MAX_BYTES = 256 * 1024
 export const SIDEBAR_INPUTS_PAGE_MIN_BYTES = 16 * 1024
 
-/**
- * With no pageToken: a delta from `cursor` when it is still in this generation's log, else a
- * snapshot. A pageToken continues the batch whose page named it.
- */
+/** No pageToken reads a same-generation cursor delta, or snapshot if unavailable; tokens continue their batch. */
 export const SidebarInputsReadParams = z.object({
   generation: z.string().optional(),
   cursor: z.number().int().nonnegative().optional(),

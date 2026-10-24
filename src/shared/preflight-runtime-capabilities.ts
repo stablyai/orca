@@ -1,9 +1,7 @@
-// Why: older hosts discard preflight.detectAgents params and probe their own PATH, so a client
-// must not read that answer as the workspace's (a WSL project on a Windows host differs).
+// Older hosts ignore workspace params and probe their own PATH; never treat that as workspace evidence (e.g. WSL on Windows).
 export const PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY =
   'preflight.workspace-scoped.v1' as const
-// Why: an older host answers its own agents for a workspace another runtime owns; one with this
-// refuses with WORKSPACE_ON_OTHER_RUNTIME, so a client may let it decide for a shared repo id.
+// This host refuses foreign-runtime workspaces with WORKSPACE_ON_OTHER_RUNTIME instead of returning its own agents.
 export const PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY =
   'preflight.other-runtime-refusal.v1' as const
 /** What such a host answers, instead of probing itself, for another runtime's workspace. */

@@ -120,9 +120,7 @@ describe('resolveAgentStartupPlanInputs', () => {
 })
 
 describe('a picked session option outranks configured launch arguments', () => {
-  // Why this composes rather than asserting the flag: the flag's name says what it sets, not what
-  // a user sees. What a user sees is one model flag on argv instead of two, and a chat surface
-  // that can name the model they picked.
+  // Compose the surfaces: prove one model flag reaches argv and the chat can name the selected model, beyond asserting the policy flag.
   function commandFor(settings: AgentStartupSettings) {
     return buildAgentStartupPlan({
       ...resolveAgentStartupPlanInputs({

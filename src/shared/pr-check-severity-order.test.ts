@@ -79,8 +79,7 @@ describe('PR check severity order', () => {
     )
   })
 
-  // Why: an object-literal rank table would resolve these off Object.prototype and
-  // return a function, turning the comparator into NaN and scrambling the list.
+  // Object rank tables expose prototype names as functions, producing NaN comparisons and unstable ordering.
   it('treats prototype property names as unknown conclusions', () => {
     for (const inherited of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
       expect(getCheckSeverityRank(inherited)).toBe(

@@ -1,12 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * What the page actually asks the main process about external managers.
- *
- * The engine-level tests hand a pre-narrowed scope list to the client, so they
- * prove the plumbing and nothing about the producer. These drive the page: the
- * selection is the input and the IPC calls it issues are the observation.
- */
+/** Drive the page’s scope producer and inspect IPC; client tests with pre-narrowed scopes cannot verify which hosts the page asks. */
 
 import { describe, expect, it } from 'vitest'
 import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'

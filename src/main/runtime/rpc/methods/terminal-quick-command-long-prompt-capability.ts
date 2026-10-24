@@ -1,9 +1,5 @@
-// Transitional: remove once no supported release lacks TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY.
-//
-// A client from before long prompts rejects the whole quick-command list if one prompt is longer
-// than its old cap, so the host leaves those commands out of what it publishes to that client.
-// Omitting beats trimming: a trimmed copy would run the wrong prompt, and saving it would
-// overwrite the stored one.
+// Remove once every supported release has TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY.
+// Older clients reject lists containing long prompts; omit those commands rather than trim and run/save different text.
 
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { isLegacyReadableTerminalQuickCommand } from '../../../../shared/terminal-quick-command-prompt-limit'

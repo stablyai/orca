@@ -31,7 +31,6 @@ export function RightSidebarToggle(): React.JSX.Element {
   )
 }
 
-/** The titlebar's center/right strip: the tab-strip portal slot and the trailing chrome buttons. */
 export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const handleToggleExpand = (): void => {
     if (!layout.effectiveActiveTabId) {
@@ -71,9 +70,9 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
           </TooltipContent>
         </Tooltip>
       )}
-      {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
+      {/* The open sidebar already renders its close button. */}
       {layout.showRightSidebarControls && !layout.rightSidebarOpen ? <RightSidebarToggle /> : null}
-      {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
+      {/* Reserve the custom window-controls overlay’s width. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )

@@ -45,8 +45,7 @@ describe('deleting a workspace owner session fields', () => {
     expect(session.terminalTopologyRevisionByRepoId).toEqual({ 'repo-1': 5 })
   })
 
-  // Why spelled out rather than derived: the cases above iterate this list, so a field quietly
-  // reclassified in the census loses its delete and its test case together.
+  // Deriving this expectation from the census would hide fields losing both deletion and coverage.
   it('deletes exactly these fields with their owner', () => {
     expect(OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER).toEqual([
       'openFilesByWorktree',
@@ -63,8 +62,7 @@ describe('deleting a workspace owner session fields', () => {
     ])
   })
 
-  // Why not in the list above: this map also holds host-qualified keys, so it is scanned rather
-  // than indexed by the owner key, and the scan is the only thing that reaches a remote row.
+  // Recency also uses host-qualified keys, which only the separate scan reaches.
   it('deletes the recency entry under a bare and a host-qualified key alike', () => {
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),

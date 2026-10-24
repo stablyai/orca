@@ -32,11 +32,9 @@ export type AgentChildWorkMembership = (typeof AGENT_CHILD_WORK_MEMBERSHIPS)[num
 export type AgentChildWorkOutcome = (typeof AGENT_CHILD_WORK_OUTCOMES)[number]
 /** Whether the provider asserted the child may outlive the turn that launched it. */
 export type AgentChildWorkResidency = (typeof AGENT_CHILD_WORK_RESIDENCIES)[number]
-/** `open`: a start edge was seen and no end yet. `reported`: the provider's latest heartbeat
- *  named it; no end edge will come, so the next report or the settlement replaces it. */
+/** open awaits an end edge; reported lasts until the next heartbeat/settlement, with no end edge promised. */
 export type AgentChildWorkOperationBasis = (typeof AGENT_CHILD_WORK_OPERATION_BASES)[number]
-/** An ending the child did not report itself: the provider acknowledged a Stop. The child's own
- *  ending of the same run may still replace it; nothing else may. */
+/** Stop-acknowledged endings may be replaced only by that same run's own ending. */
 export type AgentChildWorkOutcomeBasis = 'stop-acknowledged'
 
 /** What the child is doing now, in the vocabulary a hook-reported row uses for its own tool. */
@@ -85,8 +83,7 @@ export type AgentChildWorkInput = {
   model?: string
   totalTokens?: number
   providerTiming?: AgentChildWorkProviderTiming
-  /** The child that owns this invocation (a nested agent's spawner, or the agent that launched a
-   *  shell). Absent means the session's main agent owns it. */
+  /** Invocation owner (spawner or launching agent); absence identifies the session lead. */
   parentChildWorkId?: AgentChildWorkId
   /** Host-only: settlement consults it; never projected to a view. */
   residency?: AgentChildWorkResidency

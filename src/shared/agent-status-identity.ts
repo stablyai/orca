@@ -91,8 +91,7 @@ export function resolveAgentStatusIdentity(args: {
     (otherProcessOwner || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
   ) {
     return {
-      // Why: child agent CLIs inherit ORCA_PANE_KEY from their parent terminal.
-      // An idle turn does not end its foreground process or resume identity.
+      // Inherited ORCA_PANE_KEY does not grant child CLI ownership; idle leaves foreground process/resume identity intact.
       agentType: existingAgentType,
       inheritedFromActivePane: true
     }

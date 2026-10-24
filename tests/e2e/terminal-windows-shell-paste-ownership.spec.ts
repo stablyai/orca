@@ -4,6 +4,8 @@ import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { WINDOWS_GIT_BASH_SHELL } from '../../src/shared/windows-terminal-shell'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import { test, expect } from './helpers/orca-app'
 import {
   focusActiveTerminalInput,
@@ -175,6 +177,11 @@ async function createWindowsProjectRuntimeTerminalTab(
   const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
   await expect(tab).toBeVisible()
   await expect(tab.locator('[data-shell-icon]')).toHaveAttribute('data-shell-icon', shell)
+
+  const ptyId = await waitForActivePanePtyId(page)
+  await waitForPtyShellEcho(page, ptyId, 30_000, (args) =>
+    ['node', ...args.map(quotePosixShell)].join(' ')
+  )
 
   return tabId
 }

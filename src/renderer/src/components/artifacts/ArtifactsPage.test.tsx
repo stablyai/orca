@@ -148,8 +148,7 @@ describe('ArtifactsPage', () => {
     expect(document.querySelector('[data-slot="sheet-content"]')).toHaveClass(
       'w-[min(96rem,calc(100vw-var(--mac-traffic-lights-width,0px)))]'
     )
-    // Why: the drawer is right-anchored under the fixed Windows/Linux window-controls
-    // overlay, so its actions must sit inside an element inset past that overlay.
+    // Drawer actions must stay inset beyond the fixed Windows/Linux controls overlay.
     expect(
       screen
         .getByRole('button', { name: 'Close' })

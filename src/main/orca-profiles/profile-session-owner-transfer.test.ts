@@ -22,7 +22,6 @@ describe('session owner transfer', () => {
       openFilesByWorktree: { [SOURCE]: [file('/tmp/a/README.md')] },
       markdownFrontmatterVisible: {
         [editorId(SOURCE, '/tmp/a/README.md')]: false,
-        // Visible is the hydration default, so it is not carried.
         '/tmp/a/README.md': true
       }
     }
@@ -35,7 +34,6 @@ describe('session owner transfer', () => {
   })
 
   it('refuses to guess an override two transferred files both claim', () => {
-    // Two host-qualified owners of one worktree each claim its unqualified editor id.
     const owners = { [`h1|${SOURCE}`]: 'repo-9::/tmp/h1', [`h2|${SOURCE}`]: 'repo-9::/tmp/h2' }
     const projection = {
       mapOwnerKey: (key: string) => owners[key] ?? null,

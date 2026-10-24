@@ -1,5 +1,4 @@
-// Every agent the host registers for native chat starts as a native-chat worker, the same as a
-// chat opened any other way; an agent with no native chat still starts in a terminal.
+// Registered native-chat agents must start structured workers; agents without chat support retain terminal mode.
 
 import { describe, expect, it } from 'vitest'
 import { decideAgentLaunchMode } from '../../../agent-launch/agent-launch-mode'

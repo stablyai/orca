@@ -28,7 +28,6 @@ describe('WSL move rewrite ledger', () => {
     seedWslMoveCutover(userDataPath, committed([]))
     writeWslMoveCutover(userDataPath, committed(['a']))
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
-    // Rewriting the same ledger is a no-op, not a change.
     writeWslMoveCutover(userDataPath, committed(['a', 'b']))
     expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual(['a', 'b'])
   })

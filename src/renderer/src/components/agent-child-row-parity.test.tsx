@@ -134,8 +134,7 @@ function sidebarRows(parent: AgentStatusEntry, parentIsFresh = true): RenderedRo
   )
 }
 
-/** The strip's rows over what the host sends it: the running children, and no strip at all when
- *  none runs. */
+/** Compare the strip’s running-child rows; no running children means no strip. */
 function stripRows(
   children: AgentChildWorkView[] | undefined,
   childRowContext?: AgentChildRowContext,
@@ -290,8 +289,7 @@ const FULL_ROW_DETAIL: Record<string, { shows: string[]; hides?: string[] }> = {
   'parked, still live': { shows: [] }
 }
 
-// The sidebar and the strip list running children only; a finished child is in the transcript. A
-// finished child whose shell still runs reads monitoring, so it stays on both.
+// Finished children leave both surfaces; a finished child with a running shell remains monitoring.
 const FINISHED = new Set(['finished', 'failed', 'cancelled', 'ended, outcome unknown'])
 
 describe('a child reads the same in the sidebar and the chat strip', () => {

@@ -117,17 +117,12 @@ function statMode(path: string): number {
 describe('isUnreadableError', () => {
   const withCode = (code: string): NodeJS.ErrnoException => Object.assign(new Error(code), { code })
 
-  // The hardened-DACL case this predicate was written for.
   it('reports a denied read', () => {
     expect(isUnreadableError(withCode('EPERM'))).toBe(true)
     expect(isUnreadableError(withCode('EACCES'))).toBe(true)
   })
 
-  /**
-   * The likelier half on Windows: antivirus holding a credential open during startup yields
-   * EBUSY, and fd exhaustion yields EMFILE. Neither says the bytes were read, so neither may
-   * license a regenerate-and-overwrite.
-   */
+  /** AV locks (EBUSY) or fd exhaustion (EMFILE) reveal no contents and must never authorize regenerate-and-overwrite. */
   it('reports a read that never reached the contents for any other reason', () => {
     expect(isUnreadableError(withCode('EBUSY'))).toBe(true)
     expect(isUnreadableError(withCode('EMFILE'))).toBe(true)
@@ -135,11 +130,7 @@ describe('isUnreadableError', () => {
     expect(isUnreadableError(withCode('EIO'))).toBe(true)
   })
 
-  /**
-   * The other side of the distinction, and the reason this is an allow list rather than
-   * "everything except ENOENT": a missing file licenses creating one, and bytes that were read
-   * and did not parse are the self-heal these stores exist to perform.
-   */
+  /** Missing files permit creation; parsed garbage permits repair. Neither is an unreadable-content failure. */
   it('does not report a missing file or a parse failure', () => {
     expect(isUnreadableError(withCode('ENOENT'))).toBe(false)
     expect(isUnreadableError(new SyntaxError('Unexpected end of JSON input'))).toBe(false)

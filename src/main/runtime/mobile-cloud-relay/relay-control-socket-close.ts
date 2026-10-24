@@ -4,11 +4,8 @@ import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reas
 const NORMAL_CLOSE_CODE = 1000
 const REASONED_CLOSE_FLUSH_MS = 1_000
 
-// hostCloseReason: only auth loss names itself. Every other control close
-// (rotation, drain, quit, sleep) stays an abrupt terminate, so the cell learns
-// nothing and can never read a restart as a sign-out. A named close has to
-// reach the cell as a real close frame, but the fence must still be hard —
-// bound the handshake and then terminate.
+// Only auth loss sends a named close; rotation/drain/quit/sleep terminate abruptly to avoid false sign-outs.
+// Bound named-close handshakes, then terminate so fencing remains hard.
 export function closeRelayControlSocket(
   socket: WebSocket | null,
   hostCloseReason?: RelayHostCloseReason

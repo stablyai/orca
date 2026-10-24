@@ -1,13 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * A save must change the list the user is looking at.
- *
- * The page renders the per-host cache once any host has answered, so the legacy
- * `automations` state a save writes is no longer on screen. These pin the only
- * thing the user can observe: the row is there after the save returns, whether
- * or not the authority's `automationsChanged` event ever arrives.
- */
+/** After save, refetch the visible per-host cache even if automationsChanged never arrives; legacy state writes are offscreen once a host answers. */
 
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'

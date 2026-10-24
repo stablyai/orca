@@ -1,13 +1,12 @@
 import type { ExtraUsageBalance } from '../../shared/rate-limit-types'
 
-// Money is reported as minor units plus an exponent (e.g. 200000 @ exp 2 = €2000).
+// Minor units use the reported exponent: 200000 at exponent 2 is 2000 currency units.
 type OAuthMoney = {
   amount_minor?: number
   currency?: string
   exponent?: number
 }
 
-// Optional richer spend fields are retained for response compatibility.
 export type ClaudeOAuthSpend = {
   used?: OAuthMoney
   limit?: OAuthMoney
@@ -18,7 +17,7 @@ export type ClaudeOAuthSpend = {
   balance?: OAuthMoney | number | null
 }
 
-// Legacy shape kept as a fallback for older responses that only send `extra_usage`.
+// Older responses expose extra_usage without the richer spend object.
 export type ClaudeOAuthExtraUsage = {
   is_enabled?: boolean
   monthly_limit?: number | null
@@ -47,7 +46,6 @@ function moneyToMajor(money: OAuthMoney | number | null | undefined): number | n
   return money.amount_minor / 10 ** exponent
 }
 
-// Prefer the richer `spend` object; fall back to the legacy `extra_usage` shape.
 export function mapClaudeExtraUsage(data: {
   spend?: ClaudeOAuthSpend
   extra_usage?: ClaudeOAuthExtraUsage
@@ -62,7 +60,6 @@ function mapSpend(spend: ClaudeOAuthSpend | undefined): ExtraUsageBalance | null
   const spent = moneyToMajor(spend.used)
   const spendLimit = moneyToMajor(spend.limit) ?? moneyToMajor(spend.cap?.money)
   const balance = moneyToMajor(spend.balance)
-  // Nothing worth showing when the account has neither a configured cap nor a balance.
   if (spendLimit === null && balance === null) {
     return null
   }

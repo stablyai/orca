@@ -63,8 +63,6 @@ describe('relay control close reason', () => {
     expect(broker.closeNow).toHaveBeenCalledWith(undefined)
   })
 
-  // A signed-in desktop that merely lost the entitlement must not tell the
-  // phone to sign in — the copy would be wrong and the user has nothing to do.
   it('stays silent when the session survives but the entitlement is gone', async () => {
     let current: RelayAuthContext = context
     const { broker, coordinator } = coordinatorOver(async () => current)
@@ -98,7 +96,6 @@ describe('relay control close reason', () => {
     expect(broker.closeNow).toHaveBeenCalledWith(undefined)
   })
 
-  // Replacing a stale broker is a reconnect, not a sign-out.
   it('stays silent when an identity switch replaces the broker', async () => {
     let current = context
     const brokers: { closeNow: ReturnType<typeof vi.fn> }[] = []

@@ -220,7 +220,6 @@ function migrationManifest(
   }
 }
 
-/** The manifests the destination importer holds staged. */
 function stagedState(...manifests: OrcadMigrationManifest[]): OrcadMigrationManifest[] {
   return manifests
 }

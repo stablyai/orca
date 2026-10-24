@@ -1,13 +1,6 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
-/**
- * Drives the real `Store`, not the helper and not a fake.
- *
- * `preserveRuntimeAuthoredWorkspaceSessionFields` is only worth anything where the shipping writers
- * call it, and a mutation that unwires it at the call site survives every test that drives the
- * helper directly. Both desktop write paths belong here: the ordinary session write and the
- * before-unload stage, which is the one the desktop actually takes when the user quits.
- */
+// Exercise normal saves and quit staging through Store so both production call sites preserve runtime fields.
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,7 +34,7 @@ const WT = 'repo-1::/tmp/worktree-a'
 const stores: InstanceType<typeof Store>[] = []
 
 afterEach(async () => {
-  // Leaving a debounced save armed would write into a temp dir after the test file finishes.
+  // Cancel debounced writes before deleting temporary roots.
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
@@ -69,7 +62,6 @@ function page(): PersistedClientHostedBrowserPage {
   }
 }
 
-/** What the renderer builds from Zustand: it has never heard of the runtime-authored field. */
 function rendererSession(activeTabId: string): WorkspaceSessionState {
   return {
     activeRepoId: 'repo-1',
@@ -107,8 +99,6 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     const store = createStore()
     seedRuntimeRows(store)
 
-    // The beforeunload chain (use-app-session-persistence -> stageBeforeUnloadSync ->
-    // renderer-shutdown-checkpoint) lands here, and it is the last write before the process exits.
     store.stageWorkspaceSessionBeforeUnload(rendererSession('before-unload'))
 
     expect(store.getWorkspaceSession().clientHostedBrowserPagesByWorktree).toEqual({
@@ -135,8 +125,7 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     const store = createStore()
     seedRuntimeRows(store)
 
-    // The runtime writes an empty map rather than omitting the field, which is what separates its
-    // authoritative clear from a renderer write that simply never mentions it.
+    // Empty is an authoritative runtime clear; omission means a renderer does not own the field.
     store.setWorkspaceSession({
       ...rendererSession('runtime-clear'),
       clientHostedBrowserPagesByWorktree: {}

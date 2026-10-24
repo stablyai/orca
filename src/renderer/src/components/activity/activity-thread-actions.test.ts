@@ -182,8 +182,7 @@ describe('activity thread host routing', () => {
   it('routes the row click through the full activation sequence for the matching host', () => {
     makeActions().selectThread(thread)
 
-    // Bare setActiveWorktree skips setActiveView('terminal'), initial-terminal seeding and
-    // sleeping-session resume — the workspace dispatcher is the only path that runs them.
+    // Workspace activation must switch views, seed terminals and resume sleeping sessions; bare setActiveWorktree skips these.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
       executionHostId: REMOTE_HOST,
       revealInSidebar: false,
@@ -198,8 +197,7 @@ describe('activity thread host routing', () => {
   })
 
   it('opens a cold-parked remote thread whose tab activation revives', () => {
-    // The reported SSH symptom: the tab is not resident because the session was never
-    // revived, so a residency probe before activation made the click a silent no-op.
+    // A cold SSH tab becomes resident only during activation; probing before it made clicks silent no-ops.
     state.tabsByWorktree = {}
     mocks.activateAndRevealWorkspace.mockImplementation(() => {
       state.tabsByWorktree = { [thread.worktree.id]: [thread.tab] }

@@ -1,8 +1,6 @@
 import type { AgentType } from './agent-status-types'
 
-/** Baseline snapshot the renderer captured when it observed the submit
- *  keystroke. The main process re-validates every field against its own
- *  cached status so a racing real hook always wins over the inference. */
+/** Main revalidates the renderer's submit snapshot against cached status so racing real hooks outrank inference. */
 export type AgentQuestionAnsweredInferenceRequest = {
   paneKey: string
   baselineUpdatedAt: number

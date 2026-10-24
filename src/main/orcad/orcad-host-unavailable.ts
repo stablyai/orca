@@ -1,10 +1,5 @@
-/**
- * Deploy failures that mean managed orcad can't run on this host at all, as opposed to failures
- * a later connect may not hit again. Only these are recorded (per app version, except host-fixable
- * ones), so later connects skip setup.
- */
+// Remember repeatable deployment refusals per app version; host-fixable settings must be reprobed.
 
-/** No orcad build exists for this host's platform or target. */
 export class OrcadHostUnsupportedError extends Error {
   constructor(message: string) {
     super(message)
@@ -12,7 +7,6 @@ export class OrcadHostUnsupportedError extends Error {
   }
 }
 
-/** This build carries no orcad template (dev builds): retried once the app version changes. */
 export class OrcadArtifactsUnavailableError extends Error {
   constructor(message: string) {
     super(message)
@@ -20,7 +14,6 @@ export class OrcadArtifactsUnavailableError extends Error {
   }
 }
 
-/** The host refuses port forwarding and can't run the stdio bridge either. */
 export class OrcadStdioBridgeUnavailableError extends Error {
   constructor(message: string) {
     super(message)
@@ -55,8 +48,7 @@ const UNAVAILABLE_BY_ERROR_NAME: Record<string, OrcadHostUnavailableReason> = {
   OrcadWindowsCommandLineError: 'unsupported_host'
 }
 
-// Why only these deferrals: the candidate's native preflight (libc floor, missing libraries), its
-// PTY self-test and a Windows launch refusal fail the same way on every retry; races don't.
+// Native preflight, PTY self-test and permanent Windows refusals repeat; transient races do not.
 const UNAVAILABLE_BY_DEFERRAL_CODE: Record<string, OrcadHostUnavailableReason> = {
   orcad_candidate_preflight_failed: 'native_preflight',
   orcad_activation_pty_self_test_failed: 'native_preflight',
@@ -64,12 +56,10 @@ const UNAVAILABLE_BY_DEFERRAL_CODE: Record<string, OrcadHostUnavailableReason> =
   [ORCAD_WINDOWS_COMMAND_LINE_UNSAFE_CODE]: 'unsupported_host'
 }
 
-/** Host settings the user can change, so a later connect checks again instead of remembering it. */
 export function isOrcadHostUnavailableFixableOnHost(reason: string): boolean {
   return reason === 'runtime_noexec'
 }
 
-/** The deferral code for a candidate launch failure, keeping the permanent Windows refusals. */
 export function orcadCandidateLaunchFailureCode(error: unknown): string {
   const code = error instanceof Error && 'code' in error ? error.code : undefined
   return code === ORCAD_WINDOWS_LAUNCH_REFUSED_CODE ||

@@ -248,7 +248,6 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const unownedRun = createBoundRun(db, 'Unowned backlog')
-    // More than one 50-message page must not hide later owned mail.
     for (let index = 0; index < 51; index += 1) {
       db.insertMessage({
         from: TERMINAL_HANDLE,
@@ -473,8 +472,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  // Window-owned only: main's layout load re-mints a leaf id a second tab repeats, so two live
-  // panes never share a leaf there (workspace-layout-load-bindings.ts loadLeaves).
+  // Main remints duplicate leaf ids at load, so equivalent-pane serialization applies only to window-owned layouts.
   it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'serializes equivalent panes while newer mail arrives during Enter delay',
     async () => {
@@ -576,7 +574,6 @@ describe('orchestration notification mailbox consistency', () => {
 
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
-    // Parking unmounts the renderer leaf but intentionally leaves the PTY alive.
     harness.runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await vi.advanceTimersByTimeAsync(500)
@@ -596,7 +593,6 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
 
-    // The first post-unmount graph can omit the target while a decoy remains.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -617,8 +613,7 @@ describe('orchestration notification mailbox consistency', () => {
         }
       ]
     })
-    // The parked watcher then republishes the target leaf. It is not a live
-    // renderer pane and must not clear the cold-park fence.
+    // A parked watcher can republish a leaf without a live renderer; retain the cold-park fence.
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {

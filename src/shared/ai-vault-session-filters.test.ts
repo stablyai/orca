@@ -65,8 +65,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   })
 
   it('hides empty sessions by default and keeps non-empty ones', () => {
-    // A session only counts as empty without conversation previews or
-    // recoverable signals — preview turns alone make it resumable content.
+    // Keep preview/recovery evidence even without counted turns; only genuinely empty sessions disappear.
     const empty: AiVaultSession = {
       ...baseSession,
       id: 'claude:empty',
@@ -297,9 +296,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
   })
 
   it('matches workspace scope identically to the pre-hoist path predicate', () => {
-    // The hoisted matcher must agree with isPathInsideOrEqual on every spelling the
-    // supported hosts produce: Windows case/separator folding, trailing separators,
-    // both WSL UNC aliases, /mnt drive mounts and near-miss sibling directories.
+    // Match native containment across Windows case/separators, trailing separators, WSL aliases/mounts and near-miss sibling directories.
     const cases: [workspace: string, cwd: string][] = [
       ['C:\\Users\\Ada\\repo', 'c:/users/ada/repo/app'],
       ['C:/Users/Ada/repo/', 'C:\\Users\\Ada\\repo'],

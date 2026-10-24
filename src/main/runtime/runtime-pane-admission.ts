@@ -21,12 +21,7 @@ import {
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>
-/**
- * Layout-owner build: how a start goes, for a pane main already held or one that should stay
- * when its start fails (`keepOnFailure`), so the pane shows the failure. Each start ends the
- * pane's earlier resume outcome; one that wakes the pane's sleeping record (`resumesSleepingRecord`)
- * records its own.
- */
+/** Main-owned/keepOnFailure panes retain failed start status. Each start clears prior resume outcome; only resumesSleepingRecord publishes a new one. */
 export type PaneStartArgs = {
   startStatus?: {
     sink: PaneStartStatusSink
@@ -102,10 +97,7 @@ export async function withdrawRuntimePane(
   await withdrawAdmittedPane(store, admissionFor(args), hostIdOf(args))
 }
 
-/**
- * Never the user's close: main stops no launch for it, unlike a window's closePane. With
- * `stillStarting`, a pane whose terminal bound or is starting stays ('bound' / 'starting').
- */
+/** Withdrawal is not user close and stops no launch; stillStarting preserves already-bound or starting panes. */
 export async function withdrawAdmittedPane(
   store: RuntimeStore | null | undefined,
   admission: TerminalPaneAdmission,
@@ -131,10 +123,7 @@ export async function admitRuntimePane(
   return store?.admitTerminalPane?.(admission, hostId)
 }
 
-/**
- * Writes a pane before what fills it starts (design 4.1), then runs `start`. A start that fails
- * takes back a pane this wrote, unless `keepOnFailure`: the pane then stays to show the failure.
- */
+/** Admit before starting (design 4.1); withdraw failed newly admitted panes unless keepOnFailure retains the error surface. */
 export async function startInAdmittedPane<T>(
   store: RuntimeStore | null | undefined,
   admission: TerminalPaneAdmission,
@@ -153,12 +142,8 @@ export async function startInAdmittedPane<T>(
   }
 }
 
-/**
- * Starts a runtime-originated terminal: its pane, tab-bar entry and group are written first, then
- * the process starts and binds to that pane. A start that fails, or that attaches to a session
- * already running in another pane, takes back the pane it wrote. With `startStatus`, the pane
- * shows 'starting' from before it is written, so no view sees it unbound and starts its own.
- */
+/** Publish pane/tab/group before spawn and mark starting early so views cannot race their own spawn.
+ * Withdraw new panes on failure or attachment elsewhere, unless failure retention applies. */
 export async function spawnInAdmittedPane(
   store: RuntimeStore | null | undefined,
   controller: Pick<RuntimePtyController, 'spawn'>,
@@ -170,7 +155,7 @@ export async function spawnInAdmittedPane(
   startStatus?.sink.set(paneKey, { status: 'starting' })
   startStatus?.resumeOutcomes?.clear(paneKey)
   const resumeOutcomes = startStatus?.resumesSleepingRecord ? startStatus.resumeOutcomes : undefined
-  // A pane never bound in this process is at 0: every bind here is numbered from 1.
+  // Bindings start at 1; absent process-local history is generation 0.
   const generationNow = (): number | undefined =>
     store?.getPtyBindingGeneration
       ? (store.getPtyBindingGeneration(
@@ -181,7 +166,7 @@ export async function spawnInAdmittedPane(
   const afterGeneration = resumeOutcomes ? generationNow() : undefined
   let reported: { ptyId: string; outcome: PaneResumeOutcome } | undefined
   if (resumeOutcomes) {
-    // Why the generation now: a respawn may keep the terminal id, so only a later bind is this one.
+    // Capture generation before spawn: terminal id may survive respawn, but the next binding is new.
     spawnArgs.onResumeOutcome = (ptyId, outcome) => {
       reported = { ptyId, outcome }
       resumeOutcomes.set(paneKey, outcome, { ptyId, afterGeneration })
@@ -213,8 +198,7 @@ export async function spawnInAdmittedPane(
           startStatus?.keepOnFailure
         )
   } catch (error) {
-    // A pane that stays (kept to show the failure, or one main already held) shows why; one
-    // closed while it started is gone, and one another owner won attaches to the winner.
+    // Retained panes show failure; user-closed panes stay gone and contended panes attach to the winner.
     if (
       startStatus &&
       admittedAs &&
@@ -226,8 +210,7 @@ export async function spawnInAdmittedPane(
     } else {
       startStatus?.sink.clear(paneKey)
     }
-    // A start that failed after its spawn reported (a refused bind) resumed nothing here; one that
-    // lost the pane to another owner leaves the winner's outcome alone.
+    // Failed binding resumes nothing here; contention must leave the winner's outcome intact.
     if (!(error instanceof PaneOwnerContentionError)) {
       resumeOutcomes?.clear(paneKey)
     }
@@ -243,8 +226,7 @@ export async function spawnInAdmittedPane(
   if (elsewhere) {
     resumeOutcomes?.clear(paneKey)
   } else if (reported && afterGeneration !== undefined && generationNow() === afterGeneration) {
-    // A bind that matched the pane's existing one (an SSH relay's same-id reattach) writes and
-    // publishes nothing new: the outcome holds for the binding the pane already shows.
+    // Same-id SSH reattach may publish no new binding; apply the outcome to the existing binding.
     resumeOutcomes?.set(paneKey, reported.outcome, { ptyId: reported.ptyId })
   }
   return result

@@ -1,5 +1,4 @@
-// Shipped build: the closed-tab guard never fires (closedCreate is gated on the switch), and a
-// paired host still starts a client's second pane in an existing tab.
+// Switch-off builds permit paired hosts to add panes and do not enforce main-owned close records.
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { admitPaneToSession, applyCommandToSession } from './terminal-pane-admission'

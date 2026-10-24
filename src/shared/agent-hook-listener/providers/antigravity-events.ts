@@ -29,7 +29,7 @@ export function normalizeAntigravityEvent(
     eventName !== 'Stop' &&
     state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
   ) {
-    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a finished row doesn't turn back into a yellow spinner.
+    // Ignore bookkeeping PostToolUse after Stop so finished rows do not resurrect.
     return null
   }
 
@@ -54,7 +54,7 @@ export function normalizeAntigravityEvent(
   }
 
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
-  // Why: once the prompt is cached for this pane, avoid rescanning the (potentially large) Antigravity transcript per hook.
+  // Cache prompts per turn instead of rescanning large transcripts per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
   const effectivePrompt =
     promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
@@ -77,7 +77,7 @@ export function normalizeAntigravityEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
-  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
+  // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.
   if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }

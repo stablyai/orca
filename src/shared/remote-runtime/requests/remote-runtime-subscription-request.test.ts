@@ -219,8 +219,7 @@ describe('remote runtime subscription JSON requests', () => {
     }
   )
 
-  // Why: `ws.on('message')` calls the frame router directly, so before this was guarded a consumer
-  // throw here left the emitter and became main_uncaught_exception, killing the whole app.
+  // ws delivers frames directly; unguarded consumer throws previously crashed the app.
   it('fails the subscription instead of crashing the process when a consumer throws', async () => {
     const server = await createServer()
     const onError = vi.fn<(error: unknown) => void>()

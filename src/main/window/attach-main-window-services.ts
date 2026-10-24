@@ -62,7 +62,7 @@ export function attachMainWindowServices(
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
-    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
+    // Skip the crash-recovery reload in PTY orphan sweeping (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
     onPtyExit?: (id: string, exitSequence: number) => void
@@ -74,17 +74,16 @@ export function attachMainWindowServices(
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store, runtime)
-  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
+  // Repo IPC mutations must invalidate paired-client catalogs too (#11994).
   setRepoRemoteClientNotifier(runtime)
   setWorktreeCatalogRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
-  // Why: repo/settings mutations resync watchers through this attached main-window context.
+  // Repo/settings mutations resync watchers through this window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
-  // Why: folder projects get no watch target, so an external `git init` needs its own
-  // marker poll to upgrade them without a restart (#11477).
+  // Folder projects have no watcher target; poll for external git init so they upgrade without restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
   registerWorkspaceCleanupHandlers(store)
   registerPtyHandlers(
@@ -104,9 +103,9 @@ export function attachMainWindowServices(
       systemPrefersDark: () => nativeTheme.shouldUseDarkColors
     }
   )
-  // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
+  // Register after PTY handlers so macOS reactivation reinstalls management IPC (docs/daemon-staleness-ux.md §Phase 1).
   registerDaemonManagementHandlers()
-  // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
+  // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
@@ -159,7 +158,7 @@ export function attachMainWindowServices(
   )
 
   mainWindow.on('closed', () => {
-    // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
+    // Drop guest registrations so stale tab/webContents IDs cannot survive close or hot reload.
     browserManager.unregisterAll()
   })
 }
@@ -180,7 +179,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
   ipcMain.removeHandler(dismissChannel)
   const mainWebContents = mainWindow.webContents
   const releaseOwnerClaim = (): void => releasePendingTccPromptNotice(handlerToken)
-  // Why: a renderer reload/crash destroys its claim callbacks without closing the BrowserWindow.
+  // Reload/crash destroys renderer claim callbacks without closing the window.
   mainWebContents.on('did-start-loading', () => {
     if (mainWebContents.isLoadingMainFrame()) {
       releaseOwnerClaim()
@@ -207,7 +206,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
       dismissTccPromptNotice()
     }
   })
-  // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
+  // Windowless macOS must release closures; late old-window close must not clear replacement handlers.
   mainWindow.on('closed', () => {
     if (activeTccPromptHandlerToken !== handlerToken) {
       return
@@ -225,7 +224,7 @@ function registerAppReloadHandler(
   mainWindow: BrowserWindow,
   onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
 ): void {
-  // Why: the process-global IPC handler can outlive the window, so guard both lifetimes before using the WebContents.
+  // Process-global IPC outlives windows; guard both window and WebContents lifetimes.
   const handlerToken = ++appReloadHandlerTokenCounter
   activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
@@ -245,7 +244,7 @@ function registerAppReloadHandler(
     if (activeAppReloadHandlerToken !== handlerToken) {
       return
     }
-    // Why: macOS keeps the process alive with no window; this handler would otherwise retain the closed window until reopen.
+    // Remove the process-global handler so windowless macOS does not retain a closed window.
     ipcMain.removeHandler('app:reload')
     activeAppReloadHandlerToken = null
   })

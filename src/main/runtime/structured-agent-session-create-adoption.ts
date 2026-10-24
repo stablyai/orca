@@ -113,8 +113,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   try {
     const transcriptPath = input.resolveTranscriptPath?.()
     const candidates = input.transcriptImport.accountHomeCandidates(input)
-    // Each account's store is resolved once, so the hook path, the lookup and its re-admission
-    // all judge the same place even if the environment changes mid-create.
+    // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
       if (!stores.has(accountHome)) {
@@ -212,8 +211,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   }
 }
 
-/** `adopt` is what makes the reservation seed the handle chain. Presence of `providerHandle` alone
- *  must not: `agentSession.ensure` already passes one today without adopting anything. */
+/** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */
 export function structuredAgentSessionAdoptAttach(input: {
   definition: {
     handleTransport: AgentSessionProviderHandle['transport']

@@ -1,8 +1,4 @@
-/**
- * `repo.gitAvailable` gates the create dialog's Git option on a runtime/remote host. Only a spawn
- * that never started may answer `false`; everything else rejects so the renderer's existing
- * `unknown` branch stays reachable instead of collapsing to a false "no Git here".
- */
+/** Report no Git only when spawn never started; other failures reject so remote create dialogs retain unknown instead of false absence. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))

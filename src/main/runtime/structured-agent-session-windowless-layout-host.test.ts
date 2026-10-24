@@ -1,5 +1,3 @@
-// A windowless host's saved chat tab against a real chat host: the index hiding a chat reaches the
-// runtime and takes the tab out of the layout, and a chat whose record is gone loses its tab.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

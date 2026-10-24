@@ -1,6 +1,4 @@
-// A structured worker whose agent is at rest: its dispatch keeps it running while open, and once it
-// rests it is still this runtime's worker — mail reaches it — until its chat tab is gone. Whether
-// its process runs is a separate answer, and a close counts a released lease as done.
+// Open Dispatches retain active work; chats at rest remain mail recipients until tab retirement. Process liveness and close proof remain separate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'

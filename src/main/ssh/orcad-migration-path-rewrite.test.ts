@@ -29,7 +29,7 @@ const SAMPLE: Record<OrcadMigrationPathFieldKind, string> = {
   'editor-file-id': ownedEditorFileId('/src/wt/f.ts', WT, 'env-1')
 }
 
-/** Moves `/src` to `/dst` and marks relative paths, so every rewritten field is visible. */
+/** Mark rewritten relative paths and map /src to /dst so omissions remain visible. */
 const MARKING: OrcadMigrationPathRewriter = {
   path: (value, form) => {
     if (form === 'relative') {
@@ -42,7 +42,6 @@ const MARKING: OrcadMigrationPathRewriter = {
   }
 }
 
-/** One payload holding a sample at every location the table names. */
 function payloadWithEveryField(): OrcadMigrationCatalogPayload {
   const root: Record<string, unknown> = {
     repositories: [],
@@ -52,7 +51,7 @@ function payloadWithEveryField(): OrcadMigrationCatalogPayload {
   for (const field of ORCAD_MIGRATION_PATH_FIELDS) {
     place(root, parseFieldLocation(field.at), SAMPLE[field.kind])
   }
-  // The stage is shape-agnostic, so a sparse object stands in for a full payload.
+  // Sparse fixtures suffice because traversal follows the field table, not a full payload schema.
   return { repositories: [], projectGroups: [], folderWorkspaces: [], ...root }
 }
 
@@ -144,7 +143,7 @@ describe('orcad migration path-rewrite stage', () => {
     expect(serializeOrcadMigrationValue(output)).toBe(serializeOrcadMigrationValue(input))
   })
 
-  // Regression: renaming re-read Object.keys per entry, so a 20k-key record took seconds.
+  // Guard against per-entry Object.keys calls that made 20k-key renames quadratic.
   it('walks a large keyed record in linear time', () => {
     const started = performance.now()
     rewriteOrcadMigrationPayloadPaths(payloadWithManyOwnerKeys(20_000), MARKING)

@@ -1,9 +1,6 @@
 import type { ExecutionHostId } from './execution-host'
 
-/**
- * Names one setup. Repo-backed setups take the repo id, so twins on different hosts share
- * `setupId` and `hostId` picks the host; older clients omit it and keep the first match by id.
- */
+/** Repo IDs can repeat across hosts; hostId selects the intended setup, while older clients omit it and retain first-ID matching. */
 export type ProjectHostSetupTarget = {
   setupId: string
   hostId?: ExecutionHostId

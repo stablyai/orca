@@ -1,11 +1,4 @@
-/**
- * Planning a delta move for a host an older build changed after it was converted: what the move
- * adds, what the server keeps as it is, and the source view every later check of the move reads.
- *
- * The view subtracts what the host's earlier migrations already moved, re-exported as it is today,
- * so the delta manifest carries only rows and dormant state no earlier migration owns. Nothing
- * that overlaps an earlier migration is merged into the server.
- */
+/** Subtract earlier migrations' currently retained rows/state; export only additions. Never merge overlapping old source copies over server-owned state. */
 import type { OrcadDeltaMovePreview, OrcadDeltaMoveRow } from '../../shared/orcad-managed-runtime'
 import type {
   OrcadMigrationCatalogPayload,
@@ -28,7 +21,6 @@ import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-pr
 
 export type OrcadDeltaSourceStore = OrcadMigrationPreflightStore & OrcadMigrationSnapshotSource
 
-/** A delta move journaled but not yet committed and kept: the next move resumes it. */
 export function unfinishedOrcadDelta(
   chain: readonly OrcadMigrationSourceCutover[]
 ): OrcadMigrationSourceCutover | null {
@@ -40,7 +32,6 @@ export function unfinishedOrcadDelta(
     : null
 }
 
-/** The committed migrations a delta extends, oldest first, excluding any delta in flight. */
 export function committedOrcadMigrationChain(
   chain: readonly OrcadMigrationSourceCutover[]
 ): OrcadMigrationSourceCutover[] {
@@ -49,21 +40,19 @@ export function committedOrcadMigrationChain(
   )
 }
 
-/** The real store, except its catalog and dormant state: those come from the delta view. */
 export function orcadDeltaSourceStore(
   store: Store,
   target: SshTarget,
   moved: readonly OrcadMigrationSourceCutover[],
-  /** A journaled delta's manifest: an older build may have exported server groups in it. */
+  /** Older interrupted deltas may still include server-owned groups. */
   journaled?: OrcadMigrationManifest
 ): OrcadDeltaSourceStore {
   const ids = orcadMigrationCatalogIds(moved.map((cutover) => cutover.manifest.payload))
-  // A linked project or group is the server's already, so a delta never moves it either.
+  // Never move projects/groups already owned through earlier links.
   const linked = moved.flatMap((cutover) => cutover.linkedRepositoryIds ?? [])
   const linkedGroups = moved.flatMap((cutover) => cutover.linkedProjectGroupIds ?? [])
   const linkedFolders = moved.flatMap((cutover) => cutover.linkedFolderWorkspaceIds ?? [])
-  // The server's record of a group it got from a move or link wins: a new row in it references the
-  // server's group, since this desktop's retained copy may be stale and would conflict.
+  // New rows reference server-owned groups; exporting retained copies could overwrite newer server edits.
   const serverGroups = new Set([...ids.projectGroupIds, ...linkedGroups])
   const exported = new Set(journaled?.payload.projectGroups.map((group) => group.id))
   return orcadSourceStoreWithout(
@@ -80,7 +69,6 @@ export function orcadDeltaSourceStore(
   )
 }
 
-/** The source minus rows the server already owns, and the dormant state that references them. */
 export function orcadSourceStoreWithout(
   store: Store,
   target: SshTarget,
@@ -107,14 +95,11 @@ export function orcadSourceStoreWithout(
 export type OrcadDeltaMovePlan = OrcadDeltaMovePreview & {
   manifest: OrcadMigrationManifest
   moved: OrcadMigrationSourceCutover[]
-  /** The retained migration a new delta supersedes. */
   head: OrcadMigrationSourceCutover
-  /** An interrupted delta this move resumes from its journaled manifest instead of a new one. */
   resumes: OrcadMigrationSourceCutover | null
   source: OrcadDeltaSourceStore
 }
 
-/** Throws when the host is not a converted host an older build changed. */
 export function planOrcadDeltaMove(
   userDataPath: string,
   store: Store,

@@ -4,7 +4,6 @@ import type { HostServerOnConnectDeps } from './ssh-host-server-on-connect'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the orchestrator reads only the environment id.
 const environment = { id: 'env-1' } as never
 
-/** Every connect collaborator as a stub; tests override only what they exercise. */
 export function hostServerDepsStub(
   overrides: Partial<HostServerOnConnectDeps> = {}
 ): HostServerOnConnectDeps {

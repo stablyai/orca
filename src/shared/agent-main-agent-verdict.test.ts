@@ -13,8 +13,7 @@ import { AGENT_TURN_OUTCOMES, type AgentTurnOutcome } from './agent-turn-outcome
 const STATES: AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
 const OUTCOMES: (AgentTurnOutcome | undefined)[] = [undefined, ...AGENT_TURN_OUTCOMES]
 
-// The rule as the plan states it: the main agent's own state decides when a row carries it; a row
-// without it (a legacy or old-host row) reads the legacy flag, which alone needs the combined `done`.
+// Lead state controls its verdict; only legacy-only rows need combined done to prove completion.
 function expected(row: AgentMainAgentVerdictSource): AgentTurnOutcome | null {
   const legacyFlag = row.state === 'done' && row.interrupted === true ? 'cancellation' : null
   if (row.mainAgent) {

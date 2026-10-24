@@ -12,19 +12,16 @@ export function classifyLaunchProbeError(error: unknown): RendererLaunchProbeRes
   return typeof code === 'string' && ERRNO_CODE.test(code) ? code : 'unknown'
 }
 
-/**
- * Chromium reports any failed helper spawn as launch-failed (macOS exit 1003 = LAUNCH_RESULT_FAILURE),
- * so spawn an unrelated child to learn whether the OS is refusing every new process.
- */
+/** Chromium launch-failed hides the spawn errno; probe another child to distinguish OS-wide process refusal (macOS 1003). */
 export async function probeRendererLaunchCapacity(
   platform: NodeJS.Platform = process.platform
 ): Promise<RendererLaunchProbeResult> {
-  // Why skip Windows: a short-lived child per failed launch is the per-operation spawn burst EDR scores (windows-edr-posture.md).
+  // Windows EDR scores per-operation spawn bursts; omit this diagnostic child (windows-edr-posture.md).
   if (platform === 'win32') {
     return 'skipped'
   }
   try {
-    // Exit status is irrelevant: a child that started proves spawn headroom. /bin/sh is at a fixed path on every POSIX host.
+    // Any started child proves spawn headroom regardless of exit status; POSIX hosts provide /bin/sh.
     await runProcess({
       program: '/bin/sh',
       args: ['-c', 'exit 0'],
@@ -37,7 +34,7 @@ export async function probeRendererLaunchCapacity(
   }
 }
 
-// Electron emits render-process-gone twice (~10ms apart) for one failed launch; probe and record it once.
+// Coalesce duplicate render-process-gone events (~10ms apart) for one failed launch.
 const PROBE_COALESCE_MS = 100
 let lastProbe: { startedAt: number; result: Promise<RendererLaunchProbeResult> } | null = null
 
@@ -52,7 +49,7 @@ export function recordRendererLaunchFailureProbe(
   ) {
     return lastProbe.result
   }
-  // Never rejects: callers fire-and-forget it from the render-process-gone handler.
+  // Never reject from this fire-and-forget render-process-gone diagnostic.
   const result = probeRendererLaunchCapacity().then((spawnError) => {
     try {
       recordDurableCrashBreadcrumb('renderer_launch_failed_probe', {

@@ -12,16 +12,13 @@ import {
 } from '../ipc/runtime-import-limits'
 import { ensureOwnedTempStagingRoot, getOwnedTempStagingRoot } from './owned-temp-staging-root'
 
-// Why: macOS screenshot thumbnails live in `$TMPDIR/TemporaryItems/NSIRD_*`,
-// which only processes attributed to Orca main may open. The detached PTY
-// daemon is not, so agents in local terminals get EPERM on the original path.
+// macOS drag thumbnails require Orca-main TCC attribution; detached PTY daemons get EPERM on TemporaryItems/NSIRD_* originals.
 
 const TEMPORARY_ITEMS_SEGMENT = 'TemporaryItems'
 const DRAG_PROVIDER_DIR_PREFIX = 'NSIRD_'
 const COPY_DIR_PREFIX = 'orca-drop-'
 const DRAG_TEMP_COPY_ROOT_NAME = 'orca-drops'
-// Why no expiry: a copy may be what a terminal agent, a draft or a sent message still names, and
-// nothing tells which; fresh structured-chat copies enter the chat store before publication.
+// No expiry: terminal agents/drafts/messages may still name copies without ownership signals. New structured-chat copies enter the chat store before publication.
 
 export type DragTempCopyEnvironment = {
   platform: NodeJS.Platform
@@ -70,7 +67,7 @@ export async function materializeDragTempPaths(
   batch = new DragTempCopyBatch()
 ): Promise<DragTempCopyItemResult[]> {
   const { completed } = batch
-  // Why per drop: copies are never swept, so earlier drops must not refuse later ones.
+  // Budget per drop; retained earlier copies must not block later drops.
   let remainingBytes = env.platform === 'darwin' ? REMOTE_IMPORT_MAX_TOTAL_BYTES : 0
   try {
     for (const sourcePath of paths) {
@@ -166,7 +163,7 @@ export async function materializeDragTempPath(
       throw error
     }
     if (!inspected.isFile()) {
-      // Why: directories and symlinks keep today's reference-in-place behaviour.
+      // Keep directories/symlinks referenced in place.
       return passThrough
     }
     const canonicalSource = await realpath(sourcePath)
@@ -183,7 +180,7 @@ export async function materializeDragTempPath(
       }
       const size = opened.size
       if (size > REMOTE_IMPORT_MAX_FILE_BYTES || size > remainingBytes) {
-        // Why: targets read by main can still use the original; the relay decides.
+        // Main-attributed targets can still use the original; let the relay decide.
         console.warn('[drop] leaving a drag-temp file uncopied: over the copy budget', {
           bytes: formatByteCeiling(size),
           remaining: formatByteCeiling(Math.max(remainingBytes, 0))
@@ -216,10 +213,7 @@ export async function materializeDragTempPath(
       copyDir = await createCopyDirectory(env.copyRoot, batch)
       signal?.throwIfAborted()
       const destPath = join(copyDir, basename(canonicalSource))
-      // Why: stream from the checked handle, capped at the inspected size, so a
-      // swapped or growing source cannot slip through; unlike cp, ditto or
-      // clonefile it copies no xattrs. A read stream with `end: -1` throws, so
-      // an empty source gets its own branch.
+      // Copy from the checked handle, capped at inspected size, without xattrs. Empty files need a separate branch because stream end:-1 throws.
       await (size === 0
         ? writeFile(destPath, '', { flag: 'wx', mode: 0o600 })
         : pipeline(
@@ -232,7 +226,7 @@ export async function materializeDragTempPath(
       if (written.size !== size || !isSameSnapshot(afterRead, opened)) {
         throw new DropCopyError('changed')
       }
-      // Why: a caller that gave up mid-copy never hands this path out; don't retain it.
+      // Abort before publishing the path so abandoned copies can be removed.
       signal?.throwIfAborted()
       console.debug('[drop] copied a drag-temp file into Orca storage', { bytes: size })
       return {
@@ -244,7 +238,7 @@ export async function materializeDragTempPath(
     }
   } catch (error) {
     if (copyDir) {
-      // Why: cleanup must not hide the original failure or stop later items.
+      // Cleanup must preserve the original failure and allow later items.
       await rm(copyDir, { recursive: true, force: true }).catch(() => undefined)
     }
     if (signal?.aborted) {
@@ -274,7 +268,7 @@ function relativeSegments(root: string, candidate: string): string[] {
     return []
   }
   const segments = rel.split(sep)
-  // Why: anchor at the temp root so a nested lookalike elsewhere is not copied.
+  // Anchor at the real temp root; never copy lookalike paths elsewhere.
   return segments[0] === TEMPORARY_ITEMS_SEGMENT ? segments : []
 }
 
@@ -295,7 +289,7 @@ async function createCopyDirectory(copyRoot: string, batch: DragTempCopyBatch): 
     if (error instanceof DropCopyError) {
       throw error
     }
-    // Why: a storage fault must not read as a missing or unreadable dropped file.
+    // Distinguish storage faults from missing/unreadable sources.
     console.warn('[drop] could not create drop storage', { code: errorCode(error) })
     throw new DropCopyError(isOutOfSpace(errorCode(error)) ? 'out-of-space' : 'storage-unavailable')
   }

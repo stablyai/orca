@@ -35,7 +35,6 @@ function session(tabs: Tab[], activeGroupId?: string): WorkspaceSessionState {
   }
 }
 
-/** The command for `change` against `stored` as main loads it. */
 function commandOn(
   stored: WorkspaceSessionState,
   change: Parameters<typeof chatTabLayoutCommand>[3]
@@ -70,7 +69,6 @@ describe("a host's chat tab change as main's layout command", () => {
   })
 
   describe("a paired client's chosen place (L270)", () => {
-    /** Two groups: group-1 holds [a, c], group-2 holds [d]; group-1 is remembered active. */
     function twoGroups(): WorkspaceSessionState {
       const tabs = [
         chatTab('a', 'tab-a'),

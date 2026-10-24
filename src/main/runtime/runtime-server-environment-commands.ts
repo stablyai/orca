@@ -25,7 +25,7 @@ function resolveServerBrowsePath(pathValue: string): string {
   return resolve(homedir(), trimmed)
 }
 
-// Why: Dirent.isDirectory() is false for a symlink, so a linked folder would be unreachable; follow it, and treat broken links or loops (ENOENT/ELOOP) as files.
+// Follow symlinked directories; Dirent alone reports false. Broken/looped links remain files (ENOENT/ELOOP).
 async function isBrowseEntryDirectory(dirPath: string, entry: Dirent): Promise<boolean> {
   if (entry.isDirectory()) {
     return true

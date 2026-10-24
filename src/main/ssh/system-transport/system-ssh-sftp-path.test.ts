@@ -1,9 +1,4 @@
-/**
- * Both functions here guard against the same measured failure: sftp's batch lexer treats `\` as an
- * escape, so a Windows path handed over raw is silently mis-targeted *and the client still exits
- * 0*. On Windows 11 / OpenSSH 10.0p2, `put src C:\Users\neil\qt\a.bin` created a file literally
- * named `C` in the start directory and reported success.
- */
+/** Windows 11/OpenSSH 10.0p2: unescaped backslashes can write a file named C and still exit 0. */
 import { describe, expect, it } from 'vitest'
 import {
   quoteSftpBatchArgument,

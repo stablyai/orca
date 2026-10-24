@@ -6,18 +6,13 @@ import {
   type ObservedAgentStatusPaneIdentity
 } from '../ipc/agent-status-ipc-boundary'
 
-/** The runtime facts the fleet snapshot needs: the hook rows, the pane identity lookups the
- *  terminal registry owns, and the identity each pane was observed under when its row arrived. */
+/** Hook rows plus registry identity lookups and the identity observed when each row arrived. */
 export type FleetAgentStatusSnapshotSource = AgentStatusRuntimeEnrichment & {
   getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   readObservedAgentStatusPaneIdentityFn: (paneKey: string) => ObservedAgentStatusPaneIdentity
 }
 
-/**
- * Push-fed hook rows minted into fleet evidence. Callers must redact payload text.
- *
- * Hook rows use pane keys, while fleet evidence matches terminal identities.
- */
+/** Convert pane-keyed hooks to terminal evidence; callers must redact payload text. */
 export function readOrchestrationFleetAgentStatusSnapshot(
   runtime: FleetAgentStatusSnapshotSource
 ): readonly FleetAgentStatusEvidence[] {

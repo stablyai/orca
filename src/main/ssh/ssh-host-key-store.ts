@@ -1,9 +1,4 @@
-/**
- * Orca's own record of accepted SSH host keys, consulted alongside the user's `known_hosts`.
- *
- * We read `known_hosts` but never write it (D1), so accepted keys land here instead. See
- * docs/reference/ssh-host-key-verification.md — D1, D5 and D8 are the load-bearing decisions.
- */
+/** Record accepted keys beside the profile; consult user known_hosts without writing it. */
 import { createHash } from 'node:crypto'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -20,20 +15,17 @@ const STORE_VERSION = 1
 const MAX_PORT = 65535
 
 type TrustedHostKeyRecord = {
-  /** Lower-cased `HostKeyAlias` or resolved hostname — never the Orca target label (D2 lookup key). */
+  /** Lower-cased lookup host/HostKeyAlias, never the Orca target label. */
   host: string
   port: number
   keyType: string
-  /** The presented blob, base64. Matching compares these bytes; the fingerprint is for display. */
+  /** Match blob bytes; fingerprint is display-only. */
   key: string
   fingerprint: string
   acceptedAt: string
 }
 
-/**
- * Our store holds neither CA nor revoked entries, so it can only reach four of the six outcomes —
- * but they are the same four, so a caller can union this with `matchKnownHosts` untranslated.
- */
+/** Reuse known_hosts outcomes; this store has no CA/revoked entries. */
 type HostKeyStoreOutcome = Extract<
   KnownHostsOutcome,
   'match' | 'mismatch' | 'unknown-type-known-host' | 'unknown'
@@ -44,28 +36,21 @@ type HostKeyStoreFile = {
   hostKeys: TrustedHostKeyRecord[]
 }
 
-/** Beside the profile's data file, like the GitHub cache and scrollback snapshots. */
 export function getSshHostKeyStoreFile(dataFile: string): string {
   return join(dirname(dataFile), STORE_FILE_NAME)
 }
 
 let configuredStoreFile: string | null = null
 
-/** Bind the store to the active profile once at startup, so connect paths need not thread `dataFile`. */
 export function initSshHostKeyStoreFile(dataFile: string): void {
   configuredStoreFile = getSshHostKeyStoreFile(dataFile)
 }
 
-/** The bound store path, for messages that must name the artefact a user has to remove. */
 export function boundSshHostKeyStoreFile(): string | null {
   return configuredStoreFile
 }
 
-/**
- * Why throw rather than default to empty: an unconfigured store is a wiring bug, and answering
- * "nothing trusted" would quietly turn every host into first contact. The verifier wraps its work
- * and denies on throw (D7), so failing loudly here still fails closed.
- */
+/** Unconfigured storage is a wiring error, never an empty trust list; throw so verifier handles failure explicitly. */
 function requireStoreFile(file?: string): string {
   const resolved = file ?? configuredStoreFile
   if (!resolved) {
@@ -83,7 +68,7 @@ function isValidPort(port: unknown): port is number {
 }
 
 function decodeStoredKey(record: TrustedHostKeyRecord): Buffer | undefined {
-  // Buffer.from never throws on bad base64, it silently truncates — so re-derive and compare.
+  // Buffer.from silently truncates malformed base64; require canonical roundtrip.
   const key = Buffer.from(record.key, 'base64')
   if (
     key.length === 0 ||
@@ -91,8 +76,7 @@ function decodeStoredKey(record: TrustedHostKeyRecord): Buffer | undefined {
   ) {
     return undefined
   }
-  // The blob's own algorithm header must agree with the record's type field, or a tampered or
-  // corrupted record could claim a type it does not carry and satisfy a lookup for it.
+  // Require blob algorithm to match declared type so corrupted records cannot satisfy another type's lookup.
   return readHostKeyType(key) === record.keyType ? key : undefined
 }
 
@@ -126,17 +110,11 @@ function validateRecord(candidate: unknown): TrustedHostKeyRecord | undefined {
     acceptedAt
   }
   const decoded = decodeStoredKey(record)
-  // A fingerprint that disagrees with its key means the record was corrupted or hand-edited; D5
-  // shows this fingerprint to the user, so a record we cannot vouch for is dropped rather than shown.
+  // Drop records whose display fingerprint disagrees with their bytes.
   return decoded && fingerprintOf(decoded) === fingerprint ? record : undefined
 }
 
-/**
- * What one read of the store found. `withheld` is the distinction the read path does not care about
- * and the WRITE path cannot do without: the file exists and holds records we could not see, so a
- * rewrite would delete keys rather than supersede them. Same doctrine ssh-known-hosts-source.ts
- * applies to `known_hosts` — a file that exists and refuses to open is evidence withheld, not absent.
- */
+/** Withheld means existing records are unreadable/too new: reads trust none, but writes must preserve them. */
 type StoreSnapshot =
   | { status: 'ok'; records: TrustedHostKeyRecord[] }
   | { status: 'absent' }
@@ -158,16 +136,12 @@ async function readStore(storeFile: string): Promise<StoreSnapshot> {
   try {
     parsed = JSON.parse(contents)
   } catch {
-    // Deliberately NOT withheld: unparseable records are unrecoverable by any version, so there is
-    // nothing left for a rewrite to destroy and refusing to write would wedge the store permanently.
+    // Invalid JSON is unrecoverable; allow replacement rather than permanently wedging the store.
     console.warn(`[ssh] Host key store at ${storeFile} is not valid JSON; treating it as empty`)
     return { status: 'ok', records: [] }
   }
 
-  // Why the version is consulted: it was written and never read, so a store from a future Orca would
-  // have every record dropped by validateRecord and then be REWRITTEN as v1 — silently discarding
-  // whatever that version knew. Refusing both to trust and to overwrite keeps the file intact for the
-  // version that owns it.
+  // Preserve newer formats without trusting them; validating as v1 then rewriting would destroy future records.
   const onDiskVersion = (parsed as Partial<HostKeyStoreFile> | null)?.version
   if (typeof onDiskVersion === 'number' && onDiskVersion > STORE_VERSION) {
     console.warn(
@@ -200,29 +174,13 @@ async function readStore(storeFile: string): Promise<StoreSnapshot> {
   return { status: 'ok', records }
 }
 
-/**
- * Every trusted record, or an empty list when the file is missing or unreadable.
- *
- * Never throws and never fails open: a corrupt file degrades to "nothing trusted", which costs a
- * first-contact prompt, where the opposite mistake would accept anything. Callers that go on to
- * WRITE must not use this — see readStore, whose `withheld` case this one deliberately flattens.
- */
+/** Missing/unreadable storage returns no trusted records. Writers must use readStore so withheld evidence never becomes an empty replacement. */
 export async function loadTrustedHostKeys(file?: string): Promise<TrustedHostKeyRecord[]> {
   const snapshot = await readStore(requireStoreFile(file))
   return snapshot.status === 'ok' ? snapshot.records : []
 }
 
-/**
- * Whether these records hold this key for this endpoint.
- *
- * Scoped to host + port + key type (D8), and exactly — unlike `known_hosts` there is no bare-host
- * fallback pass, because we only ever record the endpoint we actually connected to.
- *
- * Pure and separate from the load so the connect path can reuse it against records it preloaded:
- * ssh2's verifier decides synchronously and cannot await the file. Duplicating the comparison there
- * instead is what produced the type downgrade this outcome set exists to prevent — one copy answered
- * only match/mismatch/unknown, so a record of another type read as first contact.
- */
+/** Match exact host/port/type without bare-host fallback. Reuse this pure matcher for synchronous preloaded verification so type-switch detection cannot drift. */
 export function matchTrustedHostKeys(
   records: readonly TrustedHostKeyRecord[],
   query: KnownHostsQuery
@@ -248,12 +206,11 @@ export function matchTrustedHostKeys(
   if (sawSameType) {
     return 'mismatch'
   }
-  // We hold a key for this endpoint, just not of the presented type. Never a first-contact result:
-  // an attacker who cannot forge the type on file would otherwise present another for a soft outcome.
+  // A known endpoint offering another key type is never first contact.
   return sawOtherType ? 'unknown-type-known-host' : 'unknown'
 }
 
-/** The key types we already hold for one endpoint, for the algorithm ordering that makes D3 safe. */
+/** Known endpoint types guide proposal ordering to prevent type-switch downgrade. */
 export function storedKeyTypesForEndpoint(
   records: readonly TrustedHostKeyRecord[],
   host: string,
@@ -265,7 +222,6 @@ export function storedKeyTypesForEndpoint(
     .map((record) => record.keyType)
 }
 
-/** Whether we have previously accepted this key for this endpoint. */
 export async function isTrusted(
   query: KnownHostsQuery,
   file?: string
@@ -273,12 +229,7 @@ export async function isTrusted(
   return matchTrustedHostKeys(await loadTrustedHostKeys(file), query)
 }
 
-/**
- * Record an accepted key, superseding any earlier key for the same host + port + type.
- *
- * Takes the presented blob rather than a pre-built record so the stored base64 and fingerprint
- * cannot disagree with each other.
- */
+/** Derive base64/fingerprint from the accepted blob and replace only its exact host/port/type record. */
 export async function trustHostKey(
   query: KnownHostsQuery,
   file?: string
@@ -292,17 +243,12 @@ export async function trustHostKey(
     fingerprint: fingerprintOf(query.key),
     acceptedAt: new Date().toISOString()
   }
-  // Serialized: startup restore connects to every previously-active target in parallel, so two
-  // first-contact accepts can otherwise read the same snapshot and one overwrites the other.
+  // Serialize concurrent first-contact accepts so one snapshot cannot overwrite another host's key.
   await withSidecarSnapshotQueue(storeFile, async () => {
-    // Inside the queue so the read and the write cannot be separated by another writer.
+    // Read inside the write queue to keep the full update atomic.
     const snapshot = await readStore(storeFile)
     if (snapshot.status === 'withheld') {
-      // Not an error the caller should fail on: the key verified, we simply decline to write a file
-      // whose current contents we cannot see. Writing would replace every other host's pinned key
-      // with this one record, so the next connect to those hosts would re-TOFU — and one whose key
-      // had genuinely changed would be accepted as first contact instead of refused. The next
-      // connect re-derives this decision from known_hosts.
+      // Verified connection may proceed, but unseen records must never be overwritten or other hosts would silently re-TOFU.
       console.warn(
         `[ssh] Not recording the host key for ${record.host}:${record.port}: the store at ${storeFile} was left alone because ${snapshot.reason}`
       )
@@ -315,8 +261,7 @@ export async function trustHostKey(
         existing.keyType !== record.keyType
     )
     await persist(storeFile, [...kept, record])
-    // Inside the branch that actually wrote: the withheld path logged its own reason, and claiming
-    // "Trusted" for a record that never reached disk makes the next connect's re-prompt unreadable.
+    // Log durable trust only after write; withheld paths must not claim persistence.
     console.warn(
       `[ssh] Trusted host key for ${record.host}:${record.port} (${record.keyType} ${record.fingerprint})`
     )
@@ -324,7 +269,7 @@ export async function trustHostKey(
   return record
 }
 
-/** Temp file + fsync + rename, so a crash mid-write can never publish a half-written trust list. */
+/** Publish atomically with fsync/rename so crashes cannot expose a partial trust list. */
 async function persist(storeFile: string, hostKeys: TrustedHostKeyRecord[]): Promise<void> {
   await mkdir(dirname(storeFile), { recursive: true }).catch(() => {})
   await writeSidecarSnapshot(storeFile, {

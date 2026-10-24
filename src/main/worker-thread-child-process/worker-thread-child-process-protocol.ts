@@ -1,5 +1,3 @@
-// Messages between the main-thread child stand-in and the worker that owns the real child.
-
 /** Structured-clone-safe subset of ProcessSpec; stdio is always three pipes. */
 export type WorkerThreadChildSpec = {
   program: string

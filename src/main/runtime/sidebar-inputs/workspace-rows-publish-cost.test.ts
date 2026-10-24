@@ -1,5 +1,4 @@
-// What one metadata write costs main to publish at 1000 workspaces: the real store, join, visibility
-// filter, row builder and feed diff; only git is stubbed, as the cached scan it would have left.
+// Measure metadata-publish cost at 1,000 workspaces using real store/join/filter/row/feed code; only Git is replaced by its cached result.
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'

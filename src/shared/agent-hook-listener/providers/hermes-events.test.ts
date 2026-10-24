@@ -6,10 +6,7 @@ const normalize = (eventName: string, payload: Record<string, unknown> = {}) =>
   normalizeHermesEvent(createHookListenerState(), eventName, '', 'pane-1', payload)
 
 describe('normalizeHermesEvent', () => {
-  // Hermes fires `on_session_start` when a session is opened, switched or reset — never for a
-  // turn (`pre_llm_call` carries the user message). Mapping it to `working` parked a freshly
-  // launched pane in a fresh `working` row for the whole 30-minute staleness window, so
-  // `terminal wait --for tui-idle` timed out against an idle composer.
+  // Session starts open idle composers; working would veto tui-idle for the entire 30-minute staleness window.
   it('lands session start as an idle session boundary, not a running turn', () => {
     expect(normalize('on_session_start', { session_id: 's1' })).toMatchObject({
       state: 'done',

@@ -37,7 +37,6 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-// The local (non-Windows, non-SSH) watch path delegates to the isolated watcher process.
 vi.mock('./file-watcher-host', () => ({
   closeFileExplorerWatcherInWatcherProcess: closeWatcherInWatcherProcessMock,
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
@@ -95,7 +94,7 @@ function createRuntimeFileCommands(rootPath: string) {
 
 describe('RuntimeFileCommands file watching', () => {
   const originalPlatform = process.platform
-  // Why: Windows runtime watches intentionally use fs.watch instead of the watcher child.
+  // Windows uses fs.watch directly instead of the watcher process.
   const posixWatcherProcessIt = process.platform === 'win32' ? it.skip : it
 
   beforeEach(() => {
@@ -143,7 +142,6 @@ describe('RuntimeFileCommands file watching', () => {
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
 
     expect(watchMock).toHaveBeenCalledWith('C:\\repo', { recursive: true }, expect.any(Function))
-    // Windows path does not go through the watcher child.
     expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
     const emit = listener as (() => void) | null
     expect(emit).not.toBeNull()
@@ -157,7 +155,6 @@ describe('RuntimeFileCommands file watching', () => {
     expect(onEvents).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
 
-    // A sustained stream refreshes on the slower cadence, measured from the last refresh.
     emit?.()
     await vi.advanceTimersByTimeAsync(WINDOWS_RUNTIME_FILE_WATCH_REFRESH_MS - 1)
     expect(onEvents).toHaveBeenCalledTimes(1)
@@ -274,8 +271,7 @@ describe('RuntimeFileCommands file watching', () => {
     expect(watcher.close).toHaveBeenCalledTimes(2)
   })
 
-  // Issues #5308/#8212: the local recursive watch runs out of process so the
-  // blocking initial crawl and native faults cannot take down the serve runtime.
+  // #5308/#8212: recursive crawl/native faults must stay in the watcher child, outside serve.
   posixWatcherProcessIt('delegates local recursive watching to the watcher process', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -304,14 +300,12 @@ describe('RuntimeFileCommands file watching', () => {
       controller.signal
     )
 
-    // Events surfaced by the watcher process reach the caller.
     captured.cb?.([{ kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }])
     expect(onEvents).toHaveBeenCalledWith([
       { kind: 'update', absolutePath: '/home5/Brian/a.txt', isDirectory: false }
     ])
 
-    // Unsubscribe tears the subscription down (dispose runs on the shutdown-drain
-    // microtask, so await the drain before asserting).
+    // Unsubscribe disposes on a shutdown-drain microtask; await it before asserting.
     unsubscribe()
     await awaitRuntimeFileWatcherUnsubscribes()
     expect(watcherDispose).toHaveBeenCalledTimes(1)

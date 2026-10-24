@@ -445,8 +445,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why (#16095): a still-working agent can never produce a `→working` edge, so the old predicate
-  // was unsatisfiable for every follow-up prompt; pane output after Enter is the evidence left.
+  // #16095: an already-working agent has no new working edge; post-Enter output supplies delivery evidence.
   it('accepts pane output after Enter while the agent is already working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -496,8 +495,7 @@ describe('agent prompt submission runtime', () => {
     })
   })
 
-  // Why: hook rows reach the runtime through this provider, which has no window and no OSC title —
-  // the same path a headless `orca serve` host and a minimized desktop window take.
+  // Provider hooks reach headless/minimized runtimes without window or OSC-title evidence.
 })
 
 const PTY = 'pty-input-dispatch'

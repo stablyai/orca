@@ -133,8 +133,7 @@ describe('structured worker stop', () => {
   })
 
   it('settles a released lease whose stop was unproven: nothing is left running to close', async () => {
-    // A release that could not prove its stop sent no signal and left the verdict `unverifiable`;
-    // closing the chat is the user's action, so that bookkeeping does not refuse it.
+    // Release uncertainty sends no signal; a user-requested chat close must still be allowed.
     installHost({ claimStatus: 'released', close: async () => {} })
     await expect(stopStructuredWorker(IDENTITY, 'd1')).resolves.toEqual({
       stopped: true,
@@ -184,8 +183,7 @@ describe('structured worker stop', () => {
   })
 
   it('claims no close when the tab-visibility step threw before one was issued', async () => {
-    // `closeAttempted` is what the receipt turns into `processAction: 'closed_agent_terminal'`.
-    // Reporting it here would claim a close for a child that is still running.
+    // Claiming closed_agent_terminal without an actual close would hide a still-running child.
     const close = vi.fn(async () => {})
     installHost({
       close,
@@ -200,8 +198,7 @@ describe('structured worker stop', () => {
   })
 
   it('retains when the host is not installed, and claims no close', async () => {
-    // `closed_agent_terminal` on a runtime that never reached a host is the receipt claiming an
-    // action it did not take.
+    // Without reaching a host, no receipt may claim closed_agent_terminal.
     const result = await stopStructuredWorker(IDENTITY, 'd1')
     expect(result.stopped).toBe(false)
     expect(result.closeAttempted).toBe(false)
@@ -286,9 +283,7 @@ describe('structured worker output', () => {
   })
 
   it('reports an unverifiable worker as unknown, never as running', async () => {
-    // The `could not look, therefore it is alive` inversion. After a restart the runtime observes
-    // `unverifiable` — no attached provider child in this generation — while the journal is still
-    // readable, and a coordinator reading `running` waits on a worker that may already be gone.
+    // Readable journals do not prove a current live child after restart; report unverifiable, not running.
     installHost({})
     const read = await readStructuredWorkerJournal({
       identity: IDENTITY,
@@ -336,9 +331,7 @@ describe('structured worker output', () => {
   })
 
   it('never calls an unproven release exited', async () => {
-    // The archive is frozen BEFORE the close. `release_unknown` is the state that records a close
-    // that did NOT land, and a coordinator reading `exited` there starts a replacement worker over
-    // the same worktree while the original provider child may still be attached.
+    // Pre-close archives do not prove exit; release_unknown may still own a live child and must not invite replacement.
     installHost({})
     const archive = await captureStructuredWorkerArchive(IDENTITY, 'claude')
     for (const releaseState of ['unknown', 'releasing'] as const) {
@@ -355,9 +348,7 @@ describe('structured worker output', () => {
   })
 
   it('carries the resource release state through the archived read', async () => {
-    // The wiring, not just the mapping: `worker-read` reaches the archive through
-    // `readArchivedWorkerOutput`, and the resource row it already holds is the only thing that
-    // knows whether the close landed.
+    // Read through worker-read: only its resource row proves whether the archived child's close landed.
     installHost({})
     const archive = await captureStructuredWorkerArchive(IDENTITY, 'claude')
     const db = {
@@ -391,9 +382,7 @@ describe('structured worker output', () => {
   })
 
   it('refuses a cursor once the tail window has slid past it', async () => {
-    // The cursor is an index into the bounded tail, and `sourceIdentity` was constant for the
-    // worker's life, so a coordinator paging a growing journal resumed at the newest items and
-    // skipped the middle without a word.
+    // A stable identity over a sliding bounded tail skipped middle pages; cursor identity must cover index shifts.
     installHost({ items: ITEMS })
     const first = await readStructuredWorkerJournal({
       identity: IDENTITY,
@@ -430,9 +419,7 @@ describe('archiving a structured worker whose journal cannot be read', () => {
   })
 
   it('settles with an empty, warned archive once the session is PROVEN gone', async () => {
-    // Closing the worker's chat tab is a routine user action: it evicts the child and detaches the
-    // journal permanently. Throwing archive_failed there wedged release on evidence that could
-    // never arrive, leaving worker-abandon as the only way out.
+    // A user-closed chat cannot produce future journal evidence; archive_failed must not wedge release forever.
     installHost({
       historyThrows: true,
       claimStatus: 'released',
@@ -447,8 +434,7 @@ describe('archiving a structured worker whose journal cannot be read', () => {
   })
 
   it('retains a worker at rest: released, but its chat tab still lists it', async () => {
-    // Released is not retired now — the idle sweep releases a quiet worker's lease — so an owned
-    // worker whose journal cannot be read keeps its evidence for a later archive.
+    // Idle-sweep release is not retirement; owned unreadable journals retain evidence for later archive.
     installHost({
       historyThrows: true,
       claimStatus: 'released',

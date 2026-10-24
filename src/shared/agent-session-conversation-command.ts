@@ -11,15 +11,13 @@ export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
   replacementSessionId?: string
-  /** A /compact the host holds as a card behind work in flight, with `state: 'completed'`: the
-   *  card is its one surface from here. Only clients that sent `delivery` receive it. */
+  /** A completed /compact card queued behind current work; only clients that sent delivery receive it. */
   queued?: AgentSessionQueuedSendReceipt
 } &
   /** `error`: a sentence for a person; released clients print it as it is. */
   (
     | { error?: string; failure?: undefined }
-    /** What failed, typed, beside its sentence, both from `agentSessionFailureWords`; `failure` is
-     *  absent from older hosts. */
+    /** Written with its sentence by agentSessionFailureWords; absent on older hosts. */
     | { error: AgentSessionFailureSentence; failure: AgentSessionFailureFact }
   )
 

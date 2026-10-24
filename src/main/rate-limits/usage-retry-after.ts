@@ -1,6 +1,6 @@
 import { parseRetryAfterHeaderMs } from '../../shared/retry-after-header'
 
-// Why: a corrupt/hostile Retry-After must not gate usage refreshes for days.
+// Cap corrupt/hostile headers so they cannot suppress polling indefinitely.
 const MAX_USAGE_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
 
 export function parseUsageRetryAfterMs(value: string | null, nowMs?: number): number | null {

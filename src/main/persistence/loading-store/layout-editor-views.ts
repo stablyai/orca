@@ -1,7 +1,4 @@
-// Each editor tab's view (`WorkspaceLayout.editorViews`) beside the saved session, per partition,
-// workspace key and tab id. A view is in memory only, so a command's apply, which loads the
-// partition from its saved form, is seeded with them and keeps its result's; the projection
-// publishes them. Never written to disk; layout-owner builds only.
+// Keep editor views in memory through partition applies and tab moves; never serialize them.
 
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -14,23 +11,20 @@ import type { WorkspaceLayoutModel } from '../../../shared/workspace-layout/work
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { StoreRuntimeState } from './store-runtime-state'
 
-/** Workspace key → tab id → its view. */
 export type PartitionEditorViews = Readonly<
   Record<string, Readonly<Record<string, LayoutEditorView>>>
 >
 
 type ViewsRuntime = Pick<StoreRuntimeState, 'layoutEditorViews'>
 
-/** The partition's views to seed an apply with; undefined in a window-owned build (none kept). */
+/** Window-owned builds retain no main-process views. */
 export function partitionEditorViewsOf(
   runtime: ViewsRuntime,
   hostId: ExecutionHostId
 ): PartitionEditorViews | undefined {
-  // Switch point: a window-owned build keeps no view, so its applies change nothing.
   return ORCA_LAYOUT_OWNER_IS_MAIN ? (runtime.layoutEditorViews.get(hostId) ?? {}) : undefined
 }
 
-/** The views a model holds: a closed tab's are gone, a moved or rekeyed tab's under its new id. */
 export function editorViewsOfModel(model: WorkspaceLayoutModel): PartitionEditorViews {
   const views: Record<string, Record<string, LayoutEditorView>> = {}
   for (const [key, workspace] of Object.entries(model.workspaces)) {
@@ -41,7 +35,7 @@ export function editorViewsOfModel(model: WorkspaceLayoutModel): PartitionEditor
   return views
 }
 
-/** Replaces the partition's views; the returned restore undoes it unless a later keep replaced them. */
+/** Restore only if no later keep replaced this partition's views. */
 export function keepPartitionEditorViews(
   runtime: ViewsRuntime,
   hostId: ExecutionHostId,
@@ -56,15 +50,10 @@ export function keepPartitionEditorViews(
   }
 }
 
-/**
- * After a session write: a view whose tab left its place follows the tab to the one partition and
- * workspace now holding it (a partition move or rekey), and is dropped when none does (a removal).
- * An untouched partition keeps its object, so a pending apply's restore still recognises it.
- */
+/** Follow moved/rekeyed tabs and drop removed ones; preserve untouched identity for pending rollbacks. */
 export function refileEditorViews(
   runtime: Pick<StoreRuntimeState, 'layoutEditorViews' | 'state'>
 ): void {
-  // Runs on every session write: with no views held there is nothing to refile.
   if (runtime.layoutEditorViews.size === 0) {
     return
   }
@@ -135,7 +124,6 @@ function holdsEditorTab(
   )
 }
 
-/** Every partition and workspace whose session holds editor tab `tabId`. */
 function placesHolding(
   runtime: Pick<StoreRuntimeState, 'state'>,
   tabId: string

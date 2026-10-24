@@ -78,15 +78,13 @@ describe('describeToolInput', () => {
     const label = describeToolInput({ file_path: path })
     expect(label.length).toBeLessThanOrEqual(80)
     expect(label).toContain('…')
-    // A bounded JSON preview also satisfies the two assertions above, so pin the
-    // label to the path itself or this passes with path-labelling deleted.
+    // Require the actual path; bounded JSON also passes length assertions without proving path labels work.
     expect(label).not.toContain('file_path')
     expect(label.endsWith('/file.ts')).toBe(true)
   })
 
   it('keeps the filename when trimming an overlong path', () => {
-    // Head-truncating an absolute path drops the basename — the one part that
-    // tells two rows apart — so the trim has to come off the front.
+    // Trim from the front to preserve the distinguishing basename.
     const path = `/Users/me/orca/workspaces/orca/sta-3333/src/shared/${'nested/'.repeat(4)}app.tsx`
     const label = describeToolInput({ file_path: path, offset: 10 })
     expect(label.length).toBeLessThanOrEqual(80)
@@ -119,9 +117,7 @@ describe('describeToolInput', () => {
   })
 
   it('does not count a blank search key as a search', () => {
-    // A whitespace-only `query` is no search term, but treating it as one
-    // suppresses `path` — costing the row its label, its link and its header
-    // argument all at once, and putting raw JSON back in the label.
+    // Blank queries must not hide path labels/links/arguments or expose raw JSON.
     expect(toolFilePath({ query: '   ', path: 'src/a.ts' })).toBe('src/a.ts')
     expect(describeToolInput({ query: '   ', path: 'src/a.ts' })).toBe('src/a.ts')
     expect(briefToolArg({ query: '   ', path: 'src/a.ts' })).toBe('a.ts')
@@ -139,8 +135,7 @@ describe('describeToolInput', () => {
   })
 
   it('labels a classified search row by its term, not the command that ran it', () => {
-    // Codex `commandActions` rows are the only input carrying both keys: the
-    // search term identifies the row, the raw command stays for the detail view.
+    // Codex commandActions carries both command/query; label with the search term and keep raw command for detail.
     const search = { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', path: '.' }
 
     expect(describeToolInput(search)).toBe('beta')
@@ -223,8 +218,7 @@ describe('briefToolArg', () => {
   })
 
   it('keeps a blank primary argument out of the run header', () => {
-    // Skipping a blank key must not fall through to raw JSON — the row would
-    // read `Bash {"command":""}` where it used to read `Bash`.
+    // Blank primary arguments must not fall back to raw JSON in headers.
     expect(briefToolArg({ command: '' })).toBe('')
     expect(briefToolArg({ cmd: '   ' })).toBe('')
     expect(briefToolArg({ cmd: '', file_path: '' })).toBe('')
@@ -233,8 +227,7 @@ describe('briefToolArg', () => {
   })
 
   it('still previews a primary argument that is populated but not a string', () => {
-    // Only a *blank* key means "no argument" — a mixed argv or a structured
-    // query is unrenderable as a label, not absent, so it keeps the preview.
+    // Blank means absent; populated non-string arguments still deserve a bounded preview.
     expect(briefToolArg({ command: ['kill', '-9', 1234] })).toBe('{"command":["kill","-9",1234')
     expect(briefToolArg({ command: 42 })).toBe('{"command":42}')
     expect(briefToolArg({ query: { text: 'auth flow' } })).toBe('{"query":{"text":"auth flow"')
@@ -254,10 +247,7 @@ describe('toolRunSummaryMembers', () => {
     ])
   })
 
-  // `url` is a PRIMARY_ARG_KEY but not a BRIEF_ARG_KEY, so a call carrying only
-  // a url falls through to the bounded JSON preview and is cut at 28 chars —
-  // mid-token, brace unbalanced. Pinned as-is: the header renders whatever this
-  // returns, and changing the key list would move mobile's summary too.
+  // url is primary but not brief: url-only headers intentionally retain clipped JSON (28 chars), even mid-token. Changing keys affects mobile summaries too.
   it('still falls through to a clipped JSON preview for a url-only call', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'browser.open', input: { url: 'https://example.com' } }

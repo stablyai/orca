@@ -24,8 +24,7 @@ type InstallEffects = {
   storeOpened: boolean
 }
 
-/** Stands in for `install()` by performing the effect it performs, so a probe that
- *  reinstalls the host is caught by what the install *does*, not by a call count alone. */
+/** Model installation effects so a redundant install fails even if supportsCreate still answers correctly. */
 function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
   effects: InstallEffects
   ensure: ReturnType<typeof vi.fn>

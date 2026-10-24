@@ -160,8 +160,7 @@ describe('AutomationEditorPromptEditor', () => {
     document.body.append(dialog, background)
 
     expect(getAutomationPromptEditorRoot(dialog)).toBe(editorRoot)
-    // Why: Radix's Escape listener fires on document, so currentTarget is
-    // never the dialog — probing document would see background editors.
+    // Radix Escape fires on document; document-wide lookup could find editors behind the dialog.
     expect(getAutomationPromptEditorRoot(document)).toBeNull()
     expect(getAutomationPromptEditorRoot(null)).toBeNull()
     expect(

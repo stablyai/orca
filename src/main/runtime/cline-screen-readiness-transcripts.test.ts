@@ -73,18 +73,16 @@ describe('Cline captured screen readiness', () => {
       foregroundProcess: 'cline',
       ready: READY,
       notReady: NOT_READY,
-      // Why all: an idle Cline is quiet, so the quiet-process lane settles it.
       readyWithoutScreen: READY.map(({ name }) => name)
     })
 
-    // Presence precondition for the restored-pane suite: the read projection blanks this placeholder.
     it('reads the ended turn through a projection that blanks its placeholder', async () => {
       const { lines, draft } = await finalReadProjection('cline-3-0-66-turn-ended', 120, 40)
       expect(lines).toContain('❯')
       expect(draft).toBe('Ask anything...')
     })
 
-    // Why only quiescence can refuse it: the streaming reply has scrolled its spinner away.
+    // Streaming scrolls the spinner away; only quiescence can refuse readiness.
     it('paints the same empty composer while a reply streams', async () => {
       const { ruledScreenLines } = await finalReplayFrame(STREAMING, 120, 40)
       expect(readsIdleComposer('cline', ruledScreenLines)).toBe(true)
@@ -102,7 +100,6 @@ describe('Cline captured screen readiness', () => {
           expect(readsIdleComposer('cline', ruledScreenLines)).toBe(false)
         }
       }
-      // Presence precondition: the thinking spinner was painted above the composer.
       expect(spinnerFrames).toBeGreaterThan(0)
     })
 
@@ -115,18 +112,14 @@ describe('Cline captured screen readiness', () => {
         size: { cols: 120, rows: 40 }
       })
       await runtime.readTerminal(handle, { screen: true })
-      // Why 2.5s: inside the 3s quiescence window, past the 2s poll.
+      // Past the 2s poll but inside 3s quiescence.
       await expect(waitForTranscriptIdle({ runtime, handle }, 2_500)).rejects.toThrow(/timeout/)
     }, 15_000)
   })
 })
 
 describe('Grok captured worker startup', () => {
-  /**
-   * A Grok worker start replayed through the runtime at its recorded read times. Grok draws its
-   * composer glyph at 0.6 s and then shimmers its logo until 9.9 s, and its only title is its bare
-   * name, so a wait that holds that title to quiet output answers ten seconds after the composer.
-   */
+  /** Grok paints its composer at 0.6s but animates until 9.9s; bare-title readiness must not wait for quiet. */
 
   const COMPOSER_FRAME_MS = GROK_STARTUP_PTY_TRACE.find((chunk) => chunk.data?.includes('❯'))?.t
   const LAST_FRAME_MS = GROK_STARTUP_PTY_TRACE.at(-1)?.t ?? 0
@@ -168,7 +161,6 @@ describe('Grok captured worker startup', () => {
       const settledAt = await replayGrokWorkerStart()
       expect(settledAt).not.toBeNull()
       expect(settledAt).toBeGreaterThanOrEqual(COMPOSER_FRAME_MS ?? 0)
-      // Within a second of the glyph: main's own wait answered on the title at once (2.2-2.8 s live).
       expect(settledAt).toBeLessThan((COMPOSER_FRAME_MS ?? 0) + 1_000)
       expect(settledAt).toBeLessThan(LAST_FRAME_MS)
     })
@@ -230,7 +222,6 @@ describe('Qoder captured startup readiness', () => {
       'preserves Qoder identity in %s',
       async (fixture) => {
         const data = readFileSync(join(__dirname, '__fixtures__', `${fixture}.txt`), 'utf8')
-        // The recorder's shutdown clears the OSC title; inspect the live capture before that reset.
         const title = extractLastOscTitle(
           data.replaceAll(`${String.fromCharCode(27)}]0;${String.fromCharCode(7)}`, '')
         )
@@ -309,7 +300,7 @@ describe('ZCode captured composer readiness', () => {
     it('never emits an OSC title, so no title lane can settle its wait', () => {
       const data = readTranscript()
       expect(data).toContain(String.fromCharCode(27))
-      // Why: this absence is the whole reason ZCode needs a body-evidence readiness lane.
+      // No OSC title: ZCode needs body-derived readiness.
       expect(data).not.toMatch(new RegExp(`${String.fromCharCode(27)}\\][0-2];`))
     })
 
@@ -317,8 +308,7 @@ describe('ZCode captured composer readiness', () => {
       const data = readTranscript()
       const composerIndex = data.indexOf('╭')
       expect(composerIndex).toBeGreaterThan(-1)
-      // Why: ~175KB of banner animation after the composer is up. A quiet-render window
-      // measured in hundreds of ms cannot fire anywhere in that span.
+      // Banner animation continues for ~175KB after the composer, precluding a short quiet window.
       expect(data.length - composerIndex).toBeGreaterThan(100_000)
     })
 
@@ -330,10 +320,7 @@ describe('ZCode captured composer readiness', () => {
         launchAgent: 'zcode',
         data
       })
-      // Why this asserts a NEGATIVE: Orca's wait text is a line-folded tail, and ZCode paints
-      // its composer once and then repaints only the banner — so the composer scrolls out and
-      // no screen rule can settle the wait. This is the evidence for driving ZCode readiness
-      // from its synthetic hook title instead (see synthetic-agent-title.ts).
+      // Folded text loses ZCode's one-shot composer under animation; synthetic-agent-title.ts supplies readiness.
       await expect(
         runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
       ).rejects.toThrow(/timeout/)
@@ -352,7 +339,6 @@ describe('ZCode captured composer readiness', () => {
       const data = readTranscript()
       const scanner = createDraftPasteReadyScanner('zcode-composer-prompt')
       const composerIndex = data.indexOf('╭')
-      // Why: feeding the stream in PTY-sized chunks proves the marker survives chunk splits.
       let readyAt: number | null = null
       for (let offset = 0; offset < data.length; offset += 4096) {
         const chunk = data.slice(offset, offset + 4096)
@@ -362,7 +348,6 @@ describe('ZCode captured composer readiness', () => {
         }
       }
       expect(readyAt).not.toBeNull()
-      // Ready lands on the chunk that carries the composer corner, not thousands of frames later.
       expect(readyAt!).toBeGreaterThanOrEqual(composerIndex)
       expect(readyAt!).toBeLessThan(composerIndex + 8192)
     })
@@ -370,18 +355,12 @@ describe('ZCode captured composer readiness', () => {
 })
 
 describe('Shell titles during agent startup', () => {
-  /**
-   * A shell that titles the command it is about to run (zsh preexec auto-title) writes the agent's
-   * bare name before the agent's TUI has mounted. For an agent whose only rest signal is that name,
-   * the title alone used to settle `tui-idle`, so a launch pasted its prompt into a TUI still
-   * booting, or into the shell. A launch readiness wait holds that title to a quiet stream.
-   */
+  /** Shell preexec titles precede TUI mounting; launch readiness must hold bare names to quiet output. */
 
   const ESC = String.fromCharCode(27)
   const BEL = String.fromCharCode(7)
   const BOOT_FRAME = 'Loading…\r\n'
 
-  /** The shell echoes the launch line, then its preexec hook titles the pane with the command. */
   async function launchedPaneTitledByShell(agent: 'gemini' | 'copilot') {
     return createTranscriptPane({
       paneTitle: 'Terminal',
@@ -391,7 +370,6 @@ describe('Shell titles during agent startup', () => {
     })
   }
 
-  /** The agent is still painting its boot screen: output keeps arriving each second. */
   async function keepBooting(
     runtime: Awaited<ReturnType<typeof launchedPaneTitledByShell>>['runtime'],
     seconds: number
@@ -410,7 +388,6 @@ describe('Shell titles during agent startup', () => {
       vi.useRealTimers()
     })
 
-    // Gemini's bare name was once normalized into its rest glyph; Copilot's name is its only signal.
     it.each(['gemini', 'copilot'] as const)(
       'does not treat the shell’s auto-title as readiness while %s is still booting',
       async (agent) => {

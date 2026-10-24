@@ -159,11 +159,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       : null
   }
 
-  /**
-   * The title snapshot and prompt lifecycle the blocked-dialog check compares, both as display
-   * shows them, so the check reaches main's verdict: main compared the pair a stale-working clear
-   * left, and comparing a renderer's echoed clear with the native lifecycle hid a later dialog.
-   */
+  /** Compare display-projected title and lifecycle together; mixing an echoed stale-working clear with native lifecycle can hide a later dialog. */
   protected getTerminalWaitPermissionInputs(
     handle: string,
     ptyId: string,
@@ -264,11 +260,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return this.terminalWriter.writeChunks(ptyId, text, options)
   }
 
-  /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS
-   *  the command runs under. A WSL pane is spawned as `wsl.exe` through the Windows ConPTY
-   *  (see local-pty-provider), so it pays the ConPTY ingest cost even though its shell is
-   *  Linux; an SSH pane is spawned by node-pty on the remote host, so the client's
-   *  process.platform says nothing about it. */
+  /** Use the PTY transport host: WSL writes still pay Windows ConPTY ingestion, while SSH uses remote node-pty rather than the client OS. */
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId

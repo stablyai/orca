@@ -64,7 +64,6 @@ describe('remote runtime client error classification', () => {
     expect(isRecoverableRemoteRuntimeConnectionError(error)).toBe(true)
   })
 
-  // Pins the list so a dropped or added code is a deliberate, reviewed change (round-2 S5).
   it('pins the recoverable codes and message fragments', () => {
     expect([...RECOVERABLE_CODES].toSorted()).toEqual([
       'reconnecting',

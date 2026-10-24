@@ -10,11 +10,8 @@ const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
 const MAX_PREVIEW_DEPTH = 2
 const MAX_TOOL_RUN_SUMMARY_PARTS = 3
-// Search term before command: a classified search row carries both, and the
-// term is what identifies it. No other tool input supplies the two together.
-// `directory` is a scan root or a listed folder — it labels a row but is
-// deliberately absent from the file-target keys below, because a folder reaches
-// mobile as a tappable open-file link that can only fail.
+// Prefer search term over command when classified rows carry both. directory labels scans/listings but is not an open-file target:
+// mobile would offer a dead file link to that folder.
 const PRIMARY_ARG_KEYS = [
   'query',
   'pattern',
@@ -25,8 +22,6 @@ const PRIMARY_ARG_KEYS = [
   'description'
 ] as const
 const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
-// Only the keys that hold a shell command, so a search term or a listed folder
-// cannot stand in for one.
 const COMMAND_ARG_KEYS = ['command', 'cmd'] as const
 export const MAX_TOOL_DETAIL_LENGTH = 4000
 
@@ -38,16 +33,14 @@ export type ToolInputDisplay = {
 }
 
 export function summarizeToolInput(input: unknown): string {
-  // Unwrap before clipping: the closing quote is what proves the wrapper, and an
-  // 80-character prefix has already dropped it. Non-shell input is untouched.
+  // Strip shell wrappers before clipping because their closing quote proves the match.
   const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(toRawPreview(input)))
   return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
     : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
 }
 
-/** Build the renderer-independent row model from one normalization pass. Detail
- *  formatting stays lazy because collapsed mobile rows never render it. */
+/** Normalize row display once; format details lazily because collapsed mobile rows never need them. */
 export function createToolInputDisplay(input: unknown): ToolInputDisplay {
   const normalized = normalizeToolInput(input)
   const filePath = normalizedToolFilePath(normalized)
@@ -64,9 +57,7 @@ export function truncateToolDetail(text: string): string {
   return text.length > MAX_TOOL_DETAIL_LENGTH ? `${text.slice(0, MAX_TOOL_DETAIL_LENGTH)}…` : text
 }
 
-/** Human label for a tool line: the target file path, else the primary string
- *  argument (command/query/…), else the bounded JSON preview. Keeps raw
- *  `{"file_path":…}` JSON out of the tappable row label. */
+/** Prefer target path, then primary string argument, then bounded JSON; keep serialized file_path objects out of tappable labels. */
 export function describeToolInput(input: unknown): string {
   const normalized = normalizeToolInput(input)
   return describeNormalizedToolInput(normalized, normalizedToolFilePath(normalized))
@@ -86,10 +77,7 @@ function describeNormalizedToolInput(input: unknown, path: string | null): strin
   return summarizeToolInput(input)
 }
 
-/** Full, pretty-printed tool-call input for the expanded detail view. Structured
- *  JSON strings and objects/arrays print as indented JSON so a diff-less call
- *  (e.g. a question payload) reads cleanly instead of one long minified line;
- *  other strings pass through as-is. */
+/** Pretty-print structured JSON/arrays for expanded detail; retain ordinary prose strings. */
 export function formatToolInput(input: unknown): string {
   return formatNormalizedToolInput(normalizeToolInput(input))
 }
@@ -115,8 +103,7 @@ function isStructuredNormalizedToolInput(input: unknown): boolean {
   if (input === null || typeof input !== 'object') {
     return false
   }
-  // An empty object formats back to the row label verbatim, so offering the
-  // expander would promise detail and then repeat the row.
+  // Empty inputs repeat the label without detail; do not offer a redundant expander.
   return Array.isArray(input) ? input.length > 0 : Object.keys(input).length > 0
 }
 
@@ -136,9 +123,7 @@ function normalizedToolFilePath(input: unknown): string | null {
     return null
   }
   const value = input as Record<string, unknown>
-  // A search call's `path` is usually the directory it scanned, so taking it as a
-  // target would label the row with the scan root and link to a folder. Costs the
-  // link on a file-scoped search; a dead link on every other search is worse.
+  // Search path is usually a scan root. Suppress file links, accepting lost file-scoped links over dead folder links on most searches.
   const directory = isSearchToolInput(value) ? undefined : value.path
   const path =
     value.file_path ??
@@ -174,9 +159,7 @@ export function briefToolArg(input: unknown): string {
     if (command) {
       return command.slice(0, 28)
     }
-    // A blank primary key means the call has no brief argument; falling through
-    // would stand its raw JSON in for one in the run header. Reaching here with a
-    // string key means it was blank — a structured one still earns the preview.
+    // Blank string arguments mean no brief text, not raw JSON fallback; populated structured values still receive previews.
     if (BRIEF_ARG_KEYS.some((key) => typeof value[key] === 'string')) {
       return ''
     }
@@ -184,9 +167,7 @@ export function briefToolArg(input: unknown): string {
   return summarizeToolInput(normalized).slice(0, 28)
 }
 
-/** The shell command a call carries in its input, or null when it carries none.
- *  Codex keeps the raw command on a classified `read`/`search`/`list` row, so
- *  this is what tells one apart from a Claude tool of the same lowercased word. */
+/** Raw shell command distinguishes Codex classified read/search/list from same-named Claude tools. */
 export function toolInputCommand(input: unknown): string | null {
   const normalized = normalizeToolInput(input)
   return isToolInputRecord(normalized) ? firstPrimaryToolArg(normalized, COMMAND_ARG_KEYS) : null
@@ -196,8 +177,7 @@ function isToolInputRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** Codex delivers tool arguments as a JSON string. Parse those into the object
- *  shape every helper below already understands; leave prose strings alone. */
+/** Decode Codex JSON-string arguments for structural readers; retain prose strings. */
 export function normalizeToolInput(input: unknown): unknown {
   if (typeof input !== 'string') {
     return input
@@ -214,16 +194,13 @@ export function normalizeToolInput(input: unknown): unknown {
   }
 }
 
-/** A search call is named by what it looked for, so its `path` is a scan root
- *  rather than a file target. */
 function isSearchToolInput(value: Record<string, unknown>): boolean {
   return (
     summarizePrimaryToolArg(value.query) !== null || summarizePrimaryToolArg(value.pattern) !== null
   )
 }
 
-/** The first key that yields a label — a present-but-blank key must not swallow
- *  the keys ranked after it. */
+/** Skip blank keys so later populated arguments remain eligible labels. */
 function firstPrimaryToolArg(
   value: Record<string, unknown>,
   keys: readonly string[]
@@ -237,8 +214,7 @@ function firstPrimaryToolArg(
   return null
 }
 
-/** A path is identified by its tail, so trim from the front: head-truncating an
- *  absolute path drops the filename, the one part that tells two rows apart. */
+/** Trim paths from the front to preserve the distinguishing basename. */
 function summarizeToolPath(path: string): string {
   const collapsed = path.replace(/\s+/g, ' ').trim()
   if (collapsed.length <= MAX_TOOL_PREVIEW_LENGTH) {
@@ -261,8 +237,7 @@ function summarizePrimaryToolArg(input: unknown): string | null {
   return null
 }
 
-/** One named call in a run header, kept apart rather than pre-joined so a
- *  surface can draw the boundary between members itself. */
+/** Separate run members let surfaces draw their own boundaries. */
 export type ToolRunMember = {
   name: string
   /** Brief argument, or '' when the call has none worth showing. */
@@ -270,9 +245,7 @@ export type ToolRunMember = {
   mcpIdentity?: NativeChatMcpIdentity
 }
 
-/** The run header's leading calls. Capped at the same limit the joined string
- *  has always used, so the two can never disagree about which calls speak for
- *  a run. */
+/** Share the joined header’s leading-call cap so structured members describe the same run. */
 export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolRunMember[] {
   const members: ToolRunMember[] = []
   for (const block of blocks) {

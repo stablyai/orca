@@ -34,8 +34,7 @@ const PHONE: RpcDispatchStreamingOptions = { clientKind: 'mobile', connectionId:
 
 type Flag = { lastActivityAt: number; isUnread: boolean }
 
-/** What each kind of desktop socket sends: the request and subscription sockets, the browser host
- *  lease and network tunnel (which add only browser capabilities to the shared base), and the CLI. */
+/** Desktop request, subscription, browser-host lease, network-tunnel and CLI capability sets. */
 function currentDesktopSockets() {
   return {
     request: remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES),

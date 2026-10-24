@@ -6,8 +6,7 @@ import { writePluginFileAtomically } from './plugin-atomic-file-write'
 export const PLUGIN_CURRENT_POINTER_FILENAME = 'current'
 export const PLUGIN_CURRENT_POINTER_MAX_BYTES = 128
 
-/** Reads the tiny hash pointer through a cap so discovery cannot allocate a
- * corrupt sparse file during startup. Missing pointers resolve to null. */
+/** Cap pointer reads so corrupt/sparse files cannot allocate unbounded startup memory. */
 export async function readPluginCurrentPointer(pluginDir: string): Promise<string | null> {
   const target = join(pluginDir, PLUGIN_CURRENT_POINTER_FILENAME)
   const chunks: Buffer[] = []

@@ -68,9 +68,7 @@ export class RuntimeTerminalAgentStatusQuery {
 
   private async readStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
     const ptyId = this.getPtyId(handle)
-    // Why display: whether an agent is here is read off what the pane shows, as before the
-    // stale-working clear stopped rewriting records; a cwd spinner clears to a neutral title,
-    // so the foreground process decides for an agent that exited behind it.
+    // Use display state: stale-spinner clearing leaves foreground evidence to identify agents that exited behind it.
     const clear = this.deps.getTitleDisplayClear(ptyId)
     const terminal = this.getSnapshot(handle, ptyId, clear)
     const explicitStatus = this.deps.getExplicitStatus(handle)
@@ -103,8 +101,7 @@ export class RuntimeTerminalAgentStatusQuery {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
     if (explicitStatus) {
-      // Why: permission titles can linger after hooks report the agent resumed.
-      // Fresh hook state is tighter, but current shell/management evidence wins.
+      // Fresh hooks supersede lingering permission titles, but current shell/management proves release.
       const isRunningAgent =
         !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
         !(await this.terminalHasShellForegroundProcess(handle, ptyId))
@@ -116,8 +113,7 @@ export class RuntimeTerminalAgentStatusQuery {
       }
     }
     if (terminal.titleStatus) {
-      // Why: an OpenCode marker and a lone quarter-circle spinner (STA-4028) are activity,
-      // not identity, so resolve both through the identity/foreground evidence path.
+      // OpenCode markers and quarter-circle spinners indicate activity, not identity; resolve foreground/identity separately (STA-4028).
       if (
         isOpenCodeNativeTitle(terminal.title) ||
         isQuarterCircleSpinnerOnlyAgentTitle(terminal.title)
@@ -160,8 +156,7 @@ export class RuntimeTerminalAgentStatusQuery {
     if (this.getPtyId(handle) === expectedPtyId) {
       return
     }
-    // Why: delayed process evidence belongs only to the PTY that started the
-    // read, while callers still rely on the established stale-handle contract.
+    // Delayed process evidence belongs to the original PTY; retain stale-handle refusal semantics.
     throw new Error('terminal_handle_stale')
   }
 

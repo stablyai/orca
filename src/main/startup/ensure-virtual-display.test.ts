@@ -31,7 +31,7 @@ const ORIGINAL_DISPLAY = process.env.DISPLAY
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
-  // Why: Windows has no getuid, and a simulated Linux run still needs this account's uid.
+  // Simulated Linux still needs a UID when the Windows test host lacks getuid.
   Object.defineProperty(process, 'getuid', {
     value: () => OWN_UID,
     configurable: true,
@@ -106,8 +106,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     setPlatform('linux')
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
-    // Desktop Linux (non-serve) is reported unsupported for the offscreen path
-    // here, and never spawns Xvfb.
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: false })).toBe(false)
     expect(spawnMock).not.toHaveBeenCalled()
   })
@@ -148,7 +146,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(message).toContain('`xorg-x11-server-Xvfb`')
       expect(message).toContain('`xorg-server-xvfb` on Arch')
     }
-    // Why: the serve failure must not tell someone who just ran serve to run serve.
     expect(MISSING_SERVE_DISPLAY_MESSAGE).not.toContain('orca-ide serve')
     expect(MISSING_SERVE_DISPLAY_MESSAGE).toContain('Wayland alone is not enough')
     expect(missingLinuxDisplayMessage(true)).toBe(MISSING_SERVE_DISPLAY_MESSAGE)
@@ -171,8 +168,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(process.env.DISPLAY).toBe(':77')
   })
 
-  // #15084 review: a container that bind-mounts only /tmp/.X11-unix used to serve and would
-  // otherwise now exit(1) at index.ts, since the serve gate treats false as fatal.
+  // #15084: containers may expose an external X socket without its host lock/PID.
   it('serves on an externally configured display that has no lock file', async () => {
     setPlatform('linux')
     process.env.DISPLAY = ':0'
@@ -188,8 +184,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(process.env.DISPLAY).toBe(':0')
   })
 
-  // removeStaleDisplayArtifacts unlinks the lock before the socket, so a crash between the two
-  // leaves a lockless socket on Orca's OWN :99. Adopting it would resurrect the orphan-socket bug.
+  // Cleanup unlinks lock first; trusting Orca's own lockless :99 would revive an orphan socket.
   it('does not adopt its own :99 socket when the lock is missing', async () => {
     setPlatform('linux')
     existsSyncMock.mockReturnValue(true)
@@ -197,7 +192,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
-    // Cleaned up and respawned rather than trusted.
     expect(rmSyncMock).toHaveBeenCalled()
     expect(spawnMock).toHaveBeenCalledWith(
       'Xvfb',
@@ -208,9 +202,9 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('reuses an existing virtual display only when its X server is alive', async () => {
     setPlatform('linux')
-    statSyncMock.mockReturnValue({ isSocket: () => true, uid: OWN_UID }) // :99 socket present
+    statSyncMock.mockReturnValue({ isSocket: () => true, uid: OWN_UID })
     existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue('4321\n') // lock holds a PID
+    readFileSyncMock.mockReturnValue('4321\n')
     const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true as never) // PID alive
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
@@ -224,11 +218,11 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
   it('treats a stale socket (dead server) as no display and starts a fresh Xvfb', async () => {
     setPlatform('linux')
-    existsSyncMock.mockReturnValue(true) // lock present
+    existsSyncMock.mockReturnValue(true)
     let bound = false
     statSyncMock.mockImplementation(() => ({ isSocket: () => true, uid: OWN_UID }))
     readFileSyncMock.mockImplementation(() => (bound ? '1234\n' : '9999\n'))
-    // The orphan lock names a dead PID; the freshly spawned Xvfb is alive.
+    // Only the newly spawned Xvfb is alive; the orphan lock PID is dead.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid) => {
       if (pid === 9999) {
         throw new Error('ESRCH')
@@ -242,7 +236,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     const { ensureVirtualDisplayForHeadlessServe } = await import('./ensure-virtual-display')
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
-    // Stale artifacts cleaned, then a fresh server started.
     expect(rmSyncMock).toHaveBeenCalled()
     expect(spawnMock).toHaveBeenCalledWith(
       'Xvfb',
@@ -253,12 +246,11 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     killSpy.mockRestore()
   })
 
-  // A stale :99 socket this account cannot unlink makes our Xvfb refuse to bind and exit. Trusting
-  // the surviving socket set DISPLAY to a dead server and Chromium died in Ozone init with SIGSEGV.
+  // A foreign stale socket can prevent bind; trusting it advertised a dead display and crashed Ozone initialization.
   it('reports failure when a stale socket blocks the Xvfb rebind', async () => {
     setPlatform('linux')
     statSyncMock.mockReturnValue({ isSocket: () => true, uid: OWN_UID })
-    // Removal fails (foreign owner) and no lock ever appears, because Xvfb never took the display.
+    // Foreign ownership prevents unlink and Xvfb never acquires the display.
     rmSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
     })
@@ -309,7 +301,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
   describe('with several accounts on one machine (#26602)', () => {
     type FakeDisplay = { uid: number; lockPid: number | null; socket: boolean }
 
-    // X artifacts per display number; each spawned Xvfb takes its display under this account.
+    // Model independent artifacts/ownership for each candidate display.
     function mockDisplays(displays: Record<number, FakeDisplay>, alivePids: number[]): void {
       const displayOf = (path: string): FakeDisplay | undefined => {
         const match = /(?:\.X(\d+)-lock|X11-unix\/X(\d+))$/.exec(path)
@@ -438,7 +430,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       mockDisplays(displays, [777])
       const startXvfb = spawnMock.getMockImplementation()!
       spawnMock.mockImplementationOnce((command: string, args: string[]) => {
-        // Another account's Xvfb binds :99 between our check and our own bind.
+        // Model another account winning the bind race.
         displays[99] = { uid: OTHER_UID, lockPid: 777, socket: true }
         return startXvfb(command, args)
       })
@@ -467,8 +459,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(statSyncMock).toHaveBeenCalledWith('/run/user/1000/wayland-0')
     })
 
-    // An X server may bind only the abstract namespace, leaving nothing to stat. Abstract addresses
-    // are kernel-owned and vanish when the owner exits, so an entry is proof of a live server.
+    // Abstract sockets are kernel-owned and vanish on exit, so their presence proves a live server.
     it('accepts an abstract-namespace X socket with no filesystem socket', async () => {
       setPlatform('linux')
       statSyncMock.mockImplementation(() => {
@@ -519,8 +510,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(hasUsableLinuxDisplay({ WAYLAND_SOCKET: 'not-an-fd' })).toBe(false)
     })
 
-    // Orca's own teardown unlinks the lock before the socket, so a lockless :99 is our own
-    // half-finished cleanup — trusting it because DISPLAY names it would accept a dead display.
+    // Own lockless :99 can be half-finished teardown even when inherited DISPLAY names it.
     it('does not trust a lockless socket on its own managed display number', async () => {
       setPlatform('linux')
       statSyncMock.mockReturnValue({ isSocket: () => true, uid: OWN_UID })
@@ -530,7 +520,6 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
 
       expect(hasUsableLinuxDisplay({ DISPLAY: ':99' })).toBe(false)
-      // A foreign display number with the same shape is still accepted.
       expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(true)
     })
 
@@ -548,8 +537,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       expect(readFileSyncMock).toHaveBeenCalledWith('/tmp/.X77-lock', 'utf8')
     })
 
-    // An X server writes its lock beside the socket and both survive a crash, so a lockless
-    // socket is an endpoint published from elsewhere (container bind mount, WSLg) — not an orphan.
+    // External lockless sockets can come from container mounts/WSLg; a crashed local X server leaves its lock too.
     it('accepts a local X11 socket published without a lock file', async () => {
       setPlatform('linux')
       statSyncMock.mockReturnValue({ isSocket: () => true, uid: OWN_UID })
@@ -560,12 +548,11 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       const { hasUsableLinuxDisplay } = await import('./ensure-virtual-display')
 
       expect(hasUsableLinuxDisplay({ DISPLAY: ':0' })).toBe(true)
-      // Numbers Orca may pick for itself are still someone else's when DISPLAY names them.
       expect(hasUsableLinuxDisplay({ DISPLAY: ':100' })).toBe(true)
       expect(killSpy).not.toHaveBeenCalled()
     })
 
-    // WSLg with ELECTRON_OZONE_PLATFORM_HINT=x11 has no Wayland fallback to rescue it.
+    // Pinned X11 cannot rely on a Wayland fallback in WSLg.
     it('accepts a lockless X11 socket when x11 is pinned and Wayland is unavailable', async () => {
       setPlatform('linux')
       statSyncMock.mockImplementation((path: string) => ({

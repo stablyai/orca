@@ -67,8 +67,7 @@ describe('tool pair limits', () => {
     )
   })
   it('still answers every retained call when the results trail far behind', () => {
-    // The break must not fire while a retained call is unanswered, or the mobile run
-    // would render a spinner for a tool that actually completed.
+    // Retain scanning until every retained call is answered, or mobile would spin on completed tools.
     const blocks = [call, call, ...Array.from({ length: 5000 }, () => result)]
     expect(pairToolBlocks(blocks, 2)).toEqual([
       { call, result },

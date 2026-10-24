@@ -1,11 +1,7 @@
 import type { RuntimeStatus } from './runtime-types'
 
-// Why: a headed Orca server keeps answering status.get after its workspace window
-// closes, so "a status came back" is not evidence that graph-backed workspace work
-// will succeed there. desktopWindowStatus is only 'openable' when no live renderer
-// window exists (orca-runtime.ts:4806), so pairing it with a non-ready graph is the
-// narrow "reachable, but nothing can run" signal: a graph-ready headless serve
-// (#6844) and hosts that omit desktopWindowStatus (older builds) stay untouched.
+// Reachable status does not prove workspace work can run after a headed window closes. Require a non-ready
+// graph plus absent live window; graph-ready headless and legacy hosts without window status remain usable (#6844).
 export function isRuntimeWorkspaceWindowClosed(status: RuntimeStatus | null | undefined): boolean {
   if (!status) {
     return false

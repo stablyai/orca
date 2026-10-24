@@ -32,8 +32,7 @@ describe('skillDeletionEligibility', () => {
   })
 
   it('has a message for every host-only reason the client never predicts', () => {
-    // The client cannot know these; they arrive on the result, and the band
-    // still has to say something specific for each.
+    // Host-only reasons still need specific client messages.
     expect(SKILL_DELETE_BLOCK_MESSAGES.unowned).toContain('outside')
     expect(SKILL_DELETE_BLOCK_MESSAGES.missing).toBeTruthy()
     expect(SKILL_DELETE_BLOCK_MESSAGES.stale).toBeTruthy()

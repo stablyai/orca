@@ -136,10 +136,7 @@ describe('createGitConfigSnapshotRunner', () => {
   })
 
   it('rejects an absent key from a loaded snapshot instead of returning empty success', async () => {
-    // Why: real `git config --get` exits non-zero for a missing key; a loaded
-    // snapshot must preserve that contract (not turn a miss into '' success),
-    // and must NOT fall back to a real config --get (that would re-spawn the
-    // subprocess this runner exists to coalesce away).
+    // Missing keys must reject like config --get, without respawning the command this snapshot coalesces.
     const runGit = vi.fn(async () => ({
       stdout: listSnapshot(['branch.main.remote\norigin'])
     }))
@@ -148,7 +145,6 @@ describe('createGitConfigSnapshotRunner', () => {
     await expect(runner(['config', '--get', 'branch.main.merge'])).rejects.toThrow(
       GitConfigSnapshotKeyNotFoundError
     )
-    // The miss is served from the loaded snapshot — no passthrough config --get.
     expect(countCalls(runGit, ['config', '--list', '-z'])).toBe(1)
     expect(
       runGit.mock.calls.filter((call) => {

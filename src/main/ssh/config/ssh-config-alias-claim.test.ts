@@ -52,8 +52,7 @@ Match host prod
   })
 
   it('reads any negated group as uncertainty, because OpenSSH still applies its positives', () => {
-    // `Host * !prod` routes stage; answering false there would licence overriding a block the user
-    // wrote. The exempted alias is not worth a second matching rule to recover.
+    // Negation makes the group uncertain: ignoring Host * !prod would wrongly permit overriding stage.
     expect(mayClaim('Host * !prod\n  ForwardAgent yes\n', 'stage')).toBe(true)
     expect(mayClaim('Host * !prod\n  ForwardAgent yes\n', 'prod')).toBe(true)
   })
