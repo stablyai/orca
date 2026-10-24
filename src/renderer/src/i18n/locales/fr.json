@@ -16141,11 +16141,6 @@
           "3ef9551ba2": "Chargement de l'aperçu...",
           "d9d2944855": "Échec du chargement de l'aperçu du fichier"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Appuyez sur Échap pour fermer",
-          "535f4e2b56": "Fermer",
-          "9e27b2ecaf": "Aperçu de l'image en taille réelle"
-        },
         "IpynbViewer": {
           "859bf9fc21": "Exécuter la cellule",
           "7f0d7077c6": "Annuler",

@@ -2,8 +2,8 @@
 import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
-import ImageViewerPopup from './ImageViewerPopup'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
+import { PanZoomImageDialog } from './PanZoomImageDialog'
 import { listenForViewerZoomRequests } from './viewer-zoom-request'
 import PdfViewer from './PdfViewer'
 import {
@@ -49,11 +49,8 @@ export default function ImageViewer({
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [inlineZoom, setInlineZoom] = useState(1)
-  const [popupZoom, setPopupZoom] = useState(1)
   const inlineSurfaceRef = useRef<HTMLDivElement | null>(null)
-  const popupSurfaceRef = useRef<HTMLDivElement | null>(null)
   const [inlineSurfaceSize, setInlineSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
-  const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
   const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
   const isCommandOwner = useContext(EditorCommandOwnerContext)
@@ -65,7 +62,6 @@ export default function ImageViewer({
   if (lastImageStateKey !== imageStateKey) {
     setLastImageStateKey(imageStateKey)
     setInlineZoom(1)
-    setPopupZoom(1)
     setImageDimensions(null)
   }
   const isPdf = mimeType === 'application/pdf'
@@ -99,53 +95,18 @@ export default function ImageViewer({
           }),
     [imageDimensions, inlineSurfaceSize, inlineZoom, isIntrinsicLayout]
   )
-  const popupImageLayoutSize = useMemo(
-    () =>
-      getZoomedImageLayoutSize({
-        imageDimensions,
-        surfaceSize: popupSurfaceSize,
-        zoom: popupZoom
-      }),
-    [imageDimensions, popupSurfaceSize, popupZoom]
-  )
   const inlineImageLayoutStyle = useMemo(
     () => getImageLayoutStyle(inlineImageLayoutSize),
     [inlineImageLayoutSize]
   )
-  const popupImageLayoutStyle = useMemo(
-    () => getImageLayoutStyle(popupImageLayoutSize),
-    [popupImageLayoutSize]
-  )
   const applyInlineZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
     applyAnchoredImageViewerZoomChange(inlineSurfaceRef.current, setInlineZoom, getNextZoom, anchor)
   }, [])
-  const applyPopupZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
-    applyAnchoredImageViewerZoomChange(popupSurfaceRef.current, setPopupZoom, getNextZoom, anchor)
-  }, [])
-  const openPopup = useCallback(() => {
-    setPopupZoom(inlineZoom)
-    setIsPopupOpen(true)
-  }, [inlineZoom])
-  const handlePopupOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        setPopupZoom(inlineZoom)
-      }
-      setIsPopupOpen(open)
-    },
-    [inlineZoom]
-  )
   const handleInlineImageSurfaceWheel = useCallback(
     (event: WheelEvent) => {
       applyImageSurfaceWheel(event, applyInlineZoomChange)
     },
     [applyInlineZoomChange]
-  )
-  const handlePopupImageSurfaceWheel = useCallback(
-    (event: WheelEvent) => {
-      applyImageSurfaceWheel(event, applyPopupZoomChange)
-    },
-    [applyPopupZoomChange]
   )
   const setInlineSurfaceRef = useCallback(
     (surface: HTMLDivElement | null) => {
@@ -163,21 +124,6 @@ export default function ImageViewer({
       }
     },
     [handleInlineImageSurfaceWheel]
-  )
-  const setPopupSurfaceRef = useCallback(
-    (surface: HTMLDivElement | null) => {
-      if (popupSurfaceRef.current) {
-        popupSurfaceRef.current.removeEventListener('wheel', handlePopupImageSurfaceWheel)
-      }
-      popupSurfaceRef.current = surface
-      if (surface) {
-        setPopupSurfaceSize(getElementSurfaceSize(surface))
-        surface.addEventListener('wheel', handlePopupImageSurfaceWheel, { passive: false })
-      } else {
-        setPopupSurfaceSize(null)
-      }
-    },
-    [handlePopupImageSurfaceWheel]
   )
 
   useEffect(() => {
@@ -199,36 +145,14 @@ export default function ImageViewer({
   }, [previewSrc])
 
   useEffect(() => {
-    if (!isPopupOpen) {
-      setPopupSurfaceSize(null)
+    // Why: PDFs own their zoom, combined diff images yield to editor text, and an open popup
+    // takes the shortcut first through its own listener.
+    if (!isCommandOwner || isPdf || isIntrinsicLayout) {
       return
     }
-
-    const surface = popupSurfaceRef.current
-    if (!surface) {
-      return
-    }
-
-    const updateSize = () => setPopupSurfaceSize(getElementSurfaceSize(surface))
-    updateSize()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(updateSize)
-    observer.observe(surface)
-    return () => observer.disconnect()
-  }, [isPopupOpen])
-
-  useEffect(() => {
-    // Why: PDFs own their zoom; combined diff images yield to editor text until a popup opens.
-    if (!isCommandOwner || isPdf || (isIntrinsicLayout && !isPopupOpen)) {
-      return
-    }
-    const applyZoomChange = isPopupOpen ? applyPopupZoomChange : applyInlineZoomChange
     return listenForViewerZoomRequests(
       (direction) =>
-        applyZoomChange((currentZoom) => {
+        applyInlineZoomChange((currentZoom) => {
           if (direction === 'reset') {
             return 1
           }
@@ -236,17 +160,9 @@ export default function ImageViewer({
             ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
             : currentZoom / IMAGE_VIEWER_ZOOM_STEP
         }),
-      isPopupOpen ? popupSurfaceRef : inlineSurfaceRef,
-      isPopupOpen ? 'popup' : 'pane'
+      inlineSurfaceRef
     )
-  }, [
-    applyInlineZoomChange,
-    applyPopupZoomChange,
-    isCommandOwner,
-    isIntrinsicLayout,
-    isPdf,
-    isPopupOpen
-  ])
+  }, [applyInlineZoomChange, isCommandOwner, isIntrinsicLayout, isPdf])
 
   if (isPdf) {
     return (
@@ -303,7 +219,7 @@ export default function ImageViewer({
               ? 'flex justify-center overflow-visible p-4'
               : 'flex-1 overflow-auto scrollbar-editor'
           )}
-          onClick={openPopup}
+          onClick={() => setIsPopupOpen(true)}
           title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
         >
           <div
@@ -393,15 +309,12 @@ export default function ImageViewer({
           <span>{estimatedSize}</span>
         </div>
       </div>
-      <ImageViewerPopup
-        filename={filename}
-        imageLayoutSize={popupImageLayoutSize}
-        imageLayoutStyle={popupImageLayoutStyle}
-        isOpen={isPopupOpen}
-        onOpenChange={handlePopupOpenChange}
-        previewUrl={previewSrc}
-        setSurfaceRef={setPopupSurfaceRef}
-        zoomPercent={Math.round(popupZoom * 100)}
+      <PanZoomImageDialog
+        open={isPopupOpen}
+        onOpenChange={setIsPopupOpen}
+        src={previewSrc}
+        title={filename}
+        showTitle
       />
     </>
   )

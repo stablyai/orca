@@ -48,9 +48,6 @@ vi.mock('lucide-react', () => ({
   RotateCcw: function RotateCcw(props: Record<string, unknown>) {
     return { type: 'RotateCcw', props }
   },
-  X: function X(props: Record<string, unknown>) {
-    return { type: 'X', props }
-  },
   ZoomIn: function ZoomIn(props: Record<string, unknown>) {
     return { type: 'ZoomIn', props }
   },
@@ -59,18 +56,9 @@ vi.mock('lucide-react', () => ({
   }
 }))
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: function Dialog(props: { children?: unknown }) {
-    return { type: 'Dialog', props }
-  },
-  DialogContent: function DialogContent(props: { children?: unknown }) {
-    return { type: 'DialogContent', props }
-  },
-  DialogDescription: function DialogDescription(props: { children?: unknown }) {
-    return { type: 'DialogDescription', props }
-  },
-  DialogTitle: function DialogTitle(props: { children?: unknown }) {
-    return { type: 'DialogTitle', props }
+vi.mock('./PanZoomImageDialog', () => ({
+  PanZoomImageDialog: function PanZoomImageDialog(props: Record<string, unknown>) {
+    return { type: 'PanZoomImageDialog', props }
   }
 }))
 
@@ -252,16 +240,56 @@ describe('ImageViewer pre-load layout box', () => {
 
   // Why: the scroll surface's inner box is w-max/h-max, so percentage maxes resolve
   // to none and a 6000x4000 image lays out at natural resolution before onLoad.
-  it('bounds both scroll surfaces with viewport units before the image loads', async () => {
+  it('bounds the scroll surface with viewport units before the image loads', async () => {
     const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
 
-    expect(images).toHaveLength(2)
-    for (const image of images) {
-      const className = String(image.props.className)
-      expect(className).toContain('max-h-[100vh]')
-      expect(className).toContain('max-w-[100vw]')
-      expect(className).not.toContain('max-h-full')
-      expect(className).not.toContain('max-w-full')
+    expect(images).toHaveLength(1)
+    const className = String(images[0].props.className)
+    expect(className).toContain('max-h-[100vh]')
+    expect(className).toContain('max-w-[100vw]')
+    expect(className).not.toContain('max-h-full')
+    expect(className).not.toContain('max-w-full')
+  })
+})
+
+describe('ImageViewer full-size preview', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('opens the shared pan and zoom dialog on the same image when the preview is clicked', async () => {
+    const content = pngBase64(1)
+    const [closed] = findElementsByType(
+      await renderExpandedImageViewer(content),
+      'PanZoomImageDialog'
+    )
+    expect(closed.props).toMatchObject({
+      open: false,
+      src: `data:image/png;base64,${content}`,
+      title: 'preview.png',
+      showTitle: true
+    })
+
+    const surface = findElementsByType(await renderExpandedImageViewer(content), 'div').find(
+      (element) => element.props.title === 'Open image in popup'
+    )
+    if (!surface) {
+      throw new Error('preview surface not found')
     }
+    ;(surface.props.onClick as () => void)()
+
+    const [open] = findElementsByType(
+      await renderExpandedImageViewer(content),
+      'PanZoomImageDialog'
+    )
+    expect(open.props.open).toBe(true)
+    ;(open.props.onOpenChange as (open: boolean) => void)(false)
+    const [reclosed] = findElementsByType(
+      await renderExpandedImageViewer(content),
+      'PanZoomImageDialog'
+    )
+    expect(reclosed.props.open).toBe(false)
   })
 })

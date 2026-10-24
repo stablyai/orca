@@ -16314,11 +16314,6 @@
           "3ef9551ba2": "Loading preview...",
           "d9d2944855": "Failed to load file preview"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Press Esc to close",
-          "535f4e2b56": "Close",
-          "9e27b2ecaf": "Full-size image preview"
-        },
         "IpynbViewer": {
           "859bf9fc21": "Run cell",
           "7f0d7077c6": "Cancel",

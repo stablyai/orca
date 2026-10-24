@@ -15997,11 +15997,6 @@
           "3ef9551ba2": "Cargando vista previa...",
           "d9d2944855": "No se pudo cargar la vista previa del archivo"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Presione Esc para cerrar",
-          "535f4e2b56": "Cerrar",
-          "9e27b2ecaf": "Vista previa de imagen a tamaño completo"
-        },
         "IpynbViewer": {
           "859bf9fc21": "Ejecutar celda",
           "7f0d7077c6": "Cancelar",
