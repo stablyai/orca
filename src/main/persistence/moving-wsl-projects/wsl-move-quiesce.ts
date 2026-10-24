@@ -38,6 +38,30 @@ export type WslMoveQuiesceDeps = {
   writeCutover: (cutover: WslMoveCutover) => void
   removeCutover: (migrationId: string) => void
   now: () => Date
+  /** Between Sleep attempts; tests skip the wait. */
+  wait?: (ms: number) => Promise<void>
+}
+
+// A pane still restoring or just spawned can miss its final checkpoint and stay awake once; the
+// next Sleep of the same workspace stops it (awin verify-7, 6e). Only a repeat failure refuses.
+const SLEEP_ATTEMPTS = 3
+const SLEEP_RETRY_MS = 1_000
+
+async function sleepUntilPaused(
+  deps: WslMoveQuiesceDeps,
+  workspaceIds: readonly string[]
+): Promise<string[]> {
+  let pending = workspaceIds
+  for (let attempt = 1; ; attempt += 1) {
+    const { failedWorktreeIds } = await deps.sleepWorkspaces(pending)
+    if (failedWorktreeIds.length === 0 || attempt >= SLEEP_ATTEMPTS) {
+      return failedWorktreeIds
+    }
+    pending = failedWorktreeIds
+    await (deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(
+      SLEEP_RETRY_MS * attempt
+    )
+  }
 }
 
 export type WslMoveQuiesceRefusalReason =
@@ -147,7 +171,7 @@ async function quiesceUnderLock(
   }
 
   try {
-    const { failedWorktreeIds } = await deps.sleepWorkspaces(scope.workspaceIds)
+    const failedWorktreeIds = await sleepUntilPaused(deps, scope.workspaceIds)
     if (failedWorktreeIds.length > 0) {
       return refuse({ reason: 'sleep-failed', failedWorktreeIds })
     }
