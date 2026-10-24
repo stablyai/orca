@@ -58,3 +58,16 @@ it('uses owned readiness without discovery and coalesces cold cleanup without wa
   expect(mocks.connect).toHaveBeenCalledOnce()
   expect(mocks.stopServer).toHaveBeenCalledOnce()
 })
+
+it('answers unreachable without probing WSL while this process has no bridge to the host', async () => {
+  mocks.readRunning.mockClear()
+  const connector = createWslHostConnector({
+    userDataPath: '/unused',
+    onChange: vi.fn(),
+    hasUserVisibleWork: () => true,
+    isKnownDistro: () => true,
+    runtime: { isReady: () => false, call: vi.fn(), census: vi.fn() }
+  })
+  await expect(connector.isReachable('Ubuntu', 'wsl:ubuntu')).resolves.toBe(false)
+  expect(mocks.readRunning).not.toHaveBeenCalled()
+})

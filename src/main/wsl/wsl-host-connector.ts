@@ -148,7 +148,9 @@ export function createWslHostConnector(options: {
     get: (distro) => manager.get(distro),
     isReachable: async (distro, environmentId) =>
       options.runtime.isReady?.(environmentId) ||
-      (await coldReachability(distro, environmentId)) === 'available',
+      // Without a bridge in this process nothing answers, so a probe would only delay the connect.
+      (manager.get(distro) !== null &&
+        (await coldReachability(distro, environmentId)) === 'available'),
     disconnect: (distro) => liveness.stop(distro),
     stopServer: async (distro, environmentId) => {
       const reachability = await coldReachability(distro, environmentId)
