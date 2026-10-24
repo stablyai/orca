@@ -223,6 +223,58 @@ describe('TerminalDraftEditor', () => {
     expect(textarea()?.value).toBe('remote after takeover')
   })
 
+  it('does not resurrect discarded text after choosing the terminal version', async () => {
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 8,
+      text: 'remote',
+      sourceToken: 'token-1'
+    })
+    saveDesktopTerminalDraft.mockResolvedValueOnce({
+      ok: false,
+      status: 'conflict',
+      conflict: { text: 'changed terminal', sourceToken: 'token-2' }
+    })
+    renderEditor()
+    await openEditor()
+    const field = textarea()!
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+    setter?.call(field, 'local')
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    container
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Save draft to terminal without submitting"]'
+      )
+      ?.click()
+    for (let index = 0; index < 5; index += 1) {
+      await tick()
+    }
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Use the terminal draft version"]')
+      ?.click()
+    await tick()
+    expect(textarea()?.value).toBe('changed terminal')
+    beginDesktopTerminalDraft.mockResolvedValue({
+      ok: true,
+      supported: true,
+      adapter: 'pi-editor',
+      epoch: 9,
+      text: 'changed terminal',
+      sourceToken: 'token-3'
+    })
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Reload the terminal draft"]')
+      ?.click()
+    for (let index = 0; index < 6; index += 1) {
+      await tick()
+    }
+    expect(textarea()?.value).toBe('changed terminal')
+    expect(container.textContent).not.toContain('The terminal draft was changed elsewhere.')
+  })
+
   it('keeps dirty local text when Reload is used', async () => {
     beginDesktopTerminalDraft.mockResolvedValue({
       ok: true,

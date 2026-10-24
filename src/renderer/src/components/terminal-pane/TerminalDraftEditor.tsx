@@ -300,10 +300,11 @@ export function TerminalDraftEditor({
     textRef.current = conflictText
     setText(conflictText)
     setDirty(false)
+    clearRecoveredDraft(recoveryKey)
     setConflictText(null)
     setPhase('editing')
     setStatus('Loaded the terminal version.')
-  }, [conflictText])
+  }, [conflictText, recoveryKey])
 
   const keepMine = useCallback(() => {
     setConflictText(null)

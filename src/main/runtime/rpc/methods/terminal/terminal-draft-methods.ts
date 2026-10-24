@@ -7,7 +7,8 @@ import {
 } from '../../../../../shared/rpc-contract/terminal-draft-params'
 import {
   assertTerminalSendTextWithinLimit,
-  isTerminalInputLockedForClient
+  isTerminalInputLockedForClient,
+  isTerminalSendGuardNotWritable
 } from './terminal-input-delivery'
 import { writeRefused } from '../../../../../shared/pty-write-settlement'
 import { getTerminalDraftCoordinator } from '../../../terminal/draft/terminal-draft-service'
@@ -80,11 +81,31 @@ export const TERMINAL_DRAFT_METHODS = [
           ) {
             return { accepted: false, writeSettlement: writeRefused('provider_refused_write') }
           }
-          return runtime.sendTerminal(
-            params.terminal,
-            { enter: true },
-            { inputKind: 'driving', signal, requireWriteSettlement: true }
-          )
+          try {
+            return await runtime.sendTerminal(
+              params.terminal,
+              { enter: true },
+              {
+                inputKind: 'driving',
+                signal,
+                requireWriteSettlement: true,
+                // Why: this runs at the writer's final admission, after liveness and any submit delay.
+                beforeWrite: () => {
+                  if (
+                    runtime.resolveLiveLeafForHandle(params.terminal)?.ptyId !== ptyId ||
+                    isTerminalInputLockedForClient(runtime, ptyId, params.client)
+                  ) {
+                    throw new Error('terminal_guard_not_writable')
+                  }
+                }
+              }
+            )
+          } catch (error) {
+            if (isTerminalSendGuardNotWritable(error)) {
+              return { accepted: false, writeSettlement: writeRefused('provider_refused_write') }
+            }
+            throw error
+          }
         }
       })
     }
