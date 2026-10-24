@@ -242,9 +242,7 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   await expect(
     orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${workerTerminal!.tabId}"]`)
   ).toHaveCount(1)
-  await expect(
-    orcaPage.locator(`[data-testid="sortable-tab"][data-tab-title="${workerTabTitle}"]`)
-  ).toHaveCount(1)
+  await expect(workerTab).not.toHaveAttribute('data-tab-title', workerTabTitle)
   const terminalsAfterReturn = await client.call<RuntimeTerminalListResult>('terminal.list')
   const workerAfterReturn = terminalsAfterReturn.result.terminals.find(
     (terminal) => terminal.ptyId === initialWorkerIdentity.ptyId

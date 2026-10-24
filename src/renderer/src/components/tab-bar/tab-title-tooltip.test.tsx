@@ -8,6 +8,7 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'
 import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
+import { resolveTerminalItemTab } from './tab-bar-item-model'
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
@@ -290,6 +291,108 @@ describe('tab title tooltips', () => {
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
     expectTabContainerWidth(markup, root)
+  })
+
+  it('preserves a user custom title when the agent icon is visible', () => {
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({ customTitle: '  ✦ My task  ', title: '✳ Claude Code' })}
+        agent="claude"
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expect(markup).toContain('data-agent-icon="claude"')
+    expectTooltipContent(markup, '  ✦ My task  ')
+    expect(markup).toContain('data-tab-title="  ✦ My task  "')
+    expect(markup).toContain('>  ✦ My task  </span>')
+  })
+
+  it('falls back when the custom title contains only whitespace', () => {
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({ customTitle: '   ' })}
+        agent={null}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expectTooltipContent(markup, 'Runtime terminal title')
+    const root = openingTag(markup, 'data-testid', 'sortable-tab')
+    expect(root).toContain('data-tab-title="Runtime terminal title"')
+  })
+
+  it('uses the generated task title instead of an orchestration worker management title', () => {
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={resolveTerminalItemTab(
+          makeTerminalTab({
+            customTitle: 'worker-task_0123abcdef45',
+            generatedTitle: 'Trace synthetic worker naming',
+            title: 'worker-task_0123abcdef45'
+          }),
+          true
+        )}
+        agent={null}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expectTooltipContent(markup, 'Trace synthetic worker naming')
+    const root = openingTag(markup, 'data-testid', 'sortable-tab')
+    expect(root).toContain('data-tab-title="Trace synthetic worker naming"')
+    expect(markup).not.toContain('worker-task_0123abcdef45')
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {

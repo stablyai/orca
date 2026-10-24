@@ -11,6 +11,7 @@ import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { isOrchestrationWorkerTerminalTitle } from '../../../../shared/orchestration-worker-terminal-title'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -174,7 +175,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
             presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)
           }
           // Why: only stamp the runtime title on fresh tabs; reused tabs may have a user customTitle it would overwrite on focus.
-          if (title && !reusedTab) {
+          if (title && !reusedTab && !isOrchestrationWorkerTerminalTitle(title)) {
             store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
           }
           if (leafId && ptyId) {
