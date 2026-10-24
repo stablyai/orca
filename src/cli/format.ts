@@ -43,6 +43,7 @@ export {
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
+  terminalSendDeliveryVerdict,
   terminalSendWarnings
 } from './terminal-format'
 export {
