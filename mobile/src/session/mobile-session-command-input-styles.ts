@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
+/** Command dock styles. The field grows with the draft and stops at 120px. */
 export const mobileSessionCommandInputStyles = StyleSheet.create({
   createWarningBanner: {
     flexDirection: 'row',
@@ -76,21 +76,42 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
+  accessoryRowsContainer: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 2,
+    gap: 2
+  },
+  accessoryCollapseStrip: {
+    height: 14,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  accessoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   accessoryScroll: {
     flex: 1,
     minWidth: 0
   },
   accessoryContent: {
+    alignItems: 'center',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 1,
     gap: spacing.xs
   },
   accessoryKey: {
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
     borderRadius: radii.button,
     minWidth: 36,
+    minHeight: 26,
+    justifyContent: 'center',
     alignItems: 'center'
   },
   accessoryKeyPressed: {
@@ -118,14 +139,34 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   accessoryKeyTextDisabled: {
     color: colors.textMuted
   },
+  // Same box as accessoryKey, named apart so these icons can change without resizing every shortcut.
+  accessoryActionsCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginRight: spacing.sm
+  },
+  accessoryActionButton: {
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: radii.button,
+    minWidth: 36,
+    minHeight: 26,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  accessoryActionButtonActive: {
+    backgroundColor: colors.textPrimary
+  },
   keyboardDismissKey: {
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
     marginLeft: spacing.sm,
-    marginVertical: spacing.xs,
+    marginVertical: 1,
     backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm + 2,
+    paddingHorizontal: spacing.xs + 2,
     paddingVertical: 0,
     borderRadius: radii.button,
     minWidth: 36
@@ -143,28 +184,33 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 46,
+    alignItems: 'flex-end',
+    gap: 2,
+    minHeight: 44,
     paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
   textInput: {
     flex: 1,
-    height: 34,
+    minHeight: 34,
+    maxHeight: 120,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    fontSize: TEXT_INPUT_FONT_SIZE,
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingTop: spacing.xs + 1,
+    paddingBottom: spacing.xs + 1,
+    fontSize: 14,
     fontFamily: typography.monoFamily,
-    marginRight: spacing.sm
+    lineHeight: 20,
+    includeFontPadding: false
   },
   liveInputBar: {
-    gap: spacing.sm
+    gap: 2
   },
 
   liveInputFocusTarget: {
@@ -197,22 +243,21 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   sendButton: {
     backgroundColor: colors.bgRaised,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center'
   },
   dictationButton: {
     backgroundColor: colors.bgRaised,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
+    justifyContent: 'center'
   },
   dictationButtonActive: {
     backgroundColor: colors.bgPanel,

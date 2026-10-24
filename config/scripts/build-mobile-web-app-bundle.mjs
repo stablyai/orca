@@ -142,6 +142,9 @@ export const MOBILE_WEB_APP_ROOT_RESET =
  * text field); no native TextInput paints one, and the caret and the IME already mark focus.
  * Those only: a button reached by a hardware keyboard keeps the browser's ring.
  *
+ * Textarea scrollbars: React Native Web renders multiline fields as HTML textareas; native mobile
+ * TextInput never paints scrollbars or resize grippers.
+ *
  * Text: native `Text` is unselectable unless `selectable`; react-native-web's is selectable. On
  * iOS a hold on it raises WebKit's selection over the page's own long press; on Android the
  * selection's `selectionchange` and `touchcancel` end a held press. `body`, not `#root`: modals
@@ -151,7 +154,9 @@ export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
   ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
-  '-webkit-touch-callout:default}</style>'
+  '-webkit-touch-callout:default}' +
+  'textarea,input,[contenteditable]{scrollbar-width:none!important;-ms-overflow-style:none!important;resize:none!important}' +
+  'textarea::-webkit-scrollbar,input::-webkit-scrollbar,[contenteditable]::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
@@ -644,7 +649,7 @@ export async function buildMobileWebAppBundle({
     // answers 403, the path being in no manifest. Empty rather than an asset: a WebView document
     // has no tab for an icon, and the bundle's images are route assets named by their own bytes.
     '<link rel="icon" href="data:," />\n' +
-    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n<style id="orca-scrollbars">${scrollbarStyle}</style>\n</head>\n<body>\n<div id="root"></div>\n` +
+    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n<style id="orca-scrollbars">${scrollbarStyle}</style>\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {
