@@ -20170,6 +20170,23 @@
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "Undo this merge and discard changes?",
+        "rejectConfirmBody": "These files were changed in the main worktree while the merge was awaiting review. Undoing the merge discards those changes too:",
+        "cancel": "Cancel",
+        "reject": "Undo Merge",
+        "accept": "Accept Merge",
+        "sync": "Merge into Main Worktree",
+        "andMorePaths": "and {{count}} more",
+        "nothingToMerge": "Nothing to merge — the main worktree already has these changes",
+        "syncConflicts": "Merged with conflicts",
+        "syncSuccess": "Merged into the main worktree — awaiting review",
+        "acceptSuccess": "Merge committed",
+        "stashRestored": "Restored the main worktree's changes",
+        "rejectSuccess": "Merge undone"
+      }
     }
   },
   "dashboardPopout": {

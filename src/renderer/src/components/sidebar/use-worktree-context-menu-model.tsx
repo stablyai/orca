@@ -25,11 +25,14 @@ import {
   EMPTY_UNIFIED_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
+  getWorktreeMergeReviewMenuMode,
   hasWorktreeParentLink,
   isContextWorktreeDeletable,
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { useWorktreeMergeReviewState } from './use-worktree-merge-review-state'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
@@ -207,6 +210,32 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, repoMap]
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
+  // Why: a review lives in the main checkout, so both the main row and a task
+  // row must resolve it — the mode below decides which rows act on it.
+  const mainWorktree = useMemo(
+    () =>
+      allWorktrees.find((item) => item.repoId === worktree.repoId && item.isMainWorktree) ?? null,
+    [allWorktrees, worktree.repoId]
+  )
+  // Why the extra gate: a folder workspace is not a Git checkout, so probing it
+  // would only spawn Git to fail — and no mode below could ever use the answer.
+  const mergeReview = useWorktreeMergeReviewState({
+    worktreePath: worktree.path,
+    worktreeId: worktree.id,
+    enabled: menuOpen && !isMultiContext && folderWorkspaceId === null
+  })
+  const mergeReviewMode = getWorktreeMergeReviewMenuMode({
+    isMultiContext,
+    isFolderWorkspace: folderWorkspaceId !== null,
+    // Why the execution host and not connectionId: runtime-hosted repos carry
+    // connectionId: null and would otherwise look local.
+    isRemote: repo ? getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID : false,
+    isMainWorktree: worktree.isMainWorktree,
+    worktreeBranch: worktree.branch,
+    mainWorktreeBranch: mainWorktree?.branch || null,
+    phase: mergeReview.phase,
+    syncSupported: mergeReview.syncSupported
+  })
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -317,6 +346,7 @@ export function useWorktreeContextMenuModel({
     createProjectGroup,
     folderWorkspaceId,
     isMultiContext,
+    mainWorktreeId: mainWorktree?.id ?? null,
     moveProjectToGroup,
     onAssignWorkspaceStatus,
     openModal,
@@ -401,6 +431,7 @@ export function useWorktreeContextMenuModel({
     lineageDescendantCount,
     menuOpen,
     menuPoint,
+    mergeReviewMode,
     onContextMenuSelect,
     parentPicker,
     parentPickerOpen,

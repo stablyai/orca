@@ -19888,6 +19888,23 @@
       "stepDownload": "下载",
       "stepUnpack": "解压",
       "stepCheck": "检查"
+    },
+    "sidebar": {
+      "mergeReview": {
+        "rejectConfirmTitle": "撤销合入并丢弃改动？",
+        "rejectConfirmBody": "验收期间，主工作树中以下文件有改动。撤销合入会一并丢弃这些改动：",
+        "cancel": "取消",
+        "reject": "撤销合入",
+        "accept": "完成验收",
+        "sync": "合入主工作树",
+        "andMorePaths": "另有 {{count}} 个",
+        "nothingToMerge": "没有需要合入的改动 — 主工作树已包含这些改动",
+        "syncConflicts": "已合入，存在冲突",
+        "syncSuccess": "已合入主工作树待验收",
+        "acceptSuccess": "已提交合入",
+        "stashRestored": "已恢复主工作树原有的改动",
+        "rejectSuccess": "已撤销合入"
+      }
     }
   },
   "dashboardPopout": {

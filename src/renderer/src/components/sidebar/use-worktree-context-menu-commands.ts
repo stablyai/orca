@@ -16,6 +16,24 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import {
+  runWorktreeMergeReviewAccept,
+  runWorktreeMergeReviewReject,
+  runWorktreeMergeReviewSync,
+  type WorktreeMergeReviewActionArgs
+} from './merge-review-flow'
+
+function mergeReviewActionArgs(args: {
+  worktree: Worktree
+  mainWorktreeId: string | null
+}): WorktreeMergeReviewActionArgs {
+  return {
+    worktreePath: args.worktree.path,
+    worktreeId: args.worktree.id,
+    repoId: args.worktree.repoId,
+    mainWorktreeId: args.mainWorktreeId
+  }
+}
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -25,6 +43,7 @@ export function useWorktreeContextMenuCommands(args: {
   folderWorkspaceId: string | null
   getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
+  mainWorktreeId: string | null
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
@@ -178,7 +197,19 @@ export function useWorktreeContextMenuCommands(args: {
       activateAndRevealWorktree(args.validParentWorktreeId, { navigationIntent: 'user-open' })
     }
   }, [args.validParentWorktreeId])
+  const handleMergeReviewSync = useCallback(() => {
+    runWorktreeMergeReviewSync(mergeReviewActionArgs(args))
+  }, [args])
+  const handleMergeReviewAccept = useCallback(() => {
+    runWorktreeMergeReviewAccept(mergeReviewActionArgs(args))
+  }, [args])
+  const handleMergeReviewReject = useCallback(() => {
+    runWorktreeMergeReviewReject(mergeReviewActionArgs(args))
+  }, [args])
   return {
+    handleMergeReviewAccept,
+    handleMergeReviewReject,
+    handleMergeReviewSync,
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,

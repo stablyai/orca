@@ -52,6 +52,9 @@ const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
 )
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const MergeReviewRejectConfirmDialog = lazy(
+  () => import('../components/sidebar/MergeReviewRejectConfirmDialog')
+)
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
 )
@@ -319,6 +322,11 @@ export function AppRootSurfaces(props: {
         {activeModal === 'delete-worktree' ? (
           <ModalBoundary boundaryId="modal.delete-worktree" resetKey>
             <DeleteWorktreeDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'merge-review-reject' ? (
+          <ModalBoundary boundaryId="modal.merge-review-reject" resetKey>
+            <MergeReviewRejectConfirmDialog />
           </ModalBoundary>
         ) : null}
         {activeModal === 'preserved-branch-review' ? (
