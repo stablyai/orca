@@ -107,6 +107,23 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(windowsEntries.some((entry) => entry.title === 'Terminal shell')).toBe(false)
   })
 
+  it('includes Scroll to Bottom on Input on all platforms', () => {
+    const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    const hasEntry = (entries: typeof entriesWindows): boolean =>
+      entries.some(
+        (entry) =>
+          entry.title === 'Scroll to Bottom on Input' &&
+          matchesSettingsSearch('typing', [entry]) &&
+          matchesSettingsSearch('scrollback', [entry])
+      )
+
+    expect(hasEntry(entriesWindows)).toBe(true)
+    expect(hasEntry(entriesMac)).toBe(true)
+    expect(hasEntry(entriesLinux)).toBe(true)
+  })
+
   it('includes the OSC 52 clipboard setting on all platforms', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })

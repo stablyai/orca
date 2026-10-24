@@ -188,6 +188,17 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
 
+  it('applies scroll-on-input from settings', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, settings)
+    expect(pane.terminal.options.scrollOnUserInput).toBe(true)
+
+    apply(pane, { ...settings, terminalScrollOnUserInput: false })
+    expect(pane.terminal.options.scrollOnUserInput).toBe(false)
+  })
+
   it('applies regular and bold font weights independently', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')

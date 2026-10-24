@@ -131,6 +131,26 @@ describe('xterm native user-scrolling contract', () => {
     subscription.dispose()
   })
 
+  it('keeps a scrolled-up viewport when scrollOnUserInput is off', async () => {
+    const term = new Terminal({
+      rows: 10,
+      cols: 40,
+      scrollback: 1000,
+      allowProposedApi: true
+    })
+    // Why: @xterm/headless's published options type omits this; shared OptionsService still honors it.
+    Object.assign(term.options, { scrollOnUserInput: false })
+    await writeLines(term, 30, 'line')
+    const buffer = term.buffer.active
+    term.scrollLines(-5)
+    const pinnedY = buffer.viewportY
+
+    term.input('a', true)
+
+    expect(buffer.viewportY).toBe(pinnedY)
+    expect(buffer.viewportY).not.toBe(buffer.baseY)
+  })
+
   it('distinguishes real user input from parser auto-replies', async () => {
     const term = new Terminal({
       rows: 10,

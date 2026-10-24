@@ -16,7 +16,8 @@ import {
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from './pane-terminal-options'
 import { buildTerminalKeyboardProtocolOptions } from './terminal-keyboard-protocol'
 
@@ -106,6 +107,13 @@ describe('buildDefaultTerminalOptions', () => {
 
     expect(options.scrollSensitivity).toBe(DEFAULT_TERMINAL_SCROLL_SENSITIVITY)
     expect(options.fastScrollSensitivity).toBe(DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY)
+  })
+
+  it('scrolls to the bottom on input by default', () => {
+    expect(buildDefaultTerminalOptions().scrollOnUserInput).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(undefined)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(true)).toBe(true)
+    expect(resolveTerminalScrollOnUserInput(false)).toBe(false)
   })
 
   it('normalizes configurable terminal scroll sensitivity values', () => {

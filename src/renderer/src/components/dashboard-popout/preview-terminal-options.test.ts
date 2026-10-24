@@ -31,8 +31,17 @@ describe('buildPreviewAppearanceOptions', () => {
     expect(options.lineHeight).toBe(1.4)
     expect(options.wordSeparator).toBe(' ()[]')
     expect(options.scrollSensitivity).toBe(3)
+    expect(options.scrollOnUserInput).toBe(true)
     // Why: a bar cursor's inactive style must not become xterm's block outline.
     expect(options.cursorInactiveStyle).toBe('bar')
+  })
+
+  it('turns off preview scroll-on-input when the setting is off', () => {
+    const options = buildPreviewAppearanceOptions(
+      { ...SETTINGS, terminalScrollOnUserInput: false },
+      false
+    )
+    expect(options.scrollOnUserInput).toBe(false)
   })
 
   it('enables macOptionIsMeta only for the resolved full Option-as-Alt', () => {

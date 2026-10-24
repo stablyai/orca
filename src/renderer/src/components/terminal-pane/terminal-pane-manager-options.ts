@@ -10,7 +10,8 @@ import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pan
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -164,6 +165,9 @@ export function createTerminalPaneManagerOptions(
         ),
         fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
           currentSettings?.terminalFastScrollSensitivity
+        ),
+        scrollOnUserInput: resolveTerminalScrollOnUserInput(
+          currentSettings?.terminalScrollOnUserInput
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),

@@ -53,6 +53,31 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
   },
   {
     title: translate(
+      'components.settings.TerminalInteraction.scrollOnUserInput',
+      'Scroll to Bottom on Input'
+    ),
+    description: translate(
+      'components.settings.TerminalInteraction.scrollOnUserInputDescription',
+      'When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.scroll', 'scroll'),
+      ...translateSearchKeyword('components.settings.terminal.search.typing', 'typing'),
+      ...translateSearchKeyword('components.settings.terminal.search.input', 'input'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.clipboard.search.5fb3512e8c',
+        'paste'
+      ),
+      ...translateSearchKeyword('components.settings.terminal.search.jump', 'jump'),
+      ...translateSearchKeyword('components.settings.terminal.search.bottom', 'bottom'),
+      ...translateSearchKeyword('components.settings.terminal.search.scrollback', 'scrollback'),
+      ...translateSearchKeyword('components.settings.terminal.search.snap', 'snap'),
+      ...translateSearchKeyword('components.settings.terminal.search.position', 'position')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.terminal.search.ask_before_closing_running_terminals_title',
       'Ask Before Closing Running Terminals'
     ),
