@@ -263,12 +263,18 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
  */
 export function stopTerminalInit(scope: TerminalDocumentScope) {
   scope.terminalGeneration++
-  for (const terminal of new Set([scope.term, scope.committedTerm])) {
+  for (const terminal of new Set([
+    scope.term,
+    scope.committedTerm,
+    scope.pendingTerm,
+    scope.provisionalTerm
+  ])) {
     try {
       terminal?.dispose()
     } catch {}
   }
   scope.term = null
   scope.committedTerm = null
+  scope.pendingTerm = null
   scope.provisionalTerm = null
 }

@@ -121,10 +121,14 @@ describe('init and state', () => {
       'navigate',
       'storage',
       'haptics',
-      'screencastBinary'
+      'screencastBinary',
+      'native.storage.read'
     ])
     const pair = (init.pageRouteGrants ?? []).find((entry) => entry.pathname === '/h/[hostId]')
     expect(pair?.grants).toEqual(['navigate', 'storage', 'haptics', 'screencastBinary'])
+    // The host route holds every child grant, so its own pair is covered rather than equal.
+    expect(pair?.grants.every((grant) => view.routeGrants.includes(grant))).toBe(true)
+    expect(view.routeGrants).toContain('native.storage.read')
     // The optional name is in both, so the case is the lane and not two equal required lists.
     expect(init.grants.native).toContain('screencastBinary')
   })

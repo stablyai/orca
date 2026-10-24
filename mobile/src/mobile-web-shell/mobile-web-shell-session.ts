@@ -25,10 +25,17 @@ import {
   ROUTE_UNAVAILABLE
 } from './mobile-web-shell-gates'
 import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
-import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
-import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
+import { pageDocumentStatePatch } from './page-document-state'
+import {
+  cachedFallback,
+  generationActivated,
+  openByOwnRoutes,
+  reachableCacheRead,
+  reconcileManifestCache,
+  rendersRoute
+} from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
-import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-document-lifecycle'
+import { reducePageDocumentLifecycle } from './page-document-lifecycle'
 
 export function createMobileWebShellSession(
   routePathname: string,
@@ -55,6 +62,7 @@ export function createMobileWebShellSession(
     cached: null,
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     flow: 0
   }
 }
@@ -76,6 +84,7 @@ function startFlow(
   const base = {
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     ...patch,
     gates,
     flow: session.flow + 1
@@ -89,7 +98,7 @@ function startFlow(
   return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
-/** Holds the generation read off disk, and opens it at once only when the host is unreachable. */
+/** Holds the generation read off disk. Unreachable opens it alone; connected opens it and asks. */
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -115,7 +124,7 @@ function onCacheRead(
       patch: { cached: generation }
     })
   }
-  return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
+  return reachableCacheRead(session, generation, gates)
 }
 
 function onManifestRead(
@@ -150,25 +159,7 @@ function onManifestRead(
     return step(session, { ...view, state })
   }
   // Same build id is the same bytes (the id is their digest), so the generation on disk opens as is.
-  const cached = session.cached
-  if (cached?.buildId === manifest.buildId) {
-    return openCached(session, cached, view)
-  }
-  return step(
-    session,
-    {
-      ...view,
-      requestedBuildId: manifest.buildId,
-      state: {
-        kind: 'fetching',
-        completedAssets: 0,
-        totalAssets: manifest.totalAssets,
-        receivedBytes: 0,
-        totalBytes: manifest.totalBytes
-      }
-    },
-    [{ kind: 'download' }]
-  )
+  return reconcileManifestCache(session, manifest, view)
 }
 
 /**
@@ -253,7 +244,7 @@ function decideDownloadFailed(
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
-  if (cached === null || gates === null) {
+  if (gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
@@ -265,7 +256,18 @@ function decideDownloadFailed(
   if (gated !== null) {
     return step(session, { state: gated })
   }
-  return openByOwnRoutes(session, cached, {
+  if (cached === null) {
+    if (session.state.kind === 'ready') {
+      return step(session, {
+        offeredRoutes: null,
+        updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null
+      })
+    }
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
+  }
+  return cachedFallback(session, cached, {
     // The newer manifest claimed this route or never arrived, so the cache lacking it is this
     // download's failure, with its retry.
     unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
@@ -332,23 +334,7 @@ export function reduceMobileWebShellSession(
     case 'activated':
       // Only a download's activation is an update that landed. Not build-id equality: the fetch
       // re-reads the manifest, so what it commits can be newer than what this flow was offered.
-      return step(
-        session,
-        {
-          ...CLEAR_PAGE_DOCUMENT_STATE,
-          state: {
-            kind: 'ready',
-            generationDirectory: event.generationDirectory,
-            sessionId: event.sessionId,
-            buildId: event.buildId,
-            totalBytes: event.totalBytes,
-            elapsedMs: event.elapsedMs
-          }
-        },
-        session.state.kind === 'activating' && session.state.source === 'download'
-          ? [{ kind: 'forget-update-failures' }, AWAIT_DOCUMENT_LOAD]
-          : [AWAIT_DOCUMENT_LOAD]
-      )
+      return generationActivated(session, event)
     case 'download-failed':
       return onDownloadFailed(session, event.cause)
     case 'shell-failed':

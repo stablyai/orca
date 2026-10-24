@@ -461,6 +461,28 @@ describe('a route that declares an optional grant', () => {
     expect(view.pageRouteGrants).toEqual([{ pathname, grants: view.routeGrants }])
     expect(view.routeGrants).toEqual(['navigate', 'storage', 'screencastBinary'])
   })
+
+  it('grants the host route every child grant, so a phone keeps the workspace hop', () => {
+    const host = { pathname: '/h/[hostId]', grants: ['navigate', 'storage'] }
+    const workspace = {
+      pathname: '/h/[hostId]/session/[worktreeId]',
+      grants: ['navigate', 'storage', 'native.clipboard.read']
+    }
+    const phone = routeViewOf([host, workspace], '/h/host-1')
+    expect(phone.ownsHostArea).toBe(false)
+    expect(phone.routeGrants).toEqual([
+      'navigate',
+      'storage',
+      'native.clipboard.read',
+      'native.storage.read'
+    ])
+    for (const pair of phone.pageRouteGrants) {
+      expect(pair.grants.every((grant) => phone.routeGrants.includes(grant))).toBe(true)
+    }
+    expect(routeViewOf([host, workspace], '/h/host-1/session/wt-1').routeGrants).toEqual(
+      workspace.grants
+    )
+  })
 })
 
 describe('why the page does not serve a route', () => {

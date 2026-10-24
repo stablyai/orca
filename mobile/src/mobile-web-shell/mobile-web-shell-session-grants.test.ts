@@ -37,10 +37,11 @@ describe('falling back to the cached generation after a failed download', () => 
       type: 'manifest-read',
       manifest: manifestWithClipboard
     })
-    expect([...fetching.session.routeGrants]).toEqual(['navigate', 'native.clipboard.read'])
+    expect([...fetching.session.routeGrants]).toEqual(['navigate', 'native.storage.read'])
     const step = run(fetching.session, { type: 'download-failed', cause: LINK_LOST })
     expect(step.session.state.kind).toBe('activating')
-    expect([...step.session.routeGrants]).toEqual(['navigate'])
+    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.storage.read'])
+    expect(step.session.routeGrants).not.toContain('native.clipboard.read')
   })
 
   it('carries a verb declared in the manifest through to the session grants', () => {
@@ -52,7 +53,33 @@ describe('falling back to the cached generation after a failed download', () => 
         routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'native.clipboard.write'] }]
       })
     })
-    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.clipboard.write'])
+    expect([...step.session.routeGrants]).toEqual([
+      'navigate',
+      'native.clipboard.write',
+      'native.storage.read'
+    ])
+  })
+
+  it('keeps the cached grants while the newer manifest downloads, and takes them when it lands', () => {
+    const step = run(afterCacheRead(cachedOnlyNavigate).session, {
+      type: 'manifest-read',
+      manifest: manifestWithClipboard
+    })
+    expect(step.effects).toEqual([{ kind: 'download' }])
+    expect([...step.session.routeGrants]).toEqual(['navigate', 'native.storage.read'])
+    const landed = run(step.session, {
+      type: 'activated',
+      generationDirectory: '/cache/gen',
+      sessionId: 'session-new',
+      buildId: manifestWithClipboard.buildId,
+      totalBytes: 1,
+      elapsedMs: 1
+    })
+    expect([...landed.session.routeGrants]).toEqual([
+      'navigate',
+      'native.clipboard.read',
+      'native.storage.read'
+    ])
   })
 })
 

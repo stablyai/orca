@@ -34,7 +34,12 @@ import { nativeStackReturn } from './native-stack-return'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
+import {
+  SHELL_HOST_OPENING_LABEL,
+  SHELL_OPENING_LABEL,
+  ShellPageCover,
+  ShellWaitingFrame
+} from './ShellWaitingFrame'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
@@ -185,7 +190,11 @@ export function MobileWebShellScreen({
   const keyboardInset = Math.max(0, useKeyboardOcclusion())
   const pageInsets = pageSafeAreaInsets({ insets, topCovered: noticeShown })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage, readWorkspaceKey } =
-    usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
+    usePageHostSnapshot(
+      hostId,
+      route.pathname,
+      ownsHostArea || routeGrants.includes('native.storage.read')
+    )
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
   const serveDeviceVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
@@ -358,6 +367,9 @@ export function MobileWebShellScreen({
   if (overlay && state.kind !== 'ready') {
     return null
   }
+  const openingLabel = isHostRouteOf(route.pathname, hostId)
+    ? SHELL_HOST_OPENING_LABEL
+    : SHELL_OPENING_LABEL
   if (state.kind === 'route-unavailable') {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
@@ -388,7 +400,7 @@ export function MobileWebShellScreen({
     )
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
+    return <Waiting label={state.kind === 'activating' ? openingLabel : 'Checking host'} />
   }
   return (
     <View
@@ -451,7 +463,7 @@ export function MobileWebShellScreen({
         }}
       />
       {overlay ? null : (
-        <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+        <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>

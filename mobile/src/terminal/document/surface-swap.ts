@@ -18,8 +18,13 @@ export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
       scope.pendingSurface.remove()
     } catch {}
     if (scope.pendingTerm) {
+      const abandonedTerm = scope.pendingTerm
+      scope.pendingTerm = null
+      if (scope.term === abandonedTerm) {
+        scope.term = scope.committedTerm
+      }
       try {
-        scope.pendingTerm.dispose()
+        abandonedTerm.dispose()
       } catch {}
     }
     scope.pendingSurface = null

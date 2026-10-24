@@ -5,6 +5,9 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 /** What the shell calls the wait from the bytes being on disk to the page having a frame. */
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
+/** The same wait on the host root, which is not a workspace. */
+export const SHELL_HOST_OPENING_LABEL = 'Loading host'
+
 /**
  * Eased in, so the cover holds near full opacity through the handover: the page reports its own
  * renderer's paint, and the compositor needs a frame or two more to put that on the app's surface.

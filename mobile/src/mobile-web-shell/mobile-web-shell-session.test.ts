@@ -121,7 +121,17 @@ describe('the offline rule', () => {
 describe('the connected flow', () => {
   it('asks the host for a manifest once the cache has been read', () => {
     expect(afterCacheRead(null).effects).toEqual([{ kind: 'read-manifest' }])
-    expect(afterCacheRead(CACHED).effects).toEqual([{ kind: 'read-manifest' }])
+    const cached = afterCacheRead(CACHED)
+    expect(cached.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(cached.effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      },
+      { kind: 'read-manifest' }
+    ])
   })
 
   it('walls a manifest written in a schema this shell does not know', () => {
@@ -150,20 +160,21 @@ describe('the connected flow', () => {
         totalBytes: CACHED.totalBytes
       }
     ])
-    expect(step.session.routeGrants).toEqual(['navigate'])
+    expect(step.session.routeGrants).toEqual(['navigate', 'native.storage.read'])
   })
 
-  it('downloads when the cached build id is a different one', () => {
+  it('keeps a same-build cache open instead of opening it again', () => {
+    const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(step.effects).toEqual([])
+  })
+
+  it('downloads beside a cached generation instead of covering it', () => {
     const stale = { ...CACHED, buildId: 'c'.repeat(64) }
     const step = run(afterCacheRead(stale).session, { type: 'manifest-read', manifest: MANIFEST })
-    expect(step.session.state).toEqual({
-      kind: 'fetching',
-      completedAssets: 0,
-      totalAssets: 4,
-      receivedBytes: 0,
-      totalBytes: 4096
-    })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(step.effects).toEqual([{ kind: 'download' }])
+    expect(step.session.requestedBuildId).toBe(MANIFEST.buildId)
   })
 
   it('downloads when there is no cache at all', () => {
@@ -259,17 +270,10 @@ describe('a read the link cut short falls back to what is on disk', () => {
     return afterCacheRead(CACHED)
   }
 
-  it('opens the cached generation when the socket drops before the reachability change does', () => {
+  it('keeps the cached open when the socket drops before the manifest does', () => {
     const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
-    expect(withoutRecord(step.effects)).toEqual([
-      {
-        kind: 'open-generation',
-        directory: CACHED.directory,
-        buildId: CACHED.buildId,
-        totalBytes: CACHED.totalBytes
-      }
-    ])
+    expect(withoutRecord(step.effects)).toEqual([])
     const ready = run(step.session, {
       type: 'activated',
       generationDirectory: CACHED.directory,
@@ -504,9 +508,11 @@ describe('a result from a superseded flow reports into nothing', () => {
     })
     expect(stale.effects).toEqual([])
     expect(stale.session.cached).toBeNull()
-    expect(run(stale.session, { type: 'cache-read', generation: CACHED }).effects).toEqual([
-      { kind: 'read-manifest' }
-    ])
+    expect(
+      run(stale.session, { type: 'cache-read', generation: CACHED }).effects.map(
+        (effect) => effect.kind
+      )
+    ).toEqual(['open-generation', 'read-manifest'])
   })
 
   it('drops the manifest of a run the socket drop replaced, so no download is asked for', () => {
