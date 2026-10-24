@@ -122,6 +122,8 @@ export default function BrowserTab({
     (s.browserPagesByWorkspace[tab.id] ?? []).some((page) => s.browserAudiblePageIds[page.id])
   )
   const audioMuted = useAppStore((s) => Boolean(s.browserAudioMutedTabIds[tab.id]))
+  // Why: a muted tab keeps its icon after sound stops, so it can be unmuted from the strip.
+  const showAudioControl = audible || audioMuted
   const setBrowserTabAudioMuted = useAppStore((s) => s.setBrowserTabAudioMuted)
   const toggleAudioMutedLabel = audioMuted
     ? translate('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
@@ -200,7 +202,7 @@ export default function BrowserTab({
       />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
-      {audible && (
+      {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
         <button
           type="button"
@@ -299,7 +301,7 @@ export default function BrowserTab({
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
-          {audible || audioMuted ? (
+          {showAudioControl ? (
             <DropdownMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
               {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
               {toggleAudioMutedLabel}

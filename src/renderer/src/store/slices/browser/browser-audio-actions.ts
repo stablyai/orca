@@ -1,5 +1,4 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
-import { findPage } from '../browser-page-records'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
 export function createBrowserAudioActions(
@@ -12,13 +11,11 @@ export function createBrowserAudioActions(
         if (audible === Boolean(s.browserAudiblePageIds[pageId])) {
           return s
         }
-        if (!audible) {
-          return { browserAudiblePageIds: omitRecordKeys(s.browserAudiblePageIds, [pageId]) }
+        return {
+          browserAudiblePageIds: audible
+            ? { ...s.browserAudiblePageIds, [pageId]: true }
+            : omitRecordKeys(s.browserAudiblePageIds, [pageId])
         }
-        if (!findPage(s.browserPagesByWorkspace, pageId)) {
-          return s
-        }
-        return { browserAudiblePageIds: { ...s.browserAudiblePageIds, [pageId]: true } }
       })
     },
 

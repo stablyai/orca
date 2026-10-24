@@ -123,7 +123,7 @@ export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
-  /** Main reports false when a page's guest goes away, so closed pages drop out. */
+  /** May precede the page record (client-hosted pages); main's false on guest teardown clears it. */
   browserAudiblePageIds: Record<string, true>
   /** Tab mute lives for the tab's life; each new guest of its pages is muted again. */
   browserAudioMutedTabIds: Record<string, true>
