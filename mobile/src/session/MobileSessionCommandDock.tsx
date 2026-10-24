@@ -19,6 +19,7 @@ import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { commandDockBottomPadding } from './command-dock-bottom-padding'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
@@ -78,7 +79,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       <View
         style={[
           styles.commandDock,
-          { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+          {
+            paddingBottom: commandDockBottomPadding(insets.bottom, keyboardLift),
+            transform: [{ translateY: -keyboardLift }]
+          }
         ]}
       >
         {/* Accessory keys */}
