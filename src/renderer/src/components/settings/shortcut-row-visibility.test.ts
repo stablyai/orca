@@ -17,7 +17,9 @@ function creationGroup(): ShortcutGroup {
 }
 
 function globalGroup(): ShortcutGroup {
-  const items = (['workspace.openBoard', 'dashboard.toggle'] as const).map((actionId) => {
+  const items = (
+    ['workspace.openBoard', 'dashboard.toggle', 'dashboard.openWorktree'] as const
+  ).map((actionId) => {
     const definition = getKeybindingDefinition(actionId)
     if (!definition) {
       throw new Error(`Missing keybinding definition: ${actionId}`)
@@ -62,7 +64,7 @@ describe('buildShortcutRowVisibility', () => {
     ])
   })
 
-  it('hides the agent dashboard toggle while its experiment is off', () => {
+  it('hides the agent dashboard rows while its experiment is off', () => {
     const hidden = buildShortcutRowVisibility({ ...baseOptions, groups: [globalGroup()] })
 
     expect(hidden.shortcutRows.map((row) => row.item.id)).toEqual(['workspace.openBoard'])
@@ -75,7 +77,8 @@ describe('buildShortcutRowVisibility', () => {
 
     expect(shown.shortcutRows.map((row) => row.item.id)).toEqual([
       'workspace.openBoard',
-      'dashboard.toggle'
+      'dashboard.toggle',
+      'dashboard.openWorktree'
     ])
   })
 })
