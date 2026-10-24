@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
+import { loadLatexTextMateGrammars } from './register-latex'
 import { loadNimTextMateGrammar } from './register-nim'
 import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
@@ -7,6 +8,41 @@ import { createTextMateTokensProvider } from './textmate-token-provider'
 vi.mock('../syntax-highlighting/oniguruma', () => ({ loadOniguruma: loadNodeOniguruma }))
 
 describe('createTextMateTokensProvider', () => {
+  it('tokenizes LaTeX commands and citations with embedded TeX math and comments', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLatexTextMateGrammars })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('\\documentclass{article}')).toContain('keyword.control.preamble.latex')
+    expect(scopesOf('\\section{Introduction}')).toContain('entity.name.section.latex')
+    expect(scopesOf('Text $E=mc^2$ and \\cite{key}.')).toEqual(
+      expect.arrayContaining([
+        'support.class.math.block.tex',
+        'constant.numeric.math.tex',
+        'constant.other.reference.citation.latex'
+      ])
+    )
+    expect(scopesOf('50\\% off % comment')).toEqual(
+      expect.arrayContaining(['constant.character.escape.tex', 'comment.line.percentage.tex'])
+    )
+    expect(scopesOf('50\\% off')).not.toContain('comment.line.percentage.tex')
+  })
+
+  it('keeps LaTeX verbatim contents raw across lines and resumes commands after the end', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLatexTextMateGrammars })
+    const opening = provider.tokenize('\\begin{verbatim}', provider.getInitialState())
+    const body = provider.tokenize('% not a comment \\section{raw}', opening.endState)
+    expect(body.tokens.map((token) => token.scopes)).toEqual(['markup.raw.verbatim.latex'])
+    const closing = provider.tokenize('\\end{verbatim}', body.endState)
+    const line = '\\section{After}'
+    expect(provider.tokenize(line, closing.endState).tokens).toEqual(
+      provider.tokenize(line, provider.getInitialState()).tokens
+    )
+    expect(
+      provider.tokenize('% a comment', closing.endState).tokens.map((token) => token.scopes)
+    ).toContain('comment.line.percentage.tex')
+  })
+
   it('tokenizes Nim with the vendored TextMate grammar', async () => {
     const provider = await createTextMateTokensProvider({ loadGrammar: loadNimTextMateGrammar })
 

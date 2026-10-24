@@ -10,6 +10,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
+import { registerLatexLanguage } from './monaco-languages/register-latex'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerQuartoLanguage } from './monaco-languages/register-quarto'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
@@ -86,6 +87,7 @@ runMonacoSetupSteps([
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
+  ['LaTeX language registration', () => registerLatexLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],

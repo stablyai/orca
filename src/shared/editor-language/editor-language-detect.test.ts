@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { detectLanguage } from './editor-language-detect'
 
 describe('detectLanguage', () => {
+  it.each([
+    'report.tex',
+    'report.ltx',
+    'custom.sty',
+    'C:\\documents\\REPORT.TEX',
+    '\\\\server\\share\\report.tex',
+    '/home/user/folder workspace/Report.TeX'
+  ])('maps LaTeX source %s to the latex language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('latex')
+  })
+
+  it.each(['report.tex.bak', 'report.texx', 'documents.tex/README', 'documents.tex\\README'])(
+    'keeps non-LaTeX file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
+  it('preserves the existing Apex association for .cls files', () => {
+    expect(detectLanguage('src/Controller.cls')).toBe('apex')
+  })
+
   it('maps .vue files to the custom vue language id', () => {
     expect(detectLanguage('src/components/App.vue')).toBe('vue')
   })
