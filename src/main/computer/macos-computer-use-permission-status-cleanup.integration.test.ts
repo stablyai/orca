@@ -1,11 +1,14 @@
 import { once } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { afterEach, describe, expect, it } from 'vitest'
-import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
+import {
+  reapOrphanedMacOSPermissionStatusHelpers,
+  stopMacOSPermissionStatusHelper
+} from './macos-computer-use-permission-status-cleanup'
 
 describe.skipIf(process.platform !== 'darwin')('real permission status helper cleanup', () => {
   const children: ChildProcessHandle[] = []
@@ -76,6 +79,47 @@ describe.skipIf(process.platform !== 'darwin')('real permission status helper cl
         children.filter((child) => child.exitCode === null && child.signalCode === null)
       ).toHaveLength(peers.length)
     }
+    for (const peer of peers) {
+      expect(peer.exitCode).toBeNull()
+      expect(peer.signalCode).toBeNull()
+    }
+  })
+
+  it('reaps suspended helpers whose probe finished without touching live probes', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-permission-orphans-'))
+    directories.push(directory)
+    const executablePath = join(
+      directory,
+      'Orca Computer Use.app',
+      'Contents',
+      'MacOS',
+      'orca-computer-use-macos'
+    )
+    const liveDirectory = join(directory, 'orca-computer-use-permissions-live')
+    await mkdir(liveDirectory)
+    const orphan = await startFixture(executablePath, [
+      '--permission-status-file',
+      join(directory, 'orca-computer-use-permissions-gone', 'status.json')
+    ])
+    const peers = await Promise.all([
+      startFixture(executablePath, [
+        '--permission-status-file',
+        join(liveDirectory, 'status.json')
+      ]),
+      startFixture(executablePath, [
+        '--permission-status-file',
+        join(directory, 'unrelated-gone', 'status.json')
+      ]),
+      startFixture(executablePath, ['--agent', join(directory, 'agent.sock')])
+    ])
+    // LaunchServices leaves late helpers suspended, which is what the reaper must still clear.
+    orphan.kill('SIGSTOP')
+    const exited = once(orphan, 'exit')
+
+    await reapOrphanedMacOSPermissionStatusHelpers()
+    await exited
+
+    expect(orphan.signalCode).toBe('SIGKILL')
     for (const peer of peers) {
       expect(peer.exitCode).toBeNull()
       expect(peer.signalCode).toBeNull()

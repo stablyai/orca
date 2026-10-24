@@ -1,5 +1,6 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { lstat, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import type * as fsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import type * as TimersPromises from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,6 +49,7 @@ vi.mock('child_process', () => ({
 }))
 
 vi.mock('fs/promises', () => ({
+  lstat: vi.fn(),
   mkdtemp: vi.fn(),
   readFile: vi.fn(),
   rm: vi.fn(),
@@ -70,6 +72,7 @@ describe('getComputerUsePermissionStatus', () => {
     vi.mocked(readFile).mockReset()
     vi.mocked(rm).mockReset()
     vi.mocked(stat).mockReset()
+    vi.mocked(lstat).mockReset()
     runProcessMock.mockReset()
     permissionStatusDelayMock.mockClear()
     runProcessMock.mockResolvedValue({
@@ -300,10 +303,13 @@ describe('getComputerUsePermissionStatus', () => {
   it('returns the status while helper cleanup is still pending', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     let finishCleanup = (): void => {}
-    runProcessMock.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishCleanup = resolve
-      })
+    const pendingCleanup = new Promise<void>((resolve) => {
+      finishCleanup = resolve
+    })
+    runProcessMock.mockImplementation(({ program }: { program: string }) =>
+      program === '/usr/bin/pkill'
+        ? pendingCleanup
+        : Promise.resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
     )
 
     await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
@@ -323,41 +329,117 @@ describe('getComputerUsePermissionStatus', () => {
     expectOnlyOwnStatusHelperStopped()
   })
 
-  it('targets each concurrent check separately', async () => {
+  it('shares one helper launch between concurrent checks', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+
+    const [first, second] = await Promise.all([
+      getComputerUsePermissionStatus(),
+      getComputerUsePermissionStatus()
+    ])
+
+    expect(second).toBe(first)
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expectOnlyOwnStatusHelperStopped()
+  })
+
+  it('targets each sequential check separately', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     const peerDirectory = `${permissionStatusTempDir}-peer`
     vi.mocked(mkdtemp)
       .mockResolvedValueOnce(permissionStatusTempDir)
       .mockResolvedValueOnce(peerDirectory)
 
-    await Promise.all([getComputerUsePermissionStatus(), getComputerUsePermissionStatus()])
+    await getComputerUsePermissionStatus()
+    await getComputerUsePermissionStatus()
 
-    expect(runProcessMock).toHaveBeenCalledTimes(2)
+    expect(pkillCalls()).toHaveLength(2)
     for (const directory of [permissionStatusTempDir, peerDirectory]) {
-      expect(runProcessMock).toHaveBeenCalledWith({
-        program: '/usr/bin/pkill',
-        args: [
-          '-f',
-          `(^|[[:space:]/])orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapeRegex(join(directory, 'status.json'))}$`
-        ],
-        timeoutMs: 2000,
-        stdio: 'ignore'
+      expect(runProcessMock).toHaveBeenCalledWith(pkillSpec(join(directory, 'status.json')))
+    }
+  })
+
+  it('reaps orphaned helpers from finished checks before launching a new one', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    const helper = '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
+    const orphanDirectory = '/var/folders/xy/T/orca-computer-use-permissions-orphan'
+    const liveDirectory = '/var/folders/xy/T/orca-computer-use-permissions-live'
+    runProcessMock.mockImplementation(async ({ program }: { program: string }) => ({
+      code: program === '/bin/ps' ? 0 : 1,
+      signal: null,
+      stdout:
+        program === '/bin/ps'
+          ? [
+              `  101 ${helper} --permission-status-file ${orphanDirectory}/status.json`,
+              `  102 ${helper} --permission-status-file ${liveDirectory}/status.json`,
+              `  103 ${helper} --agent /tmp/orca-computer-use.sock --token-file /tmp/token`,
+              `  104 ${helper} --permission-status-file /tmp/unrelated/status.json`,
+              '  105 /usr/bin/some-other-process'
+            ].join('\n')
+          : '',
+      stderr: '',
+      timedOut: false
+    }))
+    const actualFs = await vi.importActual<typeof fsPromises>('node:fs/promises')
+    vi.mocked(lstat).mockImplementation(async (path) => {
+      if (path === orphanDirectory) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return actualFs.lstat('/')
+    })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    try {
+      await getComputerUsePermissionStatus()
+
+      expect(kill).toHaveBeenCalledTimes(1)
+      expect(kill).toHaveBeenCalledWith(101, 'SIGKILL')
+      const psOrder = runProcessMock.mock.invocationCallOrder[0]
+      expect(runProcessMock.mock.calls[0][0]).toMatchObject({ program: '/bin/ps' })
+      expect(psOrder).toBeLessThan(vi.mocked(spawn).mock.invocationCallOrder[0])
+    } finally {
+      kill.mockRestore()
+    }
+  })
+
+  it('still checks permissions when listing helpers fails', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    runProcessMock.mockImplementation(async ({ program }: { program: string }) => {
+      if (program === '/bin/ps') {
+        throw new Error('spawn ENOENT')
+      }
+      return { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
+    })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    try {
+      await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
+        helperUnavailableReason: null
       })
+      expect(kill).not.toHaveBeenCalled()
+    } finally {
+      kill.mockRestore()
     }
   })
 })
 
 function expectOnlyOwnStatusHelperStopped(): void {
-  expect(runProcessMock).toHaveBeenCalledTimes(1)
-  expect(runProcessMock).toHaveBeenCalledWith({
+  expect(pkillCalls()).toEqual([[pkillSpec(permissionStatusPath)]])
+}
+
+function pkillCalls(): unknown[][] {
+  return runProcessMock.mock.calls.filter(([spec]) => spec?.program === '/usr/bin/pkill')
+}
+
+function pkillSpec(statusPath: string): unknown {
+  return {
     program: '/usr/bin/pkill',
     args: [
       '-f',
-      `(^|[[:space:]/])orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapeRegex(permissionStatusPath)}$`
+      `(^|[[:space:]/])orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapeRegex(statusPath)}$`
     ],
     timeoutMs: 2000,
     stdio: 'ignore'
-  })
+  }
 }
 
 function mockPermissionStatus(json: string): void {
