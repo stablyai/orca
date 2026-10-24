@@ -31,6 +31,13 @@ function selectedChoiceLabel(descriptor: SessionOptionDescriptor): string | null
   ) {
     return null
   }
+  if (
+    descriptor.id === 'permissionMode' &&
+    descriptor.kind.currentValue === 'own' &&
+    descriptor.description
+  ) {
+    return descriptor.description
+  }
   const current = descriptor.kind.currentValue
   const choice: SessionOptionSelectChoice = descriptor.kind.choices.find(
     (candidate) => candidate.value === current

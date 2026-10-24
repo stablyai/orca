@@ -28,6 +28,7 @@ let submissions: AgentJournalSubmission[] = []
 let queuedMessages: AgentSessionQueuedMessage[] | null = null
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))

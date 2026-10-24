@@ -39,6 +39,40 @@ function live(agent: string, current: AgentSessionOptionsResult['current'], auto
 }
 
 describe('the permission mode picker', () => {
+  it('delegates only on capable hosts and shows the report after startup', () => {
+    // A PR1 host reports modes but not permission-own; a PR2 client cannot offer own there.
+    const pr1 = live('codex', { permissionMode: 'ask' })
+    expect(permission(pr1)?.kind).toMatchObject({
+      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'own' })])
+    })
+    expect(permission({ ...pr1, permissionOwnSupported: null })?.settable).toBe(false)
+    expect(permission({ ...pr1, permissionOwnSupported: false })?.settable).toBe(true)
+    const capable = { ...pr1, permissionOwnSupported: true }
+    expect(permission(capable)?.settable).toBe(true)
+    expect(permission(capable)?.kind).toMatchObject({
+      choices: expect.arrayContaining([
+        expect.objectContaining({ value: 'own', label: "Codex's own settings" })
+      ])
+    })
+    const starting = { ...capable, permissionMode: 'own' }
+    expect(permission(starting)).toMatchObject({ settable: false, description: 'Codex settings' })
+    const reported = { ...starting, reportedPermissionMode: 'full-access' }
+    expect(permission(reported)).toMatchObject({
+      settable: true,
+      description: 'Full access',
+      kind: {
+        currentValue: 'own',
+        choices: expect.arrayContaining([
+          expect.objectContaining({ value: 'own', description: 'Now: Full access' })
+        ])
+      }
+    })
+    expect(permission({ ...reported, reportedPermissionMode: null })).toMatchObject({
+      settable: true,
+      description: 'Codex settings'
+    })
+  })
+
   it('shows the seeded mode before the agent starts, beside the quiet model pill', () => {
     const state = createStructuredAgentSessionOptionState(
       'codex',

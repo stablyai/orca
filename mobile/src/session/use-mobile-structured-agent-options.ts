@@ -45,7 +45,7 @@ export function useMobileStructuredAgentOptions(args: {
   /** What the host advertised; null until its status probe answers. */
   hostSupport: Pick<
     StructuredAgentSessionHostSupport,
-    'permissionModes' | 'coherentModelCatalog'
+    'permissionModes' | 'permissionOwn' | 'coherentModelCatalog' | 'statusFeed'
   > | null
 }) {
   const { agent, client, enabled, fence, mutate, optionStamp, sessionId, hostSupport } = args
@@ -60,6 +60,7 @@ export function useMobileStructuredAgentOptions(args: {
     [sessionId]
   )
   const {
+    projectPermission,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
@@ -76,6 +77,7 @@ export function useMobileStructuredAgentOptions(args: {
   } = useMobileStructuredOptionState({
     agent,
     enabled,
+    statusFeed: hostSupport?.statusFeed === true,
     fence,
     optionCatalog,
     sessionId,
@@ -115,16 +117,29 @@ export function useMobileStructuredAgentOptions(args: {
   useLayoutEffect(() => {
     lockSnapshotRef.current = lockSnapshot
   })
-  const shown = lockSnapshot(structuredAgentSessionShownSnapshot(optionState))
+  const shown = lockSnapshot(
+    structuredAgentSessionShownSnapshot(
+      projectPermission({
+        ...optionState,
+        permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
+      })
+    )
+  )
   const optionSnapshot = legacyHostPermissions
     ? [...shown, legacyHostPermissionDescriptor()]
     : shown
 
   const setStructuredOption = useCallback(
     async (id: string, value: SessionOptionValue): Promise<boolean> => {
-      const currentState = optionStateRef.current
+      const currentState = projectPermission({
+        ...optionStateRef.current,
+        permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
+      })
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
       if (
+        (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+          value === 'own' &&
+          !hostSupport?.permissionOwn) ||
         !isCurrentContext() ||
         pendingOptionRef.current !== null ||
         !client ||
@@ -221,6 +236,8 @@ export function useMobileStructuredAgentOptions(args: {
     [
       agent,
       awaitingOptions,
+      hostSupport?.permissionOwn,
+      projectPermission,
       client,
       createdHere,
       mutate,
@@ -243,6 +260,7 @@ export function useMobileStructuredAgentOptions(args: {
       demandModelCatalog,
       setStructuredOption,
       optionStateRef,
+      projectPermission,
       lockSnapshot: (snapshot) => lockSnapshotRef.current(snapshot)
     })
 

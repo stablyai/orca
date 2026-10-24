@@ -155,6 +155,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
             agent: 'codex',
             status: null,
             latestPrompt: '',
+            runtimePermission: null,
             updatedAt: expect.any(Number)
           }
         ]

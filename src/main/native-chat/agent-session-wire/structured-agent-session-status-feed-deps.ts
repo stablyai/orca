@@ -68,3 +68,28 @@ export function structuredAgentSessionNamingSnapshot(
     namingActiveSessionIds: deps.namingActiveSessionIds?.() ?? []
   }
 }
+
+/** Activity observers remain separate from descriptive provider reports. */
+export function notifyStructuredStatusObservers(
+  deps: StructuredAgentSessionStatusFeedDeps,
+  summary: AgentSessionStatusSummary,
+  previous: AgentSessionStatusSummary | undefined,
+  options: StructuredAgentSessionStatusObserverOptions & { reportOnly: boolean }
+): void {
+  if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
+    deps.onAgentStarted?.(summary.sessionId)
+  }
+  const { reportOnly, ...observation } = options
+  if (reportOnly) {
+    return
+  }
+  try {
+    deps.onStatusChanged?.(summary, observation)
+  } catch (error) {
+    deps.logger.warn('status observer failed', {
+      scope: 'status-observer',
+      sessionId: summary.sessionId,
+      error
+    })
+  }
+}

@@ -41,6 +41,7 @@ const items: AgentJournalRenderItem[] = [
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: vi.fn(async () => null),
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false)
 }))

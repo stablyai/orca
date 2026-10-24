@@ -9,10 +9,7 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
-import {
-  loadedChatPermissionSetting,
-  normalizeAgentNativeChatPermissionModes
-} from '../../../shared/agent-chat-permission-mode'
+import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
   savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
@@ -140,19 +137,12 @@ export function normalizeLoadedGlobalSettings(
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
       parsed.settings?.nativeChatShellEnvironmentVariables
     ),
-    // Why: the next settings save stores the seed; until then a reload derives the same one. Read
-    // from the Arguments as saved, before their permission flags moved into the stored choice.
-    agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
-      parsed.settings?.agentNativeChatPermissionModes
-    ),
-    nativeChatPermissionMode: loadedChatPermissionSetting(
-      parsed.settings?.nativeChatPermissionMode,
-      {
-        ...migratedAgentYoloDefaults,
-        terminalWindowsShell: parsed.settings?.terminalWindowsShell
-      },
-      process.platform
-    ),
+    // Old clients identify hosts with per-chat permissions through this valid value.
+    nativeChatPermissionMode: publishedLegacyChatPermissionMode({
+      ...parsed.settings,
+      ...migratedAgentYoloDefaults,
+      ...migratedAgentPermission
+    }),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
     visibleTaskProvidersDefaultedForJira: true,

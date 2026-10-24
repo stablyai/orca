@@ -7,6 +7,7 @@ import type {
   AgentSessionTurnActivity
 } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 function journalItem(
@@ -52,8 +53,9 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
-  type RpcReply = { ok: boolean; result: unknown; _meta: { runtimeId: string } }
+  type RpcReply = RpcResponse
   const sendRequest = vi.fn(async (method: string): Promise<RpcReply> => ({
+    id: 'indicator-rpc',
     ok: true,
     result:
       method === 'agentSession.options'
@@ -68,7 +70,17 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
     listener = onData
     return vi.fn()
   })
-  const client = { sendRequest, subscribe } as unknown as RpcClient
+  const client: RpcClient = {
+    sendRequest,
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    updateTerminalSubscriptionViewport: () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
   // Stable across renders: a fresh callback would re-run the hold/subscribe effect
   // and release the session out from under the test.
   const onSendError = vi.fn()
@@ -188,7 +200,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
 
     await act(async () => {
       const cancelled = { ok: true, value: { cancelled: true } }
-      answer({ ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
+      answer({ id: 'indicator-rpc', ok: true, result: cancelled, _meta: { runtimeId: 'r1' } })
     })
     await vi.waitFor(() => expect(hook?.turnIndicator.stopping).toBe(false))
   })

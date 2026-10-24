@@ -772,6 +772,7 @@
       }
     },
     "chat": {
+      "permissionsAgentsLink": "Configurações → Agentes",
       "permissionsTitle": "Permissões para novos chats",
       "permissionsDescription": "Somente novos chats. Os padrões de cada agente estão em Configurações → Agentes.",
       "description": "Escolha a aparência e o comportamento dos chats.",

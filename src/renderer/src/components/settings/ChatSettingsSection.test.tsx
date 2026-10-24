@@ -1,3 +1,4 @@
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-permission-modes-capability'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -91,6 +92,18 @@ function renderChat(
 }
 
 describe('Chat settings page', () => {
+  it('shows each agent’s start permission and links to Agents on an own-settings host', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY])
+    renderChat(true, true, false, {
+      agentPermissionDefault: 'own',
+      agentPermissionOverrides: { codex: 'auto' }
+    })
+    expect(screen.getByRole('button', { name: 'Settings → Agents' })).toBeDefined()
+    expect(screen.getByText('Approve for me')).toBeDefined()
+    expect(screen.getAllByText('Own settings').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Permissions Full access' })).toBeNull()
+  })
+
   it('preserves clicked provider choices while queued saves and inventory changes settle', async () => {
     let latest = getDefaultSettings('/tmp')
     state.settings = latest

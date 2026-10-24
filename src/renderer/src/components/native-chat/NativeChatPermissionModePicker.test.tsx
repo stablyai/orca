@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -110,7 +110,7 @@ function props(
   }
 }
 
-function option(mode: AgentChatPermissionMode): HTMLElement {
+function option(mode: AgentChatPermissionChoice): HTMLElement {
   return screen.getByRole('radio', {
     name: (_name, element) => element.getAttribute('data-value') === mode
   })
@@ -214,6 +214,27 @@ describe('NativeChatComposerPermissionPicker', () => {
   })
 
   // A host that states no mode, or an agent with none, gets no pill.
+  it('shows the reported mode while the menu keeps own settings selected', () => {
+    const own = descriptor({
+      description: 'Full access',
+      kind: {
+        type: 'select',
+        currentValue: 'own',
+        choices: [
+          { value: 'own', label: "Codex's own settings", description: 'Now: Full access' },
+          { value: 'full-access', label: 'Full access' }
+        ]
+      }
+    })
+    render(
+      <NativeChatComposerPermissionPicker surface={surface()} snapshot={[own]} agent="codex" />
+    )
+    const trigger = screen.getByRole('button', { name: 'Permissions Full access' })
+    expect(trigger.querySelector('.text-status-warning')?.textContent).toBe('Full access')
+    expect(option('own').getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Now: Full access')).toBeDefined()
+  })
+
   it('renders nothing without a permission descriptor', () => {
     const { container } = render(
       <NativeChatComposerPermissionPicker surface={surface()} snapshot={[]} agent="codex" />

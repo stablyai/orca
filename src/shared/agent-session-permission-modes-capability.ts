@@ -5,3 +5,7 @@
 // advertising this; they are recognised by the `nativeChatPermissionMode` their settings carry.
 export const AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY =
   'agent-session.permission-modes.v1' as const
+
+// Host accepts own chat intent and reports the permission the agent selected.
+export const AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY =
+  'agent-session.permission-own.v1' as const

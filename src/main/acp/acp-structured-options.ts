@@ -200,6 +200,19 @@ export class AcpStructuredOptions {
     }
   }
 
+  observedCurrent(values?: Readonly<Partial<Record<string, string>>>) {
+    return { ...this.read().current, reportedPermissionMode: this.reportedPermissionMode(values) }
+  }
+
+  reportedPermissionMode(
+    values: Readonly<Partial<Record<string, string>>> | undefined
+  ): string | null {
+    const current = this.select('mode')?.currentValue
+    return current && values
+      ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
+      : null
+  }
+
   // Match the mode category rather than assuming an agent's config ID.
   modeConfigId(): string {
     return this.select('mode')?.id ?? 'mode'
@@ -222,11 +235,20 @@ export async function acpSessionAcceptsImages(session: {
 }
 
 export async function readAcpLiveOptions(
-  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions }
+  session: Parameters<typeof acpSessionAcceptsImages>[0] & { options: AcpStructuredOptions },
+  permissionModes?: Readonly<Partial<Record<string, string>>>
 ) {
   const acceptsImages = await acpSessionAcceptsImages(session)
   // Only startup establishes config resolution; later reads may reflect changed picks.
-  return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
+  const options = withLiveCatalogListing(session.options.read())
+  return {
+    ...options,
+    current: {
+      ...options.current,
+      reportedPermissionMode: session.options.reportedPermissionMode(permissionModes)
+    },
+    acceptsImages
+  }
 }
 
 /** Only the current, still-awaited write may establish reusable option proof. */

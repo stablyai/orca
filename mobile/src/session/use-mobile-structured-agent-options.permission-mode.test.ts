@@ -69,7 +69,7 @@ async function mountOptions(props: ProbeProps) {
       hostSupport:
         probe.hostAdvertisesPermissionModes === null
           ? null
-          : { permissionModes: probe.hostAdvertisesPermissionModes ?? true }
+          : { permissionModes: probe.hostAdvertisesPermissionModes ?? true, statusFeed: false }
     })
     return null
   }

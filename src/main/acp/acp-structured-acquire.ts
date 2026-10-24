@@ -160,7 +160,7 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.read().current
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values)
         })
       }
     })

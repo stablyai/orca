@@ -1,3 +1,5 @@
+import { isTuiAgent } from './tui-agent-config'
+import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 // The chat's permission mode as a picker descriptor: shows the mode the host states, never derives it.
 
 import {
@@ -71,9 +73,12 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
   pendingId?: string | null
+  permissionOwnSupported?: boolean | null
+  reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
-  const current = support?.modes.find((mode) => mode === state.permissionMode)
+  const own = state.permissionMode === 'own'
+  const current = own ? 'own' : support?.modes.find((mode) => mode === state.permissionMode)
   if (!support || !current) {
     return null
   }
@@ -82,22 +87,41 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     current === 'auto' ||
       (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
   )
+  const agent = isTuiAgent(state.record.agent)
+    ? TUI_AGENT_DISPLAY_NAMES[state.record.agent]
+    : state.record.agent
+  const reported = support.modes.find((mode) => mode === state.reportedPermissionMode)
+  const now = reported ? MODE_COPY[reported].label : `${agent} settings`
   return {
+    description: own ? now : undefined,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
     label: 'Permissions',
     category: 'mode',
     kind: {
       type: 'select',
       currentValue: current,
-      choices: offered.map((value) => ({
-        value,
-        label: MODE_COPY[value].label,
-        description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
-      }))
+      choices: [
+        ...(state.permissionOwnSupported || own
+          ? [
+              {
+                value: 'own',
+                label: `${agent}'s own settings`,
+                description:
+                  own && state.reportedPermissionMode !== undefined ? `Now: ${now}` : undefined
+              }
+            ]
+          : []),
+        ...offered.map((value) => ({
+          value,
+          label: MODE_COPY[value].label,
+          description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
+        }))
+      ]
     },
     valueSource: 'applied',
     transport: 'agent-session',
-    settable: true
+    settable:
+      state.permissionOwnSupported !== null && (!own || state.reportedPermissionMode !== undefined)
   }
 }
 
@@ -126,4 +150,27 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
     transport: 'agent-session',
     settable: false
   }
+}
+
+/** Absent producers retain options fallback; present evidence owns the description, even cleared. */
+export function projectRuntimePermission<T extends { reportedPermissionMode?: string | null }>(
+  state: T,
+  summary: unknown,
+  fence: number | null
+): T {
+  if (typeof summary !== 'object' || summary === null || !('runtimePermission' in summary)) {
+    return state
+  }
+  const report = summary.runtimePermission
+  const valid =
+    typeof report === 'object' &&
+    report !== null &&
+    'fence' in report &&
+    Number.isSafeInteger(report.fence) &&
+    typeof report.fence === 'number' &&
+    report.fence >= 0 &&
+    report.fence === fence &&
+    'mode' in report &&
+    (report.mode === null || typeof report.mode === 'string')
+  return { ...state, reportedPermissionMode: valid ? report.mode : undefined }
 }

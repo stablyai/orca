@@ -1,3 +1,5 @@
+import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
+import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type {
@@ -22,6 +24,7 @@ import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../sha
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import {
   useStructuredAgentSessionHostCapability,
+  useStructuredAgentSessionOwnPermissionState,
   structuredAgentSessionHostKey
 } from '@/runtime/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -82,6 +85,7 @@ export function useStructuredAgentSessionOptionState(args: {
     turnId,
     worktree
   } = args
+  const { summary, observation } = useStructuredAgentSessionStatusSummary(sessionId, target)
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -123,7 +127,7 @@ export function useStructuredAgentSessionOptionState(args: {
     []
   )
   const hostKey = structuredAgentSessionHostKey(target)
-  const contextKey = JSON.stringify([identity, hostKey, newLaunch, worktree, fence])
+  const contextKey = JSON.stringify([identity, hostKey, newLaunch, worktree, fence, observation])
   const contextRef = useRef(contextKey)
   useEffect(() => {
     contextRef.current = contextKey
@@ -149,7 +153,8 @@ export function useStructuredAgentSessionOptionState(args: {
             ...previous,
             catalogSource: 'host' as const,
             record: cloneStructuredAgentSessionOptionRecord(previous.record),
-            pendingId: null
+            pendingId: null,
+            reportedPermissionMode: undefined
           }
         : seeded
     // The chat's own, which a restart for a new mode keeps: the picker never blanks between them.
@@ -279,6 +284,9 @@ export function useStructuredAgentSessionOptionState(args: {
       }
     }
   }
+  const permissionOwnSupport = useStructuredAgentSessionOwnPermissionState(target)
+  const permissionOwnSupported =
+    permissionOwnSupport === 'unknown' ? null : permissionOwnSupport === 'supported'
   const takesSendOptions = useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
@@ -286,8 +294,13 @@ export function useStructuredAgentSessionOptionState(args: {
 
   return {
     // What the picker shows and a send carries.
-    optionView: (...args: Parameters<typeof structuredAgentSessionOptionView>) => {
-      const view = structuredAgentSessionOptionView(...args)
+    optionView: (
+      ...args: Parameters<typeof structuredAgentSessionOptionView>
+    ): StructuredAgentSessionOptionState => {
+      const view = {
+        ...projectRuntimePermission(structuredAgentSessionOptionView(...args), summary, fence),
+        permissionOwnSupported
+      }
       return pendingOptionsRef.current.model === undefined ? view : { ...view, pendingId: 'model' }
     },
     takesSendOptions,

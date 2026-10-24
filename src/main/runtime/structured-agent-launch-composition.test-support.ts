@@ -2,7 +2,7 @@
 // it, so resolver tests exercise the shared launch path rather than a copy of it.
 
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
@@ -82,7 +82,7 @@ function withTestSpawnToken<L>(
   return (input: {
     identity: AgentSessionJournalIdentity
     spawnToken?: string | null
-    permissionMode?: AgentChatPermissionMode
+    permissionMode?: AgentChatPermissionChoice
   }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null

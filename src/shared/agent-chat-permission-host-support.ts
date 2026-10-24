@@ -62,7 +62,7 @@ export type ChatPermissionHostVerdict =
 
 /**
  * Whether a chat may start or take a turn on its host. A host that predates per-chat modes is
- * allowed only where it is known to grant no more access than `requested`: an unreadable host
+ * allowed for Own delegation or where it grants no more access than `requested`: an unreadable host
  * (`legacyMode` undefined) is refused, never assumed strict.
  */
 export function chatPermissionHostVerdict(args: {
@@ -75,7 +75,10 @@ export function chatPermissionHostVerdict(args: {
     return { kind: 'allowed' }
   }
   const requested = isAgentChatPermissionMode(args.requested) ? args.requested : 'ask'
-  if (args.legacyMode !== undefined && accessRank(args.legacyMode) <= accessRank(requested)) {
+  if (
+    args.legacyMode !== undefined &&
+    (args.requested === 'own' || accessRank(args.legacyMode) <= accessRank(requested))
+  ) {
     return { kind: 'allowed' }
   }
   return { kind: 'refused', hostMode: args.legacyMode ?? null }

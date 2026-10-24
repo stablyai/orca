@@ -85,7 +85,9 @@ async function startHost(): Promise<void> {
     adapter: {
       open: ({ acquisitionGeneration }) =>
         new Promise((resolve) => {
-          openGates.set(acquisitionGeneration!, (model) => resolve({ reportedOptions: { model } }))
+          openGates.set(acquisitionGeneration!, (model) =>
+            resolve({ reportedOptions: { model, reportedPermissionMode: 'ask' } })
+          )
         }),
       acquire,
       dispatch,
@@ -259,6 +261,59 @@ describe('a send while the agent starts', () => {
     expect(providerStarted.mock.calls[0]?.[0]).toMatchObject({ sessionId: SESSION })
   })
 })
+
+it.each([false, true])(
+  'keeps current-generation reports across readiness (replaced=%s)',
+  async (replaced) => {
+    await store.replaceSessionOptions({
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      permissionMode: 'own',
+      now: NOW
+    })
+    await restartWith(publishFirst)
+    const id = await heldBehindStart('hello')
+    const fence = store.getRecord(SESSION)!.lease.runtimeFence
+    const acquisitionGeneration = `generation-${acquire.mock.calls.length}`
+    const report = (
+      reportedOptions: { reportedPermissionMode?: string | null },
+      generation = acquisitionGeneration,
+      reportFence = fence
+    ) =>
+      host.handleAdapterEvent({
+        type: 'options-reported',
+        sessionId: SESSION,
+        fence: reportFence,
+        acquisitionGeneration: generation,
+        reportedOptions
+      })
+    const early = report({ reportedPermissionMode: 'accept-edits' })
+    expect(host.readStatusSummary(SESSION)?.runtimePermission).toBeNull()
+    if (replaced) {
+      await host.close(SESSION, 'evict')
+      await early
+      await proveOpen()
+      await host.flushStreamedEvents(SESSION)
+      expect(host.readStatusSummary(SESSION)?.runtimePermission).toBeNull()
+      return
+    }
+    await proveOpen()
+    await early
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
+    const current = () => host.readStatusSummary(SESSION)?.runtimePermission
+    expect(current()).toEqual({ fence, mode: 'accept-edits' })
+    await report({ reportedPermissionMode: 'full-access' }, 'foreign')
+    await report({ reportedPermissionMode: 'full-access' }, acquisitionGeneration, fence + 1)
+    await report({})
+    expect(current()).toEqual({ fence, mode: 'accept-edits' })
+    await report({ reportedPermissionMode: null })
+    expect(current()).toEqual({ fence, mode: null })
+    expect(store.getRecord(SESSION)?.permissionMode).toBe('own')
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    await host.close(SESSION, 'evict')
+    expect(current()).toBeNull()
+  }
+)
 
 describe('a start that ends before it proves itself', () => {
   it('settles what it held as never sent when the agent exits during startup', async () => {

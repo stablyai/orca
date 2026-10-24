@@ -1,3 +1,4 @@
+import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
@@ -91,13 +92,7 @@ export class RuntimeClientSettingsController {
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
-      // Why projected: a web client's Settings → Chat edits this host's new-chat default.
-      ...(settings.nativeChatPermissionMode
-        ? { nativeChatPermissionMode: settings.nativeChatPermissionMode }
-        : {}),
-      ...(settings.agentNativeChatPermissionModes
-        ? { agentNativeChatPermissionModes: settings.agentNativeChatPermissionModes }
-        : {}),
+      nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -129,9 +124,6 @@ export class RuntimeClientSettingsController {
               },
               process.platform
             )
-          : {}),
-        ...(updates.nativeChatPermissionMode !== undefined
-          ? { agentNativeChatPermissionModes: {} }
           : {}),
         ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
       },

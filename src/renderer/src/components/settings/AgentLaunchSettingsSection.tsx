@@ -1,3 +1,4 @@
+import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -72,6 +73,7 @@ function LocalAgentLaunchSettings({
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   renderPermissions: AgentPermissionsRenderer
 }): React.JSX.Element {
+  const chatOwnSupported = useChatSettingsOwnPermissions()
   const tail = useRef<Promise<void> | null>(null)
   const apply = (
     agent: TuiAgent | undefined,
@@ -122,6 +124,7 @@ function LocalAgentLaunchSettings({
       hostName={null}
       renderPermissions={renderPermissions}
       nativeChatPermissionsSupported
+      chatOwnSupported={chatOwnSupported}
       local={{ settings, updateSettings, saveEnvironment }}
     />
   )

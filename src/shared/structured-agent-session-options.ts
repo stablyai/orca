@@ -65,6 +65,8 @@ export type StructuredAgentSessionOptionState = {
   defaultsUnsent?: true
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
+  reportedPermissionMode?: string | null
+  permissionOwnSupported?: boolean | null
   pendingId: string | null
   listingInProgress?: boolean
   fastModeRestricted?: boolean
@@ -208,7 +210,8 @@ export function applyStructuredAgentSessionOptions(
       : result.listedModelIds?.length
         ? result.listedModelIds
         : undefined,
-    permissionMode: result.current.permissionMode ?? null
+    permissionMode: result.current.permissionMode ?? null,
+    reportedPermissionMode: result.current.reportedPermissionMode
   }
 }
 
@@ -228,7 +231,7 @@ export function commitStructuredAgentSessionOption(
   value: string
 ): StructuredAgentSessionOptionState {
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
-    return { ...state, permissionMode: value, pendingId: null }
+    return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
   }
   if (!state.catalog) {
     return state

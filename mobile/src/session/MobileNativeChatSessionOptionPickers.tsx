@@ -153,14 +153,21 @@ export function MobileNativeChatSessionOptionPickers({
   // The permission mode applies from the next send, so a running turn never locks it.
   const locked = isWorking || busy
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
-  const permissionChoice = selectedChoice(permission)
+  const permissionChoice =
+    permission?.kind.type === 'select' && permission.kind.currentValue === 'own'
+      ? (permission.kind.choices.find((choice) => choice.label === permission.description) ??
+        selectedChoice(permission))
+      : selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
-  const fullAccess = permissionColor !== undefined
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined
   const segmentOptions = options.filter(showsSessionOptionAsSegments)
   const rowOptions = options.filter((descriptor) => !segmentOptions.includes(descriptor))
-  const primary = model ? mobileModelPillLabel(model) : (permissionChoice?.label ?? 'Permissions')
+  const primary = model
+    ? mobileModelPillLabel(model)
+    : permission
+      ? mobileSessionOptionSummaryValue(permission)
+      : 'Permissions'
   const secondary = model && options.length > 0 ? mobileOptionsPillLabel(options) : null
 
   const closePicker = (): void => onNavigate(null)
@@ -197,11 +204,11 @@ export function MobileNativeChatSessionOptionPickers({
       <ModelPill
         primary={primary}
         secondary={secondary}
-        warning={fullAccess}
+        warning={permissionColor !== undefined}
         icon={permissionIcon}
         accessibleName={
           model
-            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${fullAccess ? ', full access' : ''}`
+            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${permissionColor ? ', full access' : ''}`
             : `Permissions, ${primary}`
         }
         disabled={busy}

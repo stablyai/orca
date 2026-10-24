@@ -11,6 +11,7 @@ import type { AgentChildWorkView } from '../../../shared/agent-status-child-work
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   structuredAgentSessionNamingSnapshot,
+  notifyStructuredStatusObservers,
   type StatusFeedSession,
   type StatusPublication,
   type StructuredAgentSessionStatusSubscriber,
@@ -25,7 +26,10 @@ import {
   StructuredAgentSessionJournalProjections,
   type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
-import { structuredStatusSummariesEqual } from './structured-agent-session-status-summary-equality'
+import {
+  permissionReportOnly,
+  structuredStatusSummariesEqual
+} from './structured-agent-session-status-summary-equality'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
 import {
   StructuredAgentSessionStatusOwnership,
@@ -127,6 +131,7 @@ export class StructuredAgentSessionStatusFeed {
       restartResume: _restartResume,
       ...retained
     } = previous
+    retained.runtimePermission = null
     this.published.set(sessionId, {
       summary: retained,
       firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
@@ -191,6 +196,7 @@ export class StructuredAgentSessionStatusFeed {
     const previous = publication?.summary
     const summaryChanged = !previous || !structuredStatusSummariesEqual(previous, summary)
     const inputChanged = publication?.firstInputSubmissionKey !== projection.firstInputSubmissionKey
+    const reportOnly = !inputChanged && permissionReportOnly(previous, summary)
     if (!summaryChanged && !inputChanged) {
       if (!this.ownership.matchesLocation(sessionId, session.params.location)) {
         this.sink(summary, session.params.location)
@@ -202,20 +208,16 @@ export class StructuredAgentSessionStatusFeed {
       firstInputSubmissionKey: projection.firstInputSubmissionKey
     })
     if (summaryChanged) {
-      this.sink(summary, session.params.location)
+      if (!reportOnly || !this.ownership.matchesLocation(sessionId, session.params.location)) {
+        this.sink(summary, session.params.location)
+      }
       this.broadcast({ type: 'status', session: summary })
     }
-    if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
-      this.deps.onAgentStarted?.(sessionId)
-    }
-    try {
-      this.deps.onStatusChanged?.(summary, {
-        replay: options?.replay === true,
-        firstInputSubmissionKey: projection.firstInputSubmissionKey
-      })
-    } catch (error) {
-      this.logFailure('status-observer', 'status observer failed', sessionId, error)
-    }
+    notifyStructuredStatusObservers(this.deps, summary, previous, {
+      reportOnly,
+      replay: options?.replay === true,
+      firstInputSubmissionKey: projection.firstInputSubmissionKey
+    })
   }
 
   /** Retain settled children until the next accepted send to reject late revival and allow final outcomes.
@@ -225,10 +227,9 @@ export class StructuredAgentSessionStatusFeed {
     session: StatusFeedSession,
     acceptedSendKey: string
   ): void {
-    const seen = this.acceptedSends.has(sessionId)
     const previous = this.acceptedSends.get(sessionId)
     this.acceptedSends.set(sessionId, acceptedSendKey)
-    if (!seen || acceptedSendKey === previous) {
+    if (previous === undefined || acceptedSendKey === previous) {
       return
     }
     this.admitChildWork(sessionId, session, [{ type: 'turn-started', observedAt: this.deps.now() }])

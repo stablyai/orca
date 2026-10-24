@@ -163,6 +163,7 @@
   },
   "settings": {
     "chat": {
+      "permissionsAgentsLink": "Paramètres → Agents",
       "permissionsTitle": "Autorisations pour les nouveaux chats",
       "permissionsDescription": "Uniquement pour les nouveaux chats. Les paramètres par défaut propres à chaque agent se trouvent dans Paramètres → Agents.",
       "description": "Choisissez l’apparence et le comportement des chats.",

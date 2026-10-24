@@ -2,13 +2,13 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
+import { fieldsOf, mutationOk, ok } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -26,10 +26,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 function listedModelIds(snapshot: readonly SessionOptionDescriptor[]): string[] {
   const model = snapshot.find((descriptor) => descriptor.id === 'model')
   return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
-}
-
-function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function snapshotEvent(fence = 3): AgentSessionSubscribeEvent {
@@ -155,19 +151,9 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
-function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
-  return ok({
-    ok: true,
-    replayed: false,
-    fence: 3,
-    cursor: { epoch: 'epoch-1', sequence: 1 },
-    value: structuredSendResultFixture(dispatchState, reason)
-  })
-}
-
-async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
+async function defaultSendRequest(method: string, params?: unknown) {
   if (method === 'agentSession.send') {
-    return sendResult('accepted')
+    return mutationOk(structuredSendResultFixture('accepted'))
   }
   if (method === 'agentSession.options') {
     return ok({
@@ -219,11 +205,11 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
       fence: 3,
       cursor: { epoch: 'epoch-1', sequence: 3 },
       value: {
-        itemId: String(params?.itemId ?? ''),
+        itemId: String(fieldsOf(params).itemId ?? ''),
         revision: 2,
         resolution: {
           state: 'resolved',
-          selectedOptionId: String(params?.optionId ?? ''),
+          selectedOptionId: String(fieldsOf(params).optionId ?? ''),
           resolvedBy: 'mobile',
           resolvedAt: 123
         }
@@ -244,10 +230,17 @@ describe('useMobileStructuredAgentSession', () => {
     listener = onData
     return unsubscribe
   })
-  const client = {
+  const client: RpcClient = {
     sendRequest,
-    subscribe
-  } as unknown as RpcClient
+    subscribe,
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    updateTerminalSubscriptionViewport: () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
   let storedOperations: Map<string, string>
 
   function Harness({

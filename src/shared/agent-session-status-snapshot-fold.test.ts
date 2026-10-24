@@ -23,7 +23,7 @@ it.each(['queued', 'starting', 'continued', 'refused', 'unconfirmed', 'skipped']
     })
     expect(snapshot.get('a')?.restartResume?.phase).toBe(phase)
     const disconnected = revokeAgentSessionStatusLive(snapshot)
-    expect(disconnected.get('a')).toEqual(summary)
+    expect(disconnected.get('a')).toEqual({ ...summary, runtimePermission: null })
     expect(revokeAgentSessionStatusLive(disconnected)).toBe(disconnected)
   }
 )
