@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
+import { loadLeanTextMateGrammar } from './register-lean'
 import { loadNimTextMateGrammar } from './register-nim'
 import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
@@ -7,6 +8,33 @@ import { createTextMateTokensProvider } from './textmate-token-provider'
 vi.mock('../syntax-highlighting/oniguruma', () => ({ loadOniguruma: loadNodeOniguruma }))
 
 describe('createTextMateTokensProvider', () => {
+  it('tokenizes Lean definitions, proof keywords, Unicode binders, strings, and comments', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLeanTextMateGrammar })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('theorem identity (p : Prop) : p → p := by')).toEqual(
+      expect.arrayContaining(['keyword.other.definitioncommand.lean4', 'storage.type.lean4'])
+    )
+    expect(scopesOf('  show p from h')).toContain('keyword.other.lean4')
+    expect(scopesOf('#check ∀ (α : Type), α → α')).toContain('storage.type.lean4')
+    expect(scopesOf('#eval "hello"')).toContain('string.quoted.double.lean4')
+    expect(scopesOf('-- proof note')).toContain('comment.line.double-dash.lean4')
+  })
+
+  it('carries nested Lean block comments across lines and resumes code after both closers', async () => {
+    const provider = await createTextMateTokensProvider({ loadGrammar: loadLeanTextMateGrammar })
+    let state = provider.tokenize('/- outer /- inner', provider.getInitialState()).endState
+    state = provider.tokenize('-/ still outer', state).endState
+    const hidden = provider.tokenize('theorem hidden : True := by trivial', state)
+    expect(hidden.tokens.map((token) => token.scopes)).toEqual(['comment.block.lean4'])
+    const closed = provider.tokenize('-/', hidden.endState)
+    const line = 'def answer : Nat := 42'
+    const after = provider.tokenize(line, closed.endState)
+    expect(after.tokens).toEqual(provider.tokenize(line, provider.getInitialState()).tokens)
+    expect(after.tokens.length).toBeGreaterThan(1)
+  })
+
   it('tokenizes Nim with the vendored TextMate grammar', async () => {
     const provider = await createTextMateTokensProvider({ loadGrammar: loadNimTextMateGrammar })
 
@@ -114,6 +142,7 @@ describe('createTextMateTokensProvider', () => {
   })
 
   it.each([
+    ['Lean', loadLeanTextMateGrammar, '/-'.repeat(40000), 'def value : Nat := 42'],
     ['Nim', loadNimTextMateGrammar, 'abcdefghij'.repeat(8000), 'proc greet() = discard'],
     ['Typst', loadTypstTextMateGrammar, '#let x = 12pt; *b* $x^2$ '.repeat(2000), '#let y = 2']
   ])(

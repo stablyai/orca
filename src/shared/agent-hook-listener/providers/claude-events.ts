@@ -31,6 +31,7 @@ import {
 } from './claude-pane-hold-evidence'
 import { buildClaudeStatusPayload } from './claude-status-build'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
+import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
 
 export function normalizeClaudeEvent(
   state: HookListenerState,
@@ -101,6 +102,9 @@ export function normalizeClaudeEvent(
   const isTaskWakeup =
     eventAgentId === undefined &&
     trackClaudeTaskNotificationDelivery(state, paneKey, eventName, hookPayload, backgroundTasks)
+  if (eventName === 'PostToolUse' && eventAgentId === undefined) {
+    recordClaudeTeammateSpawn(state, paneKey, hookPayload)
+  }
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
   const hasActiveSessionCron = sessionCronInventoryPresent && sessionCrons.length > 0

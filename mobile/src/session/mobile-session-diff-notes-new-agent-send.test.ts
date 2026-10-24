@@ -54,10 +54,12 @@ function launchReply(promptOutcome: 'handed-to-terminal' | 'not-delivered'): Rpc
 function launchClient() {
   const replies: ((reply: RpcResponse) => void)[] = []
   const sendRequest = vi.fn(
-    (method: string) =>
+    (method: string, _params?: unknown) =>
       new Promise<RpcResponse>((resolve) => {
         if (method === 'agent.launchReplay') {
           replies.push(resolve)
+        } else if (method === 'worktree.set') {
+          resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
         }
       })
   )
@@ -74,7 +76,7 @@ function launchClient() {
   }
   const launches = () =>
     sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
-  return { client, replies, launches }
+  return { client, replies, launches, sendRequest }
 }
 
 type Screen = {
@@ -194,7 +196,7 @@ function landLaunchedTab(): void {
 
 describe('sending review notes to a new agent session', () => {
   it('starts one agent while the first send of the same notes is still waiting on its reply', async () => {
-    const { client, replies, launches } = launchClient()
+    const { client, replies, launches, sendRequest } = launchClient()
     await mountSessionScreen(client)
     await act(async () => screen().send())
     const [sheetAction] = screen().sendActions
@@ -213,6 +215,9 @@ describe('sending review notes to a new agent session', () => {
     // Delivered: the notes leave the list rather than becoming sendable again.
     await act(async () => replies[0]?.(launchReply('handed-to-terminal')))
     expect(screen().sendingIds.size).toBe(0)
+    expect(sendRequest.mock.calls.filter(([method]) => method === 'worktree.set')).toEqual([
+      ['worktree.set', { worktree: 'id:workspace-1', diffComments: [] }]
+    ])
     await act(async () => screen().send())
     expect(screen().pendingDelivery).toBeNull()
   })

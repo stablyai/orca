@@ -19,10 +19,6 @@ import {
   type CodexSessionIndexHealPaths
 } from './codex-session-index-heal'
 
-// Stub codex app-server speaking the JSONL protocol for the heal pass:
-// initialize → initialized → thread/read×N. Scenario-driven via STUB_CONFIG;
-// every thread/read is appended to readLogFile so tests can assert order,
-// batching (one spawn appends a server-start marker), and skip behavior.
 const STUB_SERVER_SOURCE = `
 const fs = require('node:fs')
 const config = JSON.parse(process.env.STUB_CONFIG)
@@ -192,7 +188,7 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
       const record = JSON.parse(line) as { threadId: string; outcome: string }
       outcomes[record.threadId] = record.outcome
     } catch {
-      // Torn tails are quarantined by the next append and ignored by readers.
+      // Ignore torn ledger tails, as the production reader does.
     }
   }
   return outcomes
@@ -253,7 +249,6 @@ describe('runCodexSessionIndexHeal', () => {
     })
     expect(second.outcome).toBe('up-to-date')
     expect(third.outcome).toBe('up-to-date')
-    // One spawn from the first run only — no-op runs must not hit the CLI.
     expect(rig.readLog().serverStarts).toBe(1)
   })
 
@@ -524,8 +519,7 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       readsPerServerSession: 1,
       interBatchDelayMs: 1,
-      // False through the second batch's pre-delay check, then model opt-out
-      // while the delay is in progress.
+      // Opt out after the second batch's pre-delay check.
       shouldStop: () => stopChecks++ >= 3
     })
 
@@ -547,7 +541,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(summary.healedThreads).toBe(0)
     expect(readLedgerOutcomes(rig.paths)).toEqual({})
 
-    // Within the retry interval the unsupported marker suppresses re-probing.
     const again = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0

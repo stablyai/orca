@@ -31,8 +31,8 @@ import {
   observeStructuredSession,
   structuredSessionCloseSettled
 } from './structured-worker-authority'
-import { closeStructuredAgentSessionChild } from './structured-agent-session-close'
-import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
+import { closeStructuredAgentSessionChild } from './agent-session/structured-agent-session-close'
+import { retireSettledStructuredWorkerTab } from './agent-session/structured-agent-session-tab-retirement'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { OrcaRuntimeService } from './orca-runtime'

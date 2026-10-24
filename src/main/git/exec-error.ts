@@ -1,20 +1,6 @@
-/**
- * Pure helpers for reading diagnostics out of a subprocess (git/gh/glab)
- * rejection. Kept in a standalone module (not `runner.ts`) so lightweight
- * consumers — e.g. PR-refresh error classification — can import them without
- * pulling in the runner's heavy execution machinery, and so tests that mock
- * `./runner` still get the real implementations.
- */
+// Keep diagnostics independent of runner imports and mocks.
 
-/**
- * Extract stderr/stdout from an execFile rejection.
- *
- * Why: Node's execFile rejects with an Error that has `.stdout` and `.stderr`
- * fields populated separately from `.message`. Reading `err.message` alone is
- * unreliable — it can truncate stderr or omit it entirely depending on Node
- * version and maxBuffer behavior. We prefer the explicit fields and fall
- * back to `.message` only when neither is present.
- */
+/** Prefer stdout/stderr fields: Node may truncate or omit them from message. */
 export function extractExecError(err: unknown): { stderr: string; stdout: string } {
   if (err && typeof err === 'object') {
     const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
@@ -53,16 +39,7 @@ export function isMissingCommandBinaryError(err: unknown): boolean {
   )
 }
 
-/**
- * Detect a Retry-After hint in gh stderr and return the suggested delay in ms,
- * or null when the response includes no Retry-After.
- *
- * Why: gh forwards response headers when verbose, and prints "Retry-After:
- * <seconds>" in error output for primary rate-limit 429s. When present, the
- * caller is better served by propagating the error so the UI can surface the
- * real wait time — retrying on our own 250ms cadence just earns another 429
- * and burns the retry budget. Also supports HTTP-date Retry-After values.
- */
+/** Parse Retry-After seconds or HTTP dates; callers can surface explicit server waits. */
 export function parseRetryAfterMs(stderr: string): number | null {
   const raw = findRetryAfterHeaderValue(stderr)
   if (raw === null) {

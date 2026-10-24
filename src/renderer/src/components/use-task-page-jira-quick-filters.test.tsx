@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
-import type { JiraQuickFilterState } from '../../../shared/jira-quick-filters'
+import type { JiraQuickFilterState } from '../../../shared/jira/jira-quick-filters'
 import { UNRESOLVED_OWNER_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 const { read, write } = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }))
 vi.mock('@/runtime/runtime-jira-quick-filter-state', () => ({

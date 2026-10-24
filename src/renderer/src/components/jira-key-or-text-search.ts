@@ -1,4 +1,4 @@
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import {
   buildJiraIssueKeyJql,
   buildJiraTextMatchJql

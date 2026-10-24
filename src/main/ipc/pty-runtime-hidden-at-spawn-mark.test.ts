@@ -161,7 +161,6 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
     daemon.setPtyBackgrounded.mockClear()
     simulateRendererReload()
 
-    // A reload must not resurrect a runtime mark on a PTY a renderer view already owned.
     expect(isHiddenRendererPty(result.id)).toBe(false)
     expect(daemon.setPtyBackgrounded).not.toHaveBeenCalledWith(result.id, true)
   })
@@ -180,7 +179,6 @@ describe('runtime-controller spawn: hidden until a renderer view mounts', () => 
 
     const spawnPromise = controller.spawn({ cols: 80, rows: 24, initiallyHidden: true })
     await vi.waitFor(() => expect(mintedSessionId).toBeDefined())
-    // The visible mount reports visible and releases the pre-spawn mark.
     getPtySetRendererPtyVisibleListener()(null, { id: mintedSessionId!, visible: true })
     getPtySetHiddenRendererPtyListener()(null, { id: mintedSessionId!, hidden: false })
     spawnGate.resolve()

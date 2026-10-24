@@ -11,35 +11,37 @@ import { finishProjectAddWithDefaultCheckout } from './project-added-default-che
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
+export type GitRepoAddOutcome = { importedProjectGroupId?: string }
+
+export type CompleteGitRepoAdd = (
+  repoId: string,
+  source: AddRepoExistingWorkspaceSource,
+  executionHostId?: ExecutionHostId,
+  outcome?: GitRepoAddOutcome
+) => Promise<void>
+
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
   setHideDefaultBranchWorkspace: (hide: boolean) => void
   /** Why: the nested Add Project flow (hosted inside the workspace composer)
    *  keeps the composer open and selects the new project instead of running
    *  the default-checkout navigation handoff. Telemetry above still applies. */
-  finishProjectAdd?: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  finishProjectAdd?: CompleteGitRepoAdd
 }
 
 export function useCompleteGitRepoAdd({
   closeModal,
   setHideDefaultBranchWorkspace,
   finishProjectAdd
-}: CompleteGitRepoAddOptions): (
-  repoId: string,
-  source: AddRepoExistingWorkspaceSource,
-  executionHostId?: ExecutionHostId
-) => Promise<void> {
+}: CompleteGitRepoAddOptions): CompleteGitRepoAdd {
   const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
 
   return useCallback(
     async (
       repoId: string,
       source: AddRepoExistingWorkspaceSource,
-      executionHostId?: ExecutionHostId
+      executionHostId?: ExecutionHostId,
+      outcome?: GitRepoAddOutcome
     ): Promise<void> => {
       const worktrees = (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).filter(
         (worktree) =>
@@ -66,7 +68,7 @@ export function useCompleteGitRepoAdd({
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
       if (finishProjectAdd) {
-        await finishProjectAdd(repoId, source, executionHostId)
+        await finishProjectAdd(repoId, source, executionHostId, outcome)
         return
       }
       await finishProjectAddWithDefaultCheckout({

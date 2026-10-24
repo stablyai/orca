@@ -52,7 +52,6 @@ afterEach(async () => {
   }
 })
 
-/** Runs a real scan in this process the way the scanner child does, keeping every report. */
 async function scanInChild(
   limit = 20
 ): Promise<{ reports: AiVaultScanWork[]; final: AiVaultScanWork }> {
@@ -71,7 +70,7 @@ async function scanInChild(
     ])
     await utimes(path, 1_000 + index, 1_000 + index)
   }
-  // A second path to one transcript, as Codex homes and linked profiles produce: still one file.
+  // Codex homes and linked profiles can expose hardlinks to the same transcript.
   await mkdir(join(roots.claudeProjectsDir, 'linked'))
   await link(
     join(roots.claudeProjectsDir, 'project', 'a.jsonl'),
@@ -160,7 +159,6 @@ describe('Session History scan progress, scanner child to window', () => {
   })
 
   it('reaches its total when the first pass stops before reading every file it planned', async () => {
-    // The newest file fills a limit of 1, so the pass never reads the older ones it announced.
     const { reports, final } = await scanInChild(1)
     expect(final.read).toEqual({ done: 1, total: 2, skipped: 1 })
     expect(
@@ -176,7 +174,6 @@ describe('Session History scan progress, scanner child to window', () => {
     old.fail()
     expect(localAiVaultScanProgress('scope')).toMatchObject({ stage: 'finding', startedAt: 2_000 })
 
-    // A failed refresh puts back the last finished scan rather than leaving the key empty.
     replacement.fail()
     expect(localAiVaultScanProgress('scope')).toMatchObject({
       scanId: 'earlier',
@@ -312,7 +309,6 @@ it.each(['cutoff', 'bucket', 'filtered'] as const)(
             Number(basename(path).replace('rollout-', '').replace('.jsonl', ''))
           )
         ).toEqual(ids)
-        // Captured from the same generated corpus before the change; representatives move earlier.
         expect(opened.mock.calls).toHaveLength(warm ? 0 : flow === 'bucket' ? 7 : ids.length)
         expect(stats.mock.results.at(-1)?.value).toEqual({
           reused: warm ? ids.length : 0,

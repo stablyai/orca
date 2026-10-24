@@ -146,4 +146,67 @@ describe('session tab status on the phone clock', () => {
     })
     expect(dot(completed[0], PHONE_NOW + 3 * MINUTE)).toBe('done')
   })
+
+  it('clears inherited shell-title evidenceObservedAt and rejects catalog rows older than stateStartedAt', () => {
+    const oldEvidenceStamp = PHONE_NOW - 45 * MINUTE
+    const turnStartStamp = PHONE_NOW - 2 * MINUTE
+    const maskedTab: MobileSessionTab = {
+      type: 'terminal',
+      id: 'term::leaf',
+      parentTabId: 'term',
+      leafId: 'leaf',
+      title: 'pwsh',
+      terminal: 'pty-1',
+      isActive: true,
+      agentStatus: {
+        state: 'done',
+        prompt: '',
+        paneKey: 'term:leaf',
+        stateHistory: [],
+        stateStartedAt: turnStartStamp,
+        updatedAt: oldEvidenceStamp,
+        evidenceObservedAt: oldEvidenceStamp
+      }
+    }
+
+    // A stale catalog row that predates stateStartedAt must not resurrect an older working turn.
+    const staleCatalog = [
+      {
+        worktreeId: 'wt-1',
+        agents: [
+          {
+            paneKey: 'term:leaf',
+            state: 'working',
+            stateStartedAt: turnStartStamp - 10 * MINUTE,
+            updatedAt: turnStartStamp - 5 * MINUTE
+          }
+        ]
+      }
+    ]
+    const withStaleCatalog = withSessionTabStatusReceipts([maskedTab], [], PHONE_NOW, {
+      cachedWorktrees: staleCatalog,
+      worktreeId: 'wt-1'
+    })
+    expect(dot(withStaleCatalog[0], PHONE_NOW)).toBe('done')
+
+    // A fresh catalog row for the current turn replaces the state and clears the old evidenceObservedAt.
+    const freshCatalog = [
+      {
+        worktreeId: 'wt-1',
+        agents: [
+          {
+            paneKey: 'term:leaf',
+            state: 'working',
+            stateStartedAt: turnStartStamp,
+            updatedAt: PHONE_NOW - MINUTE
+          }
+        ]
+      }
+    ]
+    const withFreshCatalog = withSessionTabStatusReceipts([maskedTab], [], PHONE_NOW, {
+      cachedWorktrees: freshCatalog,
+      worktreeId: 'wt-1'
+    })
+    expect(dot(withFreshCatalog[0], PHONE_NOW + 20 * MINUTE)).toBe('working')
+  })
 })

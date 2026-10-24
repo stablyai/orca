@@ -1,9 +1,9 @@
-import { normalizeJiraQuickFilterState } from '../../../../shared/jira-quick-filters'
+import { normalizeJiraQuickFilterState } from '../../../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
   normalizeJiraSavedFilterState,
   mutateJiraSavedFilterState
-} from '../../../../shared/jira-saved-filters'
+} from '../../../../shared/jira/jira-saved-filters'
 import { JiraSavedFilterMutationParam } from '../../../../shared/rpc-contract/jira-saved-filter-params'
 import {
   omitPairingLocalUiFields,

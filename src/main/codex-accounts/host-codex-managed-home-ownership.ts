@@ -11,15 +11,7 @@ type HostCodexManagedHomeOwnershipOptions = {
 
 export const MISSING_MANAGED_HOME_MESSAGE = 'Managed Codex home directory does not exist on disk.'
 
-/**
- * Why: the gate answers two different questions and callers act on them very
- * differently. `untrusted` is a *successful observation* that failed a trust
- * check (or a definitive absence where absence is itself the verdict), and only
- * it may clear the user's persisted account selection. `indeterminate` means we
- * could not read the home at all — the home may be perfectly valid, so callers
- * must refuse to *use* it without erasing durable state (#STA-4422: one EBUSY
- * from an antivirus lock used to log the user out permanently).
- */
+/** Only `untrusted` may clear selection; `indeterminate` must refuse use without erasing state. */
 export type HostCodexManagedHomeVerdict =
   | { kind: 'owned'; homePath: string }
   | { kind: 'untrusted'; reason: string }
@@ -28,10 +20,7 @@ export type HostCodexManagedHomeVerdict =
 /** Thrown for a proven trust failure; safe to clear selection on. */
 export class UntrustedManagedCodexHomeError extends Error {}
 
-/**
- * Thrown when the home could not be read. Callers must refuse the operation and
- * leave persisted selection, credentials, and managed directories untouched.
- */
+/** Refuse the operation while preserving selection, credentials and home directories. */
 export class ManagedCodexHomeTemporarilyUnavailableError extends Error {
   constructor(
     message = 'Codex account files are temporarily locked. Retry in a moment.',
@@ -57,12 +46,7 @@ function pathIsInsideOrEqual(rootPath: string, candidatePath: string): boolean {
   )
 }
 
-/**
- * Why: the system Codex home is optional — a user with no ~/.codex is normal,
- * and its absence says nothing about the managed candidate. Only a definitive
- * absence may fall back to the resolved spelling; any other read error is
- * inconclusive and must reach the caller as `indeterminate`.
- */
+// Missing optional homes can use resolved paths; other read failures must remain indeterminate.
 function canonicalizeIfPresent(candidatePath: string): string {
   const resolvedPath = resolve(candidatePath)
   try {
@@ -84,9 +68,7 @@ function evaluate({
   const resolvedCandidate = resolve(candidatePath)
   const resolvedRoot = resolve(managedAccountsRoot)
 
-  // Why: absence of the candidate IS the structural verdict here, but only a
-  // definitive one. `existsSync` used to fold EPERM into "does not exist", which
-  // is what made an antivirus lock look like a deleted account.
+  // Avoid existsSync: it conflates a missing home with transient permission failures.
   let canonicalCandidate: string
   try {
     statSync(resolvedCandidate)
@@ -128,8 +110,7 @@ function evaluate({
     }
   }
 
-  // Why: a replaced codex-accounts directory could otherwise redirect config,
-  // hook, or resource writes into the user's real ~/.codex tree.
+  // A redirected accounts root must never allow managed writes into the system home.
   if (pathIsInsideOrEqual(canonicalSystemHome, canonicalCandidate)) {
     return {
       kind: 'untrusted',
@@ -153,8 +134,7 @@ function evaluate({
     markerIsRegularFile = lstatSync(markerPath).isFile()
     markerContents = markerIsRegularFile ? readFileSync(markerPath, 'utf-8') : ''
   } catch (error) {
-    // Why: the marker is required, so its definitive absence is structural — but
-    // an unreadable marker is not evidence of anything.
+    // A missing ownership marker disproves trust; an unreadable one leaves it unknown.
     if (isDefinitiveAbsence(error)) {
       return { kind: 'untrusted', reason: 'Managed Codex home is missing Orca ownership marker.' }
     }
@@ -176,20 +156,13 @@ function evaluate({
   return { kind: 'owned', homePath: canonicalCandidate }
 }
 
-/** Non-throwing verdict; callers decide how to treat each kind. */
 export function resolveHostCodexManagedHomeVerdict(
   options: HostCodexManagedHomeOwnershipOptions
 ): HostCodexManagedHomeVerdict {
   return evaluate(options)
 }
 
-/**
- * Throwing wrapper for write paths (add, re-auth, migration) that must never
- * proceed on an unproven home. Distinct error classes keep an unreadable home
- * from being mistaken for a deleted one — `isMissingManagedHomeError` must not
- * match the temporary case, or re-auth would recreate the home and rewrite its
- * ownership marker after a transient stat failure.
- */
+/** Distinct errors prevent transient read failures from triggering home recreation during reauth. */
 export function assertOwnedHostCodexManagedHomePath(
   options: HostCodexManagedHomeOwnershipOptions
 ): string {

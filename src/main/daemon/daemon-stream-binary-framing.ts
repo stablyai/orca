@@ -1,12 +1,8 @@
 /**
- * Length-prefixed stream framing that carries PTY data as raw UTF-8 bytes instead of a JSON
- * string, so neither side escapes or parses the payload. A stream socket uses it only after its
- * hello negotiated it; every other socket, and every daemon that predates it, stays on NDJSON.
- *
- * Frame: [kind u8][body length u32 BE][body]
- * - EVENT: body is the UTF-8 JSON of a stream event.
- * - DATA:  body is [meta length u16 BE][meta JSON][data bytes]; meta is the data event with
- *          `payload.data` removed, which the reader restores from the bytes.
+ * Negotiated binary framing carries raw UTF-8 data; older peers retain NDJSON.
+ * Frame: [kind u8][body length u32 BE][body].
+ * EVENT body: UTF-8 JSON; DATA body: [meta length u16 BE][meta JSON][data bytes].
+ * DATA metadata omits payload.data, which the reader restores from the bytes.
  */
 import { NDJSON_MAX_LINE_BYTES } from './ndjson'
 import type { DaemonEvent } from './types'
@@ -19,7 +15,7 @@ const DATA_FRAME = 2
 const FRAME_HEADER_BYTES = 5
 const DATA_META_LENGTH_BYTES = 2
 const MAX_DATA_META_BYTES = 0xffff
-// Same ceiling the NDJSON reader enforces, so splitting policy and receiver memory bounds match.
+// Share the NDJSON ceiling to keep reader bounds and writer splitting consistent.
 export const BINARY_STREAM_MAX_FRAME_BYTES = NDJSON_MAX_LINE_BYTES
 
 export type StreamDataPayloadMeta = {
@@ -46,7 +42,6 @@ function encodeDataMeta(sessionId: string, payload: StreamDataPayloadMeta): stri
   return JSON.stringify({ type: 'event', event: 'data', sessionId, payload })
 }
 
-/** Frame bytes excluding the data itself; the writer budgets splits with it. */
 export function binaryStreamDataFrameOverheadBytes(
   sessionId: string,
   payload: StreamDataPayloadMeta
@@ -132,10 +127,7 @@ export type BinaryStreamFrameReader = {
   feed(chunk: Buffer): void
 }
 
-/**
- * A malformed record is dropped like an unparsable NDJSON line, but a bad header means the
- * length prefix can no longer be trusted, so the reader stops and reports a fatal error.
- */
+/** Drop malformed records; invalid headers are fatal because their frame boundaries cannot be trusted. */
 export function createBinaryStreamFrameReader(
   onEvent: (event: DaemonEvent) => void,
   onFatal: (error: Error) => void,
@@ -147,7 +139,7 @@ export function createBinaryStreamFrameReader(
 
   const contiguousHead = (bytes: number): Buffer => {
     if (chunks[0].length < bytes) {
-      // Why one concat per frame: joining on every socket chunk is quadratic for multi-MB frames.
+      // Concatenating once per socket chunk would be quadratic for large frames.
       chunks = [Buffer.concat(chunks, bufferedBytes)]
     }
     return chunks[0]
@@ -164,7 +156,7 @@ export function createBinaryStreamFrameReader(
 
   const ownPendingHead = (): void => {
     const head = chunks[0]
-    // Why: a leftover subarray pins its whole socket chunk; copying once per feed, not per frame, avoids quadratic batches.
+    // Copy small tails once per feed to release large backing buffers without quadratic frame-by-frame copies.
     if (
       head &&
       head.buffer.byteLength > Buffer.poolSize &&

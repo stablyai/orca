@@ -16,7 +16,7 @@ import {
 } from './__mocks__/jira-issue-workspace-edit-fixture'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraMutationResult } from '../../../shared/jira-types'
+import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getDefaultSettings } from '../../../shared/constants'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'

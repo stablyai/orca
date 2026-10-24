@@ -56,7 +56,6 @@ function sessionPath(baseDir: string, sessionId: string, file: string): string {
   return join(baseDir, getHistorySessionDirName(sessionId), file)
 }
 
-/** `process.platform` is read at call time, so the Windows branch is reachable from a POSIX runner. */
 function stubPlatform(platform: NodeJS.Platform): () => void {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
@@ -70,7 +69,7 @@ function stubPlatform(platform: NodeJS.Platform): () => void {
 describe('terminal history file permissions', () => {
   const createdDirs: string[] = []
 
-  /** Repair tests need a base dir with no HistoryManager racing its own startup sweep against them. */
+  /** Avoid racing HistoryManager’s deferred startup repair. */
   function isolatedDir(): string {
     const created = mkdtempSync(join(tmpdir(), 'history-perms-test-'))
     createdDirs.push(created)
@@ -143,7 +142,6 @@ describe('terminal history file permissions', () => {
   })
 
   describe('repairing history written before modes were pinned', () => {
-    /** A base dir shaped like one written under a default umask: world-readable throughout. */
     function seedLegacyTree(): { base: string; sessionDir: string; checkpointPath: string } {
       const base = isolatedDir()
       const sessionDir = join(base, getHistorySessionDirName('legacy'))
@@ -173,7 +171,6 @@ describe('terminal history file permissions', () => {
       expect(modeOf(sessionDir)).toBe(0o700)
       expect(modeOf(checkpointPath)).toBe(0o600)
 
-      // Marker-guarded: a later launch must not re-walk 10k session trees.
       chmodSync(checkpointPath, 0o644)
       await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(false)
       expect(modeOf(checkpointPath)).toBe(0o644)
@@ -189,14 +186,13 @@ describe('terminal history file permissions', () => {
         await mgr.openSession('frozen', { cwd: '/tmp', cols: 80, rows: 24 })
         await mgr.checkpoint('frozen', makeSnapshot())
 
-        // The production ordering: freeze fingerprints, the sweep runs, then the writer re-registers.
+        // Match production order: fingerprint, sweep, then register the writer.
         const freeze = await mgr.freezeForRecovery('frozen')
         await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(true)
         mgr.registerWriter('frozen', freeze)
 
         expect(writeErrors.map((error) => error.message)).toEqual([])
         expect(mgr.isSessionDisabled('frozen')).toBe(false)
-        // Persistence, not just the absence of an error: the pane must still reach disk.
         await mgr.checkpoint('frozen', makeSnapshot({ snapshotAnsi: 'after the sweep\r\n' }))
         expect(readFileSync(sessionPath(base, 'frozen', 'checkpoint.json'), 'utf-8')).toContain(
           'after the sweep'
@@ -205,7 +201,6 @@ describe('terminal history file permissions', () => {
         await mgr.dispose()
       }
 
-      // Narrow skip: every session that is not frozen is still tightened by the same sweep.
       expect(modeOf(legacyDir)).toBe(0o700)
       expect(modeOf(checkpointPath)).toBe(0o600)
     })
@@ -233,12 +228,10 @@ describe('terminal history file permissions', () => {
       vi.useFakeTimers()
       try {
         const first = scheduleTerminalHistoryPermissionRepair(base)
-        // Both startup accessors ask for the same tree; only the first arms a sweep.
         expect(scheduleTerminalHistoryPermissionRepair(base)).toBeNull()
         expect(vi.getTimerCount()).toBe(1)
 
-        // Still armed, and the tree still untouched, well past daemon init — the sibling
-        // history GC waits the same 10s over this directory for the same reason.
+        // Repair should remain deferred throughout the startup interval.
         await vi.advanceTimersByTimeAsync(9_999)
         expect(vi.getTimerCount()).toBe(1)
         expect(existsSync(join(base, REPAIR_MARKER_NAME))).toBe(false)

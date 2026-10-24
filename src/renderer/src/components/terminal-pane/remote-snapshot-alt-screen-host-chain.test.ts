@@ -8,7 +8,12 @@ import {
   encodeTerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
 import { flushAsyncTicks, writeHeadlessTerminal } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import type { PtyReplayDataMeta } from './pty-transport-types'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
@@ -363,7 +368,8 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     const pane = createPane(1)
     const events: PaneEvent[] = []
     const parseCallbacks: (() => void)[] = []
-    pane.terminal.write.mockImplementation((chunk: string, callback?: () => void) => {
+    pane.terminal.write.mockImplementation((chunk: string | Uint8Array, callback?: () => void) => {
+      chunk = terminalWriteText(chunk)
       if (chunk.length > 0) {
         events.push(chunk)
       }

@@ -24,6 +24,9 @@ function pushRelease(mode, pushMain = 'true') {
             rejected)
               echo 'remote: error: GH013: Required status check is missing.' >&2
               return 1 ;;
+            pull-request-text)
+              echo 'remote: Changes must be made through a pull request.' >&2
+              return 1 ;;
             disconnected)
               echo 'fatal: unable to access remote' >&2
               return 128 ;;
@@ -64,11 +67,14 @@ describe('release tag push with protected main', () => {
     expect(result.calls).toEqual(['push origin HEAD:refs/heads/main', 'push origin v1.4.229'])
   })
 
-  it.each(['rejected', 'disconnected'])('stops without a tag for %s main push errors', (mode) => {
-    const result = pushRelease(mode)
-    expect(result.code).not.toBe(0)
-    expect(result.calls).toEqual(['push origin HEAD:refs/heads/main'])
-  })
+  it.each(['rejected', 'disconnected', 'pull-request-text'])(
+    'stops without a tag for %s main push errors',
+    (mode) => {
+      const result = pushRelease(mode)
+      expect(result.code).not.toBe(0)
+      expect(result.calls).toEqual(['push origin HEAD:refs/heads/main'])
+    }
+  )
 
   it('only pushes the tag for an off-main source', () => {
     const result = pushRelease('protected', 'false')

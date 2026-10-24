@@ -142,6 +142,15 @@ describe('useMobileNativeChatSession', () => {
         })
       }
       const requestsAtCap = sendRequest.mock.calls.length
+      expect(requestsAtCap).toBe(33)
+      expect(state?.hasMore).toBe(false)
+      expect(sendRequest).toHaveBeenLastCalledWith(
+        'nativeChat.readSession',
+        { agent: 'claude', sessionId: 'session', limit: 40, beforeOffset: 50 },
+        expect.objectContaining({ budgetSpansConnect: true })
+      )
+      await act(async () => state?.loadEarlier())
+      expect(sendRequest).toHaveBeenCalledTimes(33)
 
       await act(async () =>
         emit({
@@ -720,13 +729,21 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     await mountAt(client, 'session-a')
 
     await act(async () =>
-      emitFrame({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+      emitFrame({ type: 'appended', messages: [message('early-a'), message('early-b')] })
+    )
+    await act(async () =>
+      emitFrame({
+        type: 'snapshot',
+        messages: [message('early-b'), message('base-c')],
+        hasMore: true,
+        beforeOffset: 100
+      })
     )
 
     expect(renders.at(-1)).toMatchObject({
       status: 'ready',
       transcriptLoading: false,
-      ids: ['a-1']
+      ids: ['early-b', 'base-c']
     })
   })
 

@@ -552,7 +552,7 @@ describe('remote terminal frame-drop resync', () => {
       expect(onTransportClose).not.toHaveBeenCalled()
 
       await vi.advanceTimersByTimeAsync(10_000)
-      expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+      expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
     } finally {
       vi.useRealTimers()
     }

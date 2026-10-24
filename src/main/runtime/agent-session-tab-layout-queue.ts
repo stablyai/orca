@@ -9,7 +9,7 @@ import {
   loadChatTabLayout,
   type ChatTabChange,
   type ChatTabLayoutCommand
-} from './agent-session-tab-layout'
+} from './agent-session/agent-session-tab-layout'
 
 export type QueuedChatTabChange = { worktreeId: string; change: ChatTabChange }
 

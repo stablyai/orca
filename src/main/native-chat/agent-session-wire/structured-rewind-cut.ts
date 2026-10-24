@@ -1,40 +1,30 @@
-// Where a rewind cuts the conversation, derived from the journal alone. The journal keeps the old
-// epoch until the rewind completes, so admission and recovery derive the same cut, and the saved
-// rewind record names the target instead of copying the history it keeps.
+// Derive cuts from the journal’s retained old epoch so admission and recovery agree without copying history.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
+import { savedRewindKeys, isAgentSessionRewindTarget } from '../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 
 export type StructuredRewindCut = {
-  /** The rows after any /clear floor the rewound conversation keeps, in journal order. */
+  /** Excludes rows below the /clear floor. */
   kept: JournalReplacementItem[]
 } & (
   | {
-      /** The provider turn the rewind removes, with every later one. */
       beforeTurnId: string
-      /** The last provider turn the rewind keeps; null when it keeps none. */
       keptTurnId: string | null
     }
   | {
-      /** A provider that forks to rewind cuts at the message itself: the prompt it removes. */
+      /** Fork-based providers cut at the removed prompt. */
       beforeMessage: { sessionId: string; uuid: string }
     }
 )
 
-/** The cut at `itemId` for the session's current provider handle; null when it can't be cut there. */
 export function structuredRewindCut(
   journal: AgentSessionJournal,
   target: { itemId: string; provider: string; nativeId: string }
@@ -44,16 +34,16 @@ export function structuredRewindCut(
   const items = floor
     ? snapshot.items.filter((item) => item.sequence > floor.sequence)
     : snapshot.items
-  const { providerKey, omitted } = submissionKeys(snapshot.submissions)
+  const { providerKey, omitted, nativeIdentity } = savedRewindKeys(snapshot.submissions)
   const selected = items.find((item) => item.itemId === target.itemId)
-  const key = selected ? parseAgentJournalItemKey(providerKey(selected.itemId)) : null
+  const key = selected ? nativeIdentity(selected.itemId) : null
   if (key?.provider === 'claude' && target.provider === 'claude') {
-    // Any session the chat ran: a message from before an earlier rewind's fork is still cut there.
+    // Messages before an earlier fork still cut at their original position.
     const boundary = items.findIndex((item) => item.itemId === target.itemId)
     const keptTurns = new Set(items.slice(0, boundary).flatMap((item) => scopedTurn(item) ?? []))
     const keptRows = items.filter((item, index) => {
       const turn = scopedTurn(item)
-      // A kept turn's row can land after the cut, as a late provider item does.
+      // Late rows follow their kept turn even if they arrived after the cut.
       return (
         !omitted.has(item.itemId) &&
         (index < boundary || (turn !== undefined && keptTurns.has(turn)))
@@ -76,7 +66,7 @@ export function structuredRewindCut(
   const keptTurns = new Set(items.slice(0, boundary).flatMap((item) => turnOf(item) ?? []))
   const keptRows = items.filter((item, index) => {
     const turnId = turnOf(item)
-    // A kept turn's row can land after the cut, as a late provider item does.
+    // Late rows follow their kept turn even if they arrived after the cut.
     return (
       !omitted.has(item.itemId) &&
       (index < boundary || (turnId !== undefined && keptTurns.has(turnId)))
@@ -96,8 +86,7 @@ export function structuredRewindCut(
   }
 }
 
-/** Whether a new rewind may return to `itemId`. Asked only on admission: a rewind already saved
- *  completes wherever it cuts. */
+/** Admission only; already-saved rewinds complete even if their target is no longer eligible. */
 export function isStructuredRewindTarget(journal: AgentSessionJournal, itemId: string): boolean {
   const item = journal.snapshot().items.find((row) => row.itemId === itemId)
   return (
@@ -113,9 +102,7 @@ function scopedTurn(item: AgentJournalRenderItem): string | undefined {
   return item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : undefined
 }
 
-/** The newest main-thread turn the provider lists among `rows`: from a provider item's own key,
- *  since a host turn record may name a turn the provider never lists. Rows before a /clear count,
- *  since the provider keeps them. */
+/** Use provider item keys, not host-only turn records; include pre-/clear history the provider retains. */
 function lastListedTurn(
   rows: readonly AgentJournalRenderItem[],
   threadId: string,
@@ -137,34 +124,11 @@ function lastListedTurn(
   return last
 }
 
-/** The provider's key for a journal row; an accepted message keeps Orca's own until then. */
 export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): string {
-  return submissionKeys(journal.snapshot().submissions).providerKey(itemId)
+  return savedRewindKeys(journal.snapshot().submissions).providerKey(itemId)
 }
 
-// Accepted messages keep Orca's key in the journal; the rebuilt epoch has no submission to tie them
-// to, so they take the provider's.
-function submissionKeys(submissions: readonly AgentJournalSubmission[]): {
-  providerKey: (itemId: string) => string
-  /** Messages a rewind never keeps: queued ones survive it on their own, rejected ones never ran. */
-  omitted: ReadonlySet<string>
-} {
-  const providerKeys = new Map<string, string>()
-  const omitted = new Set<string>()
-  for (const submission of submissions) {
-    const key = agentJournalSubmissionKey(submission.clientMessageId)
-    if (isQueuedAgentJournalSubmission(submission) || submission.dispatchState === 'rejected') {
-      omitted.add(key)
-    } else if (submission.dispatchState === 'accepted' && submission.providerItemId) {
-      providerKeys.set(key, submission.providerItemId)
-    }
-  }
-  return { providerKey: (itemId) => providerKeys.get(itemId) ?? itemId, omitted }
-}
-
-/** The main conversation turn a row belongs to: its own Codex key on the main thread, else the turn
- *  record its scope names, else the turn record it is. A subagent thread's own turn ids are never
- *  the main thread's: its rows belong to the main turn they arrived in. */
+/** Child rows belong to their enclosing main turn, never their child-thread turn ID. */
 function turnMembership(
   journal: AgentSessionJournal,
   items: readonly AgentJournalRenderItem[],
@@ -207,14 +171,14 @@ function keptRow(
     body: renameRewindTurnOpener(body, providerKey),
     observedAt,
     ...(turnScope ? { turnScope } : {}),
-    // The old fold's provenance, so a rewind never makes a dead generation's work current.
+    // Preserve provenance so rewind cannot revive dead-generation work.
     ownerFence: ownerFence ?? 0,
     ...(executionOwner === undefined ? {} : { executionOwner }),
     ...agentJournalLinkageFields(linkage)
   }
 }
 
-/** A turn record names the message that opened it; it follows that message to its provider key. */
+/** Rename the opener with its message when converting to provider keys. */
 function renameRewindTurnOpener(
   body: AgentJournalItemBody,
   rename: (itemId: string) => string

@@ -69,6 +69,7 @@ function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): Hook
     connState: 'connected',
     scopeKey: SCOPE_A,
     enabled: true,
+    structuredNativeChat: false,
     showToast: vi.fn(),
     onSendError: vi.fn(),
     baseSend: vi.fn().mockResolvedValue('accepted'),
@@ -271,7 +272,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       // caller used to do by omitting `deadline` — would hand it a full 15s and let
       // one user action hold the composer `sending` for ~30s.
       const deadline = baseSend.mock.calls[0]?.[2] as number
-      expect(deadline - Date.now()).toBeLessThanOrEqual(5_300)
+      expect(deadline - Date.now()).toBe(5_300)
       // The message is timed at the press, as desktop times it, not 10s later.
       expect(baseSend.mock.calls[0]?.[4]).toBe(pressedAt)
     } finally {

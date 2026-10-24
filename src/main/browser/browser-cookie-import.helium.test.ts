@@ -23,9 +23,7 @@ describe('detectInstalledBrowsers — Helium', () => {
   const originalHome = process.env.HOME
 
   beforeEach(() => {
-    // Why: browser-cookie-import.ts uses destructured named imports from
-    // 'node:fs' which are bound at module-load time. resetModules must run
-    // BEFORE each doMock so the next import() picks up the fresh mock factory.
+    // Reset cached imports before installing each filesystem mock.
     vi.resetModules()
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     process.env.HOME = '/Users/test'
@@ -44,8 +42,6 @@ describe('detectInstalledBrowsers — Helium', () => {
         ...actual,
         existsSync: (p: string) => {
           const normalizedPath = slashPath(p)
-          // Why: Helium stores cookies at the legacy <Profile>/Cookies path, so the
-          // newer Network/Cookies probe must miss and the legacy fallback must fire.
           if (normalizedPath.includes('net.imput.helium/Default/Network/Cookies')) {
             return false
           }

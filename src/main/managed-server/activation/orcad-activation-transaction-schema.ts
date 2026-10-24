@@ -34,7 +34,7 @@ const OrcadActivationTransactionCommonFields = {
   recordBefore: z.unknown()
 }
 
-// Why strict operations: an older client reading a newer operation must keep the fence.
+// Unknown operations must keep older clients from releasing recovery fences.
 export const OrcadActivationTransactionSchema = z
   .discriminatedUnion('operation', [
     z.object({
@@ -42,7 +42,7 @@ export const OrcadActivationTransactionSchema = z
       operation: z.literal('activate'),
       phase: z.enum(['prepared', 'incumbent-stopped', 'snapshot-captured', 'candidate-ready']),
       candidateVersion: RemoteVersionSchema,
-      /** Absent in journals that predate it; null when the activating run had no app version. */
+      /** Absent in older journals; null when the activating app reported no version. */
       candidateAppVersion: z.string().min(1).nullable().optional(),
       recordAfter: z.unknown().nullable(),
       snapshot: SnapshotVerdictSchema
@@ -68,9 +68,8 @@ export const OrcadActivationTransactionSchema = z
       phase: z.enum(['prepared', 'stop-dispatched', 'process-exited']),
       activeVersion: RemoteVersionSchema,
       recordAfter: z.unknown(),
-      /** The instance-bound stop request; durable before it can reach the host. */
+      /** Persist instance-bound stop intent before sending it to the host. */
       request: OrcadManagedStopRequestSchema.nullable(),
-      /** Where current builds file a dispatched stop; see orcadDecommissionJournal. */
       dispatched: z
         .object({
           phase: z.enum(['stop-dispatched', 'process-exited']),

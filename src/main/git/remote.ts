@@ -33,16 +33,7 @@ export async function gitPush(
     if (pushTarget) {
       await validateGitPushTarget(worktreePath, pushTarget, options)
     }
-    // Why: push to the branch's configured upstream when one exists. PR-created
-    // worktrees can track a contributor fork remote; hardcoding origin here
-    // would send review commits to the upstream repository instead.
-    //
-    // When no upstream exists, keep the existing first-publish behavior:
-    // create/update origin/<current branch> and set it as upstream.
-    //
-    // Branch-vs-base reporting (the "Committed on Branch" section) is
-    // unaffected because it uses branchCompare against an explicit baseRef
-    // from worktree config, not the upstream relationship.
+    // Honor configured fork push targets; use origin/HEAD only for first publication.
     const target = pushTarget
       ? explicitPushTarget(pushTarget)
       : await resolveConfiguredGitPushTarget((args) =>
@@ -79,8 +70,7 @@ async function gitPullWithArgs(
       gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     )
     if (upstream && !upstream.isConfiguredUpstream) {
-      // Why: legacy Orca branches may still track origin/main while pushes
-      // target origin/<branch>. Pull the same effective branch the UI reports.
+      // Legacy worktrees may track origin/main; pull the effective branch shown by the UI.
       await gitExecFileAsync(
         ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
         gitOptionsForWorktree(worktreePath, options)
@@ -103,9 +93,7 @@ export async function gitPull(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  // Why: plain `git pull` uses the user's configured pull strategy (merge by
-  // default) so diverged branches reconcile instead of erroring out. Conflicts
-  // surface through the existing conflict-resolution flow.
+  // Respect the configured pull strategy and surface conflicts through the existing resolution flow.
   postponeRepoRefMaintenance()
   await withRepoRefMaintenancePaused('git-pull', () =>
     runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
@@ -134,9 +122,7 @@ export async function gitFetch(
   pushTarget?: GitPushTarget,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  // `--prune` deletes remote-tracking refs, which needs the `packed-refs` lock a
-  // running idle pack holds while it rewrites -- ~1.4s at most. This is the user
-  // clicking Fetch, so wait that window out rather than letting it fail on the lock.
+  // Pruning needs packed-refs.lock; wait for an idle pack's rewrite window rather than failing Fetch.
   postponeRepoRefMaintenance()
   try {
     await withRepoRefMaintenancePaused('git-fetch', async () => {

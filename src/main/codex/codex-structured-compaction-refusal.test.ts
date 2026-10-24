@@ -1,5 +1,3 @@
-// A compaction Codex refuses up front keeps Codex's own words for the chat's failure row.
-
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionCommandTurn } from '../native-chat/agent-session-wire/structured-agent-session-command-turn'
 import { CodexAppServerRequestError } from './codex-app-server-connection'

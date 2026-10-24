@@ -15,8 +15,7 @@ import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
 
-// Reading a few lines of one transcript per project dir is enough to learn that
-// dir's cwd; cap both so a giant or cwd-less transcript can't stall the scan.
+// Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
 const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
@@ -30,8 +29,7 @@ export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-// A gate refusal is a stalled WSL root, not an empty one: keep the existing
-// degrade-to-empty containment but make the gap visible in the scan issues.
+// Report WSL refusal so an unreachable root is not mistaken for an empty one.
 export function recordRefusal(
   issues: IssueSink,
   path: string,
@@ -160,8 +158,6 @@ async function newestTranscriptsInDir(
       })
     } catch (err) {
       throwIfAiVaultScanCancelled(signal)
-      // Best effort: unreadable candidates are ignored here and reported during
-      // full collection if the project directory proves in-scope.
       recordRefusal(issues, path, err, agent)
     }
   }
@@ -194,8 +190,7 @@ async function readFirstCwd(
     recordRefusal(issues, filePath, err, agent)
     return null
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so the early
-    // break/catch paths don't leak a file descriptor (this runs per project dir).
+    // readline.close() leaves its input open; destroy the stream after early exits and read failures.
     lines.close()
     input.destroy()
   }

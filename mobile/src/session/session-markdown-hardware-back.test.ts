@@ -10,6 +10,7 @@ const native = vi.hoisted(() => {
     platform,
     remove,
     dismiss: vi.fn(),
+    setLeaveDrafts: vi.fn(),
     addEventListener: vi.fn((_event: string, _handler: () => boolean) => ({ remove }))
   }
 })
@@ -67,7 +68,7 @@ function scopeWith(markdownDocs: Map<string, MarkdownDocState>): MobileSessionMa
     setMarkdownDocs: () => {},
     discardMarkdownTarget: null,
     setDiscardMarkdownTarget: () => {},
-    setLeaveDrafts: () => {},
+    setLeaveDrafts: native.setLeaveDrafts,
     markdownSaveSeqRef: { current: new Map() },
     markdownSaveInFlightRef: { current: new Set() },
     showToast: () => {},
@@ -107,6 +108,7 @@ beforeEach(() => {
   native.addEventListener.mockClear()
   native.remove.mockClear()
   native.dismiss.mockClear()
+  native.setLeaveDrafts.mockClear()
   leaves.back = null
   leaves.replaced = []
 })
@@ -166,6 +168,9 @@ describe("the session's hardware back gate", () => {
     })
     expect(left).not.toHaveBeenCalled()
     expect(native.dismiss).toHaveBeenCalledTimes(1)
+    expect(native.setLeaveDrafts).toHaveBeenCalledExactlyOnceWith([
+      { tabId: 'tab-1', title: 'Markdown', content: 'edited' }
+    ])
   })
 
   it('registers once as the drafts change, and the newest drafts are what a press reads', () => {

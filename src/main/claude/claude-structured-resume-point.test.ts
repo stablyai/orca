@@ -1,4 +1,10 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-adapter'
 import {
   adapterFor,
@@ -10,8 +16,27 @@ import {
   claudeOpened
 } from './claude-structured-session-test-support'
 
-/** A resumed owner that completed one turn (`a4`) and then saw the next turn's prompt. */
+const journals = createTrackedJournalOpener()
+const cleanups: (() => Promise<void>)[] = []
+
 async function ownerMidSecondTurn(persisted: unknown[]) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-claude-completed-leaf-'))
+  const claudeConfigDir = join(root, 'claude')
+  const project = join(claudeConfigDir, 'projects', '-work-repo')
+  await mkdir(project, { recursive: true })
+  await writeFile(
+    join(project, `${PROVIDER_SESSION_ID}.jsonl`),
+    `${JSON.stringify({
+      type: 'assistant',
+      uuid: 'a3',
+      parentUuid: null,
+      sessionId: PROVIDER_SESSION_ID,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'previous answer' }] }
+    })}\n`
+  )
+  const journal = await journals.open({ identity: identityFor(), stateDirectory: root })
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  deferred.bind({ journal, fence: 7, publish: () => {} })
   const claude = fakeClaude()
   const adapter = adapterFor(
     claude,
@@ -19,29 +44,43 @@ async function ownerMidSecondTurn(persisted: unknown[]) {
       resumesTranscript: true,
       continuesChain: true,
       resumeLeafUuid: 'a3',
+      claudeConfigDir,
       options: { resume: PROVIDER_SESSION_ID }
     },
     [],
     persisted
   )
+  cleanups.push(async () => {
+    await adapter.closeAll()
+    deferred.close()
+    await journals.closeAll()
+    await rm(root, { recursive: true, force: true })
+  })
   await adapter.acquire({
     identity: identityFor(),
     fence: 7,
     spawnToken: 'spawn-7',
-    events: recordingJournalSink()
+    events: deferred.sink
   })
   const frame = (message: Record<string, unknown>) =>
     claude.connections[0]!.handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
-  frame({ type: 'user', uuid: 'u4' })
-  frame({ type: 'assistant', uuid: 'a4' })
+  frame({ type: 'user', uuid: 'u4', message: { role: 'user', content: 'ask' } })
+  frame({
+    type: 'assistant',
+    uuid: 'a4',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] }
+  })
   frame({ type: 'result', subtype: 'success', uuid: 'a4-result' })
-  frame({ type: 'user', uuid: 'u5' })
+  frame({ type: 'user', uuid: 'u5', message: { role: 'user', content: 'next' } })
   return { adapter, claude, frame }
 }
 
 const lastCompletedTurn = { providerSessionId: PROVIDER_SESSION_ID, leafUuid: 'a4', fence: 7 }
 
-afterEach(() => {
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) {
+    await cleanup()
+  }
   vi.restoreAllMocks()
 })
 
@@ -50,7 +89,7 @@ describe('Claude resume point is the last completed turn on every exit path', ()
     const persisted: unknown[] = []
     const { adapter } = await ownerMidSecondTurn(persisted)
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persisted).toEqual([expect.objectContaining(lastCompletedTurn)])
+    await vi.waitFor(() => expect(persisted).toEqual([expect.objectContaining(lastCompletedTurn)]))
   })
 
   it('on an unexpected exit', async () => {
@@ -66,7 +105,7 @@ describe('Claude resume point is the last completed turn on every exit path', ()
     const persisted: unknown[] = []
     const { adapter } = await ownerMidSecondTurn(persisted)
     await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
-    expect(persisted).toEqual([expect.objectContaining(lastCompletedTurn)])
+    await vi.waitFor(() => expect(persisted).toEqual([expect.objectContaining(lastCompletedTurn)]))
   })
 
   it('carries the launch leaf forward when no turn completed', async () => {
@@ -99,13 +138,16 @@ describe('Claude resume point is the last completed turn on every exit path', ()
   it('saves only real messages: hook, attachment, and result frames never become the leaf', async () => {
     const persisted: unknown[] = []
     const { adapter, frame } = await ownerMidSecondTurn(persisted)
-    frame({ type: 'assistant', uuid: 'a5' })
-    // Claude's transcript chains these after a reply; the live stream never adopts them.
+    frame({
+      type: 'assistant',
+      uuid: 'a5',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'next answer' }] }
+    })
     frame({ type: 'system', subtype: 'stop_hook_summary', uuid: 'a5-hook-summary' })
     frame({ type: 'attachment', uuid: 'a5-attachment' })
     frame({ type: 'result', subtype: 'success', uuid: 'a5-result' })
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(persisted).toEqual([expect.objectContaining({ leafUuid: 'a5' })])
+    await vi.waitFor(() => expect(persisted).toEqual([expect.objectContaining({ leafUuid: 'a5' })]))
   })
 
   it('on an unexpected exit whose durable write fails, still ends the session and logs', async () => {

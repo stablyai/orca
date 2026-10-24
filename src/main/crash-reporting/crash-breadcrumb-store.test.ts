@@ -72,10 +72,6 @@ describe('crash breadcrumb store', () => {
       expect(snapshot.filter((entry) => entry.name === 'pr_refresh_queue')).toHaveLength(15)
     })
 
-    // The interaction fair-share eviction could break, and the reason `ownsUnresolvedRepeats`
-    // exists: a coalesce key owns a ring entry by reference and carries its running
-    // suppressed count there. A crash report is the LAST snapshot, so an entry orphaned by
-    // eviction never gets re-claimed — the burst would simply vanish from the report.
     it('does not evict a coalescing owner that still holds unfolded repeats', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
@@ -94,9 +90,7 @@ describe('crash breadcrumb store', () => {
       for (let repeat = 0; repeat < 5; repeat += 1) {
         hit('hot')
       }
-      // Distinct messages make `renderer_error` the crowded group even though each entry
-      // is a different error — so the naive "oldest of the crowded name" would take the
-      // hot key's own crumb, which is the one carrying the count.
+      // Distinct keys crowd one name without coalescing away the eviction pressure.
       for (let index = 0; index < 40; index += 1) {
         vi.advanceTimersByTime(10)
         hit(`cold_${index}`)
@@ -105,14 +99,10 @@ describe('crash breadcrumb store', () => {
       const snapshot = getCrashBreadcrumbSnapshot()
       const hotCrumb = snapshot.find((entry) => entry.data?.key === 'hot')
 
-      // Plain FIFO loses this singleton; fair share is why it survives 41 same-name crumbs.
       expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
       expect(hotCrumb?.data?.suppressedSinceLast).toBe(5)
     })
 
-    // The real field shape: THREE periodic emitters at roughly a quarter of the ring each,
-    // none of them past half. A policy that only engages once one name owns a majority
-    // reproduces the original bug exactly while every other test stays green.
     it('protects the trail when three series share the ring, none holding a majority', () => {
       recordCrashBreadcrumb('app_started')
       recordCrashBreadcrumb('main_window_created')
@@ -132,7 +122,6 @@ describe('crash breadcrumb store', () => {
       ])
     })
 
-    // Engagement threshold: two slots is already enough redundancy to charge the overflow to.
     it('charges the overflow to a name holding only two slots', () => {
       for (let index = 0; index < 15; index += 1) {
         recordCrashBreadcrumb(`single_${index}`)
@@ -149,7 +138,6 @@ describe('crash breadcrumb store', () => {
       expect(snapshot.filter((entry) => entry.name === 'duplicated')).toHaveLength(1)
     })
 
-    // The newest entry must be counted, or a near-tie is resolved against the wrong series.
     it('counts the entry that just arrived when two series are tied', () => {
       recordCrashBreadcrumb('lifecycle_a')
       recordCrashBreadcrumb('lifecycle_b')
@@ -167,8 +155,6 @@ describe('crash breadcrumb store', () => {
       expect(snapshot.filter((entry) => entry.name === 'series_b')).toHaveLength(14)
     })
 
-    // Eviction counts per (name, origin); the snapshot is filtered per reporter, so one
-    // surface's sample must not make another surface's singleton look redundant.
     it("does not let one renderer surface evict another surface's only sample", () => {
       for (let index = 0; index < 15; index += 1) {
         recordCrashBreadcrumb(`lifecycle_${index}`, undefined, 'main')
@@ -184,9 +170,6 @@ describe('crash breadcrumb store', () => {
       expect(mainSnapshot.filter((entry) => entry.name === 'renderer_memory')).toHaveLength(1)
     })
 
-    // Fallback path: when EVERY entry of the crowded group is a live owner there is no
-    // unowned candidate, and the overflow must still be charged to that group rather than
-    // to the oldest entry in the ring — which is the one-off the whole policy protects.
     it('charges the crowded group even when all of its entries are live owners', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
@@ -207,19 +190,11 @@ describe('crash breadcrumb store', () => {
       const snapshot = getCrashBreadcrumbSnapshot()
 
       expect(snapshot.some((entry) => entry.name === 'app_started')).toBe(true)
-      // And the crumb that just arrived is kept: its coalesce state is linked only after
-      // the push, so treating it as a candidate would always discard the newest evidence.
       expect(snapshot.some((entry) => entry.data?.index === 29)).toBe(true)
     })
 
-    // The gap round 2 named: no test populated the retained lane together with a
-    // fair-share fixture. Retained crumbs take their share off the SAME 30-entry budget,
-    // and a plain tail slice would trim the ring's head — which is exactly where fair
-    // share parks the one-offs it just protected. Three retained crumbs erased the whole
-    // lifecycle trail from the snapshot.
     it('keeps the lifecycle trail when the retained lane takes part of the budget', () => {
-      // Real timestamps: the snapshot sorts by createdAt, so a same-millisecond fixture
-      // would assert a tie-break order rather than the policy.
+      // Separate timestamps so snapshot sorting tests policy rather than tie-breaking.
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
       const tick = (): void => {
@@ -254,10 +229,7 @@ describe('crash breadcrumb store', () => {
       ])
     })
 
-    // `isCoalescedCrumbStillInEvidence` and the snapshot must compute the SAME window.
-    // If the predicate keeps a tail slice while the snapshot uses fair share, an owner the
-    // report will carry is judged invisible, its handle is dropped, and the burst count
-    // never lands on the crumb the reader actually sees.
+    // Owner visibility must use the same fair-eviction window as the final snapshot.
     it('folds a burst into an owner the report keeps, even when the lane takes budget', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-09-14T12:00:00.000Z'))
@@ -506,12 +478,6 @@ describe('crash breadcrumb store', () => {
     expect(getCrashBreadcrumbSnapshot()[0]?.data).toEqual({ suppressedSinceLast: 1 })
   })
 
-  // Windows crash F0BKR84AHEH: two `terminal_safe_fit_retry_exhausted` bursts
-  // (34 crumbs in 76ms, 34 in 56ms) flushed the pre-crash trail out of a
-  // 30-entry ring. Every hidden pane is display:none, so it measures 0x0, fails
-  // the fit thresholds, and burns its whole retry budget — one reattach wave
-  // fires once per mounted pane, near-simultaneously. These two cases pin the
-  // before/after so the coalescing in crash-reporting.ts cannot silently regress.
   describe('a per-pane burst against the fixed-size ring', () => {
     const recordPreCrashTrail = (): void => {
       for (let index = 0; index < 10; index += 1) {
@@ -520,9 +486,6 @@ describe('crash breadcrumb store', () => {
     }
     const burstSize = 34
 
-    // Fair-share eviction spares the one-off trail, but the burst still takes
-    // two thirds of the ring — enough to starve any *other* series and to lose
-    // the pane count entirely. Coalescing is still the right answer for bursts.
     it('takes most of the ring when uncoalesced, but no longer erases the trail', () => {
       recordPreCrashTrail()
       for (let pane = 0; pane < burstSize; pane += 1) {
@@ -537,8 +500,6 @@ describe('crash breadcrumb store', () => {
         10
       )
       expect(bursts).toHaveLength(20)
-      // The delta that still justifies coalescing: 20 slots against 1, and the population
-      // — the only signal multiplicity ever carried — is nowhere on the uncoalesced side.
       expect(bursts.some((entry) => entry.data?.livePanes !== undefined)).toBe(false)
       expect(bursts.every((entry) => entry.data?.suppressedSinceLast === undefined)).toBe(true)
     })
@@ -569,19 +530,11 @@ describe('crash breadcrumb store', () => {
         10
       )
       expect(bursts).toHaveLength(1)
-      // The population survives even though 33 crumbs did not — that count was
-      // the only signal the multiplicity ever carried.
       expect(bursts[0].data).toEqual(
         expect.objectContaining({ livePanes: burstSize, livePaneManagers: burstSize })
       )
     })
 
-    // The suppression path returns before the delete-then-set that re-anchors
-    // recency, so a continuously-suppressed key kept its original insertion slot
-    // and became the FIRST eviction candidate — the exact inverse of the LRU's
-    // intent. `renderer_error` keys carry message+stack identity, so one noisy
-    // loop mints unbounded distinct keys and evicts the burst key mid-storm,
-    // re-arming the ring flush this suppression exists to prevent.
     it('keeps suppressing a hot key while high-cardinality churn fills the LRU', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -608,15 +561,11 @@ describe('crash breadcrumb store', () => {
         }
       }
 
-      // Assert on suppression, not on ring occupancy: 200 genuinely-distinct
-      // errors legitimately flush the 30-entry ring, which masks an eviction as
-      // "one entry" either way.
+      // Check suppression: ring occupancy alone can hide an evicted key's re-emission.
       expect(reEmissions).toBe(0)
       expect(hitBurstKey()).toBeUndefined()
     })
 
-    // Re-anchoring must move position only. Renewing recordedAt on every hit
-    // would let a sustained emitter suppress itself forever and never re-emit.
     it('still expires the suppression window while a hot key is re-anchored', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -638,9 +587,6 @@ describe('crash breadcrumb store', () => {
       expect(hit()).toEqual({ suppressedSinceLast: 29 })
     })
 
-    // Panes mount progressively, so the first crumb of a burst sees a census of
-    // 1. Freezing it would report `livePanes: 1` for a 34-pane wave — the exact
-    // "one pane looping" misread that coalescing by name was built to prevent.
     it('reports the newest census of a growing burst, not the first', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -674,8 +620,6 @@ describe('crash breadcrumb store', () => {
       )
     })
 
-    // The re-emitted crumb already carries `suppressedSinceLast`, so folding the
-    // same events into the expiring slot too would report one burst twice.
     it('counts a burst once when the window expires and the key re-emits', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -703,9 +647,6 @@ describe('crash breadcrumb store', () => {
       expect(bursts[1].data).toEqual({ livePanes: 3, suppressedSinceLast: 1 })
     })
 
-    // A crash report filed mid-window snapshots the ring, which folds the
-    // suppressed repeats into the emitted crumb. Re-claiming those repeats on
-    // the next emit would report one burst twice across two crumbs.
     it('does not re-claim repeats a snapshot already folded into the crumb', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -731,8 +672,6 @@ describe('crash breadcrumb store', () => {
       expect(bursts[0].data).toEqual({ livePanes: 2, suppressedSinceLast: 1 })
       expect(bursts[1].data).toEqual({ livePanes: 3 })
 
-      // The re-emitted crumb was born claiming nothing, so a fold onto it must
-      // claim only the new repeat — not the one the first crumb already owns.
       vi.advanceTimersByTime(10)
       hit(4)
       const resolved = getCrashBreadcrumbSnapshot().filter(
@@ -741,8 +680,6 @@ describe('crash breadcrumb store', () => {
       expect(resolved[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 1 })
     })
 
-    // A re-emitted crumb is born already claiming the previous window's count;
-    // a later fold must add to that claim, not overwrite it away.
     it('keeps the carried count when a fold resolves onto a re-emitted crumb', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -769,10 +706,6 @@ describe('crash breadcrumb store', () => {
       expect(bursts[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
     })
 
-    // A crash storm records other breadcrumbs too; if they push the burst crumb
-    // out of the 30-entry ring mid-window, a snapshot's fold lands in evidence
-    // no snapshot can see. Marking those repeats resolved anyway would let the
-    // next emit claim nothing and the burst vanish from the record entirely.
     it('re-claims repeats on the next emit when the burst crumb was evicted from the ring', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -802,9 +735,6 @@ describe('crash breadcrumb store', () => {
       expect(burst?.data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
     })
 
-    // Retained high-water profiles occupy snapshot slots, so the oldest ring
-    // entries past that budget are invisible to every future snapshot even
-    // though they are still in the array; folding there loses the burst too.
     it('re-claims repeats when retained profiles push the burst crumb past the snapshot budget', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -826,8 +756,7 @@ describe('crash breadcrumb store', () => {
           thresholdPct: 80
         })
       }
-      // Ring stays at 30 (burst crumb still at index 0) but only the newest 26
-      // ring entries fit a snapshot alongside the 4 retained profiles.
+      // Four retained profiles reduce the report's ring budget to 26 entries.
       for (let index = 0; index < 29; index += 1) {
         recordCrashBreadcrumb(`renderer_error_${index}`, { index })
       }
@@ -838,8 +767,6 @@ describe('crash breadcrumb store', () => {
       expect(resumed).toEqual({ suppressedSinceLast: 2 })
     })
 
-    // Two crash reports filed inside one window are immutable cumulative views;
-    // the next window must still start from zero unresolved debt.
     it('keeps immutable snapshots cumulative without re-claiming resolved debt', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
@@ -868,8 +795,6 @@ describe('crash breadcrumb store', () => {
       const resumed = hit(5)
       expect(resumed).toEqual({ suppressedSinceLast: 0 })
 
-      // A fold onto the fresh crumb must claim only its own window's repeat —
-      // over-resolving in the first window would push this claim negative.
       vi.advanceTimersByTime(10)
       hit(6)
       const resolved = getCrashBreadcrumbSnapshot().filter(
@@ -878,9 +803,6 @@ describe('crash breadcrumb store', () => {
       expect(resolved[1].data).toEqual({ livePanes: 6, suppressedSinceLast: 1 })
     })
 
-    // A key that ages out loses its only handle on the ring entry it owns, so
-    // the newest suppressed payload must be folded in before the entry is
-    // dropped from the map.
     it('resolves a suppressed payload when an unrelated key ages the map', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))

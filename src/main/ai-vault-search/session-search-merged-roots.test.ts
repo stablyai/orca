@@ -12,14 +12,7 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 
-// OpenClaw is the one agent whose roots are alternates for a single install, so
-// discovery reports them as ONE discovery whose rootDir is every path joined by
-// the platform's path delimiter. That string is not a directory: readdir on it
-// answers ENOENT, containment never matches a real file, and a scan issue
-// recorded against a real root never compares equal to it. Everything that
-// judges a root works on the constituent directories, taken from the same
-// source table discovery reads, never by splitting the label -- a directory may
-// legally contain the delimiter.
+// Use constituent OpenClaw roots; joined discovery labels cannot be split because paths may contain delimiters.
 
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const INTERVAL_MS = 20_000
@@ -42,7 +35,6 @@ afterEach(async () => {
   await harness.cleanup()
 })
 
-/** OpenClaw reads `<stateDir>/agents/**` and keeps only paths through `sessions`. */
 function openclawTranscript(stateDir: string, name: string): string {
   return join(stateDir, 'agents', 'main', 'sessions', `${name}.jsonl`)
 }
@@ -80,17 +72,14 @@ it.skipIf(!CAN_DENY_READ)('fences one merged root without taking its partner dow
   await indexer.start()
   expect(sessionsMatching('conversation').sort()).toEqual(['local-session', 'mounted-session'])
 
-  // One of the two roots goes away; the other is untouched.
   await chmod(join(current, 'agents'), 0o000)
   try {
     await indexer.reconcile({ full: true })
 
     const status = indexer.status()
     const degraded = status.degradedRoots.map((root) => root.root)
-    // A real directory, not the joined string discovery reports.
     expect(degraded).toContain(join(current, 'agents'))
     expect(degraded.every((root) => !root.includes(delimiter))).toBe(true)
-    // Unprovable, so the unreadable root keeps its rows.
     expect(sessionsMatching('mounted')).toEqual(['mounted-session'])
   } finally {
     await chmod(join(current, 'agents'), 0o755)
@@ -102,8 +91,7 @@ it('retires from one merged root while its partner is healthy', async () => {
   const legacy = harness.roots.openclawLegacyStateDir ?? ''
   const going = openclawTranscript(current, 'going-session')
   await writeMessageGraphTranscript(going, ['a conversation about to be deleted'])
-  // A sibling in the same root, so deleting one leaves the root listing files
-  // and therefore healthy: this is a deletion, not an unmount.
+  // Keep a sibling so deletion does not trigger empty-root grace.
   await writeMessageGraphTranscript(openclawTranscript(current, 'sibling-session'), [
     'a conversation beside it'
   ])
@@ -125,7 +113,6 @@ it('retires from one merged root while its partner is healthy', async () => {
     'staying-session'
   ])
 
-  // A genuine deletion inside a healthy root still retires normally.
   await rm(going)
   await indexer.reconcile({ full: true })
 

@@ -131,6 +131,7 @@ export function EditorEditFileSurface({
           src={fileContent.mediaUrl}
           mimeType={fileContent.mimeType ?? 'video/mp4'}
           filePath={activeFile.filePath}
+          playbackCacheKey={pdfViewStateKey}
           canOpenLocally={
             !activeFile.externalSshTargetId &&
             !activeFile.runtimeEnvironmentId &&

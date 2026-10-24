@@ -65,11 +65,7 @@ describe('authorized-roots invalidation scope', () => {
     mocks.graph.mockClear()
   })
 
-  /**
-   * The regression this pins: the global form dirties every owner, so one worktree
-   * mutation cost a `git worktree list` per registered repo — ~58 spawns and seconds
-   * of git wall-clock on a real fleet, to rediscover roots only one repo changed.
-   */
+  // One worktree mutation must not relist every registered repo.
   it('relists only the mutated repo', async () => {
     invalidateAuthorizedRootsCacheForRepo(store, repos[3])
     await rebuildAuthorizedRootsCache(store, true)
@@ -91,8 +87,7 @@ describe('authorized-roots invalidation scope', () => {
   })
 
   it('falls back to a global relist when the repo has no known owner', async () => {
-    // An unregistered repo must not silently skip invalidation and leave a stale
-    // allowlist, so the global form is the safe fallback.
+    // Unknown owners require global invalidation rather than retaining a stale allow-list.
     invalidateAuthorizedRootsCacheForRepo(store, {
       ...repos[0],
       id: 'unregistered',

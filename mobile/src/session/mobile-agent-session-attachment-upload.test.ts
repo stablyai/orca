@@ -33,7 +33,7 @@ function fakeHost(answer: (method: string, params: unknown) => RpcResponse) {
   return { client, calls }
 }
 
-function storingHost(failAppend = false) {
+function storingHost(byteLength = 3, name = 'spec.pdf', failAppend = false) {
   return fakeHost((method) => {
     if (method === 'agentSessionAttachment.uploadStart') {
       return ok({ uploadId: 'upload-1' })
@@ -42,7 +42,7 @@ function storingHost(failAppend = false) {
       return failAppend ? fail('disk full') : ok({})
     }
     if (method === 'agentSessionAttachment.uploadCommit') {
-      return ok({ path: '/store/upload-1/spec.pdf', name: 'spec.pdf', byteLength: 3 })
+      return ok({ path: `/store/upload-1/${name}`, name, byteLength })
     }
     return ok({ aborted: true })
   })
@@ -51,7 +51,7 @@ function storingHost(failAppend = false) {
 describe('uploadMobileAgentSessionAttachment', () => {
   it('stores a file across chunks addressed by byte offset and answers the host path', async () => {
     const bytes = Buffer.alloc(AGENT_SESSION_ATTACHMENT_CHUNK_BYTES * 2 + 5, 7)
-    const host = storingHost()
+    const host = storingHost(bytes.byteLength)
 
     const stored = await uploadMobileAgentSessionAttachment(host.client, {
       sessionId: 'session-1',
@@ -59,7 +59,11 @@ describe('uploadMobileAgentSessionAttachment', () => {
       base64: bytes.toString('base64')
     })
 
-    expect(stored).toEqual({ path: '/store/upload-1/spec.pdf', name: 'spec.pdf', byteLength: 3 })
+    expect(stored).toEqual({
+      path: '/store/upload-1/spec.pdf',
+      name: 'spec.pdf',
+      byteLength: bytes.byteLength
+    })
     expect(host.calls[0]).toEqual({
       method: 'agentSessionAttachment.uploadStart',
       params: { sessionId: 'session-1', name: 'spec.pdf', byteLength: bytes.byteLength }
@@ -82,11 +86,15 @@ describe('uploadMobileAgentSessionAttachment', () => {
           String(call.params.contentBase64).length <= AGENT_SESSION_ATTACHMENT_CHUNK_BASE64_CHARS
       )
     ).toBe(true)
-    expect(host.calls.at(-1)?.method).toBe('agentSessionAttachment.uploadCommit')
+    expect(appends.every((call) => call.params.uploadId === 'upload-1')).toBe(true)
+    expect(host.calls.at(-1)).toEqual({
+      method: 'agentSessionAttachment.uploadCommit',
+      params: { uploadId: 'upload-1' }
+    })
   })
 
   it('sends an empty file as one empty append', async () => {
-    const host = storingHost()
+    const host = storingHost(0, 'empty.txt')
     await uploadMobileAgentSessionAttachment(host.client, {
       sessionId: 'session-1',
       name: 'empty.txt',
@@ -98,10 +106,14 @@ describe('uploadMobileAgentSessionAttachment', () => {
       'agentSessionAttachment.uploadCommit'
     ])
     expect(host.calls[0]?.params.byteLength).toBe(0)
+    expect(host.calls[1]).toEqual({
+      method: 'agentSessionAttachment.uploadAppend',
+      params: { uploadId: 'upload-1', offset: 0, contentBase64: '' }
+    })
   })
 
   it("aborts the slot when a chunk fails and reports the host's reason", async () => {
-    const host = storingHost(true)
+    const host = storingHost(3, 'spec.pdf', true)
     await expect(
       uploadMobileAgentSessionAttachment(host.client, {
         sessionId: 'session-1',

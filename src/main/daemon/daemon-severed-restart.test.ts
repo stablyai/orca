@@ -58,7 +58,7 @@ describe('restarting a daemon whose AppImage files are gone', () => {
       status: 'restarted',
       killedCount: 1
     })
-    // The pid travels into the restart so its teardown re-checks the endpoint owner.
+    // Pass the PID through so teardown can recheck endpoint ownership.
     expect(restart).toHaveBeenCalledWith(4288)
     expect(getSeveredDaemon()).toBeNull()
   })

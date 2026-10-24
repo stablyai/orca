@@ -53,7 +53,6 @@ src/session/pending-terminal-handle-recovery-poll.test.ts
 src/session/session-reply-schema.test.ts
 src/session/use-mobile-diff-review-send-actions.test.ts
 src/session/use-mobile-file-tap-handlers.test.ts
-src/session/use-mobile-native-chat-image-attachments.test.ts
 src/session/use-mobile-pr-branch-context.test.ts
 src/session/use-mobile-pr-sidebar-controller.test.ts
 src/session/use-mobile-session-terminal-create-actions.test.ts
@@ -85,10 +84,8 @@ src/test-support/rpc-recording/native-mounting-substitutes.test.ts
 src/test-support/rpc-recording/operation-module-loader.test.ts
 src/test-support/rpc-recording/screen-native-substitutes.test.ts
 src/transport/client-context.test.ts
-src/transport/connection-revival-triggers.test.ts
 src/transport/host-credential-cleanup.test.ts
 src/transport/host-edit-navigation.test.ts
-src/transport/host-list-load-sharing.test.ts
 src/transport/host-removal-lifecycle.test.ts
 src/transport/host-status-gates.test.ts
 src/transport/host-store.test.ts

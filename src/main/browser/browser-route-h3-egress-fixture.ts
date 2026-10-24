@@ -90,12 +90,10 @@ const DIRECT_SOCKETS_FEATURES = [
 function electronArgs(protectedSession: boolean, forcedQuicPort: number): string[] {
   const args = [
     `--origin-to-force-quic-on=${PROBE_HOST}:${forcedQuicPort}`,
-    // Why: both arms opt Direct Sockets in so the control shows an exposed constructor; the guest arm then has to
-    // beat an explicit enable, which is the future-Chromium-default-flip this switch exists to survive.
+    // Enable Direct Sockets in both arms so the shipped disable list must override an explicit enable.
     `--enable-features=${DIRECT_SOCKETS_FEATURES.join(',')}`
   ]
   if (protectedSession) {
-    // Why: the guest arm launches with the exact list Orca ships, so this proves the shipped switch, not a bare flag.
     args.push(`--disable-features=${DISABLED_CHROMIUM_FEATURES.join(',')}`)
   }
   return args
@@ -144,7 +142,7 @@ function bindUdp(socket: UdpSocket): Promise<number> {
 }
 
 function createSocksStandIn(): Server {
-  // Why: the probes only need the endpoint to exist and verify as the resolved proxy; no SOCKS reply is negotiated.
+  // The probe only checks proxy selection; it does not negotiate SOCKS.
   return createServer((socket) => socket.destroy())
 }
 

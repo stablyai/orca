@@ -39,11 +39,7 @@ vi.mock('../project-runtime-git-options', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.projectRuntimes
 }))
 
-/**
- * Widened past `Repo['executionHostId']` on purpose: the union names the stamps Orca writes, while a
- * store carries whatever an older build, a hand-edited catalog or a partial migration left behind.
- * Those are exactly the stamps authorization has to place, so the matrix must be able to build them.
- */
+/** Widen owner stamps to exercise older catalogs, malformed input and partial migrations beyond the typed union. */
 type Owner = { connectionId?: string | null; executionHostId?: string | null }
 const root = resolve('/owner-fixture')
 const linked = resolve('/linked-fixture')
@@ -121,8 +117,7 @@ const deniedOwners: { name: string; owner: Owner }[] = [
     name: 'runtime with legacy SSH',
     owner: { executionHostId: 'runtime:env', connectionId: 'host-a' }
   },
-  // Host ids the shared parser rejects. Each must fail closed: an owner we cannot place is not
-  // evidence of a local one, and a bare `getSshTargetIdForExecutionHost` answers null for all five.
+  // Rejected host IDs must fail closed; null SSH extraction alone does not prove local ownership.
   { name: 'empty SSH target', owner: { executionHostId: 'ssh:' } },
   { name: 'undecodable SSH target', owner: { executionHostId: 'ssh:%zz' } },
   { name: 'alias-delimiter SSH target', owner: { executionHostId: 'ssh:host-a|alias' } },
@@ -270,15 +265,13 @@ it('denies a workspace pinned local under a group carrying only a legacy connect
   const store = storeFor([], [legacyGroup], [pinnedFolder])
   expect(getAllowedRoots(store)).toEqual([])
   expect(isPathAllowed(join(root, 'file'), store)).toBe(false)
-  // Dispatch reads the same row as local; authorization is deliberately the stricter of the two,
-  // because agreeing would grant a root this store refuses today.
+  // Dispatch accepts the local pin, but authorization preserves the stricter legacy ownership check.
   expect(
     resolveFolderWorkspaceHost(
       { folderWorkspaces: [pinnedFolder], projectGroups: [legacyGroup], repos: [] },
       'folder'
     )
   ).toEqual({ kind: 'local' })
-  // The mirrored row needs no such note: the workspace's own legacy connection is remote on both sides.
   const mirrored = storeFor(
     [],
     [group({ executionHostId: 'local' }, { parentPath: null })],
@@ -306,7 +299,6 @@ describe('workspace-directory fallback', () => {
       storeFor([repo({ executionHostId: 'ssh:host-a' })], [], [], { workspaceDir })
     )
     expect(local).toEqual([root, workspaceDir])
-    // The SSH repo's own path is gone; nothing beyond the fallback the same config already granted.
     expect(sshOnly).toEqual([workspaceDir])
     expect(
       isPathAllowed(
@@ -338,15 +330,12 @@ describe('workspace-directory fallback', () => {
     ).toEqual([])
   })
 
-  // Why guarded rather than injected: this is the end-to-end claim that the foreign-flavour string
-  // never reaches `resolve`, so it has to run against the real host path module — and on Windows the
-  // same string is a legitimate root. The flavour matrix below covers both hosts unguarded.
+  // Use the real host module here; the injected flavor matrix below covers both platforms.
   it.skipIf(process.platform === 'win32')(
     'does not anchor a Windows-style workspace directory under the POSIX main-process cwd',
     () => {
       const store = storeFor([], [], [], { workspaceDir: 'C:\\workspaces' })
       expect(getAllowedRoots(store)).toEqual([])
-      // The cross-platform predicate used to grant exactly this: `<cwd>/C:\workspaces`.
       expect(isPathAllowed(join(resolve('C:\\workspaces'), 'file'), store)).toBe(false)
     }
   )

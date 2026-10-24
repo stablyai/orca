@@ -1,7 +1,4 @@
-// A task that finishes on its own just as the user presses Stop keeps its own ending. The CLI
-// writes the task's completion before its answer to `stop_task`, but the SDK hands Orca a control
-// answer as soon as it reads it and queues every other frame, so the acknowledgement can arrive
-// first. Driven through the real SDK and Orca's stream-json connection against the scripted CLI.
+// SDK control replies can overtake queued frames even when the CLI wrote task completion first.
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -61,7 +58,6 @@ afterEach(async () => {
   }
 })
 
-/** Streamed text the CLI wrote ahead of the completion, as while Claude is answering. */
 function streamed(count: number): Record<string, unknown>[] {
   return Array.from({ length: count }, (_, index) => ({
     type: 'stream_event',
@@ -78,8 +74,7 @@ async function until(done: () => boolean): Promise<void> {
   expect(done()).toBe(true)
 }
 
-/** The task's record after the user stops it and the CLI answers behind `ahead` streamed frames
- *  and the task's own completion, all in one write. */
+/** Emit streamed frames and task completion before the stop reply in one write. */
 async function stoppedAsItCompleted(ahead: number) {
   const dir = mkdtempSync(join(tmpdir(), 'claude-stop-ack-race-'))
   scratch.push(dir)

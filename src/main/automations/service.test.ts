@@ -24,7 +24,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-/** Simulate registry drift after a record was stored; the create path derives contexts itself. */
+/** Inject persisted drift that normal creation would resolve. */
 function mutateDataFile(mutate: (state: { automations: Record<string, unknown>[] }) => void): void {
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readPersistedStateJson(file))
@@ -575,8 +575,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
-    // While usage collection is awaited the run is already final, so a
-    // scheduler tick creating newer runs can prune it away mid-flight.
+    // New runs can prune this finalized run while usage collection waits.
     const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
       for (let i = 1; i <= 120; i++) {
         const later = store.createAutomationRun(automation, base + i * 60_000)
@@ -603,7 +602,6 @@ describe('AutomationService', () => {
     })
 
     expect(updated.id).toBe(run.id)
-    // The run really was evicted; the usage write was skipped instead of throwing.
     expect(store.listAutomationRuns(automation.id).some((entry) => entry.id === run.id)).toBe(false)
   })
 
@@ -644,7 +642,7 @@ describe('AutomationService', () => {
     expect(updated.usage?.unavailableReason).toBe('provider_unsupported')
   })
 
-  // #16303: listAutomations sorts by name, so 'A ...' is evaluated before 'B ...'.
+  // Name sorting evaluates the poison record before the healthy one.
   it('keeps evaluating later due automations after an unreadable schedule throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
@@ -671,7 +669,6 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
-    // Persisted by an older build, or hand-edited: WEEKLY with no BYDAY cannot resolve a day.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
       entry.rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
@@ -702,8 +699,6 @@ describe('AutomationService', () => {
     expect(logged).toHaveBeenCalled()
   })
 
-  // Same isolation, reached through the cron parser rather than the RRULE one, because that
-  // is the path all four cron repairs run on.
   it('keeps evaluating later due automations after an unreadable cron schedule throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
@@ -730,7 +725,6 @@ describe('AutomationService', () => {
       rrule: '0 9 * * *',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
-    // Day of month 32 never validates at input; only a hand-edited or older-build row has it.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
       entry.rrule = '0 9 32 * *'
@@ -759,8 +753,6 @@ describe('AutomationService', () => {
     expect(logged).toHaveBeenCalled()
   })
 
-  // A send that throws is a dispatch failure, not an unreadable schedule: the run must land on
-  // dispatch_failed rather than being left 'dispatching' beside a bogus skipped_unavailable row.
   it('marks the run dispatch_failed when the renderer send throws', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()

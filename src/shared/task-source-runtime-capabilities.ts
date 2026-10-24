@@ -1,11 +1,11 @@
-import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from './jira-agent-capability'
+import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from './jira/jira-agent-capability'
 import {
   JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
   JIRA_DETAIL_RUNTIME_CAPABILITIES,
   JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY
-} from './jira-detail-capabilities'
-import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from './jira-quick-filters'
-import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from './jira-saved-filter-capability'
+} from './jira/jira-detail-capabilities'
+import { JIRA_STATUS_FILTER_RUNTIME_CAPABILITY } from './jira/jira-quick-filters'
+import { JIRA_SAVED_FILTER_RUNTIME_CAPABILITY } from './jira/jira-saved-filter-capability'
 
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =

@@ -1,7 +1,7 @@
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { buildNativeChatProviderUpdate } from '../../../../shared/native-chat-providers'
+import { buildNativeChatProviderUpdate } from '../../../../shared/native-chat/native-chat-providers'
 import {
   isNativeChatDefaultFor,
   isNativeChatEnabled

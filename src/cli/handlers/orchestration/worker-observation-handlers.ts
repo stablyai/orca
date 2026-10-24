@@ -26,15 +26,14 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       const lines = [
         `${value.dispatch?.id ?? 'unknown'} task=${value.dispatch?.taskId ?? 'unknown'} [${value.worker.state}] stage=${value.worker.stage}`
       ]
-      // Why: PTY status alone read `live` for an agent that died at a trust prompt, so the
-      // fleet verdict and its next action print beside it rather than in another command.
+      // A live PTY can contain a dead agent; show the independent agent verdict and recovery action.
       if (value.projection) {
         lines.push(
           `Agent liveness: ${value.projection.liveness.verdict}`,
           `Next action: ${value.projection.nextAction.argv.join(' ') || 'none'}`
         )
       }
-      // Why: absent means unknown on older runtimes, distinct from an evaluated null wait.
+      // Older runtimes omit agentWait; absence is unknown, distinct from an evaluated null.
       if (value.observation === undefined || !('agentWait' in value.observation)) {
         lines.push('Interactive wait: unknown (not evaluated)')
       } else if (value.observation.agentWait) {

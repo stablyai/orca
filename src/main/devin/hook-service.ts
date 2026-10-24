@@ -17,6 +17,7 @@ import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/hook-post-command'
 import {
   applyDevinManagedHooks,
   DEVIN_EVENTS,
@@ -43,7 +44,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
+      // Refresh endpoint credentials for PTYs that outlive an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('devin'),
@@ -57,8 +58,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('devin'),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
+    // Refresh endpoint credentials for PTYs that outlive an Orca restart.
+    // Keep endpoint-file races and parse errors out of agent transcripts.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -66,9 +67,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: worktreeId embeds a filesystem path, so hand-building JSON in shell is unsafe (quotes/newlines); post as form fields instead.
-    // Why: pipe payload to curl's stdin (payload@-) not an inline arg, so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/devin" \\',
+    // Form encoding handles filesystem paths containing quotes or newlines.
+    // stdin keeps large payloads off the command line to avoid EDR false positives.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/devin" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -103,7 +104,6 @@ export class DevinHookService {
       }
     }
 
-    // Why: report `partial` when only some managed events are registered, so the sidebar shows a degraded install instead of a false `installed`.
     const command = getDevinManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
@@ -169,15 +169,12 @@ export class DevinHookService {
     return this.getStatus()
   }
 
-  // Why: install the Devin hook on the remote box (SFTP handle + resolved remote $HOME); POSIX-only by design.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote-Windows is out of scope for v1; process.platform here is the local box, not the remote, so assume POSIX.
+    // Remote hook scripts use POSIX syntax regardless of the local platform.
     const remoteConfigPath = getDevinRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getDevinPosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
-    // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
-      // Why: Devin config.json is JSONC (comments), so JSON.parse rejects it; parse via jsonc-parser.
       const body = await readTextFileRemote(sftp, remoteConfigPath)
       const config =
         body === null ? {} : parseDevinHooksConfigText(body, 'remote Devin config.json')
@@ -191,12 +188,10 @@ export class DevinHookService {
         }
       }
 
-      // Why: the POSIX wrapper body is path-independent, so reuse the same helper.
       const command = getDevinRemoteManagedCommand(remoteScriptPath)
       const nextConfig = applyDevinManagedHooks(config, command, remoteScriptFileName)
 
-      // Why: write script before settings so a mid-install failure never leaves settings.json referencing a missing script.
-      // Why: SSH remotes use POSIX `.sh` hooks even when Orca runs on Windows; never derive remote script syntax from local OS.
+      // Publish the script before its config so partial installs cannot reference a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
         serialized: serializeDevinHooksConfig(body, nextConfig)

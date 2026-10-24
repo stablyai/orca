@@ -60,7 +60,13 @@ describe('a URL the platform refuses before it returns a promise', () => {
   it('names the refusal rather than failing silently', () => {
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     openExternalLink('')
-    expect(warned).toHaveBeenCalled()
+    expect(warned.mock.calls).toEqual([
+      [
+        '[platform] could not open a URL',
+        { url: '' },
+        expect.objectContaining({ message: 'Invalid URL: cannot be empty' })
+      ]
+    ])
     warned.mockRestore()
   })
 })

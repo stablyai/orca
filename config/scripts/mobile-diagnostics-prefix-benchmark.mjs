@@ -64,6 +64,7 @@ const base = {
   lastConnectedAt: null,
   platform: 'android',
   appVersion: 'fixture',
+  bridgeProtocolVersion: 7,
   nowMs: 1700000000000
 }
 let seed = 0x20d1a6
@@ -135,6 +136,7 @@ for (let trace = 0; trace < 600; trace++) {
   })
   const reports = modules.map((module) => module.buildConnectionDiagnosticsReport(args))
   assert.equal(reports[1], reports[0])
+  assert(reports[1].includes('Bridge protocol: 7'))
   assert(!reports[1].includes('fixture-secret'))
   const limit = limits[random(limits.length)]
   assert.equal(

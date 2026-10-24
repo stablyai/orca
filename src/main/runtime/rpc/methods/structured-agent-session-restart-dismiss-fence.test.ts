@@ -87,12 +87,7 @@ it('fences a dismissed offer against a late teardown write when the desktop sees
 })
 
 it('leaves offers it was not shown when the host runs an agent an older desktop cannot show', async () => {
-  const { host, root, marker } = await interruptedRestart(
-    undefined,
-    undefined,
-    undefined,
-    withPilot()
-  )
+  const { host, root, marker } = await interruptedRestart(undefined, undefined, withPilot())
   setStructuredAgentSessionHost(host)
   const capsule = new AgentSessionRecoveryCapsule(root)
   // An offer whose chat this launch cannot read names no agent the desktop was shown.

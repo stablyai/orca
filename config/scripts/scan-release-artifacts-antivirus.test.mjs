@@ -78,12 +78,14 @@ describe('antivirus detection report', () => {
       known: true,
       scanned: 70,
       flagged: [
-        { engine: 'TrendMicro', category: 'malicious', detection: 'Trojan.MSIL.MSILHERACLES' }
+        { engine: 'TrendMicro', category: 'malicious', detection: 'Trojan.MSIL.MSILHERACLES' },
+        { engine: 'Microsoft', category: 'suspicious', detection: 'Behavior:Win32/Test' }
       ]
     })
 
-    expect(report).toContain('1 of 70 engines flag this build')
+    expect(report).toContain('2 of 70 engines flag this build')
     expect(report).toContain('TrendMicro: Trojan.MSIL.MSILHERACLES')
+    expect(report).toContain('Microsoft: Behavior:Win32/Test')
   })
 
   it('flags the release when any single artifact carries a verdict', () => {

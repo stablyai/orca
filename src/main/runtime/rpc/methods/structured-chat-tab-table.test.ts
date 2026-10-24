@@ -14,7 +14,7 @@ import { DeviceRegistry } from '../../device-registry'
 import WebSocket from 'ws'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
+import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
 import { devicePrincipalOf } from '../../device-principal'
 import {
   WORKTREE,

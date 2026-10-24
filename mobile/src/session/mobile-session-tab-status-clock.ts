@@ -63,8 +63,10 @@ function applyCatalogRowToStatus(
     return null
   }
   const active = state !== 'done'
+  // Why: the masked status's evidence clock records shell-title evidence, not the catalog state.
+  const { evidenceObservedAt: _evidenceObservedAt, ...rest } = base
   return {
-    ...base,
+    ...rest,
     state,
     updatedAt: Math.max(base.updatedAt, catalogRow.updatedAt),
     ...(typeof catalogRow.stateStartedAt === 'number'
@@ -91,9 +93,27 @@ function reconcileShellMaskedAgentStatus(
     agentStatus.paneKey ||
     (tab.parentTabId && tab.leafId ? `${tab.parentTabId}:${tab.leafId}` : null)
   const catalogRow = findWorktreeAgentRow(options?.cachedWorktrees, options?.worktreeId, paneKey)
+  const catalogPredatesStateStart =
+    agentStatus.stateStartedAt !== undefined &&
+    catalogRow != null &&
+    typeof catalogRow.updatedAt === 'number' &&
+    catalogRow.updatedAt < agentStatus.stateStartedAt &&
+    (typeof catalogRow.stateStartedAt !== 'number' ||
+      catalogRow.stateStartedAt < agentStatus.stateStartedAt)
+  const knownSupersedesCatalog =
+    known != null &&
+    catalogRow != null &&
+    typeof catalogRow.updatedAt === 'number' &&
+    known.state === catalogRow.state &&
+    known.updatedAt > catalogRow.updatedAt &&
+    known.updatedAt > agentStatus.updatedAt &&
+    known.stateStartedAt !== undefined &&
+    known.stateStartedAt === agentStatus.stateStartedAt
   if (
     catalogRow &&
     typeof catalogRow.updatedAt === 'number' &&
+    !catalogPredatesStateStart &&
+    !knownSupersedesCatalog &&
     (catalogRow.updatedAt >= agentStatus.updatedAt ||
       (agentStatus.state === 'done' && catalogRow.state !== 'done'))
   ) {

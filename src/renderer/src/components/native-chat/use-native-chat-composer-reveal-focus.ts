@@ -8,7 +8,7 @@ import type { NativeChatComposerHandle } from './NativeChatComposer'
 const REVEAL_FOCUS_FRAMES = 6
 const PENDING_FOCUS_MS = 1000
 
-const revealedComposerReclaims = new Map<string, () => void>()
+const revealedComposerReclaims = new Map<string, (onlyIfFocusUnclaimed?: boolean) => void>()
 const mountedComposers = new Set<RefObject<NativeChatComposerHandle | null>>()
 let pendingFocusRequest: { tabId: string | null; cancel: () => void } | null = null
 let focusRequestGeneration = 0
@@ -61,7 +61,15 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
 }
 
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
-export function requestNativeChatComposerFocus(tabId: string): void {
+export function requestNativeChatComposerFocus(
+  tabId: string,
+  options: { onlyIfFocusUnclaimed?: boolean } = {}
+): void {
+  if (options.onlyIfFocusUnclaimed) {
+    // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
+    revealedComposerReclaims.get(tabId)?.(true)
+    return
+  }
   captureNativeChatComposerFocusIntent().request(tabId)
 }
 
@@ -110,7 +118,15 @@ export function useNativeChatComposerRevealFocus({
     if (!revealed || !composerReady) {
       return
     }
-    const reclaim = (): void => {
+    const reclaim = (onlyIfFocusUnclaimed = false): void => {
+      if (onlyIfFocusUnclaimed) {
+        const root = rootRef.current
+        const active = root?.ownerDocument.activeElement
+        if (root && (active === null || active === root.ownerDocument.body)) {
+          composerRef.current?.focus()
+        }
+        return
+      }
       claimedRef.current = false
       explicitRef.current = true
       const active = rootRef.current?.ownerDocument.activeElement ?? null

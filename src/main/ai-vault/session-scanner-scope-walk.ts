@@ -39,7 +39,6 @@ type ScopeScanArgs = {
   discoveries: readonly SessionFileDiscovery[]
   options: AiVaultScanOptions
   limit: number
-  // The capped list's transcripts, already parsed and returned.
   alreadyParsedFilePaths: ReadonlySet<string>
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
@@ -48,10 +47,7 @@ type ScopeScanArgs = {
   antigravityWorkspaceResolver: AntigravityWorkspaceResolver
 }
 
-/**
- * The Workspace/Project sessions the recency cap left out, for every agent: each
- * one is found the way AI_VAULT_SCOPE_CWD_SOURCES says its cwd can be read.
- */
+/** Recover scoped sessions omitted by recency discovery using each agent’s cwd source. */
 export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultSession[]> {
   const scopePaths = args.options.scopePaths ?? []
   if (scopePaths.length === 0) {
@@ -85,7 +81,6 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
   if (candidates.length === 0) {
     return walked
   }
-  // Parse every in-scope candidate (limit === candidate count never early-stops).
   const bucketed = await parseSessionCandidates({
     candidates,
     limit: candidates.length,
@@ -99,11 +94,7 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
   return [...bucketed, ...walked]
 }
 
-/**
- * Agents without a cwd-per-directory layout: walks their files newest first,
- * skips a file only when its cached or opening-record cwd is known to be out of
- * scope, and counts what the parse then places in scope.
- */
+/** Walk non-bucket agents newest first, skipping only known out-of-scope versions before parsing. */
 async function walkInScopeSessions(
   args: ScopeScanArgs,
   scopePaths: readonly string[]
@@ -190,7 +181,6 @@ export async function prepareScopeScan(
     return []
   }
   const workload = aiVaultScanWorkload(args.options.signal)
-  // H is temporary: walk-only keys settle directly, without a second retained registry.
   if (workload) {
     const { candidates } = await walkInventory(args, scopePaths)
     for (const [index, candidate] of candidates.entries()) {
@@ -231,7 +221,7 @@ export async function prepareScopeScan(
   return inventories
 }
 
-// Per lookup batch: one database round trip, then a turn for the event loop.
+// Yield between database lookup batches to keep scanner requests responsive.
 const SCOPE_LOOKUP_BATCH = 500
 
 async function lookupScopeCwds(
@@ -249,11 +239,7 @@ async function lookupScopeCwds(
   }
 }
 
-/**
- * False only when this transcript version's cwd is known to be out of scope: a
- * parse row's cwd first, then one read without a parse. A read the agent can
- * settle is stored, so the next scan of an unchanged file reads nothing.
- */
+/** Skip known absent or out-of-scope cwds; cache readable versions to avoid repeated header reads. */
 async function mayBeInScope(
   candidate: SessionFileCandidate,
   inScope: ReturnType<typeof createAiVaultScopeCwdMatcher>,

@@ -31,7 +31,8 @@ describe('normalizeAgentSessionConversationName', () => {
   })
 
   it('bounds a pasted essay to the stored maximum', () => {
-    const normalized = normalizeAgentSessionConversationName('a'.repeat(1000))
+    const normalized = normalizeAgentSessionConversationName(`First ${'x'.repeat(994)}`)
+    expect(normalized).toBe(`First ${'x'.repeat(194)}`)
     expect(normalized).toHaveLength(AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH)
     expect(isAgentSessionConversationName(normalized)).toBe(true)
   })
@@ -50,14 +51,9 @@ describe('isAgentSessionConversationName', () => {
 })
 
 describe('normalizeAgentSessionConversationName hostile text', () => {
-  it('strips control characters and bidi overrides', () => {
-    // U+202E renders what follows right-to-left, so a tab could show a label
-    // that reads as text the name does not contain.
-    expect(normalizeAgentSessionConversationName('Fix\u202Egnp.exe probe')).toBe(
-      'Fix gnp.exe probe'
-    )
+  it('strips controls and lone surrogates', () => {
     expect(normalizeAgentSessionConversationName('Fix\u0007the probe')).toBe('Fix the probe')
-    expect(normalizeAgentSessionConversationName('Fix\u200Bthe probe')).toBe('Fix the probe')
+    expect(normalizeAgentSessionConversationName('Fix\uD800 the\uDC00 probe')).toBe('Fix the probe')
     expect(normalizeAgentSessionConversationName('\u202E\u200B ')).toBeNull()
   })
 

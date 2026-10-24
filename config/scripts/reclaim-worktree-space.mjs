@@ -12,11 +12,15 @@ export async function reclaimWorktreeSpace({
   acquireLock = lock,
   commonDirectory,
   testsStopped = false,
+  generatedMinAgeDays = 30,
   excludeWorktree,
   releaseCacheMinAgeDays = 30
 } = {}) {
   if (!Number.isFinite(releaseCacheMinAgeDays) || releaseCacheMinAgeDays < 0) {
     throw new Error('--release-cache-min-age-days requires a non-negative number')
+  }
+  if (!Number.isFinite(generatedMinAgeDays) || generatedMinAgeDays < 0) {
+    throw new Error('--generated-min-age-days requires a non-negative number')
   }
   if (!commonDirectory) {
     const result = await runProcess({
@@ -51,6 +55,9 @@ export async function reclaimWorktreeSpace({
     if (!automatic && testsStopped) {
       scripts.unshift('reclaim-release-test-caches.mjs')
     }
+    if (!automatic) {
+      scripts.push('reclaim-worktree-generated-files.mjs')
+    }
     for (const script of scripts) {
       const args = [resolve(import.meta.dirname, script), '--repo', repoRoot]
       if (apply) {
@@ -65,6 +72,9 @@ export async function reclaimWorktreeSpace({
         if (testsStopped) {
           args.push('--tests-stopped')
         }
+      }
+      if (script === 'reclaim-worktree-generated-files.mjs') {
+        args.push('--generated-min-age-days', String(generatedMinAgeDays))
       }
       const result = await execute({
         program: process.execPath,

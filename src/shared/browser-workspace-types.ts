@@ -1,3 +1,4 @@
+import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
@@ -177,6 +178,8 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+  /** Set when Orca manages this profile for one repo or workspace; it goes when its owner is removed. */
+  owner?: ManagedBrowserProfileOwner
 }
 
 export type BrowserCookieImportSummary = {

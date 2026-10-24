@@ -1,16 +1,12 @@
-// What a page or frame publishes of the host's current-work projection
-// (`structuredAgentSessionCurrentWork`), laid over the page the journal reads.
-
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { snapshotLatestTurn } from './agent-session-history-page'
+import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
-/** The newest turn record as clients are told it, and the prompts still waiting on the person.
- *  Absent, a page states the raw record and no prompt ids, as an older host did. */
+/** Absent projection preserves legacy raw-turn behavior without current prompt IDs. */
 export type AgentSessionPublishedWork = Pick<
   StructuredAgentSessionCurrentWork,
   | 'publishedLatestTurn'
@@ -41,7 +37,6 @@ function publishedWorkFields(
   }
 }
 
-/** The current-work fields a page carries, for a frame that carries no page. */
 export function agentSessionPublishedWorkFields(
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork

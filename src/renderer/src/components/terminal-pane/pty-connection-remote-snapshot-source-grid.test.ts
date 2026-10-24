@@ -1,7 +1,12 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
-import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
+import {
+  terminalWriteText,
+  createMockTransport,
+  createPane,
+  createManager
+} from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
@@ -154,7 +159,8 @@ async function connectRemotePane(): Promise<{
   pane.terminal.cols = PANE_COLS
   pane.terminal.rows = PANE_ROWS
   const operations: { kind: 'resize' | 'write'; value: string }[] = []
-  pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+  pane.terminal.write = vi.fn((data: string | Uint8Array, callback?: () => void) => {
+    data = terminalWriteText(data)
     operations.push({ kind: 'write', value: data })
     callback?.()
   })

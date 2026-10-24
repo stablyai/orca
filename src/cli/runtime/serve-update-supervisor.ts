@@ -255,7 +255,7 @@ function waitForForegroundChild(
       recordReplacementFailure(`Could not start the replacement process: ${String(error)}`)
       cleanup()
       child.off('exit', handleExit)
-      // Why: the LaunchAgent may restart this parent immediately, so durable failure must precede process rejection.
+      // Persist failure before rejection: launchd may immediately restart this parent.
       void stateWrite.then(() => reject(error))
     })
     child.once('exit', handleExit)

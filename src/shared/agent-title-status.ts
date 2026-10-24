@@ -58,7 +58,7 @@ export function clearWorkingIndicators(title: string): string {
     cleaned = cleaned.slice(2)
   }
   if (containsAgentName(cleaned)) {
-    cleaned = cleaned.replace(STRONG_WORKING_KEYWORDS_RE_GLOBAL, '')
+    cleaned = cleaned.replace(STRONG_WORKING_KEYWORDS_RE_GLOBAL, '$1')
   }
 
   cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()

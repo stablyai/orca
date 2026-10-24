@@ -94,5 +94,11 @@ describe('usage credential routing', () => {
     vi.mocked(runtimeEnvironmentSupportsCapability).mockRejectedValue(new Error('timed out'))
 
     await expect(callMiniMaxCredentials(host, 'getStatus')).rejects.toThrow('timed out')
+
+    const failure = new Error('runtime request unreachable')
+    vi.mocked(runtimeEnvironmentSupportsCapability).mockResolvedValue(true)
+    vi.mocked(callRuntimeRpc).mockRejectedValue(failure)
+
+    await expect(callMiniMaxCredentials(host, 'getStatus')).rejects.toBe(failure)
   })
 })

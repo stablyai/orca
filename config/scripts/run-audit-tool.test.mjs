@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseAllDocuments } from 'yaml'
 import { auditToolEntry, runAuditTool } from './run-audit-tool.mjs'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
@@ -72,7 +72,9 @@ describe('locked audit tool execution', () => {
   })
 
   it('rejects an unknown executable before installing anything', () => {
-    expect(() => auditToolEntry('../arbitrary-package')).toThrow('Unknown audit tool')
+    const run = vi.fn()
+    expect(() => runAuditTool('../arbitrary-package', [], { run })).toThrow('Unknown audit tool')
+    expect(run).not.toHaveBeenCalled()
   })
 
   it.each(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'])(

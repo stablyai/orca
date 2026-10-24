@@ -36,7 +36,10 @@ export function selectUnitFiles(files, changed, graphInput) {
       return full('No proven test coverage for changed inputs')
     }
   }
-  const affected = unitConsumers([...changed, ...graph.opaque], graph.reverse)
+  const affected = unitConsumers(changed, graph.reverse)
+  for (const file of graph.opaqueConsumers ?? unitConsumers(graph.opaque, graph.reverse)) {
+    affected.add(file)
+  }
   const selected = files.filter((file) => affected.has(file))
   if (!selected.length) {
     return full('No proven test coverage for changed inputs')
@@ -44,7 +47,8 @@ export function selectUnitFiles(files, changed, graphInput) {
   return {
     files: selected,
     reason: 'Transitive imports plus indirect-input consumers',
-    full: false
+    full: false,
+    checkedInputOwners: graph.checkedInputOwners ?? []
   }
 }
 
@@ -76,6 +80,7 @@ export function planUnitSelection({
     mode: selected ? 'selected' : 'shadow',
     selectionAvailable: !candidate.full,
     reason: candidate.reason,
+    checkedInputOwners: candidate.checkedInputOwners ?? [],
     files,
     candidateFiles: candidate.files,
     executionFiles,

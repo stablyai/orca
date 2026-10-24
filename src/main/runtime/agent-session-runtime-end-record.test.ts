@@ -28,7 +28,10 @@ import {
   recordAgentSessionRuntimeEnd,
   recordAgentSessionRuntimeEndOnExit
 } from './agent-session-runtime-end-record'
-import { tearDownRuntime, type InstalledRuntime } from './structured-agent-session-runtime-teardown'
+import {
+  tearDownRuntime,
+  type InstalledRuntime
+} from './agent-session/structured-agent-session-runtime-teardown'
 
 const RUNTIME_A = '0000000a-0000-4000-8000-000000000000'
 const RUNTIME_B = '0000000b-0000-4000-8000-000000000000'

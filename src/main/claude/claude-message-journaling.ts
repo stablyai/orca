@@ -1,11 +1,3 @@
-// Journaling ONE Claude message envelope: its body, tool calls, tool results,
-// reasoning, and the unmodeled content that falls back to a generic row.
-//
-// Split out of the translator when that file reached its line budget. The body
-// moved unchanged; the only edit is that what were closure variables are now
-// read off an explicit context, so the open turn and the collaborators it
-// writes through stay owned by the translator.
-
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -49,11 +41,8 @@ export type ClaudeMessageJournalContext = {
   toolOrigins: ClaudeToolOriginRegistry
   backgroundTasks: ClaudeBackgroundTaskRows
   providerFallback: ClaudeProviderFrameFallback
-  /** Attributes every row this module writes to the agent that produced it, and
-   *  remembers the ones stamped before that agent had a final identity. */
+  /** Stamp producer identity and retain rows needing later identity corrections. */
   corrections: ClaudeProvisionalRowCorrections
-  /** The session's open turn. Sole owner of turn identity and of the reopen
-   *  latch; this module asks it rather than tracking a copy. */
   turn: ClaudeOpenTurn
   authenticationFailures: ClaudeAuthenticationFailures
   usageLimits: ClaudeUsageLimits
@@ -74,20 +63,8 @@ export function journalClaudeMessage(
   }
   let changed = false
   const results = claudeToolResults(envelope)
-  // Everything this envelope journals belongs to whoever produced the envelope.
-  // A child's rows live in the parent's journal, so without this the parent's
-  // own "what am I doing" readers report the child's newest output as their own.
-  //
-  // Delivering the result of the very call it names as parent is the exception:
-  // that is the CALLER consuming its own tool output, not a child's row. Only a
-  // spawn call ever gets a sidechain, so reading the field literally here would
-  // park every ordinary tool result against an announcement never coming.
-  //
-  // The caller is not always the session's own agent. A call a child made is
-  // owned by that child, and its result is the child's row too — collapsing it
-  // to root would both misattribute it and make the result's write resolve
-  // through a different reference than the call's, stranding the correction
-  // owed to that row on the body it had before the result landed.
+  // Tool results belong to their caller, including child callers; preserve its reference for later corrections.
+  // Other rows belong to the envelope producer so child output cannot become root activity.
   const producedByCaller = results.some((result) => result.toolUseId === envelope.parentToolUseId)
   const producerRef =
     producedByCaller && envelope.parentToolUseId !== null
@@ -139,24 +116,19 @@ export function journalClaudeMessage(
   ctx.streamedText.forget(agentJournalItemKey(identity))
   const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   if (body) {
-    // Opening before the append is what brackets a turn around its own first
-    // output; a reader that scans back to the turn record and stops would
-    // otherwise look straight past the row that opened it.
+    // Open before appending so backward scans include the turn's first output.
     ctx.turn.ensureOpen(message, source, observedAt)
     if (terminalIdentity) {
       writeClaudeTerminalFailure(ctx.sink, terminalIdentity, body)
     } else {
-      ctx.sink.appendItem(identity, body, stamp(identity, body))
+      ctx.sink.appendItem(identity, body, { ...stamp(identity, body), lifecycle: true })
     }
     changed = true
   }
   for (const tool of claudeToolUses(outputEnvelope)) {
     ctx.turn.ensureOpen(message, source, observedAt)
     ctx.tools.set(tool.id, tool)
-    // Only a TOP-LEVEL call can be the parent of a top-level task row; a
-    // sidechain's own tool ids never reach the transcript. Those are recorded
-    // against their owner instead: a grandchild's frames name one of them and
-    // nothing else, so this is the only place its parent is ever knowable.
+    // Record child-owned calls here: grandchild frames name their tool IDs, absent from the root transcript.
     if (envelope.parentToolUseId) {
       ctx.toolOrigins.recordChildOwned(tool.id, envelope.parentToolUseId)
     } else {
@@ -164,7 +136,10 @@ export function journalClaudeMessage(
     }
     const toolIdentity = claudeToolIdentity(envelope.sessionId, tool.id)
     const toolBody = claudeToolBody({ tool })
-    ctx.sink.appendItem(toolIdentity, toolBody, stamp(toolIdentity, toolBody))
+    ctx.sink.appendItem(toolIdentity, toolBody, {
+      ...stamp(toolIdentity, toolBody),
+      lifecycle: true
+    })
     changed = true
   }
   for (const result of results) {
@@ -175,7 +150,10 @@ export function journalClaudeMessage(
     }
     const resultIdentity = claudeToolIdentity(envelope.sessionId, result.toolUseId)
     const resultBody = claudeToolBody({ tool, result })
-    ctx.sink.appendItem(resultIdentity, resultBody, stamp(resultIdentity, resultBody))
+    ctx.sink.appendItem(resultIdentity, resultBody, {
+      ...stamp(resultIdentity, resultBody),
+      lifecycle: true
+    })
     if (
       results.length === 1 &&
       envelope.parentToolUseId === null &&
@@ -189,7 +167,7 @@ export function journalClaudeMessage(
   }
   if (thinking) {
     ctx.turn.ensureOpen(message, source, observedAt)
-    // The write that ends the row: shed under pressure, the row would read open for good.
+    // Preserve this terminal write under pressure so the thinking row cannot stay open.
     ctx.sink.appendItem(thinking.identity, thinking.body, {
       ...stamp(thinking.identity, thinking.body),
       ...(thinking.startedAt === undefined ? {} : { observedAt: thinking.startedAt }),
@@ -200,7 +178,6 @@ export function journalClaudeMessage(
   changed =
     appendUnmodeledContent(ctx.providerFallback, outputEnvelope, message, openOutputTurn, stamp) ||
     changed
-  // The send's turn is anchored to the user row journaled just above it.
   const sendEchoTurn = claudeTurnOpenedBySendEcho({
     envelope,
     frame: message,

@@ -2,17 +2,13 @@ import { isClosedPaneFenced } from '../../../persistence/terminal-topology/close
 import type { Store } from '../../../persistence'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
-/**
- * Layout-owner build: a spawn for a pane main closed or took back, which main's layout no longer
- * holds, starts nothing. Its binding would be refused anyway (pty-binding-refusals.ts); refusing
- * first means its startup command never runs.
- */
+/** Refuse closed/reclaimed panes before spawning; a later binding refusal cannot undo a startup command. */
 export function refuseClosedPaneSpawn(
   store: Store | undefined,
   tabId: string | undefined,
   leafId: string | null | undefined
 ): void {
-  // The fence's own key: legacy non-UUID leaf ids are matched, never thrown on.
+  // Match the fence's legacy non-UUID keys without throwing.
   if (!tabId || !leafId || !isClosedPaneFenced(`${tabId}:${leafId}`)) {
     return
   }

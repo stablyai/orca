@@ -199,7 +199,9 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {})
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+      value: {
+        ui: { onFocusBrowserAddressBar: () => () => {}, onShowBrowserHistory: () => () => {} }
+      }
     })
     useAppStore.setState({
       browserUrlHistory: [],

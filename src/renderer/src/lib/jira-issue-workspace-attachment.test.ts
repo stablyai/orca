@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { JiraIssue, JiraSite } from '../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../shared/jira/jira-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {

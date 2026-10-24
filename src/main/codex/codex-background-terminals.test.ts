@@ -48,7 +48,6 @@ function threadNotFound(method: string): CodexAppServerRequestError {
   )
 }
 
-/** Answers each request from `routes`, as a live app-server would, and records it. */
 function fakeRpc(routes: Record<string, Route>): {
   rpc: Pick<CodexAppServerConnection, 'request'>
   calls: Call[]
@@ -92,7 +91,6 @@ function commandItem(status: 'inProgress' | 'completed') {
   }
 }
 
-/** A turn that starts a dev server and ends with it still running. */
 async function backgroundedDevServer(codex: ReturnType<typeof codexWith>): Promise<void> {
   await acquireReadyCodexForTest(codex.adapter, { identity, fence: 7, spawnToken: 'spawn-1' })
   codex.notify('turn/started', { threadId: THREAD_ID, turn: { id: TURN_ID, status: 'inProgress' } })
@@ -163,7 +161,6 @@ describe('Codex background-command Stop', () => {
 
     await backgroundedDevServer(codex)
 
-    // Per-row Stop stays offered for sub-agents; no command row is stoppable and no Stop all.
     expect(codex.adapter.backgroundTaskStops('session-1')).toEqual({
       supportsTaskStop: true,
       supportsStopAll: false
@@ -187,7 +184,6 @@ describe('Codex background-command Stop', () => {
     })
     await backgroundedDevServer(codex)
     expect(lastCommandStoppable(codex.evidence)).toBe(false)
-    // Per-row Stop stays offered for sub-agents; no command row is stoppable and no Stop all.
     expect(codex.adapter.backgroundTaskStops('session-1')).toEqual({
       supportsTaskStop: true,
       supportsStopAll: false

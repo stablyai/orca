@@ -18,8 +18,7 @@ import { mockBrowserManager } from './agent-browser-bridge-test-harness'
 
 const PAYLOAD_BYTES = 5 * 1024 * 1024
 
-// Why: reproduces vercel-labs/agent-browser#1407 on every platform: a detached grandchild keeps
-// the helper's stdout/stderr pipes open after the helper itself has written its JSON and exited.
+// Simulate a daemon retaining the helper's stdio after exit (vercel-labs/agent-browser#1407).
 const HELPER_WITH_LINGERING_DAEMON = `
 const { spawn } = require('node:child_process')
 const daemon = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)'], {

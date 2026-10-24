@@ -3,10 +3,7 @@ import { isCheckoutRegistered, isUnregisteredRemovalLeftover } from './worktree-
 import type { WorktreeRemovalFailure, WorktreeRemovalRecord } from './worktree-removal-records'
 import { worktreeCheckoutExists } from './worktree-removal-table'
 
-/**
- * The failure to keep for a delete that failed after Git dropped the registration with the
- * checkout still on disk, once the rest of the delete's Git side ran; undefined otherwise.
- */
+/** Keep the error if Git dropped registration but left the checkout on disk. */
 export async function failureLeftByGit(
   record: WorktreeRemovalRecord,
   error: unknown,
@@ -23,19 +20,13 @@ export async function failureLeftByGit(
   return failure
 }
 
-/**
- * What the delete's finish would have done once Git let go of the checkout, run in the same
- * operation: the branch per the recorded choice and the push-target remote. Deletes no files, so
- * the failed record owes only the folder, which the user removes.
- */
+/** Finish branch/remote cleanup; the failed record retains the folder for the user to remove. */
 async function finishGitSideOfFailedRemoval(
   record: WorktreeRemovalRecord,
   cleanupPushTargetRemote: (() => Promise<void>) | undefined
 ): Promise<void> {
-  // Why caught: bookkeeping; the failed row and the request's error stand either way.
   try {
-    // No prune: Git already dropped this entry; a repo-wide prune would unregister any other
-    // worktree whose folder is missing for now (an unmounted drive).
+    // Repo-wide prune could unregister unrelated checkouts on temporarily unmounted drives.
     await deleteBranchOfUnregisteredWorktree(
       record.repoPath,
       record.worktreePath,
@@ -61,7 +52,6 @@ async function isCheckoutLeftUnregistered(record: WorktreeRemovalRecord): Promis
       (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
     )
   } catch (error) {
-    // Unknowable: the row stays however Git lists it, as before this record existed.
     console.warn(`[worktrees] could not list worktrees of ${record.repoPath}`, error)
     return false
   }

@@ -39,8 +39,7 @@ export function readSettingsWithRuntimeEnvironmentPreference(
   return reconcileRuntimeEnvironmentPreference(store, environments)
 }
 
-// Why: finds a registry created, or replaced unseen, after the watch started.
-// Settings reads repair on their own, so this only bounds renderer staleness.
+// Bound renderer staleness when the registry is created or replaced without a native watch event.
 const REGISTRY_REBIND_SWEEP_MS = 30_000
 
 export function watchRuntimeEnvironmentPreference(
@@ -56,8 +55,7 @@ export function watchRuntimeEnvironmentPreference(
   }
   // Reconcile changes made while the native watch was being installed.
   const initialCheck = setImmediate(repairPreference)
-  // Why: watch the registry file, not userData. On macOS a directory watch is a
-  // recursive FSEvents stream that Orca's own userData writes keep busy.
+  // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
   const registryWatch = watchFileAcrossReplacement(
     getEnvironmentStorePath(userDataPath),
     repairPreference,

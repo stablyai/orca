@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import type { JiraConnectionStatus } from '../../../../shared/jira-types'
+import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
 import { createJiraSlice } from './jira'
 
 const jiraStatus = vi.hoisted(() => vi.fn())

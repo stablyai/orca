@@ -16,13 +16,13 @@ import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
-import { retireStructuredAgentSessionTabFrom } from '../structured-agent-session-tab-retirement'
+import { retireStructuredAgentSessionTabFrom } from '../agent-session/structured-agent-session-tab-retirement'
 import {
   chatTabId,
   withChatTabChanges,
   type ChatTabChange,
   type ChatTabPlacement
-} from '../agent-session-tab-layout'
+} from '../agent-session/agent-session-tab-layout'
 import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
 import type { WindowLayoutCommand } from '../runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

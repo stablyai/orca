@@ -1,10 +1,5 @@
-// What a turn's end or the session's end settles, read from the journal when the settlement runs.
-//
-// The same mechanism, and the same terminal bodies, as the dead-generation settlement after a
-// restart: every row still waiting on the row that settles it — a running tool call, a pending
-// prompt — is settled from its body as the journal holds it then. Nothing about open work is
-// trusted from memory, so a prompt a client answered a moment earlier stays answered, and a
-// second settlement finds nothing left to do.
+// Resolve unsettled work from journal bodies, using the same terminal forms as dead-generation recovery.
+// Preserve client answers and other writers’ settlements; repeated settlement writes nothing.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -29,19 +24,17 @@ import {
   resolveAgentJournalTurnRowWrite
 } from './agent-journal-turn-row-revision'
 
-/** How a turn ended: the provider's report, or what the host could prove when the child went. */
 export type ProviderTimelineTurnEnd =
   | {
       state: 'completed' | 'interrupted'
-      /** Absent when the end is proven but its time is not. */
+      /** Unknown end times remain absent. */
       completedAt?: number
       outcome?: AgentJournalTurnLifecycle['outcome']
       durationMs?: number
     }
   | { state: 'unverifiable' }
 
-/** The end owns the turn's terminal fields; `unverifiable` carries no end and no verdict. Fields
- *  keep the order every lane writes them in, so the row is the same bytes whoever ends it. */
+/** Unverifiable turns have no end/verdict; preserve canonical field order for byte-identical rows. */
 export function endedProviderTimelineTurn(
   running: AgentJournalTurnLifecycle,
   end: ProviderTimelineTurnEnd
@@ -65,19 +58,16 @@ export function endedProviderTimelineTurn(
   }
 }
 
-/** Which open rows a settlement covers: one turn's, or every row when the session ends. */
 export type ProviderTimelineSettlementScope = { turnItemId: string } | 'session'
 
-/** The turns a settlement ends, and how; absent when another writer already ended the turn, which
- *  settles only its prompts: its tool calls are the provider's to finish. */
+/** Without ending, settle prompts only; running tools remain the provider’s responsibility. */
 export type ProviderTimelineSettlementEnding = {
   turns: readonly { identity: AgentJournalItemIdentity; itemId: string }[]
   end: ProviderTimelineTurnEnd
-  /** When the session's end was seen, which is when its live subagents lost contact. */
+  /** Observed session-end time marks live subagents’ contact loss. */
   lostAt?: number
 }
 
-/** The settled rows of `scope`, then each ended turn's row while the journal holds it running. */
 export function providerTimelineSettlement(
   journal: StructuredAgentSessionTransitionJournal,
   scope: ProviderTimelineSettlementScope,
@@ -93,14 +83,14 @@ export function providerTimelineSettlement(
       covered && ending && body.kind === 'tool-call' && body.state === 'running'
         ? runningCallEnd(turnScope, (turnItemId) => journal.itemBody(turnItemId), ending.end.state)
         : null
-    // Background tasks and subagents outlive turns; only the session's end leaves them past seeing.
+    // Background tasks/subagents outlive turns; only session end proves contact loss.
     const settled = !covered
       ? null
       : (terminalAgentJournalBody(body, end) ??
         (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {
-      // No linkage: a revision keeps the row's own producer.
+      // Omitted linkage preserves the original producer.
       mutations.push({ kind: 'item', identity, body: settled, turnScope })
     }
   })
@@ -113,7 +103,6 @@ export function providerTimelineSettlement(
   return mutations
 }
 
-/** Every turn row the journal holds running, for the session's end. */
 export function runningProviderTimelineTurns(
   journal: StructuredAgentSessionTransitionJournal
 ): { identity: AgentJournalItemIdentity; itemId: string }[] {
@@ -140,7 +129,7 @@ function endedTurnRow(
   const target = { identity: turn.identity }
   const write = {
     lifecycle: agentJournalTurnBody(endedProviderTimelineTurn(running, end)),
-    // Defence only: the check above reads the same snapshot; the revision refuses an ended row too.
+    // Recheck in revision even though the snapshot already showed running.
     onlyWhileRunning: true as const
   }
   return resolveAgentJournalTurnRowWrite(

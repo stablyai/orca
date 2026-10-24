@@ -47,8 +47,6 @@ describe('AutomationService zero-grace tick latency', () => {
       agentId: 'claude',
       projectId: 'r1',
       workspaceMode: 'existing',
-      // Why a separator: without one resolveAutomationRunTarget refuses and the run records
-      // skipped_unavailable, which would make a "not skipped_missed" assertion pass vacuously.
       workspaceId: 'r1::wt1',
       timezone: 'UTC',
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
@@ -56,8 +54,7 @@ describe('AutomationService zero-grace tick latency', () => {
       missedRunGraceMinutes: 0
     })
 
-  /** One evaluation pass at exactly `at` -- start()/setRendererReady() triggers it directly, so
-   *  advancing the timer would silently add a second pass a minute later (and did). */
+  /** Set the clock without advancing timers to avoid a second scheduler pass. */
   const evaluateAt = async (
     store: Awaited<ReturnType<typeof createStore>>,
     at: number
@@ -84,37 +81,27 @@ describe('AutomationService zero-grace tick latency', () => {
     return store.listAutomationRuns(automation.id)[0]?.status
   }
 
-  // Why 1ms and 45s: the tick interval is never aligned to an occurrence, so ANY positive
-  // lateness used to exceed a zero grace budget and skip the run (#11299).
   it.each([
     ['1ms late', 1],
     ['45s late', 45_000]
   ])('dispatches a zero-grace occurrence only the tick was late for (%s)', async (_l, lateMs) => {
-    // Assert the outcome, not merely "not skipped_missed" -- a refused target would also
-    // satisfy that while never dispatching.
     expect(await statusAt(lateMs)).toBe('dispatching')
   })
 
-  // The other half of the invariant: real downtime still consumes the grace budget. A suspended
-  // process keeps its start time, so this is the case a liveness flag would have waved through.
   it('still skips a zero-grace occurrence that came due during a long sleep', async () => {
     expect(await statusAt(4 * 60 * 60 * 1000)).toBe('skipped_missed')
   })
 
-  // Just past the tolerance: the boundary has to bite, or the tolerance is a blanket grace.
   it('skips once lateness exceeds the tick-latency tolerance', async () => {
     expect(await statusAt(2 * 60_000 + 1)).toBe('skipped_missed')
   })
 
-  // A restart that crosses the occurrence must behave like any other late tick, not like
-  // downtime -- the elapsed lateness is what decides, so bookkeeping cannot drift.
   it('dispatches after a restart that crosses the occurrence within tolerance', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
     const automation = makeZeroGrace(store)
     await evaluateAt(store, DUE - 30_000)
-    // Nothing may have run yet, or the second pass is not the one under test.
     expect(store.listAutomationRuns(automation.id)).toHaveLength(0)
     await evaluateAt(store, DUE + 30_000)
     expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')

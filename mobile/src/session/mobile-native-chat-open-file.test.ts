@@ -185,17 +185,20 @@ describe('openMobileNativeChatFileTap', () => {
       scheduleDelayedAction: vi.fn((callback: () => void) => callback())
     }
 
-    openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    vi.useFakeTimers()
+    try {
+      openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
+      await vi.runAllTimersAsync()
 
-    expect(sendRequest).toHaveBeenCalledWith(
-      'files.open',
-      { worktree: 'id:wt-1', relativePath: 'src/app.ts' },
-      { timeoutMs: 15_000 }
-    )
-    expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
-    expect(options.onOpenFailed).not.toHaveBeenCalled()
+      expect(sendRequest).toHaveBeenCalledWith(
+        'files.open',
+        { worktree: 'id:wt-1', relativePath: 'src/app.ts' },
+        { timeoutMs: 15_000 }
+      )
+      expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
+      expect(options.onOpenFailed).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

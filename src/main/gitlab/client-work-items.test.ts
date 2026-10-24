@@ -91,9 +91,6 @@ describe('gitlab client — combined listWorkItems', () => {
     glabApiWithHeadersMock.mockResolvedValueOnce({ body: '[]', headers: {} })
 
     await listWorkItems('/repo', 'merged', 1, 20)
-    // Why: the merged-state filter doesn't apply to issues (issues
-    // don't have a merged lifecycle), so the IPC must not even spawn
-    // the issues read. Verifies the listIssues path was not taken.
     expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 

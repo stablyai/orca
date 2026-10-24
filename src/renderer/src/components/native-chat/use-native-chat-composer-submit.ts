@@ -96,17 +96,20 @@ export function useNativeChatComposerSubmit(args: {
       return
     }
     structuredTransport.onSubmitted?.()
+    const isCurrent = structuredTransport.capturePresentation()
     const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
         return
       }
-      structuredTransport.onError(null)
       if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
         return
       }
-      setCaret(0)
-      setEntered(false)
+      if (isCurrent()) {
+        structuredTransport.onError(null)
+        setCaret(0)
+        setEntered(false)
+      }
     })
   }, [draft, draftScopeKey, imageAttachments.length, setCaret, structuredTransport, threadGoal])
 

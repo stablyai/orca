@@ -18,8 +18,7 @@ const ARMED_MODES: TerminalModes = {
   alternateScreen: false
 }
 
-// Why import rather than restate: the exact bytes are pinned in
-// terminal-mode-reset-profiles.test.ts; this suite pins placement within the seed.
+// Assert seed placement here; terminal-mode-reset-profiles.test.ts pins the reset bytes.
 const GROUND = PROCESS_BOUNDARY_GROUND
 
 function restoreInfo(overrides: Partial<ColdRestoreInfo> = {}): ColdRestoreInfo {
@@ -68,8 +67,6 @@ describe('getRecoveredHistorySeedSegments', () => {
   })
 
   it('keeps the empty "nothing to recover" sentinel on the normal-screen branch', () => {
-    // Why: daemon-pty-adapter keys the probe-race kill+respawn and the history
-    // re-anchor on `length === 0`, so the ground must never be the only segment.
     expect(
       getRecoveredHistorySeedSegments(
         restoreInfo({
@@ -114,8 +111,7 @@ describe('getRecoveredHistorySeedSegments', () => {
   })
 
   it('does not touch the live-session reattach payload (mobile scroll gestures)', () => {
-    // Why: only recovery seeding knows the arming TUI is dead; live reattach
-    // snapshots must keep re-arming or an alt-screen TUI loses scroll forever.
+    // Live reattach must preserve the active TUI’s modes; only recovery knows that process is dead.
     expect(buildRehydrateSequences(ARMED_MODES)).toBe('\x1b[?1003h\x1b[?1006h')
   })
 

@@ -1,7 +1,6 @@
-// A Grok chat's Stop through the real host: it ends the process once Grok settles its turn, and the
-// next send resumes the session.
+import { deferred } from './acp-scripted-agent.test-support'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { withNativeChatCutTurnNotices } from '../../shared/native-chat-cut-turn-notice'
 import {
   closeProviderTimelineRigs,
@@ -18,6 +17,8 @@ import {
 } from './acp-structured-host.test-support'
 
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
 
@@ -28,14 +29,10 @@ describe('a Grok chat Stop', () => {
     await send(host, 'hello')
     const prompt = await rig.frame('session/prompt')
     first.agent.notify('session/update', replyChunk(promptIdOf(prompt), 'partial'))
-    // Grok takes a moment to wind the turn down; the host waits for it before ending the process.
+    // Delay cancellation completion to verify that process close waits for the turn.
     const answered: { cancel: boolean; atClose: boolean | null } = { cancel: false, atClose: null }
-    first.agent.on('session/cancel', () =>
-      setTimeout(() => {
-        answered.cancel = true
-        first.agent.reply(prompt, { stopReason: 'cancelled' })
-      }, 50)
-    )
+    const cancellation = deferred<void>()
+    first.agent.on('session/cancel', () => cancellation.resolve())
     const close = first.close.bind(first)
     first.close = async () => {
       answered.atClose ??= answered.cancel
@@ -43,7 +40,15 @@ describe('a Grok chat Stop', () => {
     }
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+    try {
+      expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+      await cancellation.promise
+      expect(first.exited).toBe(false)
+      expect(answered.atClose).toBeNull()
+    } finally {
+      answered.cancel = true
+      first.agent.reply(prompt, { stopReason: 'cancelled' })
+    }
     await waitFor(() => expect(first.exited).toBe(true))
     expect(framesOf(first, 'session/cancel')).toHaveLength(1)
     expect(answered.atClose).toBe(true)
@@ -56,7 +61,6 @@ describe('a Grok chat Stop', () => {
     expect(count.loads).toBe(1)
     expect(framesOf(second, 'session/new')).toHaveLength(0)
     expect(await messages()).toEqual(['hello', 'partial', 'again'])
-    // Only the Stop's own note: no exit or cut-reply notice for a Stop the person asked for.
     const transcript = withNativeChatCutTurnNotices(await rows(), { agentName: 'Grok' })
     expect(
       transcript.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))
@@ -75,14 +79,36 @@ describe('a Grok chat Stop', () => {
     first.agent.notify('session/update', replyChunk(promptIdOf(prompt), 'partial'))
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    // A write that never completes, as a full pipe to a Grok that stopped reading.
+    // Model a full pipe to an agent that stopped reading.
     let cancels = 0
+    const deadlineStarted = deferred<void>()
+    let deadlineElapsed = false
+    const requestEnd = rig.adapter.awaitStoppedRequestEnd
+    const waiting = vi
+      .spyOn(rig.adapter, 'awaitStoppedRequestEnd')
+      .mockImplementation((sessionId, at) => {
+        const pending = requestEnd(sessionId, at)
+        deadlineStarted.resolve()
+        return pending.then(() => {
+          deadlineElapsed = true
+        })
+      })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     first.cancel = () => {
       cancels += 1
       return new Promise(() => {})
     }
     expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+    await deadlineStarted.promise
+    expect(first.exited).toBe(false)
+    await vi.advanceTimersByTimeAsync(29)
+    expect(first.exited).toBe(false)
+    expect(deadlineElapsed).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(deadlineElapsed).toBe(true)
     await waitFor(() => expect(first.exited).toBe(true))
+    waiting.mockRestore()
+    vi.useRealTimers()
     expect(cancels).toBe(1)
     expect((await turns()).at(-1)).toMatchObject({ state: 'interrupted' })
   })
@@ -125,7 +151,7 @@ describe('a Grok chat Stop', () => {
     await host.flushStreamedEvents(SESSION)
     await stop(host)
     await waitFor(() => expect(first.exited).toBe(true))
-    // The task ended with Grok's process; Orca cannot say how, so its row says no more than that.
+    // Process exit ends observation without proving the task's own outcome.
     const task = (await rows()).find((row) => row.itemId.includes('background-task'))
     expect(task?.body).toMatchObject({
       blocks: [
@@ -167,8 +193,6 @@ describe('a Grok chat Stop naming a turn that has ended', () => {
     await host.close(SESSION, 'user-close')
   })
 
-  // A late Stop is an accepted no-op, as a Claude Stop is: the follow-up handed over but not yet
-  // echoed is left alone.
   it('leaves Grok and the next prompt alone in the gap before Grok echoes it', async () => {
     const { rig, host, rows, turns } = await openAttachedHostRig()
     const { agent } = rig.child()

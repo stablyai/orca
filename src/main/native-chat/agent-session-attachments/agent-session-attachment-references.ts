@@ -1,6 +1,3 @@
-// How the host recognizes its own attachment store in what a client sends: a stored file is
-// `<store root>/<upload id>/<name>`, and only the upload id is needed to know which upload it is.
-
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../shared/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -18,8 +15,7 @@ export function isAgentSessionAttachmentUploadId(value: string): boolean {
   return UPLOAD_ID.test(value)
 }
 
-/** The upload a stored file belongs to, or null for anything that is not exactly a committed file
- *  directly in an upload directory of this store. */
+/** Accept only committed files directly inside this store's upload directories. */
 export function parseAgentSessionAttachmentStorePath(
   root: string,
   filePath: string
@@ -44,7 +40,7 @@ export function parseAgentSessionAttachmentStorePath(
   return { uploadId, name }
 }
 
-// A root preceded by one of these is the tail of some other, longer path.
+// Reject store-root matches embedded inside longer paths.
 const PATH_CHARACTER = /[\w.~\\/-]/
 
 function normalizedRoot(root: string, platform: NodeJS.Platform): string {
@@ -52,13 +48,7 @@ function normalizedRoot(root: string, platform: NodeJS.Platform): string {
   return platform === 'win32' ? forward.toLowerCase() : forward
 }
 
-/**
- * The uploads of this host's store a message body names, in image paths and file references in its
- * text alike. Only a path that starts with this host's exact store root counts: matched on the
- * decoded body by `<store root>/<upload id>`, so quoting or a file name with spaces cannot hide one,
- * and Windows paths match with either separator and in any case. Any other mention of a store
- * path (another server's, a `~` form, a bare name) is only text.
- */
+/** Match exact decoded store roots; quoting/spaces cannot hide references and Windows accepts either separator. */
 export function agentSessionAttachmentReferences(
   root: string,
   body: AgentJournalMessageItem,

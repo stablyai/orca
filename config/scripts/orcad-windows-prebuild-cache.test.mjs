@@ -212,41 +212,34 @@ describe('Windows server prebuild cache inputs', () => {
     )
   })
 
-  it('covers the bundled compiler-spawn implementation', () => {
-    expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
-      expect.arrayContaining(
-        [
-          'run-process',
-          'spawn-resolution',
-          'process-tree-termination',
-          'process-tree-kill-gate',
-          'spawn-observer',
-          'bounded-output-sink',
-          'growing-byte-buffer',
-          'child-termination-reporter',
-          'process-spec',
-          'windows-command-line',
-          'windows-cmd-shim-resolution',
-          'windows-system-binary',
-          'windows-tree-kill'
-        ].map((name) => `src/packages/process-host/src/${name}.ts`)
-      )
-    )
-    expect(WINDOWS_PREBUILD_CACHE_INPUTS).toEqual(
-      expect.arrayContaining([
-        'src/packages/process-host/.gitignore',
-        'src/packages/process-host/package.json',
-        'src/packages/process-host/scripts/build-dist.mjs',
-        'src/packages/process-host/tsconfig.json'
-      ])
-    )
-  })
+  const compilerInputs = [
+    ...[
+      'run-process',
+      'spawn-resolution',
+      'process-tree-termination',
+      'process-tree-kill-gate',
+      'spawn-observer',
+      'bounded-output-sink',
+      'growing-byte-buffer',
+      'child-termination-reporter',
+      'process-spec',
+      'windows-command-line',
+      'windows-cmd-shim-resolution',
+      'windows-system-binary',
+      'windows-tree-kill'
+    ].map((name) => `src/packages/process-host/src/${name}.ts`),
+    'src/packages/process-host/.gitignore',
+    'src/packages/process-host/package.json',
+    'src/packages/process-host/scripts/build-dist.mjs',
+    'src/packages/process-host/tsconfig.json'
+  ]
+  const cacheInputs = [...new Set([...WINDOWS_PREBUILD_CACHE_INPUTS, ...compilerInputs])]
 
   it('reuses native binaries across app versions but invalidates every other manifest field', () => {
     const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-version-key-'))
     temporary.push(repository)
     const source = resolve(import.meta.dirname, '../..')
-    for (const relative of WINDOWS_PREBUILD_CACHE_INPUTS) {
+    for (const relative of cacheInputs) {
       mkdirSync(dirname(join(repository, relative)), { recursive: true })
       cpSync(join(source, relative), join(repository, relative))
     }
@@ -261,11 +254,11 @@ describe('Windows server prebuild cache inputs', () => {
     }
   })
 
-  it.each(WINDOWS_PREBUILD_CACHE_INPUTS)('invalidates a changed %s input', (file) => {
+  it.each(cacheInputs)('invalidates a changed %s input', (file) => {
     const repository = mkdtempSync(join(tmpdir(), 'orca-prebuild-key-'))
     temporary.push(repository)
     const source = resolve(import.meta.dirname, '../..')
-    for (const relative of WINDOWS_PREBUILD_CACHE_INPUTS) {
+    for (const relative of cacheInputs) {
       mkdirSync(dirname(join(repository, relative)), { recursive: true })
       cpSync(join(source, relative), join(repository, relative))
     }

@@ -67,7 +67,7 @@ import {
   listVisibleAgentSessionIds,
   setAgentSessionTabVisibility,
   showAgentSessionTabs
-} from './agent-session-tab-table'
+} from './agent-session/agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'

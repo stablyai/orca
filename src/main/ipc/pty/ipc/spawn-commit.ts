@@ -11,7 +11,7 @@ import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-st
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
     const args = ctx.args
-    // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
+    // Bound untrusted IPC identity strings before they enter runtime registration maps.
     const worktreeId =
       typeof args.worktreeId === 'string' &&
       args.worktreeId.length > 0 &&
@@ -101,8 +101,7 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
   const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   return {
     ...providerResult,
-    // Why both or neither: a pane can only adopt proven kitty flags together
-    // with the sequence boundary they describe.
+    // Kitty flags and their proven sequence boundary must be published together.
     ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
     ctx.reconciledSnapshotSeq !== null &&
     ctx.snapshotKittyFlagsCoverReconciledSeq
@@ -112,8 +111,7 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     ...(startupCwdFallback ? { startupCwdFallback } : {}),
-    // Why: the pane asked to resume and got a fresh session instead; only the
-    // renderer can say so, and a reattach never ran this launch command.
+    // Only a fresh launch can report dropped resume; reattach never ran this command.
     ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach
       ? { agentResumeUnavailable: true as const }
       : {})

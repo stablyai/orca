@@ -30,7 +30,7 @@ describe('sendSingleFlightRequest', () => {
     const leadingResponse = makeResponse('leading')
     const trailingResponse = makeResponse('trailing')
     const sendRequest = vi
-      .fn<() => Promise<RpcResponse>>()
+      .fn<RpcClient['sendRequest']>()
       .mockReturnValueOnce(leading.promise)
       .mockReturnValueOnce(trailing.promise)
     const client = rpcClient(sendRequest)
@@ -38,18 +38,20 @@ describe('sendSingleFlightRequest', () => {
     const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
     // Two more triggers arrive while the read is on the wire: no duplicate now, and they share ONE
     // trailing follow-up (not the older in-flight response).
-    const second = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
-    const third = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
+    const second = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 5000 })
+    const third = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 2500 })
 
     expect(second).toBe(third)
     expect(second).not.toBe(first)
     expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'worktree.ps', { limit: 10000 })
 
     leading.resolve(leadingResponse)
     expect(await first).toBe(leadingResponse)
 
     // The leading read settled → the coalesced follow-up fires exactly once.
     expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', { limit: 2500 })
     trailing.resolve(trailingResponse)
     expect(await second).toBe(trailingResponse)
     expect(await third).toBe(trailingResponse)

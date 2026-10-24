@@ -313,30 +313,41 @@ describe('useMobileSessionDocumentReaders markdown revalidation', () => {
     }
   })
 
-  it('keeps the newer reread when an older one finishes later', async () => {
-    const initial = readyMarkdown('# head')
-    const older = deferredReply()
-    let calls = 0
-    const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => {
-      calls += 1
-      return calls === 1
-        ? older.promise
-        : Promise.resolve(readTabResult({ content: '# new', version: 'v2' }))
-    })
-    try {
-      const first = harness.read()
-      const second = harness.read()
-      await second
-      const current = harness.docs.get('tab-md')
-      older.resolve(readTabResult({ content: '# old', version: 'v0' }))
-      await first
-      expect(harness.docs.get('tab-md')).toBe(current)
-      expect(current).toMatchObject({ content: '# new', baseVersion: 'v2' })
-      expect(harness.published.every((doc) => doc.status !== 'loading')).toBe(true)
-    } finally {
-      harness.unmount()
+  it.each([
+    ['changed', '# new', 'v2'],
+    ['unchanged', '# head', 'v1']
+  ] as const)(
+    'keeps the newer reread when an older one finishes later: %s content',
+    async (kind, content, version) => {
+      const initial = readyMarkdown('# head')
+      const older = deferredReply()
+      let calls = 0
+      const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => {
+        calls += 1
+        return calls === 1
+          ? older.promise
+          : Promise.resolve(
+              readTabResult({ content, version, editable: true, readOnlyReason: undefined })
+            )
+      })
+      try {
+        const first = harness.read()
+        const second = harness.read()
+        await second
+        const current = harness.docs.get('tab-md')
+        older.resolve(readTabResult({ content: '# old', version: 'v0' }))
+        await first
+        expect(harness.docs.get('tab-md')).toBe(current)
+        expect(current).toMatchObject({ content, baseVersion: version })
+        if (kind === 'unchanged') {
+          expect(current).toBe(initial)
+        }
+        expect(harness.published.every((doc) => doc.status !== 'loading')).toBe(true)
+      } finally {
+        harness.unmount()
+      }
     }
-  })
+  )
 
   it('updates from disk without unmounting when the desktop renderer is down', async () => {
     const initial = readyMarkdown('# head')

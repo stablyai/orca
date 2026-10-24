@@ -8,11 +8,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
   }
 
-  /**
-   * Returns the settlement instead of throwing: the recovery side effects that
-   * `finishWrite` performs still run, but an ambiguous notify must not reach the caller
-   * as a rejection it would read as a proven refusal.
-   */
+  /** Preserve ambiguous delivery as a settlement: throwing would look like proven refusal and permit replay. */
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     let recoverable: boolean
     try {
@@ -33,10 +29,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
 
   protected prepareWrite(id: string): boolean {
     this.markSessionDirty(id)
-    // Why recoverable and not just active: rejecting a write asks the pane to remount,
-    // which only helps if this endpoint can come back. A legacy adapter has no respawn,
-    // so its reattach fails and the pane rebuilds empty — losing scrollback the user
-    // could still read. Keep the pre-existing silent drop for those.
+    // Remount recovery would erase legacy panes that cannot respawn; preserve their readable scrollback.
     const recoverable =
       this.activeSessionIds.has(id) && !this.respawnAdoptionClosed && Boolean(this.respawnFn)
     if (
@@ -85,7 +78,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     this.client.notify('resumePty', { sessionId: id })
   }
 
-  // Why fire-and-forget (like pausePty): just a delivery hint for the daemon's keep-tail stream thinning.
+  // Backgrounding is a delivery hint for daemon keep-tail thinning.
   setPtyBackgrounded(id: string, background: boolean): void {
     if (!this.supportsProducerFlowControl) {
       return

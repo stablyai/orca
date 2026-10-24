@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -165,6 +165,11 @@ function findSegmentedControl(node: unknown, ariaLabel: string): ReactElementLik
   }
   return found
 }
+
+beforeEach(() => {
+  vi.stubGlobal('window', { api: { platform: { get: () => ({ platform: 'darwin' }) } } })
+})
+afterEach(() => vi.unstubAllGlobals())
 
 describe('AgentsPane', () => {
   beforeEach(() => {

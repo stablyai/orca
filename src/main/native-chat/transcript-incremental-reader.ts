@@ -17,7 +17,6 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
-  /** Newest row time read so far, so an append never sorts above earlier rows. */
   latestTimestamp: number
 }
 
@@ -87,8 +86,7 @@ export async function readIncrementalTranscriptMessages(
     }
     return messages
   } finally {
-    // Early exits (throw/oversized-record bail) must not leak the fd or, on
-    // UNC, the gated handle the generator's finally closes.
+    // Early exits must close both the fd and any UNC gate permit held by the generator.
     stream.destroy()
   }
 
@@ -113,7 +111,7 @@ export async function readIncrementalTranscriptMessages(
   }
 
   function decodeLine(): void {
-    // These owned bytes are decoded synchronously; a single part needs no copy.
+    // A single synchronously decoded chunk is already owned; avoid copying it.
     const bytes =
       state.pendingChunks.length === 1 ? state.pendingChunks[0] : Buffer.concat(state.pendingChunks)
     let line = bytes.toString('utf8')

@@ -107,7 +107,9 @@ describe('browser link routing modifier copy', () => {
       'Remote server workspaces',
       'SSH workspaces',
       'Browser identity',
-      'Site permissions'
+      'Site permissions',
+      'Profile for new tabs',
+      'Open links in the background'
     ])
   })
 

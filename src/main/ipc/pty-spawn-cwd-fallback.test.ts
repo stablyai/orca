@@ -64,7 +64,7 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
 
   it('passes floating terminal cwds through to the spawned shell', async () => {
-    // Why: the floating sentinel has no worktree root; its cwd is validated against trusted-directory grants before reaching pty:spawn.
+    // Floating terminals have no worktree root; trusted-directory grants validate cwd before IPC.
     registerPtyHandlers(mainWindow as never)
 
     await handlers.get('pty:spawn')!(null, {
@@ -155,7 +155,7 @@ describe('registerPtyHandlers', () => {
   })
   it('falls back to the worktree root when a saved local cwd no longer exists', async () => {
     registerPtyHandlers(mainWindow as never)
-    // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback must return the selected worktree path verbatim.
+    // Preserve Unicode worktree paths verbatim when falling back (#7239).
     const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
     const missingCwd = `${worktreePath}/deleted-folder`
     statSyncMock.mockImplementation((target: string) => {
@@ -533,7 +533,7 @@ describe('PTY WSL working-directory validation', () => {
     })
     process.env.USERPROFILE = 'C:\\Users\\jinwo'
 
-    // Why: the startup-cwd guard normalizes separators, so the provider sees the forward-slash UNC form.
+    // Startup cwd normalization converts UNC separators before provider validation.
     existsSyncMock.mockImplementation((targetPath: string) => {
       if (targetPath === '//wsl.localhost/Ubuntu/home/jin/missing') {
         return false
@@ -578,7 +578,7 @@ describe('PTY WSL working-directory validation', () => {
       configurable: true,
       value: 'darwin'
     })
-    // Why: this test simulates macOS even when Vitest runs on a Windows host.
+    // The fixture forces macOS even on Windows test hosts.
     process.env.HOME = '/Users/test'
     delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.SHELL = '/bin/zsh'
@@ -592,9 +592,7 @@ describe('PTY WSL working-directory validation', () => {
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      // Why absent: this HOME holds no zsh startup file, so there is no user
-      // config dir to hand back and Orca must not invent one — the wrapper
-      // leaves ZDOTDIR unset, exactly as an unwrapped login zsh would.
+      // Without user zsh startup files, leave ZDOTDIR unset as an ordinary login shell would.
       expect(options.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', {

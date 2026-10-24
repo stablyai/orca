@@ -14,7 +14,7 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from './agent-session-store-row-rules'
-import type { PersistedAgentSessionTab } from './agent-session-tab-table'
+import type { PersistedAgentSessionTab } from './agent-session/agent-session-tab-table'
 
 /** Unreadable rows are derived at load and never written, so the draft shares them. */
 export function draftAgentSessionStoreState(state: AgentSessionStoreState): AgentSessionStoreState {

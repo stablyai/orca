@@ -1,11 +1,11 @@
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-// Why type-only: scan workers import this module, and the router's setup graph must not load there.
+// Keep the router setup graph out of scan workers.
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 
-/** A real directory; a link is false, so a history folder shared by link is not read twice. */
+/** Exclude linked history directories to avoid reading them twice. */
 export function isDirectory(path: string): boolean {
   try {
     return lstatSync(path).isDirectory()
@@ -27,7 +27,7 @@ export function listClaudeProfileHomes(dataRoot: string): string[] {
 
 let installed: ClaudeProfileRouter | undefined
 
-/** Installed by the desktop's account services; workers, child processes and orcad have none. */
+/** Installed only in the desktop process. */
 export function installClaudeProfileRouter(router: ClaudeProfileRouter | undefined): void {
   installed = router
 }
@@ -38,7 +38,6 @@ export function getClaudeProfileRouter(): ClaudeProfileRouter | undefined {
 
 let installedWsl: ClaudeWslProfileRouter | undefined
 
-/** Windows only, beside the host router. */
 export function installClaudeWslProfileRouter(router: ClaudeWslProfileRouter | undefined): void {
   installedWsl = router
 }
@@ -47,7 +46,6 @@ export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined 
   return installedWsl
 }
 
-/** A local or WSL pane's env with the routed account's pointer added. */
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(
   env: Env,
   target: ClaudeAccountSelectionTarget
@@ -56,10 +54,7 @@ export function withClaudeProfileTerminalEnv<Env extends Record<string, string> 
   return profileEnv ? { ...env, ...profileEnv } : env
 }
 
-/**
- * Account `<surface>` folders the System default readers cannot see. Setup links history into the
- * System default on every platform, so only a folder setup could not link (e.g. across drives) adds any.
- */
+/** Include account history only where setup could not link it into System default. */
 export function claudeProfileHistoryDirs(surface: 'projects' | 'transcripts'): string[] {
   return (installed?.accountHomes() ?? []).map((home) => join(home, surface)).filter(isDirectory)
 }

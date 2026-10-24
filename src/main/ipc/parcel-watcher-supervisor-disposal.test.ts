@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { acknowledgeWatcherSubscribe, FakeWatcherChild } from './parcel-watcher-process-test-child'
-import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
+import { resetWatcherChildRegistryForTest } from './filesystem/watcher-process/parcel-watcher-child-registry'
 
 const { forkMock } = vi.hoisted(() => ({ forkMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ fork: forkMock }))

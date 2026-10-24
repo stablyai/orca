@@ -23,8 +23,7 @@ type ChromiumCookieSnapshotOptions = {
 }
 
 function removeSnapshotDirectory(path: string): void {
-  // Why: Windows can briefly retain SQLite handles after close; bounded retries
-  // keep cleanup reliable without ever touching the live browser directory.
+  // Windows may retain SQLite handles briefly after close; retry snapshot cleanup.
   rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
 }
 
@@ -84,14 +83,12 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
   }
 
   removeAttemptFiles(databasePath)
-  // Why: #9355 — AV/EDR briefly opens a file literally named "Cookies" with FILE_SHARE_NONE,
-  // so an otherwise-fine copy throws EBUSY. The attempt loop below only handles a false
-  // return, so a throw here would escape it entirely.
+  // Retry transient Windows AV/EDR locks; thrown copy errors bypass the snapshot attempt loop.
   copyFileWithWindowsRetry(sourcePath, databasePath)
 
   if (walBefore) {
     try {
-      // Why: SQLite only discovers a WAL whose basename exactly matches the DB.
+      // SQLite discovers WAL files only under the matching database basename.
       copyFileWithWindowsRetry(sourceWalPath, `${databasePath}-wal`)
     } catch (error) {
       if (isMissingFileError(error)) {
@@ -100,8 +97,7 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
       throw error
     }
   }
-  // Why: SHM is a transient mmap WAL index that may be locked or mid-update.
-  // SQLite safely rebuilds a matching Cookies-shm beside the private WAL copy.
+  // Skip the mutable SHM index; SQLite rebuilds it beside the copied WAL.
 
   const databaseAfter = readFileState(sourcePath)
   const walAfter = readFileState(sourceWalPath)

@@ -65,20 +65,18 @@ export function getLinuxEncryptionKey(
   keychainService: string,
   keychainAccount: string
 ): EncryptionKeyResult | null {
-  // Chromium uses v11 only with OS key storage; without it, Linux writes v10 with hardcoded
-  // "peanuts". Keep eligibility explicit because CBC cannot authenticate a wrong-key result.
+  // Linux v10 uses "peanuts"; v11 requires OS key storage, and CBC cannot authenticate a wrong key.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
   try {
-    // Why: GNOME keyring stores the Chrome Safe Storage password via secret-tool.
     keyringPassword = runKeychainCommand(
       'secret-tool',
       ['lookup', 'service', keychainService, 'account', keychainAccount],
       5_000
     )
   } catch {
-    // Why: fall back to application-based lookup used by newer Chromium versions.
+    // Newer Chromium installs may key the secret by application.
     try {
       const app = keychainAccount.toLowerCase().replaceAll(' ', '')
       keyringPassword = runKeychainCommand('secret-tool', ['lookup', 'application', app], 5_000)
@@ -128,7 +126,7 @@ export function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKey
       return null
     }
 
-    // Why: PowerShell DPAPI decrypt is the only native-addon-free path to the master key; pass via stdin to avoid injection.
+    // Send DPAPI data through stdin to keep it out of the PowerShell script.
     const dpapiData = encryptedKey.subarray(dpapiPrefix.length).toString('base64')
     const script = [
       'try { Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop }',
@@ -139,10 +137,7 @@ export function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKey
       '[Convert]::ToBase64String($out)'
     ].join('')
 
-    // Why runProcessSync and an absolute path: a bare `powershell` spawn from a
-    // GUI-subsystem process opens a visible conhost that takes foreground, so
-    // keystrokes typed into an Orca terminal during a cookie import land in the
-    // black box (#14543), and PATH under Electron is not the user's (#11771).
+    // Hide the console and use the system PowerShell path; Electron’s PATH may differ.
     const result = runProcessSync({
       program: windowsPowerShellPath(),
       args: ['-NoProfile', '-NonInteractive', '-Command', script],

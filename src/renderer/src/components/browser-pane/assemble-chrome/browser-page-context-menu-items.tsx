@@ -77,8 +77,9 @@ function buildMenuSections({
       webviewRef.current?.[command]()
     }
   })
-  const openInNewTab = (url: string, activate: boolean): void =>
+  const openInNewTab = (url: string, activate: boolean): void => {
     openUrlInTabBesideBrowserPage({ sourcePageId: browserPageId, worktreeId, url, activate })
+  }
   const openExternally = (url: string): void => {
     const targetUrl = normalizeExternalBrowserUrl(url)
     if (targetUrl) {

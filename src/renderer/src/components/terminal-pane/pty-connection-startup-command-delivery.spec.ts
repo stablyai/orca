@@ -422,9 +422,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
 
         const pane = createPane(1)
-        pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
-          callback?.()
-        })
+        pane.terminal.write.mockImplementation(
+          (_data: string | Uint8Array, callback?: () => void) => {
+            callback?.()
+          }
+        )
         const manager = createManager(1)
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
@@ -484,9 +486,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
 
         const pane = createPane(1)
-        pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
-          callback?.()
-        })
+        pane.terminal.write.mockImplementation(
+          (_data: string | Uint8Array, callback?: () => void) => {
+            callback?.()
+          }
+        )
         const manager = createManager(1)
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })

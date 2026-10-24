@@ -22,9 +22,7 @@ type ParserSessionOptions = {
   messages?: TranscriptMessageSink
 }
 
-// Kiro CLI keeps each session as <id>.json (metadata) beside <id>.jsonl (transcript),
-// flat under $KIRO_HOME/sessions/cli; per-session subdirectories hold task state only.
-// This is the `kiro-cli chat` store Orca launches; the opt-in ACP V3 engine owns its own.
+// Kiro CLI chat uses flat metadata/transcript pairs; ACP V3 and task subdirectories have separate stores.
 const KIRO_SESSION_FILE_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/i
 
@@ -36,7 +34,7 @@ export function kiroTranscriptPathForMetadata(filePath: string): string {
   return filePath.endsWith('.json') ? `${filePath}l` : ''
 }
 
-/** Kiro's `{ kind, data }` blocks restated as the Claude-shaped blocks the previewer reads. */
+/** Translate Kiro kind/data blocks into preview content blocks. */
 function toPreviewBlocks(content: unknown): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = []
   for (const value of arrayValue(content)) {
@@ -59,7 +57,6 @@ function toPreviewBlocks(content: unknown): Record<string, unknown>[] {
       case 'toolResult':
         blocks.push({ type: 'tool_result', content: toPreviewBlocks(asRecord(data)?.content) })
         break
-      // thinking and image blocks carry nothing the history list shows.
       default:
         break
     }
@@ -94,7 +91,7 @@ function consumeKiroTranscriptLine(accumulator: SessionAccumulator, line: string
   }
 }
 
-/** null for a subagent's child session: it is reached from its parent, not listed. */
+/** Exclude child sessions reached through their parent. */
 export function listedKiroMetadata(metadataContent: string): Record<string, unknown> | null {
   const metadata = parseJsonObject(metadataContent)
   return metadata && !extractString(metadata.parent_session_id) ? metadata : null
@@ -141,19 +138,18 @@ export async function parseKiroSessionFile(
     return null
   }
   try {
-    // Why streamed: Kiro transcripts embed whole tool outputs and reach megabytes.
+    // Stream transcripts because embedded tool output can be megabytes.
     const { trailingPartialLine } = await consumeCompleteJsonlLines({
       path: kiroTranscriptPathForMetadata(file.path),
       start: 0,
       onLine: (line) => consumeKiroTranscriptLine(accumulator, line)
     })
-    // A torn final write fails JSON parsing and is dropped; a complete one still counts.
+    // Accept complete final records without a newline; malformed partial writes are ignored by the parser.
     if (trailingPartialLine) {
       consumeKiroTranscriptLine(accumulator, trailingPartialLine)
     }
   } catch (error) {
-    // The metadata is written before the first turn; a missing transcript is a valid
-    // empty session, while a WSL gate refusal must stay visible.
+    // Metadata precedes the first turn, so a missing transcript is a valid empty session; other errors propagate.
     if (error instanceof WslTranscriptFsError || !isMissingPathError(error)) {
       throw error
     }

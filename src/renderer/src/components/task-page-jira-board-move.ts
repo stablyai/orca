@@ -3,7 +3,7 @@ import type {
   JiraIssueUpdate,
   JiraMutationResult,
   JiraTransition
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {

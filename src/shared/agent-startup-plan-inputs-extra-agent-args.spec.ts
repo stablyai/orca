@@ -40,7 +40,7 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     })
     const desktopArgs = mergeExtraAgentArgs({
       agent: 'claude',
-      defaultArgs: resolveTuiAgentLaunchArgs('claude', SETTINGS.agentDefaultArgs),
+      defaultArgs: resolveTuiAgentLaunchArgs('claude', SETTINGS),
       extraAgentArgs: '--effort high',
       shell: 'posix'
     })

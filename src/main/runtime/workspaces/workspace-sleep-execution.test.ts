@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
-import type { WorkspaceSleepTarget } from '../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice, WorkspaceSleepTarget } from '../../../shared/workspace-sleep'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import {
@@ -58,6 +58,40 @@ function queued(queue = new WorkspaceLifecycleQueue()): WorkspaceSleepQueue {
 const enqueue = queued()
 
 describe('sleepWorkspaces', () => {
+  it('correlates a project move with renderer notices and retains chat stop receipts without marking chats asleep', async () => {
+    const notices: WorkspaceSleepNotice[] = []
+    const { deps: d } = deps({
+      notify: (notice) => notices.push(notice),
+      stopOwnChats: async (_id, markAsleep) => {
+        expect(markAsleep).toBe(false)
+        return { stoppedSessionIds: ['chat'] }
+      }
+    })
+    const outcomes = await sleepWorkspaces(d, queued(), {
+      targets: [local('wt')],
+      markChatsAsleep: false,
+      projectMovePauseId: 'move-1'
+    })
+    expect(notices).toEqual([
+      { worktreeId: 'wt', phase: 'started', projectMovePauseId: 'move-1' },
+      {
+        worktreeId: 'wt',
+        phase: 'ended',
+        projectMovePauseId: 'move-1',
+        slept: true,
+        stoppedPtyIds: ['pty-wt'],
+        records: []
+      }
+    ])
+    expect(outcomes).toEqual([
+      {
+        worktreeId: 'wt',
+        chatFailed: false,
+        receipts: [{ executionHostId: 'local', stoppedSessionIds: ['chat'] }]
+      }
+    ])
+  })
+
   it('runs a sleep in order: the window follows, terminals stop, chats stop, then the VM', async () => {
     const { log, deps: d } = deps()
     const outcomes = await sleepWorkspaces(d, enqueue, {

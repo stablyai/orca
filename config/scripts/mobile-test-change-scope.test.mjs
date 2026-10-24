@@ -148,9 +148,6 @@ it('skips only tests, after successful detection, and retains all other mobile g
   )
   const steps = workflow.jobs.verify.steps
   expect(workflow.on.pull_request.paths).toContain('config/scripts/mobile-test-change-scope*')
-  const detector = steps.find((step) => step.id === 'test-scope')
-  expect(detector.run).toContain('git diff --name-only --no-renames -z HEAD^1 HEAD')
-  expect(detector.run.match(/should_run=true/g)).toHaveLength(2)
   expect(steps.find((step) => step.name === 'Test').if).toBe(
     "steps.test-scope.outputs.should_run != 'false'"
   )

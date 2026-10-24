@@ -34,8 +34,6 @@ describe('browser client host id', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const module = await freshModule()
 
-    // The order this guards against: a window stamped its argv from the process-local mint, so
-    // adopting the durable id now would leave that renderer answering to a name nothing else uses.
     const stamped = module.getBrowserClientHostId()
     module.initializeBrowserClientHostId(profileDirectory())
 

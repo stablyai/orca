@@ -12,6 +12,7 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   systemSshConnectionReuse: boolean
+  systemSshProxyConnectionReuse: boolean
   allowRemoteCliControl: boolean
 }
 
@@ -26,6 +27,7 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
+  systemSshProxyConnectionReuse: false,
   allowRemoteCliControl: true
 }
 
@@ -44,6 +46,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
+    systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse === true,
     allowRemoteCliControl: isRemoteCliControlAllowed(target)
   }
 }
@@ -168,6 +171,7 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
+    current.systemSshProxyConnectionReuse !== baseline.systemSshProxyConnectionReuse ||
     current.allowRemoteCliControl !== baseline.allowRemoteCliControl
   )
 }

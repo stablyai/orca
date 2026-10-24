@@ -12,7 +12,7 @@ import {
   type NativeChatTurnJournal
 } from '../../../src/shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../src/shared/native-chat-streaming'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
@@ -149,15 +149,21 @@ export function useMobileNativeChatTurnDisclosure({
 } {
   // Resolve each row's turn, which turn is live, and the order the rows draw in, once: from the
   // turn record when the host states scopes, else by journal order.
-  const { rows, turnKeys, liveTurnKey } = useMemo(() => {
+  const { rows, turnKeys, liveTurnKey, unresolvedRowIds } = useMemo(() => {
     if (!enabled) {
-      return { rows: messages, turnKeys: NO_TURN_KEYS, liveTurnKey: undefined }
+      return {
+        rows: messages,
+        turnKeys: NO_TURN_KEYS,
+        liveTurnKey: undefined,
+        unresolvedRowIds: undefined
+      }
     }
     const membership = nativeChatTurnMembership(messages, turnJournal)
     return {
       rows: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
       turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder),
-      liveTurnKey: membership.liveTurnKey
+      liveTurnKey: membership.liveTurnKey,
+      unresolvedRowIds: membership.unresolvedRowIds
     }
   }, [enabled, messages, turnJournal])
   // A message waiting behind the live turn draws after that turn's live status, not in the list.
@@ -199,8 +205,13 @@ export function useMobileNativeChatTurnDisclosure({
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
-      isNativeChatRowInLiveWorkingTurn(turnKeys[index], liveTurnKey, enabled && isWorking),
-    [enabled, isWorking, liveTurnKey, turnKeys]
+      isNativeChatRowInLiveWorkingTurn(
+        turnKeys[index],
+        liveTurnKey,
+        enabled && isWorking,
+        unresolvedRowIds?.has(rows[index]!.id)
+      ),
+    [enabled, isWorking, liveTurnKey, turnKeys, unresolvedRowIds, rows]
   )
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const line = useMemo(

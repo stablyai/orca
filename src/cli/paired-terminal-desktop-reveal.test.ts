@@ -58,7 +58,7 @@ describe('revealPairedTerminalOnLocalDesktop', () => {
 
     expect(mocks.resolveEnvironment).toHaveBeenCalledWith('/profile', 'winpc')
     expect(serverCall).toHaveBeenCalledWith('terminal.show', { terminal: HANDLE })
-    // Why null selectors: the reveal must reach this machine's runtime, not the environment again.
+    // null bypasses ambient remote selection so reveal reaches the local desktop.
     expect(mocks.desktopClient).toHaveBeenCalledWith('/profile', undefined, null, null)
     expect(mocks.desktopCall).toHaveBeenCalledWith('terminal.reveal', {
       worktreeId: shownTerminal.worktreeId,

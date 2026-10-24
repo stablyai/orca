@@ -34,8 +34,12 @@ vi.mock('./AgentLaunchSettingsCatalog', () => ({
     return <p>Local launch settings</p>
   }
 }))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 beforeEach(() => {
+  vi.stubGlobal('api', { platform: { get: () => ({ platform: 'darwin' }) } })
   state.runtimeEnvironments = [
     { id: 'ssh-host', name: 'SSH host', createdAt: 1, pairingRevision: 17 }
   ]

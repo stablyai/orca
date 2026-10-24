@@ -34,6 +34,14 @@ describe('mobile complete-pair stream windows', () => {
       })
       expect(result).toEqual({ kind: 'messages', messages: [...base, row('latest')] })
       expect(merger.indexById.get('opencode:oldest:reasoning')).toBe(0)
+      const updated = { ...row('latest'), blocks: [{ type: 'text' as const, text: 'updated' }] }
+      applyMobileNativeChatStreamFrame({
+        merger,
+        frame: { type: 'appended', messages: [updated] },
+        limit: 40,
+        replaceSnapshot: false
+      })
+      expect(merger.list).toEqual([...base, updated])
     }
   )
 

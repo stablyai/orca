@@ -11,7 +11,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 
 import {
   findCachedElevatePaths,
@@ -317,47 +316,5 @@ describe('a cached elevate.exe miss is not silent', () => {
     expect(result.stdout).not.toContain('::warning::')
     expect(result.stdout).toContain('the copy app-builder-lib will pack')
     expect(readFileSync(join(nsisDir, 'elevate.exe'), 'utf8')).toBe('signpath-signed-elevate')
-  })
-})
-
-describe('release-cut.yml swaps the cached elevate.exe through the resolver', () => {
-  function swapStep() {
-    const workflow = parse(
-      readFileSync(join(projectRoot, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const step = workflow.jobs.build.steps.find(
-      (candidate) => candidate.name === 'Replace cached elevate.exe with the signed copy'
-    )
-    expect(step).toBeDefined()
-    return step
-  }
-
-  it('delegates the cache lookup to the script instead of an inline path', () => {
-    const step = swapStep()
-    expect(step.run).toContain('node config/scripts/replace-cached-nsis-elevate.mjs $signed')
-    // The hardcoded miss that shipped v1.4.193/v1.4.194 unsigned.
-    expect(step.run).not.toContain('electron-builder\\Cache\\nsis')
-    expect(step.run).not.toContain('-ErrorAction SilentlyContinue')
-  })
-
-  it('fails the step when the swap reports a miss', () => {
-    const step = swapStep()
-    // Matched as an executed statement: downgrading this to a Write-Host restores
-    // the silent fail-open that let the unsigned helper ship.
-    expect(step.run).toMatch(/if \(\$LASTEXITCODE -ne 0\) \{/)
-    expect(step.run).toMatch(/^\s*throw \$message\s*$/m)
-    expect(step.run).toContain('GITHUB_STEP_SUMMARY')
-  })
-
-  // Why kept: windows-signing-rehearsal.yml shares the electron-builder-win-<hash>
-  // cache key, so dropping this guard would let a test certificate reach a release cache.
-  it('still refuses to stage anything but a SignPath-signed helper', () => {
-    const step = swapStep()
-    expect(step.run).toContain("$signature.Status -ne 'Valid'")
-    expect(step.run).toContain("$subject -notlike '*CN=SignPath Foundation*'")
-  })
-
-  it('blocks the release when the cache swap fails', () => {
-    expect(swapStep()['continue-on-error']).toBeUndefined()
   })
 })

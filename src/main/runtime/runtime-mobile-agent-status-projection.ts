@@ -12,6 +12,64 @@ import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-statu
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
+function workingHookOwnsIdleTitleInterval(
+  state: AgentStatusEntry['state'],
+  observedAt: number,
+  pty: RuntimePtyWorktreeRecord | null
+): boolean {
+  return (
+    state === 'working' &&
+    pty?.lastAgentStatus === 'idle' &&
+    !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle) &&
+    observedAt >
+      Math.max(
+        pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
+        pty.lastAgentStatusStartedAtEpochMs ?? 0
+      ) &&
+    Date.now() - observedAt <= AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
+// Why: only a completed turn's reply is final; mid-turn hook snapshots carry tool stdout.
+function completedTurnFields(
+  status: AgentStatusEntry
+): Pick<
+  AgentStatusEntry,
+  'lastAssistantMessage' | 'lastAssistantMessageIsToolOutput' | 'interrupted'
+> {
+  if (status.state !== 'done') {
+    return {}
+  }
+  return {
+    ...(status.lastAssistantMessage
+      ? {
+          lastAssistantMessage: status.lastAssistantMessage,
+          ...(status.lastAssistantMessageIsToolOutput != null
+            ? { lastAssistantMessageIsToolOutput: status.lastAssistantMessageIsToolOutput }
+            : {})
+        }
+      : {}),
+    ...(status.interrupted != null ? { interrupted: status.interrupted } : {})
+  }
+}
+
+export function demoteRuntimeMobileAgentStatus(
+  status: AgentStatusEntry,
+  pty: RuntimePtyWorktreeRecord | null
+): AgentStatusEntry {
+  return {
+    state: 'done',
+    prompt: '',
+    updatedAt: pty?.lastOscTitleEpochMs ?? status.updatedAt,
+    stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
+    paneKey: status.paneKey,
+    stateHistory: [],
+    agentType: status.agentType,
+    ...completedTurnFields(status),
+    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+  }
+}
+
 export function renewRuntimeMobileAgentStatusFromPtyTitle(
   status: AgentStatusEntry | null,
   pty: RuntimePtyWorktreeRecord | null,
@@ -59,13 +117,20 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
     ...(status.tabId ? { tabId: status.tabId } : {}),
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
-    ...(status.providerSession ? { providerSession: status.providerSession } : {})
+    ...(status.providerSession ? { providerSession: status.providerSession } : {}),
+    ...(state === 'done' ? completedTurnFields(status) : {})
   })
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||
     (pty.lastAgentStatus === 'permission' &&
       (status.state === 'blocked' || status.state === 'waiting'))
   if (!titleConfirmsState) {
+    // A repaint of the idle interval preceding this hook is not a new turn boundary.
+    if (
+      workingHookOwnsIdleTitleInterval(status.state, agentStatusAuthorityObservedAt(status), pty)
+    ) {
+      return status
+    }
     if (
       richStatusCanOwnTitleInterval &&
       agentStatusAuthorityObservedAt(status) >= titleEvidenceAt
@@ -212,6 +277,11 @@ export function resolveRuntimeHookLiveAgentRow(
   if (live.payload.interactivePrompt != null) {
     return live
   }
+  if (
+    workingHookOwnsIdleTitleInterval(live.payload.state, agentStatusAuthorityObservedAt(live), pty)
+  ) {
+    return live
+  }
   // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
   // was observed; replay delivery order must not make old evidence outrank a newer title.
   return !nonAgentTitle &&
@@ -251,19 +321,7 @@ export function projectPublishedTabAgentStatus(
   // Why: idle live title → drop stale "working" (no spinner) but keep agent identity so native chat can still address the transcript.
   return normalizedTabAgentStatus?.agentType != null
     ? {
-        agentStatus: {
-          state: 'done' as const,
-          prompt: '',
-          updatedAt: statusPty?.lastOscTitleEpochMs ?? normalizedTabAgentStatus.updatedAt,
-          stateStartedAt:
-            statusPty?.lastAgentStatusStartedAtEpochMs ?? normalizedTabAgentStatus.stateStartedAt,
-          paneKey: normalizedTabAgentStatus.paneKey,
-          stateHistory: [],
-          agentType: normalizedTabAgentStatus.agentType,
-          ...(normalizedTabAgentStatus.providerSession
-            ? { providerSession: normalizedTabAgentStatus.providerSession }
-            : {})
-        }
+        agentStatus: demoteRuntimeMobileAgentStatus(normalizedTabAgentStatus, statusPty)
       }
     : null
 }

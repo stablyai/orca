@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -184,6 +185,19 @@ export function useSshWorkspaceBrowserRoute(
   }
 }
 
+function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
+  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const browserRoutingSettings = useAppStore((s) => s.settings)
+  const environments = useAppStore((s) => s.runtimeEnvironments)
+  return (
+    resolveSshWorkspaceBrowserRouteEligibility(
+      executionHostId,
+      browserRoutingSettings,
+      environments
+    )?.targetId ?? null
+  )
+}
+
 /**
  * The undo for a persisted "Try anyway", surfaced where its cost shows up: on
  * a routed page's load-failure overlay. Returns null unless this workspace's
@@ -191,19 +205,11 @@ export function useSshWorkspaceBrowserRoute(
  * probing, which resurfaces the classified card if forwarding is still blocked.
  */
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
-  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
-  const browserRoutingSettings = useAppStore((s) => s.settings)
-  const environments = useAppStore((s) => s.runtimeEnvironments)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const targetId =
-    resolveSshWorkspaceBrowserRouteEligibility(
-      executionHostId,
-      browserRoutingSettings,
-      environments
-    )?.targetId ?? null
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }
@@ -213,4 +219,16 @@ export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void
         (id) => id !== targetId
       )
     })
+}
+
+/** How a routed page's load failure reads: the state of the SSH host the route dials. */
+export function useSshWorkspaceBrowserLoadFailureRoute(worktreeId: string): {
+  route: BrowserLoadFailureRoute | null
+  recheck: (() => void) | null
+} {
+  const recheck = useSshWorkspaceProbeSkipRecheck(worktreeId)
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
+  const routeConnected = useWorktreeHostConnection(worktreeId, targetId).phase === 'connected'
+  // Why: after "Try anyway" nothing proved the host forwards ports, so a SOCKS failure can't mean "nothing is running".
+  return { route: recheck ? null : { routed: true, routeConnected }, recheck }
 }

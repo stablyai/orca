@@ -193,7 +193,9 @@ export async function spawnInAdmittedPane(
   ): Promise<Awaited<ReturnType<Spawn>>> => {
     if (admitted !== undefined && admitted !== 'admitted' && admitted !== 'exists') {
       // A tab main recorded closed, or a split whose parent pane left the layout.
-      throw new Error(admitted === 'tab_closed' ? admitted : 'terminal_split_source_not_found')
+      throw new Error(
+        admitted === 'tab_closed' ? 'tab_not_found' : 'terminal_split_source_not_found'
+      )
     }
     admittedAs = admitted
     // SAFETY: Callers require spawn; a lost capability during admission keeps the original failure.

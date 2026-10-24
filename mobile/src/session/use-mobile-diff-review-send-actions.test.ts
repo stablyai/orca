@@ -90,7 +90,10 @@ function launchClient(
     if (method === 'preflight.detectAgents') {
       return rpcReply(['codex'])
     }
-    return launchReply()
+    if (method === 'agent.launchReplay') {
+      return launchReply()
+    }
+    throw new Error(`Unexpected request: ${method}`)
   })
   return { client: requestPortRpcClient(sendRequest), sendRequest }
 }
@@ -166,7 +169,9 @@ describe('useMobileDiffReviewSendActions', () => {
     await act(async () => {
       await actions?.copyNotes()
     })
-    expect(clipboardMock.setStringAsync).toHaveBeenCalledOnce()
+    expect(clipboardMock.setStringAsync).toHaveBeenCalledExactlyOnceWith(
+      'File: src/a.ts\nLine: 3\nUser comment: "rename this"'
+    )
     expect(setActionError).toHaveBeenLastCalledWith('Review notes copied')
   })
 
@@ -314,7 +319,21 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(launch?.[1]).toMatchObject({
       agent: 'codex',
       target: { kind: 'existing', worktree: 'id:wt-1' },
-      prompt: { delivery: 'submit' },
+      prompt: {
+        delivery: 'submit',
+        text: [
+          'You are reviewing the current worktree. Address the following mobile review notes.',
+          '',
+          'File: src/a.ts',
+          'Line: 3',
+          'User comment: "rename this"',
+          '',
+          'After applying fixes:',
+          '1. Summarize changed files.',
+          '2. Run relevant tests.',
+          '3. Tell me if anything remains risky.'
+        ].join('\n')
+      },
       launchSource: 'notes_send'
     })
     expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)

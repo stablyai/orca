@@ -96,6 +96,12 @@ describe('the native chat older-history page', () => {
       state?.loadEarlier()
       await Promise.resolve()
     })
+    expect(client.sendRequest).toHaveBeenCalledExactlyOnceWith(
+      'nativeChat.readSession',
+      { agent: 'claude', sessionId: 'session', limit: 60, beforeOffset: 100 },
+      { timeoutMs: expect.any(Number), budgetSpansConnect: true }
+    )
+    expect(state?.olderPages).toBe('failed')
   }
 
   it('contains a rejected page request instead of raising unhandledrejection', async () => {

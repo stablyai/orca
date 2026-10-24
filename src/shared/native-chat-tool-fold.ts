@@ -11,7 +11,7 @@ import { isNoiseMessage } from './native-chat-noise'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrameMessage
-} from './native-chat-provider-frame-summary'
+} from './native-chat/native-chat-provider-frame-summary'
 import { FoldedToolResultSources } from './native-chat-folded-tool-results'
 
 export { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-pairs'

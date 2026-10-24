@@ -16,8 +16,7 @@ export const settledDiffCache = new SettledDiffCache()
 
 export const statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
 
-// Why: clear every in-flight git read cache; clearing only some would let a post-mutation
-// getStatus() join a pre-mutation read and publish it as current.
+// Clear every read cache so post-mutation calls cannot join stale pre-mutation reads.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   settledDiffCache.clear()
@@ -34,7 +33,7 @@ export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>):
   try {
     return await run()
   } finally {
-    // Why: a read that started mid-mutation can be stale too, so invalidate again after.
+    // Invalidate again: reads started during the mutation can also be stale.
     invalidateGitReadCaches()
   }
 }

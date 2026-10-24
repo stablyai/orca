@@ -14,9 +14,7 @@ function identityOf(uuid: string): AgentJournalItemIdentity {
   return { provider: 'claude', sessionId: 'claude-session', uuid }
 }
 
-/** A block streamed with no scope is the session's own agent's, and the producer
- *  is never asked about it. Throwing pins that: a block that starts consulting
- *  the resolver for a scopeless row shows up here rather than silently. */
+/** Scopeless blocks are root-owned and must never consult the child resolver. */
 const unconsultedProducer: ClaudeSubagentLinkageSource = {
   linkageFor: () => {
     throw new Error('resolver consulted for a block with no scope')
@@ -26,16 +24,13 @@ const unconsultedProducer: ClaudeSubagentLinkageSource = {
   }
 }
 
-/** The linkage a child's block carries once its announcement has landed. */
 const CHILD_LINKAGE: AgentJournalProducerLinkage = {
   agentId: 'task-1',
   providerParentRef: 'toolu_1',
   producerKind: 'agent'
 }
 
-/** A producer whose answer a test moves from provisional to final, the way an
- *  announcement arriving mid-stream does. Under settle it never waits: the raw
- *  reference is the only handle a child that was never announced will have. */
+/** Resolve announcements mid-stream; use the raw reference if no announcement arrives. */
 function scriptedProducer() {
   let verdict: ClaudeSubagentLinkageVerdict = { kind: 'pending' }
   const settledFallback: Extract<ClaudeSubagentLinkageVerdict, { kind: 'linked' }> = {
@@ -55,9 +50,6 @@ function scriptedProducer() {
 
 function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer) {
   const rows: { uuid: string; text: string }[] = []
-  /** Attribution kept beside the rows rather than on them, so the assertions
-   *  about text stay about text — and so a harness that dropped the argument
-   *  would show up as an empty list rather than as silence. */
   const stamps: StructuredAgentSessionAppendOptions[] = []
   let scheduled: (() => void) | null = null
   const store = createClaudeStreamedTextCheckpoints({
@@ -104,7 +96,6 @@ describe('claude streamed text checkpoints', () => {
     store.settle()
 
     expect(store.pending).toBe(0)
-    // The row written before settlement stays; nothing is rewritten afterwards.
     store.flush()
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
   })
@@ -128,7 +119,6 @@ describe('claude streamed text checkpoints', () => {
     store.flush()
 
     expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
-    // Already at the row's length: a second flush has nothing to write.
     store.flush()
     expect(rows).toHaveLength(1)
   })
@@ -155,10 +145,6 @@ describe('claude streamed text checkpoints', () => {
   })
 
   it('writes a checkpoint at once while the producing agent is provisional', () => {
-    // The prose reaches the user immediately, stamped with the handle that
-    // exists. Every checkpoint rewrites the same row, so the announcement can
-    // correct it in place — holding the text back buys nothing and costs the
-    // user sight of what the child is saying.
     const producer = scriptedProducer()
     const { store, rows, stamps, runWindow } = checkpoints(producer.source)
 
@@ -167,8 +153,7 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial' }])
     expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
 
-    // `flush` rewrites a row whose TEXT moved on; correcting a stamp on text
-    // that did not is what re-attribution is for, and the translator runs both.
+    // Flush advances text; reattribute corrects linkage even when text is unchanged.
     producer.resolve(CHILD_LINKAGE)
     store.flush()
     expect(stamps.at(-1)).toMatchObject({ agentId: 'toolu_1' })
@@ -180,8 +165,6 @@ describe('claude streamed text checkpoints', () => {
   })
 
   it('writes a held block under the raw reference when no announcement comes', () => {
-    // Anti-swallow for the streamed lane: the flush that precedes settlement has
-    // to write the text, and as a child's rather than as the session's own.
     const producer = scriptedProducer()
     const { store, rows, stamps, runWindow } = checkpoints(producer.source)
 
@@ -193,16 +176,11 @@ describe('claude streamed text checkpoints', () => {
       { agentId: 'toolu_1', providerParentRef: 'toolu_1', producerKind: 'agent' }
     ])
 
-    // Nothing ever names it, so re-attribution has nothing better to say and
-    // must not burn a revision repeating itself.
     store.reattribute()
     expect(rows).toHaveLength(1)
   })
 
   it('re-resolves a block’s producer on every checkpoint', () => {
-    // Every checkpoint rewrites the SAME row, so there is only ever one row per
-    // block and re-resolving can only revise it. Latching the first verdict is
-    // what made an announcement arriving mid-stream unable to correct it.
     const producer = scriptedProducer()
     producer.resolve(CHILD_LINKAGE)
     const { store, stamps, runWindow } = checkpoints(producer.source)

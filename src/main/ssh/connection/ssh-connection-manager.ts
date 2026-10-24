@@ -7,6 +7,7 @@ import {
   isSshCredentialDeclined
 } from '../ssh-credential-decline'
 import { createSshUserDisconnectedError, isSshUserDisconnected } from '../ssh-user-disconnect'
+import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {
@@ -60,7 +61,7 @@ export class SshConnectionManager {
     // Why: replacing a connection whose own reconnect is asking the user would close that dialog
     // and open another one.
     if (this.connectingTargets.has(target.id) || existing?.isAwaitingCredential()) {
-      throw new Error(`Connection to ${target.label} is already in progress`)
+      throw new Error(`Connection to ${target.label} ${SSH_CONNECT_IN_PROGRESS_SUFFIX}`)
     }
 
     const attempt = Symbol(target.id)

@@ -20,7 +20,7 @@ describe('main_thread_hang_detected telemetry schema', () => {
     ).toBe(true)
   })
 
-  // Why: strict() keeps unplanned fields (paths, pids, window titles) off the wire.
+  // Strict schema excludes paths, PIDs and window titles from telemetry.
   it('rejects unknown fields and non-integer durations', () => {
     expect(
       eventSchemas.main_thread_hang_detected.safeParse({

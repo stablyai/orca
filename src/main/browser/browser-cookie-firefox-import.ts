@@ -17,10 +17,6 @@ import {
 import type { DetectedBrowser } from './browser-cookie-detection-types'
 import { diag } from './browser-cookie-import-diagnostics'
 
-// ---------------------------------------------------------------------------
-// Firefox import
-// ---------------------------------------------------------------------------
-
 export async function importCookiesFromFirefox(
   browser: DetectedBrowser,
   targetPartition: string,
@@ -39,7 +35,7 @@ export async function importCookiesFromFirefox(
         try {
           copyFileSync(sidecar, tmpCookiesPath + suffix)
         } catch {
-          /* best-effort */
+          /* Sidecars may disappear while Firefox updates its database. */
         }
       }
     }
@@ -64,8 +60,7 @@ export async function importCookiesFromFirefox(
       sameSite: number
       isPartitionedAttributeSet?: number
     }
-    // Why: selecting a column an older moz_cookies schema lacks fails the whole import. A schema
-    // without the server-declared partition flag predates that cookie identity.
+    // Older Firefox schemas lack the server-declared partition column.
     const firefoxColumns = new Set(
       (db.prepare('PRAGMA table_info(moz_cookies)').all() as { name: string }[]).map(
         (column) => column.name

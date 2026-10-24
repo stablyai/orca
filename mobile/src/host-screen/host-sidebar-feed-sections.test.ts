@@ -263,31 +263,25 @@ describe('the phone list from the sidebar feed', () => {
     })
   })
 
-  // The phone sends its host list resolved with an "all" scope; the desktop keeps its legacy scope.
-  const scopes: [ExecutionHostScope, string[] | null][] = [
-    ['ssh:gpu', null],
-    ['all', ['local', 'ssh:gpu']],
-    ['all', ['ssh:gpu']],
-    ['local', ['local', 'ssh:gpu']]
+  const scopes: [ExecutionHostScope, string[] | null, string[]][] = [
+    ['ssh:gpu', null, ['lab::/w/gpu']],
+    ['all', ['local', 'ssh:gpu'], ['orca::/w/parent', 'orca::/w/child', 'lab::/w/gpu']],
+    ['all', ['ssh:gpu'], ['lab::/w/gpu']],
+    ['local', ['local', 'ssh:gpu'], ['orca::/w/parent', 'orca::/w/child', 'lab::/w/gpu']]
   ]
-  it.each(scopes)('builds the desktop’s rows for scope %s and hosts %j', (scope, hostIds) => {
-    const visibleHostIds = resolveVisibleWorkspaceHostIds(hostIds, scope)
-    const view = phoneView({ filters: { ...phoneView().filters, visibleHostIds } })
-    const desktopView: SidebarFeedView = {
-      ...phoneFeedView(view),
-      workspaceHostScope: scope,
-      visibleWorkspaceHostIds: hostIds && hostIds.length > 0 ? visibleHostIds : null
+  it.each(scopes)(
+    'shows the expected workspaces for scope %s and hosts %j',
+    (scope, hostIds, expected) => {
+      const visibleHostIds = resolveVisibleWorkspaceHostIds(hostIds, scope)
+      const view = phoneView({ filters: { ...phoneView().filters, visibleHostIds } })
+      for (const groupBy of ['repo', 'none', 'workspace-status', 'pr-status'] as const) {
+        const sections = sectionsFor({ ...view, groupBy })
+        expect(
+          sections.flatMap((section) => section.data.map((row) => row.worktreeId)).sort()
+        ).toEqual([...expected].sort())
+      }
     }
-    for (const groupBy of ['repo', 'none', 'workspace-status', 'pr-status'] as const) {
-      const phone = buildSidebarFeedRows(
-        feedDomains(),
-        catalog,
-        phoneFeedView({ ...view, groupBy })
-      )
-      const desktop = buildSidebarFeedRows(feedDomains(), catalog, { ...desktopView, groupBy })
-      expect(JSON.stringify(phone.sectionRows)).toBe(JSON.stringify(desktop.sectionRows))
-    }
-  })
+  )
 
   // The test process runs on its own platform, which plays the phone's here.
   it.each([

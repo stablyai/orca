@@ -12,6 +12,7 @@ import {
   normalizeAndAccept,
   PANE_KEY
 } from './agent-hook-listener-test-harness'
+import { makePaneKey } from './stable-pane-id'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -154,7 +155,7 @@ describe('shared agent-hook-listener', () => {
       state,
       'claude',
       {
-        paneKey: 'x'.repeat(300),
+        paneKey: makePaneKey('x'.repeat(300), '11111111-1111-4111-8111-111111111111'),
         payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi' }
       },
       'production'

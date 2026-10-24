@@ -27,24 +27,20 @@ const SITE_PERMISSION_BY_MEDIA_TYPE: Partial<Record<string, BrowserSitePermissio
   audio: 'microphone'
 }
 
-/**
- * What the user decides for an Electron permission: null when it is not theirs to decide. An empty
- * list (media naming no device) is never granted.
- */
+/** Null means no site prompt applies; an empty device list must not grant media access. */
 export function browserSitePermissionsFor(
   permission: string,
   mediaTypes: readonly string[] | undefined
 ): BrowserSitePermission[] | null {
   if (permission === 'media') {
     const requested = new Set((mediaTypes ?? []).map((type) => SITE_PERMISSION_BY_MEDIA_TYPE[type]))
-    // Why: the prompt lists camera before microphone whatever order Chromium reports them in.
+    // Preserve camera-before-microphone prompt order regardless of Chromium's order.
     return BROWSER_SITE_PERMISSIONS.filter((sitePermission) => requested.has(sitePermission))
   }
   const sitePermission = SITE_PERMISSION_BY_ELECTRON_PERMISSION[permission]
   return sitePermission ? [sitePermission] : null
 }
 
-/** Where one browser session's answers live. */
 export type BrowserSitePermissionMemory = {
   get(origin: string, permission: BrowserSitePermission): BrowserSitePermissionDecision | undefined
   set(
@@ -54,7 +50,6 @@ export type BrowserSitePermissionMemory = {
   ): void
 }
 
-/** A browser profile's answers, saved and listed in settings. */
 export function savedBrowserSitePermissions(profileId: string): BrowserSitePermissionMemory {
   return {
     get: (origin, permission) => getBrowserSitePermissionDecision(profileId, origin, permission),
@@ -65,10 +60,7 @@ export function savedBrowserSitePermissions(profileId: string): BrowserSitePermi
 
 const sessionMemories = new Map<string, BrowserSitePermissionMemory>()
 
-/**
- * Answers kept until Orca quits, for a paired server's profile, which settings here cannot list.
- * Keyed by partition: closing its last page drops the handlers but must not forget the answers.
- */
+// Partition-scoped answers survive page closure until quit without entering local profile settings.
 export function sessionBrowserSitePermissions(partition: string): BrowserSitePermissionMemory {
   const existing = sessionMemories.get(partition)
   if (existing) {
@@ -87,17 +79,14 @@ export function sessionBrowserSitePermissions(partition: string): BrowserSitePer
   return memory
 }
 
-/** The site a page's permissions belong to; null for opaque pages, which are never granted. */
+/** Returns null for opaque sites; local files share one permission origin. */
 export function browserSitePermissionOrigin(rawUrl: string | null): string | null {
   return rawUrl?.startsWith('file:')
     ? BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN
     : browserPagePromptOrigin(rawUrl)
 }
 
-/**
- * The asking frame's real origin. Request details carry only its URL, and an about:blank or srcdoc
- * frame inherits its creator's origin, so read it off the frame. Null when frames at that URL differ.
- */
+// Opaque frame URLs can inherit origins; refuse ambiguous matches when walking the frames.
 export function browserSitePermissionRequestingOrigin(
   contents: Electron.WebContents,
   details: { requestingUrl?: string; isMainFrame?: boolean }
@@ -118,14 +107,9 @@ export function browserSitePermissionRequestingOrigin(
   }
 }
 
-/** The tab and the asking frame's real origin; null `frameOrigin` grants that frame nothing. */
 type SitePermissionSource = { pageUrl: string | null; frameOrigin: string | null }
 
-/**
- * Whose answers apply (null grants nothing) and whether that site may be asked now. As in Chrome,
- * a frame shares its tab's answers, except notifications, which belong to the frame's own site and
- * are only asked for by the tab's site.
- */
+// Notifications use the frame's own site and may prompt only for the tab's site; other grants use the tab.
 function answeringSite(
   { pageUrl, frameOrigin }: SitePermissionSource,
   permissions: readonly BrowserSitePermission[]
@@ -151,10 +135,6 @@ export function isBrowserSitePermissionAllowed(args: {
   )
 }
 
-/**
- * Resolves true when the page may have every permission: each was allowed before, or the user
- * allows the rest now. Any remembered Block refuses without asking.
- */
 export function decideBrowserSitePermissions(args: {
   requester: Electron.WebContents
   frameOrigin: string | null
@@ -186,7 +166,7 @@ export function decideBrowserSitePermissions(args: {
       requester,
       target: browserManager.resolvePagePromptTarget(requester),
       details: () => ({ origin, permissions: unanswered }),
-      // Why: a page asking again for the same thing before the user answers gets one question.
+      // Coalesce repeated requests until the user answers.
       coalesceKey: `${origin} ${unanswered.join(' ')}`,
       parseAnswer: (value) => (isBrowserSitePermissionDecision(value) ? value : undefined),
       settle: (decision) => {
@@ -196,7 +176,7 @@ export function decideBrowserSitePermissions(args: {
         resolve(decision === 'allow')
       }
     })
-    // Why: no window to ask (a headless server), or the page is quiet or already asking.
+    // A missing, suppressed or already-open prompt cannot grant an unanswered permission.
     if (opening !== 'prompting') {
       resolve(false)
     }

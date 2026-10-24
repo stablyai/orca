@@ -1,6 +1,6 @@
 import { escapeRegex } from '../../../../shared/string-utils'
-import { JIRA_ISSUE_KEY_PATTERN } from '../../../../shared/jira-issue-url'
-import { prefixJiraReviewTitle } from '../../../../shared/jira-review-title'
+import { JIRA_ISSUE_KEY_PATTERN } from '../../../../shared/jira/jira-issue-url'
+import { prefixJiraReviewTitle } from '../../../../shared/jira/jira-review-title'
 import { humanizeBranchSlug } from '../../../../shared/branch-name-from-work'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'

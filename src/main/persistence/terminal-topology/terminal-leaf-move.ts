@@ -8,7 +8,7 @@ import {
 } from '../../../shared/terminal-leaf-move'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { retireLeavesFromTerminalLayout } from '../../runtime/mobile-session-terminal-retirement'
+import { retireLeavesFromTerminalLayout } from '../../../shared/terminal-layout-leaf-retirement'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 import { writeRestorable } from './restorable-write'
