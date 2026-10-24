@@ -118,4 +118,33 @@ describe('requestSessionTabCloseFromRenderer', () => {
     await rejection
     expect(ipcEmitter.listenerCount('ui:sessionTabCloseResponse')).toBe(0)
   })
+
+  it('shares one lifecycle listener across overlapping close requests', async () => {
+    const { requestSessionTabCloseFromRenderer } = await import('./session-tab-close-request-relay')
+    const { mainWindow, webContents } = createMainWindow()
+    const pending = Array.from({ length: 15 }, (_, index) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the EventEmitter double implements the BrowserWindow members the relay uses.
+      requestSessionTabCloseFromRenderer(mainWindow as never, `tab-${index}`, 'wt-1')
+    )
+
+    expect(ipcEmitter.listenerCount('ui:sessionTabCloseResponse')).toBe(1)
+    expect(mainWindow.listenerCount('closed')).toBe(1)
+    for (const event of ['destroyed', 'render-process-gone', 'did-start-loading']) {
+      expect(webContents.listenerCount(event)).toBe(1)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay sends only session tab close requests on this double.
+    const requests = webContents.send.mock.calls as [string, { requestId: string }][]
+    for (const [, request] of requests) {
+      ipcEmitter.emit(
+        'ui:sessionTabCloseResponse',
+        { sender: webContents },
+        { requestId: request.requestId }
+      )
+    }
+
+    await Promise.all(pending)
+    expect(mainWindow.eventNames()).toEqual([])
+    expect(webContents.eventNames()).toEqual([])
+    expect(ipcEmitter.listenerCount('ui:sessionTabCloseResponse')).toBe(0)
+  })
 })
