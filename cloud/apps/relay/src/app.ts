@@ -390,6 +390,8 @@ export function createRelayApp(
     context.json({
       ok: true,
       connectionCapacityProtocol: 2,
+      // Placement takes min(configured, cell-reported) cap, so a fleet raise may precede the rolls.
+      ...(config.role === 'cell' ? {} : { capacityReportedCapMin: true }),
       drainPaceWindowMaxMs: DRAIN_PACE_WINDOW_MAX_MS
     })
   )

@@ -474,6 +474,7 @@ describe('served relay URL', () => {
     expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
       ok: true,
       connectionCapacityProtocol: 2,
+      capacityReportedCapMin: true,
       drainPaceWindowMaxMs: 1_200_000
     })
     expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })

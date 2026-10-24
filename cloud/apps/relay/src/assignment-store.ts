@@ -58,6 +58,16 @@ import {
 import {
   ASSIGNMENT_CONNECTION_HEADROOM_QUERY
 } from './assignment-connection-headroom-query.js'
+import {
+  CONNECTION_CAP_COLUMNS_SQL,
+  EFFECTIVE_HARD_CAP_SQL,
+  lockCellConnectionLimit,
+  readCellConnectionCap,
+  recordReportedHardCap,
+  reportedHardCapWithinLimit,
+  writeCellConnectionLimit,
+  type CellConnectionCap
+} from './cell-connection-cap.js'
 import { AssignmentIdentityQueue } from './assignment/assignment-identity-queue.js'
 import {
   CONTROL_RENEWAL_BATCH_SQL,
@@ -304,19 +314,14 @@ export type CellDeploymentBaseStatus = {
   enabled: boolean
   admissionState: CellAdmissionState
   capacityRequests: number
-  connectionCapacity: null | {
-    hardCap: number
-    controlRebindReserve: number
-    ordinaryConnectionLimit: number
-    unobservedBound: number
-    normalAdmissionPause: number
+  connectionCapacity: null | (CellConnectionCap & {
     observedConnections: number
     inFlightConnections: number
     reservedConnectionUnits: number
     enforcedConnectionUnits: number
     pendingControlReservations: number
     heartbeatFresh: boolean
-  }
+  })
   runtime: null | {
     cellUrl: string
     cellIncarnation: string
@@ -960,48 +965,7 @@ export class RelayAssignmentStore {
           stateFromEnabled(cell.initiallyEnabled !== false),
           now
         )
-        if (
-          cell.connectionHardCap !== undefined &&
-          cell.connectionUnobservedBound !== undefined
-        ) {
-          const currentLimit = (
-            await transaction.queryLocked(
-              `SELECT hard_cap, unobserved_bound FROM relay_cell_connection_limits
-               WHERE cell_id = ?`,
-              [cell.id]
-            )
-          )[0]
-          const limitChanged =
-            currentLimit !== undefined &&
-            (integer(currentLimit, 'hard_cap') !== cell.connectionHardCap ||
-              integer(currentLimit, 'unobserved_bound') !==
-                cell.connectionUnobservedBound)
-          await transaction.query(
-            `INSERT INTO relay_cell_connection_limits
-             (cell_id, hard_cap, unobserved_bound, updated_at)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT (cell_id) DO UPDATE SET
-               hard_cap = excluded.hard_cap,
-               unobserved_bound = excluded.unobserved_bound,
-               updated_at = excluded.updated_at`,
-            [
-              cell.id,
-              cell.connectionHardCap,
-              cell.connectionUnobservedBound,
-              now
-            ]
-          )
-          if (limitChanged) {
-            await transaction.query(
-              `DELETE FROM relay_cell_connection_snapshots WHERE cell_id = ?`,
-              [cell.id]
-            )
-            await transaction.query(
-              `DELETE FROM relay_cell_connection_runtime WHERE cell_id = ?`,
-              [cell.id]
-            )
-          }
-        }
+        await writeCellConnectionLimit(transaction, cell, now)
       }
       const current = await transaction.query(
         `SELECT cell_id, enabled FROM relay_cells ORDER BY cell_id ASC`
@@ -1975,13 +1939,9 @@ export class RelayAssignmentStore {
       ) {
         throw new Error('stale_cell_incarnation')
       }
-      const connectionLimit = (
-        await transaction.queryLocked(
-          `SELECT * FROM relay_cell_connection_limits WHERE cell_id = ?`,
-          [input.cellId]
-        )
-      )[0]
+      const connectionLimit = await lockCellConnectionLimit(transaction, input.cellId)
       if (connectionLimit) {
+        const reportedHardCap = reportedHardCapWithinLimit(connectionLimit, input)
         if (
           input.totalConnections === undefined ||
           input.inFlightConnections === undefined ||
@@ -1991,12 +1951,11 @@ export class RelayAssignmentStore {
             input.totalConnections +
               input.inFlightConnections +
               input.reservedConnectionUnits ||
-          input.connectionHardCap !== integer(connectionLimit, 'hard_cap') ||
-          input.connectionUnobservedBound !==
-            integer(connectionLimit, 'unobserved_bound')
+          reportedHardCap === undefined
         ) {
           throw new Error('cell_connection_telemetry_mismatch')
         }
+        await recordReportedHardCap(transaction, connectionLimit, input.cellId, reportedHardCap)
       } else if (
         input.totalConnections !== undefined ||
         input.inFlightConnections !== undefined ||
@@ -3638,43 +3597,7 @@ export class RelayAssignmentStore {
       )
       await ensureCellAdmission(transaction, cell.id, state, now)
       await setCellAdmissionBeforeBoundary(transaction, cell.id, state, now)
-      if (
-        cell.connectionHardCap !== undefined &&
-        cell.connectionUnobservedBound !== undefined
-      ) {
-        const currentLimit = (
-          await transaction.queryLocked(
-            `SELECT hard_cap, unobserved_bound FROM relay_cell_connection_limits
-             WHERE cell_id = ?`,
-            [cell.id]
-          )
-        )[0]
-        const limitChanged =
-          currentLimit !== undefined &&
-          (integer(currentLimit, 'hard_cap') !== cell.connectionHardCap ||
-            integer(currentLimit, 'unobserved_bound') !==
-              cell.connectionUnobservedBound)
-        await transaction.query(
-          `INSERT INTO relay_cell_connection_limits
-           (cell_id, hard_cap, unobserved_bound, updated_at)
-           VALUES (?, ?, ?, ?)
-           ON CONFLICT (cell_id) DO UPDATE SET
-             hard_cap = excluded.hard_cap,
-             unobserved_bound = excluded.unobserved_bound,
-             updated_at = excluded.updated_at`,
-          [cell.id, cell.connectionHardCap, cell.connectionUnobservedBound, now]
-        )
-        if (limitChanged) {
-          await transaction.query(
-            `DELETE FROM relay_cell_connection_snapshots WHERE cell_id = ?`,
-            [cell.id]
-          )
-          await transaction.query(
-            `DELETE FROM relay_cell_connection_runtime WHERE cell_id = ?`,
-            [cell.id]
-          )
-        }
-      }
+      await writeCellConnectionLimit(transaction, cell, now)
     })
   }
 
@@ -3983,7 +3906,7 @@ export class RelayAssignmentStore {
     if (!cellRow) throw new Error('cell_not_found')
     const connectionRow = (
       await this.database.query(
-        `SELECT limits.hard_cap, limits.unobserved_bound,
+        `SELECT ${CONNECTION_CAP_COLUMNS_SQL},
            connection_runtime.total_connections, connection_runtime.in_flight_connections,
            connection_runtime.reserved_connection_units,
            connection_runtime.enforced_connection_units,
@@ -4016,16 +3939,7 @@ export class RelayAssignmentStore {
       capacityRequests: integer(cellRow, 'capacity_requests'),
       connectionCapacity: connectionRow
           ? {
-            hardCap: integer(connectionRow, 'hard_cap'),
-            controlRebindReserve: RELAY_ADMISSION_BUDGETS.reservedHostControls,
-            ordinaryConnectionLimit:
-              integer(connectionRow, 'hard_cap') -
-              RELAY_ADMISSION_BUDGETS.reservedHostControls,
-            unobservedBound: integer(connectionRow, 'unobserved_bound'),
-            normalAdmissionPause:
-              integer(connectionRow, 'hard_cap') -
-              RELAY_ADMISSION_BUDGETS.reservedHostControls -
-              integer(connectionRow, 'unobserved_bound'),
+            ...readCellConnectionCap(connectionRow),
             observedConnections:
               optionalInteger(connectionRow, 'total_connections') ?? 0,
             inFlightConnections:
@@ -6913,7 +6827,7 @@ export class RelayAssignmentStore {
                         AND NOT (reservation.user_id = ? AND reservation.relay_host_id = ?
                           AND reservation.assignment_epoch = ?))
                    + limits.unobserved_bound
-                   < limits.hard_cap - ?
+                   < ${EFFECTIVE_HARD_CAP_SQL} - ?
              )
            )
          RETURNING cell_id`,
@@ -8573,7 +8487,7 @@ export class RelayAssignmentStore {
           integer(row, 'enforced_connection_units') +
             integer(row, 'outstanding_reservations') +
             integer(row, 'unobserved_bound') <
-            integer(row, 'hard_cap') -
+            integer(row, 'effective_hard_cap') -
               RELAY_ADMISSION_BUDGETS.reservedHostControls
         return [text(row, 'cell_id'), hasHeadroom] as const
       })
