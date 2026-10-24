@@ -4,7 +4,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import {
   addWorkspace,
@@ -20,10 +19,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAI
 const SSH: ExecutionHostId = 'ssh:target-1'
 
 function context(): TerminalTopologyCommitContext {
-  const state: Pick<
-    PersistedState,
-    'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
-  > = {
+  const state: TerminalTopologyCommitContext['state'] = {
     workspaceSession: addWorkspace(emptySession(), GIT_KEY, [
       { id: 'g1', tabs: [{ id: 'd-local', entityId: 'diff::/a.ts', kind: 'diff' }] }
     ]),
@@ -44,7 +40,8 @@ function context(): TerminalTopologyCommitContext {
       )
     },
     ui: getDefaultUIState(),
-    sshRemotePtyLeases: []
+    sshRemotePtyLeases: [],
+    legacyPaneKeyAliasEntries: []
   }
   return {
     state,

@@ -223,7 +223,11 @@ export function traced<T>(
 
 type TopologyState = Pick<
   PersistedState,
-  'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
+  | 'workspaceSession'
+  | 'workspaceSessionsByHostId'
+  | 'ui'
+  | 'sshRemotePtyLeases'
+  | 'legacyPaneKeyAliasEntries'
 >
 
 export type TerminalTopologyCommitContext = {
@@ -231,7 +235,12 @@ export type TerminalTopologyCommitContext = {
   hostIds: () => ExecutionHostId[]
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState
   markDirty: (
-    domain: 'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
+    domain:
+      | 'workspaceSession'
+      | 'workspaceSessionsByHostId'
+      | 'ui'
+      | 'sshRemotePtyLeases'
+      | 'legacyPaneKeyAliasEntries'
   ) => void
   /** Main's in-memory editor views; absent where a commit never changes them. */
   editorViews?: Pick<StoreRuntimeState, 'layoutEditorViews'>
@@ -279,7 +288,8 @@ function commitLeafMove(
       keepFrozen(hostId, session, context)
     )
   )
-  restores.push(...writeMovedLeafProfileRecords(request, context))
+  const boundPtyId = planned.result.status === 'moved' ? planned.result.ptyId : request.ptyId
+  restores.push(...writeMovedLeafProfileRecords({ ...request, ptyId: boundPtyId }, context))
   return {
     value: planned.result,
     rollback: () => restores.forEach((restore) => restore())
