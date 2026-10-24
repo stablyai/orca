@@ -47,6 +47,7 @@ export type AiVaultScanOptions = {
   clineSessionsDir?: string
   kimiSessionsDir?: string
   museSessionsDir?: string
+  dshSessionsDir?: string
   jcodeSessionsDir?: string
   kiroSessionsDir?: string
   limit?: number
