@@ -15,6 +15,7 @@ import {
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecycle'
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { listenForHibernatedAgentWake } from './hibernated-agent-wake-listener'
 
 /** Coordinates mount, visibility, and live appearance effects for terminal panes. */
@@ -46,6 +47,9 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       isVisible: deps.isVisible
     }
     deps.isVisibleRef.current = deps.isVisible
+    if (previousIsVisible !== null && previousIsVisible !== deps.isVisible) {
+      scheduleRuntimeGraphSync()
+    }
     const resumedFromHidden = isTerminalPaneVisibilityResume({
       previousIsVisible,
       isVisible: deps.isVisible

@@ -107,7 +107,13 @@ export async function syncRuntimeGraph(): Promise<void> {
     const manager = registeredTab.getManager()
     // Switch point: main lists this workspace's panes; the window says only which it shows.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && mainListsWorkspaceTerminals(state, registeredTab.worktreeId)) {
-      addMountedPanes(graph, registeredTab.tabId, manager?.getPanes() ?? [], state)
+      addMountedPanes(
+        graph,
+        registeredTab.tabId,
+        manager?.getPanes() ?? [],
+        state,
+        registeredTab.getIsVisible?.() === false ? 'background' : 'visible'
+      )
       continue
     }
     const container = registeredTab.getContainer()
@@ -144,6 +150,7 @@ export async function syncRuntimeGraph(): Promise<void> {
         leafId,
         paneRuntimeId: pane.id,
         ptyId,
+        surface: registeredTab.getIsVisible?.() === false ? 'background' : 'visible',
         paneTitle: paneTitles[pane.id] ?? null,
         title: resolveRuntimeTerminalTitle(
           tab,
@@ -219,6 +226,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           paneRuntimeId: parkedPaneId ?? index + 1,
           ptyId,
           parked: true,
+          surface: 'background',
           paneTitle: (parkedPaneId === undefined ? null : parkedPaneTitles[parkedPaneId]) ?? null,
           title
         })

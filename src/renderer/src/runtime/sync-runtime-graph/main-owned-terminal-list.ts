@@ -27,7 +27,8 @@ export function addMountedPanes(
   graph: { mountedLeaves?: RuntimeMountedLeaf[] },
   tabId: string,
   panes: readonly { id: number; leafId: string }[],
-  state: Pick<AppState, 'runtimePaneTitlesByTabId'>
+  state: Pick<AppState, 'runtimePaneTitlesByTabId'>,
+  surface: 'background' | 'visible' = 'visible'
 ): void {
   const paneTitles = state.runtimePaneTitlesByTabId[tabId] ?? {}
   addMountedLeaves(
@@ -36,6 +37,7 @@ export function addMountedPanes(
       tabId,
       leafId: pane.leafId,
       paneRuntimeId: pane.id,
+      surface,
       paneTitle: paneTitles[pane.id] ?? null
     }))
   )
@@ -59,6 +61,7 @@ export function addParkedPanes(
         leafId,
         paneRuntimeId: parkedPaneId ?? index + 1,
         parked: true,
+        surface: 'background',
         paneTitle: (parkedPaneId === undefined ? null : paneTitles[parkedPaneId]) ?? null
       }
     })

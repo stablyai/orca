@@ -116,7 +116,8 @@ function orphanTerminalRow(
     connected: true,
     writable: true,
     lastOutputAt: null,
-    preview: ''
+    preview: '',
+    surface: 'background'
   }
 }
 

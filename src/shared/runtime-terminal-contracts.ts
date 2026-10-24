@@ -1,56 +1,22 @@
+import type { RuntimeTerminalSummary } from './runtime-terminal-summary'
 import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
-import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { StartupCwdFallback } from './startup-cwd-fallback'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
-import type { TerminalAgent, TuiAgent } from './terminal-agent'
+import type { TuiAgent } from './terminal-agent'
 export type {
   RuntimeTerminalSend,
   RuntimeTerminalPromptStage,
   RuntimeTerminalPromptDelivery
 } from './runtime-terminal-send-contract'
 
-export type RuntimeTerminalSummary = {
-  handle: string
-  ptyId: string | null
-  incarnationId?: string | null
-  orphaned?: boolean
-  /**
-   * Orphaned only: the pane the host last recorded for this PTY, which the renderer owning it can
-   * still hold even when its graph omitted that pane. Absent when none was recorded or the host
-   * predates the field.
-   */
-  recordedPaneKey?: string
-  worktreeId: string
-  worktreePath: string
-  branch: string
-  tabId: string
-  leafId: string
-  title: string | null
-  /** A user's name for this pane from the host's saved layout; absent when unset or the host predates it. */
-  paneTitle?: string
-  connected: boolean
-  writable: boolean
-  lastOutputAt: number | null
-  preview: string
-  /** Host-resolved observed agent identity; absent when unknown. Does not imply launch support. */
-  agentIdentity?: TerminalAgent
-  /** Absent while running or when the host predates the field; never infer a clean finish. */
-  exitCause?: TerminalExitCause
-  /** Absent when the host predates the field or could not name the execution host. */
-  executionHostId?: ExecutionHostId
-  /**
-   * The execution host's word on the pane's terminal. Read this, not `connected`: `connected`
-   * keeps its old meaning, so an unreachable host reads connected. Absent from older hosts.
-   */
-  verdict?: PtyLivenessVerdict['status']
-}
+export type { RuntimeTerminalSummary } from './runtime-terminal-summary'
 
 export type RuntimeTerminalVisualTerminalNode = {
   type: 'terminal'

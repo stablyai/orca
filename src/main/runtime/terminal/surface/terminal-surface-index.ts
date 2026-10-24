@@ -303,6 +303,7 @@ export function composeMainTerminalSurfaces(
           ...leaf,
           paneRuntimeId: shown.paneRuntimeId,
           paneTitle: shown.paneTitle ?? null,
+          ...(shown.surface ? { surface: shown.surface } : {}),
           ...(shown.parked ? { parked: true } : {})
         }
       })

@@ -12,6 +12,7 @@ import {
   hasRegisteredRuntimeTerminalTab,
   registerRuntimeTerminalTab
 } from './mounted-terminal-tab-registry'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -103,6 +104,48 @@ describe('runtime terminal registration ownership', () => {
 })
 
 describe('scheduleRuntimeGraphSync', () => {
+  it('publishes mounted hidden terminal leaves as background', async () => {
+    vi.useFakeTimers()
+    const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    const pane = {
+      id: 1,
+      leafId: '11111111-1111-4111-8111-111111111111',
+      terminal: { options: { fontSize: -1 } }
+    }
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'term-1',
+      worktreeId: 'wt-1',
+      getIsVisible: () => false,
+      getManager: () =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the manager reads used by graph publication; no pane mutations run.
+        ({
+          getPanes: () => [pane],
+          getActivePane: () => pane,
+          getLeafId: () => pane.leafId,
+          getNumericIdForLeaf: () => pane.id
+        }) as never,
+      getContainer: () => null,
+      getPtyIdForPane: () => 'pty-1',
+      getTabWideAgentHintLeafId: () => null
+    })
+    setRuntimeGraphStoreStateGetter(() =>
+      makeState({
+        tabsByWorktree: { 'wt-1': [makeTerminalTab()] } as AppState['tabsByWorktree']
+      })
+    )
+
+    setRuntimeGraphSyncEnabled(true)
+    await flushRuntimeGraphSyncTimer()
+
+    const graph = syncWindowGraph.mock.calls[0]?.[0]
+    expect(ORCA_LAYOUT_OWNER_IS_MAIN ? graph.mountedLeaves : graph.leaves).toContainEqual(
+      expect.objectContaining({ leafId: pane.leafId, surface: 'background' })
+    )
+    unregister()
+  })
+
   it('coalesces updates that arrive while the runtime graph IPC is in flight', async () => {
     vi.useFakeTimers()
     const syncCalls: {

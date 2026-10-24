@@ -85,13 +85,9 @@ export function prepareTerminalPaneMount(
   const expandedStyleSnapshots = expandedStyleSnapshotRef.current
   const paneTransports = paneTransportsRef.current
   const panePtyBindings = panePtyBindingsRef.current
+  const worktrees = useAppStore.getState().allWorktrees()
   const worktreePath =
-    useAppStore
-      .getState()
-      .allWorktrees()
-      .find((candidate) => candidate.id === deps.worktreeId)?.path ??
-    deps.cwd ??
-    ''
+    worktrees.find((candidate) => candidate.id === deps.worktreeId)?.path ?? deps.cwd ?? ''
   const defaultTabCwd = deps.cwd ?? worktreePath
   const initialCwdResolution = resolveQueuedInitialCwd(
     refs.queuedInitialCwdRef.current,
@@ -239,6 +235,7 @@ export function prepareTerminalPaneMount(
     getManager: () => deps.managerRef.current,
     getContainer: () => deps.containerRef.current,
     getPtyIdForPane: (paneId) => paneTransports.get(paneId)?.getPtyId() ?? null,
+    getIsVisible: () => deps.isVisibleRef.current,
     getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
   })
   const fileOpenLinkHint = getTerminalFileOpenHint()

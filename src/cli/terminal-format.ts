@@ -19,6 +19,7 @@ import type {
   RuntimeTerminalWait
 } from '../shared/runtime-types'
 
+/** Formats `terminal list`, including each terminal's current visible/background surface. */
 export function formatTerminalList(
   result: WithAnnotatedHostScope<RuntimeTerminalListResult>
 ): string {
@@ -29,7 +30,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  [${terminal.surface ?? 'unverifiable'}]  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -94,6 +95,7 @@ function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number
   ]
 }
 
+/** Formats `terminal show` with full metadata for one runtime terminal handle. */
 export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
   const terminal = result.terminal
   return [
@@ -107,6 +109,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,
+    `surface: ${terminal.surface ?? 'unverifiable'}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
 }

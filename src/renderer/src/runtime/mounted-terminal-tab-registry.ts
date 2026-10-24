@@ -10,6 +10,7 @@ export type RegisteredTerminalTab = {
   worktreeId: string
   getManager: () => PaneManager | null
   getContainer: () => HTMLDivElement | null
+  getIsVisible?: () => boolean
   getPtyIdForPane: (paneId: number) => string | null
   getTabWideAgentHintLeafId: () => string | null
 }
