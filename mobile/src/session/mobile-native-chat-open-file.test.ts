@@ -113,11 +113,13 @@ describe('openMobileNativeChatFileTap', () => {
     })
   })
 
-  it('parses a :line:col citation and opens the mobile preview route', async () => {
-    const sendRequest = vi.fn(async () => worktreeFileResolution('src/app.ts'))
+  it('parses a :line:col citation and opens the file tab at that position', async () => {
+    const responses: unknown[] = [worktreeFileResolution('src/app.ts'), ok({ opened: true })]
+    const sendRequest = vi.fn(async () => responses.shift())
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
+    await Promise.resolve()
     await Promise.resolve()
 
     expect(sendRequest).toHaveBeenCalledWith(
@@ -126,15 +128,12 @@ describe('openMobileNativeChatFileTap', () => {
       { timeoutMs: 10_000 }
     )
     expect(options.triggerOpenFeedback).toHaveBeenCalledTimes(1)
-    expect(options.pushPreviewRoute).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: expect.objectContaining({
-        source: 'worktree',
-        relativePath: 'src/app.ts',
-        line: '120',
-        column: '7'
-      })
-    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: 'src/app.ts', line: 120, column: 7 },
+      { timeoutMs: 15_000 }
+    )
+    expect(options.pushPreviewRoute).not.toHaveBeenCalled()
     expect(options.onOpenFailed).not.toHaveBeenCalled()
   })
 

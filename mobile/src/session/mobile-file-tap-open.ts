@@ -56,10 +56,8 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   /** Optional confirmation hook invoked once the host confirms the tapped path
    *  is an existing file. Calling `proceed` completes the open without a second
    *  resolve round-trip. */
-  confirmResolvedOpen?: (
-    target: MobileFileTapResolvedConfirmation,
-    proceed: () => void
-  ) => void
+  confirmResolvedOpen?: (target: MobileFileTapResolvedConfirmation, proceed: () => void) => void
+  onRevealFileLine?: (relativePath: string, line: number) => void
 }
 
 export function openMobileFileTap<T extends FileTapSessionTab>(
@@ -215,11 +213,7 @@ async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
-  if (
-    resolvedWorktreeId !== options.worktreeId ||
-    options.line !== null ||
-    options.column !== null
-  ) {
+  if (resolvedWorktreeId !== options.worktreeId) {
     pushWorktreePreview()
     return
   }
@@ -231,9 +225,18 @@ async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
+  const openPosition =
+    options.line !== null && Number.isSafeInteger(options.line) && options.line >= 1
+      ? {
+          line: options.line,
+          ...(options.column !== null && Number.isSafeInteger(options.column) && options.column >= 1
+            ? { column: options.column }
+            : {})
+        }
+      : {}
   const openResponse = await fileTapOpenRun.request(
     options.client,
-    { worktree: resolvedWorktree, relativePath: openedPath },
+    { worktree: resolvedWorktree, relativePath: openedPath, ...openPosition },
     { timeoutMs: 15_000 }
   )
   // Why: a host with no desktop window opens no editor tabs; the preview route reads the file through files.read.
@@ -253,6 +256,9 @@ async function completeResolvedMobileFileTapOpen<T extends FileTapSessionTab>(
   if (!opened.value.opened) {
     reportOpenFailure(options)
     return
+  }
+  if (openPosition.line !== undefined) {
+    options.onRevealFileLine?.(openedPath, openPosition.line)
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }

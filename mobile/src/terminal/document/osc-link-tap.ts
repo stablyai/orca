@@ -154,7 +154,7 @@ export function parseOscPathLikeTarget(value: string) {
 }
 
 export function parseFileUrlLineHash(hash: string) {
-  const match = /^#?L(\d+)(?:C(\d+))?$/i.exec(hash)
+  const match = /^#?(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?$/i.exec(hash)
   if (!match) {
     return null
   }

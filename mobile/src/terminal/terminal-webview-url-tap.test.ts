@@ -45,6 +45,15 @@ const FILE_URL_TAP_CASES: FileTapResolverCase[] = [
     expected: { pathText: 'C:/repo/src/app.ts', line: 4, column: null }
   },
   {
+    name: 'Windows drive path with hash line range',
+    uri: 'file:///D:/code/orca/mobile/src/session/MobileSessionSheets.tsx#L38-L82',
+    expected: {
+      pathText: 'D:/code/orca/mobile/src/session/MobileSessionSheets.tsx',
+      line: 38,
+      column: null
+    }
+  },
+  {
     name: 'host-qualified POSIX authority is preserved',
     uri: 'file://remote-host/tmp/result.json#L12',
     expected: { pathText: '//remote-host/tmp/result.json', line: 12, column: null }
@@ -81,6 +90,15 @@ const OSC_FILE_TAP_CASES: FileTapResolverCase[] = [
     name: 'tilde path with line and column',
     uri: '~/notes.md:4:2',
     expected: { pathText: '~/notes.md', line: 4, column: 2 }
+  },
+  {
+    name: 'relative path with hash line range',
+    uri: 'mobile/src/session/MobileSessionSheets.tsx#L38-L82',
+    expected: {
+      pathText: 'mobile/src/session/MobileSessionSheets.tsx',
+      line: 38,
+      column: null
+    }
   },
   {
     name: 'mailto target is rejected',

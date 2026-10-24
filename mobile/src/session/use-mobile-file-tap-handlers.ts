@@ -29,6 +29,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
     target: MobileFileTapResolvedConfirmation,
     proceed: () => void
   ) => void
+  onRevealFileLine?: (relativePath: string, line: number) => void
 }
 
 /**
@@ -59,6 +60,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    onRevealFileLine,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -84,6 +86,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getSessionTabs,
       hostId,
       nativeChatSessionId,
+      onRevealFileLine,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -102,6 +105,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getSessionTabs,
     hostId,
     nativeChatSessionId,
+    onRevealFileLine,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -145,7 +149,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         }),
         switchSessionTab: current.switchSessionTab,
         scheduleDelayedAction: current.scheduleDelayedAction,
-        confirmResolvedOpen: current.confirmTerminalFileTapOpen
+        confirmResolvedOpen: current.confirmTerminalFileTapOpen,
+        onRevealFileLine: current.onRevealFileLine
       })
     },
     []
@@ -188,6 +193,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       }),
       switchSessionTab: current.switchSessionTab,
       scheduleDelayedAction: current.scheduleDelayedAction,
+      onRevealFileLine: current.onRevealFileLine,
       onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
     })
   }, [])

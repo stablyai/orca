@@ -192,9 +192,25 @@ describe('matchFilePathAtColumn', () => {
     expect(matchWrappedFilePathAtRowColumn(rows, 2, colOf(rows[2]!.text, 'education'))).toEqual(
       expected
     )
-    expect(documentMatchWrappedFilePathAtRowColumn(rows, 2, colOf(rows[2]!.text, 'education'))).toEqual(
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(rows, 2, colOf(rows[2]!.text, 'education'))
+    ).toEqual(expected)
+  })
+
+  it('preserves trailing :line when a wrapped path splits right before or inside the line suffix', () => {
+    const rows = [{ text: '  D:/code/orca/mobile/web-entry/index.tsx' }, { text: '  :136' }]
+    const expected = {
+      pathText: 'D:/code/orca/mobile/web-entry/index.tsx',
+      line: 136,
+      column: null
+    }
+    expect(matchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'index.tsx'))).toEqual(
       expected
     )
+    expect(
+      documentMatchWrappedFilePathAtRowColumn(rows, 0, colOf(rows[0]!.text, 'index.tsx'))
+    ).toEqual(expected)
+    expect(matchWrappedFilePathAtRowColumn(rows, 1, colOf(rows[1]!.text, '136'))).toEqual(expected)
   })
 
   it('does not merge two separate file paths on adjacent rows', () => {

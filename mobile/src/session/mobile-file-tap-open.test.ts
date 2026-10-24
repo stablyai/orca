@@ -190,7 +190,7 @@ describe('openMobileFileTap', () => {
     expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
   })
 
-  it('opens worktree-contained line references through the preview route', async () => {
+  it('opens worktree-contained line references through files.open and reveals the target line', async () => {
     const client = createClient([
       ok({
         worktree: 'wt-1',
@@ -204,10 +204,15 @@ describe('openMobileFileTap', () => {
           relativePath: 'src/index.ts',
           absolutePath: '/repo/src/index.ts'
         }
-      })
+      }),
+      ok({ opened: true })
     ])
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
+    const onRevealFileLine = vi.fn()
+    const scheduleDelayedAction = vi.fn((callback: () => void) => callback())
+    const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
+    const switchSessionTab = vi.fn()
 
     openMobileFileTap({
       client,
@@ -221,28 +226,26 @@ describe('openMobileFileTap', () => {
       openBrowser: vi.fn(),
       triggerOpenFeedback,
       fetchSessionTabs: vi.fn(),
-      getSessionTabs: () => [],
-      getActiveSessionTabId: () => null,
+      getSessionTabs: () => [openedTab],
+      getActiveSessionTabId: () => 'terminal-tab',
       getActivationState: activeTerminalState,
-      switchSessionTab: vi.fn(),
-      scheduleDelayedAction: vi.fn()
+      switchSessionTab,
+      scheduleDelayedAction,
+      onRevealFileLine
     })
     await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(pushPreviewRoute).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/files/preview/[worktreeId]',
-      params: expect.objectContaining({
-        hostId: 'host-1',
-        worktreeId: 'wt-1',
-        source: 'worktree',
-        relativePath: 'src/index.ts',
-        line: '120',
-        column: '7',
-        worktreeName: 'Orca'
-      })
-    })
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: 'src/index.ts', line: 120, column: 7 },
+      { timeoutMs: 15_000 }
+    )
+    expect(onRevealFileLine).toHaveBeenCalledWith('src/index.ts', 120)
+    expect(switchSessionTab).toHaveBeenCalledWith(openedTab)
     expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
-    expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
+    expect(pushPreviewRoute).not.toHaveBeenCalled()
   })
 
   it('encodes worktree HTML paths before opening a browser tab', async () => {
@@ -761,7 +764,8 @@ describe('openMobileFileTap', () => {
           relativePath: 'src/note.md',
           absolutePath: 'C:/repo/src/note.md'
         }
-      })
+      }),
+      ok({ opened: true })
     ])
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
@@ -799,13 +803,22 @@ describe('openMobileFileTap', () => {
       },
       expect.any(Function)
     )
-    expect(pushPreviewRoute).not.toHaveBeenCalled()
+    expect(client.sendRequest).not.toHaveBeenCalledWith(
+      'files.open',
+      expect.anything(),
+      expect.anything()
+    )
     expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
 
     proceedOpen!()
     await Promise.resolve()
 
-    expect(pushPreviewRoute).toHaveBeenCalledTimes(1)
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'files.open',
+      { worktree: 'id:wt-1', relativePath: 'src/note.md', line: 15, column: 2 },
+      { timeoutMs: 15_000 }
+    )
+    expect(pushPreviewRoute).not.toHaveBeenCalled()
     expect(triggerOpenFeedback).toHaveBeenCalledTimes(1)
   })
 })

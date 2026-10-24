@@ -78,6 +78,7 @@ export function MobileSessionActiveContent({
     nativeChatStructuredComposer,
     activeMarkdownTab,
     activeFileTab,
+    fileInitialLines,
     activeBrowserTab,
     activePendingTerminalTab,
     isPendingTerminalRecoveryParked,
@@ -142,6 +143,8 @@ export function MobileSessionActiveContent({
         title={activeFileTab.title || 'File'}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
+        initialLine={fileInitialLines?.get(activeFileTab.relativePath)?.line}
+        initialLineSeq={fileInitialLines?.get(activeFileTab.relativePath)?.seq}
         diffCommentActions={
           activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
             ? {

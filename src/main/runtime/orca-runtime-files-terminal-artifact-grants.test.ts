@@ -12,6 +12,7 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
+import { RuntimeTerminalArtifacts } from './terminal/artifacts/terminal-artifacts'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -375,14 +376,10 @@ describe('RuntimeFileCommands', () => {
       const artifactPath = await tempFile('ai_era_early_childhood_education.md', '# Guide')
       const canonicalPath = await realpath(artifactPath)
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      const artifacts = (
-        commands as unknown as {
-          artifacts: {
-            resolveAllowedTerminalArtifactPath: ReturnType<typeof vi.fn>
-          }
-        }
-      ).artifacts
-      vi.spyOn(artifacts, 'resolveAllowedTerminalArtifactPath').mockResolvedValueOnce(null)
+      vi.spyOn(
+        RuntimeTerminalArtifacts.prototype,
+        'resolveAllowedTerminalArtifactPath'
+      ).mockResolvedValueOnce(null)
 
       const result = await resolveTerminalArtifactPath(commands, artifactPath)
 

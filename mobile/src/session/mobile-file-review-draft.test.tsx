@@ -1,8 +1,10 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { FileReader } from './MobileSessionFileReader'
+import { FileReader, scrollOffsetForSessionFileLine } from './MobileSessionFileReader'
 import type { DiffCommentActions, FileDocState } from './mobile-session-route-types'
+
+const scrollTo = vi.fn()
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -19,7 +21,10 @@ vi.mock('react-native', async () => {
     View: 'View',
     Text: 'Text',
     TextInput: 'TextInput',
-    ScrollView: 'ScrollView',
+    ScrollView: React.forwardRef((props: Record<string, unknown>, ref) => {
+      React.useImperativeHandle(ref, () => ({ scrollTo }))
+      return React.createElement('ScrollView', props)
+    }),
     Pressable: 'Pressable',
     Platform: { OS: 'web' },
     StyleSheet: { create: (styles: unknown) => styles },
@@ -183,4 +188,57 @@ it('separates diff documents with the same path through the explicit document id
   expect(tree().root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
   await press('Add note on line 1')
   expect(tree().root.find((node) => String(node.type) === 'TextInput').props.value).toBe('')
+})
+
+it('scrolls to initialLine after layout and syntax highlighting and on repeated taps', async () => {
+  scrollTo.mockClear()
+  const fileDoc: FileDocState = {
+    status: 'ready',
+    kind: 'file',
+    content: Array.from({ length: 200 }, (_, i) => `const line${i + 1} = ${i + 1}`).join('\n'),
+    truncated: false
+  }
+  await act(async () => {
+    renderer = create(
+      createElement(FileReader, {
+        doc: fileDoc,
+        title: 'index.tsx',
+        relativePath: 'mobile/web-entry/index.tsx',
+        initialLine: 136,
+        initialLineSeq: 1
+      })
+    )
+  })
+  const scrollView = tree().root.find((node) => String(node.type) === 'ScrollView')
+  scrollTo.mockClear()
+  await act(async () => {
+    scrollView.props.onContentSizeChange(360, 4400)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  })
+  expect(scrollTo).toHaveBeenCalledWith({
+    y: scrollOffsetForSessionFileLine(136),
+    animated: false
+  })
+
+  scrollTo.mockClear()
+  await act(async () => {
+    scrollView.props.onContentSizeChange(360, 4400)
+  })
+  expect(scrollTo).not.toHaveBeenCalled()
+
+  await act(async () => {
+    tree().update(
+      createElement(FileReader, {
+        doc: fileDoc,
+        title: 'index.tsx',
+        relativePath: 'mobile/web-entry/index.tsx',
+        initialLine: 136,
+        initialLineSeq: 2
+      })
+    )
+  })
+  expect(scrollTo).toHaveBeenCalledWith({
+    y: scrollOffsetForSessionFileLine(136),
+    animated: false
+  })
 })

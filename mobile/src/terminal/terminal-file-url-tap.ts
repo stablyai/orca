@@ -69,7 +69,7 @@ function parseOscPathLikeTarget(value: string): TappedFilePath | null {
 }
 
 function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
-  const match = /^#?L(\d+)(?:C(\d+))?$/i.exec(hash)
+  const match = /^#?(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?$/i.exec(hash)
   if (!match) {
     return null
   }

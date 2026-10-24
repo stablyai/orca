@@ -16,9 +16,9 @@ export type TappedFilePath = ParsedFileLinkLocation
 // existence-check reject non-files — agents often print a bare filename, so
 // requiring a slash would miss the common case.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-/%+@\\()[\]]*(?:#(?:[Ll]|line-?)\d+(?:[Cc]\d+)?(?:-(?:[Ll]|line-?)?\d+(?:[Cc]\d+)?)?|(?::\d+(?:-\d+)?)(?::\d+)?)?/g
 const SPACED_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|`\r\n]+(?:#(?:[Ll]|line-?)\d+(?:[Cc]\d+)?(?:-(?:[Ll]|line-?)?\d+(?:[Cc]\d+)?)?|(?::\d+(?:-\d+)?)(?::\d+)?)?/g
 
 const LEADING_TRIM_CHARS = new Set(['(', '[', '{', '"', "'"])
 const TRAILING_TRIM_CHARS = new Set([')', ']', '}', '"', "'", ',', ';', '.'])
@@ -182,8 +182,8 @@ function sliceWrappedRow(text: string): WrappedRowSlice {
     content,
     contentStart,
     contentEnd,
-    leadingToken: /^[A-Za-z0-9._~\-/%+@:\\()[\]]+/.exec(content)?.[0] ?? '',
-    trailingToken: /[A-Za-z0-9._~\-/%+@:\\()[\]]+$/.exec(content)?.[0] ?? ''
+    leadingToken: /^[A-Za-z0-9._~\-/%+@:\\#()[\]]+/.exec(content)?.[0] ?? '',
+    trailingToken: /[A-Za-z0-9._~\-/%+@:\\#()[\]]+$/.exec(content)?.[0] ?? ''
   }
 }
 
@@ -191,7 +191,8 @@ function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice)
   if (
     !prev.trailingToken ||
     !next.leadingToken ||
-    (next.leadingToken === '-' && (next.content.length === 1 || /\s/.test(next.content.charAt(1)))) ||
+    (next.leadingToken === '-' &&
+      (next.content.length === 1 || /\s/.test(next.content.charAt(1)))) ||
     /^(?:~[\\/]|\/{2}|\\\\|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(next.leadingToken)
   ) {
     return false
@@ -200,6 +201,13 @@ function canRowContinueWrappedPath(prev: WrappedRowSlice, next: WrappedRowSlice)
     /\.[A-Za-z0-9_+-]+(?::\d+)*$/.test(prev.trailingToken) &&
     !/[\\/]\.[A-Za-z0-9_+-]+$/.test(prev.trailingToken)
   ) {
+    if (
+      prev.contentEnd >= 35 &&
+      (/^(?::\d+(?:-\d+)?(?::\d+)?|#(?:L|line-?)\d+)/i.test(next.leadingToken) ||
+        (/:\d+$/.test(prev.trailingToken) && /^\d+(?:-\d+)?(?::\d+)?$/.test(next.leadingToken)))
+    ) {
+      return true
+    }
     return (
       prev.contentEnd >= 35 &&
       /\.[a-z0-9]{1,2}$/.test(prev.trailingToken) &&
