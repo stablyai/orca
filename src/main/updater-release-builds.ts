@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { cancelUnreadResponseBody } from './lib/unread-response-body'
 import {
   findInstallerAssetName,
   getReleaseRepoForChannel,
@@ -166,6 +167,7 @@ export async function listReleaseBuilds(
     // A rejected token must not prevent listing a public repo unauthenticated.
     rejectReleaseApiToken()
     signedIn = false
+    await cancelUnreadResponseBody(res)
     res = await fetchReleases(repo, null)
   } else if (token && isRateLimited(res) && isPrimaryRateLimited(res)) {
     // The per-IP quota may still be available; mark the token bucket spent before retrying.
@@ -173,9 +175,11 @@ export async function listReleaseBuilds(
     if (resetAtMs !== null && credential) {
       recordGhPrimaryRateLimit('core', resetAtMs, credential.rateLimitScope)
     }
+    await cancelUnreadResponseBody(res)
     res = await fetchReleases(repo, null)
   }
   if (!res.ok) {
+    await cancelUnreadResponseBody(res)
     throw releaseListError(res, repo, channel, signedIn)
   }
   const payload: unknown = await res.json()
