@@ -19,6 +19,118 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
+  it('rejects Codex hooks stamped by a shared daemon for another workspace', () => {
+    const worktreeId = 'repo-a::/workspaces/FusionRF'
+    const wrong = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'albedo-session',
+          cwd: '/workspaces/Albedo',
+          tool_name: 'Bash',
+          tool_input: { command: 'echo from Albedo' }
+        }
+      },
+      'production'
+    )
+    expect(wrong).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
+
+    const traversed = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'albedo-session',
+          cwd: '/workspaces/FusionRF/../Albedo',
+          tool_name: 'Bash'
+        }
+      },
+      'production'
+    )
+    expect(traversed).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
+
+    const own = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'fusion-session',
+          cwd: '/workspaces/FusionRF/crates',
+          tool_name: 'Bash',
+          tool_input: { command: 'echo from FusionRF' }
+        }
+      },
+      'production'
+    )
+    expect(own?.providerSession?.id).toBe('fusion-session')
+    expect(own?.payload.toolInput).toBe('echo from FusionRF')
+  })
+
+  it('accepts a WSL Codex hook whose Linux cwd matches the stamped UNC worktree', () => {
+    const event = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId: String.raw`repo::\\wsl.localhost\Ubuntu\home\alice\repo`,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'wsl-session',
+          cwd: '/home/alice/repo/src',
+          tool_name: 'Bash'
+        }
+      },
+      'production'
+    )
+    expect(event?.providerSession?.id).toBe('wsl-session')
+
+    const uncEvent = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId: String.raw`repo::\\wsl.localhost\Ubuntu\home\alice\repo`,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'wsl-unc-session',
+          cwd: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo\src`,
+          tool_name: 'Bash'
+        }
+      },
+      'production'
+    )
+    expect(uncEvent?.providerSession?.id).toBe('wsl-unc-session')
+
+    const outside = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        worktreeId: String.raw`repo::\\wsl.localhost\Ubuntu\home\alice\repo`,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'other-session',
+          cwd: '/home/alice/repo/../other',
+          tool_name: 'Bash'
+        }
+      },
+      'production'
+    )
+    expect(outside).toBeNull()
+  })
+
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
     const event = normalizeHookPayload(
       state,
