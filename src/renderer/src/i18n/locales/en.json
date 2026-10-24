@@ -18613,6 +18613,12 @@
           "cancel": "Cancel",
           "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed."
         },
+        "localNetwork": {
+          "title": "Apps and services on this device / local network",
+          "description": "{{origin}} wants to connect to apps and services on this device or your local network. Allow this only for sites you trust.",
+          "confirm": "Allow",
+          "cancel": "Deny"
+        },
         "httpAuth": {
           "title": "Sign in",
           "description": "{{origin}} is asking for a username and password.",

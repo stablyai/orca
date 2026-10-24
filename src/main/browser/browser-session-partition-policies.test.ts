@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   installBrowserWebAuthnAccessHandlers: vi.fn(),
   isRemoteCliDrivenGuest: vi.fn((_webContentsId?: number) => false),
   requestExternalAppLaunch: vi.fn(),
-  notifyPermissionDenied: vi.fn()
+  notifyPermissionDenied: vi.fn(),
+  requestBrowserLocalNetworkAccess: vi.fn(),
+  checkBrowserLocalNetworkAccess: vi.fn(() => false)
 }))
 
 type WillDownloadListener = (
@@ -83,6 +85,10 @@ vi.mock('./browser-manager', () => ({
     notifyPermissionDenied: mocks.notifyPermissionDenied,
     requestExternalAppLaunch: mocks.requestExternalAppLaunch
   }
+}))
+vi.mock('./browser-local-network-access', () => ({
+  requestBrowserLocalNetworkAccess: mocks.requestBrowserLocalNetworkAccess,
+  checkBrowserLocalNetworkAccess: mocks.checkBrowserLocalNetworkAccess
 }))
 vi.mock('./doc-preview-download-block-notice', () => ({
   noticeDocPreviewDownloadBlocked: mocks.noticeDocPreviewDownloadBlocked
@@ -485,6 +491,97 @@ describe('partition permission policy', () => {
     )
     // Orca launches approved apps itself, so Chromium's launch remains denied.
     expect(decisions).toEqual([false, false])
+  })
+
+  it.each(['local-network-access', 'local-network', 'loopback-network'])(
+    'routes %s to the local network prompt and answers the check from the grant',
+    async (permission) => {
+      const install = await loadInstaller()
+      install(profileFor('persist:browsing-5'))
+      const sess = sessionsByPartition.get('persist:browsing-5')
+      if (!sess) {
+        throw new Error('Expected the browsing session')
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number; getURL: () => string },
+        permission: string,
+        callback: (allowed: boolean) => void,
+        details: { requestingUrl?: string }
+      ) => void
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+      const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+        webContents: { id: number } | null,
+        permission: string,
+        requestingOrigin: string,
+        details: { requestingUrl?: string }
+      ) => boolean
+      const guest = { id: 11, getURL: () => 'https://acme.okta.com/signin' }
+      const decisions: boolean[] = []
+
+      requestHandler(guest, permission, (allowed) => decisions.push(allowed), {
+        requestingUrl: 'https://acme.okta.com/signin'
+      })
+      const [args] = mocks.requestBrowserLocalNetworkAccess.mock.calls[0]
+      expect(args).toMatchObject({
+        partition: 'persist:browsing-5',
+        requester: guest,
+        requestingUrl: 'https://acme.okta.com/signin'
+      })
+      expect(decisions).toEqual([])
+      expect(mocks.notifyPermissionDenied).not.toHaveBeenCalled()
+
+      args.respond(true)
+      args.respond(false)
+      expect(decisions).toEqual([true, false])
+      expect(mocks.notifyPermissionDenied).toHaveBeenCalledOnce()
+
+      mocks.checkBrowserLocalNetworkAccess.mockReturnValueOnce(true)
+      expect(checkHandler(guest, permission, 'https://acme.okta.com', {})).toBe(true)
+      expect(mocks.checkBrowserLocalNetworkAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ partition: 'persist:browsing-5', webContents: guest })
+      )
+      expect(checkHandler(guest, permission, 'https://acme.okta.com', {})).toBe(false)
+    }
+  )
+
+  it('leaves other permissions on the allowlist, never the local network path', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-6'))
+    const sess = sessionsByPartition.get('persist:browsing-6')
+    if (!sess) {
+      throw new Error('Expected the browsing session')
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number; getURL: () => string },
+      permission: string,
+      callback: (allowed: boolean) => void,
+      details: { requestingUrl?: string }
+    ) => void
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installer registered exactly this handler on the fake session.
+    const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+      webContents: { id: number } | null,
+      permission: string,
+      requestingOrigin: string,
+      details: { requestingUrl?: string }
+    ) => boolean
+    const guest = { id: 12, getURL: () => 'https://a.test/' }
+    const decisions: Record<string, boolean> = {}
+    for (const permission of ['persistent-storage', 'storage-access', 'hid', 'serial']) {
+      requestHandler(guest, permission, (allowed) => (decisions[permission] = allowed), {})
+    }
+
+    expect(decisions).toEqual({
+      'persistent-storage': true,
+      'storage-access': true,
+      hid: false,
+      serial: false
+    })
+    expect(checkHandler(guest, 'persistent-storage', 'https://a.test', {})).toBe(true)
+    expect(checkHandler(guest, 'hid', 'https://a.test', {})).toBe(false)
+    expect(mocks.requestBrowserLocalNetworkAccess).not.toHaveBeenCalled()
+    expect(mocks.checkBrowserLocalNetworkAccess).not.toHaveBeenCalled()
   })
 
   it('cancels a download from a page an SSH host drives (#29145)', async () => {

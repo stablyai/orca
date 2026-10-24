@@ -1,5 +1,6 @@
 import type { BrowserExternalAppPrompt } from './browser-external-app'
 import type { BrowserHttpAuthCredentials, BrowserHttpAuthPrompt } from './browser-http-auth'
+import type { BrowserLocalNetworkPrompt } from './browser-local-network'
 import type {
   BrowserSitePermissionDecision,
   BrowserSitePermissionPrompt
@@ -9,6 +10,7 @@ import type {
 export type BrowserPagePromptKinds = {
   'external-app': { details: BrowserExternalAppPrompt; answer: true }
   'http-auth': { details: BrowserHttpAuthPrompt; answer: BrowserHttpAuthCredentials }
+  'local-network': { details: BrowserLocalNetworkPrompt; answer: true }
   'site-permission': { details: BrowserSitePermissionPrompt; answer: BrowserSitePermissionDecision }
 }
 

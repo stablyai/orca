@@ -8,6 +8,11 @@ import {
   invalidateBrowserSessionProxyApplication
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
+import {
+  checkBrowserLocalNetworkAccess,
+  requestBrowserLocalNetworkAccess
+} from './browser-local-network-access'
+import { clearLocalNetworkGrants, isLocalNetworkPermission } from './browser-local-network-grants'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
   browserSitePermissionRequestingOrigin,
@@ -200,6 +205,21 @@ export async function installBrowserSessionPartitionPolicies(
           permission,
           rawUrl
         })
+      if (isLocalNetworkPermission(permission)) {
+        // Why: a page may reach services on this device only after the user says so; default deny.
+        requestBrowserLocalNetworkAccess({
+          partition,
+          requester: webContents,
+          requestingUrl: details?.requestingUrl,
+          respond: (granted) => {
+            if (!granted) {
+              notifyDenied()
+            }
+            callback(granted)
+          }
+        })
+        return
+      }
       if (deniesRemoteCliDrivenClipboardRead(permission, webContents.id)) {
         notifyDenied()
         callback(false)
@@ -238,6 +258,10 @@ export async function installBrowserSessionPartitionPolicies(
       })
     })
     sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+      if (isLocalNetworkPermission(permission)) {
+        // Why: navigator.permissions.query reads this, so it must report the user's grant, not the allowlist.
+        return checkBrowserLocalNetworkAccess({ partition, webContents, requestingOrigin, details })
+      }
       if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
         return false
       }
@@ -293,6 +317,7 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
   invalidateBrowserSessionProxyApplication(sess)
   retireBrowserSessionUserAgentPolicy(sess)
   configuredPartitions.delete(partition)
+  clearLocalNetworkGrants(partition)
   browserManager.removeCertificateRequestGuard(sess)
   sess.removeListener('will-download', handleWillDownload)
   sess.removeListener('will-download', handleDeniedWillDownload)
