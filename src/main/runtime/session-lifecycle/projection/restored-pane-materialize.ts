@@ -30,6 +30,11 @@ import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-ho
 import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { collectPersistedTerminalLeafIds } from '../../mobile-session-layout-projection'
+
+function tabHasSolePane(tab: RuntimeMobileSessionTerminalTab): boolean {
+  return collectPersistedTerminalLeafIds(tab.parentLayout).length <= 1
+}
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -196,19 +201,22 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     let agentStartup: MobileTerminalCommand | MobileTerminalResumeCommand = resumeStartup ?? {}
     const resumeClaim =
       resumeStartup && 'resumeClaim' in resumeStartup ? resumeStartup.resumeClaim : null
-    if (resumeStartup === undefined && tab.launchAgent) {
+    // Why the sole-pane check: `launchAgent` is tab-wide, so in a split it names no pane; a
+    // sibling shell must come back as a shell, not as a fresh agent.
+    const tabAgent = tabHasSolePane(tab) ? tab.launchAgent : undefined
+    if (resumeStartup === undefined && tabAgent) {
       let workspace
       try {
         workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
         agentStartup = await this.resolveMobileSessionTerminalCommand(workspace, {
-          agent: tab.launchAgent
+          agent: tabAgent
         })
       } catch {
         // Why: a disabled or unresolvable agent must not make the tab
         // untappable; fall back to the plain-shell materialize. A runtime that needs repair
         // rethrows its message here instead of leaving a plain shell under the agent icon.
         if (workspace) {
-          this.resolveAgentLaunchRuntime(workspace, tab.launchAgent)
+          this.resolveAgentLaunchRuntime(workspace, tabAgent)
         }
       }
     }
@@ -229,7 +237,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           env: agentStartup.env,
           startupCommandDelivery: agentStartup.startupCommandDelivery,
           launchConfig: agentStartup.launchConfig,
-          launchAgent: agentStartup.launchAgent ?? tab.launchAgent,
+          launchAgent: agentStartup.launchAgent ?? tabAgent,
           // Why: a resume is restore work, so the host's restore admission must see it.
           ...('resumeProviderSession' in agentStartup
             ? {
