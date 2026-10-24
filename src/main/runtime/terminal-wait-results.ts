@@ -92,10 +92,13 @@ export function buildTerminalWait(
   blockedReason?: RuntimeTerminalWaitBlockedReason,
   exitCause?: TerminalExitCause | null
 ): RuntimeTerminalWait {
+  const observedState =
+    blockedReason ?? (condition === 'tui-idle' && status === 'running' ? condition : status)
   return {
     handle,
     condition,
     satisfied: blockedReason === undefined,
+    observedState,
     status,
     exitCode,
     ...(exitCause ? { exitCause } : {}),
