@@ -438,6 +438,16 @@ describe('orchestration RPC methods', () => {
 
       expect(notify).not.toHaveBeenCalled()
       expect(db.getMessageById(result.message.id)).toMatchObject({ read: 1 })
+      expect(result).toMatchObject({
+        lifecycle: { action: 'suppressed' },
+        delivery: {
+          state: 'suppressed',
+          destination: 'run_home',
+          custody: 'run_home_mailbox',
+          runId: activeRunId
+        }
+      })
+      expect(db.getUnreadRunMailbox(activeRunId!)).toEqual([])
     })
 
     it('still wakes waiters for a heartbeat on an active dispatch', async () => {

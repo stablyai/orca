@@ -7,6 +7,7 @@ import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
+import { assertLocalRunMailbox } from '../../../../orchestration/run-mailbox-home'
 import type { SendRecipientWarning } from './recipient-routing'
 import {
   workerReportRefusal,
@@ -51,6 +52,11 @@ export function sendPointToPointMessage(args: {
   } = args
   // Point-to-point — existing single-recipient behavior
   revalidateLegacyCoordinator?.()
+  const delivery = to.startsWith('run:')
+    ? assertLocalRunMailbox(db, to.slice('run:'.length), runtime.getRuntimeId())
+    : undefined
+  const withDelivery = <T extends object>(receipt: T, state: 'queued' | 'suppressed' = 'queued') =>
+    withSendWarnings(delivery ? { ...receipt, delivery: { ...delivery, state } } : receipt)
   const messageType = (params.type ?? 'status') as MessageType
   const processIncarnation = isDispatchMutationMessageType(messageType)
     ? resolveProcessIncarnation()
@@ -91,7 +97,7 @@ export function sendPointToPointMessage(args: {
       if (refusal) {
         const rejection =
           db.convertLifecycleMessageToRejection(msg.id, refusal.code, refusal.reason) ?? msg
-        const receipt = withSendWarnings({
+        const receipt = withDelivery({
           message: exposeMessage(rejection),
           lifecycle: {
             action: 'rejected',
@@ -111,13 +117,16 @@ export function sendPointToPointMessage(args: {
       if (reconciled.action === 'suppressed') {
         return recordReceiptForPostCommitNudge(
           recordMutationReceipt,
-          withSendWarnings({ message: exposeMessage(msg) }),
+          withDelivery(
+            { message: exposeMessage(db.getMessageById(msg.id) ?? msg), lifecycle: reconciled },
+            'suppressed'
+          ),
           () => undefined
         )
       }
       if (reconciled.action === 'rejected') {
         const rejection = db.getMessageById(msg.id) ?? msg
-        const receipt = withSendWarnings({
+        const receipt = withDelivery({
           message: exposeMessage(rejection),
           lifecycle: reconciled
         })
@@ -125,7 +134,7 @@ export function sendPointToPointMessage(args: {
           runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
         )
       }
-      const receipt = withSendWarnings(
+      const receipt = withDelivery(
         msg.type === 'worker_done'
           ? { message: exposeMessage(msg), lifecycle: reconciled }
           : { message: exposeMessage(msg) }
@@ -134,7 +143,7 @@ export function sendPointToPointMessage(args: {
         runtime.notifyMessageArrived(msg.to_handle, msg.type)
       )
     }
-    const receipt = withSendWarnings({ message: exposeMessage(msg) })
+    const receipt = withDelivery({ message: exposeMessage(msg) })
     return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(msg.to_handle, msg.type)
     )
