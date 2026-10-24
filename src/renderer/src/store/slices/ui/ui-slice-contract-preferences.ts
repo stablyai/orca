@@ -23,6 +23,8 @@ import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
+export type SidebarCollapsibleGroup = { key: string; running: boolean }
+
 export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
@@ -33,6 +35,8 @@ export type UISlicePreferences = {
   setSortBy: (s: UISlicePreferences['sortBy']) => void
   projectOrderBy: ProjectOrderBy
   setProjectOrderBy: (p: ProjectOrderBy) => void
+  runningProjectsFirst: boolean
+  setRunningProjectsFirst: (v: boolean) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -89,6 +93,10 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) => void
+  /** Section headers the sidebar list currently renders, by collapse key. */
+  sidebarCollapsibleGroups: readonly SidebarCollapsibleGroup[]
+  setSidebarCollapsibleGroups: (groups: readonly SidebarCollapsibleGroup[]) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void

@@ -48,6 +48,7 @@ import {
 } from './header-event-guards'
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import { getWorktreeOptionId } from './option-dom'
+import { RunningSectionLabel } from './RunningSectionLabel'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -212,6 +213,7 @@ export function renderWorktreeSectionHeaderRow(args: {
       )}
       style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
     >
+      {row.runningSectionLabel ? <RunningSectionLabel label={row.runningSectionLabel} /> : null}
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
           id={getWorktreeOptionId(row.key)}

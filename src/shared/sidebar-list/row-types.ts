@@ -43,6 +43,10 @@ export type GroupHeaderRow = {
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
+  /** A workspace in this project has a running terminal. */
+  running?: boolean
+  /** Heads the active or idle part when running projects are lifted above idle ones. */
+  runningSectionLabel?: 'active' | 'idle'
 }
 
 export type WorktreeRow = {

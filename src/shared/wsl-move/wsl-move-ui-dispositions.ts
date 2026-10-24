@@ -86,6 +86,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'groupBy',
   'sortBy',
   'projectOrderBy',
+  'runningProjectsFirst',
   'showActiveOnly',
   'hideSleepingWorkspaces',
   'showSleepingWorkspaces',

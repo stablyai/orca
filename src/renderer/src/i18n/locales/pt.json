@@ -10582,6 +10582,7 @@
           "af9249c505": "Atividade mais recente do espaço de trabalho",
           "b451c8b162": "Recente",
           "6664282a7b": "Arraste os projetos para organizá-los",
+          "ed82ad03f8": "Ordem alfabética pelo nome do projeto",
           "7b316bdd51": "Manual",
           "7153d07485": "Arraste os espaços de trabalho para organizá-los dentro de cada grupo.",
           "2170d553cf": "Projeto",
@@ -11462,7 +11463,12 @@
           "5c9c7c16aa": "Adicione um projeto para criar espaços de trabalho",
           "a30e34eb5c": "Fechar o quadro do espaço de trabalho",
           "views": "Visualização da barra lateral",
-          "addProject": "Adicionar projeto"
+          "addProject": "Adicionar projeto",
+          "collapseAll": "Recolher tudo",
+          "expandAll": "Expandir tudo",
+          "activeProjects": "Ativos",
+          "idleProjects": "Inativos",
+          "activeProjectsFirst": "Projetos ativos primeiro"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Ocultar worktrees externas permanentemente para {{value0}}",

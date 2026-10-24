@@ -29,6 +29,9 @@ type MockState = {
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
+  sidebarCollapsibleGroups: { key: string; running: boolean }[]
+  collapsedGroups: Set<string>
+  setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) => void
   settings?: {
     experimentalAgentDashboardPopout?: boolean
     agentsSidebarIntroShown?: boolean
@@ -120,6 +123,9 @@ beforeEach(() => {
     openModal: vi.fn(),
     updateSettings: vi.fn(),
     activeContextualTourId: null,
+    sidebarCollapsibleGroups: [],
+    collapsedGroups: new Set(),
+    setGroupsCollapsed: vi.fn(),
     settings: {}
   }
   container = document.createElement('div')
@@ -372,5 +378,29 @@ describe('SidebarHeader', () => {
     })
 
     expect(container.querySelector('[aria-label="Open full Agents view"]')).toBeNull()
+  })
+
+  it('collapses idle projects only, then expands every project', () => {
+    mockState.sidebarCollapsibleGroups = [
+      { key: 'repo:a', running: true },
+      { key: 'repo:b', running: false },
+      { key: 'repo:c', running: false }
+    ]
+    mockState.collapsedGroups = new Set(['repo:b'])
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    act(() => headerButton('Collapse all').click())
+    expect(mockState.setGroupsCollapsed).toHaveBeenLastCalledWith(['repo:b', 'repo:c'], true)
+
+    mockState.collapsedGroups = new Set(['repo:b', 'repo:c'])
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    act(() => headerButton('Expand all').click())
+    expect(mockState.setGroupsCollapsed).toHaveBeenLastCalledWith(
+      ['repo:a', 'repo:b', 'repo:c'],
+      false
+    )
   })
 })

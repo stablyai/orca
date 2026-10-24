@@ -142,6 +142,7 @@ export function setLineageFixtureState(
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarCollapsibleGroups: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
     // Why: multi-host added a host scope filter; 'all' (the store default)

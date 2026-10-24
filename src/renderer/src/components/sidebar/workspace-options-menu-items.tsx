@@ -18,6 +18,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
+import { FilterToggleRow } from './FilterToggleRow'
+import { ArrowUpToLine } from 'lucide-react'
 import {
   getSidebarHostVisibilityLabel,
   shouldShowHostScopeControls,
@@ -157,51 +159,66 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const runningProjectsFirst = useAppStore((s) => s.runningProjectsFirst)
+  const setRunningProjectsFirst = useAppStore((s) => s.setRunningProjectsFirst)
   return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger>
-        <span className="flex flex-1 items-center justify-between">
-          <span>
-            {translate(
-              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
-              'Project order'
-            )}
+    <>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <span className="flex flex-1 items-center justify-between">
+            <span>
+              {translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
+                'Project order'
+              )}
+            </span>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {projectOrderLabel}
+            </span>
           </span>
-          <span className="text-[11px] font-medium text-muted-foreground">{projectOrderLabel}</span>
-        </span>
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent
-        className="w-44"
-        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-      >
-        <DropdownMenuRadioGroup
-          value={projectOrderBy}
-          onValueChange={(value) => {
-            const next = PROJECT_ORDER_OPTIONS.find((opt) => opt.id === value)
-            if (next) {
-              setProjectOrderBy(next.id)
-            }
-          }}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent
+          className="w-44"
+          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
         >
-          {PROJECT_ORDER_OPTIONS.map((opt) => (
-            <Tooltip key={opt.id}>
-              <TooltipTrigger asChild>
-                <DropdownMenuRadioItem
-                  value={opt.id}
-                  // Keep the menu open so people can compare order modes.
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={6}>
-                {opt.description}
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
+          <DropdownMenuRadioGroup
+            value={projectOrderBy}
+            onValueChange={(value) => {
+              const next = PROJECT_ORDER_OPTIONS.find((opt) => opt.id === value)
+              if (next) {
+                setProjectOrderBy(next.id)
+              }
+            }}
+          >
+            {PROJECT_ORDER_OPTIONS.map((opt) => (
+              <Tooltip key={opt.id}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuRadioItem
+                    value={opt.id}
+                    // Keep the menu open so people can compare order modes.
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    {opt.label}
+                  </DropdownMenuRadioItem>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={6}>
+                  {opt.description}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <FilterToggleRow
+        icon={<ArrowUpToLine className="size-3.5" />}
+        label={translate(
+          'auto.components.sidebar.SidebarHeader.activeProjectsFirst',
+          'Active projects first'
+        )}
+        checked={runningProjectsFirst}
+        onChange={setRunningProjectsFirst}
+      />
+    </>
   )
 }
 

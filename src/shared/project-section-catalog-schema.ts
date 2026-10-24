@@ -16,7 +16,11 @@ const SETUP_METHOD_ARMS = hostUnionArms<ProjectHostSetupMethod>({
   provisioned: true
 })
 const REPO_KIND_ARMS = hostUnionArms<RepoKind>({ git: true, folder: true })
-const PROJECT_ORDER_BY_ARMS = hostUnionArms<ProjectOrderBy>({ manual: true, recent: true })
+const PROJECT_ORDER_BY_ARMS = hostUnionArms<ProjectOrderBy>({
+  manual: true,
+  recent: true,
+  name: true
+})
 
 // A host id the desktop spells; normalized, so a spelling this build cannot read drops.
 const hostIdSchema = z.string().transform((value, ctx) => {

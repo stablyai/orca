@@ -54,6 +54,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     // Why: bare set — persists only via the debounced window.api.ui.set writer in App.tsx, not on its own.
     projectOrderBy: 'manual',
     setProjectOrderBy: (p) => set({ projectOrderBy: p }),
+    runningProjectsFirst: false,
+    setRunningProjectsFirst: (v) => {
+      set({ runningProjectsFirst: v })
+      window.api.ui.set({ runningProjectsFirst: v }).catch(console.error)
+    },
 
     showActiveOnly: false,
     setShowActiveOnly: (v) => set({ showActiveOnly: v }),
@@ -168,6 +173,30 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
         return { collapsedGroups: next }
       }),
+    setGroupsCollapsed: (keys, collapsed) =>
+      set((s) => {
+        const next = new Set(s.collapsedGroups)
+        for (const key of keys) {
+          if (collapsed) {
+            next.add(key)
+          } else {
+            next.delete(key)
+          }
+        }
+        window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
+        return { collapsedGroups: next }
+      }),
+    sidebarCollapsibleGroups: [],
+    setSidebarCollapsibleGroups: (groups) =>
+      set((s) =>
+        s.sidebarCollapsibleGroups.length === groups.length &&
+        s.sidebarCollapsibleGroups.every(
+          (group, index) =>
+            group.key === groups[index].key && group.running === groups[index].running
+        )
+          ? s
+          : { sidebarCollapsibleGroups: groups }
+      ),
 
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,

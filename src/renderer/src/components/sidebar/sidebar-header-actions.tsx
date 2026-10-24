@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -29,6 +29,53 @@ function AddProjectButton({
           onClick={() => openModal('add-repo')}
         >
           <FolderPlus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function CollapseAllButton({
+  preserveWorkspaceBoardOpen
+}: {
+  preserveWorkspaceBoardOpen: boolean
+}): React.JSX.Element | null {
+  const groups = useAppStore((s) => s.sidebarCollapsibleGroups)
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
+  const setGroupsCollapsed = useAppStore((s) => s.setGroupsCollapsed)
+  if (groups.length === 0) {
+    return null
+  }
+  const allKeys = groups.map((group) => group.key)
+  const idleKeys = groups.filter((group) => !group.running).map((group) => group.key)
+  // Why: running projects stay open so their live terminals remain one click away.
+  const collapseKeys = idleKeys.length > 0 ? idleKeys : allKeys
+  const allCollapsed = collapseKeys.every((key) => collapsedGroups.has(key))
+  const label = allCollapsed
+    ? translate('auto.components.sidebar.SidebarHeader.expandAll', 'Expand all')
+    : translate('auto.components.sidebar.SidebarHeader.collapseAll', 'Collapse all')
+  const Icon = allCollapsed ? ChevronsUpDown : ChevronsDownUp
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          type="button"
+          className="text-muted-foreground"
+          aria-label={label}
+          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+          onClick={() =>
+            allCollapsed
+              ? setGroupsCollapsed(allKeys, false)
+              : setGroupsCollapsed(collapseKeys, true)
+          }
+        >
+          <Icon className="size-3.5" strokeWidth={2.25} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
@@ -90,6 +137,7 @@ export function SidebarHeaderActions({
     <div className="flex shrink-0 items-center gap-1" data-sidebar-header-actions="">
       {/* Why only options swap: the activity view portals its own options button into this slot
           (SidebarHeader), and keeping Add project means no header button shifts between views. */}
+      {agentsViewActive ? null : <CollapseAllButton preserveWorkspaceBoardOpen />}
       {agentsViewActive ? null : (
         <SidebarWorkspaceOptionsMenu
           preserveWorkspaceBoardOpen

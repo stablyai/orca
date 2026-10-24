@@ -45,6 +45,10 @@ export type SectionAppendContext = {
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
+  /** Project sections with a running terminal; absent when the reader has no liveness. */
+  runningSectionKeys?: ReadonlySet<string>
+  /** Running projects are lifted above idle ones, so each part gets a label. */
+  runningProjectsFirst?: boolean
 }
 
 export function appendOrderedGroups(
@@ -66,10 +70,25 @@ export function appendOrderedGroups(
     newExternalWorktreesInboxByRepo,
     pendingByRepo,
     mixedWorktreeHostContextLabels,
-    occurrencePlan
+    occurrencePlan,
+    runningSectionKeys,
+    runningProjectsFirst
   } = ctx
+  const labelsRunningSections =
+    runningProjectsFirst === true &&
+    groupBy === 'repo' &&
+    groupsToAppend.some(([key]) => runningSectionKeys?.has(key))
+  let previousRunning: boolean | null = null
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
+    const running = groupBy === 'repo' && runningSectionKeys?.has(key) === true
+    const runningSectionLabel =
+      labelsRunningSections && previousRunning !== running
+        ? running
+          ? ('active' as const)
+          : ('idle' as const)
+        : undefined
+    previousRunning = running
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
     const header =
@@ -81,7 +100,9 @@ export function appendOrderedGroups(
             count: group.items.length,
             icon: { kind: 'project' as const },
             repo,
-            projectGroupDepth
+            projectGroupDepth,
+            ...(running ? { running } : {}),
+            ...(runningSectionLabel ? { runningSectionLabel } : {})
           }
         : groupBy === 'workspace-status'
           ? (() => {
