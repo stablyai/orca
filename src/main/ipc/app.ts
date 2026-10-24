@@ -1,8 +1,10 @@
+import { getSystemLanguageDetection } from '../i18n/system-language'
+import { setMainUiLanguage } from '../i18n/main-i18n'
+import { rebuildAppMenu } from '../menu/register-app-menu'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
@@ -15,7 +17,7 @@ import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
+import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
   trustFloatingWorkspaceDirectory,
@@ -75,7 +77,7 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    // Why: this picker only chooses an existing directory; creation belongs to explicit file actions.
+    // Creation belongs to explicit file actions; this picker selects existing directories.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
@@ -85,7 +87,7 @@ async function pickFloatingWorkspaceDirectory(
     return null
   }
   const selectedDir = result.filePaths[0]
-  // Why: only a user-approved picker selection may become the floating terminal's cwd, unlike typed settings text.
+  // Only picker-approved paths may become the floating terminal cwd.
   await trustFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
@@ -98,7 +100,7 @@ function getFeatureWallAssetBaseUrl(): string {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const vitePath = assetDir.split(path.sep).join('/')
     const absoluteVitePath = vitePath.startsWith('/') ? vitePath : `/${vitePath}`
-    // Why: Chromium blocks file:// image loads from the http dev origin; Vite's /@fs route serves the same local media.
+    // Dev HTTP origins cannot load file images; serve media through Vite /@fs.
     return new URL(`/@fs${absoluteVitePath}/`, process.env.ELECTRON_RENDERER_URL).toString()
   }
 
@@ -113,7 +115,7 @@ function resolveDevFeatureWallAssetDir(): string {
     path.join(process.cwd(), relativeDir)
   ]
 
-  // Why: E2E launches out/main, so app.getAppPath() can point there while dev resources live at the repo root.
+  // E2E app paths can be out/main while resources remain at the repository root.
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
@@ -125,12 +127,29 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   )
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
+  ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
+    const previous = getSystemLanguageDetection()
+    const detection = getSystemLanguageDetection(
+      Array.isArray(preferences) && preferences.every((tag) => typeof tag === 'string')
+        ? preferences
+        : undefined
+    )
+    if (detection !== previous && store.getSettings().uiLanguage === 'system') {
+      void setMainUiLanguage('system')
+        .then(() => {
+          rebuildAppMenu()
+          rebuildSystemTrayMenu()
+        })
+        .catch((error) => console.warn('[app] failed to refresh system language menus:', error))
+    }
+    return detection
+  })
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
-    const identity = getDevInstanceIdentity(is.dev)
+    const identity = getDevInstanceIdentity(!app.isPackaged)
     return {
       name: identity.name,
       isDev: identity.isDev,
@@ -142,8 +161,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  // Why: these probes spawn wsl.exe/pwsh.exe; the sync variants would block the main event
-  // loop — every PTY message, window IPC and watchdog beat — for up to 5s per renderer read.
+  // Async probes avoid blocking PTY traffic and IPC for up to 5s per capability read.
   ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
   ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
   ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
@@ -155,7 +173,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       return null
     }
     try {
-      // Why: async so the focus-in probe (see option-as-alt-probe.ts) never blocks the main event loop.
+      // Focus-in probes must not block the main loop.
       const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
@@ -168,11 +186,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
 
   ipcMain.handle('app:relaunch', async () => {
-    // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
+    // Delay teardown so the renderer can paint Restarting after cleanup.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
+      // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
       destroySystemTray()
       relaunchApp('renderer-request')
       app.exit(0)
@@ -180,7 +198,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:restart', async () => {
-    // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
+    // Normal quit flushes daemon checkpoints and telemetry.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')

@@ -1,6 +1,4 @@
-// Attach is where the restart reconciler runs. These cover the wiring itself:
-// that the window the adapter reports reaches the journal, that what it settles
-// stops being reported unconfirmed, and that deciding never sends.
+// Verify attach wires history reconciliation without redelivery.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -52,8 +50,7 @@ function window(overrides: Partial<ProviderHistoryWindow> = {}): ProviderHistory
   return { items: [], boundaryConsistent: true, turnInFlight: false, ...overrides }
 }
 
-/** Only the surface `attachJournal` touches; every send-shaped method is a spy
- *  so a re-delivery would be visible rather than silent. */
+/** Spy on every send route so reconciliation cannot silently redeliver. */
 function adapterWith(providerHistoryWindow?: () => Promise<ProviderHistoryWindow | null>): {
   adapter: StructuredAgentSessionAdapter
   dispatch: ReturnType<typeof vi.fn>
@@ -66,7 +63,6 @@ function adapterWith(providerHistoryWindow?: () => Promise<ProviderHistoryWindow
   return { adapter, dispatch }
 }
 
-/** A previous process wrote the submission row and died before its outcome. */
 async function crashedJournal(clientMessageId = 'cm_1', text = 'deploy the thing') {
   const journal = await journals.open({
     identity: IDENTITY,
@@ -112,7 +108,6 @@ describe('attachJournal restart reconciliation', () => {
     const submission = attached.journal.submissions()[0]
     expect(submission?.dispatchState).toBe('rejected')
     expect(submission?.rejection).toEqual({ kind: 'notDelivered' })
-    // Deciding is not sending: nothing here puts the message back on the wire.
     expect(dispatch).not.toHaveBeenCalled()
   })
 
@@ -122,7 +117,7 @@ describe('attachJournal restart reconciliation', () => {
 
     const attached = await attach(adapter)
 
-    // Nobody failed: the crash stranded it, so the chat must not read Failed or be listed by it.
+    // A crash-stranded send is unconfirmed, not a failure.
     const { items, submissions } = attached.journal.snapshot()
     expect(
       projectStructuredAgentSessionStatusState(items, submissions, RECORD.lease.runtimeFence)
@@ -174,7 +169,7 @@ describe('attachJournal restart reconciliation', () => {
       fence: RECORD.lease.runtimeFence,
       handoverRecorded: true
     })
-    // History that holds nothing: absence would prove a handed-over message undelivered.
+    // Empty consistent history can prove handed-over sends undelivered.
     const { adapter, dispatch } = adapterWith(async () => window())
 
     const attached = await attachJournal({

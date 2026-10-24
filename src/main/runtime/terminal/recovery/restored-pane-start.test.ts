@@ -3,7 +3,8 @@ import {
   RestoredPaneStarter,
   restoredPaneStartPlan,
   type RestoredPane,
-  type RestoredPaneStartPorts
+  type RestoredPaneStartPorts,
+  type StartedPty
 } from './restored-pane-start'
 
 const PANE: RestoredPane = {
@@ -19,7 +20,7 @@ function ports(over: Partial<RestoredPaneStartPorts> = {}) {
   const start = vi.fn(async () => {
     bound = 'pty-new'
     live.add('pty-new')
-    return 'pty-new'
+    return { id: 'pty-new' }
   })
   return {
     live,
@@ -49,6 +50,49 @@ describe('restoredPaneStartPlan', () => {
 })
 
 describe('RestoredPaneStarter', () => {
+  it('shows the start before any await, and a failure with no winner', async () => {
+    const starting = vi.fn()
+    const failed = vi.fn()
+    const error = new Error('boom')
+    const starter = new RestoredPaneStarter({
+      boundPtyId: () => OWN,
+      isLive: () => false,
+      starting,
+      failed,
+      start: vi.fn(async (): Promise<StartedPty> => {
+        throw error
+      })
+    })
+
+    const started = starter.ensureStarted(PANE)
+    expect(starting).toHaveBeenCalledWith(PANE)
+    await expect(started).rejects.toBe(error)
+    expect(failed).toHaveBeenCalledWith(PANE, error)
+  })
+
+  it('starts once for a trigger that arrives after the start but before its binding is written', async () => {
+    const live = new Set<string>()
+    const start = vi.fn(async () => {
+      live.add('pty-new')
+      return { id: 'pty-new' }
+    })
+    // The stored layout still names the old terminal: the bind write has not landed.
+    const starter = new RestoredPaneStarter({
+      boundPtyId: () => OWN,
+      isLive: (ptyId) => live.has(ptyId),
+      start
+    })
+
+    await expect(starter.ensureStarted(PANE)).resolves.toEqual({ id: 'pty-new' })
+    await expect(starter.ensureStarted(PANE)).resolves.toEqual({ id: 'pty-new' })
+    expect(start).toHaveBeenCalledOnce()
+
+    // Once that terminal is gone, the next trigger starts the pane again.
+    live.delete('pty-new')
+    await starter.ensureStarted(PANE)
+    expect(start).toHaveBeenCalledTimes(2)
+  })
+
   it('starts a pane with no live terminal once for concurrent triggers, all bound to it', async () => {
     const { ports: p, start } = ports()
     const starter = new RestoredPaneStarter(p)
@@ -61,13 +105,13 @@ describe('RestoredPaneStarter', () => {
 
     expect(start).toHaveBeenCalledOnce()
     expect(start).toHaveBeenCalledWith(PANE, { sessionId: OWN }, {})
-    expect(results).toEqual(['pty-new', 'pty-new', 'pty-new'])
+    expect(results).toEqual(Array.from({ length: 3 }, () => ({ id: 'pty-new' })))
   })
 
   it('starts nothing for a pane already live, or one main no longer holds', async () => {
     const live = ports()
     live.live.add(OWN)
-    expect(await new RestoredPaneStarter(live.ports).ensureStarted(PANE)).toBe(OWN)
+    expect(await new RestoredPaneStarter(live.ports).ensureStarted(PANE)).toEqual({ id: OWN })
     expect(live.start).not.toHaveBeenCalled()
 
     const gone = ports()
@@ -99,7 +143,9 @@ describe('RestoredPaneStarter', () => {
       throw new Error('terminal_pane_owner_unknown')
     })
 
-    expect(await new RestoredPaneStarter(harness.ports).ensureStarted(PANE)).toBe('pty-window')
+    expect(await new RestoredPaneStarter(harness.ports).ensureStarted(PANE)).toEqual({
+      id: 'pty-window'
+    })
   })
 
   it('reports a failed start that left the pane without a live terminal', async () => {

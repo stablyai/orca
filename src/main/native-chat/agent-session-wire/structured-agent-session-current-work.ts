@@ -1,19 +1,6 @@
 import { currentRequestsProjection } from './agent-session-current-requests'
-// The host's one operational projection of a chat's current work: the live generation's running
-// turn, the prompts it raised that still wait on the person, the sends it owes, and the queued
-// sends this process may hand over. Every host reader asks here; none keeps a rule of its own.
-//
-// Derived on every read, never stored, from what the host already holds:
-//  - the lease: the live or reserved generation's fence; none once it is released;
-//  - this host's own sight of that generation's root exit, which ends it even when the release
-//    write failed (`lastEndedChild`);
-//  - the Orca runtimes this one replaced (`AgentSessionRecordStore.replacedRuntime`): a generation
-//    one of them held lost its pipes with it, so it is over before any startup write says so;
-//  - the journal's fold, where every item carries the generation that produced it (`ownerFence`).
-// So work an ended generation left holds nothing and is not Working whether or not its cleanup
-// landed: cleanup is bookkeeping and never gates what the person does next. Loss of contact is
-// never an end: an unreconciled or conflicted lease keeps its fence, and its work stays current, unless
-// a runtime this one replaced held it, which is this host's own proof.
+// Derive operational work from lease, first-hand exit, replaced-runtime and journal evidence.
+// Cleanup writes never gate current work; readers share this projection rather than maintaining rules.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -36,20 +23,16 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 >
 
-/** What the host knows of who runs the chat now. */
 export type StructuredAgentSessionWorkEvidence = {
   record: Pick<AgentSessionRecord, 'lease'> | null
-  /** The last child this host saw end (`StructuredAgentSessionHostSession.lastEndedChild`). */
   ended?: StructuredAgentSessionSeenEnd
-  /** `StructuredAgentSessionHostSession.operationalRevision`. */
   revision?: number
-  /** The runtimes this one replaced for the chat (`AgentSessionRecordStore.replacedRuntime`). */
   replaced?: StructuredAgentSessionReplacedEnd | undefined
-  /** This host's live child (`StructuredAgentSessionHostSession.child`); absent: not known. */
+  /** Absent means the host has no child observation. */
   child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
 }
 
-/** Every fence at or below `fence` was granted by a runtime this one replaced. */
+/** Replaced runtimes granted all fences through this boundary. */
 type StructuredAgentSessionReplacedEnd = { fence: number }
 
 type StructuredAgentSessionSeenEnd = {
@@ -58,8 +41,7 @@ type StructuredAgentSessionSeenEnd = {
   cause?: string
 }
 
-/** The live or reserved generation's fence, or null when no generation is live. With no record
- *  nothing has ended: fence 0, under which every item is current, as before records scoped work. */
+/** Missing records retain legacy fence-0 behavior; released/ended generations have no live fence. */
 export function structuredAgentSessionLiveFence(
   evidence: StructuredAgentSessionWorkEvidence
 ): number | null {
@@ -80,8 +62,7 @@ export function structuredAgentSessionLiveFence(
   return ended?.rootGone === true && ended.fence === lease.runtimeFence ? null : lease.runtimeFence
 }
 
-/** An owner not yet reconciled, or latched in recovery, that this process holds no child for: it
- *  may still be running, so its turn is unverifiable, and nothing it left is current work. */
+/** Unreconciled/recovering owners without a local child remain unverifiable, not current work. */
 function structuredAgentSessionOwnerUnverifiable(evidence: StructuredAgentSessionWorkEvidence) {
   const lease = evidence.record?.lease
   return (
@@ -91,8 +72,7 @@ function structuredAgentSessionOwnerUnverifiable(evidence: StructuredAgentSessio
   )
 }
 
-/** Whether a runtime this one replaced granted the lease's generation, which is then over. A
- *  conflicted claim's agent is a terminal's, which no runtime's pipes held. */
+/** Replaced runtimes lost their pipes; conflicted terminal claims are outside that proof. */
 export function structuredAgentSessionReplacedRuntimeEnded(
   lease: Pick<AgentSessionRecord['lease'], 'runtimeFence' | 'claimStatus'>,
   replaced: StructuredAgentSessionReplacedEnd | undefined
@@ -104,7 +84,6 @@ export function structuredAgentSessionReplacedRuntimeEnded(
   )
 }
 
-/** `StructuredAgentSessionCurrentWork.handsOver`, for a reader that needs no other answer. */
 function structuredAgentSessionHandsOver(
   journal: Pick<AgentSessionJournal, 'wroteBeforeOpen'>,
   submission: Pick<
@@ -126,9 +105,8 @@ type PromptProjection = {
 }
 const promptProjections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, PromptProjection>()
 
-/** Read lease evidence afresh per decision; immutable prompt records share a cursor/fence cache. */
+/** Re-read lease evidence per decision; immutable prompts share cursor/fence caches. */
 export class StructuredAgentSessionCurrentWork {
-  /** The shared projections' form of this answer (`StructuredAgentSessionWorkScope`). */
   readonly scope: StructuredAgentSessionWorkScope = {
     isCurrentItem: (itemId) => this.isCurrentItem(itemId),
     owesSend: (submission) => this.owesSend(submission)
@@ -136,28 +114,22 @@ export class StructuredAgentSessionCurrentWork {
 
   constructor(
     private readonly journal: StructuredAgentSessionCurrentWorkJournal,
-    /** `structuredAgentSessionLiveFence`. */
     readonly liveFence: number | null,
-    /** Moves with every generation end this host saw, lease write or not: a reader that caches
-     *  what it derived from this answer keys it here and on the journal's cursor. */
+    /** Invalidate cached work with journal cursor and observed generation-end revision, even if lease writes fail. */
     readonly revision = 0,
     private readonly ended?: StructuredAgentSessionSeenEnd,
     private readonly replaced?: StructuredAgentSessionReplacedEnd,
-    /** `structuredAgentSessionOwnerUnverifiable`. */
     private readonly ownerUnverifiable = false,
-    /** The live child's `heldSends`; absent, or answering undefined, every unanswered send is held. */
+    /** Missing child evidence conservatively holds every unanswered send. */
     private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
-  /** What a reader that published this answer compares to learn it changed with no row: the live
-   *  generation, since every answer here is the journal read through it. Not the revision, which
-   *  moves on every generation-end signal: an end that changed nothing is published once. */
+  /** Compare effective generation/view, not repeated end-signal revisions that may change nothing. */
   viewKey(): string {
     return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
   }
 
-  /** What a subscriber was last told of current work: the view, whether the agent works, and which
-   *  unanswered sends it holds. Not `viewKey`, which also owns the published requests marker. */
+  /** Include held sends/working state; viewKey separately identifies published request markers. */
   workViewKey(): string {
     const sends = this.unansweredSends().map(
       (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
@@ -165,8 +137,7 @@ export class StructuredAgentSessionCurrentWork {
     return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
   }
 
-  /** A send as clients are told it. One handed to the live child that it no longer holds, with no
-   *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
+  /** Unanswered sends the child no longer holds read uncertain until their later echo/refusal. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
     this.unanswered(submission) && !this.holds(submission)
       ? {
@@ -177,7 +148,6 @@ export class StructuredAgentSessionCurrentWork {
         }
       : submission
 
-  /** Handed to the live generation and neither answered nor refused. */
   private unanswered(submission: AgentJournalSubmission): boolean {
     return (
       !isQueuedAgentJournalSubmission(submission) &&
@@ -190,13 +160,11 @@ export class StructuredAgentSessionCurrentWork {
     return this.journal.submissions().filter((submission) => this.unanswered(submission))
   }
 
-  /** Every unanswered send as clients are told it, for a page or frame to restate: what the child
-   *  holds changes with no row, so no row's batch would carry it. */
+  /** Restate held-send changes even without journal rows. */
   restatedSubmissions(): AgentJournalSubmission[] {
     return this.unansweredSends().map(this.publishedSubmission)
   }
 
-  /** The live child still holds this send as its work, or the host is still handing it over. */
   private holds(submission: AgentJournalSubmission): boolean {
     const held = this.heldSends?.()
     return (
@@ -206,7 +174,6 @@ export class StructuredAgentSessionCurrentWork {
     )
   }
 
-  /** Whether the live generation's execution produced this item. */
   isCurrentItem(itemId: string): boolean {
     if (this.liveFence === null) {
       return false
@@ -215,16 +182,12 @@ export class StructuredAgentSessionCurrentWork {
     return provenance === undefined || provenance >= this.liveFence
   }
 
-  /** Whether this process may hand this send over: accepted here, never by an earlier host process.
-   *  Derived from where the row sits, so nothing has to be written first; keeping an earlier
-   *  process's send as a card is the reconciliation pass's bookkeeping (`holdUnsentSends`). */
+  /** Hand over only this process’s accepted sends; earlier-process sends recover as cards first. */
   handsOver(submission: AgentJournalSubmission): boolean {
     return structuredAgentSessionHandsOver(this.journal, submission)
   }
 
-  /** A send still owed: one this process may hand over, or one handed to the live generation that
-   *  it has neither answered nor refused and still holds. Working reads what the child holds, never
-   *  whether a delivery row was written: a send whose echo never comes stops being work. */
+  /** Work means admissible queued sends or unanswered sends the live child still holds, never stale delivery rows. */
   owesSend(submission: AgentJournalSubmission): boolean {
     if (isQueuedAgentJournalSubmission(submission)) {
       return this.handsOver(submission)
@@ -232,7 +195,6 @@ export class StructuredAgentSessionCurrentWork {
     return this.unanswered(submission) && this.holds(submission)
   }
 
-  /** The live generation's running turn, with its record's item. */
   activeTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
     const running = this.journal.runningTurn()
     return running && this.isCurrentItem(running.item.itemId) ? running : null
@@ -242,14 +204,11 @@ export class StructuredAgentSessionCurrentWork {
     return this.activeTurn()?.turnId ?? null
   }
 
-  /** Where a row written now joins: the live generation's running turn, else the conversation. */
   turnScope(): AgentJournalTurnScope {
     const running = this.activeTurn()
     return running ? { kind: 'turn', turnItemId: running.item.itemId } : AGENT_JOURNAL_THREAD_SCOPE
   }
 
-  /** The approvals and questions the live generation raised that wait on the person, a
-   *  subagent's included. */
   actionablePrompts(): AgentJournalRenderItem[] {
     const cursor = this.journal.cursor()
     const prior = promptProjections.get(this.journal)
@@ -299,14 +258,11 @@ export class StructuredAgentSessionCurrentWork {
     return this.journal.submissions().some((submission) => this.owesSend(submission))
   }
 
-  /** The session's own agent is working: its running turn, or a send it owes. */
   working(): boolean {
     return this.activeTurnId() !== null || this.owesAnySend()
   }
 
-  /** The running turn of a generation this host saw die on its own (its root gone, nobody asked),
-   *  or that a runtime this one replaced held: its settlement writes it interrupted, so it reads so
-   *  before that lands. */
+  /** Project interrupted turns immediately from observed/replaced-runtime death, before settlement persists. */
   diedTurn(): { item: AgentJournalRenderItem; turnId: string } | null {
     const running = this.journal.runningTurn()
     if (!running || this.isCurrentItem(running.item.itemId)) {
@@ -320,9 +276,7 @@ export class StructuredAgentSessionCurrentWork {
       : null
   }
 
-  /** The newest turn record as a client is told it: a running one an ended generation opened is
-   *  none, interrupted when it died on its own (`diedTurn`), or unverifiable while its owner is, so
-   *  no client reads it as working, steers into it or reads it finished. */
+  /** Hide ended-generation work; publish interruption or owner uncertainty without implying completion. */
   publishedLatestTurn(latest: AgentSessionLatestTurn | null): AgentSessionLatestTurn | null {
     if (latest?.turn.state !== 'running' || this.isCurrentItem(latest.itemId)) {
       return latest
@@ -351,8 +305,7 @@ export function structuredAgentSessionCurrentWork(
   )
 }
 
-/** An operation context's current work: the host projection it was built with, or, for one built
- *  without (a test's), the generation at its fence read as live. */
+/** Test contexts without host projections treat their fence as live. */
 export function contextStructuredAgentSessionCurrentWork(ctx: {
   journal: StructuredAgentSessionCurrentWorkJournal
   fence: number

@@ -133,7 +133,7 @@ const localCalls = [
   mocks.effectiveHooks
 ]
 
-// Why: this process serves no SSH filesystem, so an SSH owner is neither read remotely nor locally.
+// This process must inspect SSH-owned repos neither remotely nor locally.
 function expectRoute(target: string | null): void {
   if (target) {
     for (const method of localCalls) {

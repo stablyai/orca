@@ -6,7 +6,8 @@ import type {
 import type { DurableProfileStateMutation } from '../loading-store/store-runtime-state'
 import { writeRestorable } from './restorable-write'
 import { applyRenamesToSession } from './terminal-pane-admission'
-import { keepFrozen, traced, type TerminalTopologyCommitContext } from './terminal-topology-commit'
+import { traced, type TerminalTopologyCommitContext } from './terminal-topology-commit'
+import { keepFrozen } from './layout-command-commit'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 
 /**

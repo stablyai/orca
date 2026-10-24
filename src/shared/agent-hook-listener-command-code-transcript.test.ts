@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,6 +19,7 @@ describe('shared agent-hook-listener', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
   })
@@ -422,7 +424,10 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
-      expect(tool?.payload.prompt.startsWith('pasted prompt WWW')).toBe(true)
+      expect(tool?.payload.prompt).toBe(promptText.slice(0, 200))
+      expect(tool?.promptInteractionKey?.split('-')[5]).toBe(
+        createHash('sha256').update(promptText).digest('hex').slice(0, 12)
+      )
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -466,7 +471,24 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
-      expect(tool?.payload.prompt ?? '').toBe('')
+      expect(tool?.payload).toMatchObject({
+        state: 'working',
+        agentType: 'command-code',
+        prompt: '',
+        toolName: 'shell_command',
+        toolInput: 'pwd'
+      })
+      writeFileSync(transcriptPath, `${lines[0]}\n`, { flag: 'a' })
+      const recent = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'PreToolUse', transcript_path: transcriptPath }
+        },
+        'production'
+      )
+      expect(recent?.payload.prompt).toBe('ancient prompt')
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -525,7 +547,7 @@ describe('shared agent-hook-listener', () => {
       const filler = Array.from({ length: 900 }, (_value, index) =>
         JSON.stringify({
           role: 'assistant',
-          content: [{ type: 'text', text: `${'f'.repeat(200)}${index}` }]
+          content: [{ type: 'text', text: `😀${'f'.repeat(200)}${index}` }]
         })
       )
       const head = `${filler.join('\n')}\n`

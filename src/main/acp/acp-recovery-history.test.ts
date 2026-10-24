@@ -165,11 +165,16 @@ describe('ACP restart recovery from the agent store', () => {
   })
 
   it('reads nothing with no message in doubt, a damaged journal, or no resumable session', async () => {
-    expect((await windowFor(journal(submission('a', 'x', 'accepted', 1, 2)), [])).window).toBeNull()
+    const accepted = await windowFor(journal(submission('a', 'x', 'accepted', 1, 2)), [])
+    expect(accepted.window).toBeNull()
+    expect(accepted.readStoredUserMessages).not.toHaveBeenCalled()
     const damaged = journal(submission('held', 'x', 'unknown', 1))
-    expect(
-      (await windowFor({ ...damaged, damage: { sequence: 3, cause: 'sequence-gap' } }, [])).window
-    ).toBeNull()
+    const broken = await windowFor(
+      { ...damaged, damage: { sequence: 3, cause: 'sequence-gap' } },
+      []
+    )
+    expect(broken.window).toBeNull()
+    expect(broken.readStoredUserMessages).not.toHaveBeenCalled()
     const readStoredUserMessages = vi.fn(async () => [])
     await expect(
       readAcpRecoveryHistory(

@@ -17,7 +17,7 @@ describe('automatic terminal permissions', () => {
       const settings = agentLaunchSettingsMutationUpdates({}, mutation, platform)
 
       for (const agent of ['claude', 'claude-agent-teams', 'codex'] as const) {
-        const agentArgs = resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
+        const agentArgs = resolveTuiAgentLaunchArgs(agent, settings)
         const startup = buildAgentStartupPlan({
           agent,
           agentArgs,

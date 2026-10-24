@@ -20,12 +20,11 @@ export type AcpTextDrop = {
   producerAgentId?: string
 }
 
-/** Stable turn-relative message positions. */
 export class AcpTurnMessages {
   private readonly turns = new BoundedMap<string, MessagePosition>({ maxEntries: 128 })
   private readonly owners = new BoundedMap<string, MessageOwner>({ maxEntries: 128 })
 
-  /** Channel items inherit the provider message's first turn, including trailing chunks. */
+  /** Keep trailing chunks on the provider message's original turn. */
   owner(turn: string | undefined, update: SessionUpdate): { turn?: string; settled?: boolean } {
     if (
       (update.sessionUpdate !== 'agent_message_chunk' &&

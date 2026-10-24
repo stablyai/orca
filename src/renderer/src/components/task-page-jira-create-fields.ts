@@ -1,5 +1,5 @@
 import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
-import type { JiraCreateField } from '../../../shared/jira-types'
+import type { JiraCreateField } from '../../../shared/jira/jira-types'
 
 // 'assignee' is system here because the dialog renders a dedicated picker for it.
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set([
@@ -9,9 +9,6 @@ const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set([
   'description',
   'assignee'
 ])
-
-/** Jira's own create screen defaults only this field to the authenticated user. */
-export const JIRA_REPORTER_FIELD_KEY = 'reporter'
 
 export const JIRA_ASSIGNEE_FIELD_KEY = 'assignee'
 
@@ -85,6 +82,9 @@ export function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: st
   const trimmed = draftValue.trim()
   if (!trimmed) {
     return undefined
+  }
+  if (isJiraScalarUserCreateField(field)) {
+    return trimmed
   }
   if (field.schema?.type === 'array') {
     const parts = trimmed

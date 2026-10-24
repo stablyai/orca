@@ -1,7 +1,3 @@
-// What a Claude transcript's rows MEAN as a graph, and what makes a branch
-// provable from one snapshot of them. Nothing here touches the filesystem: the
-// readers in `claude-transcript-branch-proof.ts` decide which bytes to feed it.
-
 const MAX_CLAUDE_TRANSCRIPT_ANCESTRY = 10_000
 
 class ClaudeTranscriptMarkerMissingError extends Error {
@@ -13,9 +9,7 @@ class ClaudeTranscriptMarkerMissingError extends Error {
 type TranscriptNode = {
   parentUuid: string | null
   sessionId: string | null
-  /** First line where this UUID was observed in the append-only transcript. */
   lineIndex: number
-  /** UUIDs from result/init/stream frames and sidechains are never leaves. */
   disallowedLeaf: boolean
 }
 
@@ -39,7 +33,6 @@ export class ClaudeTranscriptTailIncompleteError extends Error {
   }
 }
 
-/** The sampled cursor is no longer present, so a root proof may still recover safely. */
 export class ClaudeTranscriptPreviousCursorMissingError extends Error {
   constructor() {
     super(
@@ -87,7 +80,6 @@ function proveAppendOrder(nodes: Map<string, TranscriptNode>): void {
   }
 }
 
-/** Rows Claude's own loader can end a conversation on; titles and markers carry no chain. */
 const TRANSCRIPT_TAIL_TYPES: ReadonlySet<unknown> = new Set([
   'user',
   'assistant',
@@ -98,12 +90,7 @@ const TRANSCRIPT_TAIL_TYPES: ReadonlySet<unknown> = new Set([
 type BranchProofInput = {
   providerSessionId: string
   previousLeafUuid: string | null
-  /**
-   * Which row is the branch tip. `file-tail` proves from the file's last
-   * main-chain row: Claude writes its `last-prompt` marker only sporadically, so
-   * a marker tip hides rows Claude already holds after a crash. Without an
-   * eligible tail row the marker rules apply unchanged. Default: `marker`.
-   */
+  /** Defaults to marker; file-tail includes rows saved after a marker during a crash. */
   tip?: 'marker' | 'file-tail'
 }
 
@@ -185,7 +172,6 @@ function createBranchProof(input: BranchProofInput) {
 
   function finish(): ClaudeTranscriptBranchProof {
     if (input.tip === 'file-tail' && tailUuid) {
-      // The last main-chain row supersedes any marker; the marker lags crashes.
       leafUuid = tailUuid
       leafMarkerLineIndex = tailLineIndex
     }
@@ -202,9 +188,7 @@ function createBranchProof(input: BranchProofInput) {
     const previousLeafUuid = input.previousLeafUuid
     if (!previousLeafUuid) {
       proveMainLineAncestry(nodes, leafUuid, input.providerSessionId)
-      // A branch proof is based on an append-only snapshot. A child that appears
-      // before its claimed parent is not a post-snapshot descendant observation;
-      // accepting that graph would turn reordered/torn rows into durable ancestry.
+      // Reject reordered rows: append-only ancestry requires each parent to precede its children.
       proveAppendOrder(nodes)
       return { leafUuid, relation: 'initial' }
     }
@@ -215,10 +199,7 @@ function createBranchProof(input: BranchProofInput) {
     if (previous.sessionId !== input.providerSessionId || previous.disallowedLeaf) {
       throw transcriptError('previous cursor is not on the main transcript')
     }
-    // The latest marker can be equal to, or descend from, a sampled cursor. In
-    // either case prove the sampled cursor's own ancestry before accepting it;
-    // otherwise a cursor that descended through a parent-tool-use sidechain
-    // could be persisted and resumed as if it were on the main transcript.
+    // Validate the old cursor too; it may itself descend through a disallowed sidechain.
     proveMainLineAncestry(nodes, previousLeafUuid, input.providerSessionId)
     if (leafUuid === previousLeafUuid) {
       proveAppendOrder(nodes)
@@ -250,12 +231,7 @@ function createBranchProof(input: BranchProofInput) {
     throw transcriptError('latest marker is on a sibling branch')
   }
 
-  /** Uuids from the leaf back to (but excluding) the anchor, leaf first. Only
-   *  meaningful after `finish()`, which is what proved the walk reaches the anchor.
-   *
-   *  A walk that does NOT reach the anchor throws rather than returning empty:
-   *  empty is the caller's "nothing followed the anchor", and answering that for
-   *  a broken walk would report non-delivery for records we never looked at. */
+  /** Call after finish(); a broken walk must throw because empty means nothing followed the anchor. */
   function ancestryChain(leafUuid: string, anchorUuid: string): string[] {
     const chain: string[] = []
     let cursor: string | null = leafUuid

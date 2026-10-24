@@ -26,7 +26,6 @@ import {
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -78,7 +77,6 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 7. updateRepo ──────────────────────────────────────────────────
 
   it('updateRepo modifies the repo in place', async () => {
     const store = await createStore()
@@ -362,7 +360,7 @@ describe('Store', () => {
     ).toThrow('Repo-backed project host setup paths must be changed by re-importing the project.')
   })
 
-  // STA-10638: a Git project can't list folder workspaces, so the next refresh purged their tabs.
+  // Git catalogs cannot enumerate sibling folder workspaces; changing kind would strand their tabs (STA-10638).
   it('refuses a folder-to-Git type change while the project has other folder workspaces', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1', path: '/repo', kind: 'folder', displayName: 'Repo' }))
@@ -385,7 +383,7 @@ describe('Store', () => {
     ).toMatchObject({ kind: 'git' })
   })
 
-  // Git accepts any path inside a work tree, so only the top folder may become a Git project.
+  // Git accepts subdirectories; conversion must separately prove this folder is the checkout root.
   it('proves a manual folder-to-Git change against the Git root before writing it', async () => {
     const store = await createStore()
     const root = join(testState.dir, 'project')
@@ -722,7 +720,6 @@ describe('Store', () => {
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
     expect(store.getRepo('r1')!.issueSourcePreference).toBe('origin')
 
-    // Why: `Object.assign` skips undefined, so updateRepo needs an explicit delete branch or the key with value undefined wouldn't clear.
     store.updateRepo({ id: 'r1' }, { issueSourcePreference: undefined })
     expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
 

@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Doubles = {
   store: Map<string, string>
@@ -64,7 +64,7 @@ vi.mock('../transport/host-store', () => ({
 }))
 
 import { savePinnedIds } from '../storage/preferences'
-import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
+import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from './page-storage-keys'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 
@@ -75,6 +75,22 @@ const JOURNAL = 'orca:mobileStructuredSendOperations:v1'
 /** The route every case below mounts for: the one page route with workspace-scoped keys. */
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(async () => {
+  await act(async () => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
+
 async function mount(routePathname = SESSION_ROUTE): Promise<{ view: () => PageHostSnapshotView }> {
   const held: { view: PageHostSnapshotView | null } = { view: null }
   function Probe(): null {
@@ -82,7 +98,7 @@ async function mount(routePathname = SESSION_ROUTE): Promise<{ view: () => PageH
     return null
   }
   await act(async () => {
-    create(createElement(Probe))
+    createTracked(createElement(Probe))
   })
   return {
     view: () => {
@@ -138,10 +154,14 @@ describe('what the shell puts on every init', () => {
     // The device repro: the session screen writes while the page is open, the document reloads,
     // and the `init` answering its ready is built from this map with no read in between. A mirror
     // only the store read refreshed would hand the drawer the repo the user left, an `init` late.
-    writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' })
+    await writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' })
     await savePinnedIds('host-1', new Set(['one']))
     expect(mounted.view().readStorage().storage).toEqual({
-      [LAST_VISITED]: JSON.stringify({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' }),
+      [LAST_VISITED]: JSON.stringify({
+        hostId: 'host-1',
+        worktreeId: 'host-1/repo/wt',
+        byHost: { 'host-1': { worktreeId: 'host-1/repo/wt' } }
+      }),
       [PINS]: '["one"]'
     })
   })
@@ -181,8 +201,10 @@ describe('what the shell puts on every init', () => {
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["mine"]' })
     // And a write for one is refused rather than mirrored, so a later read cannot answer with it.
     await act(async () => {
-      mounted.view().writeStorage('orca:pins:host-2', '["theirs"]')
+      mounted.view().writeStorage('orca:pins:host-2', '["overwritten"]')
     })
+    expect(doubles.writes).toEqual([])
+    expect(doubles.store.get('orca:pins:host-2')).toBe('["theirs"]')
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["mine"]' })
   })
 
@@ -197,6 +219,8 @@ describe('what the shell puts on every init', () => {
     await act(async () => {
       mounted.view().writeStorage('orca:nativeChatTabs:host-1:wt-2', '{}')
     })
+    expect(doubles.writes).toEqual([])
+    expect(doubles.store.get('orca:nativeChatTabs:host-1:wt-2')).toBe('{"tab-9":"chat"}')
     expect(mounted.view().readStorage().storage).toEqual({ [CHAT_TABS]: '{"tab-1":"chat"}' })
   })
 
@@ -283,7 +307,7 @@ describe('a host the app store would not answer for', () => {
     expect(mounted.view().unreadable).toBe(true)
   })
 
-  it('is not the same as a host that is simply not there', async () => {
+  it('reports a readable host without an unreadable-store failure', async () => {
     const mounted = await mount()
     expect(mounted.view().snapshot?.host.id).toBe('host-1')
     expect(mounted.view().unreadable).toBe(false)

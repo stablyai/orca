@@ -1,6 +1,9 @@
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { PaneStartStatus } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type {
+  PaneResumeOutcome,
+  PaneStartStatus
+} from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -42,6 +45,9 @@ export type TerminalState = {
   /** Main's start of a pane's terminal, by pane key, as its layout frames publish it (layout-owner
    *  build). Live state, never saved: a pane with an entry has no terminal of its own yet. */
   terminalPaneStartsByPaneKey: Record<string, TerminalPaneStart>
+  /** Whether main's start of a pane resumed its agent, by pane key, for the terminal it names
+   *  (layout-owner build). Live state, never saved. */
+  terminalPaneResumeOutcomesByPaneKey: Record<string, TerminalPaneResumeOutcome>
   /** Ordinary-park scrollback, tabId -> leafId -> buffer. Never uploaded to a peer; see
    *  WorkspaceSessionState.localOnlyScrollbackByTabId. Read via resolveLeafScrollbackBuffers only. */
   localOnlyScrollbackByTabId: Record<string, Record<string, string>>
@@ -151,3 +157,9 @@ export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppStat
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]
 
 export type TerminalPaneStart = { status: PaneStartStatus; reason?: string }
+/** `ptyGeneration` tells two starts under one terminal id apart (a daemon session id is reused). */
+export type TerminalPaneResumeOutcome = {
+  ptyId: string
+  ptyGeneration?: number
+  outcome: PaneResumeOutcome
+}

@@ -1,6 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-// Wiring the restart reconciler: what provider history is allowed to decide
-// about a submission the crash boundary could only doubt.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -73,7 +71,6 @@ export function registerJournalRestartReconciliationTests(): void {
     return { items, boundaryConsistent: true, turnInFlight: false, ...overrides }
   }
 
-  /** A host that wrote the submission row and died before learning its outcome. */
   async function reopenAfterCrash(
     body: AgentJournalMessageItem = userMessage('deploy the thing'),
     text = 'deploy the thing'
@@ -128,13 +125,12 @@ export function registerJournalRestartReconciliationTests(): void {
       expect(settled).toEqual(['cm_1'])
       const submission = journal.submissions()[0]
       expect(submission?.dispatchState).toBe('rejected')
-      // A sentence, since released clients print the reason as it is, and the fact beside it.
+      // Released clients display reason text directly; preserve wording beside typed facts.
       expect(submission?.reason).toBe(
         agentSessionFailureWords(agentSessionFailureFact('notDelivered'), { surface: 'rejection' })
           .reason
       )
       expect(submission?.rejection).toEqual({ kind: 'notDelivered' })
-      // Nobody failed: the crash stranded it before the provider took it.
       expect(submission && classifyDispatchRejection(submission)).toEqual({
         category: 'undelivered',
         verdict: null,
@@ -248,7 +244,6 @@ export function registerJournalRestartReconciliationTests(): void {
 
     it('does not let an item the journal already committed stand in for a new send', async () => {
       const journal = await open()
-      // An identical message, delivered and committed BEFORE the one that crashed.
       await journal.appendItem(claudeIdentity('uuid-old'), userMessage('deploy the thing'), {
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE

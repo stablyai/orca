@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readCodexNonUserOrigin } from './session-scanner-codex-non-user-origin'
 
-// Payload shapes below mirror real `session_meta` records: `source.subagent` is
-// an externally tagged union, so the spawn record nests under a `thread_spawn`
-// tag and the parent, nickname and path are copied onto the payload's own keys
-// beside it.
+// Mirror the provider union: spawn fields nest under thread_spawn and may also be copied onto the payload.
 function spawnedPayload(threadSpawn: unknown, payloadCopies: Record<string, unknown> = {}) {
   return {
     id: 'child-thread',
@@ -43,7 +40,6 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('reads the agent_type spelling of the role, nested and on the payload', () => {
-    // Codex documents `agent_type` as an alias of `agent_role` in both places.
     expect(readCodexNonUserOrigin(spawnedPayload({ agent_type: 'explorer' }))?.parentage).toEqual({
       parentThreadId: null,
       depth: null,
@@ -63,10 +59,7 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('classifies a non-spawn thread by its tag instead of calling it a role', () => {
-    // `review`, `compact` and `memory_consolidation` are sibling tags naming the
-    // sort of non-user thread. They are not the spawned agent's role — that
-    // field exists only inside a spawn record — and the parent, when there is
-    // one, is stated on the payload's own key.
+    // Review has no spawn record; its parent, if present, comes from the payload.
     const origin = readCodexNonUserOrigin({
       id: 'child-thread',
       thread_source: 'subagent',
@@ -118,9 +111,7 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('classifies machinery Codex ran for itself, not only agents it spawned', () => {
-    // `internal` is the other non-user branch of the same union. Its threads
-    // land in the same history tree and state no spawn record, and a release
-    // that omits `thread_source` leaves the tag as the only signal there is.
+    // Internal machinery may omit thread_source; the structural tag must still exclude it.
     expect(
       readCodexNonUserOrigin({ id: 'child-thread', source: { internal: 'guardian' } })
     ).toEqual({
@@ -139,9 +130,6 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('keeps every thread the user started, whatever its source tag', () => {
-    // Codex's runtime groups these with spawn records as real agent sessions,
-    // so none of them is machinery and none may be hidden. `custom` carries a
-    // label and is still the user's own.
     for (const source of ['cli', 'vscode', 'exec', 'mcp', 'unknown', { custom: 'acme' }]) {
       expect(readCodexNonUserOrigin({ id: 'user-thread', source })).toBeNull()
     }
@@ -156,8 +144,6 @@ describe('readCodexNonUserOrigin', () => {
       })
     )
 
-    // The unreadable parent and the absent depth do not cost the two fields the
-    // record does state.
     expect(origin?.parentage).toEqual({
       parentThreadId: null,
       depth: null,
@@ -201,20 +187,13 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('keeps a thread whose source states no readable tag at all', () => {
-    // A tagged union spells a tag as a bare string or a single-key object, so
-    // none of these is one and none says the thread is not the user's. Reading
-    // one as a spawn would drop their own thread out of their history on a
-    // value that states nothing.
     for (const source of [false, true, 0, 1, '', '   ', [], {}, { a: 1, b: 2 }]) {
       expect(readCodexNonUserOrigin({ id: 'user-thread', source })).toBeNull()
     }
   })
 
   it('classifies on the outer tag even when the kind beneath it is unreadable', () => {
-    // The outer tag is the discriminant: only a non-user source serializes
-    // under this key, so it states the thread is not the user's on its own. The
-    // kind beneath it is detail that later releases may respell, and losing the
-    // spelling must not leak every worker transcript into the user's history.
+    // The outer non-user tag remains authoritative even when future releases change its contents.
     for (const subagent of [false, 0, '', [], { type: 'review', extra: 1 }]) {
       expect(readCodexNonUserOrigin({ id: 'child-thread', source: { subagent } })).toEqual({
         source: 'subagent',
@@ -227,8 +206,6 @@ describe('readCodexNonUserOrigin', () => {
   })
 
   it('keeps a forked user thread, whose lineage is not a spawn parent', () => {
-    // `forked_from_id` and `parent_thread_id` are separate co-existing keys
-    // meaning different things. A forked thread is still the user's own.
     expect(
       readCodexNonUserOrigin({
         id: 'user-thread',

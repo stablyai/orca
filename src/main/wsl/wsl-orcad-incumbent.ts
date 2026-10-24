@@ -4,9 +4,12 @@
  * short-lived stdio bridge. Anything unproven reads as an unverifiable census, never zero.
  */
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../shared/pairing'
+import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
-import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import {
+  type OrcadTerminalCensus,
+  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+} from '../../shared/orcad-terminal-census'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { probeActiveOrcadReadiness } from '../ssh/orcad-active-readiness'
 import { orcadBoundPort } from '../managed-server/lifecycle/orcad-managed-bound-port'
@@ -19,7 +22,7 @@ import {
   requestOrcadTerminalCensus,
   type OrcadTerminalCensusRequestOptions
 } from '../ssh/orcad-terminal-census-client'
-import { updateTerminalCounts } from '../ssh/orcad-update-terminal-counts'
+import { updateTerminalCounts } from '../ssh/orcad-fenced-stop'
 import { tunneledOrcadPairingCode } from '../ssh/orcad-tunneled-pairing'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
@@ -39,16 +42,17 @@ export type WslOrcadIncumbent = {
   releaseAdmission: () => Promise<void>
 }
 
-const UNVERIFIABLE: OrcadTerminalCensus = {
-  liveSessions: null,
-  startedSinceActivation: null,
-  daemonProtocolVersion: null
+type IncumbentArgs = {
+  context: OrcadRemoteContext<WslOrcadHostTarget>
+  slot: OrcadSlotOptions
+  /** This desktop's enrolled pairing; null before its first pairing. */
+  paired?: PairingOffer | null
 }
 
 const UNREADABLE: WslOrcadIncumbent = {
-  census: UNVERIFIABLE,
+  census: UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
   readiness: null,
-  recount: async () => UNVERIFIABLE,
+  recount: async () => UNVERIFIABLE_ORCAD_TERMINAL_CENSUS,
   releaseAdmission: async () => {}
 }
 
@@ -83,10 +87,7 @@ const DEFAULT_DEPENDENCIES: WslOrcadIncumbentDependencies = {
  * the census proves zero), then asks it for its census over a bridge closed before returning.
  */
 export async function readWslOrcadIncumbent(
-  args: {
-    context: OrcadRemoteContext<WslOrcadHostTarget>
-    slot: OrcadSlotOptions
-  },
+  args: IncumbentArgs,
   dependencies: WslOrcadIncumbentDependencies = DEFAULT_DEPENDENCIES
 ): Promise<WslOrcadIncumbent> {
   const record = args.context.activationRecord
@@ -126,7 +127,7 @@ export async function readWslOrcadIncumbent(
 }
 
 async function countIncumbentTerminals(
-  args: { context: OrcadRemoteContext<WslOrcadHostTarget>; slot: OrcadSlotOptions },
+  args: IncumbentArgs,
   readiness: ServeReadiness,
   activatedAt: number,
   dependencies: WslOrcadIncumbentDependencies,
@@ -139,9 +140,12 @@ async function countIncumbentTerminals(
       orcadBoundPort(readiness) ?? ORCAD_MANAGED_REMOTE_PORT,
       args.context.target
     )
-    const offer = parsePairingCode(tunneledOrcadPairingCode(readiness, forward.entry.localPort))
+    // Why the enrolled grant: counting with the startup offer would enroll a new device each start.
+    const offer = parsePairingCode(
+      tunneledOrcadPairingCode(readiness, forward.entry.localPort, args.paired)
+    )
     if (!offer) {
-      return UNVERIFIABLE
+      return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
     }
     return await dependencies.census(
       pairedRuntimeConnectionFromOffer(offer),
@@ -150,7 +154,7 @@ async function countIncumbentTerminals(
       options
     )
   } catch {
-    return UNVERIFIABLE
+    return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   } finally {
     await forward?.close().catch(() => {})
   }

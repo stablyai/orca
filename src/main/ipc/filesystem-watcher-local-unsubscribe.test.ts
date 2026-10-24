@@ -32,11 +32,6 @@ vi.mock('./parcel-watcher-process', async (importOriginal) => {
   }
 })
 
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn(),
-  onSshFilesystemProviderRegistered: () => () => {}
-}))
-
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
   closeLocalWatcherForWorktreePath,
@@ -516,8 +511,7 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
       { sender },
       { worktreePath: '/tmp/repo' }
     ) as Promise<unknown>
-    // Why: unwatch must abort the in-flight install so watchWorktree settles
-    // without waiting for the native subscribe crawl to finish.
+    // Unwatch must settle before the native subscribe crawl finishes.
     const watchSettledEarly = await Promise.race([
       watchPromise.then(() => true),
       new Promise<false>((resolve) => setTimeout(() => resolve(false), 20))

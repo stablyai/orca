@@ -1,4 +1,3 @@
-/** What one daemon publishes about its own terminals for the rest of the host. */
 export type HostTerminalShare = {
   /** Live plus starting terminals of every kind. */
   terminals: number
@@ -13,14 +12,14 @@ export type HostTerminalLedgerEntry = HostTerminalShare & {
   updatedAt: number
 }
 
-// Why a bound: a corrupt or hostile entry must not make every reader sort a huge list.
+// Bound admission history so malformed entries cannot impose unbounded sorting work.
 const MAX_ADMITS = 64
 
 function count(value: unknown): number {
   return Number.isSafeInteger(value) ? Math.max(0, Number(value)) : 0
 }
 
-/** Automatic fields are optional: a daemon from before the shared budget writes only terminals. */
+/** Older daemons publish only terminal counts, so automatic-work fields remain optional. */
 export function parseHostTerminalLedgerEntry(raw: string): HostTerminalLedgerEntry | null {
   let value: unknown
   try {

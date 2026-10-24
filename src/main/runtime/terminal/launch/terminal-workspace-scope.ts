@@ -198,17 +198,19 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       delete cleanBaseEnv[key]
     }
     // Pane identity (ORCA_PANE_KEY/TAB_ID/WORKTREE_ID, jcode dir) is stamped by the spawn step from the spawn's ids.
+    // Why: the window stamps ORCA_WORKSPACE_ID (its ORCA_WORKTREE_ID) for every workspace kind,
+    // and agent wrappers forward it.
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
-      ...this.buildAgentHookPtyEnv?.()
+      ...this.buildAgentHookPtyEnv?.(),
+      ORCA_WORKSPACE_ID: scope.id
     }
     if (!scope.folderWorkspace) {
       return env
     }
     return {
       ...env,
-      ORCA_WORKSPACE_ID: scope.id,
       ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
       ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }

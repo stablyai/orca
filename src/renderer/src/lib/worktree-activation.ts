@@ -7,7 +7,7 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -211,7 +211,7 @@ export function activateAndRevealWorktree(
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
   state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
     postActivationState,
     wt.id
   )

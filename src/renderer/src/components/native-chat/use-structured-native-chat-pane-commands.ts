@@ -71,11 +71,7 @@ export function useStructuredNativeChatPaneCommands({
       groupId && terminalPaneActions === undefined
         ? {
             unifiedTabId: tabId,
-            groupId,
-            shortcutLabels: {
-              right: formatShortcutLabel('terminal.splitRight', keybindings),
-              down: formatShortcutLabel('terminal.splitDown', keybindings)
-            }
+            groupId
           }
         : undefined
   })

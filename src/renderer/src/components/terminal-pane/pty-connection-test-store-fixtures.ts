@@ -13,6 +13,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
       'tab-1': ['tab-pty']
     },
     terminalPaneStartsByPaneKey: {},
+    terminalPaneResumeOutcomesByPaneKey: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: LEAF_1 },

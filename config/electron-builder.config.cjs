@@ -23,6 +23,9 @@ const {
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const {
+  assertNoWindowsExecutablesInRuntimeNodeModules
+} = require('./packaged-windows-only-runtime-files.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const {
   verifyPackagedWindowsAgentHook
@@ -313,6 +316,7 @@ module.exports = {
     // whole asar with it as a compound object and gutted the install (#20966, #20972).
     '!out/relay{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
+    '!{.oxlintrc.json,.oxfmtrc.json,components.json,opencode.json,orca.yaml,pnpm-workspace.yaml,vite.web.config.ts}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
@@ -379,6 +383,7 @@ module.exports = {
     'out/main/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
+    'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
@@ -388,6 +393,7 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
+    'out/main/orcad/orcad-stale-lock-reclaim.js',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',
@@ -461,6 +467,7 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.

@@ -21,13 +21,25 @@ type MobileTerminalTabAgentIdentity = {
   launchAgent?: TuiAgent | null
 }
 
-/** Agent identity Orca owns, excluding the display-only title fallback. */
+/** The host's own pane identity for a terminal tab, as `terminal.list` last reported it. */
+export function getMobileTerminalTabHostAgentIdentity(
+  tab: MobileSessionTab,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): string | undefined {
+  if (tab.type !== 'terminal' || !tab.terminal) {
+    return undefined
+  }
+  return terminals.find((terminal) => terminal.handle === tab.terminal)?.agentIdentity
+}
+
+// Cursor imports Claude hooks, so its host identity corrects that hook misattribution.
 export function resolveMobileTerminalTabOwnedAgentId(
-  tab: MobileTerminalTabAgentIdentity
+  tab: MobileTerminalTabAgentIdentity,
+  hostAgentIdentity?: string | null
 ): string | null {
   const hookAgentType = tab.agentStatus?.agentType?.trim()
   if (hookAgentType && hookAgentType !== 'unknown') {
-    return hookAgentType
+    return hookAgentType === 'claude' && hostAgentIdentity === 'cursor' ? 'cursor' : hookAgentType
   }
   if (tab.launchAgent) {
     return tab.launchAgent
@@ -36,16 +48,23 @@ export function resolveMobileTerminalTabOwnedAgentId(
 }
 
 export function resolveMobileTerminalTabAgentId(
-  tab: MobileTerminalTabAgentIdentity
+  tab: MobileTerminalTabAgentIdentity,
+  hostAgentIdentity?: string | null
 ): string | null {
-  const ownedAgent = resolveMobileTerminalTabOwnedAgentId(tab)
+  const ownedAgent = resolveMobileTerminalTabOwnedAgentId(tab, hostAgentIdentity)
   if (ownedAgent) {
     return ownedAgent
+  }
+  if (hostAgentIdentity === 'cursor') {
+    return 'cursor'
   }
   return resolveExplicitTerminalTitleAgentType(tab.title)
 }
 
-export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
+export function getMobileSessionTabTitle(
+  tab: MobileSessionTab,
+  hostAgentIdentity?: string | null
+): string {
   if (tab.type === 'browser') {
     const title = tab.title.trim()
     if (title && !isBlankBrowserUrl(title)) {
@@ -68,7 +87,7 @@ export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
   // provider icon. Mobile falls back for glyph-only titles because iOS can
   // render the bare status glyph as a stray colored box beside the icon.
-  if (resolveMobileTerminalTabAgentId(tab)) {
+  if (resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)) {
     return stripLeadingAgentTitleDecorationOrEmpty(tab.title) || 'Terminal'
   }
   return tab.title || 'Terminal'

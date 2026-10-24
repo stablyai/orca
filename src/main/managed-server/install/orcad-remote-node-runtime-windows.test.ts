@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRelayDirectory } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import {
   ensureRemoteOrcadNodeRuntime,
   NODE_RUNTIME_PROMOTE_TIMEOUT_MS,
@@ -29,7 +29,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./remote-install-transfers', () => ({ uploadRelayDirectory: vi.fn() }))
+vi.mock('./remote-install-transfers', () => ({ uploadRemoteInstallDirectory: vi.fn() }))
 
 const host = getRemoteHostPlatform('win32-x64')
 const target = 'win32-x64'
@@ -47,7 +47,7 @@ function promoteScript(): string {
 
 beforeEach(() => {
   vi.mocked(execCommand).mockReset()
-  vi.mocked(uploadRelayDirectory).mockReset().mockResolvedValue(undefined)
+  vi.mocked(uploadRemoteInstallDirectory).mockReset().mockResolvedValue(undefined)
 })
 
 describe('Windows runtime store layout', () => {
@@ -79,12 +79,12 @@ describe('Windows runtime store commands', () => {
       .toMatchInlineSnapshot(`
         "$ProgressPreference = 'SilentlyContinue'
         function Get-OrcaSha256([string]$p) { if (Test-Path -LiteralPath $p -PathType Leaf) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() } else { "" } }
-        $runtimeDir = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32'
-        $exe = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32/node.exe'
-        $verified = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32/.verified'
-        if ((Get-OrcaSha256 $exe) -eq 'ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32') {
+        $runtimeDir = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5'
+        $exe = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5/node.exe'
+        $verified = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5/.verified'
+        if ((Get-OrcaSha256 $exe) -eq 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5') {
         if (Test-Path -LiteralPath $verified -PathType Leaf) { Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 }
-        try { $adoptOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join ''; if (($LASTEXITCODE -eq 0) -and ($adoptOut.Trim() -eq 'v24.21.0')) { [IO.File]::WriteAllText($verified, ''); Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 } } catch { }
+        try { $adoptOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join ''; if (($LASTEXITCODE -eq 0) -and ($adoptOut.Trim() -eq 'v24.22.1')) { [IO.File]::WriteAllText($verified, ''); Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 } } catch { }
         }
         Write-Output 'ORCA_NODE_RUNTIME_MISSING'"
       `)
@@ -148,7 +148,6 @@ describe('Windows runtime store commands', () => {
     ]) {
       expect(script).toContain(`Write-Output 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED ${step}'`)
     }
-    // A post-publish change must not leave a marker the warm path would trust.
     expect(script).toMatch(
       /Remove-Item -LiteralPath \$verified -Force -ErrorAction SilentlyContinue; Write-Output 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED node\.exe changed after it was published'/
     )
@@ -190,10 +189,9 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     await ensureRemoteOrcadNodeRuntime({ conn, host, slotDir: relayDir, target, archivePath })
     expect(execCommand).toHaveBeenCalledTimes(1)
     expect(vi.mocked(execCommand).mock.calls[0][2]).toMatchObject({ wrapCommand: false })
-    expect(uploadRelayDirectory).not.toHaveBeenCalled()
+    expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  /** Answers the probe, the store lock and the promote script by what each script does. */
   function answer(promote: string, reprobe = REMOTE_NODE_RUNTIME_MISSING): string[] {
     const scripts: string[] = []
     let probes = 0
@@ -226,18 +224,17 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
     expect(stage).toMatch(
       /^C:\/Users\/u\/\.orca-remote\/runtimes\/\.stage-node-[0-9a-f]{64}-[0-9a-f]{16}$/
     )
-    expect(vi.mocked(uploadRelayDirectory).mock.calls[0][2]).toBe(stage)
+    expect(vi.mocked(uploadRemoteInstallDirectory).mock.calls[0][2]).toBe(stage)
     const locked = scripts.findIndex((s) => s.includes('CreateNew'))
     const promoted = scripts.findIndex((s) => s.includes('Invoke-OrcaPromote'))
     const released = scripts.findIndex(
       (s) => s.startsWith('Remove-Item') && s.includes('.store-lock')
     )
-    // Store GC collects on Windows too, so promotion holds the lock it takes (design D5).
+    // Promotion shares the store lock with GC.
     expect(locked).toBeGreaterThan(0)
     expect(promoted).toBeGreaterThan(locked)
     expect(released).toBeGreaterThan(promoted)
     expect(calls[promoted][2]).toMatchObject({ timeoutMs: NODE_RUNTIME_PROMOTE_TIMEOUT_MS })
-    // The promote script removes its own stage, so no separate cleanup runs.
     expect(scripts.some((s) => s.startsWith('Remove-Item') && s.includes('.stage-node-'))).toBe(
       false
     )
@@ -252,7 +249,7 @@ describe('ensureRemoteOrcadNodeRuntime on Windows', () => {
 
   it('still removes the stage when the upload fails before promote runs', async () => {
     vi.mocked(execCommand).mockResolvedValueOnce(REMOTE_NODE_RUNTIME_MISSING).mockResolvedValue('')
-    vi.mocked(uploadRelayDirectory).mockRejectedValueOnce(new Error('sftp write failed'))
+    vi.mocked(uploadRemoteInstallDirectory).mockRejectedValueOnce(new Error('sftp write failed'))
     await expect(
       ensureRemoteOrcadNodeRuntime({ conn, host, slotDir: relayDir, target, archivePath })
     ).rejects.toThrow('sftp write failed')

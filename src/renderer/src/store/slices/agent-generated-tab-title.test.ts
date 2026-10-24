@@ -1,17 +1,36 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT } from '../../../../shared/agent-tab-title'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
+/** Every `layout.apply` command the window sent, whichever the transport below answers. */
+const sentCommands = vi.hoisted((): unknown[] => [])
+
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) => {
+      const [, method, params] = args
+      if (
+        method === 'layout.apply' &&
+        typeof params === 'object' &&
+        params &&
+        'command' in params
+      ) {
+        sentCommands.push(params.command)
+      }
+      return client.callRuntimeRpc(...args)
+    }
+  }
+})
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -29,9 +48,20 @@ function seedWorktree(store: ReturnType<typeof createTestStore>, enabled: boolea
   return store.getState().createTab(WORKTREE_ID).id
 }
 
+/** The title the window gives the tab: a layout-owner build's main derives it (its twin in
+ *  agent-generated-tab-titles.test.ts), so the window writes none until main's frame. */
+const windowGives = (title: string): string | undefined =>
+  ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
+
 describe('generated agent tab titles', () => {
+  beforeEach(() => {
+    sentCommands.length = 0
+  })
+
   afterEach(() => {
     vi.useRealTimers()
+    // Neither build sends main a generated title: the window keeps its own, main derives its own.
+    expect(sentCommands).not.toContainEqual(expect.objectContaining({ type: 'renameTabs' }))
   })
 
   it('stays disabled by default when agent prompts arrive', async () => {
@@ -69,10 +99,10 @@ describe('generated agent tab titles', () => {
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
     expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
   })
 
@@ -97,7 +127,7 @@ Implement the detailed worker instructions that should not be the short label`,
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Implement the detailed worker'
+      windowGives('Implement the detailed worker')
     )
 
     store.getState().setRuntimeAgentOrchestrationByPaneKey({
@@ -111,10 +141,10 @@ Implement the detailed worker instructions that should not be the short label`,
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Better worker label'
+      windowGives('Better worker label')
     )
     expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
-      'Better worker label'
+      windowGives('Better worker label')
     )
   })
 
@@ -148,7 +178,7 @@ Implement the detailed worker instructions that should not be the short label`
     })
     await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Better worker label'
+      windowGives('Better worker label')
     )
 
     // Why: orchestration metadata is sticky (~30m). A later non-dispatch turn on
@@ -161,7 +191,7 @@ Implement the detailed worker instructions that should not be the short label`
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Better worker label'
+      windowGives('Better worker label')
     )
   })
 
@@ -217,10 +247,10 @@ Old dispatch task that already finished`,
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
     expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
   })
 
@@ -249,7 +279,9 @@ Implement task A worker instructions that should not stick`,
       }
     })
     await layoutApplyTestTransport.settle()
-    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe('Worker A label')
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      windowGives('Worker A label')
+    )
 
     store.getState().setAgentStatus(paneKey, {
       state: 'working',
@@ -263,7 +295,7 @@ Implement task B worker instructions for the next dispatch`,
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Implement task B worker instructions'
+      windowGives('Implement task B worker instructions')
     )
   })
 
@@ -280,7 +312,7 @@ Implement task B worker instructions for the next dispatch`,
     })
     await layoutApplyTestTransport.settle()
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
 
     store.getState().setRuntimeAgentOrchestrationByPaneKey({
@@ -294,7 +326,7 @@ Implement task B worker instructions for the next dispatch`,
     await layoutApplyTestTransport.settle()
 
     expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
-      'Refactor the auth middleware to use JWT'
+      windowGives('Refactor the auth middleware to use JWT')
     )
   })
 
@@ -313,7 +345,7 @@ Implement task B worker instructions for the next dispatch`,
     await layoutApplyTestTransport.settle()
 
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
-    expect(tab.generatedTitle).toBe('Fix the flaky status tests large pasted')
+    expect(tab.generatedTitle).toBe(windowGives('Fix the flaky status tests large pasted'))
     expect(
       trimSpy.mock.contexts.some(
         (context) => String(context).length > GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT
@@ -338,6 +370,14 @@ Implement task B worker instructions for the next dispatch`,
     await layoutApplyTestTransport.settle()
 
     const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main holds both titles and its frame draws them; the window only sent the rename.
+      expect(
+        layoutApplyTestTransport.sentOfType('renameTab').map((command) => command.title)
+      ).toEqual(['Status tests'])
+      expect(tab.generatedTitle).toBeUndefined()
+      return
+    }
     expect(resolveTerminalTabTitle(tab, true)).toBe('Status tests')
     expect(tab.generatedTitle).toBe('Fix the flaky status tests')
   })

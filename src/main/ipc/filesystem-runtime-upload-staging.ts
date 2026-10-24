@@ -26,12 +26,8 @@ export function stagedRuntimeUploadByteLength(source: StagedExternalImportSource
   )
 }
 
-/**
- * @param totalBytesBefore Bytes already staged by earlier sources in the same drop,
- *   so the total ceiling covers the whole drop rather than each source alone.
- * @param options.nameExtensionlessImages Append the sniffed image extension to an
- *   extensionless top-level file; only for Orca-owned destinations like `.orca/drops`.
- */
+/** @param totalBytesBefore Earlier staged bytes in this drop; the ceiling spans all sources.
+ * @param options.nameExtensionlessImages Append a sniffed image suffix only in Orca-owned destinations. */
 export async function stageOneSourceForRuntimeUpload(
   sourcePath: string,
   totalBytesBefore = 0,
@@ -62,8 +58,7 @@ export async function stageOneSourceForRuntimeUpload(
     return {
       sourcePath,
       status: 'staged',
-      // Why: some drag sources hand over images as an extensionless `noname`; the
-      // agent reading the dropped path needs `.png` to know it is an image.
+      // Extensionless drag images need a suffix for agents to recognize their format.
       name: staged.imageExtension ? `${sourceName}.${staged.imageExtension}` : sourceName,
       kind: 'file',
       entries: [staged.entry]
@@ -140,8 +135,7 @@ async function stageFileEntry(
 ): Promise<{ entry: StagedExternalImportEntry; byteLength: number; imageExtension?: string }> {
   const statResult = await lstat(filePath)
   const displayPath = normalizeRelativeUploadPath(relativePath)
-  // Why: a dropped file's relative path is '', so errors would name nothing.
-  // The entry keeps '' — only the message falls back to the file's own name.
+  // Keep the empty relative path in entries, but name the dropped file in errors.
   const displayName = displayPath || basename(filePath)
   if (statResult.isSymbolicLink()) {
     throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayName}'`)
@@ -171,9 +165,7 @@ async function stageFileEntry(
       openedStat.size,
       options.totalBytesBefore + openedStat.size
     )
-    // Why: bytes are read slice-by-slice at upload time, so staging records the
-    // identity the streamer re-checks rather than the body itself. Size alone
-    // would let a same-size replacement slip through between the two calls.
+    // Record identity for upload-time checks; size alone cannot detect same-size replacements.
     return {
       entry: {
         relativePath: displayPath,
@@ -206,7 +198,7 @@ async function assertRealPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
-  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  // ..name is valid; only .. and ../ paths escape.
   if (
     relativeToRoot !== '' &&
     (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))

@@ -54,10 +54,13 @@ function baseScenario(manifest: readonly RecordingScenario[], id: string): Recor
 }
 
 function omitRetiredInventoryAdmission(scenario: RecordingScenario): RecordingScenario {
-  if (scenario.id !== 'inventory-lifecycle.unmount-before-1') {
+  if (
+    scenario.id !== 'inventory-lifecycle.unmount-before-1' &&
+    scenario.id !== 'inventory-lifecycle.reset-before-1'
+  ) {
     return scenario
   }
-  // A late search refusal cannot start an inventory after this owner's unmount.
+  // A late search refusal cannot start an inventory after its owner retires.
   return {
     ...scenario,
     steps: scenario.steps.filter(

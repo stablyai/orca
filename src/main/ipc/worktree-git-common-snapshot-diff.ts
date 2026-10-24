@@ -15,9 +15,7 @@ export type GitCommonSnapshot = {
   didFullScan: boolean
 }
 
-// Why: inode identity distinguishes "worktrees/ was replaced" (prune + re-add
-// recreates the dir) from "its contents changed". The narrow watcher's stream is
-// bound to the old inode and is deaf after a swap, so it must resubscribe.
+// Replaced worktrees directories invalidate inode-bound native streams even when contents appear unchanged.
 export function gitCommonDirectoryIdentity(signature: string): string | null {
   if (signature === 'missing') {
     return null

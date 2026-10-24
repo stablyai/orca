@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createBrowserTabMock, storeState } = vi.hoisted(() => ({
+const { createBrowserTabMock, dispatchEventMock, storeState } = vi.hoisted(() => ({
   createBrowserTabMock: vi.fn(),
+  dispatchEventMock: vi.fn(),
   storeState: {
     value: {} as Record<string, unknown>
   }
@@ -11,7 +12,7 @@ vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
@@ -52,7 +53,7 @@ function captureOpenLinkHandler(): (event: {
         ? target[property as string]
         : new Proxy({}, { get: () => () => noopUnsubscribe })
   })
-  ;(globalThis as { window?: unknown }).window = { api }
+  vi.stubGlobal('window', { api, dispatchEvent: dispatchEventMock })
 
   registerBrowserStateIpcBridge([], () => false)
   if (!handler) {
@@ -64,6 +65,8 @@ function captureOpenLinkHandler(): (event: {
 describe('link-opened Orca tabs', () => {
   beforeEach(() => {
     createBrowserTabMock.mockReset()
+    dispatchEventMock.mockReset()
+    createBrowserTabMock.mockReturnValue({ id: 'new-tab', activePageId: 'new-page' })
   })
 
   it('inherits the opener tab session so an isolated profile cannot leak into the default one', () => {
@@ -136,6 +139,30 @@ describe('link-opened Orca tabs', () => {
       'worktree-1',
       'https://docs.example.com/background',
       expect.objectContaining({ activate: false })
+    )
+  })
+
+  // Why: #18832 — focus left on the opener made Cmd/Ctrl+W close the opener instead.
+  it('moves keyboard focus into a foreground link tab but not a background one', () => {
+    storeState.value = {
+      browserPagesByWorkspace: {
+        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+      },
+      browserTabsByWorktree: {},
+      createBrowserTab: createBrowserTabMock
+    }
+    const handler = captureOpenLinkHandler()
+
+    handler({
+      browserPageId: 'page-1',
+      url: 'https://docs.example.com/background',
+      activate: false
+    })
+    expect(dispatchEventMock).not.toHaveBeenCalled()
+
+    handler({ browserPageId: 'page-1', url: 'https://docs.example.com/foreground' })
+    expect(dispatchEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: { pageId: 'new-page', target: 'webview' } })
     )
   })
 })

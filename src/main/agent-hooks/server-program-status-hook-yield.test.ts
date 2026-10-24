@@ -6,6 +6,7 @@ import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
+import { resolveProgramStatusPresentation } from '../../shared/program-status/presentation'
 
 let dir: string
 let server: AgentHookServer
@@ -97,7 +98,6 @@ describe('OSC 7501 status beside hooks', () => {
     programStatus({ state: 'done', agentType: 'opencode' })
     expect(paneRow()?.state).toBe('done')
     vi.useRealTimers()
-    // The next hook event hands the pane back.
     await openCodeHook('SessionBusy')
     expect(paneRow()?.state).toBe('working')
   })
@@ -195,6 +195,86 @@ describe('OSC 7501 status beside hooks', () => {
     expect(paneRow()?.state).toBe('working')
   })
 
+  describe('a program block beside a hook row', () => {
+    const approvePlan = (): void => {
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: {
+          state: 'blocked',
+          kind: 'permission',
+          message: 'Approve plan',
+          observedAt: Date.now()
+        }
+      })
+      programStatus({ state: 'waiting', agentType: 'opencode', toolInput: 'Approve plan' })
+    }
+
+    it('leaves a turn the hooks settled done, through any hook silence (#31547)', async () => {
+      await openCodeHook('SessionBusy')
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: { state: 'working', observedAt: Date.now() }
+      })
+      programStatus({ state: 'working', agentType: 'opencode' })
+      await openCodeHook('SessionIdle')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      approvePlan()
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()?.state).toBe('done')
+      expect(resolveProgramStatusPresentation(paneRow()).attention).toBeUndefined()
+    })
+
+    it("takes a settled turn's row for an approval in a program turn the hooks missed", async () => {
+      await openCodeHook('SessionIdle')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(1_000)
+      // One output chunk keeps only the latest facet report while preserving lifecycle order.
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: {
+          state: 'blocked',
+          kind: 'permission',
+          message: 'Approve plan',
+          observedAt: Date.now()
+        }
+      })
+      programStatus({ state: 'working', agentType: 'opencode' })
+      programStatus({ state: 'waiting', agentType: 'opencode', toolInput: 'Approve plan' })
+      expect(paneRow()).toMatchObject({ state: 'waiting', toolInput: 'Approve plan' })
+    })
+
+    it('counts new work the program reports right after clearing its records', async () => {
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: { state: 'working', observedAt: Date.now() }
+      })
+      programStatus({ state: 'working', agentType: 'opencode' })
+      await openCodeHook('SessionIdle')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      vi.advanceTimersByTime(1_000)
+      server.ingestProgramStatusFacet({
+        paneKey: PANE,
+        facet: { state: 'blocked', kind: 'permission', observedAt: Date.now() }
+      })
+      programStatus({ state: 'done', agentType: 'opencode' }, { removesProgramStatusRow: true })
+      programStatus({ state: 'working', agentType: 'opencode' })
+      programStatus({ state: 'waiting', agentType: 'opencode', toolInput: 'Approve plan' })
+      expect(paneRow()).toMatchObject({ state: 'waiting', toolInput: 'Approve plan' })
+    })
+
+    it('surfaces an approval the program waits on mid-turn, and takes the row once hooks fall silent', async () => {
+      await openCodeHook('SessionBusy')
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      approvePlan()
+      expect(resolveProgramStatusPresentation(paneRow()).attention).toEqual({
+        kind: 'permission',
+        message: 'Approve plan'
+      })
+      vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+      expect(paneRow()).toMatchObject({ state: 'waiting', toolInput: 'Approve plan' })
+    })
+  })
+
   describe('hybrid: the program facet rides whichever producer owns the row', () => {
     const facet = {
       state: 'working' as const,
@@ -224,7 +304,6 @@ describe('OSC 7501 status beside hooks', () => {
         programStatus: facet
       })
 
-      // Redelivering the same content is not news.
       server.ingestProgramStatusFacet({ paneKey: PANE, facet: { ...facet, observedAt: 2 } })
       expect(published).toHaveLength(1)
     })

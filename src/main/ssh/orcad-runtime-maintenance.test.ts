@@ -2,11 +2,20 @@ import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
-import { recordManagedOrcadMigration } from '../../shared/runtime-environment-managed-orcad-store'
+import {
+  recordManagedOrcadMigration,
+  refreshManagedOrcadPairing
+} from '../../shared/runtime-environment-managed-orcad-store'
+import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import {
+  orcadUpdateFailedThisLaunch,
+  recordOrcadUpdateFailedThisLaunch
+} from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import { orcadMigrationCutoverFixture } from './orcad-migration-cutover-fixture'
 import { writeOrcadMigrationSourceCutover } from './orcad-migration-cutover-journal'
 import {
   createManagedLifecycleHarness,
+  MANAGED_LOCAL_PORT,
   MANAGED_PREVIOUS_VERSION,
   MANAGED_VERSION,
   managedReadiness
@@ -92,6 +101,13 @@ beforeEach(() => {
 
 afterEach(() => rmSync(harness.userDataPath, { recursive: true, force: true }))
 
+function expectEnrolledPairing(): void {
+  const [environment] = listEnvironments(harness.userDataPath)
+  expect(environment?.endpoints[0]?.deviceToken).toBe('device-token')
+  expect(environment?.pairingRevision).toBe(harness.environment.pairingRevision)
+  expect(environment?.orcadDeployment).toEqual(harness.environment.orcadDeployment)
+}
+
 describe('updateManagedOrcadEnvironment', () => {
   it('defers over live or unverifiable terminals and reports the deferral in status', async () => {
     mocks.census.mockResolvedValue({ ...idle, liveSessions: null })
@@ -146,6 +162,53 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(status.deferredUpdate).toBeNull()
   })
 
+  it('keeps a connect from retrying a build an explicit Update also failed', async () => {
+    const host = { kind: 'ssh', id: 'ssh-1' } as const
+    recordOrcadUpdateFailedThisLaunch(host, { code: 'orcad_update_failed', reason: 'rejected' })
+    mocks.deploy.mockResolvedValueOnce({
+      outcome: 'installed-not-activated',
+      fullVersion: 'v3',
+      code: 'orcad_candidate_readiness_rejected',
+      reason: 'rejected again'
+    })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(orcadUpdateFailedThisLaunch(host)).toBe(true)
+  })
+
+  it('refuses Update over a host a newer Orca runs, and lets Force take it', async () => {
+    const newer = {
+      ...harness.context().activationRecord,
+      active: '9.0.0+newer',
+      activeAppVersion: '99.0.0'
+    }
+    mocks.deploy.mockResolvedValue({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(mocks.deploy.mock.calls[0]?.[0].admitRecord(newer, 'v3')).toMatch(/last ran/)
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed', force: true })
+    expect(mocks.deploy.mock.calls[1]?.[0].admitRecord(newer, 'v3')).toBeNull()
+  })
+
+  it('offers Force when Update was refused by policy', async () => {
+    mocks.deploy.mockResolvedValueOnce({
+      outcome: 'installed-not-activated',
+      fullVersion: 'v3',
+      code: 'orcad_activation_policy_refused',
+      reason: 'newer'
+    })
+    await expect(
+      updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    ).resolves.toMatchObject({ outcome: 'deferred', forceable: true })
+  })
+
+  it('lets an explicit Update retry a build a connect remembered as failed', async () => {
+    const host = { kind: 'ssh', id: 'ssh-1' } as const
+    recordOrcadUpdateFailedThisLaunch(host, { code: 'orcad_update_failed', reason: 'rejected' })
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(orcadUpdateFailedThisLaunch(host)).toBe(false)
+    expect(mocks.deploy.mock.calls[0]?.[0]).toMatchObject({ census: idle })
+  })
+
   it('hands the deploy a recount that counts again, so a terminal opened during the upload counts', async () => {
     const opened = { ...idle, liveSessions: 1, inProcessSessions: 1 }
     mocks.census.mockResolvedValueOnce(idle).mockResolvedValue(opened)
@@ -181,13 +244,32 @@ describe('updateManagedOrcadEnvironment', () => {
     ).resolves.toMatchObject({ outcome: 'updated', activeVersion: 'v3' })
   })
 
-  it('re-pairs through the same tunnel, keeping the deployment link, when the offer changed', async () => {
-    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
-    mocks.probe.mockResolvedValueOnce(managedReadiness('rotated-token'))
+  it('keeps a pairing the terminal count repaired, not the one read before it', async () => {
+    mocks.census.mockImplementationOnce(async () => {
+      refreshManagedOrcadPairing(
+        harness.userDataPath,
+        'environment-1',
+        encodePairingOffer({
+          v: PAIRING_OFFER_VERSION,
+          endpoint: `ws://127.0.0.1:${MANAGED_LOCAL_PORT}/`,
+          deviceToken: 'repaired-token',
+          publicKeyB64: 'public-key'
+        })
+      )
+      return idle
+    })
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'already-active', fullVersion: MANAGED_VERSION })
+    mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
     await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     const [environment] = listEnvironments(harness.userDataPath)
-    expect(environment?.endpoints[0]?.deviceToken).toBe('rotated-token')
-    expect(environment?.orcadDeployment).toEqual(harness.environment.orcadDeployment)
+    expect(environment?.endpoints[0]?.deviceToken).toBe('repaired-token')
+  })
+
+  it('keeps the enrolled grant when the updated server offers a new device', async () => {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expectEnrolledPairing()
   })
 })
 
@@ -295,6 +377,36 @@ describe('rollbackManagedOrcadEnvironment', () => {
     })
     expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
   })
+
+  it('keeps the enrolled grant when the restored server offers a new device', async () => {
+    mocks.rollback.mockResolvedValueOnce({
+      outcome: 'rolled-back',
+      target: MANAGED_PREVIOUS_VERSION,
+      discarded: [MANAGED_VERSION],
+      verdict: { decision: 'activate', coverage: 'pty-spawn', warnings: [] }
+    })
+    mocks.probe.mockResolvedValueOnce(managedReadiness('startup-offer-token'))
+    await rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expectEnrolledPairing()
+  })
+
+  it('hands the rollback a recount that closes admission, and a reopen that only reopens it', async () => {
+    mocks.rollback.mockResolvedValueOnce({ outcome: 'refused', code: 'x', reason: 'y' })
+    await rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    const options = mocks.rollback.mock.calls[0]?.[0]
+    // The count here is unfenced; rollbackOrcad recounts under the host lock.
+    expect(mocks.census.mock.calls.map((call) => call[4]?.closeAdmissionForMs)).toEqual([undefined])
+    await options.recountCensus()
+    await options.releaseIncumbentAdmission()
+    expect(mocks.census.mock.calls.map((call) => call[4])).toEqual([
+      { releaseFinishedAutomationTerminals: true },
+      {
+        releaseFinishedAutomationTerminals: true,
+        closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS
+      },
+      { closeAdmissionForMs: 0 }
+    ])
+  })
 })
 
 describe('recoverManagedOrcadEnvironment', () => {
@@ -322,5 +434,16 @@ describe('recoverManagedOrcadEnvironment', () => {
       recoverManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     ).resolves.toMatchObject({ outcome: 'recovered', activeVersion: MANAGED_VERSION })
     expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+  })
+
+  it('keeps the enrolled grant when the recovered server offers a new device', async () => {
+    mocks.recover.mockResolvedValueOnce({
+      outcome: 'recovered',
+      resolution: 'restored-incumbent',
+      activeVersion: MANAGED_VERSION,
+      readiness: managedReadiness('startup-offer-token')
+    })
+    await recoverManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expectEnrolledPairing()
   })
 })

@@ -9,6 +9,9 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 type FakeHost = {
   lock: string | null
   alive: Set<number>
+  /** Start ticks of each live PID; a restarted distro gives a reused PID other ticks. */
+  ticks: Map<number, string>
+  guestAnswers: boolean
   pidFiles: Map<string, number>
   record: unknown
   transaction: unknown
@@ -23,6 +26,8 @@ type FakeHost = {
 const host = vi.hoisted((): FakeHost => ({
   lock: null,
   alive: new Set(),
+  ticks: new Map(),
+  guestAnswers: true,
   pidFiles: new Map(),
   record: null,
   transaction: null,
@@ -38,9 +43,27 @@ vi.mock('../managed-server/install/orcad-remote-record-file', () => ({
   readBoundedOrcadRemoteRecord: async () =>
     host.lock === null ? { state: 'absent' } : { state: 'present', raw: host.lock }
 }))
+const BOOT_ID = '0f6e1d2c-3b4a-4958-8776-655443322110'
+const LOCK_TICKS = '4242'
+function procStat(pid: number, ticks: string): string {
+  return `${pid} (node) S ${Array.from({ length: 18 }, () => '0').join(' ')} ${ticks} 0`
+}
+vi.mock('../ssh/remote-exec/remote-exec-command', () => ({
+  execCommand: async (_conn: unknown, command: string) => {
+    host.commands.push(command)
+    if (!host.guestAnswers) {
+      throw new Error('wsl.exe did not answer')
+    }
+    const pid = Number(/cat \/proc\/(\d+)\/stat 2>/.exec(command)?.[1])
+    const stat = host.alive.has(pid) ? procStat(pid, host.ticks.get(pid) ?? LOCK_TICKS) : ''
+    const section = '--orca-identity--'
+    return `${BOOT_ID}\n${section}\n${procStat(1, '1')}\n${section}\n${stat}\n${section}\n`
+  }
+}))
 vi.mock('../managed-server/install/orcad-remote-runtime-control', () => ({
   execOrcadRemote: async (_slot: unknown, command: string) => {
     host.commands.push(command)
+    // A bare kill -0 sees any process with the PID, whatever it now is.
     const kill = /kill -0 (\d+)/.exec(command)
     if (kill) {
       return host.alive.has(Number(kill[1])) ? 'LIVE\n' : 'DEAD\n'
@@ -121,6 +144,8 @@ function lockFor(pid: number, version: string): string {
   return JSON.stringify({
     pid,
     startedAtMs: 1,
+    linuxStartTicks: LOCK_TICKS,
+    bootId: BOOT_ID,
     identity: '1000',
     version,
     acquiredAt: '2026-10-11T00:00:00.000Z',
@@ -153,6 +178,8 @@ describe('adopting an orcad the activation record does not name', () => {
   beforeEach(() => {
     host.lock = null
     host.alive.clear()
+    host.ticks.clear()
+    host.guestAnswers = true
     host.pidFiles.clear()
     host.transaction = null
     host.stopTarget = null
@@ -176,7 +203,7 @@ describe('adopting an orcad the activation record does not name', () => {
     expect(host.commands).toContain(
       `(umask 077 && printf '%s\\n' 500 > '/home/u/.orca-remote/orcad-${OLD}/.orcad-pid')`
     )
-    expect(host.commands.some((command) => /\bkill\b(?! -0)/.test(command))).toBe(false)
+    expect(host.commands.some((command) => /\bkill\b/.test(command))).toBe(false)
   })
 
   it('records an orcad from a different version as active, keeping the recorded one as previous', async () => {
@@ -219,6 +246,51 @@ describe('adopting an orcad the activation record does not name', () => {
     host.lock = JSON.stringify({ ...JSON.parse(lockFor(800, OLD)), role: 'desktop' })
     host.alive.add(800)
     await expect(adopt(record())).resolves.toEqual({ outcome: 'none' })
+    expect(host.writes).toEqual([])
+  })
+
+  it('matches a lock that recorded its boot id in upper case', async () => {
+    host.lock = JSON.stringify({ ...JSON.parse(lockFor(530, OLD)), bootId: BOOT_ID.toUpperCase() })
+    host.alive.add(530)
+    host.stopTarget = stopTargetFor(530, OLD)
+    await expect(adopt(record())).resolves.toMatchObject({ outcome: 'adopted', pid: 530 })
+  })
+
+  it('does not adopt a lock whose PID a distro restart gave to another process', async () => {
+    // The stale lock and readiness both still name pid 500, so only process identity can tell.
+    host.lock = lockFor(500, OLD)
+    host.alive.add(500)
+    host.ticks.set(500, '977')
+    host.stopTarget = stopTargetFor(500, OLD)
+    await expect(adopt(record({ active: NEW }))).resolves.toEqual({ outcome: 'none' })
+    expect(host.writes).toEqual([])
+  })
+
+  it('never reads an unanswered guest or an unprovable lock as a live holder', async () => {
+    host.lock = lockFor(510, OLD)
+    host.alive.add(510)
+    host.stopTarget = stopTargetFor(510, OLD)
+    host.guestAnswers = false
+    await expect(adopt(record({ active: NEW }))).resolves.toEqual({ outcome: 'none' })
+    host.guestAnswers = true
+    // A writer that predates the kernel incarnation leaves only a drifting wall-clock start.
+    const { linuxStartTicks: _ticks, bootId: _boot, ...legacy } = JSON.parse(lockFor(510, OLD))
+    host.lock = JSON.stringify(legacy)
+    await expect(adopt(record({ active: NEW }))).resolves.toEqual({ outcome: 'none' })
+    expect(host.writes).toEqual([])
+  })
+
+  it('refuses to adopt when the holder cannot be re-proven under the fence', async () => {
+    host.lock = lockFor(520, OLD)
+    host.alive.add(520)
+    host.stopTarget = stopTargetFor(520, OLD)
+    const reads = { count: 0 }
+    host.record = record()
+    const answers = vi.spyOn(host.alive, 'has').mockImplementation(() => reads.count++ === 0)
+    await expect(adoptUnrecordedWslOrcad(slot, record(), () => NOW)).rejects.toThrow(
+      /changed while it was being adopted/
+    )
+    answers.mockRestore()
     expect(host.writes).toEqual([])
   })
 

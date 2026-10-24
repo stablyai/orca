@@ -28,9 +28,9 @@ on:
         type: boolean
         default: false
       fast_runners:
-        description: Use faster runners where the platform and architecture are available
+        description: Use Blacksmith where the platform and architecture are available
         type: boolean
-        default: false
+        default: true
   # Release and dev builds qualify every platform for the template they ship.
   workflow_call:
     inputs:
@@ -43,9 +43,9 @@ on:
         type: boolean
         default: false
       fast_runners:
-        description: Use faster runners where the platform and architecture are available
+        description: Use Blacksmith where the platform and architecture are available
         type: boolean
-        default: false
+        default: true
   # Requalify fresh builds daily; publish missing immutable Windows cache keys.
   schedule:
     - cron: '30 11 * * *'
@@ -63,7 +63,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
@@ -78,6 +78,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
       - name: Detect headless-server build and test inputs
         id: scope
@@ -154,14 +155,14 @@ jobs:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
     # Keep platform keys stable for slot names and Windows cross-compilation.
     runs-on: >-
-      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-large","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"orca-windows-11-arm64-8core"}')[matrix.os] || matrix.os }}
+      ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15","macos-15-intel":"macos-15-intel","windows-2022":"blacksmith-8vcpu-windows-2025","windows-11-arm":"windows-11-arm"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
-      JOBS: ${{ inputs.fast_runners && 'max' || '' }}
+      JOBS: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'max' || '' }}
     steps:
       - name: Parallelize Windows checkout
-        if: inputs.fast_runners && runner.os == 'Windows'
+        if: (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && runner.os == 'Windows'
         shell: bash
         run: |
           git config --global checkout.workers 0
@@ -335,7 +336,7 @@ jobs:
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -378,7 +379,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328
           - os: ubuntu-24.04-arm
             image: quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9
-    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     container: ${{ matrix.image }}
     timeout-minutes: 25
     env:
@@ -440,7 +441,7 @@ jobs:
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) &&
       (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
       needs.changes.outputs.native_compatibility != 'false') }}
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -502,7 +503,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04-arm]
-    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -526,7 +527,7 @@ jobs:
             -e ORCA_BACKGROUND_LAUNCH=1 \
             -v "$VERIFICATION_CACHE_PATH:/root/.cache/pnpm/lockfile-verified.jsonl" \
             -v "$GITHUB_WORKSPACE:/work" -w /work \
-            node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 sleep infinity
+            node:24.22.1-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d sleep infinity
           docker exec -i orcad-alpine sh -s <<'NODE_SERVER_PREPARATION'
           set -eu
           apk add --no-cache bash git libstdc++ python3 make g++
@@ -568,7 +569,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

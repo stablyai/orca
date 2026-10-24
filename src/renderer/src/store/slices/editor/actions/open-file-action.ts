@@ -11,8 +11,7 @@ import {
   takeNextEditorFocusRequestToken
 } from '../focus/editor-focus-reveal'
 import { applyOpenFileToState, type OpenFileApplyScratch } from './open-file-apply'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { recordReopenedEditorFileInLayoutOwner } from '../tabs/editor-tab-layout-owner'
+import { afterPendingTab, pendingTabGroupId } from '@/runtime/layout-owner-pending-tabs'
 
 export function createOpenFileAction(
   set: EditorSet,
@@ -21,7 +20,9 @@ export function createOpenFileAction(
   const open = (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options: OpenFileOptions | undefined,
-    linkIntent: EditorOpenLinkIntent | null
+    linkIntent: EditorOpenLinkIntent | null,
+    /** The view once it is drawn; null when none was. */
+    onShown?: (result: EditorOpenResult | null) => void
   ): { fileId: string; result: EditorOpenResult | null } => {
     const editorItemWorktreeId = file.worktreeId
     const scratch: OpenFileApplyScratch = {
@@ -30,7 +31,6 @@ export function createOpenFileAction(
       editorItemIsPreview: false,
       refused: false
     }
-    const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get() : null
     set((s) => applyOpenFileToState(s, file, options, scratch, linkIntent))
     if (scratch.refused) {
       return { fileId: scratch.editorItemFileId, result: null }
@@ -51,48 +51,59 @@ export function createOpenFileAction(
       editorTabContentTypeForMode(file.mode),
       scratch.editorItemIsPreview,
       scratch.editorItemTargetGroupId,
-      options?.selection
+      options?.selection,
+      options?.groupIndex
     )
-    if (ORCA_LAYOUT_OWNER_IS_MAIN && before) {
-      recordReopenedEditorFileInLayoutOwner(
-        before,
-        get(),
-        editorItemWorktreeId,
-        editorItemViewStateId
+    const settled: { ran: boolean; result: EditorOpenResult | null } = { ran: false, result: null }
+    // Why after: a layout-owner build draws a new tab only with main's frame; today's is drawn already.
+    afterPendingTab(editorItemViewStateId, (shownId) => {
+      settled.ran = true
+      if (shownId === null) {
+        onShown?.(null)
+        return
+      }
+      if (options?.focusEditor) {
+        set({
+          pendingEditorFocusRequest: {
+            fileId: scratch.editorItemFileId,
+            worktreeId: editorItemWorktreeId,
+            viewStateId: shownId,
+            expiresAt: Date.now() + EDITOR_FOCUS_REQUEST_TTL_MS,
+            token: takeNextEditorFocusRequestToken()
+          }
+        })
+      }
+      // Why: openWorkspaceEditorItem falls back to the file id when no tab exists; that is not a view.
+      const view = (get().unifiedTabsByWorktree?.[editorItemWorktreeId] ?? []).find(
+        (tab) => tab.id === shownId && tab.entityId === scratch.editorItemFileId
       )
-    }
-    if (options?.focusEditor) {
-      set({
-        pendingEditorFocusRequest: {
-          fileId: scratch.editorItemFileId,
-          worktreeId: editorItemWorktreeId,
-          viewStateId: editorItemViewStateId,
-          expiresAt: Date.now() + EDITOR_FOCUS_REQUEST_TTL_MS,
-          token: takeNextEditorFocusRequestToken()
-        }
-      })
-    }
-    // Why: openWorkspaceEditorItem falls back to the file id when no tab exists; that is not a view.
-    const view = (get().unifiedTabsByWorktree?.[editorItemWorktreeId] ?? []).find(
-      (tab) => tab.id === editorItemViewStateId && tab.entityId === scratch.editorItemFileId
-    )
-    return {
-      fileId: scratch.editorItemFileId,
-      result: view
+      settled.result = view
         ? { fileId: scratch.editorItemFileId, viewStateId: view.id, groupId: view.groupId }
         : null
-    }
+      onShown?.(settled.result)
+    })
+    // A tab main has yet to draw: the view the window proposed, shown once its frame is in.
+    const proposedGroupId =
+      pendingTabGroupId(editorItemViewStateId) ?? scratch.editorItemTargetGroupId
+    const proposed = proposedGroupId
+      ? {
+          fileId: scratch.editorItemFileId,
+          viewStateId: editorItemViewStateId,
+          groupId: proposedGroupId
+        }
+      : null
+    return { fileId: scratch.editorItemFileId, result: settled.ran ? settled.result : proposed }
   }
 
   return {
     openFile: (file, options) => open(file, options, null).fileId,
-    openFileForLink: (file, options, intent) => {
-      const { result } = open(file, { ...options, focusEditor: true }, intent)
-      // Why: created and reused views must land identically; creating in another group leaves focus behind.
-      if (result) {
-        get().focusGroup?.(file.worktreeId, result.groupId)
-      }
-      return result
-    }
+    openFileForLink: (file, options, intent, onShown) =>
+      open(file, { ...options, focusEditor: true }, intent, (result) => {
+        // Why: created and reused views must land identically; creating in another group leaves focus behind.
+        if (result) {
+          get().focusGroup?.(file.worktreeId, result.groupId)
+        }
+        onShown?.(result)
+      }).result
   }
 }

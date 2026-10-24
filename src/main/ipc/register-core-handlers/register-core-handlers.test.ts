@@ -399,15 +399,15 @@ vi.mock('../terminal-render-desync-evidence', () => ({
   registerTerminalRenderDesyncEvidenceHandler: registerTerminalRenderDesyncEvidenceHandlerMock
 }))
 
-vi.mock('../linear', () => ({
+vi.mock('../linear/register-handlers', () => ({
   registerLinearHandlers: registerLinearHandlersMock
 }))
 
-vi.mock('../jira', () => ({
+vi.mock('../jira/register-handlers', () => ({
   registerJiraHandlers: registerJiraHandlersMock
 }))
 
-vi.mock('../jira-issue-summary-generation', () => ({
+vi.mock('../jira/issue-summary-generation', () => ({
   registerJiraIssueSummaryGenerationHandlers: registerJiraIssueSummaryGenerationHandlersMock
 }))
 
@@ -710,8 +710,7 @@ describe('registerCoreHandlers', () => {
     )
   })
 
-  // Session history and terminal resume are not chats: the refusal chats get leaves them no host
-  // to check, and any other host failure still fails them.
+  // Chat refusal must not disable session history/resume; other ownership failures still propagate.
   it('serves session history while chats are refused', async () => {
     const aiVaultOptions = registeredAiVaultOptions
     expect(aiVaultOptions).toBeDefined()
@@ -756,8 +755,7 @@ describe('registerCoreHandlers', () => {
   })
 
   it('only registers IPC handlers once but always updates web contents id', () => {
-    // The first test already called registerCoreHandlers, so the module-level
-    // guard is now set. beforeEach reset all mocks, so call counts are 0.
+    // The module registration guard survived prior tests while mocks were reset.
     const store2 = { marker: 'store2' }
     const runtime2 = { marker: 'runtime2', getAgentBrowserBridge: () => null }
     const stats2 = { marker: 'stats2' }
@@ -784,16 +782,12 @@ describe('registerCoreHandlers', () => {
       42
     )
 
-    // Web contents ID should always be updated
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(42)
-    // IPC handlers should NOT be registered again
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()
     expect(registerBrowserHandlersMock).not.toHaveBeenCalled()
-    // Why: ipcMain.handle throws on duplicate channel registration, so the
-    // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
   })
 })

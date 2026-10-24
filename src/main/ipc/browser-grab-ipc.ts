@@ -39,28 +39,23 @@ function queueGrabModeOperation(
 
 export function resetGrabModeState(): void {
   grabModeIntentByPageId.clear()
-  // Why: a stale in-flight chain from a prior registration would block new operations forever.
+  // Retired registrations must not leave chains blocking new operations.
   grabModeOperationByPageId.clear()
 }
 
 export function disposeGrabModeStateForPage(browserPageId: string): void {
   grabModeIntentByPageId.delete(browserPageId)
-  // Why: don't let a reused browserPageId queue behind the destroyed guest's pending chain.
+  // Reused page IDs must not queue behind destroyed guests.
   grabModeOperationByPageId.delete(browserPageId)
 }
 
-/**
- * Why previews need their own disposal path: a browser page announces its own death on
- * `browser:unregisterGuest`, and a preview never does — it withdraws by revoking its grant, which
- * is also what a re-mint does. Without this, every grant leaves an intent entry behind forever.
- */
+// Previews withdraw through grant revocation, not unregisterGuest; dispose their retained intent then.
 let disposePreviewGrantSubscription: (() => void) | null = null
 
 function subscribeToPreviewGrantRevocation(): void {
   disposePreviewGrantSubscription?.()
   disposePreviewGrantSubscription = onDocPreviewGrantRevoked((grant) => {
-    // Why cancel first: a grab still armed on that guest would otherwise leave the renderer's
-    // await hanging on a surface the reader has already closed.
+    // Settle pending grabs before disposing the guest's intent.
     browserManager.cancelGrabOp(grant.browserPageId, 'evicted')
     disposeGrabModeStateForPage(grant.browserPageId)
   })
@@ -89,7 +84,7 @@ export function registerBrowserGrabHandlers(): void {
         grabModeIntentByPageId.get(args.browserPageId) === intent
       let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!guest && args.enabled) {
-        // Why: fast file:// pages can expose the toolbar before did-attach registration reaches main.
+        // Fast file pages can expose tools before guest registration reaches main.
         await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
           () => {}
         )
@@ -131,10 +126,7 @@ export function registerBrowserGrabHandlers(): void {
       if (!guest) {
         return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
       }
-      // Why: no hasActiveGrabOp guard here — awaitGrabSelection already handles
-      // the conflict by cancelling the previous op. Blocking at the IPC layer
-      // would create a race window where rearm() fails if the previous IPC call
-      // hasn't fully resolved yet.
+      // awaitGrabSelection cancels previous grabs; an extra active-op guard would race rearming.
       return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)
     }
   )
@@ -143,8 +135,7 @@ export function registerBrowserGrabHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
-    // Why: verify the sender actually owns this tab, consistent with the
-    // authorization check in setGrabMode/awaitGrabSelection/captureScreenshot.
+    // Resolve through sender ownership, as the other grab channels do.
     const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
     if (!guest) {
       return false

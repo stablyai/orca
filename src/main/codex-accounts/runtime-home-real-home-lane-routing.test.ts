@@ -20,7 +20,7 @@ import {
   writePaneRegistry
 } from './runtime-home-service-test-harness'
 
-// Why: temp homes exceed sun_path on macOS but not on Linux; keep asserted config bytes host-independent.
+// Keep asserted config bytes independent of platform socket-path limits.
 vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   applyCodexDaemonSocketGuard: (config: string) => config
@@ -82,8 +82,8 @@ describe('CodexRuntimeHomeService', () => {
       })
     ).toBeNull()
     if (process.platform !== 'win32') {
-      // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
-      // must not invoke an ambient WSL bash while evaluating this contract.
+      // Avoid ambient WSL bash: shell-startup home discovery is a POSIX-host contract.
+
       writeFileSync(
         join(testState.fakeHomeDir, '.zshrc'),
         'export CODEX_HOME="$HOME/shell-custom-codex-home"\n',
@@ -100,8 +100,8 @@ describe('CodexRuntimeHomeService', () => {
     process.env.CODEX_HOME = getRuntimeCodexHomePath()
     process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
     try {
-      // Background fetchers prefer ambient CODEX_HOME when passed null, so an
-      // explicit path proves nested Orca launches cannot poll the managed home.
+      // Pin the path so nested Orca cannot poll an inherited managed CODEX_HOME.
+
       expect(service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getSystemCodexHomePath()

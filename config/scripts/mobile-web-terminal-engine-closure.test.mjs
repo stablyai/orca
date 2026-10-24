@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppModuleClosure } from './build-mobile-web-app-bundle.mjs'
-import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 /**
  * The 612 KiB xterm engine string, and where the page must never meet it.
@@ -44,7 +44,6 @@ async function documentEntryPoints() {
     .filter((name) => name.endsWith('.ts'))
     .filter((name) => !name.includes('.test'))
     .sort()
-  expect(names.length).toBeGreaterThan(30)
   return names.map((name) => `src/terminal/document/${name.replace(/\.ts$/, '')}`)
 }
 

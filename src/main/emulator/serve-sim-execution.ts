@@ -60,7 +60,6 @@ function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
   return env
 }
 
-// Cached per process: materialization is a one-time copy; later calls only stat.
 let materializedServeSimPackageDir: string | null | undefined
 
 function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): string | null {
@@ -87,9 +86,7 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
     (process.platform === 'darwin'
       ? join(app.getPath('exe'), '..', '..', 'Resources')
       : join(app.getPath('exe'), '..', 'resources'))
-  // macOS releases used to copy serve-sim to Resources/serve-sim explicitly.
-  // The runtime closure now owns a single copy under Resources/node_modules;
-  // keep the root path first so already-installed bundles continue to work.
+  // Prefer the legacy Resources/serve-sim path for already-installed bundles.
   for (const bundledPackageDir of [
     join(bundledResourcesPath, 'serve-sim'),
     join(bundledResourcesPath, 'node_modules', 'serve-sim')
@@ -99,9 +96,7 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
       continue
     }
     if (process.platform === 'darwin') {
-      // Why: the bundled camera dylib is signed but has no Gatekeeper ticket
-      // (iOS-simulator arch), so injecting it from the quarantined app bundle
-      // can trip syspolicyd; run serve-sim from an unquarantined copy instead.
+      // Materialize an unquarantined copy so Gatekeeper accepts the injected simulator dylib.
       const materializedDir = resolveMaterializedServeSimPackageDir(bundledPackageDir)
       if (materializedDir) {
         return {

@@ -7,14 +7,56 @@ import {
   type OrcadTunnelIdentity
 } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { tunneledOrcadPairingCode } from '../ssh/orcad-tunneled-pairing'
+import { getPreferredPairingOffer } from '../../shared/runtime-environments'
+import {
+  buildWithPairingRepair,
+  type ManagedOrcadPairingRecovery
+} from '../managed-server/lifecycle/orcad-managed-tunnel-pairing-recovery'
 import type { WslOrcadLaunch } from './wsl-orcad-deploy'
 
-/** Reconnect with the enrolled grant and host key; startup offers only enroll new clients. */
+/** The managed repair gate a refused enrolled token goes through, for one WSL host. */
+export type WslOrcadPairingRecovery = Omit<ManagedOrcadPairingRecovery, 'ensure'> & {
+  environmentId: string
+}
+
+/**
+ * Reconnect with the enrolled grant and host key; startup offers only enroll new clients. A token
+ * the host refuses re-pairs through the gate once, then must verify under the new pairing.
+ */
 export async function resolveWslOrcadPairing(
   launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
   localPort: number,
   paired: PairingOffer | null,
-  verifyIdentity = verifyWslOrcadIdentity
+  verifyIdentity = verifyWslOrcadIdentity,
+  recovery?: WslOrcadPairingRecovery
+): Promise<string> {
+  const verified = (offer: PairingOffer | null) =>
+    verifyWslOrcadPairing(launch, localPort, offer, verifyIdentity)
+  // Why only an enrolled token: a first pairing has nothing to repair.
+  if (!recovery || !paired) {
+    return verified(paired)
+  }
+  let pairingOffer = ''
+  await buildWithPairingRepair(
+    {
+      ...recovery,
+      ensure: async (environment) => {
+        pairingOffer = await verified(getPreferredPairingOffer(environment))
+      }
+    },
+    recovery.environmentId,
+    async () => {
+      pairingOffer = await verified(paired)
+    }
+  )
+  return pairingOffer
+}
+
+async function verifyWslOrcadPairing(
+  launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
+  localPort: number,
+  paired: PairingOffer | null,
+  verifyIdentity: typeof verifyWslOrcadIdentity
 ): Promise<string> {
   const pairingOffer = tunneledOrcadPairingCode(launch.readiness, localPort, paired)
   const identity = await verifyIdentity(pairingOffer, launch.readiness)

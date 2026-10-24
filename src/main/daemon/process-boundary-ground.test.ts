@@ -9,8 +9,7 @@ import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { TerminalSnapshot } from './types'
 
-// Why this suite: a new process must inherit none of a dead process's input
-// modes, whichever boundary (cold-restore seed or proven crash) starts it.
+// Recovery must ground dead-program input modes at both cold restore and a proven crash.
 
 const DEAD_PROCESS_ARMS = '\x1b[?1004h\x1b[?1h\x1b=\x1b[?66h\x1b[?2004h\x1b[?1002h\x1b[?1006h'
 const ARMED_TRAILERS = [
@@ -85,7 +84,7 @@ describe('process boundary ground at a cold restore', () => {
   })
 
   it('rebases a zero-record first fold even when TerminalModes cannot see the stale modes', async () => {
-    // Focus and keypad have no TerminalModes field, so only the trailer shows them.
+    // Focus and keypad modes are visible only in serialized trailers, outside TerminalModes.
     const dead = emulator(DAEMON_RESTORE_SCROLLBACK_ROWS)
     write(dead, 'OLD_OUTPUT\r\n$ \x1b[?1004h\x1b[?66h')
     const deadSnapshot = dead.getSnapshot()
@@ -137,7 +136,7 @@ describe('process boundary ground at a proven crash', () => {
       isAlive: () => true
     })
 
-    // The prompt's 133;A: focus armed before any marker is the host's and survives the ground.
+    // Focus armed before the first prompt belongs to the host and survives recovery.
     const data = `\x1b]133;A\x07$ tui\r\n\x1b[?1049h${DEAD_PROCESS_ARMS}TUI\x1b]133;D;137\x07\x1b[?2004h$ `
     barrier.accept({ data, rawStartSeq: 0, rawEndSeq: data.length, transformed: false })
 

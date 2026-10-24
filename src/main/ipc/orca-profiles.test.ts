@@ -89,8 +89,7 @@ const ipcEvent = { sender: { isDestroyed: () => false, send: vi.fn() } }
 
 describe('registerOrcaProfileHandlers', () => {
   beforeEach(() => {
-    // Why the port and per-test: userData resolves through AppEnvironment now, and
-    // the global setup's beforeEach reinstates its own fake before this runs.
+    // Reinstall AppEnvironment per test after global beforeEach resets its fake.
     installFakeAppEnvironment({ getPath: () => '/tmp/orca-user-data' })
     vi.useFakeTimers()
     handlers.clear()
@@ -194,8 +193,7 @@ describe('registerOrcaProfileHandlers', () => {
 
     expect(appRelaunchMock).toHaveBeenCalledOnce()
     expect(relaunchAppMock).toHaveBeenCalledWith('profile-switch')
-    // Why quit, not exit: before-quit/will-quit teardown (scrollback capture,
-    // PTY kill, daemon checkpoints) must run on a profile switch.
+    // Profile switches must run normal quit teardown for scrollback, PTYs and daemon checkpoints.
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
   })

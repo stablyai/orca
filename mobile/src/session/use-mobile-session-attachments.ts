@@ -2,14 +2,14 @@ import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
-import {
-  hostRefusesOtherRuntimeWorkspace,
-  loadMobileNewTabAgentOptions,
-  MobileWorkspaceOnOtherRuntimeError
-} from './mobile-new-tab-agent-loader'
+import { resolveMobileImageAttachmentAgent } from './mobile-image-paste-agent'
+import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileNativeChatStructuredComposer } from './use-mobile-native-chat-structured-composer'
-import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibility'
+import {
+  isMobileNativeChatAgentConfirmed,
+  resolveMobileNativeChatSessionId
+} from './mobile-native-chat-eligibility'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
@@ -49,10 +49,10 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     hostId
   } = scope
   const clipboardContents = useClipboardReader().contents
-  const agent =
-    activeSessionTab && 'agentStatus' in activeSessionTab
-      ? (activeSessionTab.agentStatus?.agentType ?? nativeChatController.nativeChatAgent)
-      : nativeChatController.nativeChatAgent
+  const agent = resolveMobileImageAttachmentAgent(
+    activeSessionTab,
+    nativeChatController.nativeChatAgent
+  )
   const handlePaste = useMobileTerminalPaste({
     client,
     agent,
@@ -97,6 +97,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       deviceTokenRef,
       nativeChatScopeKey,
       nativeChatInputLeaseReady,
+      nativeChatAgentConfirmed: isMobileNativeChatAgentConfirmed(activeSessionTab),
       getActiveWorktreeConnectionId,
       beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
       nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
@@ -144,55 +145,16 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     }
   }, [clipboardContents, selectModeActive, setCanPaste])
 
-  const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
-  useEffect(() => {
-    const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
-    if (!shouldLoadAgentOptions) {
-      setCreateTabAgentLoadState('idle')
-      setCreateTabAgentOptions([])
-      return
-    }
-    if (!client || connState !== 'connected') {
-      setCreateTabAgentLoadState('idle')
-      setCreateTabAgentOptions([])
-      return
-    }
-
-    let stale = false
-    setCreateTabAgentLoadState('loading')
-    setCreateTabAgentOptions([])
-
-    void (async () => {
-      const options = await loadMobileNewTabAgentOptions({
-        client,
-        worktreeId,
-        hostRefusesOtherRuntime
-      })
-      if (stale) {
-        return
-      }
-      setCreateTabAgentOptions(options)
-      setCreateTabAgentLoadState('loaded')
-    })().catch((error: unknown) => {
-      if (!stale) {
-        setCreateTabAgentOptions([])
-        setCreateTabAgentLoadState(
-          error instanceof MobileWorkspaceOnOtherRuntimeError ? 'other-runtime' : 'error'
-        )
-      }
-    })
-
-    return () => {
-      stale = true
-    }
-  }, [
+  useMobileNewTabAgentOptions({
     client,
     connState,
-    hostRefusesOtherRuntime,
-    pendingDiffNotesDelivery,
-    showCreateTabDrawer,
-    worktreeId
-  ])
+    hostId,
+    hostCapabilities,
+    worktreeId,
+    open: showCreateTabDrawer || pendingDiffNotesDelivery !== null,
+    setLoadState: setCreateTabAgentLoadState,
+    setOptions: setCreateTabAgentOptions
+  })
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,

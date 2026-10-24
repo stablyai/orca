@@ -1,11 +1,8 @@
 import type { ClassifiedError } from '../../shared/classified-error'
 
-// Why: gh CLI surfaces API errors as unstructured stderr. Map known
-// patterns to typed errors so callers can show user-friendly messages.
 export function classifyGhError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
-  // Why: primary rate-limit errors also carry "HTTP 403" — check rate limit
-  // first so they don't misclassify as a token-scope problem.
+  // Rate limits also carry HTTP 403; classify them before permission failures.
   if (s.includes('rate limit')) {
     return {
       type: 'rate_limited',
@@ -38,8 +35,7 @@ export function classifyGhError(stderr: string): ClassifiedError {
   return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
 }
 
-// Why: classifyGhError's copy is phrased for edit/update operations, but
-// listIssues is a read op and renderer banners interpolate the message.
+// Shared classification uses mutation copy; list banners need read-specific wording.
 export function classifyListIssuesError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
@@ -56,9 +52,11 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
   return { type: c.type, message: readMessages[c.type] }
 }
 
-// Why: classifyGhError's copy names an "issue"; PR mutations reuse the same
-// classification but must not tell the user their pull request is an issue.
-export function classifyPullRequestUpdateError(stderr: string): ClassifiedError {
+// Preserve classification while using PR-specific wording.
+export function classifyPullRequestUpdateError(
+  stderr: string,
+  action = 'update pull request'
+): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
   const pullRequestMessages: Record<ClassifiedError['type'], string> = {
@@ -69,21 +67,18 @@ export function classifyPullRequestUpdateError(stderr: string): ClassifiedError 
     validation_error: `Invalid update — ${trimmed}`,
     rate_limited: c.message,
     network_error: c.message,
-    unknown: `Failed to update pull request: ${trimmed}`
+    unknown: `Failed to ${action}: ${trimmed}`
   }
   return { type: c.type, message: pullRequestMessages[c.type] }
 }
 
-// Why: PR-side list failures need the same read-op classification — pagination
-// decisions key on the type, and swallowing them made failures look like
-// end-of-data (#11485).
+// Pagination needs typed failures so an outage cannot masquerade as end-of-data.
 export function classifyListPrsError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
 }
 
-// Why: classifyGhError's copy names an "issue"; a failed check rerun must name
-// the operation the user actually triggered.
+// Preserve classification while naming the rerun operation.
 export function classifyRerunChecksError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()

@@ -56,7 +56,7 @@ function isDocumentRow(row: unknown): row is DocumentRow {
   )
 }
 
-/** Reads every document in one statement, independent of the Store under test. */
+// Read independently of Store, using one SQL statement for a consistent snapshot.
 function readDocuments(): Map<string, DocumentRow> {
   const opened = openProfileStateDatabaseReadOnly(
     profileStateDatabaseFile(dirname(dataFile())),

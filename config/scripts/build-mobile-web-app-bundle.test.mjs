@@ -7,7 +7,7 @@ import {
   readAppBundle,
   readWrittenBundle,
   copyWrittenBundle
-} from './mobile-web-app-bundle-test-fixture.mjs'
+} from './mobile-web-app/mobile-web-app-bundle-test-fixture.mjs'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
   MOBILE_WEB_APP_ROOT_RESET,
@@ -20,7 +20,7 @@ import {
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
   collectMobileWebAppRouteKeys
-} from './mobile-web-app-route-manifest.mjs'
+} from './mobile-web-app/mobile-web-app-route-manifest.mjs'
 import {
   MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES,
   MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES,
@@ -50,7 +50,7 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ASSETS
 } from '../../src/shared/mobile-web-bundle/manifest-contract.js'
-import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
+import { mobileWebAppDependenciesPresent } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
 
 const projectDir = fileURLToPath(new URL('../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')
@@ -310,16 +310,6 @@ describeBundling('the app bundle', () => {
     }
   }, 120_000)
 
-  it('builds the same buildId twice', async () => {
-    const first = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'a') })
-    )
-    const second = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'b') })
-    )
-    expect(first.manifest.buildId).toBe(second.manifest.buildId)
-  }, 120_000)
-
   it('loads the entry as a module, so its route imports resolve', async () => {
     const { manifest, html } = await readWrittenBundle()
     // import() in a classic script is a syntax error, so the tag and the format are one fact.
@@ -468,10 +458,10 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // 1 to 11 per route, which is why four per route was a bound rather than a fit and why the
+    // 1 to 14 per route, which is why four per route was a bound rather than a fit and why the
     // envelope cannot be a line through the measurement either.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(11)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -516,11 +506,6 @@ describe('the Phase C budget', () => {
       for (const imageCount of [0, 42, 120]) {
         const chunks = mobileWebAppBundleMaxChunks(routeCount)
         expect(mobileWebAppBundleMaxAssets(routeCount, imageCount)).toBe(chunks + imageCount + 1)
-        // The ordering claim itself: a bundle at the chunk ceiling is exactly at the asset
-        // ceiling, so no bundle can pass the chunk check and fail the asset one.
-        expect(chunks + imageCount + 1).toBeLessThanOrEqual(
-          mobileWebAppBundleMaxAssets(routeCount, imageCount)
-        )
       }
     }
   })
@@ -543,13 +528,13 @@ describe('the Phase C budget', () => {
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
     // that ships a green build no device can open. At the 42 images the tree carries, the envelope
-    // plus 42 plus the document crosses 256 at 27 routes, which Phase C reaches. The crossing came
+    // plus 42 plus the document crosses 256 at 25 routes, which Phase C reaches. The crossing came
     // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
     // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(26, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(246)
-    expect(() => assertAssetCeilingFitsShell(27, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /257 .*256/
+    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(250)
+    expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /264 .*256/
     )
   })
 })

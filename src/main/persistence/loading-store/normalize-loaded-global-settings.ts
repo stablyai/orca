@@ -8,7 +8,6 @@ import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
-import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
 import {
   loadedChatPermissionSetting,
@@ -42,6 +41,7 @@ export function normalizeLoadedGlobalSettings(
     migratedFloatingTerminalTrustedCwds
   } = terminal
   const {
+    migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedTerminalCursorStyle,
@@ -54,6 +54,7 @@ export function normalizeLoadedGlobalSettings(
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
     migratedAgentYoloDefaults,
+    migratedAgentPermission,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,
@@ -133,13 +134,14 @@ export function normalizeLoadedGlobalSettings(
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
     // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
-    uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
+    ...migratedPortugueseUiLanguage,
     // Why: the structured runtime reads these per launch; a malformed hand-edited value must not fail a chat.
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
       parsed.settings?.nativeChatShellEnvironmentVariables
     ),
-    // Why: the next settings save stores the seed; until then a reload derives the same one.
+    // Why: the next settings save stores the seed; until then a reload derives the same one. Read
+    // from the Arguments as saved, before their permission flags moved into the stored choice.
     agentNativeChatPermissionModes: normalizeAgentNativeChatPermissionModes(
       parsed.settings?.agentNativeChatPermissionModes
     ),
@@ -159,6 +161,7 @@ export function normalizeLoadedGlobalSettings(
     ),
     disabledTuiAgents: migratedDisabledTuiAgents,
     ...migratedAgentYoloDefaults,
+    ...migratedAgentPermission,
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
     openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {

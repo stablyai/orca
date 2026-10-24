@@ -30,7 +30,6 @@ describe('Claude hook event version table', () => {
         compareAppVersions(version, first) >= 0
       )
     }
-    // Why: the release published just before `first` lacks the event, so the table is exact, not just safe.
     const before = previousPublished[first]
     expect(enums[before], `enum for ${before}`).toBeDefined()
     expect(enums[before]).not.toContain(event)
@@ -44,7 +43,6 @@ describe('Claude statusLine version floor', () => {
         compareAppVersions(version, CLAUDE_STATUS_LINE_FIRST_VERSION) >= 0
       )
     }
-    // Why: the release just before rejects the unknown key, so the floor is exact, not just safe.
     const before = previousPublished[CLAUDE_STATUS_LINE_FIRST_VERSION]
     expect(topLevelSettings[before].strict).toBe(true)
     expect(topLevelSettings[before].keys).not.toContain('statusLine')

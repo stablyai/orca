@@ -9,16 +9,22 @@ import {
 } from './cursor-auth'
 import { cursorSessionCookie, isCursorSessionTokenExpired } from './cursor-session-token'
 import {
+  mapCursorCurrentPeriodUsage,
+  type CursorCurrentPeriodUsage,
   mapCursorLegacyRequestQuota,
   mapCursorUsageSummary,
   parseCursorUsageSummary
 } from './cursor-usage-mapping'
+import { CURSOR_ON_DEMAND_BUCKET_NAME } from '../../shared/cursor-usage-buckets'
 import { parseUsageRetryAfterMs } from './usage-retry-after'
 
 const DASHBOARD_ORIGIN = 'https://cursor.com'
 const USAGE_SUMMARY_URL = `${DASHBOARD_ORIGIN}/api/usage-summary`
+const CURRENT_PERIOD_USAGE_URL = `${DASHBOARD_ORIGIN}/api/dashboard/get-current-period-usage`
 const LEGACY_USAGE_URL = `${DASHBOARD_ORIGIN}/api/usage`
 const API_TIMEOUT_MS = 10_000
+// Shorter than any monthly billing cycle (28-31 days), e.g. a weekly Premium seat.
+const SUB_MONTHLY_PERIOD_MINUTES = 27 * 24 * 60
 
 const SIGNED_OUT_MESSAGE =
   'No Cursor sign-in on this computer — sign in with Cursor IDE or `cursor-agent login`'
@@ -68,12 +74,15 @@ function requestHeaders(session: CursorAuthSession): Record<string, string> {
   }
 }
 
-type FetchOutcome = { kind: 'data'; data: unknown } | { kind: 'result'; result: ProviderRateLimits }
+type FetchOutcome =
+  | { kind: 'data'; data: unknown }
+  | { kind: 'result'; result: ProviderRateLimits; httpStatus?: number }
 
 async function fetchDashboardJson(
   url: string,
   session: CursorAuthSession,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  method: 'GET' | 'POST' = 'GET'
 ): Promise<FetchOutcome> {
   const source = usageSource(session)
   // Why on failures too: the account-switch guard downstream can only drop a
@@ -85,7 +94,11 @@ async function fetchDashboardJson(
     redirect: 'manual',
     // The selected account's Cookie must not be replaced by Electron's session jar.
     credentials: 'omit',
-    headers: requestHeaders(session),
+    headers: {
+      ...requestHeaders(session),
+      ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(method === 'POST' ? { method, body: '{}' } : {}),
     signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
   })
   if (res.status === 401) {
@@ -120,6 +133,7 @@ async function fetchDashboardJson(
   if (!res.ok) {
     return {
       kind: 'result',
+      httpStatus: res.status,
       result: result('error', `Cursor usage request failed (HTTP ${res.status})`, {
         usageMetadata: {
           source,
@@ -145,6 +159,40 @@ async function fetchDashboardJson(
       })
     }
   }
+}
+
+type CurrentPeriodOutcome =
+  | { kind: 'usage'; usage: CursorCurrentPeriodUsage }
+  | { kind: 'result'; result: ProviderRateLimits }
+  | { kind: 'summary' }
+
+/** Unified plans trust the period strictly; other plans only use it when Cursor reports a sub-monthly period. */
+async function fetchCurrentPeriodUsage(
+  session: CursorAuthSession,
+  signal: AbortSignal | undefined,
+  unified: boolean
+): Promise<CurrentPeriodOutcome> {
+  let current: FetchOutcome
+  try {
+    current = await fetchDashboardJson(CURRENT_PERIOD_USAGE_URL, session, signal, 'POST')
+  } catch (error) {
+    if (unified) {
+      throw error
+    }
+    return { kind: 'summary' }
+  }
+  if (current.kind === 'result') {
+    // Why: only a retired endpoint falls back (Cursor serves unknown dashboard routes as
+    // 200 HTML); other failures must not publish obsolete zeros as healthy usage.
+    const retired =
+      [404, 405, 501].includes(current.httpStatus ?? 0) ||
+      current.result.usageMetadata?.failureKind === 'parse'
+    return unified && !retired ? { kind: 'result', result: current.result } : { kind: 'summary' }
+  }
+  const usage = mapCursorCurrentPeriodUsage(current.data)
+  return usage && (unified || usage.periodMinutes < SUB_MONTHLY_PERIOD_MINUTES)
+    ? { kind: 'usage', usage }
+    : { kind: 'summary' }
 }
 
 function credentialFailure(readResult: CursorAuthReadResult): ProviderRateLimits | null {
@@ -199,6 +247,35 @@ export async function fetchCursorRateLimits(
       return outcome.result
     }
     const mapped = mapCursorUsageSummary(parseCursorUsageSummary(outcome.data))
+
+    const unified = mapped.planType?.startsWith('unified_') === true
+    const planPools = mapped.buckets.filter(
+      (bucket) => bucket.name !== CURSOR_ON_DEMAND_BUCKET_NAME
+    )
+    // Why: weekly plans keep obsolete monthly zeros in the summary, so only idle pools justify a request.
+    // Unlimited non-unified plans keep main's no-bar result without the extra request.
+    const summaryPoolsIdle =
+      !mapped.isUnlimited &&
+      planPools.length > 0 &&
+      planPools.every((bucket) => bucket.usedPercent === 0)
+    if (unified || summaryPoolsIdle) {
+      const current = await fetchCurrentPeriodUsage(session, options.signal, unified)
+      if (current.kind === 'result') {
+        return current.result
+      }
+      if (current.kind === 'usage') {
+        const period = current.usage
+        return result('ok', null, {
+          ...(period.monthly ? { monthly: period.monthly } : {}),
+          buckets: [
+            ...period.buckets,
+            ...mapped.buckets.filter((bucket) => bucket.name === CURSOR_ON_DEMAND_BUCKET_NAME)
+          ],
+          planType: mapped.planType,
+          usageMetadata: metadata
+        })
+      }
+    }
 
     // Why: an unlimited plan has no ceiling to divide by. Publish the plan so the
     // roster still lists the account, with no misleading bar.

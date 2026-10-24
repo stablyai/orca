@@ -24,11 +24,9 @@ import {
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
 import {
-  getAgentRowGeneratedTitleText,
-  getOrcaDispatchTaskId,
-  isOrcaDispatchPrompt,
-  orchestrationLabelsMatchLiveDispatch
-} from '@/lib/agent-row-primary-text'
+  generatedTitleReplacesExisting,
+  generatedTitleSourceText
+} from '../../../../shared/agent-generated-tab-title-rules'
 
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime
@@ -142,21 +140,7 @@ export function createAgentStatusLiveActions(
       return
     }
     const { entry } = builtResult
-    // Sticky orchestration titles are replaced only when they still describe this dispatch.
-    const hasMatchingOrchestrationLabels = Boolean(
-      (entry.orchestration?.displayName?.trim() || entry.orchestration?.taskTitle?.trim()) &&
-      orchestrationLabelsMatchLiveDispatch(entry)
-    )
-    const liveIsDispatchPrompt = isOrcaDispatchPrompt(entry.prompt)
-    const liveDispatchTaskId = liveIsDispatchPrompt ? getOrcaDispatchTaskId(entry.prompt) : null
-    const stickyOrchestrationTaskId = entry.orchestration?.taskId?.trim() || null
-    const isNewDispatchAgainstStickyOrchestration = Boolean(
-      liveDispatchTaskId &&
-      stickyOrchestrationTaskId &&
-      liveDispatchTaskId !== stickyOrchestrationTaskId
-    )
-    const shouldReplaceGeneratedTitle =
-      hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+    const shouldReplaceGeneratedTitle = generatedTitleReplacesExisting(entry)
     const mayWriteGeneratedTitle =
       get().settings?.tabAutoGenerateTitle === true &&
       (shouldReplaceGeneratedTitle ||
@@ -165,10 +149,9 @@ export function createAgentStatusLiveActions(
           entry.tabId ?? getTabIdFromPaneKey(paneKey),
           entry.worktreeId
         ))
-    const generatedTitlePrompt =
-      liveIsDispatchPrompt && mayWriteGeneratedTitle
-        ? getAgentRowGeneratedTitleText(entry)
-        : entry.prompt
+    const generatedTitlePrompt = mayWriteGeneratedTitle
+      ? generatedTitleSourceText(entry)
+      : entry.prompt
     applyGeneratedTabTitleUpdate({
       paneKey,
       prompt: generatedTitlePrompt,

@@ -1,5 +1,6 @@
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
+import { registerLivePty } from '../bind-first-pane.test-fixture'
 import {
   OrcaRuntimeService,
   advertisedUrlWatcher,
@@ -91,6 +92,10 @@ describe('OrcaRuntimeService', () => {
           ptyId: 'visual-pty'
         }
       ]
+    })
+    registerLivePty(runtime, 'visual-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'occupied-tab',
+      leafId: HEADLESS_LEAF_ID
     })
     runtime.setPtyController({
       write: () => true,

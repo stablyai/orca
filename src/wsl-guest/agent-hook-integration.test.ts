@@ -150,7 +150,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         connectionId: 'conn-test',
         mainAgent: { state: 'done', outcome: 'cancellation' }
       })
+    const replayOutcomes: (string | undefined)[] = []
+    orcaServer.setListener((event) => replayOutcomes.push(event.payload.mainAgent?.outcome))
+    replayOutcomes.length = 0
     expect(hookServer.replayCachedPayloadsForPanes()).toBe(1)
+    await expect.poll(() => replayOutcomes).toEqual(['cancellation'])
     await expect
       .poll(() => orcaServer.getStatusSnapshotForPane(paneKey)[0]?.mainAgent?.outcome)
       .toBe('cancellation')
@@ -341,6 +345,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         tool_input: { command: 'pnpm test' }
       })
     ).resolves.toMatchObject({ status: 204 })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await expect(
       postClaude({
         hook_event_name: 'PreToolUse',
@@ -394,6 +399,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       tool_name: 'Bash',
       tool_input: { command: 'false' }
     })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await postClaude({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
 
     const start = Date.now()
@@ -444,6 +450,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         tool_input: { command: 'rm -rf /tmp/orca-2824-permission-target' }
       })
     ).resolves.toMatchObject({ status: 204 })
+    await expect.poll(() => orcaServer.getStatusSnapshot()[0]?.state).toBe('waiting')
     await expect(
       postClaude({
         hook_event_name: 'PostToolUse',

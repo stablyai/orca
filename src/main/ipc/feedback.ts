@@ -28,9 +28,7 @@ export type {
 }
 
 const FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
-// Why: corporate filters can reject multipart with 403 and the host caps bodies
-// near 4.5 MB (413) while allowing the small JSON report, so content-shaped
-// failures should shed the attachment.
+// Content-shaped rejections may still accept small JSON after dropping attachments (corporate filters/body caps).
 const ATTACHMENT_JSON_RETRY_STATUSES = new Set([400, 403, 408, 413, 415, 422])
 
 type InternalFeedbackSubmitArgs = FeedbackSubmitArgs & {
@@ -39,18 +37,13 @@ type InternalFeedbackSubmitArgs = FeedbackSubmitArgs & {
   feedbackWithoutDiagnosticBundle?: string
 }
 
-// Why: the Slack notification and any follow-up investigation need to know
-// which Orca build and which OS the feedback came from. The main process is
-// the only place with trusted access to these values (app.getVersion and the
-// node os module), so we enrich the payload here rather than trusting the
-// renderer.
+// Enrich trusted build/OS identity in main rather than accepting renderer claims.
 function buildSubmitBody(args: InternalFeedbackSubmitArgs): FeedbackSubmitBody {
   const identity = args.submitAnonymously
     ? { githubLogin: null, githubEmail: null }
     : { githubLogin: args.githubLogin, githubEmail: args.githubEmail }
 
-  // Why: anonymity is an IPC-only privacy decision. Allow-list fields here so
-  // stale renderer state or future identity-shaped fields cannot leak upstream.
+  // Allow-list anonymous payloads so stale or future identity fields cannot leak upstream.
   return {
     feedback: args.feedback,
     submissionType: args.submissionType ?? 'feedback',
@@ -62,8 +55,7 @@ function buildSubmitBody(args: InternalFeedbackSubmitArgs): FeedbackSubmitBody {
     ...(args.submissionType === 'crash' && args.diagnosticBundle
       ? { diagnosticBundle: args.diagnosticBundle }
       : {}),
-    // Why: images are a feedback-only affordance; crash reports already carry
-    // diagnostic bundles and the server rejects images on that lane.
+    // Server accepts images only for feedback; crash reports carry diagnostic bundles.
     ...(args.submissionType !== 'crash' && args.images?.length ? { images: args.images } : {})
   }
 }
@@ -81,8 +73,7 @@ async function retryFeedbackOnPrimary(
     if (primaryError === undefined) {
       return { ok: false, status: retry.status, error: retryMessage }
     }
-    // Why: keep the first failure visible so support can see 5xx → retry outcome,
-    // not only the last error in a same-host retry chain.
+    // Preserve the first failure as well as the retry outcome for support.
     return {
       ok: false,
       status: retry.status,
@@ -155,10 +146,7 @@ async function submitFeedbackWithImages(
           }
         : { ok: true, imagesDelivered: false, imagesFailure }
     }
-    // Why: the text lane retries 5xx, this one does not. Replaying the
-    // attachments on a flaky link costs more than it saves, and the dialog
-    // stays open with its thumbnails while the draft text sits in the app
-    // store, so a manual resend loses nothing.
+    // Do not retry image uploads automatically; the open dialog preserves thumbnails and draft text for manual retry.
     return { ok: false, ...imagesFailure }
   } catch (error) {
     return { ok: false, ...errorFailure(error) }
@@ -170,8 +158,7 @@ async function submitFeedbackWithDiagnosticBundle(
   bodyWithoutDiagnosticBundle: FeedbackSubmitBody | null
 ): Promise<FeedbackSubmitResult> {
   try {
-    // Why: diagnostic bundles can approach 4 MiB and need more upload time than
-    // the small JSON report-only path, especially on constrained connections.
+    // Large diagnostic bundles need longer upload deadlines than small JSON reports.
     const response = await postFeedback(
       FEEDBACK_API_URL,
       body,
@@ -196,8 +183,7 @@ async function submitFeedbackWithDiagnosticBundle(
 export async function submitFeedback(
   args: InternalFeedbackSubmitArgs
 ): Promise<FeedbackSubmitResult> {
-  // Why: buildSubmitBody drops images on the crash lane, so validating them
-  // there would abort a crash report over attachments it never meant to send.
+  // Ignore discarded crash-lane images instead of rejecting over unused attachments.
   if (args.submissionType !== 'crash' && args.images !== undefined) {
     const imageError = validateFeedbackImages(args.images)
     if (imageError) {
@@ -224,8 +210,7 @@ export async function submitFeedback(
     if (res.ok) {
       return { ok: true }
     }
-    // Why: api.onorca.dev serves a different product, so transient failures
-    // retry the endpoint that owns feedback and crash delivery.
+    // Retry the owning endpoint; api.onorca.dev serves a different product.
     if (res.status >= 500) {
       return retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
     }
@@ -238,16 +223,14 @@ export async function submitFeedback(
 export function registerFeedbackHandlers(): void {
   ipcMain.removeHandler('feedback:submit')
   ipcMain.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) => {
-    // Why: validate the raw clone before normalization so a tiny hostile value
-    // cannot become a large main-process typed-array allocation.
+    // Validate before typed-array normalization can expand hostile renderer input.
     if (args.images !== undefined) {
       const imageError = validateFeedbackImages(args.images)
       if (imageError) {
         return { ok: false, status: null, error: imageError }
       }
     }
-    // Why: crash submissions are main-only. A compromised renderer can invoke
-    // this channel directly, so force the public feedback lane at the boundary.
+    // Force the public feedback lane at IPC; crash submission is main-only.
     return submitFeedback({
       ...args,
       submissionType: 'feedback'

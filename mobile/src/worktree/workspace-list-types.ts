@@ -55,6 +55,10 @@ export type Worktree = {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
   lineageDepth?: number
+  /** How deep the row sits in the desktop's project-group tree; indents it the same way. */
+  projectGroupDepth?: number
+  /** Its project group came from a folder scan, whose rows the desktop steps more compactly. */
+  inFolderScanGroup?: boolean
   lineageChildCount?: number
   lineageCollapsed?: boolean
   /** The collapse key the shared builder gave this row's children; set only on a feed-built list. */
@@ -100,6 +104,10 @@ export type Section = {
   icon?: 'pin'
   /** Under Project grouping, the repo whose colour and icon the header shows, as on the desktop. */
   repo?: SectionRepo
+  /** A project group's own header (no repo), drawn with the group icon, as on the desktop. */
+  isProjectGroup?: boolean
+  /** How deep the header sits in the desktop's project-group tree; indents it the same way. */
+  projectGroupDepth?: number
   /** The header's own count from a feed-built list, which a collapsed section still shows. */
   count?: number
   /** Drawn under the header, above its rows, as the desktop places them. */

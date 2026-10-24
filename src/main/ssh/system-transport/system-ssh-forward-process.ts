@@ -12,7 +12,7 @@ export const SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS = 2_000
 // either already reaped or beyond anything teardown can do about it.
 export const SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS = 500
 
-export type SystemSshPortForwardProcess = {
+type SystemSshPortForwardProcess = {
   process: ChildProcess
   /** The local port the forward listens on, chosen here when the caller asked for any (0). */
   localPort: number

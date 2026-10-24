@@ -28,6 +28,7 @@ import {
 import { renameEditorFiles } from './workspace-layout-editor-rekey'
 import { openSimulatorTab } from './workspace-layout-simulator-tab'
 import { updateLegacyPersistence } from './workspace-layout-legacy-persistence'
+import { runDroppedLeafStep } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import {
   closePane,
@@ -78,7 +79,16 @@ export function applyLayoutCommand(
   context: LayoutContext
 ): Applied {
   const result = applyCommand(model, command, context)
-  return result.ok ? { ...result, model: updateLegacyPersistence(model, result.model) } : result
+  if (!result.ok) {
+    return result
+  }
+  const next = updateLegacyPersistence(model, result.model)
+  return {
+    ...result,
+    model: context.droppedLeafReason
+      ? runDroppedLeafStep(model, next, context.droppedLeafReason, context.now())
+      : next
+  }
 }
 
 function applyCommand(

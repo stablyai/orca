@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
-import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../src/shared/native-chat-turn-status'
+import {
+  NATIVE_CHAT_COMPOSER_PLACEHOLDER,
+  NATIVE_CHAT_TURN_STATUS_COPY
+} from '../../../src/shared/native-chat-turn-status'
 import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
@@ -96,12 +98,11 @@ export function useSettledMobileNativeChatInputLock(
 }
 
 /** What the composer says while the input lease blocks it, else that a message sent now runs
- *  after a Stop the chat reads as stopping, else its normal prompt naming the agent. */
+ *  after a Stop the chat reads as stopping, else desktop's normal prompt. */
 export function mobileNativeChatComposerPlaceholder(
   lockReason: MobileNativeChatInputLockReason | null,
   /** While stopping: whether a message sent now is queued, or sent for the host to hold. */
-  afterStop?: 'queue' | 'send',
-  agent?: string | null
+  afterStop?: 'queue' | 'send'
 ): string {
   if (lockReason === 'disconnected') {
     return 'Reconnecting…'
@@ -114,6 +115,5 @@ export function mobileNativeChatComposerPlaceholder(
       ? NATIVE_CHAT_TURN_STATUS_COPY.queueAfterStop
       : NATIVE_CHAT_TURN_STATUS_COPY.sendAfterStop
   }
-  const name = agent ? tuiAgentDisplayName(agent) : null
-  return name ? `Message ${name}` : 'Message, @files, /commands'
+  return NATIVE_CHAT_COMPOSER_PLACEHOLDER
 }

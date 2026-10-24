@@ -6,15 +6,7 @@ import {
   readPersistedStateJson,
   writePersistedStateJson
 } from './persistence-test-harness'
-/**
- * A `local`-typed automation whose folder workspace pins it to an SSH host is
- * projected as SSH-owned, so it must be fenceable like any other SSH-owned row.
- *
- * It used to capture no registration generation at all, so `captured ?? current`
- * always read the *current* one and `targetReplaced` could never fire: deleting
- * a host and re-adding one under the same id silently moved the schedule onto a
- * different machine. These tests drive the real Store through create and reload.
- */
+// Workspace SSH pins override local automation types; capture the target generation to reject host replacement.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -56,7 +48,7 @@ function prodTarget(generation: number): SshTarget {
   } as SshTarget
 }
 
-/** Local project outside the pinned folder scope: only the pin makes the record SSH-owned. */
+// Keep the project local so only the workspace pin establishes SSH ownership.
 function localRepo(): Repo {
   return {
     id: 'repo-1',
@@ -83,7 +75,6 @@ function projectGroup(): ProjectGroup {
   } as ProjectGroup
 }
 
-/** A remote-rooted folder workspace: its scope connection is the pin. */
 function pinnedFolderWorkspace(): FolderWorkspace {
   return {
     id: 'fw-1',
@@ -140,7 +131,6 @@ async function reloadStore() {
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
-/** The same target id now carries a different registration incarnation. */
 function replaceStoredTargetGeneration(generation: number): void {
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readPersistedStateJson(file))
@@ -305,8 +295,7 @@ describe('workspace-pinned automations capture a registration generation', () =>
 })
 
 describe('the destination a pinned create lands on', () => {
-  // The derived selection reads `local`; the record still lands on the pinned SSH host,
-  // so accepting Self here scheduled a job on a machine the user did not choose.
+  // Derived local selection cannot authorize Self when the workspace actually pins execution to SSH.
   it('refuses a Self destination for a workspace-pinned record', async () => {
     const store = await createStoreFromState(pinnedState(FIRST_GENERATION))
 

@@ -34,7 +34,7 @@ describe('preparation lock reasons', () => {
     expect(parseWorktreePreparationOwnerPid(reason)).toBe(process.pid)
     expect(parseWorktreePreparationOwnerMachine(reason)).toBe(`win32-machine-guid:${MACHINE_A}`)
     expect(isWorktreeCreatePreparation({ path: '/w', lockReason: reason })).toBe(true)
-    // What a pre-fix build reads: the first field after the prefix.
+    // Older builds parse the PID immediately after the version prefix.
     expect(Number(reason.slice('orca-create-preparation:v1:'.length).split(':')[0])).toBe(
       process.pid
     )
@@ -48,7 +48,6 @@ describe('preparation lock reasons', () => {
 })
 
 describe('preparationOwnerExitedHere', () => {
-  // Two hosts sharing an NFS repo: B's pid 4242 is absent on A, though B is still preparing.
   it('never reads an owner on another machine as exited', () => {
     expect(preparationOwnerExitedHere(reasonFrom(MACHINE_B), REPO, {}, probe())).toBe(false)
   })
@@ -86,7 +85,6 @@ describe('preparationOwnerExitedHere', () => {
         probe({ repoIsOnLocalDisk: () => false })
       )
     ).toBe(false)
-    // A WSL repo belongs to this machine's own distro.
     expect(
       preparationOwnerExitedHere(
         reasonFrom(null),

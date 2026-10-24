@@ -1,10 +1,4 @@
-/**
- * The AppImage desktop's terminal daemon across an upgrade onto the extracted copy (D3-D3): the
- * previous build's busy Electron daemon is kept with its terminal, and once it retires the next
- * daemon runs on the copy's bundled Node, leases its generation, and keeps serving after the
- * window's mount is gone. The FUSE runtime is simulated (no AppImage can mount in a test); the
- * launcher runs under the real Electron and everything after the runtime check is real. Linux only.
- */
+// Real Electron launch with simulated FUSE: verify generation-copy adoption and mount independence.
 import {
   chmodSync,
   copyFileSync,
@@ -64,7 +58,6 @@ function cacheRootOf(install: AppImageInstall): string {
   return join(install.cacheHome, 'orca', 'appimage')
 }
 
-/** A mounted AppImage: the file at $APPIMAGE and its payload at $APPDIR. */
 async function installAppImage(name: string): Promise<AppImageInstall> {
   const base = join(root, name)
   const install = {
@@ -82,7 +75,6 @@ async function installAppImage(name: string): Promise<AppImageInstall> {
   return install
 }
 
-/** What `orca` registration extracts for the file now at $APPIMAGE, optionally without Node. */
 function extractCopy(install: AppImageInstall, version: string, withNode = true): string {
   const generation = resolveAppImageExtractedRoot({
     appImagePath: install.appImagePath,
@@ -204,7 +196,6 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
       const install = await installAppImage('upgrade')
       const userData = newProfile(install)
 
-      // The previous build, with nothing extracted: Electron from the mount, and it says why.
       const previous = await openWindow(install, userData, '1.0.0')
       expect(previous.result).toEqual({ adopted: false, mode: null })
       expect(previous.stderr()).toContain('AppImage daemon host fallback reason=no-extracted-copy')
@@ -213,7 +204,6 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
       const live = await session('create', userData, 'aic-live', 'BEFORE')
       await previous.quit()
 
-      // The update replaces the file at $APPIMAGE, and the CLI extracts the new release.
       writeFileSync(install.appImagePath, 'release 1.1.0, a different size')
       const generation = extractCopy(install, '1.1.0')
 
@@ -226,7 +216,6 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
         output: true
       })
 
-      // The old daemon retires on its own once its last terminal and window are gone.
       process.kill(live.pid, 'SIGKILL')
       await upgraded.quit()
       await vi.waitFor(() => expect(isProcessAlive(oldPid)).toBe(false), { timeout: 30_000 })
@@ -245,7 +234,6 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
       const kept = await session('create', userData, 'aic-kept', 'ON-NODE')
       await next.quit()
 
-      // The window's mount goes away; nothing the daemon runs or maps lived there.
       rmSync(install.mountPath, { recursive: true, force: true })
       expect(readFileSync(`/proc/${pid}/maps`, 'utf8')).not.toContain(install.mountPath)
       expect(await session('attach', userData, 'aic-kept', 'NO-MOUNT')).toMatchObject({

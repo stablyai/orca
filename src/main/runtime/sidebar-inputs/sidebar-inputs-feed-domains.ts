@@ -6,17 +6,23 @@ import { getWslHostService } from '../../wsl/wsl-host-service-instance'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/desktop-sidebar-facts'
 import type { RuntimeStore } from '../runtime-store-contract'
+import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeWithSidebarTemporal } from './orca-runtime-sidebar-temporal'
 import type { PairedServerRowsProducer } from './paired-server-rows-producer'
-import type { WorkspaceCreationRegistry } from './workspace-creation-registry'
+import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
 import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
 import { readSidebarProjectCatalog } from './sidebar-project-catalog'
-import { buildPairedServerReviewFacts } from '../../../shared/sidebar-list/workspace-review-facts'
+import {
+  buildPairedServerReviewFacts,
+  buildWorkspaceReviewFacts
+} from '../../../shared/sidebar-list/workspace-review-facts'
 import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/paired-server-activity-facts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/workspace-activity-facts'
 
 /** This host's store and connection registries, read the way sidebarInputs.desktopFacts reads them. */
 export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSidebarFacts {
@@ -36,10 +42,33 @@ const CATALOG_EVENTS = new Set<RuntimeClientEvent['type']>([
   'sshStateChanged'
 ])
 
+// The host's sidebar view settings, each its own entity; ui.get serves the same fields.
+const SIDEBAR_VIEW_UI_FIELDS = [
+  'groupBy',
+  'sortBy',
+  'projectOrderBy',
+  'hideSleepingWorkspaces',
+  'hideDefaultBranchWorkspace',
+  'alwaysShowDefaultBranchWorkspace',
+  'hideAutomationGeneratedWorkspaces',
+  'hideCliCreatedWorkspaces',
+  'hideDetachedHeadWorkspaces',
+  'hideWorkspacesFromOtherDevices',
+  'filterRepoIds',
+  'collapsedGroups',
+  'workspaceStatuses',
+  'workspaceHostScope',
+  'visibleWorkspaceHostIds',
+  'worktreeCardProperties',
+  'agentActivityDisplayMode'
+] as const satisfies readonly (keyof PersistedUIState)[]
+
+const DESKTOP_WRITE_DOMAINS = [...WORKTREE_METADATA_DOMAINS, 'settings', 'ui']
+
 export type SidebarInputsFeedSources = {
   facts: OrcaRuntimeWithSidebarTemporal
   pairedServerRows: PairedServerRowsProducer
-  workspaceCreations: WorkspaceCreationRegistry
+  workspaceLifecycle: WorkspaceLifecycleQueue
   workspaceRows: WorkspaceRowsProducer
   repoIcons: Pick<RepoIconDataUrls, 'idsByRepo'>
   store: () => RuntimeStore | null
@@ -53,7 +82,8 @@ export type SidebarInputsFeedSources = {
 export function sidebarInputsFeedDomains(
   sources: SidebarInputsFeedSources
 ): SidebarInputsFeedDomain[] {
-  const { facts, pairedServerRows, workspaceCreations, workspaceRows } = sources
+  const { facts, pairedServerRows, workspaceLifecycle, workspaceRows } = sources
+  const urgent = { urgent: true }
   const watchCatalog = (changed: () => void): (() => void) =>
     sources.onClientEvent(
       (event) => {
@@ -73,17 +103,25 @@ export function sidebarInputsFeedDomains(
   return [
     {
       name: 'activity',
-      read: () => ({
-        // A paired server's rows too; this host's own rows win an id both list.
-        ...buildPairedServerActivityFacts(
-          pairedServerRows.snapshot().servers,
-          (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
-        ),
-        ...facts.getWorkspaceActivityFacts().facts
-      }),
+      read: () => {
+        const rows = workspaceRows.snapshot()?.rows
+        if (!rows) {
+          return null
+        }
+        return {
+          // This host's session tabs and agents are by bare id, so a same-id pair it lists share them.
+          ...keyWorkspaceActivityByRow(facts.getWorkspaceActivityFacts().facts, rows),
+          ...buildPairedServerActivityFacts(
+            pairedServerRows.snapshot().servers,
+            (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
+          )
+        }
+      },
+      ready: () => workspaceRows.ready(),
       watch: (changed) => {
         const detaches = [
           facts.workspaceActivityFacts.revision.onChange(changed),
+          workspaceRows.revision.onChange(changed),
           pairedServerRows.revision.onChange(changed),
           // This desktop's saved session for a paired server holds its browser and chat tabs there.
           sources.store()?.onWorkspaceSessionWritten?.((hostId) => {
@@ -104,14 +142,45 @@ export function sidebarInputsFeedDomains(
       watch: (changed) => facts.onSidebarTemporalChange(changed)
     },
     {
+      // The queue's creates, as the creations readers read them.
       name: 'creations',
-      read: () => workspaceCreations.snapshot().creations,
-      watch: (changed) => workspaceCreations.revision.onChange(changed)
+      read: () => workspaceLifecycle.creationsSnapshot().creations,
+      // An accepted command shows at once.
+      watch: (changed) => workspaceLifecycle.revision.onChange(() => changed(urgent))
+    },
+    {
+      // Each workspace's running, waiting or paused lifecycle command, keyed host-qualified.
+      name: 'inProgress',
+      read: () => workspaceLifecycle.hints(),
+      watch: (changed) => workspaceLifecycle.revision.onChange(() => changed(urgent))
     },
     {
       name: 'workspaces',
-      read: async () => (await workspaceRows.snapshot()).rows,
-      watch: (changed) => workspaceRows.revision.onChange(changed)
+      read: () => workspaceRows.snapshot()?.rows ?? null,
+      watch: (changed) => workspaceRows.revision.onChange(changed),
+      ready: () => workspaceRows.ready()
+    },
+    {
+      // The imported card and new-external inbox inputs; no reader yet.
+      name: 'detected',
+      read: () => facts.detectedCheckouts.snapshot(),
+      // No ready: a phone's first read never waits on every repo's listing.
+      watch: (changed) => facts.detectedCheckouts.watch(() => changed())
+    },
+    {
+      // Live terminal content per workspace; no reader yet.
+      name: 'liveContent',
+      read: () => facts.workspaceLiveContent.snapshot(),
+      watch: (changed) => facts.workspaceLiveContent.revision.onChange(changed)
+    },
+    {
+      // The sidebar view settings; no reader yet (each still reads ui.get).
+      name: 'view',
+      read: () => {
+        const ui = requireStore().getUI?.()
+        return ui ? Object.fromEntries(SIDEBAR_VIEW_UI_FIELDS.map((key) => [key, ui[key]])) : {}
+      },
+      watch: (changed) => sources.store()?.onUIChanged?.(() => changed(urgent)) ?? (() => {})
     },
     {
       name: 'pairedServerHosts',
@@ -138,19 +207,26 @@ export function sidebarInputsFeedDomains(
     },
     {
       name: 'desktop',
-      // Each field its own entity; the WSL registry announces no change.
+      // Each field its own entity.
       read: () => readRuntimeDesktopSidebarFacts(requireStore()),
       watch: (changed) => {
         const store = sources.store()
         const detaches = [
           watchCatalog(changed),
-          store?.onUIChanged?.(changed),
-          store?.onWorkspaceSessionWritten?.(changed),
-          store?.onSettingsChanged?.(changed)
+          store?.onWorkspaceSessionWritten?.(() => changed()),
+          // Pins, settings (saved with or without notifying), UI, and full saves (repos, folders, SSH).
+          store?.onStateWritten?.((domains) => {
+            if (
+              domains === undefined ||
+              DESKTOP_WRITE_DOMAINS.some((domain) => domains.includes(domain))
+            ) {
+              changed(urgent)
+            }
+          }),
+          getWslHostService()?.onStatusesChanged(changed)
         ]
         return () => detaches.forEach((detach) => detach?.())
-      },
-      rereadOnRead: true
+      }
     },
     {
       // Each field its own entity, so a reader holds the catalog only once it is whole.
@@ -161,7 +237,7 @@ export function sidebarInputsFeedDomains(
           watchCatalog(changed),
           pairedServerRows.revision.onChange(changed),
           // Manual repo order and project order live in the UI state.
-          sources.store()?.onUIChanged?.(changed),
+          sources.store()?.onUIChanged?.(() => changed()),
           // Catalog writes are full saves, and some (a project rename) announce no event.
           sources.store()?.onStateWritten?.((domains) => {
             if (domains === undefined) {
@@ -180,17 +256,30 @@ export function sidebarInputsFeedDomains(
     },
     {
       name: 'review',
-      read: async () => ({
-        // A paired server's rows by the window's cache too; this host's own rows win an id both list.
-        ...buildPairedServerReviewFacts(
-          pairedServerRows.snapshot().servers,
-          requireStore().getGitHubCache().pr
-        ),
-        ...(await facts.getWorkspaceReviewFacts()).facts
-      }),
-      // The window's PR cache saves announce no change.
-      watch: watchCatalog,
-      rereadOnRead: true
+      read: () => {
+        const worktrees = workspaceRows.resolvedWorktrees()
+        if (!worktrees) {
+          return null
+        }
+        const store = requireStore()
+        const prCache = store.getGitHubCache().pr
+        return {
+          ...buildWorkspaceReviewFacts(worktrees, store.getRepos(), prCache),
+          // A paired server's rows by the window's cache too.
+          ...buildPairedServerReviewFacts(pairedServerRows.snapshot().servers, prCache)
+        }
+      },
+      watch: (changed) => {
+        const detaches = [
+          watchCatalog(changed),
+          // A branch or link change reaches the facts through the rows' revision.
+          workspaceRows.revision.onChange(changed),
+          pairedServerRows.revision.onChange(changed),
+          sources.store()?.onGitHubCacheWritten?.(changed)
+        ]
+        return () => detaches.forEach((detach) => detach?.())
+      },
+      ready: () => workspaceRows.ready()
     }
   ]
 }

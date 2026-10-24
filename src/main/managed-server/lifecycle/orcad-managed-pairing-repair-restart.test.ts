@@ -32,7 +32,6 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()))
 })
 
-/** An orcad process on `hostProfile`, the host profile that holds its E2EE key and devices. */
 async function startOrcad(hostProfile: string): Promise<OrcaRuntimeRpcServer> {
   const server = new OrcaRuntimeRpcServer({
     runtime: new OrcaRuntimeService(),
@@ -45,7 +44,6 @@ async function startOrcad(hostProfile: string): Promise<OrcaRuntimeRpcServer> {
   return server
 }
 
-/** What the slot publishes in its readiness file, which the repair reads over SSH. */
 async function publishedReadiness(server: OrcaRuntimeRpcServer): Promise<ServeReadiness> {
   return {
     runtimeId: 'runtime-now',
@@ -61,7 +59,6 @@ function offerIn(readiness: ServeReadiness): PairingOffer {
   return parsePairingCode(readiness.pairing.url)!
 }
 
-/** The desktop's saved server; the tunnel's local port is where the server listens here. */
 function savedEnvironment(offer: PairingOffer, at = 1): KnownRuntimeEnvironment {
   return {
     ...createEnvironmentFromPairingOffer({
@@ -111,14 +108,13 @@ describe('a managed orcad that dropped this desktop and restarted', () => {
       runtimeId: null
     })
     await first.stop()
-    // Host side: this desktop's device is removed, then the server restarts.
     new DeviceRegistry(hostProfile).removeDevice(paired.pairedDeviceId!)
     const restarted = await startOrcad(hostProfile)
     const readiness = await publishedReadiness(restarted)
     const reached = { ...paired, endpoint: offerIn(readiness).endpoint }
 
     const refused = await verifyManagedOrcadTunnelIdentity(savedEnvironment(reached))
-    // Not "another Orca holds the port": the refusal came sealed under the pinned key.
+    // The pinned key sealed this refusal, proving the expected server answered.
     expect(refused.verdict).toBe('unpaired')
 
     const { repairs, refresh } = repairsAgainst(savedEnvironment(reached), readiness)

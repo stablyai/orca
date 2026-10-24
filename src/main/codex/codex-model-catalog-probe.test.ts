@@ -17,7 +17,6 @@ describe('codex model catalog probe', () => {
   it.each([`"${process.execPath}"`, ''])(
     'lists with the session executable for Command %j',
     async (command) => {
-      // The env a user's shell/config resolves for sessions, PATH included.
       const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
         PATH: '/resolved/bin',
         HOME: '/homes/user',
@@ -50,7 +49,6 @@ describe('codex model catalog probe', () => {
       const success = await probe({ variable: 'CODEX_HOME', path: '/homes/account-a' })
       expect(success.origin).toBe('probe')
       expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
-      // The session launch resolves the exact same invocation for the same deps.
       const sessionInvocation = await resolveCodexStructuredInvocation({
         resolveEnvironment,
         resolveCommand
@@ -63,7 +61,7 @@ describe('codex model catalog probe', () => {
         OPENAI_BASE_URL: 'https://gateway.example',
         CODEX_HOME: '/homes/account-a'
       })
-      // A short-lived probe must not start plugin marketplace clones that outlive its teardown.
+      // Marketplace clones may outlive short-lived probe teardown.
       expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
     }
   )
@@ -114,6 +112,7 @@ describe('codex model catalog probe', () => {
         )
     })
     const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    expect(success.complete).toBe(false)
     expect(configReadTimeouts).toEqual([3_000])
     expect(configReadFailures).toEqual([
       expect.objectContaining({
@@ -165,7 +164,7 @@ describe('Codex catalog availability', () => {
     return createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({}),
       resolveCommand: () => 'codex',
-      // A stand-in system home, so no test reads the real ~/.codex/auth.json.
+      // Isolate account classification from the real ~/.codex/auth.json.
       resolveAccountKind: (home) => (home === '/homes/system' ? 'system' : 'managed'),
       runSession: async (_invocation, body) =>
         body({
@@ -205,7 +204,6 @@ describe('Codex catalog availability', () => {
   ] as const)(
     'reports explicit signed-out account for %s beside its list',
     async (home, account) => {
-      // The verdict can be wrong while a chat works, so the picker keeps the list it got.
       expect(
         await withAccount({ account: null, requiresOpenaiAuth: true })({
           variable: 'CODEX_HOME',
@@ -313,4 +311,32 @@ describe('Codex catalog probe reads the home a launch would', () => {
     expect((await probe({ variable: 'CODEX_HOME', path: '/homes/mirror' })).models).toHaveLength(1)
     expect(order).toEqual(['prepare /homes/mirror', 'spawn'])
   })
+})
+
+it('keeps unknown or unsupported configuration incomplete and observes genuine empty config', async () => {
+  for (const config of [undefined, [], { model: 42 }, {}]) {
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({ PATH: '/bin' }),
+      resolveCommand: () => '/bin/codex',
+      runSession: async (_invocation, body) =>
+        body({
+          notify: () => {},
+          request: async (method) => {
+            if (method === 'model/list') {
+              return { data: [MODEL_ROW], nextCursor: null }
+            }
+            if (method === 'config/read') {
+              if (config === undefined) {
+                throw new Error('method not found')
+              }
+              return { config }
+            }
+            return {}
+          }
+        })
+    })
+    expect((await probe({ variable: 'CODEX_HOME', path: '/account' })).complete).toBe(
+      config !== undefined && !Array.isArray(config) && !('model' in config)
+    )
+  }
 })

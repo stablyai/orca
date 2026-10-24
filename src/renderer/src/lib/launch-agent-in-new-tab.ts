@@ -13,7 +13,7 @@ import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/launch-agent-new-tab-host-route'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import {
@@ -147,10 +147,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+    agentArgs !== undefined ? agentArgs : resolveTuiAgentLaunchArgs(agent, store.settings)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings, resolvedLaunchPlatform)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -222,7 +220,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
 
   args.focusIntent?.cancel()
-  const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(store, worktreeId)
+  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null

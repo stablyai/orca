@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { toEditorModelUri } from './editor-model-uri'
 import { getEditorModelOwnerKey } from './editor-model-owner'
+import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { detectLanguage } from '@/lib/language-detect'
 import { getDefaultMarkdownViewMode, getMarkdownViewModes } from './markdown-preview-controls'
 import type { FileWriteResult } from '../../../../shared/file-write-disk-precondition'
@@ -10,21 +11,26 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-typ
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 
 /**
- * `user`: an explicit desktop save (shortcut, save-and-close dialog). `restart`: the save-all
+ * `user`: an explicit desktop save (shortcut, save-and-close dialog). `convert`: an explicit save
+ * the user confirmed may replace a non-UTF-8 file's unreadable characters. `restart`: the save-all
  * before a restart. `overwrite`: the conflict banner's Overwrite, the only consent to replace a
  * disk change.
  */
-export type EditorSaveTrigger = 'autosave' | 'user' | 'restart' | 'overwrite'
+export type EditorSaveTrigger = 'autosave' | 'user' | 'convert' | 'restart' | 'overwrite'
 
 /**
  * `written`: disk holds the text. `blocked-stale`: the host refused because disk moved on since the
- * tab's baseline. `failed`: nothing was written (read-only, suspended, superseded). Write errors reject.
+ * tab's baseline. `not-utf8`: an explicit save met a file that isn't UTF-8 and needs `convert`.
+ * `failed`: nothing was written (read-only, suspended, superseded). Write errors reject.
  * Callers treat anything but `written` as not saved.
  */
-export type EditorSaveResult = 'written' | 'blocked-stale' | 'failed'
+export type EditorSaveResult = 'written' | 'blocked-stale' | 'not-utf8' | 'failed'
 
 export const EDITOR_STALE_SAVE_MESSAGE =
   'This file changed on disk since your edits. Use the banner to compare, reload, or overwrite.'
+
+/** The rejection an explicit save reports for a non-UTF-8 file, so the caller can ask to convert. */
+export const EDITOR_NOT_UTF8_SAVE_MESSAGE = "This file isn't UTF-8 text, so it wasn't saved."
 
 /** The Monaco model a tab edits; tabs of one file on one host share it, and so share its text. */
 export function editorTabModelUri(state: AppState, file: OpenFile): string {
@@ -32,7 +38,7 @@ export function editorTabModelUri(state: AppState, file: OpenFile): string {
 }
 
 /** Whether the tab edits its Monaco model directly; rich, notebook, CSV and preview views don't. */
-function isCodeViewTab(state: AppState, file: OpenFile): boolean {
+export function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   // Why: the Changes view renders its own diff model, not the shared text model.
   if (file.mode !== 'edit' || state.editorViewMode?.[file.id] === 'changes') {
     return false
@@ -49,20 +55,12 @@ function isCodeViewTab(state: AppState, file: OpenFile): boolean {
   return views.length === 0 || view === 'source'
 }
 
-/**
- * Code-view tabs showing the same live model as `file`, `file` included. They share the model's
- * text, so a write or Keep may advance their baseline; any other view is guarded on its own.
- */
+/** Every view of `file`'s buffer record, `file` included: they share its text, baseline and conflict. */
 export function editorModelSiblingTabs(state: AppState, file: OpenFile): OpenFile[] {
-  if (!isCodeViewTab(state, file)) {
-    return [file]
-  }
-  const modelUri = editorTabModelUri(state, file)
-  return state.openFiles.filter(
-    (tab) =>
-      tab.id === file.id ||
-      (isCodeViewTab(state, tab) && editorTabModelUri(state, tab) === modelUri)
-  )
+  const viewIds = new Set(editorBufferSiblingViewIds(state, file.id))
+  viewIds.add(file.id)
+  const views = state.openFiles.filter((tab) => viewIds.has(tab.id))
+  return views.some((tab) => tab.id === file.id) ? views : [file, ...views]
 }
 
 /**
@@ -71,18 +69,18 @@ export function editorModelSiblingTabs(state: AppState, file: OpenFile): OpenFil
  * write gets the writer's compatibility fallback: the client reads and compares, then writes.
  */
 export type EditorSavePrecondition =
-  | { kind: 'guarded'; signature: string; allowMissing: boolean }
+  | { kind: 'guarded'; signature: string; allowMissing: boolean; requireLosslessUtf8?: boolean }
   | { kind: 'explicit-overwrite' }
   | { kind: 'blocked'; reason: 'no-baseline' }
 
 export type EditorSaveWrite = Exclude<EditorSavePrecondition, { kind: 'blocked' }>
 
-/** A code-view model is dirty when any tab of it holds unsaved edits; other views answer for themselves. */
+/** Whether `file`'s buffer record holds unsaved edits (every view mirrors it). */
 export function isEditorModelDirty(state: AppState, file: OpenFile): boolean {
   return editorModelSiblingTabs(state, file).some((tab) => tab.isDirty)
 }
 
-/** The tab holding the model's unsaved text; it may be a sibling of `file`, not `file` itself. */
+/** A view of `file`'s record holding its unsaved text; views of one record share one draft. */
 export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFile | undefined {
   return editorModelSiblingTabs(state, file).find(
     (tab) => tab.isDirty && state.editorDrafts[tab.id] !== undefined
@@ -90,8 +88,8 @@ export function editorModelDraftHolder(state: AppState, file: OpenFile): OpenFil
 }
 
 /**
- * The one disk version of a code-view model: every tab sharing the model holds the same value, set
- * only here. Other views keep their own. Returns the sibling tabs whose value moved.
+ * Moves the record's one disk version, so every view of it moves too. Returns the other views
+ * whose value moved.
  */
 export function setEditorDiskBaseline(
   state: AppState,
@@ -99,15 +97,13 @@ export function setEditorDiskBaseline(
   signature: string | undefined
 ): OpenFile[] {
   const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  const moved: OpenFile[] = []
-  for (const tab of file ? editorModelSiblingTabs(state, file) : []) {
-    if (tab.lastKnownDiskSignature !== signature) {
-      state.setLastKnownDiskSignature(tab.id, signature)
-      if (tab.id !== fileId) {
-        moved.push(tab)
-      }
-    }
+  if (!file) {
+    return []
   }
+  const moved = editorModelSiblingTabs(state, file).filter(
+    (tab) => tab.id !== fileId && tab.lastKnownDiskSignature !== signature
+  )
+  state.setLastKnownDiskSignature(fileId, signature)
   return moved
 }
 
@@ -128,7 +124,13 @@ export function editorSavePrecondition(
     return { kind: 'blocked', reason: 'no-baseline' }
   }
   // Why: autosave must not resurrect a file deleted behind the editor's back; explicit saves may.
-  return { kind: 'guarded', signature: baseline, allowMissing: trigger !== 'autosave' }
+  return {
+    kind: 'guarded',
+    signature: baseline,
+    allowMissing: trigger !== 'autosave',
+    // Why: only a confirmed conversion may replace bytes that didn't decode as UTF-8.
+    requireLosslessUtf8: trigger !== 'convert'
+  }
 }
 
 /** The only file write editor save code makes. */
@@ -137,7 +139,8 @@ export function writeEditorSave(
   filePath: string,
   content: string,
   access: LocalFileAccess | undefined,
-  write: EditorSaveWrite
+  write: EditorSaveWrite,
+  beforeSend?: () => void
 ): Promise<FileWriteResult> {
   return writeRuntimeFile(
     context,
@@ -145,8 +148,13 @@ export function writeEditorSave(
     content,
     access,
     write.kind === 'guarded'
-      ? { expectedSignature: write.signature, allowMissing: write.allowMissing }
-      : undefined
+      ? {
+          expectedSignature: write.signature,
+          allowMissing: write.allowMissing,
+          ...(write.requireLosslessUtf8 ? { requireLosslessUtf8: true } : {})
+        }
+      : undefined,
+    beforeSend
   )
 }
 

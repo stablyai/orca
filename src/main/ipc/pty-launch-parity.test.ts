@@ -12,7 +12,8 @@ import {
   restoreMainPlatform,
   setMainPlatform,
   startParityLanes,
-  type ParityLanes
+  type ParityLanes,
+  spawnBoth
 } from './pty-launch-parity.test-fixture'
 import {
   POSIX_PATH,
@@ -106,7 +107,7 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-// Why: an OpenCode v2 install with the picked model available; the probes would run the binary.
+// Model an OpenCode v2 install with the selected model without running its binary.
 vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
 }))
@@ -120,19 +121,19 @@ vi.mock('../opencode/opencode-model-availability', () => ({
 vi.mock('../opencode/opencode-launch-model-context', () => ({
   probeOpenCodeLaunchModelContext: vi.fn()
 }))
-// Why: every folder in the table exists on its host; main checks that before it spawns.
+// Every fixture folder exists on its execution host.
 vi.mock('../project-groups/folder-workspace-path-status', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getFolderWorkspacePathStatus: vi.fn(async () => ({ path: '', exists: true }))
 }))
-// Why: no Antigravity account is selected on this machine, so the account switch before an agy launch is a no-op.
+// No selected Antigravity account means launch preparation requires no account switch.
 vi.mock('../antigravity/native-account-launch', () => ({
   prepareAntigravityAccountForLaunch: vi.fn(async () => {})
 }))
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-// Why: the OpenSSH DefaultShell registry read; only a managed SSH host's case answers it.
+// Only managed Windows SSH-host cases supply OpenSSH DefaultShell.
 vi.mock('../../shared/openssh-default-shell', () => ({ readOpenSshDefaultShell: vi.fn(() => '') }))
 
 type WindowLaneCase = {
@@ -142,7 +143,6 @@ type WindowLaneCase = {
   settings?: Record<string, unknown>
   request: Record<string, unknown>
   provider: WindowProviderFacts
-  /** The agent env the case saved, as the provider must receive it. */
   env: Record<string, string>
 }
 
@@ -161,10 +161,7 @@ const WINDOW_LANE_CASES: WindowLaneCase[] = [
   }))
 ]
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 1, 2, 5, 6 and 8, main
-// half): each table request, fed to pty:spawn, reaches the provider with these facts (the pane's
-// measured size, never hidden), one agent_started, and a pane binding.
-// C2 (row 1), C5a-e and C6 check the merged spawn pipeline against it.
+// Exercise real window-lane spawning through provider, telemetry and pane binding.
 describe('window lane: pty:spawn request -> provider', () => {
   const suite = setupPtyIpcSuite()
   afterEach(() => restoreMainPlatform())
@@ -260,9 +257,7 @@ async function runHostCall(lanes: ParityLanes, c: HostLaunchCase): Promise<unkno
   return response.result
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 3, 4, 7, 8, 10):
-// each host producer's call reaches the provider through the real runtime controller with these
-// facts, telemetry, placement and phone tab. C1, C2 and C5a-e check the host path against it.
+// Exercise host producers through the real runtime controller, including telemetry and phone tabs.
 describe('host lane: producer call -> runtime controller -> provider', () => {
   const suite = setupPtyIpcSuite()
   beforeEach(() => stubOpenCodeV2())
@@ -277,6 +272,7 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
     // The host stamps its own pane identity (the window lane's stale-key case is below).
     const spawned = recordOf(lanes.provider.mock.calls.at(-1)?.[0])
     expect(recordOf(spawned.env).ORCA_PANE_KEY).toBe(spawned.paneKey)
+    expect(recordOf(spawned.env).ORCA_WORKSPACE_ID).toBe(launchWorkspaceId(c.workspace))
     expect(trackMock.mock.calls).toEqual(c.telemetry ? [['agent_started', c.telemetry]] : [])
     expect(lanes.persistPtyBinding.mock.calls[0]?.[0]).toMatchObject({
       placement: { kind: 'new-tab' }
@@ -289,8 +285,6 @@ describe('host lane: producer call -> runtime controller -> provider', () => {
 const POSIX_REPO = { kind: 'repo', path: POSIX_PATH } as const
 const WORKER = HOST_LAUNCH_CASES.find((c) => c.name.startsWith('orchestration worker'))!
 
-// Pins main's current launch behaviour as the convergence parity baseline (rows 2 and 10; failed
-// spawn, reveal, pane identity): the facts no single table row carries.
 describe('launch facts outside the tables', () => {
   const suite = setupPtyIpcSuite()
   afterEach(() => restoreMainPlatform())
@@ -559,7 +553,6 @@ describe('launch facts outside the tables', () => {
     }
   })
 
-  // C5a (one agent_error place): main today reports a failed window-lane spawn.
   it.each([
     {
       lane: 'telemetry kind wins over the claude sniff',
@@ -587,7 +580,7 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toEqual(c.calls)
   })
 
-  // C5a (one execute) keeps this on both lanes; C5a-2 flips only the host's agent_error.
+  // Current lane difference: window failures emit agent_error; host failures do not.
   const FAILED_START_AGENT_ERROR: Record<'window' | 'host', unknown[]> = {
     window: [['agent_error', { agent_kind: 'claude-code', error_class: 'binary_not_found' }]],
     host: [['agent_error', { agent_kind: 'claude-code', error_class: 'binary_not_found' }]]
@@ -650,7 +643,6 @@ describe('launch facts outside the tables', () => {
     }
   )
 
-  // C5a-2: requests that join one claimed start share its failure; only the request that started it counts it.
   it('host lane: concurrent resumes of one Claude session count one failed start once', async () => {
     setMainPlatform('darwin')
     classifyErrorMock.mockReturnValue({ error_class: 'binary_not_found' })
@@ -698,7 +690,6 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toHaveLength(1)
   })
 
-  // C5e (presentation merge): a worker asks the window to reveal its titled tab without activating it.
   it('row 10: an orchestration worker requests a titled, inactive reveal', async () => {
     setMainPlatform(WORKER.os)
     const lanes = startParityLanes(suite, { workspace: WORKER.workspace })
@@ -711,7 +702,6 @@ describe('launch facts outside the tables', () => {
     expect(lanes.reveal.mock.calls[0]?.[1]).not.toHaveProperty('presentation')
   })
 
-  // createAgentSession on the host planner keeps this refusal when no launch can be built.
   it('row 7: a paired agent session with no buildable launch refuses before any spawn', async () => {
     setMainPlatform('linux')
     const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
@@ -735,8 +725,6 @@ describe('launch facts outside the tables', () => {
     expect(lanes.provider).not.toHaveBeenCalled()
   })
 
-  // C5c (pane identity built once in main): main rewrites stale pane keys from the request's tab and
-  // leaf; workspace keys pass.
   it('window lane: the provider gets the pane keys main derives, not the stale ones sent', async () => {
     setMainPlatform('darwin')
     const tabId = '55555555-5555-4555-8555-555555555555'
@@ -761,7 +749,6 @@ describe('launch facts outside the tables', () => {
 })
 
 const WSL_UBUNTU = { kind: 'wsl', distro: 'Ubuntu' } as const
-// What the renderer sends for a WSL project (it reads a never-saved \\wsl$ path the same way).
 const WSL_PROJECT_SENT = {
   status: 'resolved',
   runtime: {
@@ -775,8 +762,6 @@ const WSL_PROJECT_SENT = {
 }
 const LOGIN_SHELL = String.raw`C:\Program Files\PowerShell\7\pwsh.exe`
 
-// Pins main's current spawn preflight (row 3, C5b): where the two lanes resolve a plain terminal's
-// start differently today. Row 13a removes the missing-folder split; row 13b the runtime split.
 describe('spawn preflight: where the lanes differ today', () => {
   const suite = setupPtyIpcSuite()
   afterEach(() => {
@@ -784,24 +769,15 @@ describe('spawn preflight: where the lanes differ today', () => {
     vi.unstubAllEnvs()
   })
 
-  async function spawnBoth(
-    lanes: ParityLanes,
-    workspace: LaunchWorkspace,
-    window: Record<string, unknown>,
-    host: Record<string, unknown> = {}
-  ): Promise<Record<'window' | 'host', Record<string, unknown>>> {
-    const worktreeId = launchWorkspaceId(workspace)
-    const result = recordOf(
-      await lanes.spawnWindow({ cols: 80, rows: 24, cwd: workspace.path, worktreeId, ...window })
-    )
-    const windowFacts = { ...(await providerFacts(lanes.provider)), result }
-    await lanes.runtime.createTerminal(`id:${worktreeId}`, host)
-    return { window: windowFacts, host: await providerFacts(lanes.provider) }
-  }
-
-  // The host hands the provider the missing folder, and the provider's own check then refuses it
-  // ("Working directory ... does not exist").
-  it('a deleted folder: the window starts in the workspace root and says so; the host does not', async () => {
+  // A caller-named session the host no longer has is created too, so it falls back like a fresh one.
+  it.each([
+    { name: 'a fresh start', window: {}, host: {} },
+    {
+      name: 'a dead caller-named session',
+      window: { sessionId: 'pty-gone-window' },
+      host: { sessionId: 'pty-gone-host' }
+    }
+  ])('a deleted folder, $name: both lanes start in the workspace root and say so', async (c) => {
     setMainPlatform('darwin')
     const missing = `${POSIX_PATH}/deleted`
     statSyncMock.mockImplementation((target: string) => {
@@ -814,15 +790,20 @@ describe('spawn preflight: where the lanes differ today', () => {
     const facts = await spawnBoth(
       lanes,
       POSIX_REPO,
-      { cwd: missing, cwdFallback: 'worktree' },
-      { cwd: missing }
+      { cwd: missing, ...c.window },
+      { cwd: missing, ...c.host }
     )
 
+    const fallback = { kind: 'worktree', cwd: POSIX_PATH }
     expect(facts.window).toMatchObject({
       cwd: POSIX_PATH,
-      result: { startupCwdFallback: { kind: 'worktree', cwd: POSIX_PATH } }
+      result: { startupCwdFallback: fallback }
     })
-    expect(facts.host).toMatchObject({ cwd: missing })
+    expect(facts.host).toMatchObject({ cwd: POSIX_PATH, created: { startupCwdFallback: fallback } })
+    expect(lanes.reveal).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({ startupCwdFallback: expect.anything() })
+    )
   })
 
   it.each([
@@ -854,8 +835,7 @@ describe('spawn preflight: where the lanes differ today', () => {
     expect(facts.host).toMatchObject(c.host)
   })
 
-  // One resolution reads it for both lanes. Only an SSH-launched orcad has this env, and it has no
-  // window (no pty:spawn), so the window lane never meets it in practice.
+  // Managed SSH hosts expose this shell environment; the shared resolver serves both lanes.
   it('Windows managed SSH host: both lanes open the OpenSSH login shell', async () => {
     setMainPlatform('win32')
     vi.stubEnv('ORCA_ORCAD_MANAGED_ACTIVATION_ROOT', '/activation')

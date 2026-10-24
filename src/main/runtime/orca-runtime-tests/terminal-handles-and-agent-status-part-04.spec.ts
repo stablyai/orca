@@ -1,5 +1,6 @@
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -458,7 +459,7 @@ describe('OrcaRuntimeService', () => {
     const getForegroundProcess = vi.fn(async () => 'omp')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess

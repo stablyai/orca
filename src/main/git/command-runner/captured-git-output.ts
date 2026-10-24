@@ -1,12 +1,6 @@
 import type { ResolvedCommand } from './wsl-command-resolution'
 
-/**
- * Slice a fenced payload out of raw bytes.
- *
- * Why bytes: blob content may be binary, so decoding to a string to find the
- * fence would corrupt it. Returns the buffer untouched when the command was not
- * fenced or the fence is absent.
- */
+/** Find fences in bytes to preserve binary blobs; return untouched output if no fence is found. */
 export function readCapturedGitBuffer(stdout: Buffer, resolved: ResolvedCommand): Buffer {
   const captured = resolved.captured
   if (!captured) {

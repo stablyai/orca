@@ -196,7 +196,7 @@ describe('changes made while main’s layout stream is down', () => {
         ?.activeTabId
     ).toBe('tab-unbound')
   })
-  it('keep an agent’s first generated title when a second prompt comes before the snapshot', async () => {
+  it('leave an agent’s generated titles to main, and show the one main kept from the snapshot', async () => {
     useAppStore.setState({
       settings: { ...useAppStore.getState().settings!, tabAutoGenerateTitle: true }
     })
@@ -205,12 +205,20 @@ describe('changes made while main’s layout stream is down', () => {
     stream.onStatus!({ state: 'lost' })
 
     useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth module')
-    await mainAppliesEach()
-    // The answer settled the first title, so the second prompt is sent too.
     useAppStore.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(rpc.calls.map((call) => call.command.type)).toEqual(['renameTabs'])
-    await mainAppliesEach()
+    expect(rpc.calls.filter((call) => call.command.type === 'renameTabs')).toEqual([])
     expect(terminalRow('tab-unbound').generatedTitle).toBeUndefined()
+    // Main derives both from its own agent status and keeps the first, as its deriver sends them.
+    mainRenames({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Refactor the auth module' }]
+    })
+    mainRenames({
+      type: 'renameTabs',
+      kind: 'generated',
+      renames: [{ workspace: GIT_KEY, tabId: 'tab-unbound', title: 'Fix the flaky login test' }]
+    })
 
     stream.onStatus!({ state: 'connecting' })
     stream.onFrame!(frames.snapshot(published(), ++seq))

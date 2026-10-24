@@ -17,6 +17,7 @@ import {
   terminalLayoutSnapshotSchema,
   terminalPaneLayoutNodeSchema
 } from './terminal-layout-snapshot-schema'
+import { closedTerminalPaneSchema } from './closed-terminal-panes'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
@@ -290,6 +291,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   closedTerminalTabTombstonesByTabId: salvagedOptional(
     'closedTerminalTabTombstonesByTabId',
     salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
+  ),
+  closedTerminalPanesByPaneKey: salvagedOptional(
+    'closedTerminalPanesByPaneKey',
+    salvagingRecord(z.string().min(1), closedTerminalPaneSchema)
   )
 })
 

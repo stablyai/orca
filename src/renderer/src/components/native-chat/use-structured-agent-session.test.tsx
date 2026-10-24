@@ -113,14 +113,6 @@ const FAST_OPTIONS = {
   current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((accept) => {
-    resolve = accept
-  })
-  return { promise, resolve }
-}
-
 describe('useStructuredAgentSession working state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -325,8 +317,12 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('sends the pick again as a new operation after a pending admission refusal', async () => {
+    const refreshedOptions = Promise.withResolvers<typeof OPTIONS>()
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options' && fence === 4) {
+        return refreshedOptions.promise
+      }
       if (method !== 'agentSession.setOption') {
         // The hook also holds the session while it is mounted; only option writes are attempts.
         return Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
@@ -368,7 +364,8 @@ describe('useStructuredAgentSession options', () => {
     })
     fence = 4
     rerender()
-    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+    expect(result.current.optionSnapshot.every((entry) => !entry.settable)).toBe(true)
+    await act(async () => refreshedOptions.resolve(OPTIONS))
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })
@@ -390,7 +387,7 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual([3, 4])
   })
 
-  it('ignores an option failure from a superseded fence', async () => {
+  it('reports an option failure across startup while its pane remains current', async () => {
     let reject!: (error: Error) => void
     const pending = new Promise<never>((_resolve, rejectPromise) => {
       reject = rejectPromise
@@ -423,7 +420,7 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(result.current.error).toBeNull()
-    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
   })
 
   it('includes one background task id in the cancel fingerprint and payload', async () => {
@@ -671,9 +668,12 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('discards an option read that began before a Fast mutation', async () => {
-    const staleRead = deferred<typeof FAST_OPTIONS>()
+    const staleRead = Promise.withResolvers<typeof FAST_OPTIONS>()
     let optionReads = 0
     mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.modelCatalog') {
+        return Promise.resolve({ origin: 'unknown' })
+      }
       if (method === 'agentSession.options') {
         optionReads += 1
         if (optionReads === 1) {

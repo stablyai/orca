@@ -90,11 +90,14 @@ pnpm build
 ```
 
 For repeated local typechecks, use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`,
-and `pnpm tc:cli`). These run `bun check` from the pinned `bun` devDependency —
-about a third of tsc's CPU and an eighth of its memory, so several agents can
-typecheck at once. Pass `--compiler=native` to use tsc and its incremental
-cache instead. CI uses `pnpm typecheck:ci`, the same Bun check with CI's
-concurrency. Shared tests are checked by the
+and `pnpm tc:cli`). On Apple Silicon macOS and x64/arm64 Linux, these use the pinned
+`tsrs` compiler with incremental caches. Keep `.cache/typecheck/` between checks;
+delete it to force a fresh check. Caches are separate for each project, compiler
+version, and worktree. At most two projects run together, subject to the memory budget.
+Windows, Intel macOS, and other unsupported platforms use pinned Bun automatically.
+Pass `--compiler=bun` to explicitly use Bun, or `--compiler=native` to use TypeScript.
+CI uses `pnpm typecheck:ci`, which explicitly selects Bun and its CI concurrency.
+Shared tests are checked by the
 Node project; shared production code is checked in all three environments.
 Run `pnpm tc:node` after editing shared tests, or `pnpm tc` to check everything.
 

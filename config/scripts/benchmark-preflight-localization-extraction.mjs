@@ -1,3 +1,4 @@
+import { readPinnedBunVersion } from './pinned-bun-executable.mjs'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,8 +26,8 @@ async function requireSuccess(program, args, label, env = process.env) {
 report.bunVersion = (
   await requireSuccess(bun, ['--version'], 'extraction-bun-version')
 ).stdout.trim()
-if (report.bunVersion !== '1.4.3') {
-  throw new Error('Pin Bun 1.4.3')
+if (report.bunVersion !== readPinnedBunVersion(root)) {
+  throw new Error(`Pin Bun ${readPinnedBunVersion(root)}`)
 }
 const directory = mkdtempSync(path.join(output, 'extraction-'))
 const outputPattern = path.join(directory, '{{language}}.json').split(path.sep).join('/')

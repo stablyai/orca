@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, test } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
   type AgentJournalItemIdentity,
   type AgentSessionJournalIdentity,
   type AgentSessionJournalProviderHandle
@@ -163,11 +163,9 @@ test("an older build keeps every row around a Stop's event, a Resume and a reope
     await journal.appendQueueReopen(1)
     const afterMarks = journal.cursor()
     await append(1, 'after the Stop')
-    const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
-    if (!since.ok) {
-      throw new Error(`expected rows, got reset ${since.reset}`)
-    }
-    const rows: JournalRow[] = since.rows
+    // As stored: a read raises each row's `v` to the newest this build reads, which the older
+    // build does not.
+    const rows: JournalRow[] = storedRows(directory).map((json) => JSON.parse(json))
 
     // The older build, after a downgrade, replays the same rows from its own database.
     const checkout = await materializeReleaseCheckout(BASELINE_REF)
@@ -325,7 +323,8 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
     await journal.appendItem(item(0), { kind: 'status', text: 'before' }, scope)
     const at = journal.cursor().sequence + 1
     const newer = JSON.stringify({
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+      // A version the older build reads, so it meets the kind rather than a newer version.
+      v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
       kind: 'future-mark',
       epoch: journal.epoch,
       seq: at,

@@ -31,6 +31,7 @@ async function listLiveDaemonSessionIds(): Promise<string[] | null> {
 
 export class TerminalUpdateAdmission {
   private closedUntilMs = 0
+  private heldUntilExit = false
   private spawnsInFlight = 0
   private settledWaiters: (() => void)[] = []
 
@@ -46,7 +47,12 @@ export class TerminalUpdateAdmission {
   }
 
   isClosed(): boolean {
-    return this.closedUntilMs > this.now()
+    return this.heldUntilExit || this.closedUntilMs > this.now()
+  }
+
+  /** The server has begun to stop: nothing it starts now can outlive it, whatever a census asks. */
+  holdUntilExit(): void {
+    this.heldUntilExit = true
   }
 
   /**

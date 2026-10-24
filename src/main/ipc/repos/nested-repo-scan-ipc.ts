@@ -89,7 +89,7 @@ export async function scanNestedReposForIpc(args: {
       onProgress: args.onProgress
     })
   }
-  // Why: this process serves no SSH target, so a remote scan has nothing to read.
+  // This local scanner cannot read an SSH target.
   throw new Error('ssh_connection_unavailable')
 }
 

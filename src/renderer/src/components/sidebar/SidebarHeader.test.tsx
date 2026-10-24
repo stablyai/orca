@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   const shortcutLabel: { current: string | null } = { current: '⌘N' }
 
   return {
+    bucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
     popoverContentProps,
     shortcutLabel,
@@ -44,7 +45,7 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => ({ attention: 0, working: 0, done: 0, idle: 0 })
+  useAgentBucketCounts: () => mocks.bucketCounts
 }))
 
 vi.mock('./SidebarWorkspaceOptionsMenu', () => ({
@@ -106,6 +107,7 @@ function createButton(): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  mocks.bucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
   mocks.shortcutLabel.current = '⌘N'
@@ -131,6 +133,44 @@ afterEach(() => {
 })
 
 describe('SidebarHeader', () => {
+  it.each(['workspaces', 'agents'] as const)(
+    'prioritizes questions, then working, and shows idle zero in the %s view',
+    (sidebarBody) => {
+      mockState.sidebarBody = sidebarBody
+      const render = () => {
+        act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+        return headerButton(sidebarBody === 'agents' ? 'Turn off activity view' : 'View activity')
+      }
+      mocks.bucketCounts = { attention: 2, working: 5, done: 3, idle: 4 }
+      let button = render()
+      expect(button.querySelector('[aria-label="Needs You: 2"]')?.textContent).toBe('2')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeTruthy()
+      expect(button.querySelector('[aria-label="Working: 5"]')).toBeNull()
+
+      mocks.bucketCounts.attention = 0
+      button = render()
+      expect(button.querySelector('[aria-label="Working: 5"]')?.textContent).toBe('5')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+
+      mocks.bucketCounts.working = 0
+      button = render()
+      expect(button.querySelector('[aria-label="Idle: 0"]')?.textContent).toBe('0')
+      expect(button.querySelector('.lucide-message-circle-question-mark')).toBeNull()
+      expect(button.getAttribute('aria-describedby')).toBe(
+        button.querySelector('[aria-label="Idle: 0"]')?.id
+      )
+    }
+  )
+
+  it.each([9, 12, 99, 100])('keeps the working count accessible at %s agents', (working) => {
+    mocks.bucketCounts.working = working
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    const button = headerButton('View activity')
+    const status = button.querySelector(`[aria-label="Working: ${working}"]`)
+    expect(status?.textContent).toBe(working > 99 ? '99+' : String(working))
+    expect(button.getAttribute('aria-describedby')).toBe(status?.id)
+  })
+
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)

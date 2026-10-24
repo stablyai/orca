@@ -314,7 +314,7 @@ describe('registerPtyHandlers', () => {
         'ORCA_WSL_CLI_DIR/p',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
-        // Why: bare WSL shells no longer create ~/.omp; only status extension is exported (#10196).
+        // Bare WSL shells expose OMP status without creating ~/.omp (#10196).
         'ORCA_OMP_STATUS_EXTENSION/u',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])

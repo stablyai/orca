@@ -1,6 +1,6 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
-import { presentPaneViewportPreservingSynchronizedOutput } from './pane-webgl-renderer'
+import { presentPaneViewport } from './pane-webgl-renderer'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
@@ -132,6 +132,6 @@ export function schedulePaneRevealPresent(
 ): void {
   forEachPaneOnSettledFrame(resolvePaneGetter(ownerOrGetter, panes), (pane) => {
     reattachWebglIfNeeded(pane)
-    presentPaneViewportPreservingSynchronizedOutput(pane)
+    presentPaneViewport(pane)
   })
 }

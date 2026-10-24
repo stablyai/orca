@@ -41,7 +41,12 @@ export const SIDEBAR_INPUT_METHODS = [
     name: 'sidebarInputs.workspaceRows',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => requireSwitchedOn(runtime.workspaceRows).snapshot()
+    handler: async (_params, { runtime }) => {
+      const rows = requireSwitchedOn(runtime.workspaceRows)
+      // A one-shot read covers every scan asked for before it, as the fresh listing it replaced did.
+      await rows.settled()
+      return rows.snapshot() ?? { revision: rows.revision.value, rows: {} }
+    }
   }),
   defineMethod({
     name: 'sidebarInputs.reviewFacts',
@@ -104,7 +109,7 @@ export const SIDEBAR_INPUT_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) =>
-      requireSwitchedOn(runtime.workspaceCreations).snapshot()
+      requireSwitchedOn(runtime.workspaceLifecycle).creationsSnapshot()
   }),
   defineMethod({
     name: 'sidebarInputs.reportView',

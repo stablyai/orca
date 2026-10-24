@@ -1,18 +1,29 @@
 import { homedir } from 'node:os'
+import { delimiter } from 'node:path'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-const mocks = vi.hoisted(() => ({
-  refreshed: new Set<() => void>(),
-  observe: vi.fn(),
-  recapture: vi.fn(async () => {})
-}))
+const mocks = vi.hoisted(() => {
+  const programs: Record<string, () => { command: string; env: Record<string, string> }> = {}
+  return {
+    refreshed: new Set<() => void>(),
+    releasesChanged: new Set<() => void>(),
+    observe: vi.fn(),
+    recapture: vi.fn(async () => {}),
+    programs,
+    installable: true
+  }
+})
 vi.mock('../preflight/workspace-agent-detection', () => ({
   onAgentsRefreshedOnHost: (listener: () => void) => mocks.refreshed.add(listener)
 }))
+vi.mock('../node-runtime/managed-runtime-installation', () => ({
+  onManagedRuntimeReleasesChanged: (listener: () => void) => mocks.releasesChanged.add(listener)
+}))
 vi.mock('./structured-agent-launch-support', () => ({
-  observeStructuredAgentLaunch: mocks.observe
+  observeStructuredAgentLaunch: mocks.observe,
+  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '/usr/bin' })
 }))
 vi.mock('./structured-agent-shell-environment', () => ({
   recaptureHostShellEnvironment: mocks.recapture
@@ -21,15 +32,39 @@ vi.mock('./structured-agent-shell-environment', () => ({
 vi.mock('./structured-agent-runtime-metadata', () => ({
   STRUCTURED_AGENT_RUNTIME_METADATA: ['claude', 'grok', 'pi', 'opencode'].map((agent) => ({
     definition: { agent },
-    supportsLocation: () => agent !== 'grok'
+    supportsLocation: () => agent !== 'grok',
+    ...(agent === 'grok'
+      ? {}
+      : {
+          chatProgram: {
+            resolve: () => mocks.programs[agent](),
+            ...(agent === 'opencode' ? { installable: () => mocks.installable } : {})
+          }
+        })
   }))
 }))
 
 import { installStructuredAgentAvailability } from './structured-agent-availability'
 
+const READY = { status: 'ready', version: '2.0.14' } as const
+const TOO_OLD = { status: 'tooOld', version: '2.0.13', minimumVersion: '2.0.14' } as const
+const opencodeAvailable = expect.objectContaining({ agent: 'opencode', state: 'available' })
+const found =
+  (command: string, PATH = '/usr/bin') =>
+  () => ({ command, env: { PATH } })
+
 beforeEach(() => {
   mocks.refreshed.clear()
-  mocks.observe.mockReset().mockResolvedValue('supported')
+  mocks.releasesChanged.clear()
+  mocks.installable = true
+  mocks.programs = {
+    claude: found('/usr/bin/claude'),
+    pi: () => {
+      throw new Error('Command setting not runnable')
+    },
+    opencode: found('opencode')
+  }
+  mocks.observe.mockReset().mockResolvedValue(READY)
   mocks.recapture.mockReset().mockResolvedValue(undefined)
 })
 
@@ -57,7 +92,7 @@ it('shares a host-home snapshot even if shell recapture fails, retaining it with
     if (agent === 'pi') {
       throw new Error('Command setting not runnable')
     }
-    return agent === 'opencode' ? 'unsupported' : 'supported'
+    return agent === 'opencode' ? TOO_OLD : READY
   })
   const { availability } = install()
   const first = vi.fn()
@@ -65,11 +100,11 @@ it('shares a host-home snapshot even if shell recapture fails, retaining it with
   await vi.waitFor(() => expect(first).toHaveBeenCalledTimes(1))
   release()
   expect(first.mock.calls[0][0]).toEqual([
-    { agent: 'claude', state: 'available' },
-    { agent: 'grok', state: 'refused', reason: 'agent' },
+    { agent: 'claude', state: 'available', chatProgram: 'available' },
+    { agent: 'grok', state: 'refused', reason: 'agent', chatProgram: 'unknown' },
     // A check that could not answer is no verdict.
-    { agent: 'pi', state: 'unknown' },
-    { agent: 'opencode', state: 'refused', reason: 'agent' }
+    { agent: 'pi', state: 'unknown', chatProgram: 'unknown' },
+    { agent: 'opencode', state: 'refused', reason: 'agent', chatProgram: 'installable' }
   ])
   expect(cwds).toEqual([homedir(), homedir(), homedir()])
   // Kept with no readers: a later one reads it at once, without probing again.
@@ -88,7 +123,7 @@ it('recaptures for settings and uses the completed capture on Refresh', async ()
   change({ agentCmdOverrides: { pi: '/opt/pi' } })
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
   const capture = Promise.withResolvers<void>()
-  let version = 'unsupported'
+  let version: typeof READY | typeof TOO_OLD = TOO_OLD
   mocks.observe.mockImplementation(async () => version)
   mocks.recapture.mockImplementation(() => capture.promise)
   mocks.refreshed.forEach((listener) => listener())
@@ -97,15 +132,15 @@ it('recaptures for settings and uses the completed capture on Refresh', async ()
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(read).toHaveBeenCalledTimes(2)
   expect(mocks.observe).toHaveBeenCalledTimes(9)
-  version = 'supported'
+  version = READY
   capture.resolve()
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(3))
-  expect(read.mock.lastCall?.[0]).toContainEqual({ agent: 'opencode', state: 'available' })
+  expect(read.mock.lastCall?.[0]).toContainEqual(opencodeAvailable)
 })
 
 it('captures fresh shell facts for a first subscriber even when Refresh had no listener', async () => {
   const capture = Promise.withResolvers<void>()
-  let version = 'unsupported'
+  let version: typeof READY | typeof TOO_OLD = TOO_OLD
   mocks.observe.mockImplementation(async () => version)
   mocks.recapture.mockImplementation(() => capture.promise)
   mocks.refreshed.forEach((listener) => listener())
@@ -114,8 +149,25 @@ it('captures fresh shell facts for a first subscriber even when Refresh had no l
   availability.subscribe(read)
   await new Promise<void>((resolve) => setImmediate(resolve))
   expect(mocks.observe).not.toHaveBeenCalled()
-  version = 'supported'
+  version = READY
   capture.resolve()
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1))
-  expect(read.mock.lastCall?.[0]).toContainEqual({ agent: 'opencode', state: 'available' })
+  expect(read.mock.lastCall?.[0]).toContainEqual(opencodeAvailable)
+})
+
+it('reads a missing program as missing, a workspace-relative PATH as unknown, and re-reads after an install', async () => {
+  mocks.installable = false
+  mocks.programs.claude = found('claude', `bin${delimiter}/usr/bin`)
+  const { availability } = install()
+  const read = vi.fn()
+  availability.subscribe(read)
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1))
+  const programOf = (agent: string) =>
+    read.mock.lastCall?.[0].find((row: { agent: string }) => row.agent === agent)?.chatProgram
+  expect(programOf('claude')).toBe('unknown')
+  expect(programOf('opencode')).toBe('missing')
+  mocks.programs.opencode = found('/data/runtimes/opencode/bin/opencode')
+  mocks.releasesChanged.forEach((listener) => listener())
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+  expect(programOf('opencode')).toBe('available')
 })

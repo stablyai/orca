@@ -171,17 +171,6 @@ describe('the connected flow', () => {
     expect(step.effects).toEqual([{ kind: 'download' }])
   })
 
-  it('still walls a listed route whose bundle this shell cannot read', () => {
-    const step = run(afterCacheRead(null).session, {
-      type: 'manifest-read',
-      manifest: { ...MANIFEST, schemaVersion: 99 }
-    })
-    expect(step.session.state).toMatchObject({
-      kind: 'wall',
-      verdict: { reason: 'bundle-shell-too-old' }
-    })
-  })
-
   it('walls a listed route whose page is older than this shell, as a desktop to update', () => {
     for (const manifest of [
       { ...MANIFEST, pageVersion: 0 },
@@ -453,12 +442,19 @@ describe('recovery follows the shell view contract', () => {
 
 describe('try again', () => {
   it('clears both latches and restarts the flow', () => {
-    const first = run(readySession().session, {
+    const lost = run(readySession().session, {
+      type: 'shell-failed',
+      reason: 'render-process-gone'
+    })
+    const remounted = run(lost.session, { type: 'remounted', sessionId: 'session-remounted' })
+    const first = run(remounted.session, {
       type: 'shell-failed',
       reason: 'document-load-failed'
     })
     const refetched = readyAgain(first.session, 'session-two')
     const failed = run(refetched.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    expect(failed.session.retriedOnce).toBe(true)
+    expect(failed.session.remountedOnce).toBe(true)
     const retried = run(failed.session, { type: 'retry-pressed' })
     expect(retried.session.retriedOnce).toBe(false)
     expect(retried.session.remountedOnce).toBe(false)

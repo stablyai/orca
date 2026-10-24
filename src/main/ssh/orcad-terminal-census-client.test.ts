@@ -81,6 +81,15 @@ describe('managed orcad terminal census client', () => {
     expect(order).toEqual(['wake', 'census'])
   })
 
+  it('never starts a server just to reopen its terminal admission', async () => {
+    await collectManagedTerminalCensus('/profile', environment, active, undefined, {
+      closeAdmissionForMs: 0
+    })
+    // A server that stopped has nothing left to reopen; waking it could restart or recover it.
+    expect(mocks.verify).not.toHaveBeenCalled()
+    expect(mocks.send.mock.calls[0]?.[2]).toMatchObject({ closeAdmissionForMs: 0 })
+  })
+
   it('asks an advertising host with the activation time', async () => {
     answerWith([ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY], { ok: true, result: census })
     await expect(collect(active)).resolves.toEqual(census)

@@ -45,7 +45,7 @@ const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
   'agent.launch.v2'
 ]
 
-// A layout-owner build's main opens the file itself, so the open succeeds and the tab is listed.
+// A layout-owner build's main opens the file itself, so the open succeeds and its tab is listed.
 const LAYOUT_OWNER_BUILD = existsSync(
   path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
 )
@@ -189,9 +189,18 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
     })
     await record('phone closes the pinned tab', closedPinned)
 
-    // A headless server refuses with runtime_error "renderer_unavailable" (no window to open in),
-    // except in a layout-owner build, whose main opens it: the README tab is listed from the restart.
+    // A windowless server's main opens the file itself and lists a markdown row; the rebuilt rows
+    // then name tab2 from the saved session ("Terminal 2"). A layout-owner build lists it at once.
     const opened = await reply(phone, 'files.open', { worktree, relativePath: 'README.md' })
+    if (LAYOUT_OWNER_BUILD) {
+      const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      expect(
+        listed.tabs.some((tab) => 'filePath' in tab && tab.filePath.endsWith('README.md')),
+        'the phone lists the file it just opened'
+      ).toBe(true)
+    }
     await record('phone opens a file', opened)
 
     const selectedBefore = sessionTabsBaseline(await firstSnapshot(phone, worktree), labels)

@@ -14,10 +14,6 @@ import { spawnTokenFromEnvironBlock } from './agent-session-spawn-token-readback
 
 export type AgentSessionSpawnTokenScan = ReadonlyMap<string, readonly number[]>
 
-export type AgentSessionSpawnTokenScanEvidence =
-  | { status: 'verified'; processes: AgentSessionSpawnTokenScan }
-  | { status: 'unverifiable'; processes: null; platform: NodeJS.Platform }
-
 /** Tokens observed on this host, or null when the platform cannot answer at all. */
 export async function scanAgentSessionSpawnTokenProcesses(
   platform: NodeJS.Platform = process.platform,

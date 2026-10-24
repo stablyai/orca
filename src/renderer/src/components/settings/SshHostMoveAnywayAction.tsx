@@ -3,6 +3,7 @@ import type { SshManagedServerStatus, SshTarget } from '../../../../shared/ssh-t
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { sshHostServerReassurance } from '@/ssh/ssh-host-server-setup-copy'
+import { trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -17,16 +18,16 @@ import { getManagedOrcadApi } from './use-managed-server-catalog'
 /** Offered only for a refusal that saved state alone causes. */
 export function canMoveSshHostAnyway(status: SshManagedServerStatus | undefined): boolean {
   return Boolean(
-    getManagedOrcadApi() &&
     status?.kind === 'relay' &&
     status.reason === 'refused' &&
-    status.canLeaveBehind
+    status.canLeaveBehind &&
+    getManagedOrcadApi()
   )
 }
 
 /**
  * The way out of a move refused only by saved state: move the host now and keep what can't move on
- * this computer. Unsaved drafts are never deleted, and live terminals still have to be closed.
+ * this computer. Unsaved drafts stay here, and bridged terminals keep their tabs and panes.
  */
 export function SshHostMoveAnywayDialog({
   target,
@@ -35,7 +36,7 @@ export function SshHostMoveAnywayDialog({
   onOpenChange,
   onChanged
 }: {
-  target: SshTarget
+  target: Pick<SshTarget, 'id' | 'label'>
   status: SshManagedServerStatus | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -57,7 +58,8 @@ export function SshHostMoveAnywayDialog({
     setError(null)
     try {
       await api.allowMoveLeavingBehind({ sshTargetId: target.id })
-      await window.api.ssh.connect({ targetId: target.id })
+      // Tracked so Retry and the row's Connect join this connect instead of dialing a second.
+      await trackSshConnect(target.id, window.api.ssh.connect({ targetId: target.id }))
       if (mountedRef.current) {
         setOpen(false)
       }
@@ -108,5 +110,42 @@ export function SshHostMoveAnywayDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The same way out where the refusal shows outside Settings, e.g. a disconnected terminal pane. */
+export function SshHostMoveAnywayButton({
+  target,
+  status,
+  disabled = false
+}: {
+  target: Pick<SshTarget, 'id' | 'label'>
+  status: SshManagedServerStatus | undefined
+  disabled?: boolean
+}): React.JSX.Element | null {
+  const [open, setOpen] = useState(false)
+  if (!canMoveSshHostAnyway(status)) {
+    return null
+  }
+  return (
+    <>
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+      </Button>
+      {/* The connect it runs publishes the new status, so nothing here refreshes. */}
+      <SshHostMoveAnywayDialog
+        target={target}
+        status={status}
+        open={open}
+        onOpenChange={setOpen}
+        onChanged={() => {}}
+      />
+    </>
   )
 }

@@ -1,6 +1,5 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -15,7 +14,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
-        // Why: callers treat inspection errors as "skip", so a requested/ambiguous host must report error (fail closed), not hook-free.
+        // Ambiguous/requested hosts must report error, not hook-free success, so callers cannot skip inspection.
         return {
           status: args.hostId || repoIdExists ? 'error' : 'ok',
           hasHooks: false,
@@ -27,8 +26,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
-      if (getStoredRepoSshConnectionId(repo)) {
-        // Why: this process serves no SSH filesystem.
+      if (getRepoDialableSshTargetId(repo)) {
         return {
           status: 'error',
           hasHooks: false,
@@ -39,7 +37,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
 
       const has = hasHooksFile(repo.path)
       const hooks = has ? loadHooks(repo.path) : null
-      // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
+      // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {
         status: 'ok',

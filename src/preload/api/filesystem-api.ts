@@ -211,7 +211,7 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
-    /** Uploads client-local files into a paired server's store for one structured chat. */
+    /** Uploads client-local files to the paired server owning the chat. */
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>

@@ -265,7 +265,7 @@ describe('local filesystem watcher flush serialization', () => {
       paths.map((path) => ({ type: 'update' as const, path }))
     )
     vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS)
-    // Why a loop, not a fixed microtask count: 5,000 stats through 8 lanes take many turns.
+    // Bounded stat lanes take many microtasks; wait on the observable send.
     for (let i = 0; i < eventCount * 4 && sender.send.mock.calls.length === 0; i++) {
       await Promise.resolve()
     }
@@ -333,7 +333,6 @@ describe('local filesystem watcher flush serialization', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(statMock).toHaveBeenCalledTimes(1)
 
-    // The still-open window coalesces the create away instead of emitting a transient one.
     watcherCallback?.(null, [
       { type: 'delete', path: transientPath },
       { type: 'update', path: otherPath }
@@ -350,7 +349,7 @@ describe('local filesystem watcher flush serialization', () => {
   })
 
   it('re-arms the flush window after a re-subscribe inside the teardown grace period', async () => {
-    // Why real timers: fake-timers' refresh() revives a cleared handle, but Node's is a no-op — the bug only shows on real Timeouts.
+    // Fake refresh revives cleared handles; this regression needs real Node Timeout behavior.
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
     const listener = { ...sender, id: 7, removeListener: vi.fn(), once: vi.fn() }

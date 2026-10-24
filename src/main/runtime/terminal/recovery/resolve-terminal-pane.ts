@@ -93,6 +93,32 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     }
   }
 
+  /** Whether the caller's handle still names the pane it asks to recover. */
+  private handleNamesRecoveredPane(
+    handle: string,
+    paneKey: string,
+    worktreeId: string,
+    pty: RuntimePtyWorktreeRecord
+  ): boolean {
+    const handlePaneKey = this.getPaneKeyForTerminalHandle(handle)
+    if (handlePaneKey === paneKey) {
+      return true
+    }
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || handlePaneKey !== null) {
+      return false
+    }
+    // Switch point: main's layout names no pane for a terminal its replacement unbound, so a handle
+    // resolved for this pane, whose terminal ended, learns the connected replacement (never spawns).
+    const staleRecord = this.handles.get(handle)
+    const stale = staleRecord?.ptyId ? this.ptysById.get(staleRecord.ptyId) : undefined
+    return (
+      staleRecord?.issuedForPaneKey === paneKey &&
+      !stale?.connected &&
+      pty.connected &&
+      this.getTerminalWorktreeIdForHandle(handle) === worktreeId
+    )
+  }
+
   async recoverTerminalPane(
     paneKey: string,
     expectedWorktreeId: string,
@@ -105,7 +131,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       !pty ||
       !expectedHandle ||
       pty.worktreeId !== expectedWorktreeId ||
-      this.getPaneKeyForTerminalHandle(expectedHandle) !== paneKey
+      !this.handleNamesRecoveredPane(expectedHandle, paneKey, expectedWorktreeId, pty)
     ) {
       throw new Error('terminal_not_found')
     }
@@ -186,11 +212,12 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       const agentWait = await this.getTerminalInteractiveWait(handle)
+      const recorded = this.paneOfPty(pty.pty)
       return {
         ...summary,
         preview,
-        tabId: pty.pty.tabId ?? pty.record.tabId,
-        leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
+        tabId: recorded.tabId ?? pty.record.tabId,
+        leafId: parsePaneKey(recorded.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
         ptyId: pty.pty.ptyId,
         rendererGraphEpoch: this.rendererGraphEpoch,

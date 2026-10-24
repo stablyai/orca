@@ -4,6 +4,8 @@ import { eraseRpcMethods, type RpcContext } from '../../../core'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { RuntimeStore } from '../../../../runtime-store-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
 
@@ -45,6 +47,28 @@ export type OrchestrationWorkerReleaseHarness = {
   readonly inspectProcessLiveness: ReturnType<typeof vi.fn>
 }
 
+/** Layout-owner builds: an empty store whose session holds main's layout, which binds the panes. */
+function workerReleaseLayoutStore(): RuntimeStore {
+  return {
+    getRepos: () => [],
+    getRepo: () => undefined,
+    addRepo: vi.fn<RuntimeStore['addRepo']>(),
+    updateRepo: vi.fn<RuntimeStore['updateRepo']>(),
+    getAllWorktreeMeta: () => ({}),
+    getWorktreeMeta: () => undefined,
+    setWorktreeMeta: vi.fn<RuntimeStore['setWorktreeMeta']>(),
+    removeWorktreeMeta: vi.fn<RuntimeStore['removeWorktreeMeta']>(),
+    getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
+    getSettings: () => ({
+      workspaceDir: '/workspaces',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      branchPrefix: 'none',
+      branchPrefixCustom: ''
+    })
+  }
+}
+
 export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerReleaseHarness {
   let db: OrchestrationDb
   let dbOpen = false
@@ -59,7 +83,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
   function setup(): void {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
-    runtime = new OrcaRuntimeService()
+    runtime = new OrcaRuntimeService(ORCA_LAYOUT_OWNER_IS_MAIN ? workerReleaseLayoutStore() : null)
     runtime.setOrchestrationDb(db)
     inspectProcessLiveness = vi.fn().mockResolvedValue('live')
     ;(

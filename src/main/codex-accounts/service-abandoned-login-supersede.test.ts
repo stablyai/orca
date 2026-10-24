@@ -46,7 +46,7 @@ function createStubLoginChild(): StubLoginChild {
     signalCode: null,
     kill: () => true
   })
-  // The real codex CLI forwards SIGTERM to its native child and exits.
+
   child.kill = vi.fn(() => {
     child.exitCode = 143
     return true
@@ -54,7 +54,6 @@ function createStubLoginChild(): StubLoginChild {
   return child
 }
 
-/** A service whose `codex login` never finishes on its own. */
 async function createServiceWithHangingLogin(): Promise<{
   service: {
     addAccount: () => Promise<{ accounts: { email: string }[] }>
@@ -64,7 +63,7 @@ async function createServiceWithHangingLogin(): Promise<{
     onPendingLoginUrlChanged: (listener: (url: string | null) => void) => void
   }
   children: StubLoginChild[]
-  /** The `CODEX_HOME` each login was spawned against. */
+
   loginHomes: string[]
 }> {
   vi.resetModules()
@@ -105,14 +104,12 @@ describe('CodexAccountService abandoned login', () => {
     const abandonedRejection = expect(abandoned).rejects.toThrow('Codex sign-in was cancelled.')
     await vi.waitUntil(() => children.length === 1)
 
-    // The user reopens Settings and clicks Add Account again.
     const retry = service.addAccount()
     const retryRejection = expect(retry).rejects.toThrow()
 
     await abandonedRejection
     expect(children[0].kill).toHaveBeenCalledTimes(1)
-    // Why: the point of the fix — the second login starts now, not after the
-    // abandoned one's whole sign-in deadline elapses.
+
     await vi.waitUntil(() => children.length === 2)
     expect(children[1].kill).not.toHaveBeenCalled()
 
@@ -126,8 +123,6 @@ describe('CodexAccountService abandoned login', () => {
     const abandonedRejection = expect(abandoned).rejects.toThrow('Codex sign-in was cancelled.')
     await vi.waitUntil(() => children.length === 1)
 
-    // Why: switching to the system default is the commonest thing a user does
-    // after giving up on a sign-in, and it shares the add's mutation queue.
     await service.selectAccount(null)
     await abandonedRejection
     expect(children[0].kill).toHaveBeenCalled()
@@ -138,15 +133,12 @@ describe('CodexAccountService abandoned login', () => {
     const pending = service.addAccount()
     await vi.waitUntil(() => children.length === 1)
 
-    // The browser half of the OAuth flow finishes while the CLI lingers.
     writeFileSync(
       join(loginHomes[0], 'auth.json'),
       createCodexAuthJson('user@example.com', 'provider-account-1', 'refresh-token'),
       'utf-8'
     )
 
-    // Why: cancelling here would send the rollback at a home that just
-    // authenticated. There is nothing left to cancel.
     expect(service.cancelPendingLogin()).toBe(false)
     expect(children[0].kill).not.toHaveBeenCalled()
 
@@ -185,7 +177,7 @@ describe('CodexAccountService abandoned login', () => {
 
     service.cancelPendingLogin()
     await rejection
-    // Why: the link dies with the login server it points back at.
+
     expect(service.getPendingLoginUrl()).toBeNull()
     expect(published).toEqual([authUrl, null])
   })

@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { basename, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
@@ -79,7 +79,7 @@ export function getWorkspaceFilePreviewPlan(
   }
   // Why: the doc preview needs no browser at all, so a paired runtime without the
   // screencast capability still previews documents.
-  if (runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)) {
+  if (runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)) {
     const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
     const outsideWorktree = worktreeRoot && !getRelativePathInsideRoot(filePath, worktreeRoot)
     // Why: the host's files.read is worktree-scoped (plus chat scratch folders, served by path), so
@@ -128,7 +128,7 @@ export function useWorkspaceFileBrowserActionPredicate(
         ? getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state
         : null,
       runtimeEnvironmentId: worktreeId
-        ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+        ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
         : null,
       folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
@@ -333,7 +333,7 @@ export function openFilePreviewToSide(params: {
 
   // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
   // snapshot reads an activated empty group as a terminal pane.
-  const activate = !runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+  const activate = !runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   const placement = existingSibling
     ? { targetGroupId: existingSibling }
     : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }

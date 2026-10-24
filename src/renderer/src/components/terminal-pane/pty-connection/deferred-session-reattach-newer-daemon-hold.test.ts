@@ -6,7 +6,11 @@ import { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-sta
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold'
 import { newerDaemonHoldStore, reopenHeldTerminals } from '../newer-daemon-hold-state'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { PANE_NOT_LIVE_ERROR } from '../../../../../shared/pane-attach-only-view'
+import { useAppStore } from '@/store'
+import type { PaneResumeOutcome } from '../../../../../shared/workspace-layout/workspace-layout-published'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
 vi.mock('../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
@@ -19,14 +23,14 @@ const REFUSAL = `Error invoking remote method 'pty:spawn': Error: ${NEWER_DAEMON
 
 function createSession(opts: { runtimeEnvironmentId?: string } = {}) {
   let onError: (message: string) => void = () => {}
-  let next: 'refuse' | 'reattach' | 'throw' = 'refuse'
+  let next: 'refuse' | 'reattach' | 'throw' | 'not-live' = 'refuse'
   const transport = {
     connect: vi.fn(async () => {
       if (next === 'throw') {
         throw new Error('spawn failed')
       }
-      if (next === 'refuse') {
-        onError(REFUSAL)
+      if (next === 'refuse' || next === 'not-live') {
+        onError(next === 'refuse' ? REFUSAL : PANE_NOT_LIVE_ERROR)
         return undefined
       }
       return { id: 'restored-pty', coldRestore: { scrollback: 'x', cwd: '/', cols: 80, rows: 24 } }
@@ -46,6 +50,7 @@ function createSession(opts: { runtimeEnvironmentId?: string } = {}) {
       tabId: 'tab',
       worktreeId: 'wt',
       paneTransportsRef: { current: new Map([[1, transport]]) },
+      isVisibleRef: { current: true },
       clearTabPtyId: vi.fn()
     },
     buildColdRestoreAgentResumeStartup: () => ({ command: 'claude --resume c1', agent: 'claude' }),
@@ -69,6 +74,11 @@ function createSession(opts: { runtimeEnvironmentId?: string } = {}) {
   const session = fixture as unknown as ConnectPanePtySession
   return { fixture, session, transport, nextConnect: (mode: typeof next) => (next = mode) }
 }
+
+/** Switch on, main's start resumes the agent, so the window's reattach claims no resume. */
+const windowResumedDescription = ORCA_LAYOUT_OWNER_IS_MAIN
+  ? undefined
+  : { description: '1 agent session resumed.' }
 
 const isHeld = (): boolean => Object.keys(newerDaemonHoldStore.getState().panes).length > 0
 
@@ -109,12 +119,14 @@ describe('restored pane refused for a newer daemon', () => {
     nextConnect('reattach')
     await reopenHeldTerminals('tab:leaf')
     expect(transport.connect).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sessionId: 'restored-pty', command: 'claude --resume c1' })
+      expect.objectContaining(
+        ORCA_LAYOUT_OWNER_IS_MAIN
+          ? { sessionId: 'restored-pty', attachOnlyView: true }
+          : { sessionId: 'restored-pty', command: 'claude --resume c1' }
+      )
     )
     expect(fixture.pane.terminal.options.disableStdin).toBe(false)
-    expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', {
-      description: '1 agent session resumed.'
-    })
+    expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', windowResumedDescription)
   })
 
   it('shows the saved screen while held and clears it before reconnecting', async () => {
@@ -149,10 +161,39 @@ describe('restored pane refused for a newer daemon', () => {
     nextConnect('throw')
     await reopenHeldTerminals('tab:leaf')
     expect(fixture.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
-    expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', {
-      description: '1 agent session resumed.'
-    })
+    expect(toast.success).toHaveBeenCalledWith('Reopened 1 terminal', windowResumedDescription)
   })
+
+  it.each([
+    ['restored', { description: '1 agent session resumed.' }],
+    ['resume-unavailable', undefined]
+  ] as const)(
+    "counts a released pane main restarts as resumed by main's outcome (%s)",
+    async (outcome: PaneResumeOutcome, description) => {
+      const { fixture, session, nextConnect } = createSession()
+      // Main's start of the pane: its frame binds the terminal and says whether the agent came back.
+      fixture.startFreshColdRestoreAgentResume.mockImplementation(async () => {
+        useAppStore.setState({
+          terminalPaneResumeOutcomesByPaneKey: {
+            'tab:leaf': { ptyId: 'main-pty', ptyGeneration: 2, outcome }
+          }
+        })
+        return 'main-pty'
+      })
+      startDeferredSessionReattach(session, 'restored-pty')
+      await vi.waitFor(() => expect(isHeld()).toBe(true))
+      // The newer build stopped, so the held terminal is gone and main starts the pane again.
+      nextConnect('not-live')
+      await reopenHeldTerminals('tab:leaf')
+      expect(fixture.startFreshColdRestoreAgentResume).toHaveBeenCalledOnce()
+      expect(toast.success).toHaveBeenCalledWith(
+        'Reopened 1 terminal',
+        // Switch off, the window's own resume counts, whatever main published.
+        ORCA_LAYOUT_OWNER_IS_MAIN ? description : { description: '1 agent session resumed.' }
+      )
+      useAppStore.setState({ terminalPaneResumeOutcomesByPaneKey: {} })
+    }
+  )
 
   it('treats a paired host refusal as an ordinary error, never a local hold', async () => {
     const { fixture, session, transport } = createSession({ runtimeEnvironmentId: 'env-1' })

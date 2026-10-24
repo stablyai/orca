@@ -11,6 +11,7 @@ import {
   type LayoutSource,
   type UnwrittenLayoutSource
 } from './workspace-layout-disk-fields'
+import { EDITOR_FILE_KEY_FIELDS } from './workspace-layout-editor-tab-file'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { diskRecords, stableJson } from './workspace-layout-load-report'
 import type { LoadedWorkspaceLayout } from './workspace-layout-load-types'
@@ -57,7 +58,7 @@ const IDENTITY_SOURCES = new Set<LayoutSource>([
   'tab.entityId',
   'tab.kind',
   'group.id',
-  'file.filePath',
+  ...EDITOR_FILE_KEY_FIELDS.map((field) => `file.${field}` as const),
   'browserTab.id',
   'leaf.$key'
 ])

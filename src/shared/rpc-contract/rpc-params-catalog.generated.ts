@@ -18,6 +18,10 @@ import {
   BrowserNetworkTunnelAttachParams
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+import {
+  BundledSkillExecuteRequestSchema,
+  BundledSkillPlanRequestSchema
+} from '../bundled-skill-plan'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../delegated-mobile-device-contract'
 import {
   DesktopBrowserBridgeAttachParams,
@@ -173,6 +177,14 @@ import {
   SetValue,
   TypeText
 } from './computer-schemas-params'
+import {
+  ConnectorAnswer,
+  ConnectorCancel,
+  ConnectorPendingPrompt,
+  ConnectorSend,
+  ConnectorStart,
+  ConnectorWatch
+} from './connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
@@ -404,6 +416,7 @@ import { NativeChatSession, NativeChatUnsubscribe } from './native-chat-params'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
 } from './notifications-params'
@@ -624,6 +637,7 @@ import {
 import {
   WorkspacePortKillHostParams,
   WorkspacePortKillParams,
+  WorkspacePortProbePageParams,
   WorkspacePortScanHostParams,
   WorkspacePortScanParams
 } from './workspace-ports-params'
@@ -640,6 +654,7 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
@@ -886,6 +901,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'connector.answer': ConnectorAnswer,
+  'connector.cancel': ConnectorCancel,
+  'connector.pendingPrompt': ConnectorPendingPrompt,
+  'connector.send': ConnectorSend,
+  'connector.start': ConnectorStart,
+  'connector.watch': ConnectorWatch,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,
@@ -969,6 +990,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.generatePullRequestFields': GitGeneratePullRequestFields,
   'git.history': GitHistory,
   'git.localBranches': WorktreeSelectorOfGitParams,
+  'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
   'git.rebaseFromBase': GitRebaseFromBase,
@@ -1164,6 +1186,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
+  'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
   'notifications.subscribe': NotificationsSubscribeParams,
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
@@ -1314,10 +1337,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'skills.commitUpload': SkillUploadCommitRequestSchema,
   'skills.delete': SkillDeleteRequestSchema,
   'skills.discover': SkillsDiscoverParams,
+  'skills.executeBundledOrca': BundledSkillExecuteRequestSchema,
   'skills.getInstallProgress': SkillsGetInstallProgressParams,
   'skills.install': SkillInstallRequestSchema,
   'skills.installBundle': SkillBundleInstallRequestSchema,
   'skills.listManagedInstalls': null,
+  'skills.planBundledOrca': BundledSkillPlanRequestSchema,
   'skills.previewDelete': SkillDeleteRequestSchema,
   'skills.previewInstall': SkillInstallPreviewRequestSchema,
   'skills.removeInstall': SkillRemoveRequestSchema,
@@ -1403,6 +1428,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.install': null,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
+  'workspacePorts.probePage': WorkspacePortProbePageParams,
   'workspacePorts.scan': WorkspacePortScanParams,
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,
@@ -1421,7 +1447,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
-  'worktree.sleep': WorktreeSelectorOfWorktreeParams,
+  'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const
 

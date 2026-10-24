@@ -37,7 +37,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
-import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime-tailscale-hint'
+import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'

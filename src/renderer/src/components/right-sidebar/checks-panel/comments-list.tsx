@@ -49,7 +49,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     onResolve,
     onEditComment,
     onDeleteComment,
-    onSetReaction
+    onSetReaction,
+    onOpenLocation
   } = props
   const {
     presentation,
@@ -371,6 +372,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
                 onSetReaction={onSetReaction}
+                onOpenLocation={onOpenLocation}
               />
             </>
           )}

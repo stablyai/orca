@@ -1,8 +1,19 @@
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native'
 import {
   ChevronLeft,
   FilePenLine,
   Hand,
+  LockKeyhole,
   ShieldAlert,
   ShieldCheck,
   X,
@@ -101,18 +112,42 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
+  const open = presentation?.page != null
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      controller.optionSurface?.demandModelCatalog?.()
+    }
+    wasOpen.current = open
+  }, [open, controller.optionSurface])
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
+  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
+  const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  const showWorkingNotice =
+    (model !== undefined || permission !== undefined) &&
+    activeDescriptor !== undefined &&
+    isWorking &&
+    !permissionView
+
+  useEffect(() => {
+    if (Platform.OS === 'ios' && showWorkingNotice) {
+      // Queued announcements cannot be canceled when the picker closes or changes pages.
+      AccessibilityInfo.announceForAccessibilityWithOptions(
+        'Agent is working. Model settings unlock when this turn finishes.',
+        { queue: false }
+      )
+    }
+  }, [showWorkingNotice])
+
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model && !permission) {
     return null
   }
   const home = model ?? permission!
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
-  const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // The permission mode applies from the next send, so a running turn never locks it.
@@ -203,6 +238,17 @@ export function MobileNativeChatSessionOptionPickers({
                 ) : null}
               </View>
             </View>
+            {showWorkingNotice ? (
+              <View style={styles.lockNotice} accessibilityLiveRegion="polite">
+                <LockKeyhole size={16} color={colors.textSecondary} />
+                <View style={styles.lockNoticeBody}>
+                  <Text style={styles.lockNoticeTitle}>Agent is working</Text>
+                  <Text style={styles.lockNoticeDescription}>
+                    Model settings unlock when this turn finishes.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
@@ -339,6 +385,26 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  lockNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg
+  },
+  lockNoticeBody: {
+    flex: 1,
+    gap: spacing.xs
+  },
+  lockNoticeTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  lockNoticeDescription: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   },
   group: {
     overflow: 'hidden',

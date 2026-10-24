@@ -57,7 +57,7 @@ export function unservedHostServerMessage(decision: UnservedDecision): string {
     case 'refused':
       return decision.detail ?? 'Orca couldn’t set up its server on this host.'
     case 'source_changed':
-      return 'An older version of Orca changed this host’s projects. Move those changes to this host’s Orca server in SSH Hosts settings to continue.'
+      return 'This computer has projects or folders for this host that its Orca server doesn’t have yet, often added by an older version of Orca. Move them to this host’s Orca server in SSH Hosts settings to continue.'
     case 'deferred':
     case 'failed':
       if (decision.contactLost) {

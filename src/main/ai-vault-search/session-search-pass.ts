@@ -23,25 +23,10 @@ import {
 import type { SessionSearchFileRow, SessionSearchStore } from './session-search-store'
 import { sessionSearchEnumeratedContainers } from './session-search-synthetic-sources'
 
-/**
- * Rows a cycle proves present or gone, newest first.
- *
- * Why bounded and why newest first: a cycle lists the newest N per agent, so
- * every older row it holds is undiscovered and would otherwise be walked every
- * twenty seconds. Newest first is what makes the guarantee hold — a transcript
- * recent enough for the window to cover is recent enough to be in this slice,
- * so its deletion is proven on the very next cycle whenever it happened.
- */
+// Bound recent-cycle retirement work and prioritize rows within the recency window.
 const RETIREMENT_ROWS_PER_CYCLE = 512
 
-/**
- * Directories either pass may read proving deletions.
- *
- * The bound on the walk is readdirs, not rows: rows sharing a directory are one
- * read and then map lookups, and a directory that answers an error answers it
- * once for every row under it. Counting rows instead let one unreadable
- * directory hold the whole walk for as long as it stayed unreadable.
- */
+// Count directory reads so many rows under one unreadable directory cannot exhaust the budget.
 const RETIREMENT_DIRECTORIES_PER_PASS = 512
 
 export type SessionSearchPassArgs = {
@@ -50,64 +35,33 @@ export type SessionSearchPassArgs = {
   /** A sweep lists every root; a cycle lists the newest N per agent. */
   full: boolean
   recentPerAgent: number
-  /** Real roots that listed transcripts on the previous pass; undefined before the first. */
+  /** Roots with transcripts on the previous pass; undefined before any observation. */
   previousRootsWithFiles?: ReadonlySet<string>
-  /** True once the pass is out of wall time; reads stop, everything else finishes. */
+  /** The deadline stops transcript reads; discovery and retirement still finish. */
   overdue?: () => boolean
-  /** One readdir per directory for the whole pass, shared by every step. */
+  /** Cache directory reads across discovery-health and retirement checks for this pass. */
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
 }
 
 export type SessionSearchPassResult = {
-  /** Real roots this pass listed transcripts under, for the next pass to compare against. */
+  /** Roots with discovered transcripts, retained to detect newly emptied roots. */
   rootsWithFiles: Set<string>
   degradedRoots: SessionSearchDegradedRoot[]
-  /** False when the pass was cut short; its conclusions are not to be recorded. */
+  /** Ignore health findings from an incomplete pass. */
   completed: boolean
-  /**
-   * True when the deadline stopped the reads with candidates still owed.
-   *
-   * The caller's one use for it: a cycle lists the newest N per agent, so a
-   * backlog outside that window is only *visible* to a sweep. Without this a
-   * first run would index the recency window in its opening pass and then crawl,
-   * making progress only on the periodic sweep every five minutes.
-   */
+  /** Deferred reads require another sweep to reach backlog outside the recent window. */
   outOfTime: boolean
-  /**
-   * Candidates this pass decided were owed a read and did not read.
-   *
-   * Zero unless the deadline stopped the reads. Not a queue: it is the size of
-   * the backlog at the moment the pass gave up, reported so the caller can say
-   * so, and every one of them is owed again on the next pass by its row.
-   */
+  /** Deferred candidates excluding due rows, which status already counts from the database. */
   left: number
 }
 
-/**
- * One pass. Four steps, the same four whether it sweeps or cycles.
- *
- * 1. **Discover.** The only filesystem walk: every root on a sweep, the newest
- *    N per agent on a cycle. Everything below is decided from what it returns.
- * 2. **Decide and read.** Per candidate, its stat against its row. Reads stop
- *    at the deadline and nothing is recorded about what was left, because being
- *    owed is a fact about the row and not an entry in a queue.
- * 3. **Retire.** Candidates are the rows this pass's discovery did not return,
- *    inside the scope that discovery covered. The stateless walk proves each
- *    one gone, present or unverifiable; only `gone` deletes.
- * 4. **Report.** Root health for this pass. The counts are a query, made by the
- *    caller against the same rows, so nothing here is tallied.
- *
- * The pass keeps nothing. Everything it learns is either on a row or in the
- * result the caller compares against the next pass.
- */
 export async function runSessionSearchPass(
   args: SessionSearchPassArgs
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
   if (args.full) {
-    // Every sweep opens with the purge, so a window narrower than the last
-    // instance held is applied by the first sweep of this one.
+    // Apply narrowed retention before the new instance’s first discovery.
     await store.purgeOlderThan(store.retentionCutoff, signal)
   }
   return withCursorChatMetaScan(async () => {
@@ -141,18 +95,14 @@ export async function runSessionSearchPass(
     const rootsWithFiles = new Set(
       listings.filter((listing) => listing.files > 0).map((listing) => listing.root)
     )
-    // Undefined, not empty, before any pass has recorded one: an empty set is a
-    // real observation and this is the absence of one.
     const previousRootsWithFiles = args.previousRootsWithFiles
-    // A pass cut short saw part of the machine, so its silence about a path is
-    // not evidence; it retires nothing and publishes no verdicts.
+    // An incomplete read pass cannot prove deletions or clear degraded-root findings.
     const retirement = completed
       ? await retireDeletedSessionSearchSources({
           store,
           paths: retirementCandidates(rows, swept, roots, args.full),
           roots,
-          // Only a sweep enumerates without a per-agent limit, so only a sweep
-          // may prove a synthetic row's container holds it no longer.
+          // Only unlimited discovery can prove a synthetic session is absent from its container.
           enumeratedContainers: args.full
             ? sessionSearchEnumeratedContainers(swept.candidates, issues)
             : undefined,
@@ -166,15 +116,13 @@ export async function runSessionSearchPass(
       : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }
 
     for (const refusal of cursorChatMetaRefusals()) {
-      // One issue per refused chats root, not one per Cursor transcript.
       recordSessionScanIssue(issues, {
         agent: 'cursor',
         path: refusal.chatsRoot,
         message: refusal.message
       })
     }
-    // Roots that listed no transcripts and cannot be listed either: the walker
-    // swallows a readdir failure, so this is the only place it surfaces.
+    // Discovery suppresses readdir failures; check empty roots explicitly to expose those failures.
     const unlistable = completed
       ? await unreadableRoots(
           roots.filter((root) => !rootsWithFiles.has(root)),
@@ -197,15 +145,7 @@ export async function runSessionSearchPass(
   })
 }
 
-/**
- * Rows this pass's discovery did not return, inside the scope it covered.
- *
- * A sweep covers everything, so every undiscovered row is a candidate. A cycle
- * covers the newest N per agent, so it may only judge rows under a root it
- * actually listed, and it takes the newest of those: an older row is not
- * evidence of anything a cycle looked for, and the next sweep is what reaches
- * it. This is the whole of what used to be a watch set carried between passes.
- */
+/** Retire undiscovered rows; recent cycles check only the newest rows under discovered roots. */
 function retirementCandidates(
   rows: ReadonlyMap<string, SessionSearchFileRow>,
   swept: { candidates: readonly { file: { path: string } }[] },

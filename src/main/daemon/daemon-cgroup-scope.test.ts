@@ -27,9 +27,7 @@ describe('daemonScopeUnitName', () => {
   })
 })
 
-// Real, connectable AF_UNIX sockets rather than plain files at "bus" — the fix under test
-// distinguishes a genuinely reachable bus from a stale file/directory left at that path, so a
-// fixture that only `existsSync`-passes would not exercise it.
+// Use real AF_UNIX sockets so stale-file and directory fixtures cannot satisfy the bus check.
 const fakeBusServers: Server[] = []
 const fakeBusDirs: string[] = []
 const fakeSystemdBootDirs: string[] = []
@@ -49,8 +47,6 @@ function fakeRuntimeDirWithoutBus(): string {
   return dir
 }
 
-// A directory that reliably exists on every dev host, standing in for the real
-// `/run/systemd/system` boot marker that only exists on a systemd host.
 function fakeSystemdBootPath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'systemd-boot-marker-'))
   fakeSystemdBootDirs.push(dir)
@@ -115,8 +111,6 @@ describe('isDurableDaemonScopeSupported', () => {
   it('is false when neither the canonical per-UID path nor the env path has a reachable bus', () => {
     const canonical = fakeRuntimeDirWithoutBus()
     const envDir = fakeRuntimeDirWithoutBus()
-    // Neither fixture has a `bus` socket written — the probe must fail closed regardless of
-    // which path it looks at first.
     expect(
       isDurableDaemonScopeSupported({
         env: { XDG_RUNTIME_DIR: envDir },
@@ -155,10 +149,7 @@ describe('isDurableDaemonScopeSupported', () => {
   })
 
   it('is true when the process env XDG_RUNTIME_DIR is a hardened unit override, but the real per-UID dir has a reachable bus (mtl-02 regression)', () => {
-    // Simulates orca-serve@factory.service's RuntimeDirectory=factory hardening directive:
-    // the process's own XDG_RUNTIME_DIR points at a private scratch dir that is NOT the user
-    // session bus location, while the real per-UID runtime dir (injected here in place of the
-    // real /run/user/<uid>) has a genuinely reachable bus the whole time.
+    // Simulate service hardening: the inherited runtime directory has no bus; the per-UID path does.
     const hardenedOverrideDir = fakeRuntimeDirWithoutBus()
     const realPerUidDir = fakeRuntimeDirWithBus()
     expect(
@@ -188,8 +179,6 @@ describe('isDurableDaemonScopeSupported', () => {
   })
 
   it('falls back to the process env XDG_RUNTIME_DIR when the canonical per-UID path has no reachable bus', () => {
-    // Some hosts legitimately have no /run/user/<uid> at all but do have a working bus
-    // wherever their own environment points — the probe must still support that host.
     const canonicalWithoutBus = fakeRuntimeDirWithoutBus()
     const envDirWithBus = fakeRuntimeDirWithBus()
     expect(
@@ -240,7 +229,6 @@ describe('buildDurableDaemonScopeCommand', () => {
       { PATH: '/bin', XDG_RUNTIME_DIR: hardenedOverrideDir },
       realPerUidDir
     )
-    // Explicitly the real per-UID dir, not inherited from the spread env's overridden value.
     expect(result.env.XDG_RUNTIME_DIR).toBe(realPerUidDir)
   })
 

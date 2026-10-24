@@ -34,7 +34,10 @@ import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-se
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
-export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
+export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
+  read?: (verifiedOnly?: boolean) => ReturnType<AgentModelCatalogStore['get']>
+  demand?: (legacy?: boolean) => Promise<unknown>
+}
 
 export type CodexStructuredLaunch = {
   command: string
@@ -42,23 +45,20 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
-  /** The resumed thread is this session's own creation: when Codex answers that it holds no
-   *  rollout for it, start a new thread in its place. Never set for a thread a resume proved. */
+  /** Replace an unsaved thread created by this session; never supersede a proven resume. */
   supersedeIfUnsaved?: boolean
   permissionPolicy?: CodexStructuredPermissionPolicy
-  /** The model the session chose; the thread opens on it so its first turn is not a switch. */
+  /** Open on the chosen model to avoid a first-turn switch. */
   model?: string
-  /** The child's sealed environment, and the inherited keys it must not keep. */
+  /** Sealed child environment; envToDelete removes inherited keys. */
   env?: Record<string, string>
   envToDelete?: readonly string[]
-  /** The session values each command must see, whatever the user's shell environment policy. */
+  /** Command values that must survive the user's shell environment policy. */
   commandEnv?: Record<string, string>
-  /** This chat's scratch folder and visuals skill; absent when the chat has no visuals. */
   visuals?: NativeChatVisualsLaunch
 }
 
-/** Turn and item boundaries, timed by when the host received them, never by when a buffered or
- *  retried delivery got round to them. */
+/** Boundaries retain host receipt time through buffering and retries. */
 export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
   'turn/started',
   'turn/completed',
@@ -73,8 +73,7 @@ export type CodexStructuredSessionEvent =
       threadId: string
       method: string
       params: unknown
-      /** Host receipt time of a `CODEX_RECEIPT_TIMED_METHODS` boundary; survives retry and
-       *  deferral so a replay is not re-stamped. */
+      /** Original host receipt time for CODEX_RECEIPT_TIMED_METHODS boundaries. */
       observedAt?: number
       /** Highest dispatch sequence armed when this turn-start was first received. */
       dispatchSequenceAtReceipt?: number
@@ -96,21 +95,17 @@ export type CodexStructuredSessionEvent =
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
-  /** What a resting Codex chat's menu lists, as Codex itself would list it there. */
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
   onEvent?: (event: CodexStructuredSessionEvent) => void
-  /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
   logger?: StructuredAgentSessionLogger
-  /** What the session's child work did, delivered after the journal handled the frame. */
-  /** `producer`: the reporting child's own sink, which writes what the report changes. */
+  /** Delivered after journal admission; producer is the reporting child's sink. */
   onChildWorkEvidence?: (
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
-  /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
-   *  Codex answered it into ended without taking it. */
+  /** Settle an admitted send by provider echo or rejection at its answered turn's end. */
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
       | { providerIdentity: AgentJournalItemIdentity }
@@ -130,6 +125,11 @@ export type CodexStructuredSessionAdapterDeps = {
   requestTimeoutMs?: number
   /** Host model catalog; sessions write their listings through and read back. */
   modelCatalog?: AgentModelCatalogStore
+  readModelCatalog?: (
+    sessionId: string,
+    verifiedOnly?: boolean
+  ) => ReturnType<AgentModelCatalogStore['get']>
+  demandModelCatalog?: (sessionId: string, legacy?: boolean) => Promise<unknown>
 }
 
 export type CodexSession = {
@@ -139,20 +139,16 @@ export type CodexSession = {
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */
   exitObservedAt?: number
-  /** The close Orca began for this child: asked for, or forced as a death, and why. Whatever ends
-   *  the child after it (that close, or the exit the connection reports meanwhile) keeps this. */
+  /** Preserve the initiating close's cause and reason through later exit reports. */
   orcaClose?: { requested: boolean; reason: Error }
   fence: number
   acquisitionGeneration: string
   threadId: string
   historyMode?: 'legacy' | 'paginated'
-  /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
-   *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */
+  /** Wire-observed open primary turns; rewind and untargeted Stop use these before journal admission. */
   activeTurnIds?: Set<string>
-  /** Of those, the turns whose interrupt Codex answered. It answers as the turn aborts, ahead of
-   *  that turn's `turn/completed`, so none of them can take a steer any more. */
+  /** Interrupt-acknowledged turns cannot accept steers while awaiting turn/completed. */
   abortedTurnIds?: Set<string>
-  /** Stops waiting for the turn Codex answered a send into to open. */
   turnOpenWaits: CodexTurnOpenWaits
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
@@ -167,14 +163,12 @@ export type CodexSession = {
   nativeDefaults?: { personality?: string; serviceTier?: string }
   /** Overrides actually attempted on this child, independently of future saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
-  /** Absent when the adapter runs without a host catalog store (tests). */
+  /** Optional for adapters without a host catalog store. */
   catalogAccess?: CodexSessionCatalogAccess
-  /** Sends whose identity is still to be settled by the provider echo. */
   dispatchEchoes: CodexDispatchEchoes
   translator: CodexJournalTranslator | null
-  /** Ephemeral roster behind the background-tasks strip; never durable state. */
+  /** Ephemeral compatibility roster; durable child records own runtime state. */
   backgroundTasks: CodexBackgroundTaskTracker
-  /** What this child's Codex lists as its skills; absent until the thread is open. */
   skillReport?: CodexSkillReport
   unbindReadingControl?: () => void
   /** Terminates this exact child as an unexpected death and enters host recovery. */
@@ -197,7 +191,6 @@ export function codexSessionLifecycle(
   }
 }
 
-/** A child that exited while being acquired never becomes the session's. */
 export function assertCodexConnectionOpen(
   connection: Pick<CodexAppServerConnection, 'closed'>,
   sessionId: string

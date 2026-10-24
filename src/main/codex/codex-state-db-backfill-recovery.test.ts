@@ -409,7 +409,7 @@ describe('Codex state DB backfill recovery', () => {
       string[],
       { cwd?: string; env?: NodeJS.ProcessEnv }
     ]
-    // Why: spawnProcess resolves a recognised npm shim past cmd.exe; pre-wrapping hides the shim.
+    // Pre-wrapping hides the npm shim from spawnProcess resolution.
     expect(spawnFile).toBe(codexCommand)
     expect(spawnArgs).toEqual([
       '-c',
@@ -422,7 +422,6 @@ describe('Codex state DB backfill recovery', () => {
     ])
     expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
     expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
-    // Windows has no supervisor: the drain-first probe termination stays its stop.
     expect(spawnOptions).not.toHaveProperty('detached')
     expect(terminate).toHaveBeenCalledWith(child, false)
   })

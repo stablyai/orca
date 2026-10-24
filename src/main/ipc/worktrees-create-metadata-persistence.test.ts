@@ -13,7 +13,8 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
   ORIGIN_HEAD_COMPONENT,
   ORIGIN_REMOTE_URL,
-  makeWorktreeMeta
+  makeWorktreeMeta,
+  expectDetectedWorktreeListResult
 } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import {
@@ -22,8 +23,6 @@ import {
 } from '../../shared/worktree/host-qualified-identity'
 
 const WORKTREE_HANDLER_CHANNELS = [
-  'worktrees:listAll',
-  'worktrees:list',
   'worktrees:listRetiredNames',
   'worktrees:listDetected',
   'worktrees:listKnownForExecutionHost',
@@ -35,6 +34,9 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:resolvePrBase',
   'worktrees:resolveMrBase',
   'worktrees:remove',
+  'worktrees:sleep',
+  'worktrees:sleepReopened',
+  'worktrees:resumeSleptPane',
   'worktrees:previewNestedRemoval',
   'worktrees:forgetLocal',
   'worktrees:forceDeletePreservedBranch',
@@ -45,7 +47,6 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:getBranchRenameFailureOutput',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
-  'hooks:createIssueCommandRunner',
   'hooks:readIssueCommand',
   'hooks:writeIssueCommand'
 ] as const
@@ -72,9 +73,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -164,13 +162,14 @@ describe('registerWorktreeHandlers', () => {
   it('persistSortOrder only reorders existing worktrees and never mints meta for a stale id', () => {
     const liveId = 'repo-1::/workspace/repo'
     const staleId = 'removed-repo::/workspace/gone'
-    // Only the live worktree has meta; the stale id (e.g. a removed repo the
-    // renderer still lists) has none and must be skipped, not created.
+    // Missing metadata on a stale renderer row must not recreate it.
     store.getWorktreeMeta.mockImplementation((id: string) =>
       id === liveId ? ({ instanceId: 'x' } as never) : undefined
     )
 
-    handlers['worktrees:persistSortOrder'](null, { orderedIds: [liveId, staleId] })
+    handlers['worktrees:persistSortOrder'](null, {
+      orderedIds: [liveId, staleId]
+    })
 
     const orderedTargets = store.setWorktreeMeta.mock.calls.map((call) => call[0].id)
     expect(orderedTargets).toContain(liveId)
@@ -184,7 +183,9 @@ describe('registerWorktreeHandlers', () => {
       sortOrder: id === firstId ? 200 : 100
     }))
 
-    handlers['worktrees:persistSortOrder'](null, { orderedIds: [firstId, secondId] })
+    handlers['worktrees:persistSortOrder'](null, {
+      orderedIds: [firstId, secondId]
+    })
 
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
@@ -199,12 +200,18 @@ describe('registerWorktreeHandlers', () => {
         isPinned: true,
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false }
+        orcaCreationWorkspaceLayout: {
+          path: '/workspace',
+          nestWorkspaces: false
+        }
       }
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/feature-wt', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/feature-wt',
+        hostId: 'local'
+      }),
       { comment: 'keep me', isPinned: true }
     )
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
@@ -219,7 +226,10 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledExactlyOnceWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/feature-wt', hostId: 'ssh:build-box' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/feature-wt',
+        hostId: 'ssh:build-box'
+      }),
       { comment: 'remote note' }
     )
     expect(result).toMatchObject({ comment: 'remote note' })
@@ -244,7 +254,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-1::/workspace/feature-wt',
       updates: { isUnread: false }
     })
-    // Why: per-click isUnread writes must stay event-free (PR #209), while a rename must reach paired remote clients that no longer poll for titles.
+    // Unread clicks stay event-free; renames must reach remote clients without title polling.
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).not.toHaveBeenCalled()
 
     handlers['worktrees:updateMeta'](null, {
@@ -258,7 +268,6 @@ describe('registerWorktreeHandlers', () => {
     const folderRepo = { ...harnessRepo, kind: 'folder' as const }
     const workspaceId = `${harnessRepo.id}::${harnessRepo.path}::workspace:0b6f6d2e-1c1d-4c55-9a51-3f1c0f4f2a10`
 
-    // Backs the store mocks with one meta table so writes, removal and listing see the same rows.
     function useFolderMetaTable(): Record<string, WorktreeMeta> {
       const table: Record<string, WorktreeMeta> = {}
       store.getRepo.mockReturnValue(folderRepo)
@@ -286,8 +295,7 @@ describe('registerWorktreeHandlers', () => {
 
       await handlers['worktrees:remove'](null, { worktreeId: workspaceId })
       expect(table[workspaceId]).toBeUndefined()
-      // The renderer still lists the row until its teardown runs, so a PTY reattach in that
-      // window stamps activity on the removed id (bumpWorktreeActivity -> updateMeta).
+      // Before renderer teardown, a lingering PTY can still stamp activity on the removed ID.
       handlers['worktrees:updateMeta'](null, {
         worktreeId: workspaceId,
         updates: { lastActivityAt: 2 }
@@ -298,8 +306,12 @@ describe('registerWorktreeHandlers', () => {
         updates: { isUnread: true }
       })
 
-      const rows = await handlers['worktrees:list'](null, { repoId: folderRepo.id })
-      expect(rows).not.toContainEqual(expect.objectContaining({ id: workspaceId }))
+      const result = expectDetectedWorktreeListResult(
+        await handlers['worktrees:listDetected'](null, {
+          repoId: folderRepo.id
+        })
+      )
+      expect(result.worktrees).not.toContainEqual(expect.objectContaining({ id: workspaceId }))
       expect(table[workspaceId]).toBeUndefined()
     })
 
@@ -327,7 +339,10 @@ describe('registerWorktreeHandlers', () => {
         updates: { lastActivityAt: 2 }
       })
 
-      expect(table[workspaceId]).toMatchObject({ displayName: 'Feature work', lastActivityAt: 2 })
+      expect(table[workspaceId]).toMatchObject({
+        displayName: 'Feature work',
+        lastActivityAt: 2
+      })
     })
   })
 
@@ -340,8 +355,14 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/feature-wt', hostId: 'local' }),
-      expect.objectContaining({ displayName: 'Agent label', displayNameIsPinned: true })
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/feature-wt',
+        hostId: 'local'
+      }),
+      expect.objectContaining({
+        displayName: 'Agent label',
+        displayNameIsPinned: true
+      })
     )
   })
 
@@ -399,7 +420,10 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/improve-dashboard',
+        hostId: 'local'
+      }),
       expect.objectContaining({
         displayName: 'Fix: dashboards for PRs'
       })
@@ -430,7 +454,10 @@ describe('registerWorktreeHandlers', () => {
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       hostWorktreeTarget({ id: 'repo-1::/workspace/feature', hostId: 'local' }),
-      expect.objectContaining({ displayName: 'feature', displayNameIsPinned: true })
+      expect.objectContaining({
+        displayName: 'feature',
+        displayNameIsPinned: true
+      })
     )
   })
 
@@ -456,7 +483,10 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/improve-dashboard',
+        hostId: 'local'
+      }),
       expect.objectContaining({
         linkedIssue: 123,
         linkedPR: 456,
@@ -493,7 +523,10 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/improve-dashboard',
+        hostId: 'local'
+      }),
       expect.objectContaining({
         createdWithAgent: 'codex'
       })
@@ -505,9 +538,6 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  // Was "configures a PR push target during local create": create used to mint the
-  // fork remote up front. It now defers to first sync (#17828); the minting itself is
-  // covered by worktree-remote-push-target-materialization.test.ts.
   it('defers the fork-PR remote during local create and persists the target unmaterialized', async () => {
     listWorktreesMock.mockResolvedValue([
       {
@@ -550,7 +580,6 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/repo' }
     )
-    // Upstream can only be set once the remote exists, so it defers with the remote.
     expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'branch',
@@ -560,10 +589,12 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/improve-dashboard' }
     )
-    // Exact object, not objectContaining: `remoteCreated` must stay absent until
-    // something actually mints the remote.
+    // Exact equality rejects premature remoteCreated provenance.
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/improve-dashboard',
+        hostId: 'local'
+      }),
       expect.objectContaining({
         pushTarget: {
           remoteName: 'pr-prateek-orca',
@@ -574,10 +605,6 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Was "keeps the Orca-created marker ...": create used to inherit the marker while
-  // minting. With minting deferred (#17828) create must not claim ownership it has not
-  // earned; marker inheritance now happens at materialization and is covered by
-  // worktree-push-target-setup.test.ts.
   it('does not claim the Orca-created marker at create when a sibling worktree minted the fork remote', async () => {
     listWorktreesMock.mockResolvedValue([
       {
@@ -595,7 +622,9 @@ describe('registerWorktreeHandlers', () => {
       remoteCreated: true
     }
     store.getAllWorktreeMeta.mockReturnValue({
-      'repo-1::/workspace/previous-fix': makeWorktreeMeta({ pushTarget: existingPushTarget })
+      'repo-1::/workspace/previous-fix': makeWorktreeMeta({
+        pushTarget: existingPushTarget
+      })
     })
     store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -603,7 +632,10 @@ describe('registerWorktreeHandlers', () => {
         return { stdout: 'pr-contributor-orca\n', stderr: '' }
       }
       if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
+        return {
+          stdout: 'https://github.com/contributor/orca.git\n',
+          stderr: ''
+        }
       }
       return { stdout: '', stderr: '' }
     })
@@ -623,7 +655,10 @@ describe('registerWorktreeHandlers', () => {
       expect.any(Object)
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: 'repo-1::/workspace/improve-dashboard', hostId: 'local' }),
+      hostWorktreeTarget({
+        id: 'repo-1::/workspace/improve-dashboard',
+        hostId: 'local'
+      }),
       expect.objectContaining({
         pushTarget: {
           remoteName: 'pr-contributor-orca',

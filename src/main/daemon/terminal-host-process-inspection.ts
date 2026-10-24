@@ -1,3 +1,5 @@
+import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
@@ -15,6 +17,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundProcess: string | null
@@ -25,11 +28,7 @@ export type TerminalHostProcessInspection = {
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
-/**
- * Tick tiers for a POSIX pane. `cheap` forks `ps` without `tty=`/`command=` (11-38x cheaper)
- * and answers from the anchored identity when the pane fingerprint is unchanged; anything it
- * cannot prove escalates to `full`, today's evidence capture.
- */
+/** Cheap POSIX polls reuse anchored identity; unresolved reads escalate to full evidence capture. */
 export type TerminalHostInspectionTier = 'full' | 'cheap'
 
 export async function inspectTerminalHostProcess(args: {
@@ -39,7 +38,6 @@ export async function inspectTerminalHostProcess(args: {
   expectedIncarnationId?: string
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
-  /** See `PtyProcessInspectionOptions`. */
   ignoreDetached?: boolean
   retiredIncarnation?: RetiredIncarnation
   authorityGeneration: string
@@ -76,8 +74,7 @@ export async function inspectTerminalHostProcess(args: {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
       args.onTier?.('cheap')
-      // No evidence member on purpose: a tty-less capture cannot fence anything, and a
-      // fabricated fence would be read by remote/restore consumers as an observation.
+      // A tty-less capture cannot supply fencing evidence to remote or restore consumers.
       return { foregroundProcess: anchored, hasChildProcesses: true }
     }
   }
@@ -99,7 +96,7 @@ export async function inspectTerminalHostProcess(args: {
       args.steadyState !== true,
       args.ignoreDetached === true
     )
-    // Unverifiable whatever `ps` says, and an MSYS `ps.exe` on PATH would flash a console.
+    // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
@@ -139,7 +136,7 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'session_changed')
   }
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
-  // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).
+  // Agent-only evidence must not erase an ordinary foreground command.
   const ordinaryForeground =
     nonShellForeground && !recognizeAgentProcess(foregroundProcess) ? foregroundProcess : null
   return {
@@ -156,13 +153,7 @@ export async function inspectTerminalHostProcess(args: {
   }
 }
 
-/**
- * Cheap tier, gated on an anchor the last full capture established. Start discovery therefore
- * keeps today's exact behaviour: a pane with no anchor never gets here. A recognized agent's
- * exit is a pid vanishing from the subtree, which the fingerprint always sees, so completion
- * detection is unaffected. Any mismatch, unreadable capture, changed node-pty name, or non-POSIX
- * host answers null -> full tier.
- */
+/** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
 async function readAnchoredForeground(session: Session): Promise<string | null> {
   const anchor = getSteadyStateAnchor(session)
   if (process.platform === 'win32' || !anchor) {
@@ -200,4 +191,30 @@ function unverifiableEvidence(
     verdict: 'unverifiable',
     reason
   }
+}
+
+export function inspectTerminalHostSession(
+  sessions: ReadonlyMap<string, Session>,
+  retired: Map<string, RetiredIncarnation>,
+  sessionId: string,
+  options: PtyProcessInspectionOptions | undefined,
+  authorityGeneration: string,
+  nextObservationEpoch: () => number
+): Promise<TerminalHostProcessInspection> {
+  pruneRetiredPtyIncarnations(retired)
+  const session = getInspectableTerminalHostSession(
+    sessions,
+    retired,
+    sessionId,
+    options?.expectedIncarnationId
+  )
+  return inspectTerminalHostProcess({
+    sessionId,
+    currentSession: () => sessions.get(sessionId),
+    session: session?.isAlive ? session : null,
+    ...options,
+    retiredIncarnation: retired.get(sessionId),
+    authorityGeneration,
+    nextObservationEpoch
+  })
 }

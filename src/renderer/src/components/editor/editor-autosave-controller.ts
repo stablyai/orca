@@ -15,7 +15,10 @@ import {
   getAutosaveSubscriberInputs
 } from './editor-autosave-state-projections'
 import { createEditorSaveQueue, type AppStoreApi } from './editor-save-queue'
-import { EDITOR_STALE_SAVE_MESSAGE } from './editor-save-disk-precondition'
+import {
+  EDITOR_NOT_UTF8_SAVE_MESSAGE,
+  EDITOR_STALE_SAVE_MESSAGE
+} from './editor-save-disk-precondition'
 import { createEditorRestartSaveHandlers } from './editor-restart-save-handlers'
 import { createEditorExternalChangeTabReset } from './editor-external-change-tab-reset'
 import {
@@ -27,26 +30,15 @@ const NOT_SAVED_MESSAGE = "The file wasn't saved. Try saving again."
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const saveQueue = createEditorSaveQueue(store)
-  const {
-    queueSave,
-    quiesceFileSave,
-    clearAutoSaveTimer,
-    bumpSaveGeneration,
-    holdAutoSave,
-    syncAutoSave
-  } = saveQueue
+  const { queueSave, settleFileSaves, holdAutoSave, syncAutoSave } = saveQueue
 
   const { handleSaveDirtyFiles, handlePrepareHotExit } = createEditorRestartSaveHandlers({
     store,
     queueSave,
-    quiesceFileSave
+    settleFileSaves
   })
 
-  const handleExternalFileChange = createEditorExternalChangeTabReset({
-    store,
-    clearAutoSaveTimer,
-    bumpSaveGeneration
-  })
+  const handleExternalFileChange = createEditorExternalChangeTabReset(store)
 
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     if (!(event instanceof CustomEvent)) {
@@ -65,7 +57,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // Why: only a written save may close the tab; anything else keeps it and its edits.
         const result = await queueSave(file, draft)
         if (result !== 'written') {
-          onNotClosed?.(result === 'blocked-stale' ? 'blocked-stale' : 'not-saved')
+          onNotClosed?.(result === 'failed' ? 'not-saved' : result)
           return
         }
       } catch {
@@ -102,9 +94,16 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      const result = await queueSave(file, content, detail.overwrite ? 'overwrite' : 'user')
+      const trigger = detail.overwrite ? 'overwrite' : detail.convertToUtf8 ? 'convert' : 'user'
+      const result = await queueSave(file, content, trigger)
       if (result !== 'written') {
-        detail.reject(result === 'blocked-stale' ? EDITOR_STALE_SAVE_MESSAGE : NOT_SAVED_MESSAGE)
+        detail.reject(
+          result === 'blocked-stale'
+            ? EDITOR_STALE_SAVE_MESSAGE
+            : result === 'not-utf8'
+              ? EDITOR_NOT_UTF8_SAVE_MESSAGE
+              : NOT_SAVED_MESSAGE
+        )
         return
       }
       detail.resolve()
@@ -124,8 +123,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     try {
       const state = store.getState()
       let matchingFiles: OpenFile[]
+      const discard = 'fileId' in detail && detail.discard === true
       if ('fileId' in detail) {
         matchingFiles = state.openFiles.filter((file) => file.id === detail.fileId)
+        // Why: a view may republish the dropped text while saves drain; no autosave may write it.
+        if (discard) {
+          release = holdAutoSave(new Set(matchingFiles.map((f) => editorFileHoldKey(state, f))))
+        }
       } else {
         // Why: a git discard rewrites the file under every workspace showing it, and the guarded
         // write's compare fallback (older hosts) can't refuse a save that read disk just before git.
@@ -133,9 +137,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         release = holdAutoSave(keys)
         matchingFiles = state.openFiles.filter((file) => keys.has(editorFileHoldKey(state, file)))
       }
-      await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+      await Promise.all(matchingFiles.map((file) => settleFileSaves(file.id, !discard)))
     } catch (error) {
-      // Why: a failed quiesce (e.g. an unresolved CSV cell) must stop the discard, not strand its hold.
+      // Why: a failed settle (e.g. an unresolved CSV cell) must stop the discard, not strand its hold.
       release?.()
       detail.reject?.(error instanceof Error ? error.message : String(error))
       return

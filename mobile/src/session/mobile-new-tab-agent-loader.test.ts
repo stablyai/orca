@@ -7,6 +7,12 @@ import {
   MobileWorkspaceOnOtherRuntimeError
 } from './mobile-new-tab-agent-loader'
 
+async function loadOptions(
+  args: Parameters<typeof loadMobileNewTabAgentOptions>[0]
+): Promise<unknown[]> {
+  return (await loadMobileNewTabAgentOptions(args)).options
+}
+
 function createClient(
   handler: (method: string, params?: unknown) => Promise<unknown>
 ): RpcClient & { sendRequest: ReturnType<typeof vi.fn> } {
@@ -29,7 +35,7 @@ describe('mobile new-tab agent loading', () => {
       throw new Error(`unexpected request: ${method}`)
     })
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client,
         worktreeId: 'folder:fw-1',
         hostRefusesOtherRuntime: true
@@ -155,9 +161,9 @@ describe('mobile new-tab agent loading', () => {
     ]
   ])('resolves an older host folder catalog: %s', async (_label, args, method) => {
     const client = folderClient(args)
-    await expect(
-      loadMobileNewTabAgentOptions({ client, worktreeId: 'folder:fw-1' })
-    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    await expect(loadOptions({ client, worktreeId: 'folder:fw-1' })).resolves.toEqual([
+      { agent: 'claude', label: 'Claude' }
+    ])
     expect(client.sendRequest.mock.calls.at(-1)?.[0]).toBe(method)
   })
 
@@ -199,9 +205,7 @@ describe('mobile new-tab agent loading', () => {
     ['other runtime', { executionHostId: 'runtime:other', connectionId: 'server-private-ssh' }]
   ])('does not probe the wrong host for a %s folder', async (_label, args) => {
     const client = folderClient(args)
-    await expect(
-      loadMobileNewTabAgentOptions({ client, worktreeId: 'folder:fw-1' })
-    ).rejects.toThrow()
+    await expect(loadOptions({ client, worktreeId: 'folder:fw-1' })).rejects.toThrow()
     expect(client.sendRequest.mock.calls.some(([method]) => method.startsWith('preflight.'))).toBe(
       false
     )
@@ -214,9 +218,9 @@ describe('mobile new-tab agent loading', () => {
       }
       return { ok: false, error: { code: 'method_not_found', message: 'Unknown method' } }
     })
-    await expect(
-      loadMobileNewTabAgentOptions({ client, worktreeId: 'folder:fw-1' })
-    ).rejects.toThrow('Unknown method')
+    await expect(loadOptions({ client, worktreeId: 'folder:fw-1' })).rejects.toThrow(
+      'Unknown method'
+    )
     expect(client.sendRequest.mock.calls.some(([method]) => method.startsWith('preflight.'))).toBe(
       false
     )
@@ -232,9 +236,7 @@ describe('mobile new-tab agent loading', () => {
         }
         return base.sendRequest(method, params)
       })
-      await expect(
-        loadMobileNewTabAgentOptions({ client, worktreeId: 'folder:fw-1' })
-      ).rejects.toThrow()
+      await expect(loadOptions({ client, worktreeId: 'folder:fw-1' })).rejects.toThrow()
       expect(
         client.sendRequest.mock.calls.some(([method]) => method.startsWith('preflight.'))
       ).toBe(false)
@@ -252,7 +254,7 @@ describe('mobile new-tab agent loading', () => {
         throw disconnected
       })
       await expect(
-        loadMobileNewTabAgentOptions({
+        loadOptions({
           client,
           worktreeId: 'folder:fw-1',
           hostRefusesOtherRuntime: modern
@@ -273,7 +275,7 @@ describe('mobile new-tab agent loading', () => {
         : { ok: false, error: { code: 'runtime_error', message: 'SSH host not served' } }
     )
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client,
         worktreeId: 'folder:fw-1',
         hostRefusesOtherRuntime: true
@@ -287,7 +289,7 @@ describe('mobile new-tab agent loading', () => {
 
   it('preserves a modern host folder ownership refusal', async () => {
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client: folderClient({ refused: true }),
         worktreeId: 'folder:fw-1',
         hostRefusesOtherRuntime: true
@@ -310,7 +312,7 @@ describe('mobile new-tab agent loading', () => {
     })
 
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client,
         worktreeId: FLOATING_WORKSPACE_WORKTREE_ID
       })
@@ -340,7 +342,7 @@ describe('mobile new-tab agent loading', () => {
     })
 
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client,
         worktreeId: 'repo-1::/remote/worktree'
       })
@@ -369,7 +371,7 @@ describe('mobile new-tab agent loading', () => {
     })
 
     await expect(
-      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
+      loadOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
     ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
     // Neither the paired host nor its SSH targets are probed for a workspace it does not own.
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
@@ -409,7 +411,7 @@ describe('mobile new-tab agent loading', () => {
       error: { code: 'runtime_error', message: WORKSPACE_ON_OTHER_RUNTIME }
     }))
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client: refused,
         worktreeId: 'repo-1::/srv/worktree',
         hostRefusesOtherRuntime: true
@@ -418,7 +420,7 @@ describe('mobile new-tab agent loading', () => {
 
     const answered = sharedRepoIdClient(() => ({ ok: true, result: ['claude'] }))
     await expect(
-      loadMobileNewTabAgentOptions({
+      loadOptions({
         client: answered,
         worktreeId: 'repo-1::/srv/worktree',
         hostRefusesOtherRuntime: true
@@ -434,11 +436,44 @@ describe('mobile new-tab agent loading', () => {
   it('#13752: an older host cannot decide a shared repo id, so nothing is probed', async () => {
     const client = sharedRepoIdClient(() => ({ ok: true, result: ['codex'] }))
     await expect(
-      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
+      loadOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
     ).rejects.toBeInstanceOf(MobileWorkspaceOnOtherRuntimeError)
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'repo.list',
       'settings.get'
+    ])
+  })
+
+  it('refreshes like desktop, and detects only where the host predates refresh for phones', async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'preflight.refreshAgents') {
+        return {
+          ok: false,
+          error: {
+            code: 'forbidden',
+            message: "Method 'preflight.refreshAgents' is not available to mobile clients"
+          }
+        }
+      }
+      if (method === 'preflight.detectAgents') {
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+    await expect(
+      loadOptions({
+        client,
+        worktreeId: FLOATING_WORKSPACE_WORKTREE_ID,
+        refresh: true
+      })
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'preflight.refreshAgents',
+      'settings.get',
+      'preflight.detectAgents'
     ])
   })
 })

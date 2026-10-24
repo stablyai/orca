@@ -1,4 +1,5 @@
 import type { AgentSessionClaimedSpawnResult } from '../../../../shared/agent-session-host-authority'
+import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import { isTerminalLeafId, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { rejectPaneSpawnReservation } from '../pane/spawn-reservation'
@@ -21,13 +22,17 @@ function toRuntimeSpawnReply(result: {
   wslDistro?: string | null
   stablePaneOwner?: { handle: string; tabId: string; leafId: string }
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  startupCwdFallback?: StartupCwdFallback
+  savedStartupCwd?: string
 }) {
   return {
+    savedStartupCwd: result.savedStartupCwd,
     id: result.id,
     ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
     ...(typeof result.wslDistro === 'string' ? { wslDistro: result.wslDistro } : {}),
     ...(result.stablePaneOwner ? { stablePaneOwner: result.stablePaneOwner } : {}),
-    ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
+    ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+    ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {})
   }
 }
 
@@ -143,12 +148,7 @@ async function spawnFreshPtyFromRuntimeController(
       )
       ctx.pendingRegistrationPtyId = null
     }
-    // Why: once the reservation is created, any later throw — spawn
-    // failure, persist failure, or a post-spawn helper such as
-    // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
-    // it lingers in paneSpawnReservationsByOwnerKey and every future spawn
-    // for this pane awaits a promise that never resolves. reject is a
-    // no-op once the reservation has already resolved.
+    // Settle reservations on every post-reservation failure or future spawns for this pane wait forever.
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
     throw err
   } finally {

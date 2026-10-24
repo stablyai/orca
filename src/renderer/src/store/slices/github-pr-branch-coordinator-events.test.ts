@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
@@ -76,7 +77,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
@@ -126,7 +127,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()

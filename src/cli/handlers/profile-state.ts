@@ -56,9 +56,23 @@ function formatRollback(result: ProfileStateRollbackResult): string {
       : []),
     `storage: ${result.storage}`,
     `restored: ${result.restoredPath}`,
+    ...(result.repairedSections ?? []).map(formatRepairedSection),
     `quarantine: ${result.quarantineDirectory}`,
     `removedDatabaseFiles: ${result.removedDatabaseFiles.length}`
   ].join('\n')
+}
+
+function formatRepairedSection({
+  domain,
+  backupId,
+  backupCreatedAtMs
+}: NonNullable<ProfileStateRollbackResult['repairedSections']>[number]): string {
+  if (backupId === null) {
+    return `repaired ${domain}: no readable backup, starts empty`
+  }
+  const savedAt =
+    backupCreatedAtMs === undefined ? '' : ` saved ${new Date(backupCreatedAtMs).toLocaleString()}`
+  return `repaired ${domain}: from backup ${backupId}${savedAt}`
 }
 
 function rejectProfileStateRemoteSelection(flags: ReadonlyMap<string, string | boolean>): void {
@@ -130,14 +144,21 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function parseSelector(flags: Map<string, string | boolean>): ProfileStateRecoverySelector {
-  const selectors = ['revision', 'backup', 'current-json', 'current-sqlite', 'latest-json'] as const
+  const selectors = [
+    'repair',
+    'revision',
+    'backup',
+    'current-json',
+    'current-sqlite',
+    'latest-json'
+  ] as const
   if (selectors.filter((flag) => flags.has(flag)).length !== 1) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Select exactly one of --revision, --backup, --current-json, --current-sqlite, or --latest-json.'
+      'Select exactly one of --repair, --revision, --backup, --current-json, --current-sqlite, or --latest-json.'
     )
   }
-  for (const kind of ['current-json', 'current-sqlite', 'latest-json'] as const) {
+  for (const kind of ['repair', 'current-json', 'current-sqlite', 'latest-json'] as const) {
     if (flags.has(kind)) {
       if (flags.get(kind) !== true) {
         throw new RuntimeClientError('invalid_argument', `--${kind} does not take a value.`)

@@ -83,6 +83,8 @@ export function closeTerminalTab(
   // teardown of a PTY whose host is unproven fails closed on its own.
   const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
+  // Why: with the pin prompt turned off, the close itself is the user's consent.
+  let pinnedCloseConsented = false
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
   if (
@@ -108,6 +110,7 @@ export function closeTerminalTab(
       })
       return
     }
+    pinnedCloseConsented = true
   }
 
   // Why: the X button, middle-click and the tab menu used to skip the running-process
@@ -182,7 +185,10 @@ export function closeTerminalTab(
             publicationEpoch,
             terminalHandle: lifecycleTerminalHandle
           }
-        : {})
+        : // Why: a confirmed pinned close (this window's prompt, a phone's, or the prompt turned off).
+          options?.force || pinnedCloseConsented
+          ? { force: true }
+          : {})
     })
     options?.onClosed?.()
     return

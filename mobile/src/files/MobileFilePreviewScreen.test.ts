@@ -6,7 +6,7 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 
-describe('MobileFilePreviewScreen', () => {
+describe('mobile file preview editability and dirty-draft policy', () => {
   it('treats empty terminal artifact text previews as editable', () => {
     expect(isEditableMobileTerminalArtifactPreview({ status: 'empty', kind: 'text' })).toBe(true)
     expect(
@@ -54,7 +54,7 @@ describe('MobileFilePreviewScreen', () => {
     ).toBe(false)
   })
 
-  it('keeps dirty terminal artifact drafts protected while preview is waiting for reconnect', () => {
+  it('recognizes only changed terminal artifact drafts for the active source', () => {
     const sourceKey = sourceKeyForPreview({
       source: 'terminalArtifact',
       worktreeId: 'wt-1',
@@ -62,15 +62,21 @@ describe('MobileFilePreviewScreen', () => {
       grantId: 'grant-1'
     })
 
+    const draft = {
+      source: 'terminalArtifact' as const,
+      draftSourceKey: sourceKey,
+      previewSourceKey: sourceKey,
+      draftContent: '{"ok":false}',
+      savedContent: '{"ok":true}'
+    }
+    expect(hasUnsavedMobileTerminalArtifactDraft(draft)).toBe(true)
     expect(
-      hasUnsavedMobileTerminalArtifactDraft({
-        source: 'terminalArtifact',
-        draftSourceKey: sourceKey,
-        previewSourceKey: sourceKey,
-        draftContent: '{"ok":false}',
-        savedContent: '{"ok":true}'
-      })
-    ).toBe(true)
+      hasUnsavedMobileTerminalArtifactDraft({ ...draft, previewSourceKey: 'other-file' })
+    ).toBe(false)
+    expect(
+      hasUnsavedMobileTerminalArtifactDraft({ ...draft, draftContent: draft.savedContent })
+    ).toBe(false)
+    expect(hasUnsavedMobileTerminalArtifactDraft({ ...draft, source: undefined })).toBe(false)
   })
 
   it('keeps dirty terminal artifact drafts when a reload fails or waits', () => {

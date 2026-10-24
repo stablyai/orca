@@ -1,3 +1,4 @@
+import { isViewEntry, type WorktreeNavHistoryEntry } from '@/store/slices/worktree-nav-history'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -70,6 +71,52 @@ export function getCyclableWorktrees(
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): Worktree[] {
   return getCyclableWorktreeRows(rows, pinnedDisplayPolicy).map((row) => row.worktree)
+}
+
+export function resolveCycleAnchorWorktreeId(args: {
+  activeWorktreeId: string | null
+  navHistory: readonly WorktreeNavHistoryEntry[]
+  navHistoryIndex: number
+  worktreeIds: readonly string[]
+}): string | null {
+  if (args.activeWorktreeId !== null) {
+    return args.activeWorktreeId
+  }
+  const cyclable = new Set(args.worktreeIds)
+  // Entries ahead of the cursor belong to forward navigation.
+  for (
+    let index = Math.min(args.navHistoryIndex, args.navHistory.length - 1);
+    index >= 0;
+    index--
+  ) {
+    const entry = args.navHistory[index]
+    if (entry !== undefined && !isViewEntry(entry) && cyclable.has(entry)) {
+      return entry
+    }
+  }
+  return null
+}
+
+export type LastActiveCycleWorkspace = {
+  worktreeId: string
+  executionHostId: ExecutionHostId | null
+}
+
+export function resolveCycleAnchorExecutionHostId(args: {
+  anchorWorktreeId: string | null
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+  lastActiveWorkspace: LastActiveCycleWorkspace | null
+}): ExecutionHostId | null {
+  if (args.anchorWorktreeId === null) {
+    return null
+  }
+  if (args.anchorWorktreeId === args.activeWorktreeId) {
+    return args.activeWorkspaceExecutionHostId
+  }
+  return args.lastActiveWorkspace?.worktreeId === args.anchorWorktreeId
+    ? args.lastActiveWorkspace.executionHostId
+    : null
 }
 
 /** Pick the worktree that `worktree.navigateUp` / `worktree.navigateDown` moves

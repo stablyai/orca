@@ -425,7 +425,7 @@ async function updatePhase(distro: string): Promise<Receipt> {
 
   // Force: the new build serves, and the terminal survives on the preserved daemon.
   started = performance.now()
-  const forced = await supervisor.connect(distro, { force: true })
+  const forced = await supervisor.connect(distro, { intent: 'force' })
   result.forceMs = Math.round(performance.now() - started)
   expect(forced.fullVersion).toBe(deferred.deferredUpdate?.candidateVersion)
   expect(forced.deferredUpdate).toBeNull()

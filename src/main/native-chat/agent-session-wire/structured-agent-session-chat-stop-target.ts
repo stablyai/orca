@@ -1,7 +1,4 @@
-// What the chat's Stop acts on, decided ONCE, on the session's lane, as it is accepted: the turn
-// it is about, the provider child it reaches, and whether it withdraws what is queued. After the
-// acceptance commits, the Stop acts only while that target still stands, read again from state,
-// so a newer turn or a newer child is never this Stop's.
+// Capture once at acceptance, then recheck the target before acting so Stop cannot reach newer work.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
@@ -14,31 +11,23 @@ import {
 } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
-/**
- * - `close`: joins the close an earlier stop began on the child, which takes no input.
- * - `starting`: ends a child's start that may never land; it takes no interrupt.
- * - `interrupt`: interrupts what the child runs, ending it when the interrupt fails.
- * - `withdraw`: no agent to reach; it only withdraws what is queued.
- */
+/** close joins shutdown; starting ends startup; interrupt reaches live work; withdraw only settles queued sends. */
 export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'withdraw'
 
 export type ChatStopTarget = {
   reach: ChatStopReach
   child: StructuredAgentSessionProviderChild | null
-  /** The turn the Stop is about: the one it named, else the one live as it was accepted. */
   turnId: string | null
   named: boolean
-  /** The turn its event names when the Stop named one; else, and for a Stop that ends the
-   *  provider's session, which ends whatever runs, the turn live as the event is written. */
+  /** Named turn unless ending the provider session; then use the turn live at event write. */
   eventTurnId: string | null
-  /** Sends queued as it was captured: the lane it holds keeps them the ones it withdraws. */
+  /** The held lane preserves the captured set of queued sends. */
   queued: boolean
-  /** It writes a Stop event of its own; else it repeats the one in force, or only joins a close. */
+  /** False reuses an existing Stop or only joins close. */
   marks: boolean
 }
 
-/** Null: a late Stop, or one with nothing queued and nothing in flight, which is an accepted
- *  no-op. A Stop naming a turn that already ended withdraws nothing and interrupts nothing. */
+/** Late/empty Stops are accepted no-ops and must not withdraw or interrupt newer work. */
 export function captureChatStopTarget(
   ctx: AgentSessionTurnContext,
   input: {
@@ -70,18 +59,15 @@ export function captureChatStopTarget(
   if (child?.phase === 'starting') {
     return { ...target, reach: 'starting', marks: true }
   }
-  // A Stop naming no turn ends nothing more unless the session reads working, by the rule every
-  // session list and the chat's own Stop read it, over the fold as it stands.
+  // Unnamed Stops use the same current-work rule as session lists.
   if (!child || (turnId === undefined && !isMainAgentWorking(ctx))) {
     return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
   }
-  // Repeating the Stop in force with nothing sent since writes no second event, so a card queued
-  // between the presses sends normally, as after one Stop.
+  // Repeated Stop must not pause cards queued after the first press.
   return { ...target, reach: 'interrupt', marks: queued || reached === 'unrecorded' }
 }
 
-/** After the acceptance: whether the captured target still stands. A newer child is not this
- *  Stop's to interrupt, nor, for a Stop naming a turn, a turn other than that one. */
+/** Revalidate child identity and named turn after durable acceptance. */
 export function chatStopTargetStands(
   ctx: AgentSessionTurnContext,
   target: ChatStopTarget,
@@ -94,7 +80,7 @@ export function chatStopTargetStands(
     return true
   }
   if (target.named) {
-    // As at acceptance: only a named turn with no row yet may still be opening.
+    // Only named turns without records may still be opening.
     return (
       target.turnId !== null &&
       !structuredAgentSessionStopNamesEndedTurn(
@@ -104,7 +90,6 @@ export function chatStopTargetStands(
       )
     )
   }
-  // A Stop naming no turn stops whatever runs: hand-over runs only on the lane this Stop holds, so
-  // a turn that opened after it was captured is from a send made before it.
+  // The held lane prevents newer sends; unnamed Stop may reach a preexisting send’s newly opened turn.
   return isMainAgentWorking(ctx)
 }

@@ -109,6 +109,23 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
     },
+    async fileSize(target) {
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? node.bytes.byteLength : null
+    },
+    async copyFile(fromUri, toUri) {
+      if (failReadAt !== null && fromUri === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
+      }
+      const node = nodes.get(fromUri)
+      if (node?.kind !== 'file') {
+        throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      if (nodes.has(toUri)) {
+        throw new Error(`fake filesystem refuses to copy onto ${toUri}`)
+      }
+      write(toUri, node.bytes)
+    },
     async delete(target) {
       for (const key of Array.from(nodes.keys())) {
         if (key === target || key.startsWith(`${target}/`)) {

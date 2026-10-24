@@ -2,10 +2,7 @@ import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer
 import type { CodexEventLabel, CodexTrustEntry } from './config-toml-trust'
 import { normalizeCodexHookTimeoutSec } from './codex-trust-identity'
 
-// Why: Codex's trust hash key uses the snake_case event label (see
-// codex-rs/hooks/src/lib.rs::hook_event_key_label) while hooks.json uses the
-// PascalCase serde-rename. Keep the mapping in one shared module so the
-// install, status, and write-back promotion paths cannot drift.
+// Trust keys use snake_case (codex-rs/hooks/src/lib.rs::hook_event_key_label); hooks.json uses PascalCase.
 export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   SessionStart: 'session_start',
   UserPromptSubmit: 'user_prompt_submit',
@@ -64,9 +61,7 @@ export function createCodexHookTrustEntry(
   }
 }
 
-// Why: identity of a hook's content independent of file position, used to
-// match the same hook across the system and runtime hooks.json layouts
-// (dedupe and the prepended managed hook shift positions between them).
+// Match content across homes despite position shifts from deduplication and prepended managed hooks.
 export function getCodexHookTrustSignature(entry: CodexTrustEntry): string {
   return JSON.stringify({
     eventLabel: entry.eventLabel,

@@ -71,12 +71,7 @@ export function buildRuntimeMobileAgentStatus(
         )
       : null
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-  const titleOmitsAgent = ptyTitle !== null && ptyTitleClassification !== 'agent'
-  const oscTitle = pty?.lastOscTitle ?? leaf?.lastOscTitle ?? null
-  // Why: a manual rename is not the shell reclaiming the pane, so the hook session stays addressable (#20626).
-  const manualTitleOverridesAgentOsc =
-    titleOmitsAgent && ptyTitle !== oscTitle && classifyAgentTitle(oscTitle) === 'agent'
-  const nonAgentTitle = titleOmitsAgent && !manualTitleOverridesAgentOsc
+  const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
   if (nonAgentTitle) {
     // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
     const hasLiveHookSignal =
@@ -147,7 +142,6 @@ export function buildRuntimeMobileAgentStatus(
   // client's row) and drop the question fields (#12346). Only a later shell title retires it.
   const shellTitleRetiredRestored =
     hookRow.restored !== null &&
-    !manualTitleOverridesAgentOsc &&
     terminalTitleBlocksExplicitAgentStatus(ptyTitle) &&
     (pty?.lastOscTitleEpochMs ?? host.getPtyTitleObservedAtEpochMs?.(leaf?.ptyId ?? null) ?? 0) >=
       hookRow.restored.updatedAt

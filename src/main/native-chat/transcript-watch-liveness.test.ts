@@ -60,7 +60,7 @@ function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): str
   })}\n`
 }
 
-// fs.watch and filesystem mutations use the platform clock; poll observable callbacks to a deadline.
+// Real fs.watch events need observable polling against the platform clock.
 async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
@@ -142,8 +142,7 @@ describe('native chat transcript watcher liveness', () => {
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await appendFile(filePath, claudeLine('missed-event', 'assistant', 'recovered'))
-    // The mocked watcher never invokes watchCallbacks[0], reproducing a silent
-    // missed/coalesced host event while the file itself remains valid.
+    // Suppress native callbacks to reproduce a missed/coalesced event.
     await waitFor(() => appends.mock.calls.flat(2).some((message) => message.id === 'missed-event'))
 
     subscription.unsubscribe()

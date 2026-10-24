@@ -1,7 +1,7 @@
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
@@ -318,7 +318,13 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   publicationEpoch: string
   snapshotVersion: number
   warning?: 'desktop-tab-not-shown'
+  /** The saved folder was gone, so the terminal started at the workspace root. */
+  startupCwdFallback?: 'workspace-root'
 }
+
+/** Activation's reply: the fallback rides this one answer and is never stored on the snapshot. */
+export type RuntimeMobileSessionTabActivationResult = RuntimeMobileSessionTabsResult &
+  Pick<RuntimeMobileSessionCreateTerminalResult, 'startupCwdFallback'>
 
 export type RuntimeMobileSessionTabsRemovedResult = RuntimeMobileSessionTabsResult & {
   removed: true

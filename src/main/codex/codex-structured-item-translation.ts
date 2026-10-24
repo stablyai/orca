@@ -1,6 +1,7 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -30,9 +31,6 @@ export {
 } from './codex-turn-ordinals'
 import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
 
-// Codex thread items → journal item bodies.
-
-/** `userMessage` carries structured content parts; `agentMessage` a flat text. */
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
     item.type === 'agentMessage'
@@ -65,6 +63,19 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   return blocks
 }
 
+/** The message text displays the question; this call block enables replies. */
+function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
+  if (item.type !== 'agentMessage' || item.delivery !== 'async' || !Array.isArray(item.questions)) {
+    return null
+  }
+  return {
+    type: 'tool-call',
+    name: CODEX_ASYNC_QUESTION_TOOL,
+    callId: item.id,
+    input: { questions: item.questions }
+  }
+}
+
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
   handled: boolean
@@ -78,7 +89,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
       callId: item.id,
-      // Raw command and cwd stay so the expanded view still shows what ran.
+      // Preserve raw execution details alongside the classified label.
       input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
       state: codexItemRunState(item),
       ...toolExecutionMetadata(item),
@@ -120,22 +131,14 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
-/** The tool name reaches the row verbatim — downstream dispatch (diff renderer,
- *  question parsers, input previews) matches raw identifiers, so any casing
- *  transform would silently miss them. `server/` qualifies it so two servers
- *  exposing the same tool stay distinguishable and neither shadows a built-in. */
+/** Preserve names for exact dispatch; qualify by server to avoid tool collisions. */
 function mcpToolCallName(item: CodexThreadItem): string {
   const tool = readString(item, 'tool')
   const server = readString(item, 'server')
   return tool === null ? 'mcp' : server === null ? tool : `${server}/${tool}`
 }
 
-/** Row-label derivation only reads top-level keys, so the call's own arguments
- *  have to be the input itself. `arguments` is arbitrary JSON upstream: a
- *  non-object stays addressable under a key rather than being dropped, while a
- *  no-argument call — `{}` on the wire, the shape every argument-less MCP tool
- *  sends — becomes null so the row reads as a bare `server/tool` instead of a
- *  literal `{}`. */
+/** Labels read top-level keys; wrap non-object arguments and omit empty objects. */
 function mcpToolArguments(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) {
     return value === null || value === undefined ? null : { arguments: value }
@@ -162,10 +165,7 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
-/** A row label is read off top-level keys only, so the action's own labelable
- *  fields are hoisted beside the query while `action` stays whole for the
- *  expanded detail. The action `type` lands on `description`, the lowest-ranked
- *  label key, so it names only an action that carries nothing better. */
+/** Hoist action fields for labels; description is the lowest-priority fallback. */
 function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
   const action = readRecord(item.action)
   const fields: [string, unknown][] = [
@@ -176,17 +176,13 @@ function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
   ]
   const query = readString(item, 'query') ?? readString(action, 'query')
   const present = fields.filter(([, value]) => value !== null)
-  // A blank `query` is the run header's "this call has no brief argument"
-  // signal; drop the key and the header stands the row's raw JSON in for one.
+  // A blank query prevents the run header from falling back to raw JSON.
   return query === null && present.length === 0
     ? null
     : { query: query ?? '', ...Object.fromEntries(present) }
 }
 
-/** `webSearch` carries no status: Codex starts it with an empty query and a null
- *  action, then sends the action, so `action` is the completion signal — a
- *  completed item's own `query` is routinely still empty. The hits arrive on
- *  `results` and are the call's output. */
+/** Web search has no status; action presence signals completion even when query is empty. */
 function webSearchItem(item: CodexThreadItem): CodexJournalItem {
   const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
@@ -204,20 +200,15 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
-/**
- * Journal body for a Codex item, or null for one with nothing to render.
- *
- * Known empty items wait for later deltas. Unknown types become bounded status
- * rows so a provider release cannot make new activity invisible. `started` is a
- * finished item's own started revision, when the caller still holds it.
- */
+/** Unknown items get bounded status rows; started supplies the earlier revision of a finished item. */
 export function codexJournalItem(
   item: CodexThreadItem,
   helperName?: CodexHelperName,
   started?: CodexThreadItem
 ): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    const question = codexAsyncQuestionBlock(item)
+    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
     return {
       body:
         blocks.length === 0
@@ -274,7 +265,6 @@ export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | nul
   return codexJournalItem(item).body
 }
 
-/** Snapshot body for text still streaming, before its item completes. */
 export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   return {
     kind: 'message',
@@ -283,7 +273,6 @@ export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   }
 }
 
-/** Snapshot body for any item-level stream, keyed onto its parent item. */
 export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
   if (item.type === 'agentMessage') {
     return { body: codexStreamingMessageBody(text), handled: true }

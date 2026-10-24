@@ -143,6 +143,10 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   queueTooLarge: () =>
     translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
   shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),
+  messageTooLarge: () =>
+    translate('components.native-chat.writeNotice.messageTooLarge', COPY.messageTooLarge),
+  shortenMessage: () =>
+    translate('components.native-chat.writeNotice.shortenMessage', COPY.shortenMessage),
   optionRejected: () =>
     translate('components.native-chat.writeNotice.optionRejected', COPY.optionRejected),
   goalsUnsupported: () =>

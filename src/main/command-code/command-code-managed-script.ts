@@ -93,17 +93,14 @@ export function buildCommandCodeManagedScript(
     '    [ -n "$__orca_endpoint_value" ] && export "$__orca_endpoint_name=$__orca_endpoint_value"',
     '  done',
     '}',
-    '# Why: Command Code sanitizes hook subprocess env. The parent TUI process',
-    '# still has Orca pane/hook metadata, so recover it before posting.',
+    '# Recover pane/hook metadata from the parent TUI after Command Code sanitizes hook env.',
     'for __orca_name in ORCA_AGENT_HOOK_ENDPOINT ORCA_AGENT_HOOK_PORT ORCA_AGENT_HOOK_TOKEN ORCA_AGENT_HOOK_ENV ORCA_AGENT_HOOK_VERSION ORCA_PANE_KEY ORCA_TAB_ID ORCA_WORKTREE_ID ORCA_AGENT_LAUNCH_TOKEN; do',
     '  __orca_fill_from_ancestor "$__orca_name"',
     'done',
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  __orca_fill_from_endpoint_file "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
-    '# Why: Command Code strips TOKEN-like env vars before invoking hooks. If',
-    '# ORCA_AGENT_HOOK_ENDPOINT was not exported into this PTY, recover the',
-    '# matching endpoint file by the unstripped loopback port.',
+    '# Recover stripped token metadata by matching the preserved loopback port.',
     'if [ -z "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_AGENT_HOOK_PORT" ]; then',
     '  for endpoint in \\',
     '    "$HOME/Library/Application Support/orca-dev/agent-hooks"/*/endpoint.env \\',
@@ -124,10 +121,7 @@ export function buildCommandCodeManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
+    // Bound stalled posts and pipe large payloads through stdin to avoid EDR command-line false positives.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/command-code" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',

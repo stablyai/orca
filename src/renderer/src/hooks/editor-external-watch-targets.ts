@@ -1,10 +1,11 @@
-import type { AppState } from '@/store'
+import { useAppStore, type AppState } from '@/store'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -57,6 +58,7 @@ type WatchedTargetsSnapshot = {
   unwatchedTargetsKey: string
 }
 
+let cachedOwnersKey = ''
 let cachedOpenFiles: AppState['openFiles'] | null = null
 let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
@@ -123,7 +125,7 @@ function getSidebarWatchConsumer(
   worktreeId: string
 ): WatchConsumer {
   // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
-  const owner = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+  const owner = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (owner) {
     return { owner, hostId: toRuntimeExecutionHostId(owner) }
   }
@@ -149,7 +151,19 @@ export function selectEditorExternalWatchTargets(
 ): WatchedTargetsSnapshot {
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
   const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId ?? null
+  // Why the store: this selector's narrowed state lacks the catalog the owner lookup reads, and
+  // the owners join the cache key because catalog fields outside it can move them.
+  const catalog = useAppStore.getState()
+  const watchWorktreeIds = new Map<string, string>()
+  for (const file of state.openFiles) {
+    const owner = openFileOwnerWorktreeId(file, catalog)
+    if (owner !== file.worktreeId) {
+      watchWorktreeIds.set(file.id, owner)
+    }
+  }
+  const ownersKey = [...watchWorktreeIds].join('|')
   if (
+    cachedOwnersKey === ownersKey &&
     cachedOpenFiles === state.openFiles &&
     cachedWorktreesByRepo === selectWorktreesByRepo(state) &&
     cachedRepos === state.repos &&
@@ -187,7 +201,11 @@ export function selectEditorExternalWatchTargets(
     const consumers = watchEligibleIds.has(file.worktreeId)
       ? consumersByWorktreeId
       : unwatchedConsumersByWorktreeId
-    addWatchConsumer(consumers, file.worktreeId, getOpenFileWatchConsumer(file))
+    addWatchConsumer(
+      consumers,
+      watchWorktreeIds.get(file.id) ?? file.worktreeId,
+      getOpenFileWatchConsumer(file)
+    )
   }
   const activeWorktreeId = state.activeWorktreeId
   const activeWorktree = activeWorktreeId
@@ -238,6 +256,7 @@ export function selectEditorExternalWatchTargets(
   const nextTargets = sortedEntries.map(([, target]) => target)
   const targetsKey = sortedEntries.map(([key]) => key).join('|')
   const unwatchedTargetsKey = [...unwatchedTargetKeys].sort().join('|')
+  cachedOwnersKey = ownersKey
   cachedOpenFiles = state.openFiles
   cachedWorktreesByRepo = selectWorktreesByRepo(state)
   cachedRepos = state.repos

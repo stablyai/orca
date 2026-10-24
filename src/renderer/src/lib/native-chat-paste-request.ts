@@ -17,6 +17,15 @@ export function findNativeChatPasteField(
   return card?.isConnected && root?.contains(card) ? card.querySelector('textarea') : null
 }
 
+/** A question card's typed-answer field, which a pane menu Paste opened on it fills. */
+export function findNativeChatAnswerField(
+  target: EventTarget | null,
+  root: Element | null
+): HTMLInputElement | null {
+  const field = target instanceof Element ? target.closest('[data-native-chat-answer-field]') : null
+  return field instanceof HTMLInputElement && root?.contains(field) ? field : null
+}
+
 /** Asks a mounted chat input owner to paste; left unclaimed when no input can take it. */
 export class NativeChatPasteRequest extends Event {
   constructor(readonly clipboardEvent?: ClipboardEvent) {

@@ -34,10 +34,6 @@ vi.mock(
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
 vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
@@ -61,8 +57,7 @@ import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-er
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -151,8 +146,7 @@ describe('registerFilesystemHandlers', () => {
 describe('registerFilesystemHandlers pull request field generation', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -239,8 +233,7 @@ describe('registerFilesystemHandlers pull request field generation', () => {
       })
 
       expect(getWorktreeMeta).not.toHaveBeenCalled()
-      // Why: without the length guard the property assertion passes vacuously on `undefined`,
-      // so an unrelated early return would read as "enrichment correctly suppressed".
+      // A call count prevents vacuous success on undefined after an early return.
       expect(generatePullRequestFieldsFromContextMock.mock.calls).toHaveLength(1)
       expect(generatePullRequestFieldsFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
         'linkedIssue'

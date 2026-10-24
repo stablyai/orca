@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import {
-  buildDismissedOnboardingFolderAgentStartup,
   buildOnboardingFolderAgentStartup,
   shouldSeedFolderAgentAfterDismissedOnboarding
 } from '@/lib/onboarding-folder-agent-startup'
@@ -110,35 +109,5 @@ describe('buildOnboardingFolderAgentStartup', () => {
         false
       )
     ).toBe(false)
-  })
-
-  it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
-    expect(
-      buildDismissedOnboardingFolderAgentStartup(
-        {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
-          defaultTuiAgent: 'codex',
-          agentCmdOverrides: { codex: 'echo onboarding-folder-agent' }
-        },
-        { ...getDefaultOnboardingState(), outcome: 'dismissed' },
-        false,
-        HOST
-      )
-    ).toEqual({
-      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-      env: {},
-      launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      sessionOptions: undefined,
-      telemetry: {
-        agent_kind: 'codex',
-        launch_source: 'onboarding',
-        request_kind: 'new'
-      }
-    })
   })
 })

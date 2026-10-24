@@ -5,8 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -66,7 +68,19 @@ async function createRuntimeWithHookRows(
   const readRows = statusWiring
     ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
     : (): AgentStatusIpcPayload[] => rows
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  // Switch-on, main's layout answers which pane holds the PTY, so the runtime needs a store.
+  const store = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? {
+        getRepos: () => [],
+        getRepo: () => undefined,
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        getProjects: () => [],
+        getSettings: () => ({})
+      }
+    : null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the create and list paths read only repos, settings and the session bindPaneFirst adds.
+  const runtime = new OrcaRuntimeService(store as never, undefined, {
     ...(statusWiring
       ? {
           onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus,
@@ -90,7 +104,7 @@ async function createRuntimeWithHookRows(
     folderWorkspace: null
   })
   runtime.setPtyController({
-    spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
+    spawn: vi.fn(committingSpawn(runtime, async () => ({ id: PTY_ID }))),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -438,6 +452,34 @@ describe('headless hook agent-status projection (#11761)', () => {
     expect(after?.type === 'terminal' ? after.agentStatus : undefined).toMatchObject({
       state: 'working',
       providerSession: PROVIDER_SESSION
+    })
+  })
+
+  // A rename is the tab's name, not process title evidence: the CLI status read keeps the agent.
+  it('keeps the terminal agent status running after the pane is renamed to a shell name', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        prompt: 'Working',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+    observePaneTitle(runtime, '⠋ Claude')
+    const { tabs } = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const handle = tabs[0]?.type === 'terminal' ? tabs[0].terminal : undefined
+    if (!handle) {
+      throw new Error('expected a live terminal handle')
+    }
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true
+    })
+
+    await runtime.renameTerminal(handle, 'bash')
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+      isRunningAgent: true,
+      status: 'working'
     })
   })
 

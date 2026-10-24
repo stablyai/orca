@@ -9,7 +9,7 @@ import { trackExternalChangeConflictShown } from './editor-external-change-telem
 // at fs-event time, the autosave controller's notification backstop, and the
 // restored-tab conflict scan). Centralizing keeps the rule from drifting;
 // each writer keeps its own echo/eligibility guard at the call site. A code
-// model is dirty when any of its tabs is, and the mark reaches all of them.
+// record is dirty when any of its views is, and the mark reaches all of them.
 export function markFileChangedOnDisk(
   state: AppState,
   file: OpenFile,
@@ -24,7 +24,5 @@ export function markFileChangedOnDisk(
   if (file.externalMutation !== 'changed') {
     trackExternalChangeConflictShown(file, options)
   }
-  for (const tab of tabs) {
-    state.setExternalMutation(tab.id, 'changed')
-  }
+  state.setExternalMutation(file.id, 'changed')
 }

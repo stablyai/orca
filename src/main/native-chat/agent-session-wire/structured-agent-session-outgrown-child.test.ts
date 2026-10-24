@@ -1,7 +1,3 @@
-// A child the chat outgrew is replaced before the next send: one that reported it is not signed in,
-// so a sign-in made since reaches a new child, and one launched with a permission mode the chat no
-// longer has, so the new mode reaches a new child.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -61,7 +57,6 @@ describe('a send after the agent said it is not signed in', () => {
     expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
 
-    // The earlier child's report does not follow the new one.
     expect((await rig.host.send(CALLER, restTestSend('and again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
@@ -210,7 +205,6 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
   })
 
   it('keeps it while it owes work the idle sweep also protects', async () => {
-    // A pending prompt is the shared check's too; the idle sweep's tests cover that case.
     for (const kept of [
       await retire(signedOut, owing('turn-1', false)),
       await retire(signedOut, { childWorkOpen: () => true }),
@@ -284,16 +278,15 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
       ).not.toHaveBeenCalled()
     })
 
-    // The check reads the same mode a start launches with, so each start ends the restarts.
     describe('against the mode a start launches with', () => {
-      // The saved catalog the probe keeps from `claude` 2.1.280: the default row folded into the
-      // row it resolves to, every row but haiku listed as running auto.
+      // Model Claude’s saved catalog: resolved default alias, auto on every model except haiku.
       const listed = [
         { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
         { id: 'sonnet', isDefault: false, supportsAutoMode: true },
         { id: 'haiku', isDefault: false }
       ]
       const catalog = (rows: typeof listed) => ({
+        peek: () => null,
         read: vi.fn(async () => ({
           origin: 'probe' as const,
           fetchedAt: 1,
@@ -357,7 +350,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
         }
       })
 
-      // A resolved id launches Ask; the start reports the listed alias, so one restart reaches auto.
+      // A resolved ID initially launches Ask; the reported catalog alias enables auto after one restart.
       it('settles after one restart once a resolved id is reported as its alias', async () => {
         const first = await launch({ model: 'claude-opus-5-5[1m]', permissionMode: 'auto' })()
         const reported = launch({ model: 'opus[1m]', permissionMode: 'auto' })

@@ -4,15 +4,13 @@ import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
 
 const MANAGED_HOME = '/tmp/orca-user-data/codex-runtime-home/home'
 
-// Why: only the path-only variant may run on the resolve poll — the getter
-// mkdirSyncs the runtime home, which is launch-time work and blocks the main
-// thread on every tick.
+// Polling may read paths only; the launch-time getter mkdirSyncs and would block every tick.
 vi.mock('../codex/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: vi.fn(() => MANAGED_HOME),
   resolveOrcaManagedCodexHomePath: vi.fn(() => MANAGED_HOME)
 }))
 
-// Keeps the WSL fallback tier inert so this stays a host-roots test on any platform.
+// Disable WSL fallback so the host-roots test behaves identically on every platform.
 vi.mock('../wsl', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   listRunningWslHomeDirsAsync: vi.fn(async () => [])

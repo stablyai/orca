@@ -78,11 +78,11 @@ function returnedExpressions(selector) {
   return expressions
 }
 
-function unwrapShallowSelector(selector, shallowHooks) {
+function unwrapShallowSelector(selector, state) {
   if (
     selector?.type === 'CallExpression' &&
     selector.callee.type === 'Identifier' &&
-    shallowHooks.has(selector.callee.name)
+    state.shallowHooks.has(variableFor(selector.callee, state))
   ) {
     return { selector: selector.arguments[0], shallow: true }
   }
@@ -157,26 +157,37 @@ function isModuleScope(node) {
   )
 }
 
-/** Records module-scope `const selectX = (state) => ...` so identifier selectors resolve. */
-function recordNamedSelector(node, state) {
-  if (!isModuleScope(node)) {
-    return
-  }
-  const declared =
-    node.type === 'FunctionDeclaration'
-      ? [[node.id, node]]
-      : node.declarations.map((declarator) => [declarator.id, declarator.init])
-  for (const [id, initializer] of declared) {
-    const name = identifierName(id)
-    if (name && functionNode(initializer)) {
-      state.namedSelectors.set(name, initializer)
+/** Resolve the binding at the use site, including nested lexical shadows. */
+function variableFor(node, state) {
+  const name = identifierName(node)
+  for (let scope = name && state.sourceCode.getScope(node); scope; scope = scope.upper) {
+    const variable = scope.set.get(name)
+    if (variable) {
+      return variable
     }
   }
+  return null
 }
 
-/** Inline function, or a module-scope selector referenced by name. */
+/** Inline function, or a module-scope selector referenced by its lexical binding. */
 function resolveSelector(argument, state) {
-  return functionNode(argument) ?? state.namedSelectors.get(identifierName(argument)) ?? null
+  if (functionNode(argument)) {
+    return argument
+  }
+  const definition = variableFor(argument, state)?.defs[0]
+  const declaration = definition?.node
+  if (
+    definition?.type === 'FunctionName' &&
+    declaration.type === 'FunctionDeclaration' &&
+    isModuleScope(declaration)
+  ) {
+    return declaration
+  }
+  return definition?.type === 'Variable' &&
+    declaration.type === 'VariableDeclarator' &&
+    isModuleScope(declaration.parent)
+    ? functionNode(declaration.init)
+    : null
 }
 
 /**
@@ -186,8 +197,8 @@ function resolveSelector(argument, state) {
  */
 function expandThroughNamedHelper(expression, state) {
   const helper =
-    expression?.type === 'CallExpression'
-      ? state.namedSelectors.get(identifierName(expression.callee))
+    expression?.type === 'CallExpression' && expression.callee.type === 'Identifier'
+      ? resolveSelector(expression.callee, state)
       : undefined
   const returned = helper ? returnedExpressions(helper) : []
   return returned.length > 0 && returned.every((entry) => allocates(entry, true))
@@ -195,11 +206,11 @@ function expandThroughNamedHelper(expression, state) {
     : [expression]
 }
 
-function createRuleState() {
+function createRuleState(sourceCode) {
   return {
     appStoreHooks: new Set(),
     shallowHooks: new Set(),
-    namedSelectors: new Map(),
+    sourceCode,
     deferredCalls: []
   }
 }
@@ -211,12 +222,12 @@ function recordImports(node, state) {
       continue
     }
     const imported = identifierName(specifier.imported)
-    const localName = identifierName(specifier.local)
-    if (!imported || !localName) {
+    const variable = variableFor(specifier.local, state)
+    if (!imported || !variable) {
       continue
     }
     if (source === 'zustand/react/shallow' && imported === 'useShallow') {
-      state.shallowHooks.add(localName)
+      state.shallowHooks.add(variable)
     }
     // useAppStore is the app store wherever it is re-exported from; sibling
     // stores are trusted by naming convention only when they come from this codebase.
@@ -225,7 +236,7 @@ function recordImports(node, state) {
       !NON_STORE_HOOKS.has(imported) &&
       (imported === 'useAppStore' || isLocalModuleSource(source))
     ) {
-      state.appStoreHooks.add(localName)
+      state.appStoreHooks.add(variable)
     }
   }
 }
@@ -233,13 +244,13 @@ function recordImports(node, state) {
 function isAppStoreCall(node, state) {
   return (
     node.callee.type === 'Identifier' &&
-    state.appStoreHooks.has(node.callee.name) &&
+    state.appStoreHooks.has(variableFor(node.callee, state)) &&
     node.optional !== true
   )
 }
 
-function requireSelectorRule() {
-  const state = createRuleState()
+function requireSelectorRule(sourceCode) {
+  const state = createRuleState(sourceCode)
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
@@ -260,17 +271,11 @@ function requireSelectorRule() {
  * Selector arguments are collected during traversal and judged at Program:exit so a
  * selector hoisted below its call site still resolves.
  */
-function deferredSelectorRule(inspect) {
-  const state = createRuleState()
+function deferredSelectorRule(sourceCode, inspect) {
+  const state = createRuleState(sourceCode)
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
-    },
-    FunctionDeclaration(node) {
-      recordNamedSelector(node, state)
-    },
-    VariableDeclaration(node) {
-      recordNamedSelector(node, state)
     },
     CallExpression(node) {
       if (isAppStoreCall(node, state)) {
@@ -279,10 +284,7 @@ function deferredSelectorRule(inspect) {
     },
     'Program:exit'() {
       for (const node of state.deferredCalls) {
-        const { selector: argument, shallow } = unwrapShallowSelector(
-          node.arguments[0],
-          state.shallowHooks
-        )
+        const { selector: argument, shallow } = unwrapShallowSelector(node.arguments[0], state)
         const report = inspect({
           selector: resolveSelector(argument, state),
           shallow,
@@ -296,8 +298,8 @@ function deferredSelectorRule(inspect) {
   }
 }
 
-function noIdentitySelectorRule() {
-  return deferredSelectorRule(({ selector }) =>
+function noIdentitySelectorRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector }) =>
     isIdentitySelector(selector)
       ? {
           node: selector,
@@ -308,8 +310,8 @@ function noIdentitySelectorRule() {
   )
 }
 
-function noFreshSelectorResultRule() {
-  return deferredSelectorRule(({ selector, shallow, state }) => {
+function noFreshSelectorResultRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, shallow, state }) => {
     if (shallow || !selector) {
       return null
     }
@@ -339,8 +341,8 @@ function nestedFreshValues(expression) {
   return []
 }
 
-function noNestedFreshUnderShallowRule() {
-  return deferredSelectorRule(({ selector, shallow, state }) => {
+function noNestedFreshUnderShallowRule(sourceCode) {
+  return deferredSelectorRule(sourceCode, ({ selector, shallow, state }) => {
     if (!shallow || !selector) {
       return null
     }
@@ -361,7 +363,7 @@ function noNestedFreshUnderShallowRule() {
 
 function bindContext(createVisitors) {
   return (context) => {
-    const visitors = createVisitors()
+    const visitors = createVisitors(context.sourceCode)
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)
     }

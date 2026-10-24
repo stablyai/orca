@@ -57,10 +57,7 @@ import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/pty-provider-contract'
 
-// The runtime's worktree.ps liveness refresh calls the aggregate inventory (no connectionId)
-// under a 3s budget, and only a returned inventory can retire an exited PTY. STA-517: one
-// unreachable relay made the whole aggregate fail, so no PTY was ever proven dead and every
-// retained pane — the SSH ones above all — kept reporting "active" to mobile indefinitely.
+// An unreachable relay must not invalidate all host inventories and leave exited panes active on mobile (STA-517).
 
 type ListCall = { opts: { deadlineMs?: number } | undefined }
 
@@ -119,8 +116,7 @@ describe('aggregate PTY process inventory', () => {
     setLocalPtyProvider(local.provider)
     const controller = captureController()
 
-    // A local failure is a real controller fault, not one unreachable host: the runtime must
-    // keep treating it as "no inventory" rather than proving every local PTY dead.
+    // Local controller failure must preserve uncertainty instead of proving every local PTY dead.
     await expect(controller.listProcesses()).rejects.toThrow('relay unreachable')
   })
 })

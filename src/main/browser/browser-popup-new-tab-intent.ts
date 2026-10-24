@@ -1,11 +1,4 @@
-/**
- * Whether a new-window request from a page should open an Orca tab rather than a popup window.
- *
- * Chromium's disposition already carries Chrome's answer: new-tab links, Cmd/Ctrl/middle clicks, and
- * `window.open` without window features (`noopener` and `noreferrer` are not features) arrive as a
- * tab, while size/position features and Shift-click arrive as `new-window`. Denying hands the page
- * `null`, so named opens and OAuth authorization URLs must keep their opener in a child window.
- */
+// Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
 export function isNewBrowserTabPopupIntent(details: {
   url: string
   frameName: string
@@ -19,7 +12,7 @@ export function isNewBrowserTabPopupIntent(details: {
   )
 }
 
-/** A GET Chrome would open as a tab; Orca can only reopen its URL, which drops any opener. */
+// Reopening by URL drops the opener and POST body.
 export function isBrowserTabPopupRequest(details: {
   frameName: string
   disposition: string
@@ -41,7 +34,6 @@ export function isBlankBrowserPopupUrl(rawUrl: string): boolean {
   }
 }
 
-/** Popup destinations are Chromium URLs, never address-bar searches or local files. */
 export function normalizeBrowserPopupUrl(rawUrl: unknown): string | null {
   if (typeof rawUrl !== 'string') {
     return null
@@ -56,7 +48,6 @@ export function normalizeBrowserPopupUrl(rawUrl: unknown): string | null {
   }
 }
 
-// Unnamed window.open(url), used by Deel, has the same disposition as an ordinary new-tab link.
 function isOAuthAuthorizationUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl)

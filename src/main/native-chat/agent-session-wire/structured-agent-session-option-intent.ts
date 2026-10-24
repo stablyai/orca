@@ -1,5 +1,3 @@
-// A pick is kept only when the chat's agent takes it, and is recorded as intent for the next start.
-
 import { refuse, type AgentSessionOptionResult } from '../../../shared/agent-session-wire'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -12,10 +10,10 @@ import {
   savedAgentSessionCatalogModels,
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { pickAgentSessionOption } from '../../runtime/agent-session-record-options'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 
-/** Whether the agent takes this pick: a permission mode it offers, or an option key it names. */
 function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   provider: string,
@@ -29,7 +27,6 @@ function acceptsOptionPick(
     : definition?.restingOptions.acceptsKey(key) === true
 }
 
-/** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
 export function structuredAgentSessionOptionOverridesRefusal(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   provider: string,
@@ -47,8 +44,7 @@ export function structuredAgentSessionOptionOverridesRefusal(
       )
 }
 
-/** Records a pick for the next start. Only a key the provider would accept is kept, and only a
- *  value the chat's model runs; a model pick drops an inherited effort or Fast it doesn't. */
+/** Save accepted intent; model changes drop inherited effort/Fast values the new model cannot run. */
 export async function recordStructuredAgentSessionOptionIntent(
   deps: {
     store: Pick<
@@ -56,6 +52,7 @@ export async function recordStructuredAgentSessionOptionIntent(
       'getRecord' | 'replaceSessionOptions' | 'reviseSessionOptions'
     >
     agents: Pick<StructuredAgentRegistry, 'definition'>
+    adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions'>
   } & Parameters<typeof savedAgentSessionCatalogModels>[0],
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'now'>,
   input: { key: string; value: string }
@@ -77,7 +74,7 @@ export async function recordStructuredAgentSessionOptionIntent(
   if (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     const permissionMode = input.value
     await deps.store.replaceSessionOptions({ sessionId, fence, permissionMode, now: ctx.now() })
-    // The answer still names the mode among the options, as the wire always has.
+    // Preserve the wire’s permission mode within options.
     options = { ...record.options, [input.key]: input.value }
   } else {
     const picked = { sessionId, fence, ...input, models, now: ctx.now() }
@@ -85,16 +82,23 @@ export async function recordStructuredAgentSessionOptionIntent(
       options =
         (await deps.store.reviseSessionOptions(pickAgentSessionOption, picked)).options ?? {}
     } catch (error) {
-      // The ordered write refused a value the chat's model doesn't offer.
       if (isAgentSessionRefusalError(error)) {
         return { ok: false, refusal: error.refusal }
       }
       throw error
     }
   }
+  const displayModels =
+    models ??
+    (await savedAgentSessionCatalogModels(deps, record.provider, sessionId, undefined, false))
   ctx.publish()
   return {
     ok: true,
-    value: { ...input, options: structuredAgentSessionPickReply(options, models) }
+    value: {
+      ...input,
+      options:
+        deps.adapter?.projectOptions?.(sessionId, options)?.options ??
+        structuredAgentSessionPickReply(options, displayModels)
+    }
   }
 }

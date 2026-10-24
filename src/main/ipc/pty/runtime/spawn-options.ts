@@ -15,7 +15,6 @@ import {
 import type { RuntimePtySpawnState } from './spawn-state'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
 
-/** Host lane: the shared spawn options plus this lane's agent-session claims and pane join. */
 export async function buildRuntimePtySpawnOptions(
   ctx: RuntimePtySpawnState
 ): Promise<
@@ -72,6 +71,7 @@ export async function buildRuntimePtySpawnOptions(
     envToDelete: deletions.envToDelete,
     launchCommand: ctx.launchCommand,
     cwd: ctx.cwd,
+    prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
     isNewSession: ctx.isNewDaemonSession,
@@ -95,8 +95,7 @@ export async function buildRuntimePtySpawnOptions(
     sessionId: ctx.sessionId,
     sessionAppId: ctx.effectiveSessionAppId,
     isFreshSessionId: ctx.isNewDaemonSession,
-    // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
-    // cached size is the only source that can outrank their requested grid here.
+    // Runtime requests are measured; only cached geometry can outrank them here.
     requestIsUnmeasured: false,
     cols: args.cols,
     rows: args.rows
@@ -108,7 +107,7 @@ export async function buildRuntimePtySpawnOptions(
     args.agentSessionEnsure &&
     (await (ctx.provider as IPtyProvider).supportsAgentSessionClaims?.()) === false
   ) {
-    // Why: runtime routing must select legacy before dispatch; never downgrade here after it began.
+    // Select legacy routing before dispatch; never downgrade after work begins.
     throw new Error('agent_session_claim_unavailable')
   }
   if (
@@ -131,7 +130,7 @@ export async function buildRuntimePtySpawnOptions(
     args.onPtySpawnCommitted &&
     (ctx.provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(ctx.provider))
   ) {
-    // Why: local fallback has no lower operation ledger, so commit must be reported at native spawn.
+    // Local fallback lacks an operation ledger; report commit at native spawn.
     ctx.spawnOptions.onPtySpawnCommitted = ctx.reportPtySpawnCommitted
   }
 
@@ -152,14 +151,9 @@ export async function buildRuntimePtySpawnOptions(
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null
   ctx.pendingRegistrationPtyId = null
-  // Why hoisted to the reply scope: main reconciles the provider sequence
-  // deep inside the spawn path, but the pane needs that renderer-domain
-  // boundary beside the daemon snapshot's kitty flags.
+  // Carry renderer-domain sequence reconciliation into the reply beside proven kitty flags.
   ctx.reconciledSnapshotSeq = null
-  // False when bytes crossed the data socket during the spawn RPC: the
-  // reconciled boundary covers them, but the daemon proved its kitty flags
-  // before they existed, so the claim must not erase what the pane may
-  // have scanned from those bytes live.
+  // Bytes arriving during spawn can postdate proven flags; preserve any negotiation scanned live.
   ctx.snapshotKittyFlagsCoverReconciledSeq = true
   ctx.preparedProvisionalExecutionContext = false
 

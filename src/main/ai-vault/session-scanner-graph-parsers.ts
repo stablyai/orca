@@ -18,13 +18,12 @@ import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorSessionIdentity,
   cloneSessionAccumulator,
-  addPreviewContent,
-  addPreviewMessage,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -42,7 +41,7 @@ type ParserSessionOptions = {
   executionHostPlatform?: NodeJS.Platform | null
 }
 
-/** The session's cwd; a scope walk reads it from metadata.json without the context file. */
+/** Scope discovery reads cwd from metadata without opening the context file. */
 export function rovoSessionCwd(metadata: Record<string, unknown>): string | null {
   return firstString(metadata, [
     'workspace_path',
@@ -106,7 +105,7 @@ export function consumeRovoSessionContext(
       if (role === 'user') {
         accumulator.title ??= extractContentText(record?.content)
       }
-      addPreviewContent(accumulator, role, record?.content, record?.timestamp)
+      addSessionContent(accumulator, role, record?.content, record?.timestamp)
     }
   }
 
@@ -127,19 +126,15 @@ export function consumeRovoHistoryEntry(
   if (role !== 'user' && role !== 'assistant') {
     return
   }
-  const text = rovoPartsText(arrayValue(record.parts), role)
-  if (!text) {
+  const content = rovoTextParts(arrayValue(record.parts), role)
+  if (content.length === 0) {
     return
   }
   accumulator.messageCount++
   if (role === 'user') {
-    accumulator.title ??= text
+    accumulator.title ??= extractContentText(content)
   }
-  addPreviewMessage(accumulator, {
-    role,
-    text,
-    timestamp: record.timestamp
-  })
+  addSessionContent(accumulator, role, content, record.timestamp)
 }
 
 export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
@@ -152,7 +147,7 @@ export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
   return null
 }
 
-export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): string | null {
+function rovoTextParts(parts: unknown[], role: 'user' | 'assistant'): string[] {
   const textParts: string[] = []
   for (const part of parts) {
     const record = asRecord(part)
@@ -176,12 +171,9 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
       textParts.push(text)
     }
   }
-  return extractContentText(textParts)
+  return textParts
 }
 
-// Agents whose transcripts are append-only message-graph JSONL (session +
-// model_change + message records). OMP and Prime Agent are Pi forks and
-// share the format.
 export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
 
 export async function parseMessageGraphSessionFile(
@@ -195,8 +187,7 @@ export async function parseMessageGraphSessionFile(
   try {
     return await parseMessageGraphSessionLines({ agent, file, lines, platform, messages })
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so a
-    // mid-parse throw cannot leak the gated transcript handle.
+    // readline.close() leaves its input open; destroy the gated stream after parse failures too.
     lines.close()
     input.destroy()
   }
@@ -246,8 +237,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
     return
   }
   if (record.type === 'model_change') {
-    // Pi writes `modelId`; OMP writes `model`. Prefer either so an in-progress
-    // session shows its model before the first assistant reply lands.
+    // Read model changes before the first assistant reply; Pi and OMP spell the key differently.
     accumulator.model =
       extractString(record.modelId) ?? extractString(record.model) ?? accumulator.model
     return
@@ -269,7 +259,7 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
       accumulator.model = extractString(message?.model) ?? accumulator.model
       accumulator.totalTokens += tokenTotal(message?.usage)
     }
-    addPreviewContent(accumulator, role, message?.content, record.timestamp)
+    addSessionContent(accumulator, role, message?.content, record.timestamp)
   }
 }
 
@@ -287,9 +277,7 @@ export function createMessageGraphSessionResumeState(
     }),
     ompTitle: null
   })
-  // Why: only OMP materializes task-subagent transcripts beside its sessions
-  // (in the same-named artifact dir); the row UI shows the count without
-  // expanding details. Pi/OpenClaw/Prime Agent have no such layout — skip the readdir.
+  // Only OMP has this task-artifact layout; avoid directory reads for the other graph agents.
   return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
 }
 

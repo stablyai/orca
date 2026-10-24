@@ -7,6 +7,7 @@ import { resolveMobileNativeChatSessionId } from './mobile-native-chat-eligibili
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
@@ -15,7 +16,9 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
+    hostId,
     worktreeId,
     insets,
     connState,
@@ -53,6 +56,7 @@ export function MobileSessionActiveContent({
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
     copyMarkdownLocalContent,
+    copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
@@ -67,6 +71,7 @@ export function MobileSessionActiveContent({
     handleSelectionMode,
     handleSelectionCopy,
     handleSelectionEvicted,
+    handleClipboardWrite,
     handleModesChanged,
     handleKeyboardAvoidanceMetrics,
     handleHaptic,
@@ -120,6 +125,7 @@ export function MobileSessionActiveContent({
         onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
         onSave={() => void saveMarkdownTab(activeMarkdownTab)}
         onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
+        onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
         onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
         keyboardLift={keyboardLift}
       />
@@ -132,6 +138,7 @@ export function MobileSessionActiveContent({
   ) : activeFileTab ? (
     <View style={styles.markdownFrame}>
       <FileReader
+        documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
         client={client}
         doc={fileDocs.get(activeFileTab.id)}
         title={activeFileTab.title || 'File'}
@@ -219,6 +226,7 @@ export function MobileSessionActiveContent({
           onSelectionMode={handleSelectionMode}
           onSelectionCopy={handleSelectionCopy}
           onSelectionEvicted={handleSelectionEvicted}
+          onClipboardWrite={handleClipboardWrite}
           onModesChanged={handleModesChanged}
           onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
           onHaptic={handleHaptic}
@@ -231,6 +239,7 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatOverlay
         controller={nativeChatController}
+        activeSessionTabId={controller.activeSessionTab?.id}
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
         structuredComposer={nativeChatStructuredComposer}

@@ -93,7 +93,7 @@ export class PtyPendingDataDrainQueue {
     this.pendingChars += pending.data.length - existing.pending.data.length
     existing.pending = pending
     if (this.openRound) {
-      // Why: renderer notification can synchronously append; defer the whole ID past this round's frontier.
+      // Renderer notification can synchronously append; defer this ID beyond the current round's frontier.
       this.unlink(existing)
       existing.eligibleRound = this.openRound.round + 1
       this.appendToLane(existing, this.classify(id))

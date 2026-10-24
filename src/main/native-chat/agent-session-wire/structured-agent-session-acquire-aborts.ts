@@ -1,14 +1,12 @@
-// Concurrent host waits keep their own cancellation handles until they settle.
-
 export class StructuredAgentSessionAcquireAborts {
   private readonly inFlight = new Map<
     string,
     Set<{ controller: AbortController; handover: boolean; goal: boolean }>
   >()
-  /** Set by quit: the host is going away, so an attach that begins after it starts aborted. */
+  /** Starts admitted after quit must begin aborted. */
   private quitReason: Error | null = null
 
-  /** For the provider wait about to run; `end` once it settles. */
+  /** End each handle when its own wait settles. */
   begin(
     sessionId: string,
     handover = false,
@@ -46,7 +44,6 @@ export class StructuredAgentSessionAcquireAborts {
       )
   }
 
-  /** A no-op when the session has nothing in flight. */
   abort(sessionId: string, reason: string | Error): boolean {
     let reached = false
     for (const { controller, handover, goal } of this.inFlight.get(sessionId) ?? []) {
@@ -56,7 +53,7 @@ export class StructuredAgentSessionAcquireAborts {
     return reached
   }
 
-  /** Quit: every provider wait under way stops, including those queued in the attach drain. */
+  /** Abort all waits, including queued attach-drain work. */
   abortAll(reason: string): void {
     this.quitReason ??= new Error(reason)
     for (const waits of this.inFlight.values()) {

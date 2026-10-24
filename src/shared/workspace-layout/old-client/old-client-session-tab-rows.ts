@@ -4,24 +4,10 @@
 
 import type { LayoutTab, WorkspaceLayout } from '../workspace-layout-model'
 import { layoutContainsLeafId } from '../terminal-pane-tree'
+import { AGENT_SESSION_ROW_PREFIX, TERMINAL_ROW_SEPARATOR } from './old-client-session-row-ids'
 
-const TERMINAL_ROW_SEPARATOR = '::'
-const AGENT_SESSION_ROW_PREFIX = 'agent-session:'
-
-/** One row per pane: `<terminal id>::<pane id>`, as the window and headless publishers write it. */
-export function terminalRowId(entityId: string, leafId: string): string {
-  return `${entityId}${TERMINAL_ROW_SEPARATOR}${leafId}`
-}
-
-/** The runtime publishes chat tabs under their session id, in rows and in group tab orders. */
-export function agentSessionRowId(sessionId: string): string {
-  return `${AGENT_SESSION_ROW_PREFIX}${sessionId}`
-}
-
-/** A tab's entry in a published group tab order. */
-export function publishedTabOrderId(tab: LayoutTab): string {
-  return tab.kind === 'agent-session' ? agentSessionRowId(tab.entityId) : tab.id
-}
+export { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
+export { projectSessionTabs } from './old-client-session-tabs-projection'
 
 export type SessionTabRowTarget = { tab: LayoutTab; leafId?: string }
 

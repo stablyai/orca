@@ -12,7 +12,8 @@ import {
 import {
   ORCAD_TERMINAL_CENSUS_METHOD,
   OrcadTerminalCensusSchema,
-  type OrcadTerminalCensus
+  type OrcadTerminalCensus,
+  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
@@ -23,12 +24,6 @@ export type OrcadTerminalCensusRequestOptions = {
   releaseFinishedAutomationTerminals?: boolean
   /** Close the server's terminal admission this long before counting; 0 reopens it. */
   closeAdmissionForMs?: number
-}
-
-const UNVERIFIABLE: OrcadTerminalCensus = {
-  liveSessions: null,
-  startedSinceActivation: null,
-  daemonProtocolVersion: null
 }
 
 /**
@@ -47,13 +42,16 @@ export async function collectManagedTerminalCensus(
   }
   const activatedAt = record.activatedAt ? Date.parse(record.activatedAt) : Number.NaN
   if (!Number.isFinite(activatedAt) || activatedAt < 0) {
-    return UNVERIFIABLE
+    return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   }
   try {
     // Why its answer, not `environment`: the tunnel may have re-paired, retiring that token.
     const current = await ensureOrcadManagedTunnel(userDataPath, environment.id)
     // A server that idled out behind a forward still up is started first, or it never answers.
-    await verifyOrcadManagedServing(userDataPath, environment.id)
+    // Not for a reopen: a server that stopped has no admission left to reopen.
+    if (options.closeAdmissionForMs !== 0) {
+      await verifyOrcadManagedServing(userDataPath, environment.id)
+    }
     return await requestOrcadTerminalCensus(
       getPreferredPairedRuntimeConnection(current),
       activatedAt,
@@ -61,7 +59,7 @@ export async function collectManagedTerminalCensus(
       options
     )
   } catch {
-    return UNVERIFIABLE
+    return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   }
 }
 
@@ -98,8 +96,10 @@ export async function requestOrcadTerminalCensus(
       undefined,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
-    return response.ok ? OrcadTerminalCensusSchema.parse(response.result) : UNVERIFIABLE
+    return response.ok
+      ? OrcadTerminalCensusSchema.parse(response.result)
+      : UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   } catch {
-    return UNVERIFIABLE
+    return UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
   }
 }

@@ -1,7 +1,3 @@
-// Continue on a reply an Orca stop cut off: the restart continuation, bound to the cut turn and
-// re-checked under the session lock, so it works with or without a restart offer and never sends
-// twice.
-
 import { expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
@@ -42,7 +38,6 @@ function sentTexts(dispatch: Restarted['dispatch']): string[] {
 
 it('continues with no restart offer, as Orca itself, and the chat says so', async () => {
   const { host, dispatch } = await interruptedRestart()
-  // What a crash, a paired server's restart or a dismissed offer leaves: no offer at all.
   await host.restartResume.dismiss()
   expect(await host.restartResume.list()).toEqual([])
   const send = vi.spyOn(host, 'send')
@@ -55,7 +50,7 @@ it('continues with no restart offer, as Orca itself, and the chat says so', asyn
   })
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
   expect(sentTexts(dispatch)).toEqual([AGENT_SESSION_RESTART_CONTINUATION_MESSAGE])
-  // Sent under Orca's own caller, so it reads as Orca's and leaves a queue pause alone.
+  // Orca-origin continuation must preserve the personal queue pause.
   expect(send.mock.calls[0]?.[0]).toEqual({
     callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER
   })
@@ -96,7 +91,6 @@ it('sends nothing for a retry after an answer that was lost', async () => {
   await host.restartResume.continueInterrupted(SESSION, turnItemId)
   await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
 
-  // The client never heard back, so it asks again for the same cut.
   const retry = await host.restartResume.continueInterrupted(SESSION, turnItemId)
 
   expect(retry).toEqual({ sessionId: SESSION, outcome: 'superseded' })
@@ -172,7 +166,7 @@ it('answers once Orca accepted it, while the agent is still starting', async () 
   const starting = new Promise<void>((resolve) => {
     finishStarting = resolve
   })
-  // An agent start slower than a paired client's wait for the answer.
+  // Startup outlasts a paired client’s response budget.
   acquire.mockImplementationOnce(async (input) => {
     await starting
     return start(input)
@@ -210,7 +204,7 @@ it('continues a reply the user had steered before Orca stopped', async () => {
   if (fence === undefined || fence === null || !journal) {
     throw new Error('the restarted chat has no open journal')
   }
-  // A steer the cut turn took: the client still offers Continue, so the host must agree.
+  // Client rules still offer Continue after a steer; host admission must agree.
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'steer' },
     hostTestMessage('also update the tests'),
@@ -237,7 +231,7 @@ it('answers a refusal before anything was accepted, and a retry adds no note to 
   const retry = await host.restartResume.continueInterrupted(SESSION, turnItemId)
 
   expect([first.outcome, retry.outcome]).toEqual(['refused', 'refused'])
-  // The click's answer is the one report; the chat stays as it was.
+  // Refusal belongs in the click response, with no journal note.
   expect(await statusNotes(host)).toEqual(notesBefore)
   expect(dispatch).not.toHaveBeenCalled()
 })

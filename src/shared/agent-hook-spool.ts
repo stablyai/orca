@@ -12,7 +12,6 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 
-export const AGENT_HOOK_SPOOL_MAX_BYTES = 5 * 1024 * 1024
 export const AGENT_HOOK_SPOOL_MAX_FILES = 1024
 export const AGENT_HOOK_SPOOL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 

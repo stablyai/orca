@@ -15,22 +15,14 @@ export function supportsClaudeQueuedInterruptCancellation(session: ClaudeSession
 
 export type ClaudeTurnCancellationGuard = () => boolean
 
-/**
- * Interrupt the running turn, then make sure no queued async user message survives to spawn a
- * later unexpected turn. On a CLI advertising `interrupt_cancel_queued_v1` one round trip
- * cancels the queue alongside the abort; otherwise the interrupt receipt lists `still_queued`
- * uuids, and each is withdrawn best-effort with `cancel_async_message`. Either way, every send
- * the CLI confirms it withdrew settles as cancelled. Older CLIs resolve no receipt, so there is
- * nothing to sweep.
- */
+/** Cancel queued sends atomically when supported; otherwise withdraw UUIDs from the interrupt receipt. */
 export async function cancelClaudeTurn(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   isCurrent: ClaudeTurnCancellationGuard = () => true,
   onDispatchSettledLate?: ClaudeLateDispatchSettlement
 ): Promise<{ cancelled: boolean }> {
-  // The SDK interrupt is session-scoped. Re-check the caller's turn/fence
-  // immediately before issuing it so a delayed request cannot stop a later turn.
+  // Interrupt is session-scoped; recheck ownership immediately before sending.
   if (!isCurrent()) {
     return { cancelled: false }
   }
@@ -53,8 +45,7 @@ export async function cancelClaudeTurn(
     }
     return { cancelled: true }
   } catch (error) {
-    // The CLI refused. Any other error leaves the interrupt's effect unknown. Either way the Stop
-    // ends the child next, so its Stop event stands.
+    // Only an explicit refusal proves the interrupt had no effect.
     if (error instanceof ClaudeControlRequestError) {
       return { cancelled: false }
     }
@@ -62,9 +53,7 @@ export async function cancelClaudeTurn(
   }
 }
 
-/** Stops each task the host named, and names each the CLI accepted the stop of as it does: the host
- *  ends that run provisionally, since the CLI answers success for a task it no longer knows without
- *  sending that task any frame. */
+/** Acknowledgements are provisional: the CLI also reports success for unknown tasks. */
 export async function stopClaudeBackgroundTasks(
   session: ClaudeSession,
   timeoutMs: number | undefined,
@@ -73,9 +62,7 @@ export async function stopClaudeBackgroundTasks(
   acknowledge: (acknowledgement: AgentChildWorkStopAcknowledgement) => void = () => {}
 ): Promise<{ cancelled: boolean }> {
   let cancelled = false
-  // A failed request for one task still leaves the others to stop; it is reported after them. A
-  // timeout ends the loop: a CLI that is not answering would make each id wait out its own
-  // deadline while the session's other actions queue behind this one.
+  // Continue after individual failures; a timeout aborts to avoid one deadline per task.
   let failure: { error: unknown } | undefined
   for (const taskId of taskIds) {
     if (!isCurrent()) {
@@ -100,7 +87,6 @@ export async function stopClaudeBackgroundTasks(
   return { cancelled }
 }
 
-/** Stops the tasks while `session` is still the one the host asked about. */
 export async function stopCurrentClaudeBackgroundTasks(input: {
   sessions: ReadonlyMap<string, ClaudeSession>
   session: ClaudeSession

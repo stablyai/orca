@@ -2,11 +2,13 @@ import { chmodSync, statSync } from 'node:fs'
 import process from 'node:process'
 import { restrictWindowsPathSync } from '../../shared/secure-path-windows-acl'
 
-export type OrcadInstanceLockCode =
+type OrcadInstanceLockCode =
   | 'orcad_data_root_unusable'
   | 'orcad_data_root_wrong_owner'
   | 'orcad_data_root_shared'
   | 'orcad_instance_lock_held'
+  /** A holder this machine cannot judge, such as one on a shared home; it may still be running. */
+  | 'orcad_instance_lock_holder_unverifiable'
   | 'orcad_instance_lock_foreign_identity'
   | 'orcad_instance_lock_unreadable'
 

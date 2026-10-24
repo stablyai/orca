@@ -248,6 +248,13 @@ export function getSshTargetIdForExecutionHost(
   return parsed?.kind === 'ssh' ? parsed.targetId : null
 }
 
+/** The SSH target this client may dial for a row's files; null for local and `runtime:` rows. */
+export function getRepoDialableSshTargetId(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): string | null {
+  return getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+}
+
 // Why: SSH ownership has two spellings on a repo row — the legacy `connectionId`
 // field and the unified `executionHostId`. Routing that reads the raw field answers
 // "local" for a row that only carries `ssh:<target>`, which runs a remote operation
@@ -267,7 +274,7 @@ export function getSshTargetIdForExecutionHost(
 //     as local, which is what decides whether a transcript is read on this client.
 //
 // So this answers "which SSH target holds this row's files", not "which connection may this
-// client dial". `getSshTargetIdForExecutionHost` answers the latter; callers routing a
+// client dial". `getRepoDialableSshTargetId` answers the latter; callers routing a
 // client-local PTY or Git provider want that one instead.
 export function getRepoSshConnectionId(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -287,7 +294,7 @@ export function getRepoSshConnectionId(
 export function getRepoRoutingConnectionId(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): string | null {
-  return getRepoSshConnectionId(repo) ?? normalizeHostPart(repo.connectionId)
+  return getRepoDialableSshTargetId(repo) ?? normalizeHostPart(repo.connectionId)
 }
 
 export function getWorktreeExecutionHostId(

@@ -15,6 +15,7 @@ import { applyCommandToSession } from '../persistence/terminal-topology/terminal
 import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
 import { withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { committingSpawn } from './bind-first-pane.test-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -105,7 +106,6 @@ function notifierWithRename(renameTerminal: RuntimeNotifier['renameTerminal']): 
     renameTerminal,
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   }
@@ -119,7 +119,11 @@ async function createHeadlessRuntimeWithAgent(
   const runtime = new DefaultTabRuntime(store, connectionId)
   let spawned = 0
   runtime.setPtyController({
-    spawn: vi.fn(async () => ({ id: spawned++ === 0 ? AGENT_PTY_ID : `pty-${spawned}` })),
+    spawn: vi.fn(
+      committingSpawn(runtime, async () => ({
+        id: spawned++ === 0 ? AGENT_PTY_ID : `pty-${spawned}`
+      }))
+    ),
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null

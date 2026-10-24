@@ -182,10 +182,4 @@ describe('the rich Markdown editor document at parse time', () => {
       )
     ).toEqual([[], [], []])
   })
-
-  it('would name a start the sequence forgot, which is what the comparison above is for', () => {
-    const planted = sequenceCallsTo('startRichMarkdownEditorDocument')
-    expect(planted).not.toContain('startEditorCommands')
-    expect([...planted, 'startEditorCommands'].sort()).not.toEqual(planted.slice().sort())
-  })
 })

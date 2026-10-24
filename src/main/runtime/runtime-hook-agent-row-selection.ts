@@ -71,8 +71,6 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
   return best
 }
 
-export type FreshExplicitAgentStatus = ReturnType<typeof selectFreshExplicitAgentStatus>
-
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
 export function selectFreshExplicitAgentStatus(args: {
   handle: string

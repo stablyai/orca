@@ -174,7 +174,7 @@ describe('readNativeChatVisualFile', () => {
   })
 
   it('reads a hard link the agent made inside its own folder', async () => {
-    // A hard link grants nothing a copy would not: the agent could write the same bytes itself.
+    // Hard links grant no more than copying bytes the agent already controls.
     await writeFile(join(folder, 'a.html'), '<p>a</p>')
     await link(join(folder, 'a.html'), join(folder, 'b.html'))
     expect(await readNativeChatVisualFile(folder, 'b.html')).toMatchObject({ ok: true })
@@ -198,7 +198,7 @@ describe('readNativeChatVisualFile', () => {
         () => null,
         (error: unknown) => error
       )
-      // Root reads through the mode bits; everyone else gets the coded fault.
+      // Root bypasses mode bits, so assert refusal only when the read fails.
       if (failure !== null) {
         expect(String(failure)).toContain('visual_read_failed:EACCES')
         expect(String(failure)).not.toContain(stateDirectory)

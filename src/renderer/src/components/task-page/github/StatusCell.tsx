@@ -26,7 +26,7 @@ import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page-github-
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { CircleDot, ChevronDown, Copy, CheckCircle2, Ban, ChevronRight } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { TaskPageGitHubDuplicatePicker } from './DuplicatePicker'
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 

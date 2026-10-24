@@ -212,6 +212,7 @@ export function restageWebRuntimeBrowserCreation(
   if (context.staged) {
     context.staged = restageWebRuntimeBrowserTabHostingIntent(context.staged, {
       environmentId: context.environmentId,
+      worktreeId: context.args.worktreeId,
       remotePageId: context.provisionalPageId,
       clientHosted
     })

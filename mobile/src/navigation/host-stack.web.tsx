@@ -1,8 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Navigator } from 'expo-router'
+import { Navigator, usePathname } from 'expo-router'
 import { colors } from '../theme/mobile-theme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
+import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
 
 /**
  * Web sibling: the page's host stack, with the push and pop slide the native stack has.
@@ -125,6 +126,7 @@ function StackScreen({
   children: ReactNode
 }) {
   const ref = useRef<View>(null)
+  const transparent = isOverlayPageRoute(usePathname())
   // Where an interrupted slide stopped, so a pop during a push leaves from there and not from 0.
   const stoppedAt = useRef<string | null>(null)
 
@@ -170,7 +172,10 @@ function StackScreen({
   }, [motion, onSettled])
 
   return (
-    <View ref={ref} style={[styles.screen, visible ? null : styles.hidden]}>
+    <View
+      ref={ref}
+      style={[styles.screen, transparent && styles.transparent, visible ? null : styles.hidden]}
+    >
       {children}
     </View>
   )
@@ -184,6 +189,9 @@ const styles = StyleSheet.create({
   screen: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.bgBase
+  },
+  transparent: {
+    backgroundColor: 'transparent'
   },
   hidden: {
     display: 'none'

@@ -1,5 +1,5 @@
 import type * as NodeFsModule from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as NodeOsModule from 'node:os'
 import { join } from 'node:path'
@@ -46,11 +46,16 @@ function syncCallsUnderHome(): string[] {
 describe('managed hook script refresh stays off the main thread', () => {
   beforeEach(async () => {
     state.home = await mkdtemp(join(tmpdir(), 'orca-hook-refresh-main-thread-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(state.home, 'user-data'))
+    vi.stubEnv('GROK_HOME', undefined)
+    vi.stubEnv('KIMI_CODE_HOME', undefined)
+    vi.stubEnv('XDG_CONFIG_HOME', undefined)
     state.syncCalls = []
   })
 
   afterEach(async () => {
     await rm(state.home, { recursive: true, force: true })
+    vi.unstubAllEnvs()
   })
 
   it('uses no synchronous HOME filesystem calls for missing or stale scripts', async () => {
@@ -68,6 +73,9 @@ describe('managed hook script refresh stays off the main thread', () => {
     }
 
     expect(syncCallsUnderHome()).toEqual([])
+    const refreshed = await readFile(claudeScript, 'utf8')
+    expect(refreshed).not.toBe('stale')
+    expect(refreshed).toContain(process.platform === 'win32' ? 'echo {}' : 'printf "{}\\n"')
   })
 
   it('keeps the Windows Claude entry and payload refresh off the main thread', async () => {
@@ -82,6 +90,11 @@ describe('managed hook script refresh stays off the main thread', () => {
       await MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.find(([agent]) => agent === 'claude')![1]()
 
       expect(syncCallsUnderHome()).toEqual([])
+      const entry = await readFile(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      const payload = await readFile(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
+      expect(entry).toContain('set "ORCA_CLAUDE_HOOK_IMPL=%~dp0claude-hook-impl.cmd"')
+      expect(payload).toContain('echo {}')
+      expect(payload).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
     } finally {
       Object.defineProperty(process, 'platform', platform)
     }

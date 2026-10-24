@@ -18,16 +18,14 @@ type MockDebugger = {
   removeListener: Mock<(event: string, handler: DebuggerListener) => void>
 }
 
-// Why: annotate the return explicitly so the exported inferred type stays nameable under
-// composite declaration emit — otherwise the vi.fn() mocks leak @vitest/spy's Procedure
-// and tsgo reports TS2883.
+// Explicit mock types avoid unnameable @vitest/spy Procedure types during declaration emit (TS2883).
 export type MockWebContents = {
   webContents: {
     debugger: MockDebugger
     isDestroyed: () => boolean
     isCrashed: () => boolean
     focus: Mock<() => void>
-    // Why: defaults to an offscreen page; 'webview' opts a test into guest-direct key input.
+    // Offscreen by default; use 'webview' for guest-direct input.
     getType: Mock<() => string>
     sendInputEvent: Mock<(event: Electron.KeyboardInputEvent) => void>
     setIgnoreMenuShortcuts: Mock<(ignore: boolean) => void>

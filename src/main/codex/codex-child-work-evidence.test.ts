@@ -104,7 +104,6 @@ function harness() {
   return { tracker, store, send, records, byKind, display, log }
 }
 
-/** A child spawned by the parent turn and running its first turn. */
 function runningChild() {
   const run = harness()
   run.send(turn('turn/started', PRIMARY, PARENT_TURN), spawned(), turn('turn/started', CHILD, 'c1'))
@@ -132,7 +131,6 @@ describe('Codex child-work evidence', () => {
       ['thread_id', CHILD],
       ['turn_id', 'c1']
     ])
-    // The host hears the child once.
     expect(log.flat().filter((edge) => edge.type === 'live')).toHaveLength(1)
   })
 
@@ -168,7 +166,6 @@ describe('Codex child-work evidence', () => {
     expect(records()).toEqual([
       expect.objectContaining({ membership: 'settled', state: 'done', outcome })
     ])
-    // Today's strip drops the child the moment its turn ends; only the record keeps its ending.
     expect(tracker.state).toBeNull()
   })
 
@@ -203,7 +200,7 @@ describe('Codex child-work evidence', () => {
       expect.objectContaining({ membership: 'settled', state: 'done', outcome: 'unknown' })
     ])
     expect(tracker.state).toBeNull()
-    // Lost contact is no verdict: the turn's own ending still says how it went.
+    // A late turn outcome can refine an unknown thread-close result.
     send(turn('turn/completed', CHILD, 'c1', 'completed'))
     expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
     send(turn('turn/completed', CHILD, 'c1', 'failed'))
@@ -246,7 +243,6 @@ describe('Codex child-work evidence', () => {
         ]
       })
     ])
-    // A late ending of the first run neither ends nor restarts the second.
     send(turn('turn/completed', CHILD, 'c1', 'failed'))
     expect(records()).toEqual([
       expect.objectContaining({
@@ -287,7 +283,7 @@ describe('Codex child-work evidence', () => {
       toolName: 'mcp__github__search_issues',
       input: 'flaky'
     })
-    // The newer call ends first: the child is still running the older one, since it opened.
+    // Reveal the older call again without changing its opening time.
     send(
       item('item/completed', CHILD, 'c1', { type: 'mcpToolCall', id: 'mcp-1', status: 'completed' })
     )
@@ -303,7 +299,6 @@ describe('Codex child-work evidence', () => {
 
   it('names a unified-exec shell as the open call until its process exits', () => {
     const { send, byKind } = runningChild()
-    // Codex runs every agent shell through unified exec, not only the ones that outlive a turn.
     send(
       item(
         'item/started',
@@ -372,7 +367,6 @@ describe('Codex child-work evidence', () => {
       lastMessage: 'Two tests flake on CI',
       totalTokens: 4_200
     })
-    // A new run has said nothing yet.
     send(turn('turn/started', CHILD, 'c2'))
     expect(byKind('agent')[0]).not.toHaveProperty('lastMessage')
   })
@@ -405,7 +399,6 @@ describe('Codex child-work evidence', () => {
     send(status({ type: 'active', activeFlags: ['waitingOnUserInput'] }))
     send(turn('turn/completed', CHILD, 'c1'))
     send(turn('turn/started', CHILD, 'c2'))
-    // The wait ended with the turn that asked.
     expect(byKind('agent')[0]?.state).toBe('working')
   })
 
@@ -420,7 +413,6 @@ describe('Codex child-work evidence', () => {
       )
     )
     const [agent] = byKind('agent')
-    // While the child's turn runs, the command is also the tool it has open.
     expect(agent?.operation).toMatchObject({ toolName: 'Bash', input: 'npm run dev' })
     expect(byKind('command')).toEqual([
       expect.objectContaining({
@@ -493,7 +485,6 @@ describe('Codex child-work evidence', () => {
     expect(byKind('command')).toEqual([])
     expect(display(agent!.childWorkId)).toBe('done')
     expect(tracker.state).toBeNull()
-    // The exit Codex could not deliver starts nothing if it ever arrives.
     send(
       item(
         'item/completed',
@@ -552,7 +543,6 @@ describe('Codex child-work evidence', () => {
     const { send, byKind, records, log } = runningChild()
     send(turn('turn/completed', CHILD, 'c1'))
     const before = log.length
-    // Codex runs every shell, however short, the way it runs one left running.
     for (let index = 0; index < 40; index += 1) {
       const id = `exec-${index}`
       send(
@@ -574,7 +564,6 @@ describe('Codex child-work evidence', () => {
     expect(records()).toEqual([
       expect.objectContaining({ kind: 'agent', membership: 'settled', outcome: 'succeeded' })
     ])
-    // Raw status evidence keeps every start and exit, including foreground processes.
     expect(
       log
         .slice(before)

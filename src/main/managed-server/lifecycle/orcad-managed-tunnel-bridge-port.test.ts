@@ -35,7 +35,6 @@ const options: PortForwardStartOptions = {
   remotePort: 6768
 }
 
-/** A connection stubbed down to what the reservation reads: its transport and its ssh target. */
 function connection(systemSsh: boolean): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reservation reads only these three.
   return {
@@ -58,7 +57,6 @@ describe('the managed tunnel’s port reservation', () => {
     expect(orphanArgs).toContain('LogLevel=INFO')
   })
 
-  // Why: a forward made through a ControlMaster is left on the master, with no process to stop.
   it('lets a system-SSH host have that same forward cancelled on its ControlMaster', async () => {
     await reserveManagedTunnelLocalPort(connection(true), options)
 

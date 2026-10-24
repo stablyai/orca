@@ -364,6 +364,26 @@ describe('memoized worktree rows', () => {
     await act(async () =>
       renderer!.update(
         createElement(ListRowHarness, {
+          item: {
+            ...baseItem,
+            hostId: 'ssh:ssh-1',
+            hostContextHealthLabel: 'Disconnected'
+          },
+          now: 2_000
+        })
+      )
+    )
+    expect(textNodes()).toContain('Disconnected')
+    expect(textNodes()).not.toContain('openclaw')
+    expect(textNodes()).not.toContain('· Disconnected')
+    expect(renderer!.root.findAll((node) => String(node.type) === 'Server')).toHaveLength(1)
+    expect(
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Disconnected')
+    ).toHaveLength(1)
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
           item: { ...baseItem, hostContextLabel: 'Local Mac' },
           now: 2_000
         })

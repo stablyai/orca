@@ -1,5 +1,7 @@
 import { joinPath } from '@/lib/path'
+import { openFileOwnerWorktreeId } from '@/lib/open-file-owner-scope'
 import type { OpenFile } from '@/store/slices/editor'
+import type { AppState } from '@/store/types'
 import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
@@ -8,6 +10,7 @@ import {
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
+import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
@@ -36,13 +39,18 @@ export type EditorPathMutationTarget = {
   }
 }
 
-export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
+export type EditorSaveQuiesceTarget =
+  | {
+      fileId: string
+      /** Don't Save: no flush, and autosave held until the release runs. */ discard?: true
+    }
+  | EditorPathMutationTarget
 
 export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
   claim: () => void
   resolve: () => void
   reject?: (message: string) => void
-  /** A path quiesce holds autosave of that file in every workspace until this release runs. */
+  /** A path or discard quiesce holds autosave of that file in every workspace until this release runs. */
   onHold?: (release: () => void) => void
 }
 
@@ -51,12 +59,14 @@ export type EditorSaveFileTarget = {
   fallbackContent?: string
   /** Only the conflict banner's Overwrite sets this. */
   overwrite?: true
+  /** Only the user's confirmation to replace a non-UTF-8 file's unreadable characters sets this. */
+  convertToUtf8?: true
 }
 
 export type EditorSaveAndCloseDetail = {
   fileId: string
   /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
-  onNotClosed?: (reason: 'blocked-stale' | 'not-saved') => void
+  onNotClosed?: (reason: 'blocked-stale' | 'not-utf8' | 'not-saved') => void
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {
@@ -68,6 +78,8 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
 export type EditorFileSavedDetail = {
   fileId: string
   content: string
+  /** Every view of the saved record, read when the write landed: the saving view may close. */
+  recordViewIds?: readonly string[]
 }
 
 export type EditorRequestFileCloseDetail = {
@@ -101,24 +113,19 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
   return file.mode === 'edit' || (file.mode === 'diff' && file.diffSource === 'unstaged')
 }
 
-// Why: autosave must not resolve a changed-on-disk conflict by overwriting
-// the newer external content, nor write over a restored tab whose disk
-// baseline is still unverified (the conflict may simply not be marked YET).
+// Why: autosave must not resolve a changed-on-disk conflict by overwriting the newer external
+// content. An unmarked conflict needs no pause: every save is guarded, and a refusal sets the mark.
 // One predicate so the save-queue gate and the timer scheduler cannot drift.
 export function isAutosaveSuspendedForFile(
   file: Pick<
     OpenFile,
-    | 'externalMutation'
-    | 'pendingDiskBaselineVerification'
-    | 'pendingLiveDiskVerification'
-    | 'pendingOwnerMigration'
+    'externalMutation' | 'pendingOwnerMigration' | 'filePath' | 'runtimeEnvironmentId'
   >
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
-    file.pendingDiskBaselineVerification === true ||
-    file.pendingLiveDiskVerification === true ||
-    file.pendingOwnerMigration === true
+    file.pendingOwnerMigration === true ||
+    isAutosavePausedForNonUtf8File(file)
   )
 }
 
@@ -137,7 +144,8 @@ export function normalizeAutoSaveDelayMs(value: unknown): number {
 
 export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
-  target: EditorPathMutationTarget
+  target: EditorPathMutationTarget,
+  catalog?: AppState
 ): OpenFile[] {
   if (target.indexedOpenFiles) {
     return target.indexedOpenFiles.matches(openFiles)
@@ -146,7 +154,7 @@ export function getOpenFilesForExternalFileChange(
   const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
-    if (file.worktreeId !== target.worktreeId) {
+    if (openFileOwnerWorktreeId(file, catalog) !== target.worktreeId) {
       return false
     }
     if (

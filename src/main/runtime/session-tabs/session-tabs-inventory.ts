@@ -4,6 +4,7 @@ import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as Re
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession as HydrateHeadlessMobileSessionTabsFromWorkspaceSessionMethods } from './mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs as BuildHeadlessMobileSessionBrowserTabsMethods } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods } from './renderer-session-terminal-rescue'
+import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
 import {
@@ -20,6 +21,7 @@ import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PaneStartStatuses } from '../pane-start-statuses'
+import { paneOfPty, type PtyPane, type PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
 export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   abstract get workspaceLayoutReads(): WorkspaceLayoutReads
@@ -30,20 +32,36 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     windowId: number,
     graph: RuntimeSyncWindowGraph
   ): RuntimeSyncWindowGraph {
+    return this.mainSurfaces().withMainSurfaces(windowId, graph)
+  }
+
+  // Main's index answers with or without a window's graph: each layout write is a new partition.
+  protected paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane {
+    return paneOfPty(pty, (ptyId) => this.mainSurfaces().findPaneForPty(ptyId))
+  }
+
+  private mainSurfaces(): ReturnType<typeof mainTerminalSurfaces> {
     const host = (): MainTerminalSurfacesHost => ({
       store: () => this.store,
       reads: () => this.workspaceLayoutReads,
       homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
-      registered: (ptyId) => this.ptysById.has(ptyId),
+      registered: (ptyId) => this.ptysById.get(ptyId) ?? null,
       // Certified exit only: a dropped relay leaves records disconnected but unverifiable.
       exited: (ptyId) => this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited',
+      live: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
       paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
       readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
       publish: (publisher, next) => {
         this.syncWindowGraph(publisher, next)
-      }
+      },
+      heldRows: () => this.mobileSessionTabsByWorktree,
+      replaceHeldRows: (worktreeId, next) => {
+        this.storeMobileSessionSnapshot(worktreeId, next)
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      },
+      fenceExited: (rows) => this.applyMobileSessionRetirementFences(rows)
     })
-    return mainTerminalSurfaces(this, host).withMainSurfaces(windowId, graph)
+    return mainTerminalSurfaces(this, host)
   }
 
   protected abstract getAuthoritativeSessionTabsInventoryEpoch(
@@ -51,6 +69,12 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       SessionTabsInventoryPublicationMethods['getAuthoritativeSessionTabsInventoryEpoch']
     >
   ): ReturnType<SessionTabsInventoryPublicationMethods['getAuthoritativeSessionTabsInventoryEpoch']>
+
+  protected abstract applyMobileSessionRetirementFences(
+    ...args: Parameters<
+      TouchMobileSessionTabsForWorktreeMethods['applyMobileSessionRetirementFences']
+    >
+  ): ReturnType<TouchMobileSessionTabsForWorktreeMethods['applyMobileSessionRetirementFences']>
 
   protected abstract getMobileSessionTabsForWorktree(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['getMobileSessionTabsForWorktree']>

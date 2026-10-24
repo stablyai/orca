@@ -17,18 +17,16 @@ import { codexStopTarget, interruptOpeningCodexTurn } from './codex-structured-t
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
 
-/** A command's Stop interrupts the provider turn carrying it; any other turn is its own. */
+/** Map command-owned journal turns to the provider turn Stop must interrupt. */
 function providerTurnId(session: CodexSession, turnId: string): string | undefined {
   return session.translator ? session.translator.commandProviderTurnId(turnId) : turnId
 }
 
-/** A send whose answer this child lost: Codex may still open a turn for it that no Stop can name.
- *  A pending one Codex answered is not: its turn is the one the Stop interrupts. */
+/** An unrecovered send may still open a turn that Stop cannot yet name. */
 function sendInDoubt(dispatchStatus: CancelInput['dispatchStatus']): boolean {
   return dispatchStatus?.state === 'unknown' && !dispatchStatus.recovered
 }
 
-/** The Stop's own answer, naming the journal turn it stopped when it took. */
 function stoppedTurn(
   outcome: AgentSessionCancelOutcome,
   turnId: string
@@ -36,21 +34,16 @@ function stoppedTurn(
   return outcome.cancelled ? { ...outcome, turnId } : outcome
 }
 
-/**
- * A Stop that names no turn: interrupt the turn the journal shows, or else the one Codex reported
- * started and not yet ended, which the journal can trail by a publish, or else the one Codex
- * answered a send into, at once (`interruptOpeningCodexTurn`). A turn that may still open but
- * cannot be reached, or a send whose answer was lost, answers refused, and the host ends the child.
- */
+/** Fall back to provider bookkeeping when the journal trails an opening turn. */
 async function cancelCodexConversation(
   input: Parameters<typeof cancelCodexStructuredTurn>[0],
   session: CodexSession
 ): Promise<AgentSessionCancelOutcome> {
   const { request, sessions, requestTimeoutMs } = input
   const liveTurnId = request.resolveLiveTurnId?.() ?? null
-  // A turn the journal shows that Codex has not started yet (a compaction's) has nothing to stop.
+  // A command's journal turn can exist before its interruptible provider turn.
   const target = liveTurnId === null ? codexStopTarget(session) : { turnId: liveTurnId }
-  // Read again after any wait for the turn to open, which can outlive the session it began on.
+  // Opening waits can outlive their session; recheck ownership after awaiting.
   const current = (): boolean =>
     sessions.get(request.sessionId) === session && !session.ended && session.fence === request.fence
   if (!current()) {

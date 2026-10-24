@@ -183,20 +183,6 @@ describe('restored turns on a synced leaf', () => {
     )
   })
 
-  it('keeps a restored turn when a manual shell-like label overrides an agent OSC title', () => {
-    const receivedAt = Date.now() - 60_000
-    const leaf = {
-      ...leafWithTitle('✳ Claude'),
-      paneTitle: 'bash',
-      paneTitleUpdatedAt: 2
-    }
-    const result = project(leaf, receivedAt + 1_000, receivedAt)
-
-    expect(result.agentStatus).toEqual(
-      expect.objectContaining({ state: 'working', restoredUnconfirmed: true })
-    )
-  })
-
   it('retires to done once the leaf PTY paints a newer shell title', () => {
     const receivedAt = Date.now() - 60_000
     const result = project(leafWithTitle('bash'), receivedAt + 1_000, receivedAt)

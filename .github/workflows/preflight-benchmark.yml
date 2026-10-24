@@ -17,7 +17,8 @@ env:
 jobs:
   compilers:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ubuntu-24.04-arm
+    # Native compiler peaks can exhaust the standard ARM runner before samples are saved.
+    runs-on: blacksmith-8vcpu-ubuntu-2404-arm
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6

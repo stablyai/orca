@@ -1,6 +1,3 @@
-// A Claude chat whose Claude is not running offers the `/` commands Claude itself lists in the
-// chat's folder, falling back to what its folders hold until Claude can answer.
-
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -42,7 +39,6 @@ let clock: number
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 
-/** Claude is never running here, so the only `/` surface is the one read from its folders. */
 function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAdapter {
   return {
     supportsLocation: () => true,
@@ -78,7 +74,7 @@ function catalogFor(workspacePath: string): ClaudeAtRestCommandCatalog {
   return new ClaudeAtRestCommandCatalog({
     resolveWorkspacePath: async () => workspacePath,
     now: () => clock,
-    // Only the folders this test writes, never the machine's own home.
+    // Isolate discovery to test folders, excluding the user’s home.
     discover: async (args) => {
       const { discoverSkills } = await import('../../skills/discovery')
       return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
@@ -110,7 +106,6 @@ async function writeCommand(root: string, file: string): Promise<void> {
   await writeFile(join(root, file), '---\ndescription: A command\n---\nDo it.\n')
 }
 
-/** The `/` surface a pane subscribed to `sessionId` shows once the scan has landed. */
 async function menuOf(sessionId: string): Promise<AgentSessionSlashCommand[] | null> {
   let commands: AgentSessionSlashCommand[] | null | undefined
   const emit = (event: AgentSessionSubscribeEvent) => {
@@ -192,7 +187,6 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
     try {
       await host.flushAllStreamedEvents()
       await openHost(catalog)
-      // A CLI that answers no list, with none from it before: the menu is what the folders hold.
       expect(namesOf(await menuOf(SESSION), 'command')).toEqual([
         'model',
         'effort',
@@ -206,7 +200,7 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
       clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
       host.readCommands(SESSION)
       await vi.waitFor(() => expect(asked).toHaveLength(2))
-      // Both scans start before Claude answers; the newer one will fall back after it does.
+      // Start overlapping scans before the newer result falls back.
       answer = failure.promise
       clock += 30_000
       host.readCommands(SESSION)
@@ -224,7 +218,7 @@ describe("a Claude chat whose Claude isn't running lists Claude's own `/` comman
       await vi.waitFor(() => expect(warned).toHaveBeenCalledTimes(2))
       await new Promise((resolve) => setTimeout(resolve, 20))
       expect(catalog.read(record())).toEqual(claudeList)
-      // A failed refresh keeps Claude's list rather than the shorter one from the folders.
+      // Failed refresh must retain the provider list over folder fallback.
       answer = failed
       clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
       host.readCommands(SESSION)

@@ -5,16 +5,22 @@ import { cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({ detectedIds: ['claude', 'codex'] })
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-vi.mock('@/store', () => {
+vi.mock('@/store', async () => {
+  const { makeWorktree, TEST_REPO } = await vi.importActual<typeof WorktreeFixtures>(
+    '@/store/slices/worktrees-slice-test-fixtures'
+  )
   const state = {
     settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] },
-    worktreesByRepo: {},
-    repos: [],
+    worktreesByRepo: {
+      [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
+    },
+    repos: [TEST_REPO],
     activeWorktreeId: 'worktree-1',
     tabsByWorktree: { 'worktree-1': [{ id: 'starting-tab', ptyId: null }] },
     ptyIdsByTabId: {},
@@ -134,7 +140,7 @@ it('shows the existing inventory failure alongside truthful disabled chat rows',
       }}
     />
   )
-  expect(document.body.textContent).toContain('reach this workspace')
+  expect(document.body.textContent).toContain('list terminal agents for this workspace')
   expect(document.body.textContent).toContain('Couldn’t check chat availability')
   expect(document.querySelector('[title]')).toBeNull()
 })

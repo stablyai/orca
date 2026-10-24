@@ -13,7 +13,6 @@ import { isENOENT } from '../filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -55,7 +54,6 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
           throw error
         }
       }
-      await assertLocalWriteTargetIsRegularFile(filePath)
       return writeLocalTextFileWithDiskPrecondition(filePath, args.content, args.diskPrecondition)
     }
   )
@@ -79,15 +77,15 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
-      // Why: preserve the symlink so we delete the link, not its target (realpath would trash the real file, possibly outside all roots).
+      // Delete the symlink entry, not a realpath target that may be outside allowed roots.
       const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {
         preserveSymlink: true
       })
-      // Why: WSL UNC targets have no Recycle Bin (shell.trashItem throws), so hard-delete via `rm` inside the distro (issue #6415).
+      // WSL UNC has no Recycle Bin; hard-delete inside the distro (#6415).
       if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
         return
       }
-      // Why: swallow ENOENT so an external delete racing this UI delete stays idempotent (design §7.1).
+      // Concurrent external deletion must leave UI deletion idempotent.
       try {
         await shell.trashItem(targetPath)
       } catch (error) {

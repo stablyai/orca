@@ -9,7 +9,7 @@
  * Timers are monotonic, and a power resume re-verifies instead of trusting them.
  */
 import type { WslOrcadConnection } from './wsl-orcad-connection'
-import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
 import {
@@ -64,7 +64,7 @@ export class WslOrcadLivenessSupervisor {
   }
 
   /** User-initiated, so it may boot the distro. Resolves once the watch is armed. */
-  async connect(distro: string, options: { force?: boolean } = {}): Promise<WslOrcadConnection> {
+  async connect(distro: string, options: WslOrcadConnectIntent = {}): Promise<WslOrcadConnection> {
     const entry = this.entryFor(distro)
     // An unchanged bridge offer may stay quiet even when an earlier failure needs clearing.
     const reportReady = entry.busy || (entry.state !== null && entry.state !== 'ready')

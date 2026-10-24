@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -88,7 +89,7 @@ export const createPullRequestActions = (
         ) {
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
             {
               shouldApply: (worktree) =>
                 shouldApplyDivergedLinkedPRClear({

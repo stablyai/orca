@@ -1,6 +1,8 @@
 import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { sessionLayoutApply } from './__fixtures__/main-layout-close-fixture'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -79,14 +81,16 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
           expandedLeafId: null,
           ptyIdsByLeafId: { [LEAF_ID]: 'pty-left' }
         }
-      }
+      },
+      // The spawn commit's binding: the terminal's incarnation, as it registers below.
+      terminalPtyIncarnationsByPaneKey: { [`tab:${LEAF_ID}`]: 'incarnation-a' }
     }
   }
 
   function createHost(): {
     runtime: OrcaRuntimeService
     handle: string
-    retirePersistedSurface: () => void
+    retirePersistedSurface: () => Promise<void>
   } {
     let session = makePersistedSession()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store stub carries the four members this publication-order suite drives; the rest of Store is unreached.
@@ -95,9 +99,16 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       withDurableRuntimeStore({
         getRepos: () => [LIVE_REPO],
         getWorkspaceSession: () => session,
+        // As a profile store: main's layout indexes the session under its host.
+        getWorkspaceSessionHostIds: () => ['local'],
         setWorkspaceSession: (next: WorkspaceSessionState) => {
           session = next
         },
+        // Main's `layout.apply` on this partition, as the Store applies it.
+        applyLayoutCommand: sessionLayoutApply({
+          get: () => session,
+          set: (next) => (session = next)
+        }),
         flushOrThrow: vi.fn()
       }) as never
     )
@@ -134,8 +145,18 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     return {
       runtime,
       handle,
-      // The renderer's close transaction de-persists the tab and flushes before it republishes.
-      retirePersistedSurface: () => {
+      // The close de-persists the tab before the renderer republishes: switch-on main's layout
+      // close, switch-off the renderer's own close transaction.
+      retirePersistedSurface: async () => {
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await runtime.applyLayoutCommand({
+            type: 'closeTabs',
+            workspace: WORKTREE_ID,
+            tabIds: ['tab'],
+            recordClose: 'user'
+          })
+          return
+        }
         session = { ...session, tabsByWorktree: {}, terminalLayoutsByTabId: {} }
       }
     }
@@ -177,7 +198,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
     it('publishes the proof when the renderer drops the surface before the exit lands', async () => {
       const { runtime, handle, retirePersistedSurface } = createHost()
 
-      retirePersistedSurface()
+      await retirePersistedSurface()
       republishWithoutTheSurface(runtime)
       await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
 
@@ -199,7 +220,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       )
 
       try {
-        retirePersistedSurface()
+        await retirePersistedSurface()
         republishWithoutTheSurface(runtime)
         await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
       } finally {

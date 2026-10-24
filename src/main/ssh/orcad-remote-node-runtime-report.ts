@@ -1,4 +1,5 @@
 /** What the host-side runtime-store scripts print, shared by the POSIX and Windows installers. */
+import { parseMissingSharedLibrary } from '../orcad/native-host-abi'
 import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
@@ -17,8 +18,13 @@ export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
     readonly exitStatus: number | null,
     readonly output: string
   ) {
+    const exit = `exit ${exitStatus ?? 'unknown'}`
+    const missing = parseMissingSharedLibrary(output)
     super(
-      `The pinned Node runtime did not run on the host (exit ${exitStatus ?? 'unknown'}): ${output}`
+      missing
+        ? `The host is missing ${missing}, which Orca's Node runtime needs. ` +
+            `${installHint(missing)} Then reconnect. (${exit}: ${output})`
+        : `The pinned Node runtime did not run on the host (${exit}): ${output}`
     )
     this.name = 'RemoteNodeRuntimeSelfTestError'
   }
@@ -50,6 +56,13 @@ export function assertRemoteNodeRuntimeStoreExecutable(probe: string, storeDir: 
   if (report.exitStatus === 126) {
     throw new RemoteNodeRuntimeNoexecError(report.output, storeDir)
   }
+}
+
+// Alpine is the one supported family that ships without libstdc++ by default.
+function installHint(library: string): string {
+  return library.startsWith('libstdc++')
+    ? 'Install it (Alpine: apk add libstdc++; Debian/Ubuntu: apt install libstdc++6; Fedora: dnf install libstdc++).'
+    : 'Install the package that provides it.'
 }
 
 /** The host answered, and what it answered is that something rewrote or removed our verified bytes. */

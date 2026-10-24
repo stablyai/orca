@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
+import { copyImageToClipboard } from '@/lib/clipboard-image-copy'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../shared/clipboard-image'
 
@@ -60,8 +60,7 @@ export function keepPreviewOpenForChatMenu(event: {
 
 export async function copyNativeChatImage(image: NativeChatCopyImage): Promise<void> {
   try {
-    const png = await convertImageBlobToPng(await image())
-    await window.api.ui.writeClipboardImage(`data:image/png;base64,${await blobToBase64(png)}`)
+    await copyImageToClipboard(await image())
     toast.success(translate('components.native-chat.composer.imageCopied', 'Image copied'))
   } catch (error) {
     toast.error(

@@ -4,7 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { flushMicrotasks } from './agent-status-test-harness'
-import { createTestStore, makeTab, makeUnifiedTab } from './store-test-helpers'
+import { createTestStore, makeTab, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status'
 import {
@@ -13,10 +13,34 @@ import {
 } from '../../../../shared/structured-agent-session-projection'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
 import { createStoreSessionMockApi } from './store-session-test-harness'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
+// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
+/** Resolves `pending` under fake timers by running the timer ticks main's drain waits on (a 0 ms timer fires at 1 ms). */
+async function underFakeTimers<T>(pending: Promise<T>): Promise<T> {
+  let done = false
+  void pending.finally(() => {
+    done = true
+  })
+  for (let turn = 0; turn < 50 && !done; turn += 1) {
+    await vi.advanceTimersByTimeAsync(1)
+  }
+  return pending
+}
 
 beforeEach(() => {
   // Track the original global before the shared fixture installs the renderer API.
@@ -417,7 +441,7 @@ afterEach(() => {
 
     it.each(['wt-1', 'folder-workspace-1'])(
       'preserves an open chat and its read state when an unrelated terminal closes in %s',
-      (worktreeId) => {
+      async (worktreeId) => {
         vi.useFakeTimers()
         const store = createTestStore()
         const sessionId = 'chat-1'
@@ -441,7 +465,19 @@ afterEach(() => {
               makeTab({ id: 'tab-live', worktreeId })
             ]
           },
-          unifiedTabsByWorktree: { [worktreeId]: [chat] }
+          unifiedTabsByWorktree: { [worktreeId]: [chat] },
+          groupsByWorktree: {
+            [worktreeId]: [
+              makeTabGroup({
+                id: 'group-1',
+                worktreeId,
+                activeTabId: chat.id,
+                tabOrder: [chat.id]
+              })
+            ]
+          },
+          layoutByWorktree: { [worktreeId]: { type: 'leaf', groupId: 'group-1' } },
+          activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
         })
         for (const key of [paneKey, missingOwnerPaneKey]) {
           store
@@ -459,6 +495,7 @@ afterEach(() => {
           activityClearedAtByPaneKey: { [paneKey]: 100, [missingOwnerPaneKey]: 100 },
           manuallyUnreadTurnsByPaneKey: { [paneKey]: 200, [missingOwnerPaneKey]: 200 }
         })
+        const main = await underFakeTimers(drawTabsFromMain(store))
         const before = store.getState()
 
         store.getState().closeTab('tab-closed')
@@ -476,7 +513,9 @@ afterEach(() => {
         expect(after.manuallyUnreadTurnsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
 
         store.getState().closeUnifiedTab(chat.id)
+        await underFakeTimers(main.settle())
         store.getState().closeTab('tab-live')
+        main.close()
 
         const closed = store.getState()
         expect(closed.unifiedTabsByWorktree[worktreeId]).toEqual([])

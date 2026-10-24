@@ -100,17 +100,3 @@ export function classifyWslOrcadLiveness(evidence: WslLivenessEvidence): WslLive
   }
   return { kind: 'unverifiable', reason: 'orcad-unanswered' }
 }
-
-/** A terminal-level verdict a distro-level verdict proves; null leaves it to orcad's census. */
-export function terminalVerdictOf(verdict: WslLivenessVerdict): 'exited' | 'unverifiable' | null {
-  switch (verdict.kind) {
-    case 'distro-stopped':
-    case 'distro-restarted':
-      return 'exited'
-    case 'unverifiable':
-      return 'unverifiable'
-    case 'live':
-    case 'orcad-exited':
-      return null
-  }
-}

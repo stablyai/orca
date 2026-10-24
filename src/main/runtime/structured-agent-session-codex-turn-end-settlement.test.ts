@@ -442,7 +442,8 @@ describe('a queued card sent now into the turn a Stop ends', () => {
     }
   }
 
-  it('comes back as a paused waiting card, and nothing sends it again', async () => {
+  // The agent may have it, and nothing proves it did not: it stays sent, never sent again.
+  it("reads as the stopped turn's unconfirmed message, and nothing sends it again", async () => {
     await runningTurn()
     const { messageId: cardId } = await queueThenSendNow('and check the tests')
     // Steered into the running turn, with no echo yet.
@@ -452,16 +453,11 @@ describe('a queued card sent now into the turn a Stop ends', () => {
 
     await stop('turn-1')
 
-    await vi.waitFor(async () => {
-      const [withdrawn] = await handoffs(cardId)
-      expect(verdictOf([withdrawn!], withdrawn!.clientMessageId)).toBe('withdrawn')
-    })
     await vi.waitFor(
       async () =>
-        expect({ ...(await queue()), sends: await sends(cardId) }).toEqual({
-          pause: { reason: 'stopped' },
-          cards: [{ messageId: cardId, state: 'waiting' }],
-          sends: [{ verdict: 'withdrawn' }]
+        expect({ cards: (await queue()).cards, sends: await sends(cardId) }).toEqual({
+          cards: [],
+          sends: [{ verdict: 'unknown' }]
         }),
       { timeout: 5_000 }
     )
@@ -476,7 +472,7 @@ describe('a queued card sent now into the turn a Stop ends', () => {
       clock.restore()
     }
     expect(steers + answers).toBe(2)
-    expect(await sends(cardId)).toEqual([{ verdict: 'withdrawn' }])
+    expect(await sends(cardId)).toEqual([{ verdict: 'unknown' }])
   }, 20_000)
 })
 
@@ -523,7 +519,7 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
     expect((await settled()).owesWork).toBe(false)
   })
 
-  it('is withdrawn when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {
+  it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {
     // Before 0.148, a steered turn/start answers with an id no turn opens or ends under,
     // so only the steer's own answer names the turn whose end settles the send.
     turns = codexTurnLifecycleFake(
@@ -538,8 +534,9 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
 
     await stop('turn-1')
 
+    // A card's hand-off the agent may have: read as sent, never as refused.
     await vi.waitFor(async () =>
-      expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
+      expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
     )
     expect(steers).toBe(1)
   })

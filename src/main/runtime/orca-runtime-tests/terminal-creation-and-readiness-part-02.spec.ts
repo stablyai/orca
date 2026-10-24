@@ -24,6 +24,7 @@ import {
   RESTORED_AUTHORITY_TOKEN,
   RESTORED_AUTHORITY_TOKEN_HASH,
   TEST_FOLDER_WORKSPACE_KEY,
+  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
@@ -86,8 +87,15 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(
       {
         ...store,
+        // The worker's repo lives on the SSH target whose partition holds its session.
+        getRepos: () => [{ ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }],
+        getRepo: (id: string) =>
+          id === TEST_REPO_ID
+            ? { ...store.getRepo(TEST_REPO_ID)!, connectionId: targetId }
+            : undefined,
         getWorkspaceSession: (hostId?: string | null) =>
-          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession()
+          hostId === `ssh:${targetId}` ? sshSession : getDefaultWorkspaceSession(),
+        getWorkspaceSessionHostIds: () => ['local', `ssh:${targetId}`]
       },
       undefined,
       {

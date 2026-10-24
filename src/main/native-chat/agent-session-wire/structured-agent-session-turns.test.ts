@@ -134,7 +134,7 @@ describe('performCancel', () => {
     await performCancel(ctx, { clientOperationId: 'cancel-live-1', turnId: 'turn-1' })
 
     expect(resolveLiveTurnId?.()).toBe('turn-1')
-    // Re-read, not captured: the turn ending is what the guard has to see.
+    // The guard must reread after the turn ends rather than use captured state.
     await journal.appendItem(
       lifecycleIdentity,
       {
@@ -225,7 +225,6 @@ describe('performCancel', () => {
       ok: true,
       value: { turnId: 'background-tasks', cancelled: true }
     })
-    // Every task the records offer a stop, and nothing else.
     expect(stopBackgroundTasks).toHaveBeenCalledWith({
       sessionId: 'session-1',
       fence: 1,
@@ -444,7 +443,7 @@ describe('performCancel', () => {
     stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'],
     operation: string,
     acknowledgeStops?: (evidence: AgentChildWorkEvidence[]) => void,
-    /** An untargeted press, as production sends with unlisted work: `listed` is what the records list. */
+    /** Untargeted Stop includes work missing from the listed records. */
     untargeted?: {
       unlisted: { present: () => boolean; stop: () => Promise<void> }
       listed: AgentChildWorkView[]
@@ -495,7 +494,7 @@ describe('performCancel', () => {
     })
     expect(stop).toHaveBeenCalledOnce()
 
-    // A turn the agent opens while the listed stops are out is not the Stop's to end.
+    // Turns opened during background cancellation must survive that Stop.
     let journal: AgentSessionJournal | undefined
     const woke = await backgroundStopWith(
       async () => {
@@ -527,14 +526,12 @@ describe('performCancel', () => {
       ok: true,
       value: { turnId: 'background-tasks', cancelled: false }
     })
-    // Only what the agent itself wrote is there.
     expect(woke.items).toHaveLength(1)
     expect(stop).toHaveBeenCalledOnce()
   })
 
   it('ends the agent for unlisted work with nothing listed, never asking an agent that has no stop', async () => {
     const stop = vi.fn(async () => {})
-    // As an ACP agent with no cancellation route answers any stop.
     const stopBackgroundTasks = vi.fn(async () => {
       throw new Error('ACP child cancellation is unavailable')
     })
@@ -564,7 +561,6 @@ describe('performCancel', () => {
       acknowledgeStops
     )
 
-    // Saved first, so the timeout comes back as the unconfirmed note, never a refusal.
     expect(result).toEqual({ ok: true, value: { turnId: 'background-tasks', cancelled: false } })
     expect(items).toHaveLength(1)
     expect(acknowledgeStops).toHaveBeenCalledWith([
@@ -573,7 +569,6 @@ describe('performCancel', () => {
   })
 })
 
-/** A Stop whose receipt is already saved, as the receipt runner hands a background Stop. */
 function acceptedStop(ctx: AgentSessionTurnContext): AgentSessionTurnContext {
   return {
     ...ctx,
@@ -586,7 +581,6 @@ function acceptedStop(ctx: AgentSessionTurnContext): AgentSessionTurnContext {
   }
 }
 
-/** A live child record the strip would offer a stop, named by the provider as `providerId`. */
 function liveTask(
   providerId: string,
   overrides: Partial<AgentChildWorkView> = {}
@@ -631,7 +625,7 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
     if (turnRow === 'running') {
       await openTurn()
     }
-    // Issued, not yet landed: the Stop's read takes its place behind it in the journal's queue.
+    // Issue without awaiting: Stop must queue its read behind this turn write.
     const landing = turnRow === 'landing' ? openTurn() : null
     const ctx: AgentSessionTurnContext = {
       logger: createStructuredAgentSessionLogger(),
@@ -705,7 +699,7 @@ describe('the note a Stop writes', () => {
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
-    // An earlier streamed row still ahead, then the turn row the Stop names.
+    // Model an earlier stream row still ahead of the named turn.
     deferred.sink.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-0', ordinal: 0 },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Earlier.' }] },

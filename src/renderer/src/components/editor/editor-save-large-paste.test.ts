@@ -58,8 +58,15 @@ function pasteIntoGuardedTab(pasted: string) {
   const files = new Map([[PATH, 'base']])
   const writeFile = vi.fn(async (args: GuardedWriteArgs) => {
     const conflict = args.diskPrecondition
-      ? compareDiskWritePrecondition(args.diskPrecondition, files.get(args.filePath) ?? null)
+      ? compareDiskWritePrecondition(
+          args.diskPrecondition,
+          files.get(args.filePath) ?? null,
+          args.content
+        )
       : null
+    if (conflict === 'identical') {
+      return { ok: true, unchanged: true }
+    }
     if (conflict) {
       return { ok: false, diskConflict: conflict }
     }
@@ -118,7 +125,11 @@ it('holds autosave while a chunked paste is in flight, then saves the pasted tex
   expect(files.get(PATH)).toBe(`${pasted}base`)
   expect(writeFile).toHaveBeenCalledWith(
     expect.objectContaining({
-      diskPrecondition: { expectedSignature: getDiskBaselineSignature('base'), allowMissing: false }
+      diskPrecondition: {
+        expectedSignature: getDiskBaselineSignature('base'),
+        allowMissing: false,
+        requireLosslessUtf8: true
+      }
     })
   )
   queue.dispose()
@@ -134,7 +145,11 @@ it('refuses a save after a 70 KiB paste when an agent wrote the file meanwhile',
   expect(writeFile).toHaveBeenCalledWith(
     expect.objectContaining({
       content: `${pasted}base`,
-      diskPrecondition: { expectedSignature: getDiskBaselineSignature('base'), allowMissing: true }
+      diskPrecondition: {
+        expectedSignature: getDiskBaselineSignature('base'),
+        allowMissing: true,
+        requireLosslessUtf8: true
+      }
     })
   )
   expect(files.get(PATH)).toBe('agent rewrite')

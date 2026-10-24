@@ -1,44 +1,18 @@
-/**
- * gh CLI auth diagnostics.
- *
- * Why: when project queries fail with "missing scope", the canned
- * remediation `gh auth refresh -s project ...` silently no-ops if the user
- * has `GITHUB_TOKEN` (or `GH_TOKEN`) exported in their shell — gh prefers
- * env tokens over keyring credentials and refuses to refresh env-supplied
- * tokens. Users follow the instructions, see no error, retry, and stay
- * stuck. This probe makes that failure mode legible in the UI.
- *
- * Output is parsed from `gh auth status`, which prints free-form text but
- * uses stable field labels ("Token scopes:", "(GITHUB_TOKEN)", etc.).
- */
+// Environment tokens override keyring credentials and cannot be refreshed through gh auth refresh.
 import { ghExecFileAsync } from '../git/runner'
 import type { GhAuthDiagnostic, GhAuthAccount } from '../../shared/github/auth-types'
 
-// Required scopes for ProjectV2 GraphQL access in Orca. `project` is the
-// scope that gates ProjectV2 reads/writes; the others are needed for the
-// surrounding repo/org queries we already run.
+// ProjectV2 and surrounding repository/organization queries require these scopes.
 const REQUIRED_SCOPES = ['project', 'read:org', 'repo'] as const
 
-/**
- * Parse `gh auth status` stderr/stdout. gh writes to stderr by default but
- * has used stdout in some versions; we accept either. Format (per host):
- *
- *   github.com
- *     ✓ Logged in to github.com account NAME (GITHUB_TOKEN)
- *     - Active account: true
- *     - Token scopes: 'gist', 'read:org', 'repo'
- */
+/** gh auth status has used both streams; accept either supplied diagnostic text. */
 export function parseAuthStatus(text: string): GhAuthAccount[] {
   const accounts: GhAuthAccount[] = []
   let currentHost: string | null = null
   let current: GhAuthAccount | null = null
   for (const rawLine of text.split('\n')) {
     const line = rawLine.replace(/\r$/, '')
-    // Host header: a non-indented hostname token, with an optional
-    // trailing colon some gh versions emit. Permits single-label hostnames
-    // (internal GHES like `github` or `ghe-internal`); we also recover the
-    // host from the `Logged in to <host>` line below if this header was
-    // missed, so a parser miss never silently drops every account.
+    // Accept single-label Enterprise hosts and optional trailing colons.
     const hostMatch = line.match(/^([a-z0-9][a-z0-9.-]*(?::\d+)?)\s*:?\s*$/i)
     if (hostMatch && !/^logged\b/i.test(line)) {
       currentHost = hostMatch[1]
@@ -49,13 +23,9 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
       if (current) {
         accounts.push(current)
       }
-      // Prefer the host from the `Logged in to <host>` line itself — it's
-      // always present, whereas the section header above can be skipped
-      // by the regex on unfamiliar gh output.
+      // Inline host labels survive unfamiliar section-header formats.
       const host = loggedIn[1] || currentHost || 'github.com'
       const sourceLabel = (loggedIn[3] ?? '').trim()
-      // gh emits "(keyring)" for stored creds and "(GITHUB_TOKEN)" /
-      // "(GH_TOKEN)" when an env var is shadowing the keyring.
       const envToken =
         sourceLabel === 'GITHUB_TOKEN' || sourceLabel === 'GH_TOKEN' ? sourceLabel : null
       current = {
@@ -97,10 +67,7 @@ export async function diagnoseGhAuth(
   let raw = ''
   let ghAvailable = true
   try {
-    // `gh auth status` exits non-zero when no host is logged in but still
-    // prints the same diagnostic text we want, so capture both streams.
-    // Why: auth is ambient (no Repo.ghAccount) but must still run on the
-    // repo's WSL/native execution host so inventory matches token resolution.
+    // Capture diagnostics even on nonzero exit; use the repo runtime so inventory matches token resolution.
     const { stdout, stderr } = await ghExecFileAsync(['auth', 'status'], {
       ...(execOptions.cwd ? { cwd: execOptions.cwd } : {}),
       ...(execOptions.wslDistro ? { wslDistro: execOptions.wslDistro } : {})
@@ -118,7 +85,6 @@ export async function diagnoseGhAuth(
     raw = `${stdout}\n${stderr}`
     if (!raw.trim()) {
       const message = err instanceof Error ? err.message : String(err)
-      // Most likely cause: gh CLI not installed or not on PATH.
       if (/ENOENT|not found|command not found/i.test(message)) {
         ghAvailable = false
       }
@@ -126,8 +92,7 @@ export async function diagnoseGhAuth(
     }
   }
   const accounts = parseAuthStatus(raw)
-  // Why: when the caller names a host (a GHES origin), scope the diagnosis to
-  // that host's account — the github.com account's scopes are irrelevant to it.
+  // Diagnose only the requested host's account; other hosts' scopes do not apply.
   const normalizedRequiredHost = requiredHost?.trim().toLowerCase() || null
   const hostAccounts = normalizedRequiredHost
     ? accounts.filter((a) => a.host.toLowerCase() === normalizedRequiredHost)
@@ -144,10 +109,7 @@ export async function diagnoseGhAuth(
   const missingScopes = active
     ? REQUIRED_SCOPES.filter((s) => !active.scopes.includes(s))
     : [...REQUIRED_SCOPES]
-  // Is there a non-env (keyring) account we could fall back to by unsetting
-  // the env var? Only meaningful if the active account is env-shadowed, and
-  // only if the keyring login is on the SAME host — otherwise unsetting the
-  // env var leaves the user with no credential for the host that was active.
+  // Unsetting an environment token helps only when keyring credentials exist for the same host.
   const keyringFallback = active
     ? (accounts.find((a) => a.source === 'keyring' && a.host === active.host) ?? null)
     : null

@@ -18,8 +18,6 @@ export function chromiumTimestampToUnix(chromiumTs: bigint | number | string): n
   }
 }
 
-// Why: each platform protects the Chromium key differently: macOS/Linux PBKDF2→AES-128-CBC, Windows DPAPI→AES-256-GCM.
-
 export type EncryptionKeyResult =
   | {
       mode: 'aes-128-cbc'
@@ -141,7 +139,7 @@ export function buildChromiumCookieInsertParams(
       return null
     }
 
-    // Why: cookie columns drift across Chrome/Electron versions; missing NOT NULL columns need Chromium defaults, not NULL.
+    // Missing NOT NULL columns need Chromium defaults, rather than NULL.
     return fallbackChromiumCookieColumnValue(column, sourceRow)
   })
 }

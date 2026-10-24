@@ -1,7 +1,4 @@
-/**
- * POSIX-only measurement: a PATH-injected git fixture exercises the real spawn path.
- * Timing distributions are reported for field comparison; CI assertions stay structural.
- */
+// PATH-injected POSIX fixture: report timings, but assert only structure in CI.
 import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'

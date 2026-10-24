@@ -14,7 +14,7 @@ import type {
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
-  // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
+  // Detached daemon PTYs can host agents; cleanup must not treat every foreground process as an idle shell.
   protected hasChildProcessesFromForeground(foregroundProcess: string | null): boolean {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)
   }
@@ -34,10 +34,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return clientOnlyUnverifiableInspection('old_host')
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
-      // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
-      // one call they do support instead of throwing, or completion detection stays dead until recreate.
-      // Requests directly (not via getForegroundProcess) so a dead socket still rejects rather than
-      // reading as an idle foreground and dispatching a false completion.
+      // Pre-v27 daemons need client-side inspection; preserve transport errors to avoid false idle completion.
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
@@ -103,17 +100,9 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     return JSON.stringify(sessions)
   }
 
-  async revive(_state: string): Promise<void> {
-    // Sessions already live in the daemon — no revival needed
-  }
+  async revive(_state: string): Promise<void> {}
 
-  /** Called on app launch. Lists daemon sessions, kills orphans whose workspaceId
-   *  no longer exists, and caches alive session IDs.
-   *
-   *  IMPORTANT: a session id embeds the worktree's path at spawn time, so a renamed
-   *  worktree keeps its old id. Callers MUST seed `validWorktreeIds` with each live
-   *  worktree's `WorktreeMeta.priorWorktreeIds` or those sessions get reaped as false
-   *  orphans. No production caller yet; wire the alias in when it gains one. */
+  /** Include priorWorktreeIds in validWorktreeIds: renamed worktrees retain session IDs containing their old paths. */
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
@@ -128,19 +117,19 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       if (!session.isAlive) {
         continue
       }
-      // Why: an unminted session id (worktreeId === null) can't be tied to a live worktree, so it's treated as an orphan.
+      // Unminted IDs cannot establish workspace membership and are treated as orphans.
       const { worktreeId } = parsePtySessionId(session.sessionId)
 
       if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
         try {
           await this.client.request('kill', { sessionId: session.sessionId })
         } catch {
-          /* already dead */
+          /* Orphan cleanup is best-effort. */
         }
         killed.push(session.sessionId)
       } else {
         alive.push(session.sessionId)
-        // Why: track background sessions in the checkpoint set so disconnectOnly's final checkpoint doesn't leave stale recovery data.
+        // Include background sessions in the final disconnect checkpoint.
         this.activeSessionIds.add(session.sessionId)
         await this.reconcileLiveSessionHistory(session).catch((err) =>
           console.warn('[history] live-session reconciliation failed:', session.sessionId, err)

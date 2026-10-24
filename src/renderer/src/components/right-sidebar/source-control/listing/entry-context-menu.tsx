@@ -25,7 +25,7 @@ import {
   getRouteForLocalPathOpenOwner,
   isRevealOrEditorOpenBlocked
 } from '@/lib/local-path-open-guard'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -63,7 +63,7 @@ export function SourceControlEntryContextMenu({
   // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
   // cannot tell that host's path from a local one of the same name.
   const runtimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, currentWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, currentWorktreeId)
   )
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })

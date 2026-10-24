@@ -41,6 +41,7 @@ async function resolve(ref) {
       ...identity,
       REPO_URL: pathToFileURL(repository).href,
       GITHUB_OUTPUT: output,
+      RUNNER_TEMP: scratch,
       REQUESTED_REF: ref
     }
   })

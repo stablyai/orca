@@ -80,7 +80,6 @@ describe('local worktree metadata prune gate', () => {
     forgetLocalWorktreeMetadataPruneGate('repo-1')
 
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(true)
-    // The forgotten fingerprint must not later read as a change against a stale entry.
     recordLocalWorktreeListingForPruneGate('repo-1', ['/a'])
     markLocalWorktreeMetadataPruneStarted('repo-1')
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)

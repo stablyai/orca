@@ -1,7 +1,3 @@
-// Nothing steers into a turn a person's Stop is ending: a card's Send-now or a send made then waits
-// for the turn to end, and runs after it as its own turn. The host owns the rule, so a client of
-// any version gets it.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -62,14 +58,12 @@ function watchStatus(): () => AgentSessionStatusSummary | undefined {
   }
 }
 
-/** The session's lane, after every step queued on it so far, the delivery loop's included. */
 async function laneDrained(): Promise<void> {
   for (let step = 0; step < 5; step += 1) {
     await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
   }
 }
 
-/** Turn `turn-1` running, a person's Stop ending it, and what was dispatched by then. */
 async function stoppingTurn(options: { card?: true; refused?: true } = {}) {
   rig = await createQueuedMessageTestRig()
   const sent = await rig.workingSend()
@@ -103,7 +97,6 @@ describe("a message sent while a person's Stop ends the turn", () => {
 
     const result = cardId ? await rig.sendNow(cardId) : await rig.send('one more thing').result
     expect(result).toMatchObject({ ok: true })
-    // Held on the host: the delivery loop has run its steps and handed nothing over.
     await laneDrained()
     const held = await rig.submission(result.ok ? result.value.clientMessageId : '')
     expect(held).toMatchObject({ dispatchState: 'pending' })
@@ -116,9 +109,7 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
   })
 
-  // A Stop pressed before the turn showed holds a later send only while it settles. Settling
-  // having stopped nothing, the send still waits for the first send's turn to open, then joins it;
-  // that turn is not the Stop's.
+  // A no-op Stop ends no future turn; later sends may join the opening turn once it appears.
   it('hands over a send made after a Stop that stopped nothing once the turn opens, with no Stopping flip', async () => {
     rig = await createQueuedMessageTestRig()
     const first = await rig.workingSend()
@@ -137,7 +128,6 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(seen.at(-1)).toBe(true))
     const dispatched = rig.dispatch.mock.calls.length
 
-    // Accepted on the session's lane behind the Stop, so it lands once the Stop settles.
     const later = rig.send('sent before the turn opened')
     answer.resolve({ cancelled: false })
     expect(await stopped).toMatchObject({ ok: true })
@@ -151,14 +141,12 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
     await laneDrained()
     expect(seen.at(-1)).toBeUndefined()
-    // Once Stopping ended it never came back.
     expect(seen.slice(seen.lastIndexOf(true) + 1)).not.toContain(true)
   })
 
-  // A settle edge writes no row, so nothing else wakes the handover once it closes.
+  // Settlement without rows must still wake held delivery.
   it('hands a held send over when the Stop settles with no row after it', async () => {
     rig = await createQueuedMessageTestRig()
-    // Working: its turn is open, so the held send is held only by the Stop's settle.
     await turn('turn-1', await rig.workingSend(), 'running')
     await journal().appendStopEvent({ reason: 'user-stop' }, 1)
     const settle = journal().stopMarks.beginSettle()
@@ -173,7 +161,6 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
   })
 
-  // The delivery step that judged the send and its handover are two turns of the session's lane.
   it('holds a send that a Stop overtook between its delivery step and the handover', async () => {
     rig = await createQueuedMessageTestRig()
     const sent = await rig.workingSend()
@@ -187,7 +174,6 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await step.held
     const dispatched = rig.dispatch.mock.calls.length
 
-    // The Stop withdraws the first send; a second one arrives before the handover.
     const stopped = rig.stop()
     const second = rig.send('and this one')
     step.release()
@@ -202,7 +188,6 @@ describe("a message sent while a person's Stop ends the turn", () => {
     await eventually(() => expect(rig.dispatch.mock.calls.length).toBe(dispatched + 1))
   })
 
-  // The hold reads the status feed's own projection for the commit, never a journal read of its own.
   it('reads Stopping once per commit while a send waits on it', async () => {
     const { cardId } = await stoppingTurn({ card: true })
     expect(await rig.sendNow(cardId ?? '')).toMatchObject({ ok: true })

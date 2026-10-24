@@ -8,9 +8,6 @@ import type {
   StartedPortForward
 } from './ssh-port-forward-provider'
 
-export type { PortForwardEntry }
-export type { PortForwardCloseReason }
-
 // Why bounded: a start on an unresponsive host can take long, and its `closed` flag already ends
 // it when it resolves; only a close needs waiting out, since a rebind needs its port.
 const TEARDOWN_START_WAIT_MS = 3_000

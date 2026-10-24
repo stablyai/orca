@@ -86,25 +86,11 @@ describe('the same haptic on Android', () => {
 })
 
 describe('the kinds and the functions behind them', () => {
-  it('spends exactly one call per notify, which is what a per-row tap can afford', () => {
+  it('plays exactly one distinct device call for every kind', () => {
     for (const kind of BRIDGE_HAPTICS_KINDS) {
       playPageHaptic(kind)
     }
     expect(calls).toHaveLength(BRIDGE_HAPTICS_KINDS.length)
-  })
-
-  /**
-   * Every kind reaches a different device call, which is what says the table has no duplicate row.
-   *
-   * A table mapping two kinds to one function would pass every case above — each still plays
-   * something — and would mean a Save that felt like a failure. The third direction, a haptic
-   * `haptics.ts` grows with no kind of its own, is the census's:
-   * `config/scripts/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
-   */
-  it('plays a different device call for every kind, so no two share a row', () => {
-    for (const kind of BRIDGE_HAPTICS_KINDS) {
-      playPageHaptic(kind)
-    }
     expect(new Set(calls).size).toBe(BRIDGE_HAPTICS_KINDS.length)
   })
 })

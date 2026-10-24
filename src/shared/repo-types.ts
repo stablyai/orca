@@ -6,7 +6,7 @@ import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
-import type { JiraProjectReference } from './jira-project-reference'
+import type { JiraProjectReference } from './jira/jira-project-reference'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
