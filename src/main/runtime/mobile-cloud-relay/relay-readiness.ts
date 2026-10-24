@@ -11,6 +11,8 @@ export type RelayUnavailableReason =
   | 'tls_untrusted'
   | 'connect_timeout'
   | 'network'
+  // A transport errno/undici code, e.g. `network_enotfound`, so a copied diagnostic names the cause.
+  | `network_${string}`
   | 'control_not_active'
   | `director_${'token_exchange' | 'assignment'}_${number}`
   // A relay-coded error message with its `relay_` prefix removed.
@@ -28,6 +30,8 @@ const TLS_TRUST_ERROR_CODES = new Set([
   'CERT_SIGNATURE_FAILURE'
 ])
 const TIMEOUT_ERROR_CODES = new Set(['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'])
+// Fixed-vocabulary tokens only: request URLs and host names never reach the code.
+const NETWORK_ERROR_CODE = /^(?:E[A-Z0-9]{2,20}|UND_ERR_[A-Z_]{1,30})$/
 const RELAY_CONTROL_MESSAGE = /^relay_(control_[a-z0-9_]{1,60})$/
 
 function errorCode(error: unknown): string | null {
@@ -56,20 +60,34 @@ export function relayUnavailableReasonFor(error: unknown): RelayUnavailableReaso
       ? 'rate_limited'
       : `director_${error.operation === 'token-exchange' ? 'token_exchange' : 'assignment'}_${error.statusCode}`
   }
+  let networkCode: string | null = null
   for (const link of errorChain(error)) {
     const code = errorCode(link)
     if (code && (TLS_TRUST_ERROR_CODES.has(code) || code.startsWith('CERT_'))) {
       return 'tls_untrusted'
     }
-    if (code && TIMEOUT_ERROR_CODES.has(code)) {
+    // AbortSignal.timeout() rejects with a DOMException named TimeoutError, which has no string code.
+    if ((code && TIMEOUT_ERROR_CODES.has(code)) || isTimeoutAbort(link)) {
       return 'connect_timeout'
+    }
+    if (!networkCode && code && NETWORK_ERROR_CODE.test(code)) {
+      networkCode = code
     }
   }
   const message = error instanceof Error ? RELAY_CONTROL_MESSAGE.exec(error.message) : null
   if (message?.[1] === 'control_closed_4429') {
     return 'rate_limited'
   }
-  return message ? `control_${message[1].slice('control_'.length)}` : 'network'
+  if (message) {
+    return `control_${message[1].slice('control_'.length)}`
+  }
+  return networkCode ? `network_${networkCode.toLowerCase()}` : 'network'
+}
+
+function isTimeoutAbort(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'TimeoutError'
+  )
 }
 
 const RATE_LIMIT_FLOOR_BASE_MS = 5_000

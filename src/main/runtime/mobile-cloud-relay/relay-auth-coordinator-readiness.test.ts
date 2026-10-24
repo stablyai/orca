@@ -221,4 +221,28 @@ describe('relay readiness', () => {
     )
     expect(relayUnavailableReasonFor(new Error('ECONNRESET with secret=abc'))).toBe('network')
   })
+
+  it('names the transport cause undici hides behind "fetch failed"', async () => {
+    const dns = new TypeError('fetch failed', {
+      cause: Object.assign(new Error('getaddrinfo ENOTFOUND relay.example'), {
+        code: 'ENOTFOUND'
+      })
+    })
+    expect(relayUnavailableReasonFor(dns)).toBe('network_enotfound')
+    expect(
+      relayUnavailableReasonFor(
+        Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' })
+      )
+    ).toBe('network_econnrefused')
+    const deadline = await new Promise<unknown>((resolve) =>
+      AbortSignal.timeout(0).addEventListener('abort', function () {
+        resolve(this.reason)
+      })
+    )
+    expect(relayUnavailableReasonFor(deadline)).toBe('connect_timeout')
+    // A code outside the errno vocabulary must not leak into the user-visible failure code.
+    expect(
+      relayUnavailableReasonFor(Object.assign(new Error('x'), { code: 'relay.example:443' }))
+    ).toBe('network')
+  })
 })
