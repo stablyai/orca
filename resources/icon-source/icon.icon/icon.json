@@ -27,10 +27,10 @@
               }
             }
           ],
-          "image-name": "logo.svg",
-          "name": "logo",
+          "image-name": "orca-classic.png",
+          "name": "orca-classic",
           "position": {
-            "scale": 3,
+            "scale": 1.1,
             "translation-in-points": [0, 0]
           }
         }
