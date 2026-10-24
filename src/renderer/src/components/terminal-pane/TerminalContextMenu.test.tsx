@@ -65,7 +65,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onOpenChange: vi.fn(),
     menuPoint: { x: 0, y: 0 },
     menuOpenedAtRef: { current: 0 },
-    canClosePane: true,
+    isSinglePane: false,
     canExpandPane: true,
     menuPaneIsExpanded: false,
     onCopy: vi.fn(),
@@ -155,6 +155,21 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  // Why: a single-pane terminal still needs a right-click close, same as its header X.
+  it.each([
+    { isSinglePane: true, label: 'Close tab' },
+    { isSinglePane: false, label: 'Close Pane' }
+  ])('offers "$label" that closes via onClosePane when isSinglePane=$isSinglePane', (c) => {
+    const onClosePane = vi.fn()
+    renderMenu({ isSinglePane: c.isSinglePane, onClosePane })
+
+    const closeItems = items.list.filter((item) => childrenText(item.children).startsWith('Close '))
+    expect(closeItems.map((item) => childrenText(item.children))).toEqual([`${c.label}Ctrl+W`])
+
+    closeItems[0]?.onSelect?.()
+    expect(onClosePane).toHaveBeenCalledTimes(1)
   })
 
   it('shows new-session continuation only for eligible agent panes', () => {

@@ -42,7 +42,7 @@ type TerminalContextMenuProps = {
   onOpenChange: (open: boolean) => void
   menuPoint: { x: number; y: number }
   menuOpenedAtRef: React.RefObject<number>
-  canClosePane: boolean
+  isSinglePane: boolean
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
   onCopy: () => void
@@ -134,7 +134,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
 // Build menu rows only when Radix mounts the open content, after terminal activation.
 function TerminalContextMenuItems({
   onOpenChange,
-  canClosePane,
+  isSinglePane,
   canExpandPane,
   menuPaneIsExpanded,
   onCopy,
@@ -327,19 +327,14 @@ function TerminalContextMenuItems({
         <Copy />
         {translate('auto.components.terminal.pane.TerminalContextMenu.2cf85a6a55', 'Copy Pane ID')}
       </DropdownMenuItem>
-      {canClosePane && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
-            <X />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-              'Close Pane'
-            )}
-            <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </>
-      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
+        <X />
+        {isSinglePane
+          ? translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
+          : translate('auto.components.terminal.pane.TerminalContextMenu.8c17d6786d', 'Close Pane')}
+        <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={onClearScreen}>
         <Eraser />
