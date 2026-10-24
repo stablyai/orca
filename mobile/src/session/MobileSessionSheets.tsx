@@ -11,6 +11,7 @@ import { CustomKeyModal } from '../components/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
+import { MobileFileTabActionSheet } from './MobileFileTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
 import { getMobileNativeChatCliForkActions } from './mobile-native-chat-cli-fork'
 import {
@@ -253,30 +254,19 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         ]}
         onClose={() => setMarkdownActionTarget(null)}
       />
-      <ActionSheetModal
-        visible={fileActionTarget != null}
-        title={fileActionTarget?.title || 'File'}
-        actions={[
-          {
-            label: 'Refresh',
-            icon: RefreshCw,
-            onPress: () => {
-              const target = fileActionTarget
-              setFileActionTarget(null)
-              if (target) {
-                void readFileTab(target)
-              }
-            }
-          },
-          ...closeWithBulkActions(fileActionTarget, () => setFileActionTarget(null))
-        ]}
+      <MobileFileTabActionSheet
+        target={fileActionTarget}
         onClose={() => setFileActionTarget(null)}
+        onRefresh={(target) => void readFileTab(target)}
+        onToast={showToast}
+        closeWithBulkActions={closeWithBulkActions}
       />
       <MobileBrowserTabActionSheet
         target={browserActionTarget}
         onClose={() => setBrowserActionTarget(null)}
         onNavigate={handleBrowserNavigationCommand}
         onCloseTab={handleCloseSessionTab}
+        onToast={showToast}
         bulkCloseActions={bulkCloseActions}
       />
       <ActionSheetModal
