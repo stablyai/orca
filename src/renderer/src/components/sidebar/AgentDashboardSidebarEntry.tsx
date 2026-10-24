@@ -6,24 +6,15 @@ import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared
 import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 import { resolveAgentDashboardMode } from '@/components/dashboard/agent-dashboard-open-mode'
 import { translate } from '@/i18n/i18n'
+import {
+  dashboardBucketLabel,
+  dashboardTurnEndedDescription
+} from '@/components/dashboard/dashboard-bucket-labels'
 
 const DASHBOARD_BUCKET_DOT_CLASS: Record<'working' | 'done' | 'idle', string> = {
   working: 'bg-yellow-500',
   done: 'bg-emerald-500',
   idle: 'bg-neutral-500/50'
-}
-
-function dashboardBucketLabel(bucket: DashboardBucket): string {
-  switch (bucket) {
-    case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
-    case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
-    case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
-    case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
-  }
 }
 
 function DashboardBucketCounts({
@@ -44,7 +35,9 @@ function DashboardBucketCounts({
       {active.map((bucket) => (
         <span
           key={bucket}
+          role="img"
           aria-label={`${dashboardBucketLabel(bucket)}: ${counts[bucket]}`}
+          title={bucket === 'done' ? dashboardTurnEndedDescription() : undefined}
           className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
         >
           {bucket === 'attention' ? (
