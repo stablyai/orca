@@ -20,6 +20,7 @@ export function useMobileRemoteDraftSubmit({
   setSession,
   setConflict,
   markUncertain,
+  operationGeneration,
   release,
   showToast
 }: {
@@ -30,6 +31,7 @@ export function useMobileRemoteDraftSubmit({
   setSession: (session: MobileRemoteDraftSession | null) => void
   setConflict: (conflict: MobileRemoteDraftConflict | null) => void
   markUncertain: (handle: string) => void
+  operationGeneration: (handle: string) => number
   release: (session: MobileRemoteDraftSession | null) => void
   showToast: (message: string, duration?: number) => void
 }) {
@@ -41,6 +43,7 @@ export function useMobileRemoteDraftSubmit({
       if (!current || !rpc || !deviceToken) {
         return { applied: false }
       }
+      const generation = operationGeneration(current.handle)
       let result
       try {
         const response = await terminalDraftSubmit.request(
@@ -57,18 +60,22 @@ export function useMobileRemoteDraftSubmit({
         )
         result = terminalDraftSubmit.interpret(response)
       } catch {
-        if (
-          activeHandleRef.current === current.handle &&
-          sessionRef.current?.epoch === current.epoch
-        ) {
+        if (operationGeneration(current.handle) === generation) {
           markUncertain(current.handle)
-          showToast('Result unknown — check the terminal before sending again', 2600)
         }
+        showToast('Result unknown — check the terminal before sending again', 2600)
         return { applied: false }
       }
       if (!result) {
         showToast("This Orca host doesn't support draft editing yet", 2200)
         return { applied: false }
+      }
+      if (
+        result.ok &&
+        result.status === 'submit_unknown' &&
+        operationGeneration(current.handle) === generation
+      ) {
+        markUncertain(current.handle)
       }
       if (
         activeHandleRef.current !== current.handle ||

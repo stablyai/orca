@@ -10,6 +10,8 @@ export function useMobileRemoteDraftResolution({
   setSession,
   setConflict,
   clearUncertain,
+  activeHandle,
+  bumpOperationGeneration,
   setInput,
   input,
   release,
@@ -20,6 +22,8 @@ export function useMobileRemoteDraftResolution({
   setSession: (session: MobileRemoteDraftSession | null) => void
   setConflict: (conflict: MobileRemoteDraftConflict | null) => void
   clearUncertain: (handle: string) => void
+  activeHandle: string | null
+  bumpOperationGeneration: (handle: string) => void
   setInput: (value: string) => void
   input: string
   release: (session: MobileRemoteDraftSession | null) => void
@@ -50,14 +54,25 @@ export function useMobileRemoteDraftResolution({
 
   const exitRemoteDraft = useCallback(() => {
     const current = sessionRef.current
+    const handle = current?.handle ?? activeHandle
     release(current)
     setSession(null)
     setConflict(null)
-    if (current) {
-      clearUncertain(current.handle)
+    if (handle) {
+      clearUncertain(handle)
+      bumpOperationGeneration(handle)
     }
     showToast('Stopped editing the terminal draft', 1400)
-  }, [clearUncertain, release, sessionRef, setConflict, setSession, showToast])
+  }, [
+    activeHandle,
+    bumpOperationGeneration,
+    clearUncertain,
+    release,
+    sessionRef,
+    setConflict,
+    setSession,
+    showToast
+  ])
 
   return { reloadConflict, keepConflictMine, exitRemoteDraft, input }
 }

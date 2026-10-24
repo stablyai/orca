@@ -209,7 +209,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionRemoteDr
         activeSessionTabType: activeSessionTabTypeRef.current,
         deviceToken: deviceTokenRef.current,
         bytes,
-        showToast
+        showToast,
+        isBlocked: () => isRemoteDraftUncertain(handle)
       }),
     [showToast]
   )

@@ -16,7 +16,12 @@ export async function sendLiveTerminalInputBytes(args: {
   deviceToken: string | null
   bytes: string
   showToast: (message: string, duration?: number) => void
+  isBlocked?: () => boolean
 }): Promise<boolean> {
+  if (args.isBlocked?.()) {
+    args.showToast('Check the terminal before sending again', 2000)
+    return false
+  }
   const text = normalizeTerminalTextInput(args.bytes)
   if (text.length === 0) {
     return false

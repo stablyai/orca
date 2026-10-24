@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert } from 'react-native'
-import {
-  terminalDraftBegin,
-  terminalDraftRelease,
-  terminalDraftSave
-} from '../terminal/mobile-terminal-operations'
+import { terminalDraftBegin, terminalDraftRelease } from '../terminal/mobile-terminal-operations'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 import { useMobileRemoteDraftResolution } from './use-mobile-remote-draft-resolution'
+import { useMobileRemoteDraftSave } from './use-mobile-remote-draft-save'
 import { useMobileRemoteDraftSubmit } from './use-mobile-remote-draft-submit'
 
 export type MobileRemoteDraftSession = {
@@ -24,10 +21,6 @@ export type MobileRemoteDraftConflict = {
 export type MobileRemoteDraftSubmitOutcome =
   | { applied: true; status: 'submitted' | 'saved_not_submitted' | 'submit_unknown' }
   | { applied: false }
-
-function operationId(): string {
-  return `mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
 
 /**
  * Pulls the agent's real terminal draft into the local command field. Local typing never waits on
@@ -51,6 +44,17 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
   const inputRef = useRef(bufferedTerminalDraftState.input)
   inputRef.current = bufferedTerminalDraftState.input
   const loadSeqRef = useRef(0)
+  const operationGenerationsRef = useRef<Map<string, number>>(new Map())
+  const operationGeneration = useCallback(
+    (handle: string) => operationGenerationsRef.current.get(handle) ?? 0,
+    []
+  )
+  const bumpOperationGeneration = useCallback(
+    (handle: string) => {
+      operationGenerationsRef.current.set(handle, operationGeneration(handle) + 1)
+    },
+    [operationGeneration]
+  )
   const markUncertain = useCallback((handle: string) => {
     setUncertainHandles((current) => {
       if (current.has(handle)) {
@@ -172,6 +176,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
       setSession(next)
       setConflict(null)
       clearUncertain(handle)
+      bumpOperationGeneration(handle)
       bufferedTerminalDraftState.setInput(result.text)
       showToast('Loaded terminal draft', 1200)
     },
@@ -199,81 +204,19 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     )
   }, [begin, bufferedTerminalDraftState.input])
 
-  const saveRemoteDraft = useCallback(async () => {
-    const current = sessionRef.current
-    const rpc = client
-    const deviceToken = deviceTokenRef.current
-    if (!current || !rpc || !deviceToken) {
-      showToast('Load the terminal draft first', 1600)
-      return
-    }
-    if (uncertainHandles.has(current.handle)) {
-      showToast('Result unknown — check the terminal before saving again', 2200)
-      return
-    }
-    const sentText = bufferedTerminalDraftState.input
-    let result
-    try {
-      const response = await terminalDraftSave.request(
-        rpc,
-        {
-          terminal: current.handle,
-          client: { id: deviceToken, type: 'mobile' },
-          epoch: current.epoch,
-          baseToken: current.baseToken,
-          text: bufferedTerminalDraftState.input,
-          operationId: operationId()
-        },
-        { failWhenDisconnected: true }
-      )
-      result = terminalDraftSave.interpret(response)
-    } catch {
-      if (
-        activeHandleRef.current === current.handle &&
-        sessionRef.current?.epoch === current.epoch
-      ) {
-        markUncertain(current.handle)
-        showToast('Result unknown — check the terminal before retrying', 2600)
-      }
-      return
-    }
-    if (activeHandleRef.current !== current.handle || sessionRef.current?.epoch !== current.epoch) {
-      return
-    }
-    if (result?.ok) {
-      const actualText = typeof result.text === 'string' ? result.text : sentText
-      if (inputRef.current === sentText && actualText !== sentText) {
-        inputRef.current = actualText
-        bufferedTerminalDraftState.setInput(actualText)
-      }
-      const next = {
-        ...current,
-        baseToken: result.sourceToken ?? current.baseToken,
-        remoteText: actualText
-      }
-      setSession(next)
-      showToast(
-        result.normalized
-          ? 'Saved; the agent expanded tabs or line endings'
-          : result.replayed
-            ? 'Already saved to terminal'
-            : 'Saved to terminal',
-        1600
-      )
-      return
-    }
-    if (result?.status === 'conflict' && result.conflict) {
-      setConflict(result.conflict)
-      showToast('Terminal draft changed elsewhere', 2200)
-      return
-    }
-    showToast(
-      result?.status === 'unknown'
-        ? 'Result unknown — check the terminal before retrying'
-        : 'Could not save the draft',
-      2400
-    )
-  }, [bufferedTerminalDraftState.input, client, markUncertain, showToast, uncertainHandles])
+  const saveRemoteDraft = useMobileRemoteDraftSave({
+    client,
+    deviceTokenRef,
+    sessionRef,
+    operationGeneration,
+    isUncertain: (handle) => uncertainHandles.has(handle),
+    getInput: () => inputRef.current,
+    setInput: (value) => bufferedTerminalDraftState.setInput(value),
+    setSession,
+    setConflict,
+    markUncertain,
+    showToast
+  })
 
   const submitRemoteDraft = useMobileRemoteDraftSubmit({
     client,
@@ -283,6 +226,7 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     setSession,
     setConflict,
     markUncertain,
+    operationGeneration,
     release,
     showToast
   })
@@ -293,19 +237,22 @@ export function useMobileSessionRemoteDraft(scope: MobileSessionTerminalWebviewM
     setSession,
     setConflict,
     clearUncertain,
+    activeHandle,
+    bumpOperationGeneration,
     setInput: (value) => bufferedTerminalDraftState.setInput(value),
     input: bufferedTerminalDraftState.input,
     release,
     showToast
   })
 
-  const remoteDraftUncertain = session ? uncertainHandles.has(session.handle) : false
+  const isRemoteDraftUncertain = (handle: string | null): boolean =>
+    handle !== null && uncertainHandles.has(handle)
+  const remoteDraftUncertain = isRemoteDraftUncertain(activeHandle)
   return {
     remoteDraftSession: session,
     remoteDraftConflict: conflict,
     remoteDraftUncertain,
-    isRemoteDraftUncertain: (handle: string | null) =>
-      handle !== null && uncertainHandles.has(handle),
+    isRemoteDraftUncertain,
     reloadUncertainDraft: () => void begin(false),
     loadRemoteDraft,
     saveRemoteDraft,

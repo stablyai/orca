@@ -9,6 +9,12 @@ export class TerminalDraftOperationGate {
   }
 
   dispose(ptyId: string): void {
+    // With no queued work there is nothing to fence; keeping the entry would leak per dead PTY.
+    if (!this.queues.has(ptyId)) {
+      this.generations.delete(ptyId)
+      this.disposed.delete(ptyId)
+      return
+    }
     // The queue is not dropped: a pending task must still finish before a replacement PTY writes.
     this.generations.set(ptyId, this.generation(ptyId) + 1)
     this.disposed.add(ptyId)
