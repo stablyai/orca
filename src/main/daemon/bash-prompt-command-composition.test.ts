@@ -396,6 +396,25 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output)
   })
 
+  // Why: bash 5.0 and older run the legacy PROMPT_COMMAND dispatch, which a DEBUG trap change upset.
+  itWithBash.each(['trap - DEBUG', "trap ':' DEBUG"])(
+    'starts the next command after its prompt when `%s` runs at the prompt',
+    (trapChange) => {
+      const output = runInteractiveBash(
+        "PS1='ORCA_PS1> '",
+        tempHome,
+        `${trapChange}\ntrue\nexit 0\n`
+      )
+      const startBeforePrompt = new RegExp(
+        `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+      )
+
+      expect(output).toContain('ORCA_PS1> ')
+      expect(output).not.toMatch(startBeforePrompt)
+      expectLifecycle(output, 0)
+    }
+  )
+
   itWithBash('does not treat user command text as a bash-preexec helper', () => {
     const output = runInteractiveBash('', tempHome, 'echo a:__bp_x\nfalse\nexit 0\n')
 

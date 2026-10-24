@@ -410,6 +410,20 @@ describePosix('local PTY shell-ready launch config', () => {
     expectBashOsc133Lifecycle(output)
   })
 
+  // Why: bash 5.0 and older run the legacy PROMPT_COMMAND dispatch, which a DEBUG trap change upset.
+  itWithBash('starts the next command after its prompt when the DEBUG trap is removed', () => {
+    writeFileSync(join(userDataPath, '.bash_profile'), "PS1='ORCA_PS1> '\n")
+    const input = 'trap - DEBUG\nfalse\nexit 0\n'
+    const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath, input)
+    const startBeforePrompt = new RegExp(
+      `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+    )
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(startBeforePrompt)
+    expectBashOsc133Lifecycle(output)
+  })
+
   itWithBash('composes an inherited PROMPT_COMMAND ending in separators', () => {
     writeFileSync(
       join(userDataPath, '.bash_profile'),
