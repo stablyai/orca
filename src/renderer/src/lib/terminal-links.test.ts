@@ -124,6 +124,54 @@ describe('terminal path helpers', () => {
       ).toEqual(['docs/café/report.pdf'])
     })
 
+    it('keeps CJK name punctuation in the detected range', () => {
+      expect(
+        extractTerminalFileLinks('//nas/base/会社・事業/確定申告/R7確定申告送信票.pdf').map(
+          (link) => link.displayText
+        )
+      ).toEqual(['//nas/base/会社・事業/確定申告/R7確定申告送信票.pdf'])
+      expect(
+        extractTerminalFileLinks('C:/tmp/中黒・テスト/a.txt').map((link) => link.displayText)
+      ).toEqual(['C:/tmp/中黒・テスト/a.txt'])
+    })
+
+    it('still stops a CJK path at ASCII delimiters', () => {
+      expect(
+        extractTerminalFileLinks('/tmp/中黒・テスト/a.txt, done').map((link) => link.pathText)
+      ).toEqual(['/tmp/中黒・テスト/a.txt'])
+      expect(
+        extractTerminalFileLinks('open /tmp/中黒・テスト/a.txt; retry').map((link) => link.pathText)
+      ).toEqual(['/tmp/中黒・テスト/a.txt'])
+    })
+
+    it('keeps CJK name punctuation in a relative first directory', () => {
+      expect(
+        extractTerminalFileLinks('会社・事業/file.txt').map((link) => link.displayText)
+      ).toEqual(['会社・事業/file.txt'])
+    })
+
+    it('does not start a relative path at a bullet middle dot', () => {
+      expect(extractTerminalFileLinks('・/tmp/foo.txt').map((link) => link.pathText)).toEqual([
+        '/tmp/foo.txt'
+      ])
+      expect(extractTerminalFileLinks('･/tmp/foo.txt').map((link) => link.pathText)).toEqual([
+        '/tmp/foo.txt'
+      ])
+    })
+
+    it('stops a path at a Japanese range wave dash', () => {
+      expect(
+        extractTerminalFileLinks('ログ: /var/log/app.log〜古いものは削除').map(
+          (link) => link.pathText
+        )
+      ).toEqual(['/var/log/app.log'])
+      expect(
+        extractTerminalFileLinks('ログ: /var/log/app.log～古いものは削除').map(
+          (link) => link.pathText
+        )
+      ).toEqual(['/var/log/app.log'])
+    })
+
     it('detects tilde-prefixed POSIX paths', () => {
       const links = extractTerminalFileLinks('~/Documents/Path/file_name')
       expect(links).toHaveLength(1)
