@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   observeStructuredAutomationRunCompletion,
   parseStructuredAutomationRunHandle,
@@ -193,5 +193,95 @@ describe('runtime-structured-run-observer', () => {
       outputSnapshot: null,
       error: 'Automation structured session turn ended with interruption.'
     })
+  })
+
+  /** The accepted send's own row is the durable proof a turn is owed; nothing else is. */
+  function acceptedUnansweredSubmission() {
+    return {
+      clientMessageId: 'msg-1',
+      fence: 1,
+      payloadFingerprint: '',
+      dispatchState: 'pending' as const,
+      providerItemId: null,
+      reason: null,
+      submittedAt: 100,
+      resolvedAt: null
+    }
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** Only `journalSnapshot` and `subscribeTurnCompletions` are read by the observer. */
+  function hostStub(snapshot: () => Promise<unknown>) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub implements only the members read by the observer.
+    return { journalSnapshot: snapshot, subscribeTurnCompletions: () => () => {} } as never
+  }
+
+  async function observeFor121Seconds(
+    sessionId: string,
+    snapshot: () => Promise<unknown>
+  ): Promise<unknown> {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    let settled: unknown = null
+    void observeStructuredAutomationRunCompletion({
+      sessionId,
+      signal: controller.signal,
+      since: 100,
+      getHost: () => hostStub(snapshot)
+    }).then(
+      (value) => {
+        settled = value
+      },
+      () => {}
+    )
+    await vi.advanceTimersByTimeAsync(121_000)
+    controller.abort()
+    return settled
+  }
+
+  it('keeps waiting while the accepted send has no turn yet', async () => {
+    expect(
+      await observeFor121Seconds('sess-sent', async () => ({
+        items: [],
+        submissions: [acceptedUnansweredSubmission()]
+      }))
+    ).toBeNull()
+  })
+
+  it('keeps waiting when the journal cannot be read, since that proves nothing about the start', async () => {
+    expect(
+      await observeFor121Seconds('sess-unreadable', async () => {
+        throw new Error('journal unavailable')
+      })
+    ).toBeNull()
+  })
+
+  it('keeps waiting while the turn is still running', async () => {
+    expect(
+      await observeFor121Seconds('sess-running', async () => ({
+        items: [
+          {
+            itemId: 'turn-1',
+            revision: 1,
+            body: {
+              kind: 'status',
+              turnLifecycle: { turnId: 'turn-1', state: 'running', startedAt: 100 }
+            }
+          }
+        ],
+        submissions: []
+      }))
+    ).toBeNull()
+  })
+
+  it('does not fail a session that never journaled a request before the observation cap', async () => {
+    // Why pinned: an empty journal cannot tell "never started" from "still starting", so the only
+    // convergence today is the 6h cap. Shortening it needs positive proof this run never sent.
+    expect(
+      await observeFor121Seconds('sess-never-started', async () => ({ items: [], submissions: [] }))
+    ).toBeNull()
   })
 })

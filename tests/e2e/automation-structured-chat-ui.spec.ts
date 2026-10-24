@@ -191,7 +191,17 @@ test.describe('automation structured chat UI', () => {
         activeTabType: 'agent-session'
       })
 
-    await expect(page.getByText('Stub reply.', { exact: true }).first()).toBeVisible({
+    // Why: DOM, not store — the store can switch while nothing paints. Selection is stated by the
+    // tab strip's own data-active, the run-details page must be gone, and the reply must come from a
+    // rendered chat surface, not the page that showed the same text before the click.
+    const chatTabId = chatTabsAfterSecond[0]!.id
+    await expect(
+      page.locator(`[data-testid="sortable-tab"][data-tab-id="${chatTabId}"]`)
+    ).toHaveAttribute('data-active', 'true')
+    await expect(page.getByRole('button', { name: 'View run' })).toHaveCount(0)
+    const chatRoot = page.locator('[data-native-chat-root="true"]:visible').last()
+    await expect(chatRoot).toBeVisible({ timeout: 15_000 })
+    await expect(chatRoot.getByText('Stub reply.', { exact: true }).first()).toBeVisible({
       timeout: 15_000
     })
   })
