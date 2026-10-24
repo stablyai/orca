@@ -52,6 +52,7 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
     agentTaskComplete: booleanOr(candidate.agentTaskComplete, defaults.agentTaskComplete),
     terminalBell: booleanOr(candidate.terminalBell, defaults.terminalBell),
     suppressWhenFocused: booleanOr(candidate.suppressWhenFocused, defaults.suppressWhenFocused),
+    showDockBadge: booleanOr(candidate.showDockBadge, defaults.showDockBadge),
     customSoundId,
     customSoundPath:
       typeof candidate.customSoundPath === 'string'
