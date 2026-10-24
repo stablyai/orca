@@ -16,7 +16,7 @@ import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import { getRegisteredSshState } from '../../../ssh/ssh-target-registry'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -189,8 +189,9 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     }
     const handles = this.getExistingTerminalHandlesForPtyId(ptyId)
     const paneKeys = this.collectPaneKeysForPty(ptyId)
-    if (pty.paneKey) {
-      paneKeys.add(pty.paneKey)
+    const ptyPaneKey = this.paneOfPty(pty).paneKey
+    if (ptyPaneKey) {
+      paneKeys.add(ptyPaneKey)
     }
     const readPane = this.getAgentStatusSnapshotForPaneFn
     const hookRows = readPane
@@ -289,14 +290,20 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 
+  protected isAgentPromptPermissionBlocked(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): boolean {
+    return (
+      current.status === 'permission' || current.permissionSequence > baseline.permissionSequence
+    )
+  }
+
   protected assertAgentPromptPermissionSafe(
     baseline: AgentPromptActivity,
     current: AgentPromptActivity
   ): void {
-    if (
-      current.status === 'permission' ||
-      current.permissionSequence > baseline.permissionSequence
-    ) {
+    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
       throw new Error('agent_prompt_blocked')
     }
   }

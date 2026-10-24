@@ -68,7 +68,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/plugin-language-packs', () => ({
   usePluginLanguagePackStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ packs: [], loaded: true })
+    selector({ entries: [], loaded: true })
 }))
 
 vi.mock('@/i18n/i18n', () => ({

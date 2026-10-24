@@ -39,10 +39,7 @@ class BinderTestServer extends AgentHookServer {
 
 const DB_PATH = '/tmp/binder-store/opencode.db'
 
-/**
- * Stands in for the worker read: OpenCode 1 rows past the cursor, oldest first.
- * The SQL itself is covered by readers/opencode-binder-sessions.test.ts.
- */
+/** Return OpenCode 1 worker rows oldest first; reader tests cover SQL behavior. */
 class FakeSessionStore {
   rows: BinderSessionRow[] = []
   calls: { dbPath: string; cursor: OpenCodeSessionCursor }[] = []
@@ -101,7 +98,7 @@ describe('opencode binder loop', () => {
   })
 
   it('skips the round when the read answers its failure value', async () => {
-    // [] is what the worker client resolves to on a timeout, crash or unreadable store.
+    // The worker returns [] on timeout, crash, or unreadable storage.
     const sweep = vi.fn(async () => [])
     server.bindDeps({ listSessions: async () => [], sweep })
     expect(await server.runBinderRound()).toBe(0)
@@ -129,7 +126,6 @@ describe('opencode binder loop', () => {
     expect(sweep).not.toHaveBeenCalled()
     expect(server.readRegistry('ses_live')).toBeUndefined()
 
-    // The stale round left the watermark alone: the next round lists from the start.
     server.bindDeps({ listSessions: store.list })
     expect(await server.runBinderRound()).toBe(0)
     expect(store.calls.at(-1)?.cursor).toEqual({ ms: 0, id: '' })
@@ -139,7 +135,7 @@ describe('opencode binder loop', () => {
     store.add()
     vi.useFakeTimers()
     try {
-      // Birth arrives stamped with the wrong (server-starter) pane.
+      // OpenCode serve initially stamps birth with the server starter's pane.
       server.ingest('opencode', {
         paneKey: PANE_B,
         launchToken: '',
@@ -252,12 +248,9 @@ describe('opencode binder loop', () => {
     server.stop()
     server.startBinderLoop()
     await vi.waitFor(() => expect(sweepCalls).toBe(2))
-    // The obsolete round finishes while the new round is still parked: its
-    // finally must not clear the flag the new round holds.
+    // The old round's finally must preserve the newer round's in-flight flag.
     releaseFirst()
     await new Promise((resolve) => setTimeout(resolve, 20))
-    // A third round attempted now must be refused at the flag check, calling
-    // no sweep. With the unguarded finally it would be admitted instead.
     const extraRound = server.runBinderRound()
     expect(sweepCalls).toBe(2)
     releaseLater()

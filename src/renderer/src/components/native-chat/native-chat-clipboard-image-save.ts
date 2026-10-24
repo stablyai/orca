@@ -30,7 +30,13 @@ async function clipboardImageSaveArgs(
   | { ok: false; notice: string; cause: NativeChatClipboardImageFailureCause }
 > {
   if (owner.kind === 'local') {
-    return { ok: true, args: { forNativeChatDraft: true } }
+    return {
+      ok: true,
+      args: {
+        forNativeChatDraft: true,
+        ...(owner.structuredSessionId ? { forStructuredChat: true } : {})
+      }
+    }
   }
   // A terminal-backed chat's agent reads the path from the server's own temp dir, as a terminal paste does.
   if (owner.kind === 'remote') {

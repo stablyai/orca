@@ -52,7 +52,7 @@ it('shares one setup and overlaps the compiler only after type-aware checks fini
 })
 
 it('uses the shared Bun pin for every current-toolchain workflow', () => {
-  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.3')
+  expect(readFileSync('config/.bun-version', 'utf8').trim()).toBe('1.4.4')
   for (const file of readdirSync('.github/workflows').filter((name) => /\.ya?ml$/.test(name))) {
     const current = parse(readFileSync(`.github/workflows/${file}`, 'utf8'))
     for (const job of Object.values(current.jobs)) {
@@ -65,6 +65,14 @@ it('uses the shared Bun pin for every current-toolchain workflow', () => {
       }
     }
   }
+})
+
+it('checks formatting over the same tree the local format script writes', () => {
+  const check = steps.find((step) => step.name === 'Check formatting')
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
+  expect(check.run.replace('node node_modules/oxfmt/bin/oxfmt', 'oxfmt')).toBe(
+    manifest.scripts.format.replace('--write', '--check')
+  )
 })
 
 it('keeps the Bun anti-slop scan aligned with the local audit', () => {
@@ -226,6 +234,7 @@ it('pins every foreground and background step to its selected phase', () => {
     (step) => !step.background && /outputs\.(static_analysis|typecheck)/.test(step.if ?? '')
   )
   expect(foreground.map((step) => [step.name ?? step.run ?? step.uses, step.if])).toEqual([
+    ['Check formatting', staticPhase],
     ['Reject low-evidence patterns', staticPhase],
     ['Enforce type-aware code-quality baseline', staticPhase],
     [
@@ -238,17 +247,9 @@ it('pins every foreground and background step to its selected phase', () => {
     ['Check reliability gate manifest', staticPhase],
     ['Enforce dead design-system classes', staticPhase],
     ['Check VM runtime rollback compatibility', staticPhase],
-    ['Enforce max-lines ratchet', staticPhase],
-    ['Enforce ts-nocheck ratchet', staticPhase],
-    ['Enforce runtime Electron-import ratchet', staticPhase],
-    ['Enforce focus-read ratchet', staticPhase],
-    ['Enforce layout-writer ratchets', staticPhase],
-    ['Enforce deprecated runtime-owner importer ratchet', staticPhase],
-    ['Enforce path-literal ratchet', staticPhase],
-    ['Enforce worktree-id composer ratchet', staticPhase],
-    ['Enforce e2e typecheck ratchet', staticPhase],
-    ['Enforce legacy relay fence ratchet', staticPhase],
+    ['Enforce ratchets', staticPhase],
     ['Check Node runtime pin', staticPhase],
+    ['Check root and mobile lock the same shared dependencies', staticPhase],
     ['Decide whether the orcad terminal smoke runs', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
     ['Verify the generated ACP protocol schema', staticPhase],
@@ -278,7 +279,8 @@ it('pins every foreground and background step to its selected phase', () => {
 })
 
 it.each([
-  { changed: ['README.md'], static_analysis: false, typecheck: false, mobile_dependencies: false },
+  { changed: ['LICENSE'], static_analysis: false, typecheck: false, mobile_dependencies: false },
+  { changed: ['README.md'], static_analysis: true, typecheck: false, mobile_dependencies: false },
   {
     changed: ['mobile/src/App.tsx'],
     static_analysis: true,
@@ -398,7 +400,7 @@ it('runs the unchanged Node 18 smoke after every Node 24 step and preserves its 
     expect(joined, background.id).toBeLessThan(steps.indexOf(smoke))
   }
   expect(receipt.name).toBe('managed hooks on Node 18')
-  expect(receipt['runs-on']).toBe('ubuntu-slim')
+  expect(receipt['runs-on']).toBe('blacksmith-2vcpu-ubuntu-2404')
   expect(receipt.steps).toHaveLength(1)
   expect(receipt.steps[0].uses).toBeUndefined()
   expect(receipt.steps[0].env.MANAGED_HOOK_NODE18).toBe(

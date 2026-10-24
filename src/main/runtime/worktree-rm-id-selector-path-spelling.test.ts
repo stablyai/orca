@@ -28,6 +28,7 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/srv/projects/app'
@@ -60,7 +61,7 @@ function makeStore(repoPath: string = REPO_PATH) {
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...metaById[id], ...meta }
       return metaById[id]
     },

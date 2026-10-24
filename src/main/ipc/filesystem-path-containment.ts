@@ -1,14 +1,9 @@
 import { resolve, relative, isAbsolute, sep, dirname } from 'node:path'
 import { statSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
-/**
- * Check whether resolvedTarget is equal to or a descendant of resolvedBase.
- * Uses relative() so it works with both `/` (Unix) and `\` (Windows) separators.
- *
- * Compared byte-exactly first, then across Unicode forms — but only where both spellings prove to
- * be one filesystem object.
- */
+/** Check native-path containment; accept Unicode-equivalent spellings only after proving filesystem identity. */
 export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string): boolean {
   if (isDescendantOrEqualExact(resolvedTarget, resolvedBase)) {
     return true
@@ -22,15 +17,11 @@ function isDescendantOrEqualExact(resolvedTarget: string, resolvedBase: string):
     return true
   }
   const rel = relative(resolvedBase, resolvedTarget)
-  // Security: reject "..", "../…" or an absolute rel — on Windows relative() returns absolute across drives, which would bypass drive-traversal checks.
-  // Use isAbsolute, not rejoin+compare: Windows path.relative() ignores drive/root casing, so rejoining would deny valid c:\repo under C:\Repo.
+  // Reject parent/cross-drive escapes with isAbsolute; rejoin comparison would wrongly reject Windows drive/root case differences.
   return rel !== '' && !(rel === '..' || rel.startsWith(`..${sep}`)) && !isAbsolute(rel)
 }
 
-/**
- * Why a loop and not a regex: `[^\u0000-\u007f]` trips no-control-regex, and this runs once per
- * registered root on every filesystem IPC, where charCodeAt beats an ICU-backed scan anyway.
- */
+/** Avoid ICU scans and control-character regex linting on this per-root hot path. */
 function hasNonAscii(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     if (value.charCodeAt(index) > 0x7f) {
@@ -40,27 +31,8 @@ function hasNonAscii(value: string): boolean {
   return false
 }
 
-/**
- * The same name, spelled two ways.
- *
- * macOS returns a path in whichever Unicode form its source held: APFS gives back the form it
- * stores — NFD for names typed into Finder — while the file picker and git (`core.precomposeunicode`)
- * give back NFC. A workspace whose path contains Korean, accented or otherwise composed characters
- * is registered in one form and read in the other, so byte comparison puts the file outside its own
- * workspace and fs:readFile denies a path the user is looking at (#21172). ASCII paths are immune,
- * which is why the guard held for so long.
- *
- * Canonical equivalence is not containment on its own: APFS folds both spellings onto one
- * directory, ext4 keeps them as distinct siblings, and the unregistered sibling is not the root —
- * equivalence includes singletons such as U+212A KELVIN SIGN folding to K. So the fold only locates
- * the candidate ancestor, in the caller's spelling; isDescendantOrEqual settles identity.
- *
- * Walks up by component count, never by offset: NFD is longer than NFC.
- */
+/** Locate a Unicode-equivalent ancestor by component count; NFD is longer than NFC. Filesystem identity must still prove containment (#21172). */
 function foldedContainmentAncestor(resolvedTarget: string, resolvedBase: string): string | null {
-  // Both sides must carry non-ASCII before normalize() earns its allocation: ASCII is identical in
-  // every form, so a mismatch confined to it is a real one. Target first — it is the side the
-  // allow-list scan holds fixed while it walks every registered root.
   if (!hasNonAscii(resolvedTarget) || !hasNonAscii(resolvedBase)) {
     return null
   }
@@ -77,14 +49,7 @@ function foldedContainmentAncestor(resolvedTarget: string, resolvedBase: string)
   return ancestor
 }
 
-/**
- * The same directory entry, not merely the same name — the question the fold is really asking, and
- * only the filesystem can answer it.
- *
- * Fails closed: an ancestor that cannot be stat'ed has not shown it is the registered root, and ino
- * is 0 on volumes that expose none. Reached only on a containment the exact comparison refused, so
- * ASCII paths and non-folding roots still touch no disk.
- */
+/** Fail closed unless both spellings have a nonzero inode and match filesystem identity; folded names alone can be distinct on ext4. */
 function isSameFilesystemObject(pathA: string, pathB: string): boolean {
   try {
     const statA = statSync(pathA)
@@ -95,10 +60,7 @@ function isSameFilesystemObject(pathA: string, pathB: string): boolean {
   }
 }
 
-/**
- * Node's canonical ENOENT message. Matched in full so a message that merely mentions the word — a
- * log line, a user's branch name — cannot be mistaken for a missing path.
- */
+// Match the full Node phrase so unrelated ENOENT mentions cannot imply absence.
 const ENOENT_MESSAGE = /\bENOENT: no such file or directory\b/
 
 export function isENOENT(error: unknown): boolean {
@@ -108,19 +70,13 @@ export function isENOENT(error: unknown): boolean {
   if ('code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
     return true
   }
-  // Why the message is also consulted: an error raised on an SSH host crosses the relay as JSON-RPC,
-  // and ssh-channel-multiplexer rebuilds it with the TRANSPORT's numeric code (msg.error.code), so
-  // Node's 'ENOENT' string code no longer exists on the object by the time any caller sees it. Every
-  // caller here asks the same question — "is this path simply absent?" — and for a remote path the
-  // answer was unreachable: remotePathExists rethrew instead of returning false, which surfaced as a
-  // raw "ENOENT: no such file or directory, lstat '<path>'" when creating a worktree over SSH.
-  //
-  // The cost, accepted rather than overlooked: a remote host can make an unrelated failure read as
-  // "absent" by putting that sentence in a message. Narrowing back to the code alone is not an
-  // option — the transport overwrites it, which IS the bug — and the blast radius is a host already
-  // trusted to run our relay. normalizeExistingPath is unaffected either way: its realpath runs
-  // locally and always carries a real .code, so symlink containment cannot be spoofed this way.
+  // Relay RPC replaces Node codes; accept its canonical message from trusted hosts. Local realpath containment still uses actual filesystem identity.
   return ENOENT_MESSAGE.test(error.message)
+}
+
+/** An existence probe's "not there": also ENOTDIR, since `file.txt/child` cannot exist either. */
+export function isPathAbsentError(error: unknown): boolean {
+  return isENOENT(error) || isDefinitiveAbsence(error)
 }
 
 export async function normalizeExistingPath(resolvedPath: string): Promise<string> {

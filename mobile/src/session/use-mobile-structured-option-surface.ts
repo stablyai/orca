@@ -9,13 +9,14 @@ import type {
 
 /** The picker surface over a structured chat's options: picks, `/`-opened pickers, snapshots. */
 export function useMobileStructuredOptionSurface(args: {
+  demandModelCatalog: () => void
+  lockSnapshot: (snapshot: SessionOptionDescriptor[]) => SessionOptionDescriptor[]
   optionSnapshot: SessionOptionDescriptor[]
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   /** The latest option state, which a settled pick's snapshot is read from. */
   optionStateRef: RefObject<StructuredAgentSessionOptionState>
-  takesSendOptions: boolean
 }) {
-  const { optionSnapshot, optionStateRef, setStructuredOption, takesSendOptions } = args
+  const { optionSnapshot, optionStateRef, setStructuredOption, demandModelCatalog } = args
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -36,20 +37,21 @@ export function useMobileStructuredOptionSurface(args: {
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
       return {
-        snapshot: structuredAgentSessionShownSnapshot(optionStateRef.current, takesSendOptions)
+        snapshot: args.lockSnapshot(structuredAgentSessionShownSnapshot(optionStateRef.current))
       }
     },
-    [optionStateRef, setStructuredOption, takesSendOptions]
+    [args.lockSnapshot, optionStateRef, setStructuredOption]
   )
 
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
+      demandModelCatalog,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [optionSnapshot, setOption]
+    [optionSnapshot, setOption, demandModelCatalog]
   )
 
   return { optionPickerRequest, invokeStructuredOption, optionSurface }

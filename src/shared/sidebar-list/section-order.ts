@@ -1,6 +1,6 @@
 import type { Repo } from '../repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ProjectGroupingModel } from '../project-section-grouping'
+import type { ProjectSectionModel } from '../project-section-grouping'
 import { ALL_GROUP_KEY } from './group-keys'
 import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
@@ -20,7 +20,7 @@ export function getRenderedNaturalAnchorRepoIds({
   prGroupOf: SidebarPRGroupReader
   collapsedGroups: ReadonlySet<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  projectGrouping?: ProjectGroupingModel
+  projectGrouping?: ProjectSectionModel
 }): Set<string> {
   const renderedRepoIds = new Set<string>()
   if (groupBy === 'none') {

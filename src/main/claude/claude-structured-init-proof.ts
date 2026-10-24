@@ -6,7 +6,7 @@ import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wir
 export type ClaudeInitObservation = {
   providerSessionId: string
   uuid: string | null
-  /** The resolved model id the CLI reports it is running; only `system/init` carries it. */
+  /** Only `system/init` reports the running model. */
   model: string | null
   message: Record<string, unknown>
 }
@@ -47,11 +47,7 @@ export function readClaudeModels(initialization: unknown): unknown[] {
     : []
 }
 
-/**
- * The capabilities this CLI advertises: the first report given that names any, else `observed`.
- * A SessionStart proof and the 2.1.280 initialize result name none, so only a turn's system/init
- * may say what the binary supports, and a report naming none never retracts that.
- */
+/** Empty reports do not retract capabilities: SessionStart and older initialize replies omit them. */
 export function readClaudeCapabilities(
   observed: readonly string[],
   ...reports: unknown[]
@@ -109,18 +105,15 @@ export function claudeAuthDiagnostic(
   }
 }
 
-/** The CLI's own frame naming the session it runs (system/init or a SessionStart hook). Only a
- *  SessionStart hook sends one before the first turn, so startup takes it when it came and never
- *  waits for it. */
+/** Startup uses any session proof already observed; it cannot wait for the first turn's init. */
 export type ClaudeInitProof = {
   promise: Promise<ClaudeInitObservation>
   resolve: (init: ClaudeInitObservation) => void
   reject: (error: Error) => void
-  /** A frame named another provider session. */
   refuse: () => void
   /** The proof seen so far, or null; throws when it was refused or the child failed first. */
   seen: () => ClaudeInitObservation | null
-  /** Set once startup has read the proof: a later refusal ends the session. */
+  /** Refusals after startup must end the published session. */
   onRefusal: ((error: Error) => void) | null
 }
 
@@ -145,7 +138,6 @@ export function createClaudeInitProof(): ClaudeInitProof {
     },
     reject,
     refuse: () => {
-      // A session already proven by its own frame keeps that proof.
       if (outcome && 'init' in outcome) {
         return
       }

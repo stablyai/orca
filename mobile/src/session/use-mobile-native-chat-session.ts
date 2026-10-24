@@ -13,6 +13,7 @@ import {
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
+import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -40,8 +41,10 @@ export type MobileNativeChatSession = {
   readFailedFinally?: boolean
   /** True when an older page may exist (the last read filled the window). */
   hasMore: boolean
-  /** Whether an older-history page is currently loading. */
+  /** `olderPages === 'loading'`, kept because recorded RPC fixtures read it. */
   loadingEarlier: boolean
+  /** The Load earlier control's state: reading now, or how the last read ended. */
+  olderPages?: OlderPagePhase
   /** Grow the window to page in older history. */
   loadEarlier: () => void
 }
@@ -50,6 +53,17 @@ export type MobileNativeChatSession = {
 const INITIAL_LIMIT = 40
 const PAGE = 60
 const MAX_MESSAGES = 2000
+
+/** The next older page, or null once the window holds the most it may. */
+function nextPageWindow(
+  limit: number,
+  listLength: number
+): { nextLimit: number; pageLimit: number } | null {
+  // Live output grows the list past the last read, so the next page counts from what is held.
+  const held = Math.max(limit, listLength)
+  const nextLimit = Math.min(held + PAGE, MAX_MESSAGES)
+  return nextLimit > held ? { nextLimit, pageLimit: nextLimit - held } : null
+}
 
 type ReadSessionResult =
   | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
@@ -102,8 +116,7 @@ export function useMobileNativeChatSession(args: {
   const status = settled ? settled.status : initialStatus
   const [error, setError] = useState<string | undefined>(undefined)
   const [hasMore, setHasMore] = useState(false)
-  const [loadingEarlier, setLoadingEarlier] = useState(false)
-  const loadingEarlierRef = useRef(false)
+  const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
   // Stateful id-dedup merger: caches the id→index map so each live append frame
   // costs O(incoming), not O(existing+incoming) (#18). `replaceList` resets the
@@ -113,7 +126,6 @@ export function useMobileNativeChatSession(args: {
   // Tracks the live session so a late loadEarlier resolve can detect a swap.
   const sessionIdRef = useRef<string | null>(sessionId)
   sessionIdRef.current = sessionId
-  const streamGenerationRef = useRef(0)
   // Whether this subscription already delivered its base snapshot; later
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
@@ -136,11 +148,9 @@ export function useMobileNativeChatSession(args: {
     let cancelled = false
     // Why: disconnect/agent/session loss must invalidate a page request before
     // the early idle/waiting return can clear the visible source.
-    streamGenerationRef.current += 1
+    supersede()
     limitRef.current = INITIAL_LIMIT
-    loadingEarlierRef.current = false
     snapshotSeenRef.current = false
-    setLoadingEarlier(false)
     setList([])
     setError(undefined)
     setHasMore(false)
@@ -188,12 +198,14 @@ export function useMobileNativeChatSession(args: {
           // follows is still this subscription's base, not a reconnect replay.
           snapshotSeenRef.current = true
         }
-        if (applied.windowReplaced || frame.type === 'snapshot') {
-          // Why: any authoritative window (and any replay merge) invalidates an
-          // in-flight older-page request; stale results must not land on it.
-          streamGenerationRef.current += 1
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
+        if (
+          applied.windowReplaced ||
+          (frame.type === 'snapshot' && beforeOffsetRef.current === null)
+        ) {
+          // Why: a replaced window fences an in-flight older page, and any replay fences a
+          // cursorless page, which replaces the list. A cursor page survives a contiguous
+          // replay; one that re-cut the cursor fails the page's own cursor check.
+          supersede()
         }
         if (applied.windowReplaced) {
           // Only a genuinely fresh window resets the grown read window — an
@@ -212,9 +224,7 @@ export function useMobileNativeChatSession(args: {
         if (applied.cursorInvalidated) {
           // Fall back to a growing-tail read so history trimmed by live appends
           // cannot leave a gap between the retained window and the old cursor.
-          streamGenerationRef.current += 1
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
+          supersede()
           beforeOffsetRef.current = null
         }
         setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
@@ -223,89 +233,79 @@ export function useMobileNativeChatSession(args: {
 
     return () => {
       cancelled = true
+      supersede()
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, supersede])
 
   const loadEarlier = useCallback(() => {
-    if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
+    if (!client || !agent || !sessionId || !hasMore) {
       return
     }
     // Capture the session this page belongs to; a swap underneath us must not
     // apply this read's result onto the new session (mirrors desktop's guard).
     const requestSessionId = sessionId
-    const requestGeneration = streamGenerationRef.current
-    // Live output grows the list past the last read, so the next page counts from what is held.
-    const held = Math.max(limitRef.current, mergerRef.current.list.length)
-    const nextLimit = Math.min(held + PAGE, MAX_MESSAGES)
-    const pageLimit = nextLimit - held
-    if (pageLimit <= 0) {
-      setHasMore(false)
-      return
-    }
-    const beforeOffset = beforeOffsetRef.current
-    loadingEarlierRef.current = true
-    setLoadingEarlier(true)
-    void (async () => {
-      try {
-        const response = await nativeChatSessionPageRead.request(client, {
+    loadOlderPages(async ({ timeoutMs, isCurrent }) => {
+      const page = nextPageWindow(limitRef.current, mergerRef.current.list.length)
+      if (!page) {
+        setHasMore(false)
+        return 'end'
+      }
+      const { nextLimit, pageLimit } = page
+      const beforeOffset = beforeOffsetRef.current
+      const response = await nativeChatSessionPageRead.request(
+        client,
+        {
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
-        })
-        const accepted = nativeChatSessionPageRead.interpret(response)
-        if (!accepted.accepted) {
-          return
-        }
-        // The read is `z.unknown()` because the reply is a union, so an accepted success can still
-        // carry no result at all, or null; `'error' in` throws on either.
-        const payload = accepted.value
-        if (payload === null || typeof payload !== 'object') {
-          return
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands back the same result.
-        const result = payload as ReadSessionResult
-        if ('error' in result) {
-          return
-        }
-        // Drop a stale resolve from a session that swapped underneath us.
-        if (
-          sessionIdRef.current !== requestSessionId ||
-          streamGenerationRef.current !== requestGeneration
-        ) {
-          return
-        }
-        limitRef.current = nextLimit
-        if (beforeOffset !== null && result.beforeOffset != null) {
-          beforeOffsetRef.current = result.beforeOffset
-          setList([...result.messages, ...mergerRef.current.list])
-          setHasMore(
-            nextLimit < MAX_MESSAGES && (result.hasMore ?? result.messages.length >= pageLimit)
-          )
-        } else {
-          // Older runtimes ignore the cursor and return the growing tail.
-          setList(result.messages)
-          setHasMore(result.messages.length >= nextLimit)
-        }
-      } catch {
-        // Nothing awaits this page, so a rejected request — a transport drop, or the client
-        // abandoning it at teardown — would otherwise reach the document as an unhandled
-        // rejection. Swallowed to match the operation's own skip policy: a page that never
-        // arrives leaves the window the subscription already delivered.
-      } finally {
-        // A late page from a prior tab must not unlock the current tab's request.
-        if (
-          sessionIdRef.current === requestSessionId &&
-          streamGenerationRef.current === requestGeneration
-        ) {
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
-        }
+        },
+        { timeoutMs, budgetSpansConnect: true }
+      )
+      const accepted = nativeChatSessionPageRead.interpret(response)
+      if (!accepted.accepted) {
+        return 'failed'
       }
-    })()
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList])
+      // The read is `z.unknown()` because the reply is a union, so an accepted success can still
+      // carry no result at all, or null; `'error' in` throws on either.
+      const payload = accepted.value
+      if (payload === null || typeof payload !== 'object') {
+        return 'failed'
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main cast this payload unread; the reader hands back the same result.
+      const result = payload as ReadSessionResult
+      if ('error' in result) {
+        return 'failed'
+      }
+      // Lands only on the window and cursor it was asked from; otherwise the window it
+      // read against is gone, and the reader pages again from the new one.
+      if (
+        !isCurrent() ||
+        sessionIdRef.current !== requestSessionId ||
+        beforeOffsetRef.current !== beforeOffset
+      ) {
+        return 'end'
+      }
+      limitRef.current = nextLimit
+      let more: boolean
+      if (beforeOffset !== null && result.beforeOffset != null) {
+        beforeOffsetRef.current = result.beforeOffset
+        setList([...result.messages, ...mergerRef.current.list])
+        more = nextLimit < MAX_MESSAGES && (result.hasMore ?? result.messages.length >= pageLimit)
+      } else {
+        // Older runtimes ignore the cursor and return the growing tail; rows that streamed in while
+        // it waited stay.
+        const live = mergerRef.current.list
+        const after = live.findIndex((message) => message.id === result.messages.at(-1)?.id)
+        setList(after === -1 ? result.messages : [...result.messages, ...live.slice(after + 1)])
+        more = result.messages.length >= nextLimit
+      }
+      setHasMore(more)
+      return more ? 'drew' : 'end'
+    })
+  }, [client, agent, sessionId, transcriptPath, hasMore, setList, loadOlderPages])
 
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.
@@ -323,7 +323,8 @@ export function useMobileNativeChatSession(args: {
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,
     hasMore,
-    loadingEarlier,
+    loadingEarlier: olderPages === 'loading',
+    olderPages,
     loadEarlier
   }
 }

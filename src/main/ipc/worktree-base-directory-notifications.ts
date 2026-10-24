@@ -38,12 +38,12 @@ export function clearPendingWorktreeBaseNotifications(watch: WorktreeBaseNotific
 }
 
 export function supportsWorktreeHeadIdentityRefresh(watch: WorktreeBaseNotificationWatch): boolean {
-  return watch.kind === 'git-common' && !watch.connectionId
+  return watch.kind === 'git-common'
 }
 
 export function scheduleWorktreeBaseNotification(
   watch: WorktreeBaseNotificationWatch,
-  changes: Partial<Omit<WorktreeBaseCollectedChanges, 'overflow'>>
+  changes: Partial<WorktreeBaseCollectedChanges>
 ): void {
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     clearPendingWorktreeBaseNotifications(watch)
@@ -58,9 +58,7 @@ export function scheduleWorktreeBaseNotification(
   for (const repoId of changes.headIdentityRepoIds ?? []) {
     watch.pendingHeadIdentityRepoIds.add(repoId)
   }
-  // Why: callers that cannot attribute the burst to specific worktrees (watcher
-  // failure, event overflow) omit the scope entirely; that is a loss of
-  // knowledge, so it must widen to a full re-read rather than narrow to nothing.
+  // Unattributed bursts lose knowledge; widen to all heads rather than narrowing to none.
   watch.pendingHeadIdentityScope = mergeHeadIdentityScopes(
     watch.pendingHeadIdentityScope,
     changes.headIdentityScope ?? FULL_HEAD_IDENTITY_SCOPE
@@ -69,7 +67,10 @@ export function scheduleWorktreeBaseNotification(
     watch.pendingGitStatusScope,
     changes.gitStatusScope ?? FULL_HEAD_IDENTITY_SCOPE
   )
-  clearTimeout(watch.notifyTimer ?? undefined)
+  // Sustained churn joins the armed notification without postponing delivery.
+  if (watch.notifyTimer) {
+    return
+  }
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
     if (watch.disposed || watch.mainWindow.isDestroyed()) {
@@ -85,14 +86,13 @@ export function scheduleWorktreeBaseNotification(
     )
     const emitHeadIdentities = pendingStructure.length === 0
     const headIdentityScope = watch.pendingHeadIdentityScope
-    // Resolved before the head refresh below can rewrite the memo. Only local
-    // watches keep one; SSH stays unattributed so every checkout still refreshes.
+    // Resolve attribution before head refresh rewrites the memo; base watches remain unattributed.
     const gitStatusWorktreePaths = supportsWorktreeHeadIdentityRefresh(watch)
       ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
       : null
     clearPendingWorktreeBaseNotifications(watch)
     for (const repoId of pendingStructure) {
-      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId, watch.connectionId)
+      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
     }
     for (const repoId of sourceControlRepoIds) {
       notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)

@@ -23,7 +23,6 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
-/** A frame as Claude Code sends it while it retries a refused request. */
 function apiRetry(attempt: number, fields: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     type: 'system',
@@ -86,7 +85,6 @@ describe('a Claude api_retry frame', () => {
       }
     })
     expect(row).not.toHaveProperty('providerFrame')
-    // The latest attempt's frame, as the log detail.
     expect(row.failure?.detail?.text).toContain('"attempt":3')
   })
 
@@ -141,7 +139,6 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toEqual([
       unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
     ])
-    // An uncatalogued kind keeps its sentence but is no failure: only a kind decides that.
     expect(rows[0]).toMatchObject({ text: 'rate_limit' })
     expect(rows[0]).not.toHaveProperty('tone')
   })

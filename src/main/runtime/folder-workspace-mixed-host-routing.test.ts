@@ -17,6 +17,7 @@ import {
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({
@@ -134,8 +135,10 @@ describe('a workspace the router throws on', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { stream, route, write } = streamThrowingOn(FOLDER_KEY)
     route.throws = false
-    const events: string[] = []
-    const first = stream.subscribe((event) => events.push(`${event.type} ${event.key}`))
+    const collector = collectLayoutEvents()
+    const first = stream.subscribe(collector.listener)
+    collector.seed(first.snapshot)
+    const events = collector.events
     expect(first.snapshot.map((entry) => entry.key)).toEqual([GIT_KEY, FOLDER_KEY])
     route.throws = true
     write()

@@ -1,9 +1,10 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  writeDataFile,
-  readDataFile
+  readDataFile,
+  testState,
+  workspaceRepos,
+  writeDataFile
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
@@ -19,7 +20,6 @@ import {
   makeBalancedLegacyPaneLayout
 } from './persistence-session-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -77,7 +77,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -189,7 +189,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -300,7 +300,7 @@ describe('Store', () => {
     mkdirSync(agentHooksDir, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -396,7 +396,7 @@ describe('Store', () => {
     const ownerPaneKey = makePaneKey('tab-target', TEST_LEAF_2)
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -432,7 +432,7 @@ describe('Store', () => {
   it('persists fallback aliases when a legacy split layout has no PTY leaf bindings', async () => {
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -517,12 +517,12 @@ describe('Store', () => {
     )
   })
 
-  // ~9s locally; the 30s default timeout leaves too little headroom on a loaded CI shard.
+  // Large alias migrations need extra timeout headroom on loaded CI shards.
   it('loads legacy pane aliases from very large persisted split layouts', async () => {
     const leafCount = 130_000
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},
@@ -578,7 +578,7 @@ describe('Store', () => {
     const stablePaneKey = makePaneKey('tab1', TEST_LEAF_1)
     writeDataFile({
       schemaVersion: 1,
-      repos: [],
+      repos: workspaceRepos('wt1'),
       worktreeMeta: {},
       settings: {},
       ui: {},

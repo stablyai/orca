@@ -36,7 +36,7 @@ vi.mock('./runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn(async () => ({ ok: true }))
 }))
 vi.mock('../ssh/ssh-session-teardown', () => ({ disconnectRegisteredSshTarget: hoisted.teardown }))
-vi.mock('../../ssh/ssh-target-registry', async (importOriginal) => ({
+vi.mock('../../ssh/targets/ssh-target-registry', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   connectRegisteredSshTarget: hoisted.connectHost
 }))
@@ -110,7 +110,6 @@ describe("the status bar's Disconnect of a server", () => {
     await invoke('runtimeEnvironments:connect')
 
     expect(isRuntimeEnvironmentManuallyDisconnected('env-1')).toBe(false)
-    // That connect republishes the managed verdict and restores the host's port forwards.
     expect(hoisted.connectHost).toHaveBeenCalledWith('ssh-1')
   })
 

@@ -8,7 +8,7 @@ import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedWebClient } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-headless-stalled-stream-'))

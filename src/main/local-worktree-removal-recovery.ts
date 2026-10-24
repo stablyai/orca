@@ -90,8 +90,7 @@ async function removeRequiredGitWorktreeRegistration(
     removalError = error
   }
 
-  // Why: Git prune exits successfully while retaining locked registrations;
-  // a failed remove can also have detached the row before filesystem cleanup.
+  // Successful prune can retain locked registrations; verify the row is gone.
   try {
     await verifyGitWorktreeRegistrationRemoved(
       args.repoPath,
@@ -104,26 +103,21 @@ async function removeRequiredGitWorktreeRegistration(
       ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, forceForError)
       : verificationError
   }
-  // Why: if Git detached the row before reporting its filesystem error, keep
-  // the branch rather than guessing whether the normal branch cleanup ran.
+  // Preserve the branch when Git may have detached the row before reporting a filesystem error.
   return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
 }
 
 export async function recoverLocalWindowsWorktreeRemoval(
   args: LocalWindowsRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
-  // Why: recovery can recursively delete the remaining directory, so a Git
-  // lock must reject the attempt before classification or any side effects.
+  // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
   if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
     return undefined
   }
 
-  // Why: this error means Git accepted removal and started deleting the path;
-  // finish that partial success with Windows retries, then verify Git metadata.
-  // Why: Windows recovery recursively deletes the remaining directory, so it
-  // must fail closed while a watcher process may still own a native handle.
+  // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
   try {
     await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
@@ -142,8 +136,7 @@ async function isRecoverableWindowsFilesystemRemovalFailure(
 
   try {
     const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
-    // Why: error prose can be localized or ambiguous. Only a missing Git row
-    // proves removal started and makes recursive Windows cleanup safe.
+    // Localized error text cannot prove removal started; require the Git row to be absent.
     return !worktrees.some((worktree) =>
       areWorktreePathsEqual(worktree.path, args.canonicalWorktreePath)
     )

@@ -90,10 +90,11 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-update'],
     summary: 'Update project host setup metadata',
     usage:
-      'orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
+      'orca project setup-update --setup <setup-id> [--host <host>] [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'setup',
+      'host',
       'display-name',
       'path',
       'worktree-base-path',
@@ -104,6 +105,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Repo-backed setups mirror safe fields onto the repo record.',
+      '--host picks the setup when the project is set up on more than one host under the same setup id.',
       'Path and availability state changes are only supported for independent setup records.'
     ],
     examples: [
@@ -115,8 +117,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-delete'],
     destructive: true,
     summary: 'Remove a project host setup',
-    usage: 'orca project setup-delete --setup <setup-id> [--force] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'force'],
+    usage: 'orca project setup-delete --setup <setup-id> [--host <host>] [--force] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'host', 'force'],
     notes: [
       'Independent setups are removed directly.',
       'Repo-backed setups remove the registered repo compatibility record.',

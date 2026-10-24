@@ -18,10 +18,7 @@ import { useAppStore } from '@/store'
 import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
-import {
-  presentPaneViewport,
-  presentPaneViewportPreservingSynchronizedOutput
-} from '@/lib/pane-manager/pane-webgl-renderer'
+import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 const WINDOW_WAKE_FLUSH_CHARS = 64 * 1024
@@ -130,7 +127,7 @@ export function resumeTerminalVisibility({
       // present now; the settled rebuild is two frames out and would otherwise
       // leave pre-hide pixels composited until then.
       for (const pane of manager.getPanes()) {
-        presentPaneViewportPreservingSynchronizedOutput(pane)
+        presentPaneViewport(pane)
       }
       // Why: one settled rebuild repairs recreated rendering without paying a
       // duplicate global atlas rebuild before the pane is attached and measured.

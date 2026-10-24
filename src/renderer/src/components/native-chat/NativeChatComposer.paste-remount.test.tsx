@@ -14,11 +14,13 @@ import type {
   NativeChatComposerFieldProps,
   NativeChatComposerImageAttachment
 } from './NativeChatComposerField'
+import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 type FieldProps = {
   imageAttachments?: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled?: boolean
   onRemoveImageAttachment: (id: string) => void
+  onSend: () => void
 }
 
 const mocks = vi.hoisted(() => {
@@ -51,8 +53,11 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
+}))
+vi.mock('../../../../shared/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
+  isRemoteRuntimePtyId: () => false
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
@@ -112,6 +117,7 @@ function composer(
       targetPtyId={null}
       agent="claude"
       structuredTransport={{
+        capturePresentation: () => () => true,
         send: vi.fn(() => true),
         dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
         optionsSurface: {
@@ -417,3 +423,103 @@ it('starts no upload when the composer closes before image presence is known', a
   expect(mocks.save).not.toHaveBeenCalled()
   expect(readNativeChatAttachmentCache(PANE)).toEqual([])
 })
+
+import { promptEditor, promptValue } from './native-chat-prompt-editor.test-support'
+import {
+  clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWriteSettled,
+  readNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
+import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
+import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+import { promptTextContent } from './native-chat-prompt-document'
+
+it.each([false, true])(
+  'keeps a selected paste through completion, clear, history and reload (%s)',
+  async (reconstruct) => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    mocks.state.owner = { kind: 'local' }
+    const pending = Promise.withResolvers<string>()
+    installPreloadApi({ savePastedTextAsFile: () => pending.promise })
+    writeNativeChatDraftCache(PANE, 'helloworldend')
+    const view = render(composer())
+    const field = () => screen.getByRole('textbox')
+    const editor = () => promptEditor(field())
+    const paste = (text: string) => {
+      const data = new DataTransfer()
+      data.setData('text/plain', text)
+      fireEvent(field(), new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
+    }
+    const copy = () => {
+      const data = new DataTransfer()
+      editor().commands.selectAll()
+      field().dispatchEvent(
+        new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true })
+      )
+      return data.getData('text/plain')
+    }
+    act(() => editor().commands.setTextSelection({ from: 6, to: 11 }))
+    await act(async () => paste('x'.repeat(32768)))
+    const raw = promptValue(field())
+    expect(raw).toMatch(/^hello\[Pasted text\]\(orca-paste:[0-9a-f-]{36}\)end$/)
+    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
+    act(() => expect(copy()).toBe(`hello${'x'.repeat(32768)}end`))
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000000)
+    if (reconstruct) {
+      // The field adopts saved JSON this way after another window edits the same pending draft.
+      act(() => editor().commands.setContent(promptTextContent(`${raw}!`), { emitUpdate: false }))
+    }
+    const transaction = vi.fn()
+    editor().on('transaction', transaction)
+    await act(async () => pending.resolve('/p/saved.txt'))
+    expect(transaction).not.toHaveBeenCalled()
+    expect(promptValue(field())).toBe(reconstruct ? `${raw}!` : raw)
+    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
+    act(() =>
+      expect(copy()).toBe(reconstruct ? 'hello @/p/saved.txt end!' : 'hello @/p/saved.txt end')
+    )
+    act(() => mocks.state.fieldProps?.onSend())
+    await waitFor(() => expect(promptValue(field())).toBe(''))
+    act(() => editor().commands.undo())
+    clock.mockRestore()
+    expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
+    act(() => editor().commands.undo())
+    expect(promptValue(field())).toBe('helloworldend')
+    act(() => editor().commands.redo())
+    expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
+    await nativeChatComposerDraftWriteSettled(PANE)
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    nativeChatPastedTextOperations.clear()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    render(composer())
+    expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
+    const failed = Promise.withResolvers<string>()
+    installPreloadApi({ savePastedTextAsFile: () => failed.promise })
+    act(() => editor().commands.selectAll())
+    await act(async () => paste('y'.repeat(32768)))
+    const failedRaw = promptValue(field())
+    expect(readNativeChatComposerDraft(PANE).pastedTextFiles).toBeUndefined()
+    await act(async () => failed.reject(new Error('disk full')))
+    expect(promptValue(field())).toBe(failedRaw)
+    expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
+    act(() => mocks.state.fieldProps?.onSend())
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    expect(promptValue(field())).toBe(failedRaw)
+    act(() => expect(copy()).toBe('Paste not saved'))
+    act(() => editor().commands.undo())
+    expect(resolveNativeChatPastedText(PANE, promptValue(field()))).toBe('hello @/p/saved.txt end')
+    installPreloadApi({ saveClipboardImageAsTempFile: () => new Promise(() => {}) })
+    await act(async () => fireEvent(field(), imagePaste()))
+    expect(mocks.state.fieldProps?.imageAttachments).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeTruthy()
+  }
+)

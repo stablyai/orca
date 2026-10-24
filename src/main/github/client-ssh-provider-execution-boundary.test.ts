@@ -111,9 +111,7 @@ function mockUpstreamOnlyPRLookup(): void {
     })
 }
 
-// The strict execution boundary: for an SSH-hosted repoPath, an unregistered
-// provider means "we could not ask" — it must never degrade into a client-side
-// git run, which on a same-named local path answers for the wrong repository.
+// Missing SSH providers must not probe a same-named local path and report the wrong repository.
 describe('getPRForBranch SSH execution boundary', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)

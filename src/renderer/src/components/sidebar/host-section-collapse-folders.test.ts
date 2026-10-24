@@ -75,7 +75,8 @@ for (const hostId of ['ssh:builder', 'runtime:managed-builder'] as const) {
       ],
       workspaceHostScope: 'all',
       visibleWorkspaceHostIds: ['local', hostId],
-      defaultHostId: 'local'
+      defaultHostId: 'local',
+      localHostLabel: 'Local Mac'
     })
 
     it(`${hostId} ${groupBy}: collapses folder workspaces only on the owning host`, () => {

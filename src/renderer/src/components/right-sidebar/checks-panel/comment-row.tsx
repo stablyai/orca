@@ -11,13 +11,13 @@ import { formatPrCommentRelativeTime } from '../../../../../shared/pr-comment-ti
 import { translate } from '@/i18n/i18n'
 import {
   buildCopyText,
+  CommentLocationLabel,
   CommentMoreMenu,
   CopyButton,
   isMutablePRConversationComment,
   PRCommentActionBadge,
   QueueForAgentButton,
-  ResolveButton,
-  formatLineRange
+  ResolveButton
 } from './comment-controls'
 
 /** A single comment row — used for both root and reply comments. */
@@ -39,7 +39,8 @@ export function CommentRow({
   onEditComment,
   onDeleteComment,
   onSetReaction,
-  onQueueForAgent
+  onQueueForAgent,
+  onOpenLocation
 }: {
   comment: PRComment
   botAuthorOverrides: ReadonlySet<string>
@@ -63,6 +64,7 @@ export function CommentRow({
     reacted: boolean
   ) => Promise<boolean>
   onQueueForAgent?: () => void
+  onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
@@ -199,12 +201,11 @@ export function CommentRow({
             {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         ) : null}
-        {comment.path ? (
-          <span className={presentation.pathBadge} title={comment.path}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
-        ) : null}
+        <CommentLocationLabel
+          comment={comment}
+          className={presentation.pathBadge}
+          onOpenLocation={onOpenLocation}
+        />
         <PRCommentActionBadge
           actionState={actionState}
           isQueued={isQueued}
@@ -245,11 +246,12 @@ export function CommentRow({
             {translate('auto.components.right.sidebar.checks.panel.content.2ba0a32bdd', 'bot')}
           </span>
         )}
-        {!isReply && comment.path && (
-          <span className={presentation.pathBadge}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
+        {!isReply && (
+          <CommentLocationLabel
+            comment={comment}
+            className={presentation.pathBadge}
+            onOpenLocation={onOpenLocation}
+          />
         )}
         {!isReply ? (
           <PRCommentActionBadge

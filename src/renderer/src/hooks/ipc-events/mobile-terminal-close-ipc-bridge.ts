@@ -2,16 +2,17 @@ import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
-import {
-  runSleepWorktree,
-  sleepWorktreesReportingFailures
-} from '@/components/sidebar/sleep-worktree-flow'
+import { followWorkspaceSleep } from '@/components/sidebar/workspace-sleep-follower'
+import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { useAppStore } from '../../store'
+import { afterLayoutFrame, layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { framesDrawWorkspace } from '@/runtime/workspace-layout-frame-drawn-workspaces'
+import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
 import type { AppState } from '../../store/types'
 import type { EditorTabSelection } from '../../store/slices/editor/types/open-file'
 import {
@@ -38,6 +39,46 @@ function openRuntimeEditorTab(
   revealWorkspaceSurface(store, worktreeId)
   open(store, 'focus')
   store.setActiveTabType('editor', worktreeId)
+}
+
+/** Shows main's editor tab if the window draws it; false when it does not (closed, or undrawn). */
+function showMainEditorTab(
+  { worktreeId, tabId, navigation, position }: RuntimeEditorTabReveal,
+  positionFile: ReturnType<typeof createRuntimeFilePositionQueue>
+): boolean {
+  const tab = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
+  if (!tab) {
+    return false
+  }
+  openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
+    if (selection !== 'none') {
+      store.activateTab(tabId, selection === 'background' ? { recordFocus: false } : {})
+    }
+    positionFile(tab.entityId, position, selection === 'focus')
+  })
+  return true
+}
+
+/**
+ * Runs `show` once a visited workspace starts drawing: its root group is seeded after render, and
+ * main's tabs draw in the frame flush that queues. Dropped if the user leaves first or frames stop.
+ */
+function showOnceWorkspaceDraws({ worktreeId }: RuntimeEditorTabReveal, show: () => void): void {
+  const unsubscribe = useAppStore.subscribe((state) => {
+    const viewed = isFloatingWorkspaceId(worktreeId)
+      ? selectFloatingWorkspacePanelVisible(state)
+      : state.activeWorktreeId === worktreeId
+    if (!viewed || !layoutFramesFlowing()) {
+      unsubscribe()
+    } else if (framesDrawWorkspace(state)(worktreeId)) {
+      unsubscribe()
+      // Why after: the frame sync subscribed at startup, so this update queued its flush first.
+      // (Before the frame sync starts, no flush comes and the tab shows on a later visit.)
+      queueMicrotask(show)
+    }
+  })
 }
 
 export function registerMobileAndTerminalCloseIpcBridge(
@@ -67,6 +108,33 @@ export function registerMobileAndTerminalCloseIpcBridge(
       }
     )
   )
+
+  // Layout-owner builds: main wrote the tab of a file it opened; show it once its frame draws it.
+  // Why optional: an older preload lingering through an in-place reload lacks the channel.
+  if (window.api.ui.onRevealEditorTabFromRuntime) {
+    unsubs.push(
+      window.api.ui.onRevealEditorTabFromRuntime((reveal) =>
+        // No stream coming ('none' or ended): runs now, and an undrawn tab is left unshown.
+        afterLayoutFrame(reveal.frameSeq, () => {
+          if (showMainEditorTab(reveal, positionFile)) {
+            return
+          }
+          const store = useAppStore.getState()
+          const { worktreeId, navigation } = reveal
+          // An undrawn workspace draws main's tabs on its first visit; a background open waits for it.
+          if (
+            framesDrawWorkspace(store)(worktreeId) ||
+            !layoutFramesFlowing() ||
+            (navigation !== undefined && !navigationTargetsHost(navigation))
+          ) {
+            return
+          }
+          revealWorkspaceSurface(store, worktreeId)
+          showOnceWorkspaceDraws(reveal, () => showMainEditorTab(reveal, positionFile))
+        })
+      )
+    )
+  }
 
   unsubs.push(
     window.api.ui.onOpenDiffFromMobile(
@@ -130,34 +198,19 @@ export function registerMobileAndTerminalCloseIpcBridge(
     )
   }
 
-  unsubs.push(
-    window.api.ui.onSleepWorktree(({ worktreeId }) => {
-      void runSleepWorktree(worktreeId)
-    })
-  )
-
-  // Why optional: an older preload lingering through an in-place reload lacks the channel.
-  if (window.api.ui.onWorktreeSleepRequest) {
+  // A sleep main runs, from this window or a phone: the window hides the workspace and its panes.
+  if (window.api.ui.onProjectMovePause && window.api.ui.respondProjectMovePause) {
+    const movePause = createProjectMovePauseFollower(window.api.ui.respondProjectMovePause)
     unsubs.push(
-      window.api.ui.onWorktreeSleepRequest(({ requestId, worktreeIds }) => {
-        void (async () => {
-          const { failedWorktreeIds } = await sleepWorktreesReportingFailures(worktreeIds)
-          // Main waits on the ack, so the slept state must be durable before it.
-          const state = useAppStore.getState()
-          await persistWorkspaceSessionByHost(
-            window.api.session,
-            buildWorkspaceSessionPayload(state),
-            state
-          )
-          window.api.ui.respondWorktreeSleep({ requestId, failedWorktreeIds })
-        })().catch((error: unknown) => {
-          window.api.ui.respondWorktreeSleep({
-            requestId,
-            error: error instanceof Error ? error.message : 'worktree_sleep_failed'
-          })
+      window.api.ui.onProjectMovePause((request) => {
+        void movePause.request(request).catch((error: unknown) => {
+          console.warn('[project-move-pause] renderer reply failed', error)
         })
       })
     )
+    unsubs.push(window.api.ui.onWorkspaceSleep(movePause.follow))
+  } else {
+    unsubs.push(window.api.ui.onWorkspaceSleep(followWorkspaceSleep))
   }
 
   unsubs.push(

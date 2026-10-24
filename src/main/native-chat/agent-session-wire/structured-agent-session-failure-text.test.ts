@@ -15,6 +15,7 @@ import {
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import {
@@ -23,11 +24,36 @@ import {
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 
-/** What Orca's own error text looks like: a code, a marker, a uuid, a path, an exception. */
 const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
 describe('structuredAgentSessionStartFailure', () => {
+  it('names a provider request that ran out of time, through wrappers, unless the provider exited', () => {
+    const timedOut = withProviderRequestTimeout(new Error('thread/start exceeded 30000ms'), {
+      method: 'thread/start',
+      timeoutMs: 30_000
+    })
+    const wrapped = new Error('codex open failed', { cause: timedOut })
+    expect(structuredAgentSessionStartFailure({ error: wrapped }, { agentName: 'Codex' })).toEqual({
+      reason:
+        'Codex took too long to start (no response to thread/start after 30s). Send your message to try again. If this keeps happening, the computer running this chat may be overloaded.',
+      rejection: {
+        kind: 'startFailed',
+        requestTimeout: { method: 'thread/start', timeoutMs: 30_000 }
+      }
+    })
+    expect(
+      structuredAgentSessionStartFailure(
+        { error: wrapped },
+        { agentName: 'Codex', retryControl: true }
+      ).reason
+    ).toBe(
+      'Codex took too long to start (no response to thread/start after 30s). If this keeps happening, the computer running this chat may be overloaded.'
+    )
+    expect(
+      structuredAgentSessionStartFailure({ error: withObservedProviderExit(wrapped) }).rejection
+    ).toEqual({ kind: 'providerStartFailed' })
+  })
   it('names a saved Arguments option in start and restart failures without exposing its value', () => {
     const error = new StructuredAgentArgumentsError(
       'Codex',
@@ -69,7 +95,6 @@ describe('structuredAgentSessionStartFailure', () => {
         rejection: { kind: 'startFailed', detail: { text: 'code 1\nboom', audience: 'log' } }
       }
     )
-    // Orca's own words, however provider-like, are never promoted to a detail.
     expect(
       structuredAgentSessionStartFailure({ error: new Error('Not logged in. Run /login.') })
         .rejection
@@ -254,7 +279,6 @@ describe('structuredAgentSessionStartFailure', () => {
   it("holds any provider detail to the lease record's cap", () => {
     expect(MAX_UNEXPECTED_EXIT_REASON_CHARS).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
     const long = 'x'.repeat(4_000)
-    // However the caller built the detail, the fact stores at most the cap.
     const words = structuredAgentSessionStartFailure({
       diagnostic: { text: long, audience: 'log' }
     })
@@ -267,7 +291,7 @@ describe('structuredAgentSessionStartFailure', () => {
   })
 
   it('says the provider stopped only when an exit was observed', () => {
-    // An `exited` verdict says only that nothing runs now, not that the provider stopped.
+    // Exited proves present absence, not provider-caused failure.
     const gone = refuseUnclassified('agent_session_operation_invalid', 'thread gone', {
       ownerVerdict: 'exited'
     })
@@ -302,14 +326,13 @@ describe('structuredAgentSessionStartFailure', () => {
       reason: 'The agent stopped before it finished starting. Send your message to try again.',
       rejection: { kind: 'providerStartFailed', detail: { text: 'code 1', audience: 'log' } }
     })
-    // A start that threw proves nothing about the provider: it may be Orca's, or a failed spawn.
     expect(
       structuredAgentSessionStartFailure({ error: new Error('spawn claude ENOENT') }, {})
     ).toEqual({
       reason: "The agent couldn't start. Send your message to try again.",
       rejection: { kind: 'startFailed' }
     })
-    // The same error, once the adapter that observed the child's exit marked it, blames the provider.
+    // Only the observer’s explicit exit marker permits provider attribution.
     const exit = withObservedProviderExit(
       withProviderDiagnostic(new Error('exited (code 1)'), providerDiagnostic('code 1', 'log'))
     )

@@ -441,7 +441,6 @@ async function recordFor(
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'parity-key',
       claimStatus: 'released',
       unreconciled: false,

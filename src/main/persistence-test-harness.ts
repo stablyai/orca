@@ -5,6 +5,7 @@ import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import type { SshRemotePtyLease } from '../shared/ssh-types'
@@ -21,7 +22,6 @@ import { exportProfileStateJson } from './persistence/profile-state/profile-stat
 
 export { makeTerminalTab } from './persistence-session-fixtures'
 
-// Shared mutable state so the electron mock can reference a per-test directory
 export const testState = { dir: '' }
 const stores = new Set<Store>()
 
@@ -85,14 +85,13 @@ export function readPersistedStateJson(path = dataFile(), profileId = 'persisten
   }
 }
 
-/** Create a profile store without rebuilding its large module graph inside each test timeout. */
 export function createStore(options: Pick<StoreRuntimeOptions, 'paneShellPath'> = {}): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { ...options, dataFile: dataFile() })
 }
 
-/** Leases now arrive only from a relay-era profile, so tests seed them on disk before load. */
+/** Seed legacy relay leases before load; the store no longer creates them. */
 export function createStoreWithSshRemotePtyLeases(
   leases: (Pick<SshRemotePtyLease, 'targetId' | 'ptyId' | 'state'> & Partial<SshRemotePtyLease>)[]
 ): Store {
@@ -124,12 +123,7 @@ export function writeDataFile(data: unknown): void {
   writeFileSync(dataFile(), json, 'utf-8')
 }
 
-/**
- * The persisted state as a reader gets it, not the raw bytes: the serializer omits any
- * `worktreeMetaByIdentity` row the locator row regenerates, and every consumer of this file --
- * including the Store's own load path -- rebuilds those before looking at them. Tests that need
- * the literal bytes parse the file themselves (see `worktree-meta-alias-projection.test.ts`).
- */
+/** Restore aliases omitted by serialization, as Store.load does; use readPersistedStateJson for raw state. */
 export function readDataFile(): unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Store exports use PersistedState; this fixture reader restores only its omitted aliases.
   const parsed = JSON.parse(readPersistedStateJson()) as PersistedState
@@ -164,6 +158,19 @@ export const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   addedAt: 1,
   ...overrides
 })
+
+/** Stored layouts require registered repos to survive loading. */
+export function workspaceRepos(...worktreeIds: string[]): Repo[] {
+  return [...new Set(worktreeIds.map(getRepoIdFromWorktreeId))].map((id) => makeRepo({ id }))
+}
+
+export function registerWorkspaceRepos(store: Store, ...worktreeIds: string[]): void {
+  for (const repo of workspaceRepos(...worktreeIds)) {
+    if (!store.getRepo(repo.id)) {
+      store.addRepo(repo)
+    }
+  }
+}
 
 export const makeProject = (overrides: Partial<Project> = {}): Project => ({
   id: 'project-1',

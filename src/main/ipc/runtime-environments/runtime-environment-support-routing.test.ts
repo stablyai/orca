@@ -107,6 +107,36 @@ describe('runtime environment support routing', () => {
     expect(unsupported).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['the re-resolved pairing names a replacement runtime', 'replacement', 'runtime'],
+    ['the ready connection reached a replacement runtime', 'runtime', 'replacement']
+  ])(
+    'does not send a runtime-pinned call when %s',
+    async (_label, pairedRuntimeId, reachedRuntimeId) => {
+      supportsMock
+        .mockResolvedValueOnce({ kind: 'stale_incarnation' })
+        .mockResolvedValueOnce(acceptedOutcome('capable', reachedRuntimeId))
+      resolveEnvironmentMock.mockReturnValue(environment({ runtimeId: pairedRuntimeId }))
+      const supported = vi.fn().mockResolvedValue(success())
+      const unsupported = vi.fn().mockResolvedValue(success())
+
+      const result = await routeRuntimeEnvironmentCallBySupport({
+        userDataPath: '/profile',
+        initialEnvironment: environment(),
+        expectedRuntimeId: 'runtime',
+        method: 'files.write',
+        timeoutMs: 100,
+        supported,
+        unsupported,
+        markUsed: vi.fn()
+      })
+
+      expect(result).toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
+      expect(supported).not.toHaveBeenCalled()
+      expect(unsupported).not.toHaveBeenCalled()
+    }
+  )
+
   it('delivers a response but suppresses identity writes after response-time invalidation', async () => {
     supportsMock.mockResolvedValue(acceptedOutcome('absent'))
     const pending = deferred<ReturnType<typeof success>>()
@@ -153,7 +183,7 @@ describe('runtime environment support routing', () => {
   })
 })
 
-function acceptedOutcome(verdict: 'capable' | 'absent') {
+function acceptedOutcome(verdict: 'capable' | 'absent', runtimeId = 'runtime') {
   const environmentId = 'env'
   const pairing = {
     v: 2 as const,
@@ -165,8 +195,8 @@ function acceptedOutcome(verdict: 'capable' | 'absent') {
     environmentId,
     pairedRuntimeConnectionFromOffer(pairing)
   )
-  applyRuntimeEnvironmentCapabilityVerdict({ evidence, verdict, runtimeId: 'runtime' })
-  return runtimeEnvironmentCapabilityOutcome(evidence, verdict, 'runtime')
+  applyRuntimeEnvironmentCapabilityVerdict({ evidence, verdict, runtimeId })
+  return runtimeEnvironmentCapabilityOutcome(evidence, verdict, runtimeId)
 }
 
 function environment(overrides: Partial<KnownRuntimeEnvironment> = {}): KnownRuntimeEnvironment {

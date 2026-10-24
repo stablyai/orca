@@ -37,7 +37,7 @@ const RecordSchema = z.object({
 
 export type OrcadArtifactVerificationRecord = z.infer<typeof RecordSchema>
 
-export type FileSignature = {
+type FileSignature = {
   signature: string
   /** False when the file changed too recently for its signature to prove it unchanged later. */
   settled: boolean

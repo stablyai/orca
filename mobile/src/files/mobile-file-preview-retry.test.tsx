@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const push = vi.hoisted(() => vi.fn())
 const transport = vi.hoisted(
   (): {
     forceReconnect: ((hostId: string) => Promise<void>) | null
@@ -32,10 +33,12 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
 vi.mock('../navigation/route-handoff', () => ({
-  useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
+  useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false, push })
 }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
-vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('./MobileFileMarkdownPreview', () => ({
+  MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
+}))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // A host the shell has not reached by default: no client, so the screen settles on `waiting`.
 vi.mock('../transport/host-client-hooks', () => ({
@@ -103,11 +106,52 @@ describe('the file preview Retry while the host is unreachable', () => {
     transport.forceReconnect = null
     const rendered = await render()
     expect(retryButtons(rendered)).toHaveLength(0)
-    const sendRequest = vi.fn(() => new Promise(() => {}))
+    const sendRequest = vi.fn(async () => ({
+      id: 'reconnected',
+      ok: true,
+      result: { content: '# Recovered preview', truncated: false, byteLength: 19 },
+      _meta: { runtimeId: 'host' }
+    }))
     transport.connection = { client: { sendRequest }, state: 'connected' }
     await act(async () => {
       rendered.update(createElement(MobileFilePreviewScreen, { route: ROUTE }))
     })
-    expect(sendRequest).toHaveBeenCalled()
+    expect(sendRequest).toHaveBeenCalledWith('files.read', {
+      worktree: 'id:wt-1',
+      relativePath: 'README.md'
+    })
+    expect(
+      rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview').props.content
+    ).toBe('# Recovered preview')
+    expect(
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop...')
+    ).toHaveLength(0)
+  })
+})
+
+it('wires rendered file links through the preview screen to navigation', async () => {
+  transport.connection = {
+    state: 'connected',
+    client: {
+      sendRequest: vi.fn(async () => ({
+        ok: true,
+        id: '1',
+        _meta: { runtimeId: 'runtime-1' },
+        result: { content: '[Details](docs/details.md)', isBinary: false, truncated: false }
+      }))
+    }
+  }
+  const rendered = await render()
+  const markdown = rendered.root.find((node) => String(node.type) === 'MobileFileMarkdownPreview')
+  await act(async () => markdown.props.onOpenFile('docs/details.md'))
+  expect(push).toHaveBeenCalledWith({
+    pathname: '/h/[hostId]/files/preview/[worktreeId]',
+    params: {
+      hostId: 'host-a',
+      worktreeId: 'wt-1',
+      worktreeName: undefined,
+      source: 'worktree',
+      relativePath: 'docs/details.md'
+    }
   })
 })

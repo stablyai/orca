@@ -11,9 +11,9 @@ import {
   getPosixDirname,
   getWslBridgeMarker,
   getWslLauncherMarker,
-  parseManagedLauncherTarget,
-  quoteShell
+  parseManagedLauncherTarget
 } from './wsl-cli-scripts'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import {
   buildWslCliStatus,
@@ -137,9 +137,7 @@ export class WslCliInstaller {
       })
     }
 
-    // Why: a stale managed launcher is only repairable when its bridge is
-    // ours too; reporting conflict here keeps repair from a doomed install
-    // whose bridge guard would fail on every startup.
+    // A foreign bridge blocks repair even when the launcher is managed.
     const bridgeConflict = managed && (await this.isBridgeConflict(ready.distro, ready.bridgePath))
     return this.buildStatus({
       distro: ready.distro,
@@ -170,8 +168,7 @@ export class WslCliInstaller {
       return { changed: false, managed: false, status }
     }
     if (status.state === 'conflict') {
-      // Why: a user-owned bridge conflicts with repair, but the launcher is
-      // still Orca-managed and must remain registered for future reconciliation.
+      // Keep managed launchers registered even when a foreign bridge blocks repair.
       return { changed: false, managed: status.currentTarget !== null, status }
     }
 
@@ -197,19 +194,16 @@ export class WslCliInstaller {
       status.commandPath &&
       (await this.isBridgeConflict(this.distro, getBridgePathFromCommandPath(status.commandPath)))
     ) {
-      // Why: adopting the legacy command would fail install()'s bridge guard
-      // forever; stay registered so reconciliation retries after an update.
+      // Preserve opt-in for later reconciliation without attempting a blocked bridge install.
       return { changed: false, managed: true, status }
     }
 
-    // Why: a legacy-only managed command proves the user opted into WSL CLI
-    // registration; install the current name before removing that owned script.
+    // The managed legacy command proves opt-in; replace it only after installing the current name.
     return { changed: true, managed: true, status: await this.install(status) }
   }
 
   async install(precomputedStatus?: CliInstallStatus): Promise<CliInstallStatus> {
-    // Why: repair passes its fresh probe; re-probing here would double every
-    // WSL round trip on the startup reconciliation path.
+    // Reuse repair's fresh probe to avoid duplicate WSL round trips.
     const status = precomputedStatus ?? (await this.getStatus())
     if (!status.supported || !status.commandPath || !status.launcherPath) {
       throw new Error(status.detail ?? 'WSL CLI registration is unavailable.')
@@ -238,11 +232,13 @@ export class WslCliInstaller {
     }
     const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
     if (status.state === 'not_installed') {
-      // Why: a managed legacy `orca` left behind would later be re-adopted by
-      // startup reconciliation as opt-in proof, silently undoing this removal.
+      // A leftover managed legacy command would let startup reconciliation undo removal.
       await this.run(
         this.distro as string,
-        ['set -eu', buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))].join('\n')
+        [
+          'set -eu',
+          buildManagedLegacyRemoveCommand(quotePosixShellDoubleQuotedApostrophe(legacyCommandPath))
+        ].join('\n')
       )
       return status
     }
@@ -290,26 +286,21 @@ async function runWslCommand(
   command: string,
   options: WslCliRunOptions = {}
 ): Promise<string> {
-  // Why 'none' by default: these scripts use absolute paths and coreutils only;
-  // a login-PATH probe would let a slow ~/.profile or cold distro spend their
-  // budget (#14288, #29497). Only the `$PATH` check opts in.
+  // Only PATH checks need the login probe; slow profiles must not consume other commands' budgets.
   const loginPath = options.loginPath ?? 'none'
   const result = await runWslProcess({
     distro,
     loginPath,
     script: command,
-    // Declared, not assumed: the payload is opaque here, so the guard cannot
-    // check it for bashisms. These are POSIX (`-eu`, `case`), hence sh.
+    // Opaque generated payloads are POSIX; the process guard cannot infer their shell dialect.
     shell: 'sh',
     timeoutMs: WSL_COMMAND_TIMEOUT_MS
   })
-  // Timeout first: it is the more specific diagnosis, and a timed-out run also
-  // leaves the environment unresolved, so the order decides which one shows.
+  // A timeout also leaves the environment unresolved; report the more specific diagnosis first.
   if (result.timedOut) {
     throw new WslCliUnreachableError(distro)
   }
-  // Without the login PATH the `case ":$PATH:"` probe answers from the distro
-  // default PATH, which never has ~/.local/bin. Unverifiable, not negative.
+  // An unresolved login PATH cannot establish whether the user's command directory is on PATH.
   if (loginPath === 'preferred' && !result.environmentResolved) {
     throw new WslCliLoginPathUnavailableError(distro)
   }

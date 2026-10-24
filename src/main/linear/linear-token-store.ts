@@ -32,14 +32,9 @@ export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
     ensureWorkspaceTokenDir()
   }
   const tokenPath = getWorkspaceTokenPath(workspaceId)
-  // Why the shared writer: it re-applies 0600 to an existing file and never truncates it mid-write.
+  // Credential writes restore existing file permissions and publish without truncating live contents.
   writeEncryptedCredential('Linear', tokenPath, apiKey)
   workspaceTokenFileCache.forget(workspaceId)
-}
-
-// Backward-compatible export for the legacy single-workspace storage path.
-export function saveToken(apiKey: string): void {
-  saveWorkspaceToken(LEGACY_WORKSPACE_ID, apiKey)
 }
 
 export function loadToken(options: { force?: boolean; workspaceId?: string } = {}): string | null {
@@ -50,7 +45,6 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
   return workspaceTokenFileCache.read(workspaceId, options.force === true)
 }
 
-/** How a workspace's stored token sits on disk, or null when none is stored. */
 export function getWorkspaceTokenProtection(workspaceId: string): SecretAtRestProtection | null {
   return readCredentialFileProtection(getWorkspaceTokenPath(workspaceId))
 }
@@ -60,7 +54,7 @@ export function clearTokenFile(workspaceId: string): void {
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {
-    // File may not exist — safe to ignore.
+    // Token cleanup is best-effort when storage is absent or unavailable.
   }
 }
 

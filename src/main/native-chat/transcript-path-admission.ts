@@ -26,8 +26,7 @@ export async function admitTranscriptPath(root: string, candidate: string) {
     : null
 }
 
-/** A not-yet-written transcript resolves through its deepest existing ancestor, so a linked
- *  account folder compares equal before the agent's first save. */
+/** Resolve missing files through the deepest existing ancestor so linked account roots still compare equal. */
 async function canonicalPath(path: string): Promise<string | null> {
   const missing: string[] = []
   let existing = path

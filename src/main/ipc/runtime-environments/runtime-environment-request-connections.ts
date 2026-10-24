@@ -9,16 +9,16 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime-request-connection'
-import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime-shared-control-connection'
+import { RemoteRuntimeRequestConnection } from '../../../shared/remote-runtime/requests/remote-runtime-request-connection'
+import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { probeAllRemoteRuntimeSocketsNow } from '../../../shared/remote-runtime-socket-liveness'
 import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
-} from '../../../shared/remote-runtime-shared-control-types'
-import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
+import { sharedControlEnvironmentPolicy } from './runtime-environment-shared-control-policy'
 import {
   clearSharedControlAnswerSource,
   setSharedControlAnswerSource
@@ -42,6 +42,17 @@ type CachedSharedControlConnection = {
 const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
 const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
+
+/** Consult owned authenticated transports without acquiring another host channel. */
+export function isRemoteRuntimeConnectionReady(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection
+): boolean {
+  const pairingKey = getPairingKey(pairedConnection)
+  return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
+    (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
+  )
+}
 
 export function getRuntimeEnvironmentStatusOwner(
   userDataPath: string,
@@ -144,6 +155,48 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   )
 }
 
+/** Send only on the shared socket that proved expectedRuntimeId; return null if it changed or is unproven. */
+export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  expectedRuntimeId: string,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
+): Promise<RuntimeRpcResponse<TResult> | null> {
+  const shared = getSharedControlConnection(environmentId, pairedConnection)
+  let statusSocket: number | undefined
+  const status = await shared.request<RuntimeStatus>(
+    'status.get',
+    undefined,
+    timeoutMs,
+    undefined,
+    signal,
+    () => {
+      statusSocket = shared.socketGeneration.peek()
+    }
+  )
+  if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
+    return null
+  }
+  let socketChanged = false
+  try {
+    return await shared.request<TResult>(method, params, timeoutMs, envelope, signal, () => {
+      socketChanged = shared.socketGeneration.peek() !== statusSocket
+      if (socketChanged) {
+        throw new Error('Runtime connection changed before sending')
+      }
+    })
+  } catch (error) {
+    if (socketChanged) {
+      return null
+    }
+    throw error
+  }
+}
+
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection,
@@ -184,10 +237,6 @@ export function reconnectRemoteRuntimeSharedControlConnection(environmentId: str
   sharedControlConnections.get(environmentId)?.connection.reconnectNow()
 }
 
-export function retryRemoteRuntimeSharedControlConnectionNow(environmentId: string): void {
-  sharedControlConnections.get(environmentId)?.connection.retryNow()
-}
-
 export function pauseRemoteRuntimeSharedControlRetry(environmentId: string): void {
   sharedControlConnections.get(environmentId)?.connection.pauseStandingRetry()
 }
@@ -205,8 +254,7 @@ export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
   for (const { connection } of sharedControlConnections.values()) {
     connection.retryNow()
   }
-  // Why: a socket that still reads OPEN after wake arms no reconnect timer, so retryNow finds
-  // nothing; probing every socket (shared control and per-stream) settles a dead path quickly (#9092).
+  // OPEN sockets can be dead after suspend with no reconnect timer; probe every socket (#9092).
   probeAllRemoteRuntimeSocketsNow()
 }
 
@@ -227,9 +275,8 @@ function getSharedControlConnection(
       connection: new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-        isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
-        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
-        // Why wall clock: it advances across a suspend, so a pre-sleep answer reads as stale.
+        ...sharedControlEnvironmentPolicy(environmentId),
+        // Wall-clock time includes suspend, expiring pre-sleep answers.
         onAnswered: () => {
           answeredAt = Date.now()
         },
@@ -257,8 +304,8 @@ function getSharedControlConnection(
     }
     sharedControlConnections.set(environmentId, cached)
     const entry = cached
-    // Why ready is enough: a socket reaches ready only on its own server frame, which stamps it.
-    setSharedControlAnswerSource(environmentId, () =>
+    // Ready requires this socket's own server frame, which stamps its answer time.
+    setSharedControlAnswerSource(environmentId, entry.connection, () =>
       entry.connection.getDiagnostics().state === 'ready' ? entry.answeredAt() : null
     )
   }

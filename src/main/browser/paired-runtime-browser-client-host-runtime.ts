@@ -36,39 +36,38 @@ import {
   type PairedRuntimeBrowserClientHostStart
 } from './paired-runtime-browser-client-host-registry'
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
+import { derivePairedRuntimeBrowserAuthorityIdentity } from './paired-runtime-browser-authority-identity'
+import type { BrowserClientPageAuthorityIdentity } from './browser-client-page-command-executor-dependencies'
 import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from './browser-route-session-runtime'
 
-export type ClientHostRouteIdentity = {
+export type ClientHostRouteIdentity = BrowserClientPageAuthorityIdentity & {
   orcaProfileId: string
-  authorityConnectionIdentity: string
+  /** Pairs with `authorityConnectionIdentity` and `pairingAuthorityConnectionIdentity`. */
   executionHostIdentity: string
-  /** Pre-migration pair, naming the partition an older build already populated. */
-  legacyAuthorityConnectionIdentity: string
+  /** Pairs with `legacyAuthorityConnectionIdentity`, naming the partition an older build populated. */
   legacyExecutionHostIdentity: string
   storageScope: string
 }
 
-type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart & {
-  connection: PairedRuntimeConnection
-  orcaProfileId: string
-  authorityConnectionIdentity: string
-  legacyAuthorityConnectionIdentity: string
-  storageScope: string
-  environmentLabel: string
-}
+type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart &
+  BrowserClientPageAuthorityIdentity & {
+    connection: PairedRuntimeConnection
+    orcaProfileId: string
+    storageScope: string
+    environmentLabel: string
+  }
 
 let activeOrcaProfileId: string | null = null
-/** Route identity of each live client host, for storage operations without a page. */
+// Storage operations need a route identity even without an open page.
 const clientHostRouteIdentities = new Map<string, ClientHostRouteIdentity>()
 
 const browserClientHosts =
   new PairedRuntimeBrowserClientHostRegistry<ProductionBrowserClientHostStart>({
     createComposition: (input) => {
-      // Why: one transport per composition so an authority replacement rebinds it to the new lease
-      // instead of leaving the executor pointed at a fenced one.
+      // Authority replacement rebinds this composition-owned transport to the new lease.
       const fileChannel = new BrowserClientFileChannelTransport()
       const stagingRoot = browserClientFileStagingRoot(input.environmentId)
       const uploadStaging = new BrowserClientUploadStaging(path.join(stagingRoot, 'uploads'))
@@ -93,6 +92,7 @@ const browserClientHosts =
           executor = new BrowserClientPageCommandExecutor({
             orcaProfileId: next.orcaProfileId,
             authorityConnectionIdentity: next.authorityConnectionIdentity,
+            pairingAuthorityConnectionIdentity: next.pairingAuthorityConnectionIdentity,
             legacyAuthorityConnectionIdentity: next.legacyAuthorityConnectionIdentity,
             storageScope: next.storageScope,
             retainNetworkRoute,
@@ -163,24 +163,19 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     orcaProfileId,
     environmentId: options.environment.id
   })
+  const authorityIdentity = derivePairedRuntimeBrowserAuthorityIdentity({
+    orcaProfileId,
+    environment: options.environment,
+    pairingRevision,
+    authorityRuntimeId: options.authorityRuntimeId,
+    connection
+  })
   const routeIdentity: ClientHostRouteIdentity = {
     orcaProfileId,
     storageScope,
-    authorityConnectionIdentity: authorityConnectionIdentity(
-      orcaProfileId,
-      options.environment.id,
-      pairingRevision,
-      connection
-    ),
-    // Why: settings-level operations target the server's own machine, not a nested SSH/WSL host.
+    ...authorityIdentity,
+    // Settings-level cookie imports target the server itself.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
-    legacyAuthorityConnectionIdentity: legacyAuthorityConnectionIdentity(
-      orcaProfileId,
-      options.environment.id,
-      pairingRevision,
-      options.authorityRuntimeId,
-      connection
-    ),
     legacyExecutionHostIdentity: legacyBrowserNativeExecutionHostStorageIdentity(
       options.authorityRuntimeId
     )
@@ -193,25 +188,18 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     orcaProfileId,
     storageScope: routeIdentity.storageScope,
     environmentLabel: options.environment.name,
-    authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
-    legacyAuthorityConnectionIdentity: routeIdentity.legacyAuthorityConnectionIdentity
+    ...authorityIdentity
   })
   clientHostRouteIdentities.set(options.environment.id, routeIdentity)
   return authority
 }
 
-/**
- * Route identity of the client host serving `environmentId`, or null when the
- * desktop is not hosting that server's pages. Names the environment's own
- * execution host: the target a settings-level cookie import applies to.
- */
 export function getPairedRuntimeBrowserClientRouteIdentity(
   environmentId: string
 ): ClientHostRouteIdentity | null {
   return clientHostRouteIdentities.get(environmentId) ?? null
 }
 
-/** Whether this desktop renders `browserPageId` for `environmentId` as a client-placed page. */
 export function pairedRuntimeBrowserClientHostsPage(
   environmentId: string,
   browserPageId: string
@@ -227,10 +215,7 @@ export function closePairedRuntimeBrowserClientHostEnvironment(
   return browserClientHosts.closeEnvironment(environmentId, error)
 }
 
-/**
- * Closes an environment's client host and waits for its pages to be released, so a caller that
- * clears the environment's partition storage runs after the partitions are actually free.
- */
+/** Waits for pages to release their partitions before callers clear storage. */
 export function retirePairedRuntimeBrowserClientHostEnvironment(
   environmentId: string,
   error?: Error
@@ -260,61 +245,12 @@ function createNetworkRoutes(
         executionHost,
         executionHostRevision: executionHost.kind === 'native' ? executionHost.revision : 0,
         onError: reportBrowserClientHostError,
-        // Why: a route that stayed dark after bounded rebuilds leaves every page in the
-        // environment black-holing requests, so retire the host instead of warning forever.
+        // Retire the host after bounded recovery fails so its pages cannot keep issuing doomed requests.
         onUnavailable: (error) => retireFailedEnvironmentHost(environmentId, error)
       })
   })
 }
 
-/**
- * Storage identity of the connection to a paired server.
- *
- * Every component is a durable client-side record: the environment, its pairing
- * revision, and the server's public key. The server's `authorityRuntimeId` is
- * deliberately absent -- it is a per-process UUID, and hashing it here minted a
- * fresh partition on every remote restart, dropping the user's cookies.
- */
-function authorityConnectionIdentity(
-  orcaProfileId: string,
-  environmentId: string,
-  pairingRevision: number,
-  connection: PairedRuntimeConnection
-): string {
-  return connectionIdentityDigest([
-    'paired-runtime-browser',
-    orcaProfileId,
-    environmentId,
-    pairingRevision,
-    connection.hostPublicKeyB64,
-    connection.pairedDeviceId ?? null
-  ])
-}
-
-/** Superseded per-process identity, kept only so its partition can be adopted. */
-function legacyAuthorityConnectionIdentity(
-  orcaProfileId: string,
-  environmentId: string,
-  pairingRevision: number,
-  authorityRuntimeId: string,
-  connection: PairedRuntimeConnection
-): string {
-  return connectionIdentityDigest([
-    'paired-runtime-browser',
-    orcaProfileId,
-    environmentId,
-    pairingRevision,
-    authorityRuntimeId,
-    connection.hostPublicKeyB64,
-    connection.pairedDeviceId ?? null
-  ])
-}
-
-function connectionIdentityDigest(components: readonly unknown[]): string {
-  return `paired-runtime:${createHash('sha256').update(JSON.stringify(components)).digest('hex')}`
-}
-
-// Why: staged remote bytes are main-owned scratch, never the user's visible Downloads folder.
 function browserClientFileStagingRoot(environmentId: string): string {
   const scope = createHash('sha256').update(environmentId).digest('hex').slice(0, 16)
   return path.join(app.getPath('temp'), 'orca-browser-file-channel', scope)
@@ -326,8 +262,7 @@ function reportBrowserClientHostError(error: Error): void {
 
 function retireFailedEnvironmentHost(environmentId: string, error: Error): void {
   reportBrowserClientHostError(error)
-  // Why: the identity's lifetime is the composition's — a retired host must not keep answering
-  // getPairedRuntimeBrowserClientRouteIdentity, or a cookie import writes into a dead partition.
+  // Retire the route identity too, or cookie imports could target a dead partition.
   void closePairedRuntimeBrowserClientHostEnvironment(environmentId, error).catch((closeError) => {
     console.warn(
       '[browser-client-host] Failed client host retirement:',

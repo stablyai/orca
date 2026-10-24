@@ -26,6 +26,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-upgraded'
 const FOLDER_PATH = 'D:\\project\\a'
@@ -52,11 +53,11 @@ function makeRuntime(): OrcaRuntimeService {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...metaById[id], ...meta }
       return metaById[id]
     },
-    removeWorktreeMeta: (id: string) => {
+    removeWorktreeMeta: ({ id }: HostWorktreeTarget) => {
       delete metaById[id]
     },
     getAllWorktreeLineage: () => ({}),

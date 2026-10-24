@@ -25,6 +25,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
+import { withPendingPaneTitleRenames } from '../pending-pane-title-renames'
 
 export function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
@@ -217,6 +218,7 @@ export function chooseRemoteTerminalLayout(
   // bufferless, terminalLayoutEqual compares buffers so the write is not bailed out, and
   // apply-terminal-records assigns it wholesale. Structure still comes from the host; only bytes
   // for leaves the host itself names are carried over.
+  const titlesByLeafId = withPendingPaneTitleRenames(parentLayout?.titlesByLeafId, leafIds)
   return retainLocalScrollbackInRemoteLayout(existingLayout, {
     // Why: host parentLayout is authoritative for split direction; else keep the prior client tree — a leaf-set mismatch prunes/grafts it, never re-guesses the directions it already carries.
     root: resolveTerminalLayoutRoot({
@@ -233,7 +235,7 @@ export function chooseRemoteTerminalLayout(
     ...(chatLeafId ? { chatLeafId } : {}),
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
-    ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
+    ...(titlesByLeafId ? { titlesByLeafId } : {})
   })
 }
 

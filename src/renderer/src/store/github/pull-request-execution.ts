@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AppState } from '../types'
@@ -209,7 +210,7 @@ export function startPullRequestLookup(args: {
           // Why: only clear the durable link that produced this exact probe; drift means the stale result no longer owns the worktree.
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
             {
               shouldApply: () =>
                 shouldApplyDivergedLinkedPRClear({
@@ -240,7 +241,7 @@ export function startPullRequestLookup(args: {
         ) {
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            CLEARED_HOSTED_REVIEW_SELECTION_UPDATES,
             {
               // Why: the branch-scoped PR refetch below updates both caches; the generic metadata refresh would duplicate provider work.
               suppressHostedReviewRefresh: true,

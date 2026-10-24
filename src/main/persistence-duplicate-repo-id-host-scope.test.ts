@@ -4,12 +4,7 @@ import {
   createStore as createFreshStore,
   testState
 } from './persistence-test-harness'
-/**
- * The same repo id may be registered on two execution hosts (see `removeProjectForHost`).
- * Every deletion that resolves a *row* must therefore delete only that row, never the sibling
- * host's registration. Since #11994 those deletions fan out to every paired device, so a
- * cross-host over-delete is no longer local.
- */
+// Repo IDs can repeat across execution hosts; row deletion must preserve sibling registrations.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,6 +15,7 @@ import { getDefaultPersistedState } from '../shared/constants'
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
 let hasCreatedStoreInCase = false
 
@@ -64,8 +60,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   }
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
-  // Why here: userData resolves through AppEnvironment, and this must point at this
-  // file's temp dir rather than the global fake's shared one, after resetModules.
+  // resetModules replaces AppEnvironment; reinstall this test’s userData path before initializing.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -75,7 +70,6 @@ function createStoreWithDuplicateRepoId() {
   return createStoreFromState({ repos: duplicateIdRepos() })
 }
 
-/** A persisted local setup pointing at a repo id that only exists on ssh:ssh-1. */
 function staleLocalSetupState() {
   const project: Project = {
     id: 'project-dup',
@@ -126,13 +120,14 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   it.each(['git', 'folder'] as const)(
     'removing the local %s row keeps the other host row and its metadata',
     async (kind) => {
-      // A stale renderer catalog once sent id-only removal when it could not see the SSH twin (#13071).
       const store = await createStoreFromState({
         repos: duplicateIdRepos().map((repo) => ({ ...repo, kind }))
       })
-      store.setWorktreeMetaForHost('dup::/remote/dup', 'ssh:ssh-1', { displayName: 'SSH wt' })
+      store.setWorktreeMeta(hostWorktreeTarget({ id: 'dup::/remote/dup', hostId: 'ssh:ssh-1' }), {
+        displayName: 'SSH wt'
+      })
 
-      store.removeProjectForHost('dup', 'local')
+      store.removeProjectForHost({ id: 'dup', executionHostId: 'local' })
       expect(store.getRepos().map((repo) => repo.path)).toEqual(['/remote/dup'])
       expect(Object.values(store.getAllWorktreeMeta()).map((meta) => meta.displayName)).toContain(
         'SSH wt'
@@ -143,15 +138,48 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   it('removeProjectForHost drops only the addressed host row', async () => {
     const store = await createStoreWithDuplicateRepoId()
 
-    store.removeProjectForHost('dup', 'ssh:ssh-1')
+    store.removeProjectForHost({ id: 'dup', executionHostId: 'ssh:ssh-1' })
 
     expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup'])
   })
 
+  it('removeProjectForHost given the SSH row itself leaves the local twin', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+    const sshRow = store.getRepos().find((repo) => repo.connectionId === 'ssh-1')!
+
+    store.removeProjectForHost(sshRow)
+
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(['/laptop/dup'])
+  })
+
+  it('moveProjectToGroup moves the addressed twin, not the first row with the id', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+    const group = store.createProjectGroup({
+      name: 'Remote',
+      connectionId: 'ssh-1',
+      createdFrom: 'manual'
+    })
+    const sshRow = store.getRepos().find((repo) => repo.connectionId === 'ssh-1')!
+
+    const moved = store.moveProjectToGroup(sshRow, group.id, 3)
+
+    expect(moved?.path).toBe('/remote/dup')
+    const groupByPath = Object.fromEntries(
+      store.getRepos().map((repo) => [repo.path, repo.projectGroupId ?? null])
+    )
+    expect(groupByPath).toEqual({ '/laptop/dup': null, '/remote/dup': group.id })
+  })
+
+  it('moveProjectToGroup on a host holding no twin moves nothing', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+    const group = store.createProjectGroup({ name: 'G', createdFrom: 'manual' })
+
+    expect(store.moveProjectToGroup({ id: 'dup', connectionId: 'ssh-2' }, group.id)).toBeNull()
+    expect(store.getRepos().every((repo) => !repo.projectGroupId)).toBe(true)
+  })
+
   it('deleteProjectHostSetup drops only the row it reports, never the sibling host', async () => {
-    // Repo-derived setups reuse the repo id, so a duplicated id yields two setups with the
-    // same setup id and the lookup can only resolve one. Whichever it resolves, the other
-    // host's registration must survive.
+    // Duplicate repo IDs also duplicate derived setup IDs; only the resolved host row may be deleted.
     const store = await createStoreWithDuplicateRepoId()
 
     const result = store.deleteProjectHostSetup({ setupId: 'dup' })
@@ -164,9 +192,54 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
     )
   })
 
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'deleteProjectHostSetup with hostId %s removes that host twin only',
+    async (hostId) => {
+      const store = await createStoreWithDuplicateRepoId()
+
+      const result = store.deleteProjectHostSetup({ setupId: 'dup', hostId })
+
+      expect(result?.setup.hostId).toBe(hostId)
+      expect(store.getRepos().map((repo) => repo.path)).toEqual(
+        hostId === 'local' ? ['/remote/dup'] : ['/laptop/dup']
+      )
+    }
+  )
+
+  it.each(['local', 'ssh:ssh-1'] as const)(
+    'updateProjectHostSetup with hostId %s renames that host twin only',
+    async (hostId) => {
+      const store = await createStoreWithDuplicateRepoId()
+
+      const result = store.updateProjectHostSetup({
+        setupId: 'dup',
+        hostId,
+        updates: { displayName: 'Renamed' }
+      })
+
+      expect(result?.setup.hostId).toBe(hostId)
+      expect(store.getRepos().map((repo) => repo.displayName)).toEqual(
+        hostId === 'local' ? ['Renamed', 'Dup Remote'] : ['Dup Local', 'Renamed']
+      )
+    }
+  )
+
+  it('a hostId naming no twin edits nothing', async () => {
+    const store = await createStoreWithDuplicateRepoId()
+
+    expect(
+      store.updateProjectHostSetup({
+        setupId: 'dup',
+        hostId: 'ssh:other',
+        updates: { displayName: 'Renamed' }
+      })
+    ).toBeNull()
+    expect(store.deleteProjectHostSetup({ setupId: 'dup', hostId: 'ssh:other' })).toBeNull()
+    expect(store.getRepos().map((repo) => repo.displayName)).toEqual(['Dup Local', 'Dup Remote'])
+  })
+
   it('setResolvedRepoGitUsername writes only the probed host row', async () => {
-    // Enrichment resolves per repo *location*, so the write must land on the row it probed; an
-    // id-only lookup would stamp the sibling host's username and host-scoped hydration cache.
+    // Enrichment must update the probed location, including its host-scoped hydration cache.
     const store = await createStoreFromState({
       repos: [
         {
@@ -202,8 +275,7 @@ describe('deleting one host copy of a repo id shared by two hosts', () => {
   })
 
   it('a stale local setup for an id that only exists on ssh never deletes the ssh row', async () => {
-    // Two mechanisms must each hold this line: load-time projection drops the stale setup, and
-    // deleteProjectHostSetup resolves the repo by (repoId, setup.hostId) with no sibling fallback.
+    // Both load-time projection and host-scoped deletion must reject a stale setup’s sibling fallback.
     const { setupId, ...state } = staleLocalSetupState()
     const store = await createStoreFromState(state)
 

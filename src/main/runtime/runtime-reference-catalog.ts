@@ -135,6 +135,31 @@ export function listWorkspaceReferences(worktree: ReferenceWorkspace): RuntimeRe
   }
 }
 
+/** Selects from the cached listing, then once from a fresh scan: unsaved worktrees and cold-cache
+ *  branches only resolve after one. */
+export async function selectWarmedReferenceWorkspace(
+  store: Parameters<typeof listReferenceWorkspaces>[0],
+  listing: {
+    cached: () => readonly Worktree[] | undefined
+    scan: () => Promise<readonly Worktree[]>
+  },
+  selector: string,
+  cwd?: string
+): Promise<ReferenceWorkspace> {
+  try {
+    return selectReferenceWorkspace(listReferenceWorkspaces(store, listing.cached()), selector, cwd)
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+      throw error
+    }
+    return selectReferenceWorkspace(
+      listReferenceWorkspaces(store, await listing.scan()),
+      selector,
+      cwd
+    )
+  }
+}
+
 export function selectReferenceWorkspace(
   workspaces: readonly ReferenceWorkspace[],
   selector: string,

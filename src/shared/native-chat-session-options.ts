@@ -124,10 +124,22 @@ export type NativeChatSessionOptionSettingsMutation =
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
 export type SessionOptionsSurface = {
+  demandModelCatalog?: () => void
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
+}
+
+/** An effort no list confirms, under a model the list lacks: shown as text, not a control. */
+export function isReadOnlySessionOptionValue(descriptor: SessionOptionDescriptor): boolean {
+  return (
+    descriptor.id === 'effort' &&
+    descriptor.kind.type === 'select' &&
+    !descriptor.settable &&
+    !descriptor.action &&
+    descriptor.kind.choices.length === 1
+  )
 }

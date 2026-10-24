@@ -295,12 +295,14 @@ export function NativeChatAgentControls({
 
 export function ProviderFrameRow({
   block,
-  summary
+  summary,
+  detail
 }: {
   block: NativeChatBlock
   summary?: string
+  detail?: string
 }): React.JSX.Element | null {
-  if (block.type !== 'text' || !block.providerFrame) {
+  if (block.type !== 'text' || (!block.providerFrame && !detail)) {
     return null
   }
   const frame = block.providerFrame
@@ -310,9 +312,11 @@ export function ProviderFrameRow({
         <span className="transition-transform motion-reduce:transition-none group-open:rotate-90">
           ›
         </span>
-        <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>
+        {frame ? (
+          <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>
+        ) : null}
         <span className="truncate">{summary ?? nativeChatProviderFrameSummary(block)}</span>
-        {frame.payload.truncated ? (
+        {frame?.payload.truncated ? (
           <span>
             ·{' '}
             {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
@@ -325,8 +329,10 @@ export function ProviderFrameRow({
         data-native-chat-code-content
         className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-chat-code text-foreground"
       >
-        {frame.payload.head}
-        {frame.payload.truncated ? '\n…' : ''}
+        {detail}
+        {detail && frame ? '\n\n' : ''}
+        {frame?.payload.head}
+        {frame?.payload.truncated ? '\n…' : ''}
       </pre>
     </details>
   )

@@ -87,7 +87,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDeleteQuickAction
   } = card
 
-  // Why: pinned trees mix repos, so ordinary rows keep the repo icon; cross-repo children use the name.
+  // Why: pinned trees mix repos, so ordinary rows lead with the project chip; cross-repo children keep the regular project badge.
   const showPinnedRepoIcon = inPinnedSection && !!repo && !showProjectName
   const showInlineRepoBadge =
     cardDetails.repoInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
@@ -236,13 +236,17 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
           metaIssue && 'url' in metaIssue && metaIssue.url ? handleOpenIssueInBrowser : undefined
         }
         onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-        onOpenReviewInOrca={
-          metaReview?.url && metaReview.provider === 'github' ? handleOpenReviewInOrca : undefined
-        }
+        onOpenReviewInOrca={repo ? handleOpenReviewInOrca : undefined}
         onOpenReviewInBrowser={metaReview?.url ? handleOpenReviewInBrowser : undefined}
         onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
         onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
-        onUnlinkReview={!affiliateListMode && canUnlinkReview ? handleUnlinkReview : undefined}
+        onUnlinkReview={
+          !affiliateListMode &&
+          (canUnlinkReview ||
+            getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue'))
+            ? handleUnlinkReview
+            : undefined
+        }
       >
         {detailsAndPortsContent}
       </WorktreeCardDetailsHover>

@@ -20,7 +20,7 @@ src/main/ssh/orcad-migration-terminal-gate.ts
 src/main/managed-server/lifecycle/orcad-runtime-conversion.test.ts
 src/main/ssh/ssh-host-server-on-connect.test.ts
 src/main/ssh/ssh-host-server-on-connect.ts
-src/main/ssh/ssh-target-orcad-preflight.ts
+src/main/ssh/targets/ssh-target-orcad-preflight.ts
 src/preload/api-types.ts
 src/preload/api/legacy-relay-bridge-api.ts
 src/renderer/src/components/terminal-pane/legacy-relay-bridge-panes.ts
@@ -40,3 +40,4 @@ tests/e2e/helpers/build-released-relay-bundle.mts
 tests/e2e/helpers/legacy-relay-docker-host.ts
 tests/e2e/helpers/orcad-upgrade-profile.ts
 tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts
+tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts

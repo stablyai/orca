@@ -1,8 +1,4 @@
-/**
- * Finishing or undoing an activation, rollback or decommission that a crash, a lost connection or an
- * unverifiable failure left fenced. Either way the host ends serving exactly the slot its
- * activation record names, or the fence stays for an operator.
- */
+// Reconcile interrupted transactions to the recorded slot and state; retain the fence whenever ownership remains unproven.
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
   planOrcadTransactionRecovery,
@@ -39,7 +35,7 @@ export type OrcadActivationRecoveryResult =
     }
   | OrcadManagedRefusal
 
-export type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
+type OrcadActivationRecoveryOptions = OrcadIncumbentRecoveryOptions
 
 export const ORCAD_RECOVERY_UNVERIFIABLE_CODE = 'orcad_recovery_unverifiable'
 
@@ -56,7 +52,7 @@ export async function recoverInterruptedOrcadActivation(
     return await withStaleOrcadActivationRecoveryLock(options, async (lock) => {
       const transaction = await readOrcadActivationTransaction(options)
       if (!transaction) {
-        // A release cut short after removing the journal; dropping the lock finishes it.
+        // Interrupted release can remove the journal before the fence; finishing release is enough.
         return { outcome: 'none' }
       }
       const result = await reconcileOrcadTransaction(options, transaction)
@@ -86,8 +82,8 @@ export async function recoverInterruptedOrcadActivation(
   }
 }
 
-/** Runs under a held fence. Throws when a step is unverifiable. */
-export async function reconcileOrcadTransaction(
+/** Requires a held fence; unverifiable steps throw to preserve it. */
+async function reconcileOrcadTransaction(
   options: OrcadActivationRecoveryOptions,
   transaction: OrcadActivationTransaction
 ): Promise<OrcadActivationRecoveryResult> {

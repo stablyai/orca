@@ -1,38 +1,20 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type { GrabIntent } from '../../shared/browser-grab-types'
+import type {
+  BrowserSitePermission,
+  BrowserSitePermissionDecision
+} from '../../shared/browser-site-permission'
+import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-guest-events'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
-    callback: (event: {
-      browserPageId: string
-      x: number
-      y: number
-      screenX: number
-      screenY: number
-      pageUrl: string
-      linkUrl: string | null
-      selectionText: string
-      canGoBack: boolean
-      canGoForward: boolean
-    }) => void
+    callback: (event: BrowserContextMenuRequestedEvent) => void
   ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        browserPageId: string
-        x: number
-        y: number
-        screenX: number
-        screenY: number
-        pageUrl: string
-        linkUrl: string | null
-        selectionText: string
-        canGoBack: boolean
-        canGoForward: boolean
-      }
-    ) => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserContextMenuRequestedEvent) =>
+      callback(data)
     ipcRenderer.on('browser:context-menu-requested', listener)
     return () => ipcRenderer.removeListener('browser:context-menu-requested', listener)
   },
@@ -82,8 +64,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:agentInputFocusGuard', listener)
     return () => ipcRenderer.removeListener('browser:agentInputFocusGuard', listener)
   },
-  agentInputFocusGuardReady: (token: string): void => {
-    ipcRenderer.send('browser:agentInputFocusGuardReady', { token })
+  agentInputFocusGuardReady: (token: string, composing: boolean): void => {
+    ipcRenderer.send('browser:agentInputFocusGuardReady', { token, composing })
   },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
@@ -141,6 +123,11 @@ export const browserPageInteractionAndSessionsApi = {
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
+  onSessionProfilesChanged: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('browser:session:profilesChanged', listener)
+    return () => ipcRenderer.removeListener('browser:session:profilesChanged', listener)
+  },
   prepareSshWorkspacePartition: (args: {
     targetId: string
     expectedSshTargetGeneration?: number
@@ -150,6 +137,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
   sessionCreateProfile: (args: { scope: 'default' | 'isolated' | 'imported'; label: string }) =>
     ipcRenderer.invoke('browser:session:createProfile', args),
+  sessionEnsureManagedProfile: (args: { owner: ManagedBrowserProfileOwner; label: string }) =>
+    ipcRenderer.invoke('browser:session:ensureManagedProfile', args),
   identityGet: () => ipcRenderer.invoke('browser:identity:get'),
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
@@ -173,6 +162,14 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sitePermissionsList: (args: { profileId: string }) =>
+    ipcRenderer.invoke('browser:sitePermissions:list', args),
+  sitePermissionsSet: (args: {
+    profileId: string
+    origin: string
+    permission: BrowserSitePermission
+    decision: BrowserSitePermissionDecision | null
+  }) => ipcRenderer.invoke('browser:sitePermissions:set', args),
   notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:activeTabChanged', args)
 } satisfies Partial<PreloadApi['browser']>

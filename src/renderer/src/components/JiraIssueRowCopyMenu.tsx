@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { copyJiraTextToClipboard } from './jira-issue-workspace-actions'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
 import { Popover, PopoverAnchor } from '@/components/ui/popover'

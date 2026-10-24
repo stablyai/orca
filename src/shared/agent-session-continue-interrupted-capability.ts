@@ -1,4 +1,4 @@
-// Split out of protocol-version.ts, which lists it in RUNTIME_CAPABILITIES. Import it from here.
+// Split out of protocol-version.ts; listed in AGENT_SESSION_RUNTIME_CAPABILITIES. Import it from here.
 
 // Why: a client may call `agentSession.continueInterrupted` (Continue on a reply an Orca stop cut
 // off) only on a host that has it; an older host also writes no row naming that stop, so a client

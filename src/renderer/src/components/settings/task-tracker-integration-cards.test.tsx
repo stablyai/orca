@@ -32,12 +32,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: StoreState) => unknown) => {
-    if (!mocks.store.current) {
-      throw new Error('Store state was not installed')
-    }
-    return selector(mocks.store.current)
-  }
+  useAppStore: Object.assign(
+    (selector: (state: StoreState) => unknown) => {
+      if (!mocks.store.current) {
+        throw new Error('Store state was not installed')
+      }
+      return selector(mocks.store.current)
+    },
+    { getState: () => mocks.store.current }
+  )
 }))
 
 vi.mock('@/components/linear-api-key-dialog', () => ({
@@ -161,7 +164,7 @@ describe('LinearIntegrationCard account scope', () => {
     expect(rendered.querySelector('[data-settings-section="integrations-linear"]')).not.toBeNull()
     expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+      'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
     )
     expect(rendered.textContent).toContain('Open Remote Servers')
     expect(rendered.textContent).toContain('Add access with a Personal API key')
@@ -182,7 +185,7 @@ describe('LinearIntegrationCard account scope', () => {
 
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > Advanced > Default host for new projects.'
+      'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
     )
     await act(async () => {
       Array.from(rendered.querySelectorAll('button'))

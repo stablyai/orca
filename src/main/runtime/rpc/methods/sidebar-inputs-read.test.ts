@@ -57,11 +57,27 @@ describe('sidebarInputs.read', () => {
     expect(frame).toBeLessThanOrEqual(MOBILE_BRIDGE_MAX_FRAME_BYTES)
   })
 
+  it('serves the host’s own desktop window over its IPC connection', async () => {
+    const host = makeHost()
+    const response = await host.read({
+      clientKind: 'runtime',
+      caller: { kind: 'desktop' },
+      connectionId: 'desktop-renderer:1:1'
+    })
+    expect(response).toMatchObject({ ok: true, result: { kind: 'snapshot' } })
+    expect([...host.cleanups.keys()]).toEqual(['sidebar-inputs-feed-desktop-renderer:1:1'])
+  })
+
   it('refuses a delegated phone, a paired desktop and a caller without a connection', async () => {
     const host = makeHost()
     for (const context of [
       { clientKind: 'mobile', connectionId: 'conn-1', pairedDeviceParentId: 'desktop-device' },
       { clientKind: 'runtime', connectionId: 'conn-1' },
+      {
+        clientKind: 'runtime',
+        connectionId: 'conn-1',
+        caller: { kind: 'paired-device', deviceId: 'desktop-device' }
+      },
       { clientKind: 'mobile' }
     ] satisfies RpcDispatchStreamingOptions[]) {
       expect(await host.read(context)).toMatchObject({ ok: false, error: { code: 'forbidden' } })

@@ -26,9 +26,8 @@ export type PtySubprocessOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
-  /** Explicit shell executable path/basename requested by the renderer. */
   shellOverride?: string
-  /** Optional Unix interactive profile args; ignored for command and agent launches. */
+  /** Unix interactive profile args are ignored for command and agent launches. */
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -60,13 +59,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
-/**
- * Spawns the daemon-owned PTY subprocess for a terminal session.
- *
- * Launch planning stays ahead of validation so Windows validates the effective
- * host or WSL cwd selected by the same fallback chain that native spawn uses.
- * The handle then owns all event buffering, foreground identity, and teardown.
- */
+/** Plan first so validation uses the host or WSL cwd that spawn will actually use. */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)

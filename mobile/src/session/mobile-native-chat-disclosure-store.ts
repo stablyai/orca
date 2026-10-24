@@ -1,11 +1,15 @@
 // Desktop parity: `native-chat-disclosure-store`. Where a transcript row's open/closed
 // disclosures live when the row itself may be unmounted: a run or line the reader opened
-// stays open after the list recycles its row, on reload, and across the Tools toggle.
+// stays open after the list recycles its row and on reload.
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
+import {
+  MobileNativeChatScrollRoots,
+  type MobileNativeChatRootPosition
+} from './mobile-native-chat-scroll-roots'
 
 /** Where the reader left an opened run's own scroll box. */
-export type MobileNativeChatRunScroll = { top: number; followsEnd: boolean }
+export type MobileNativeChatRunScroll = MobileNativeChatRootPosition
 
 export type MobileNativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
@@ -13,6 +17,7 @@ export type MobileNativeChatDisclosureStore = {
   /** By the run's disclosure key, and forgotten when that run closes. A plain map, not state:
    *  scrolling a run must not re-render the transcript. */
   runScroll: Map<string, MobileNativeChatRunScroll>
+  roots: MobileNativeChatScrollRoots
 }
 
 export const MobileNativeChatDisclosureContext =
@@ -25,10 +30,17 @@ type ScopedDisclosures = {
   scopeKey: string
   open: ReadonlyMap<string, boolean>
   runScroll: Map<string, MobileNativeChatRunScroll>
+  roots: MobileNativeChatScrollRoots
 }
 
 function emptyDisclosures(scopeKey: string): ScopedDisclosures {
-  return { scopeKey, open: new Map(), runScroll: new Map() }
+  const runScroll = new Map<string, MobileNativeChatRunScroll>()
+  return {
+    scopeKey,
+    open: new Map(),
+    runScroll,
+    roots: new MobileNativeChatScrollRoots(runScroll, MAX_DISCLOSURES)
+  }
 }
 
 /** One store per chat: another chat's choices never leak in. */
@@ -37,12 +49,13 @@ export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeCh
   if (state.scopeKey !== scopeKey) {
     setState(emptyDisclosures(scopeKey))
   }
-  const { open, runScroll } = state
+  const { open, runScroll, roots } = state
+  useLayoutEffect(() => () => roots.dispose(), [roots])
   const write = useCallback(
     (key: string, next: boolean) => {
       // Forgotten with the run that closed, as desktop does.
       if (!next) {
-        runScroll.delete(key)
+        roots.forget(key)
       }
       setState((current) => {
         if (current.open.get(key) === next) {
@@ -60,11 +73,11 @@ export function useMobileNativeChatDisclosures(scopeKey: string): MobileNativeCh
         return { ...current, open: updated }
       })
     },
-    [runScroll]
+    [roots]
   )
   return useMemo(
-    () => ({ read: (key: string) => open.get(key), write, runScroll }),
-    [open, write, runScroll]
+    () => ({ read: (key: string) => open.get(key), write, runScroll, roots }),
+    [open, write, runScroll, roots]
   )
 }
 

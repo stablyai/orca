@@ -12,7 +12,7 @@ export type OrcadProfileStateAuthoritySelection = {
   migrated: boolean
 }
 
-export type OrcadProfileStateTelemetrySink = (line: string) => void
+type OrcadProfileStateTelemetrySink = (line: string) => void
 
 /** Render one machine-readable stderr line for fleet log collection. */
 export function formatOrcadProfileStateAuthoritySelected(

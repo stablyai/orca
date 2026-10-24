@@ -120,7 +120,7 @@ describe('WorktreeCard pinned repo icon', () => {
   })
 
   it(
-    'shows the configured repo icon for pinned cards even when the repo badge is hidden',
+    'shows the repo icon and project name for pinned cards even when the repo badge is hidden',
     async () => {
       const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -137,6 +137,7 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('>orca</span>')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
@@ -177,7 +178,30 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('>orca</span>')
       expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
+
+  it(
+    'shows the project name on ungrouped compact cards and hides it when grouped by project',
+    async () => {
+      settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false }
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const worktree = makeWorktree({ isPinned: false, displayName: 'main' })
+
+      const ungrouped = renderToStaticMarkup(
+        <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+      )
+      expect(ungrouped).toContain('>orca</span>')
+      expect(ungrouped).toContain('Project orca')
+
+      const groupedByProject = renderToStaticMarkup(
+        <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} hideRepoBadge />
+      )
+      expect(groupedByProject).not.toContain('>orca</span>')
+      expect(groupedByProject).not.toContain('Project orca')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )

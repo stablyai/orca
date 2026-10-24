@@ -1,4 +1,4 @@
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { WSL_CODEX_SESSION_BRIDGE_SCRIPT } from '../codex/wsl-codex-session-bridge-script'
 
 export const RETIRED_SESSION_BRIDGE_COMMAND = `bash -c ${quotePosixShell(WSL_CODEX_SESSION_BRIDGE_SCRIPT)} bash "$legacy_home/sessions" "$target_home/sessions" "$session_link_manifest" "$session_stage_root"`

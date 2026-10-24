@@ -1,10 +1,6 @@
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
 
-// Why: `listRunningWslDistrosAsync` polls on a 2s timer for as long as any WSL transcript
-// tab is open (see wsl-transcript-running-observer.ts). Without a last-known-good fallback
-// and backoff mirroring the full distro-list cache in wsl.ts, a persistently broken
-// wsl.exe would make every WSL session vanish app-wide with no signal distinguishing
-// "discovery broken" from "distro stopped", and would re-spawn wsl.exe every 2s forever.
+// Preserve last-known-good state and back off failed discovery so sessions survive a persistent wsl.exe outage.
 let cache: string[] | null = null
 let retryAfterMs = 0
 let failureStreak = 0
@@ -69,14 +65,7 @@ function armRetryAfterFailure(): void {
   retryAfterMs = now + wslDistroListRetryDelayMs(failureStreak)
 }
 
-/**
- * Runs `probe` unless another probe is already in flight (shares its result) or a prior
- * failure's retry window is still open (falls back to the last-known-good list instead).
- * A successful probe — including a genuine empty result, i.e. no distros running — is
- * authoritative and replaces the cache; only a probe *failure* (thrown/rejected) falls
- * back to the cache and arms backoff. Bounds wsl.exe spawns under both IPC fan-out and a
- * broken/degraded host.
- */
+/** Share probes; only failures use stale cache/backoff. A confirmed empty result means no running distros. */
 export async function resolveRunningWslDistros(
   probe: () => Promise<string[]>,
   options: { requireConfirmed?: boolean } = {}
@@ -119,6 +108,11 @@ function observeRunningWslDistros(
     })
   inFlightProbe = result
   return result
+}
+
+/** Last confirmed running list without probing; null before any probe has succeeded. */
+export function peekConfirmedRunningWslDistros(): readonly string[] | null {
+  return cache
 }
 
 export function _resetRunningWslDistroCacheForTests(): void {

@@ -25,6 +25,10 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+// Why: a relay kept through the background grace may have died while the app was
+// suspended; one miss redials instead of two. Not shorter: the first packet after
+// resume can pay radio wake-up plus a TCP retransmit.
+const RELAY_RESUME_PROBE_MS = 4_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -35,6 +39,8 @@ export type MobileRelayRpcSession = RpcClient &
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getFailure(): Error | null
+    // One decisive probe for a relay retained through a real background stay.
+    probeAfterBackground(): void
   }
 
 export function connectMobileRelayRpcSession(args: {
@@ -150,7 +156,9 @@ export function connectMobileRelayRpcSession(args: {
     getAttachDeadlineAt: () => attachDeadlineAt,
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
-    getFailure: () => failure
+    getFailure: () => failure,
+    probeAfterBackground: () =>
+      state === 'connected' && livenessWatchdog.probeNow(livenessIdentity, RELAY_RESUME_PROBE_MS)
   }
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',

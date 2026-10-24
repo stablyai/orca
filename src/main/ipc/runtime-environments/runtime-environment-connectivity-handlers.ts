@@ -21,11 +21,10 @@ import type { Store } from '../../persistence'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
+import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 import {
   closeRemoteRuntimeRequestConnection,
-  getRuntimeEnvironmentStatusOwner,
-  getRuntimeEnvironmentStatusSnapshots,
-  retryRemoteRuntimeSharedControlConnectionNow
+  getRuntimeEnvironmentStatusSnapshots
 } from './runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentManualDisconnect,
@@ -34,6 +33,7 @@ import {
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
+import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 import { withWslOrcadAccountEnv } from '../../wsl/wsl-orcad-account-env'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
@@ -91,6 +91,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { name: string; pairingCode: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
+      // An unverified code must not replace a working pairing.
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
@@ -101,13 +102,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
-        clearRuntimeEnvironmentManualDisconnect(result.environment.id)
-        getRuntimeEnvironmentStatusOwner(getUserDataPath(), result.environment.id).acceptVerified({
-          id: 'status.get',
-          ok: true,
-          result: result.runtimeStatus,
-          _meta: { runtimeId: result.runtimeStatus.runtimeId }
-        })
+        await publishVerifiedPairing(
+          getUserDataPath(),
+          result,
+          result.updatedExisting ? { invalidateTransport } : null
+        )
       }
       return result
     }
@@ -126,7 +125,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
-          'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+          'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
         )
       }
       // A closed gate leaves persisted WSL hosts untouched on disk.
@@ -151,7 +150,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const runtimeLayer = { userDataPath: getUserDataPath(), invalidateTransport }
       disconnectRuntimeEnvironmentForUser(environment.id, runtimeLayer)
       closeLegacySelectorTransport(args.selector, environment.id)
-      // Why: otherwise Settings keeps showing the managed host's SSH connection as live (#30085).
+      // Also clear the managed host SSH connection shown in Settings (#30085).
       await disconnectManagedHostOfEnvironmentForUser(environment, runtimeLayer)
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
@@ -165,21 +164,13 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       assertWslHostReachable(environment)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
+      noteRuntimeEnvironmentConnectRequested(environment.id)
       clearSshCredentialDeclinedForEnvironment(environment)
       await liftSshUserDisconnectForEnvironment(environment)
       await connectThroughOwningService(environment)
       return getRuntimeEnvironmentStatus(getUserDataPath(), environment.id, args.timeoutMs, {
         reconnect: true
       })
-    }
-  )
-  ipcMain.handle(
-    'runtimeEnvironments:retryControlConnection',
-    (_event, args: { selector: string }): void => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        retryRemoteRuntimeSharedControlConnectionNow(environment.id)
-      }
     }
   )
 }
@@ -258,7 +249,7 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
-      // Why here: every renderer call to a paired host passes this one handler.
+      // Every renderer request to a paired host passes this account environment boundary.
       const accounts = await withWslOrcadAccountEnv({
         environmentId: environment.id,
         method: args.method,

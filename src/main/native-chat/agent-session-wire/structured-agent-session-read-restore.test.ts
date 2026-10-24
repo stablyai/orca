@@ -1,6 +1,3 @@
-// Read restore decides whether a session comes back at all: only one with a record and a journal
-// to read is published, and publishing it starts no agent.
-
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -22,7 +22,7 @@ export {
   SessionId
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
-import { isAgentSessionSurfaceTabId } from '../agent-session-surface-tab-id'
+import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isAgentSessionOptions } from '../agent-session-record'
 import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
@@ -144,9 +144,11 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    /** The composer's model and effort for the turn this send starts; the host records them on the
-     *  chat. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
+    /** The composer's choices for the turn this message starts, kept with the message until it is
+     *  dispatched. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
+    // Strict payload: only hosts advertising the bound usage-limit send capability accept this.
+    usageLimitContinuationOfTurnItemId: Identifier('Invalid source turn item id').optional(),
     body: SendBody
   })
   .strict()
@@ -157,8 +159,7 @@ export const CreateIntentParams = z
     worktree: Identifier('Invalid worktree selector'),
     agent: StructuredAgent,
     resumeFrom: ResumeSource.optional(),
-    /** Strict payload: send only after the host advertises the create-tab-id capability. */
-    tabId: z.string().refine(isAgentSessionSurfaceTabId, 'Invalid chat tab ID').optional(),
+    ...CREATE_TAB_FIELDS,
     /** Both fields require `agentSession.create.message.v1` on the executing host. */
     firstMessage: z
       .object({
@@ -268,19 +269,25 @@ export const RespondToQuestionParams = z
     }
   })
 
-export const SetOptionParams = z
-  .object({
-    envelope: MutationEnvelope,
-    key: Identifier('Invalid option key'),
-    value: z.string().max(MAX_OPTION_LABEL)
-  })
-  .strict()
+export const SetOptionParams = z.strictObject({
+  envelope: MutationEnvelope,
+  key: Identifier('Invalid option key'),
+  value: z.string().max(MAX_OPTION_LABEL)
+})
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const ItemParams = OptionsParams.extend({ itemId: z.string().min(1) }).strict()
+// Why optional: only a host advertising the workspace-sleep-mark capability is sent `markAsleep`.
+export const SleepWorkspaceParams = z
+  .object({ workspaceId: z.string().min(1), markAsleep: z.literal(true).optional() })
+  .strict()
 export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor: JournalCursor })
 
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
+
+/** `agentSession.subscribeAvailability` takes nothing: the snapshot is the host's. */
+export const AvailabilityParams = z.strictObject({})
 
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.
@@ -358,9 +365,7 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = z
-  .object({ sessionId: SessionId, cursor: JournalCursor.optional() })
-  .strict()
+export const SubscribeParams = OptionsParams.extend({ cursor: JournalCursor.optional() }).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

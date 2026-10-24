@@ -69,6 +69,7 @@ desktop.ini
 .oxlintcache
 /.cache/vite/
 /.cache/vite.lock/
+/.cache/typecheck/
 
 # Logs
 *.log
@@ -104,22 +105,17 @@ docs/**
 # The deployable docs app is source, not local engineering notes.
 !docs/site/
 !docs/site/**
-!docs/audits/
-!docs/audits/closed-editor-model-lifetime/
-!docs/audits/closed-editor-model-lifetime/**
 !docs/assets/
 !docs/assets/**
-!docs/audits/
-!docs/audits/plugin-uninstall-log-retirement/
-!docs/audits/plugin-uninstall-log-retirement/**
 !docs/readme/
 !docs/readme/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
-!docs/audits/
-!docs/audits/crashpad-read-limit/
-!docs/audits/crashpad-read-limit/source-hashes.json
+!docs/reference/
+!docs/reference/cross-platform-support.md
+!docs/reference/git-workflow.md
+!docs/reference/test-antipatterns.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
 

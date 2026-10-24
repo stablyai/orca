@@ -7,7 +7,9 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('./remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()
@@ -90,7 +92,7 @@ describe('decommissioning a managed orcad', () => {
     })
     expect(currentRecord()).toMatchObject({ active: null, previous: OLD, snapshot: null })
     expectExactlyTheRecordedSlot()
-    // Never a signal: the instance-bound request is the only stop path.
+    // Only instance-bound requests may stop the server; never signal a possibly reused PID.
     expect(host.commands.some((command) => command.includes('kill -TERM'))).toBe(false)
   })
 

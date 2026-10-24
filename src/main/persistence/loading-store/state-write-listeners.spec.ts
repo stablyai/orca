@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { WORKTREE_METADATA_DOMAINS } from './worktree-identity-metadata'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 export function registerStateWriteListenersTests(): void {
   it('tells each write the domains it changed, undefined for a full save', async () => {
@@ -8,10 +9,14 @@ export function registerStateWriteListenersTests(): void {
     const seen: (readonly string[] | undefined)[] = []
     const detach = store.onStateWritten((domains) => seen.push(domains))
 
-    store.setWorktreeMeta('repo-1::/r/a', { isPinned: true })
-    store.setWorktreeMetaForHost('repo-1::/r/b', 'local', { isUnread: true })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo-1::/r/a', hostId: 'local' }), {
+      isPinned: true
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo-1::/r/b', hostId: 'local' }), {
+      isUnread: true
+    })
     store.patchWorkspaceSession({ activeTabId: 'tab-1' })
-    store.setWorktreeLineage('repo-1::/r/b', {
+    store.setWorktreeLineage(hostWorktreeTarget({ id: 'repo-1::/r/b', hostId: 'local' }), {
       worktreeId: 'repo-1::/r/b',
       worktreeInstanceId: 'b-1',
       parentWorktreeId: 'repo-1::/r/a',
@@ -21,10 +26,13 @@ export function registerStateWriteListenersTests(): void {
       createdAt: 1
     })
     detach()
-    store.setWorktreeMeta('repo-1::/r/a', { isPinned: false })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo-1::/r/a', hostId: 'local' }), {
+      isPinned: false
+    })
 
+    // Every metadata write also writes the host-qualified identity row.
     expect(seen).toEqual([
-      ['worktreeMeta'],
+      WORKTREE_METADATA_DOMAINS,
       WORKTREE_METADATA_DOMAINS,
       ['workspaceSession'],
       undefined

@@ -1,9 +1,10 @@
 import type { PublicKnownRuntimeEnvironment } from './runtime-environments'
 import type { OrcadTerminalCensus } from './orcad-terminal-census'
-import type { OrcadMigrationBlocker } from './orcad-migration-preflight'
-import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration-source-cutover'
+import type { OrcadMigrationBlocker } from './orcad-migration/orcad-migration-preflight'
+import type { OrcadMigrationSourceCutoverPhase } from './orcad-migration/orcad-migration-source-cutover'
 import type { OrcadDaemonRetirementVerdict } from './orcad-stop-request'
 import type { SshManagedServerLinkedProject } from './ssh-types'
+import type { OrcadStaleLockEvidence } from './orcad-stale-lock-reclaim'
 
 export const ORCAD_MANAGED_REMOTE_PORT = 6_768
 
@@ -77,6 +78,40 @@ export type OrcadManagedRestartResult =
   | { outcome: 'restarted'; environmentId: string }
   | { outcome: 'terminals-running'; liveSessions: number | null }
   | { outcome: 'not-restarted'; reason: string }
+
+/** A dry run, or a confirmation pinned to the lock record that dry run showed. */
+export type OrcadManagedStaleLockReclaimRequest =
+  | { yes: false }
+  | { yes: true; expectNonce: string }
+
+/** `orcad --reclaim-stale-lock` run on a managed host's active slot (#32177). */
+export type OrcadManagedStaleLockReclaimResult =
+  | {
+      status: 'none' | 'eligible' | 'refused'
+      message: string
+      lockPath: string
+      evidence?: OrcadStaleLockEvidence
+    }
+  /** `notRestarted` says why the server did not start again once its lock was cleared. */
+  | {
+      status: 'reclaimed'
+      environmentId: string
+      message: string
+      lockPath: string
+      /** The record the reclaim acted on. */
+      evidence?: OrcadStaleLockEvidence
+      notRestarted?: string
+    }
+  /**
+   * The host can't run the command from here; nothing changed. `reclaimWithoutPin`: its orcad has
+   * the reclaim, but not the pin a confirmation from here needs, so the user runs the reclaim
+   * themselves. Otherwise `lockPath` names the lock to delete by hand.
+   */
+  | { status: 'unsupported'; message: string; lockPath?: string; reclaimWithoutPin?: true }
+  /** The slot runs the command but gave no answer this client understands; nothing is known. */
+  | { status: 'no-answer'; message: string }
+  /** Another lifecycle step holds the host; nothing changed. */
+  | { status: 'busy'; message: string }
 
 /**
  * Unlinks the server from this desktop without reaching its host, for a host that is gone or

@@ -1,10 +1,10 @@
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation
-} from '../../shared/jira-issue-summary-generation'
+} from '../../shared/jira/jira-issue-summary-generation'
 import { ipcRenderer } from 'electron'
-import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira-types'
+import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira/jira-types'
 import type { PreloadApi } from '../api-types'
 
 export const jiraApi = {

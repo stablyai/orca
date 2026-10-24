@@ -5,7 +5,7 @@ import type { JournalRow } from './journal-row-schema'
 
 type CommandReceiptNotInserted = Extract<CommandReceiptInsert, { inserted: false }>
 
-/** The enclosing effect rolls back; its caller replays, refuses conflict, or answers unknown. */
+/** Roll back the enclosing effect before replaying, refusing conflict or answering unknown. */
 export class CommandReceiptExistsError extends Error {
   constructor(readonly result: CommandReceiptNotInserted) {
     super(`command receipt already exists: ${result.reason}`)

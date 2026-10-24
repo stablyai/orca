@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isClientHostedBrowserPageHandle } from '@/store/slices/browser'
 import type { BrowserWorkspace as BrowserWorkspaceState } from '../../../../../shared/browser-workspace-types'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
@@ -24,6 +24,10 @@ import { DeferredBrowserContent } from './DeferredBrowserContent'
 import { isBrowserPagePanePaintable } from '../host-guest/browser-page-paintability'
 import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
 import {
+  ManagedBrowserProfileHold,
+  useManagedBrowserProfileStatus
+} from './managed-browser-profile-hold'
+import {
   isBrowserPageMountAdmitted,
   useAnyBrowserPageMountAdmission
 } from '../host-guest/browser-page-mount-admission'
@@ -41,7 +45,7 @@ export default function BrowserPane({
 }): React.JSX.Element {
   const resolvedChromeShortcutScope = chromeShortcutScope ?? (isActive ? 'focused' : 'inactive')
   const activeRuntimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, browserTab.worktreeId)
   )
   const browserPages = useAppStore((s) =>
     getBrowserPagesForWorkspace(s.browserPagesByWorkspace, browserTab.id)
@@ -77,6 +81,7 @@ export default function BrowserPane({
     [localBrowserPages]
   )
   const hasAdmittedPage = useAnyBrowserPageMountAdmission(localBrowserPageIds)
+  const managedProfileStatus = useManagedBrowserProfileStatus(browserTab.sessionProfileId)
   const pageDriver = useBrowserDriverForPage(activeBrowserPageId)
   // Why: a runtime-backed page is streamed, never locally driven, so its driver must read idle.
   const activeBrowserDriver = runtimeEnvironmentActive ? IDLE_BROWSER_DRIVER : pageDriver
@@ -155,6 +160,11 @@ export default function BrowserPane({
     ) : (
       <div className="flex h-full min-h-0 flex-1 bg-background" />
     )
+  }
+
+  // Why: until main has the workspace's profile, a webview would load on another partition or be refused.
+  if (localBrowserPages.length > 0 && managedProfileStatus) {
+    return <ManagedBrowserProfileHold status={managedProfileStatus} />
   }
 
   return (

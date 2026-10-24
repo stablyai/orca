@@ -108,6 +108,28 @@ describe('live agent-status replay notifications', () => {
     expect(mocks.observe).not.toHaveBeenCalled()
   })
 
+  it('observes a replayed working row whose turn completed while the host was unreachable', () => {
+    seedRow({ state: 'working', stateStartedAt: 1_700_000_000_000 })
+    const apply = createApplicator()
+
+    apply(status({ state: 'working', isReplay: true, turnCompletedAt: 1_700_000_004_000 }))
+
+    expect(mocks.observe).toHaveBeenCalledTimes(1)
+    expect(mocks.observe.mock.calls[0][0]).not.toHaveProperty('seedOnly')
+    expect(mocks.observe.mock.calls[0][0].payload).toHaveProperty(
+      'turnCompletedAt',
+      1_700_000_004_000
+    )
+  })
+
+  it('seeds a stamped working replay when this renderer holds no row', () => {
+    const apply = createApplicator()
+
+    apply(status({ state: 'working', isReplay: true, turnCompletedAt: 1_700_000_004_000 }))
+
+    expect(mocks.observe.mock.calls[0][0]).toHaveProperty('seedOnly', true)
+  })
+
   it('seeds a replayed working row, and a later real done still notifies', () => {
     const apply = createApplicator()
 

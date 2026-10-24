@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest'
  * and nothing else in the tree would notice.
  */
 // 43.7.8 fixes find-in-page looping across host iframes (electron/electron#54199).
-const MINIMUM_ELECTRON_VERSION = '43.7.8'
+// 43.8.1 blocks compromised eMudhra TLS intermediates (GHSA-jr5w-w6x2-84p9).
+const MINIMUM_ELECTRON_VERSION = '43.8.1'
 
 function parseVersion(specifier: string): [number, number, number] {
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(specifier)
@@ -35,7 +36,7 @@ function meetsRuntimeFloor(specifier: string): boolean {
 }
 
 describe('electron runtime floor', () => {
-  it('pins Electron at or above the startup, webview-detach and find-in-page fixes', () => {
+  it('pins Electron at or above the startup, webview-detach, find-in-page and TLS fixes', () => {
     const packageJson = JSON.parse(
       readFileSync(join(__dirname, '../../package.json'), 'utf-8')
     ) as { devDependencies: Record<string, string> }

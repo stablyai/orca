@@ -4,8 +4,7 @@ import { type Mock, vi } from 'vitest'
 /** Loose signature: these mocks stand in for many unrelated module exports. */
 type IpcMock = Mock<(...args: any[]) => unknown>
 
-// Why: paths are resolved via path.resolve() in production code, so test
-// data must use resolved paths to avoid Unix-vs-Windows mismatches.
+// Resolve fixture paths like production for cross-platform comparisons.
 export const REPO_PATH = path.resolve('/workspace/repo')
 export const WORKSPACE_DIR = path.resolve('/workspace')
 export const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
@@ -53,7 +52,6 @@ export const cancelGeneratePullRequestFieldsLocalMock: IpcMock = vi.fn()
 export const getPullRequestDraftContextMock: IpcMock = vi.fn()
 export const resolveHostedReviewBodyForGenerationMock: IpcMock = vi.fn()
 export const loadPullRequestLinkedIssueMock: IpcMock = vi.fn()
-export const getSshFilesystemProviderMock: IpcMock = vi.fn()
 export const tryDeleteWslUncPathMock: IpcMock = vi.fn()
 export const recordCrashBreadcrumbMock: IpcMock = vi.fn()
 
@@ -106,10 +104,6 @@ export const gitWorktreeMock = {
   listWorktreeGraph: listWorktreesMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock
-}
-
-export const sshFilesystemDispatchMock = {
-  getSshFilesystemProvider: getSshFilesystemProviderMock
 }
 
 export const textGenerationModuleMock = {
@@ -207,14 +201,12 @@ const ALL_MOCKS = [
   gitStatusModuleMock,
   gitIgnoredPathsMock,
   gitWorktreeMock,
-  sshFilesystemDispatchMock,
   textGenerationModuleMock,
   pullRequestContextMock,
   pullRequestTemplateMock,
   pullRequestLinkedIssueMock
 ].flatMap(collectMocks)
 
-/** A FileHandle double over `content`: positional reads copy from it, and stat reports its size. */
 export function localFileHandleMock(
   content: Buffer,
   { isFile = true, size = content.byteLength }: { isFile?: boolean; size?: number } = {}
@@ -244,7 +236,6 @@ export function localFileHandleMock(
   }
 }
 
-/** Resets every filesystem IPC mock and reinstalls the defaults every suite starts from. */
 export function resetFilesystemIpcMocks(): void {
   handlers.clear()
   for (const mock of ALL_MOCKS) {

@@ -1,3 +1,4 @@
+import { quotePosixShellUnlessPlain } from '../shared/shell-argument-quoting'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
@@ -22,11 +23,7 @@ const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
 export type ExternalEditorExecutableLaunchSpec = {
   kind: 'executable'
   hideWindowsConsole: boolean
-  /**
-   * Set only for Windows batch shims that would otherwise leave a Command
-   * Prompt behind; routes the spawn through `start` with an empty title and
-   * `/B`. Left unset elsewhere because `start` re-parses quoted argv.
-   */
+  /** Detach Windows GUI shims via start /B only when required; start re-parses quoted argv. */
   detachedGui?: boolean
   spawnCmd: string
   spawnArgs: string[]
@@ -43,13 +40,6 @@ export type ExternalEditorLaunchSpec =
   | ExternalEditorExecutableLaunchSpec
   | ExternalEditorShellLaunchSpec
 
-function escapePosixPathForShell(pathValue: string): string {
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
-    return pathValue
-  }
-  return `'${pathValue.replace(/'/g, "'\\''")}'`
-}
-
 function escapeWindowsPathForShell(pathValue: string): string {
   return /^[a-zA-Z0-9_./@:\\-]+$/.test(pathValue) ? pathValue : `"${pathValue}"`
 }
@@ -57,7 +47,7 @@ function escapeWindowsPathForShell(pathValue: string): string {
 function escapePathForShell(pathValue: string, platform: NodeJS.Platform): string {
   return platform === 'win32'
     ? escapeWindowsPathForShell(pathValue)
-    : escapePosixPathForShell(pathValue)
+    : quotePosixShellUnlessPlain(pathValue)
 }
 
 function isWindowsExecutablePath(command: string): boolean {
@@ -81,8 +71,7 @@ function isDirectExecutablePath(
   if (!/\s/.test(unquoted) || hasMatchingOuterQuotes(command)) {
     return true
   }
-  // Why: unquoted POSIX paths can contain spaces, but so can shell commands
-  // with arguments. Only an existing path is safe to treat as one executable.
+  // An unquoted POSIX path with spaces is ambiguous; only treat existing files as executables.
   return platform === 'win32' ? isWindowsExecutablePath(unquoted) : fileExists(unquoted)
 }
 
@@ -101,8 +90,7 @@ function buildExecutableArgs(
 ): string[] {
   const isCursor = getLauncherBaseName(editorCommand) === 'cursor'
   const targetArgs = buildWslRemoteTargetArgs(editorCommand, pathValue, platform, isCursor)
-  // Why: Cursor can route bare folder launches through the last active
-  // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
+  // Cursor may reuse the last workbench; a new window preserves this workspace target.
   return isCursor ? ['--new-window', ...targetArgs] : targetArgs
 }
 
@@ -116,7 +104,7 @@ function buildWslRemoteTargetArgs(
     return [pathValue]
   }
   const wslPath = parseWslUncPath(pathValue)
-  // Why: both editors otherwise treat a WSL UNC path as a local Windows folder.
+  // Both editors interpret WSL UNC paths as local Windows folders without --remote.
   return wslPath ? ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath] : [pathValue]
 }
 
@@ -171,11 +159,7 @@ function buildShellLaunchSpec(
 ): ExternalEditorLaunchSpec {
   const shellCommand = `${command} ${escapePathForShell(pathValue, platform)}`
   if (platform === 'win32') {
-    // Why: no `start` wrap here. `start` re-parses the line — it swallows the
-    // first quoted operand as a window title and mangles remote paths with
-    // spaces — and on a batch target it leaves a resident nested `cmd /K`.
-    // User-authored compound commands run verbatim; users who want a detached
-    // launch already write `start` themselves.
+    // Do not wrap shell commands in start: it consumes quoted titles and can leave cmd /K running.
     return {
       kind: 'shell',
       hideWindowsConsole: !shouldShowWindowsConsole(command, platform, { shellCommand: true }),
@@ -201,8 +185,7 @@ export function resolveExternalEditorLaunchSpec(
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    // Why: settings often store a full path to idea.cmd / idea.exe; upgrade
-    // those the same way as PATH-resolved names when *64.exe is colocated.
+    // Upgrade explicit JetBrains paths to a colocated GUI executable, just like PATH-resolved names.
     return buildExecutableLaunchSpec(
       preferJetBrainsGuiExecutable(stripMatchingQuotes(trimmed), platform, fileExists),
       pathValue,
@@ -260,8 +243,7 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
       : spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
   }
   if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
-    // Why process-host owns the batch hop: its /s line keeps quoted arguments intact, while a
-    // plain `cmd /c` strips the outer quotes once a spaced code.cmd path meets a spaced argument.
+    // process-host preserves quoting for batch launchers and arguments containing spaces.
     return spawnProcess({
       program: launchSpec.spawnCmd,
       args: launchSpec.spawnArgs,
@@ -269,7 +251,6 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
       stdio: 'ignore'
     })
   }
-  // Why: only shims flagged during resolution (JetBrains) take the start /B detach.
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
     launchSpec.spawnCmd,
     launchSpec.spawnArgs,
@@ -278,7 +259,7 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     }
   )
   if (!launchSpec.hideWindowsConsole) {
-    // Why direct: process-host always hides the console, and a terminal editor on Windows needs one.
+    // process-host hides consoles; Windows terminal editors need a visible console.
     return spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
   }
   return spawnProcess({ program: spawnCmd, args: spawnArgs, detached: true, stdio: 'ignore' })

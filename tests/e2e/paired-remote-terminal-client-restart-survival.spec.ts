@@ -39,7 +39,7 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 /** What a user would accept for "my terminal is back" after reopening the app. */
 const RESTORE_BUDGET_MS = 60_000

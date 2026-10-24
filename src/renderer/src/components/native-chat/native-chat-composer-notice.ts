@@ -7,6 +7,8 @@ import { isClipboardTextTooLargeError } from '../../../../shared/clipboard-text'
 
 export type NativeChatComposerNoticeContent = {
   text: string
+  /** Inline presentation of the sentence when it contains navigation. */
+  content?: React.ReactNode
   /** Text from outside Orca (a host or system error), shown apart and copyable. */
   errorText?: string
 }

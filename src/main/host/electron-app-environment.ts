@@ -1,10 +1,6 @@
 import { app } from 'electron'
 import type { AppEnvironment, AppPathName, AppProcessMetric } from '../../shared/app-environment'
 
-/**
- * Electron-backed AppEnvironment for the desktop app: a pass-through to
- * `electron.app`, so desktop path, version and lifecycle behaviour is unchanged.
- */
 export class ElectronAppEnvironment implements AppEnvironment {
   getPath(name: AppPathName): string {
     return app.getPath(name)

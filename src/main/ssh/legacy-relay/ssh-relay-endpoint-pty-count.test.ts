@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 
 const { waitForSentinel, request, dispose } = vi.hoisted(() => ({
   waitForSentinel: vi.fn(),

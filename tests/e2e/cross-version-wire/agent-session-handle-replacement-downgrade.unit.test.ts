@@ -57,6 +57,8 @@ function neutralRow(chain: AgentSessionProviderHandleLink[]): unknown {
   return JSON.parse(
     JSON.stringify({
       ...fixture,
+      // Historical leases keep the checkpoint so old readers reach handle validation.
+      lease: { ...fixture.lease, journalCheckpoint: null },
       provider: 'grok',
       accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok' },
       providerHandleChain: encodePersistedAgentSessionProviderHandleChain(chain)
@@ -94,7 +96,7 @@ function legacyRow(provider: 'claude' | 'codex') {
   const fixture = agentSessionRecordFixture(
     agentSessionLeaseFixture({ sessionId: `chat-${provider}` })
   )
-  return encodeAgentSessionRecord({
+  const stored = encodeAgentSessionRecord({
     ...fixture,
     provider,
     accountHome:
@@ -111,6 +113,8 @@ function legacyRow(provider: 'claude' | 'codex') {
       }
     ]
   })
+  // Use the same historical lease format as the neutral rows above.
+  return { ...stored, lease: { ...stored.lease, journalCheckpoint: null } }
 }
 
 // A replacement is stored as it is held, which older builds would refuse; it is safe only because

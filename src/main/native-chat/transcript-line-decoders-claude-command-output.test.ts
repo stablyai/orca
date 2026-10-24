@@ -6,8 +6,7 @@ import { stripNoiseMessages } from '../../shared/native-chat-noise'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 
-// OpenClaude 0.31.0 running `/context`, `/cost`, `/context` with no model call;
-// session id and cwd scrubbed. `/cost` replies in a `system` row.
+// OpenClaude 0.31.0: /context, /cost, /context without model calls; session ID/cwd scrubbed.
 const FIXTURE_LINES = readFileSync(
   join(__dirname, '__fixtures__', 'openclaude-0.31.0-local-command-rows.jsonl'),
   'utf8'

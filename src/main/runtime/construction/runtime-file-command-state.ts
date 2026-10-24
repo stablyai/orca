@@ -22,7 +22,6 @@ import { RuntimeRepositoryIssueCommand } from '../runtime-repository-issue-comma
 import { ClientHostedBrowserRowPublisher } from '../client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import {
   isChatScratchWorktreeId,
   resolveChatScratchSelectorFolder
@@ -32,8 +31,18 @@ import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { Repo } from '../../../shared/repo-types'
 import { isWslMoveWorktreeBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
+  protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+    worktreeId?: string,
+    options?: { force?: boolean }
+  ): Set<string>
+  abstract notifyMobileSessionTabsChanged(worktreeId: string): void
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     executionHostId: ExecutionHostId
@@ -93,7 +102,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   protected abstract resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree>
 
-  protected abstract resolveRepoSelector(selector: string): Promise<Repo>
+  protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
 
   protected readonly fileCommands = new RuntimeFileCommands({
     getRuntimeId: () => this.runtimeId,
@@ -126,23 +135,15 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
         absolutePath
       }),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position) => {
-      // The UI cannot open a tab in a workspace that has no row.
-      if (isChatScratchWorktreeId(worktreeId)) {
-        throw new Error('chat_scratch_not_openable')
+    openFile: createRuntimeEditorFileOpener({
+      getNotifier: () => this.notifier,
+      applyLayoutCommand: (command) => this.applyLayoutCommand(command),
+      groupFor: (id) => this.editorOpenGroupFor(id),
+      publishHeadlessTabs: (id) => {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(id, { force: true })
+        this.notifyMobileSessionTabsChanged(id)
       }
-      if (!this.notifier?.openFile) {
-        throw new Error('renderer_unavailable')
-      }
-      this.notifier.openFile(
-        worktreeId,
-        filePath,
-        relativePath,
-        runtimeEnvironmentId,
-        navigation,
-        ...(position ? [position] : [])
-      )
-    },
+    }),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId, navigation) => {
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
@@ -160,6 +161,11 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       )
     }
   })
+
+  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+
+  /** The group a file main opens lands in: the window's live one, else the saved view's. */
+  protected abstract editorOpenGroupFor(worktreeId: string): string | undefined
 
   protected readonly fileWatcherRemoval = createRuntimeFileWatcherRemoval(this.fileCommands)
 
@@ -203,16 +209,14 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
     // Why (#17828 review follow-up): RuntimeGitSyncCommands materializes with no store to
     // avoid unrelated side effects; this is its only way back into the persisted
     // `pushTarget.remoteCreated` flag that #17842's orphan sweep relies on.
-    persistMaterializedPushTarget: (worktreeId, pushTarget) => {
+    persistMaterializedPushTarget: (worktree, pushTarget) => {
       const store = this.store
-      if (!store?.setWorktreeMeta) {
-        return
-      }
+      const target = store ? worktreeRowTarget(store, worktree) : undefined
       // Bookkeeping incidental to the push: a project a WSL move is taking skips it, not the push.
-      if (isWslMoveWorktreeBlocked(worktreeId, store.getWorktreeMeta?.(worktreeId)?.hostId)) {
+      if (!store || !target || isWslMoveWorktreeBlocked(target.id, target.hostId)) {
         return
       }
-      store.setWorktreeMeta(worktreeId, { pushTarget })
+      store.setWorktreeMeta(target, { pushTarget })
     }
   })
 
@@ -232,10 +236,6 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
   protected readonly provenAbsentLeafPtyVerdicts = new Map<string, number>()
 
   protected readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
-
-  // Why: probe dedupe shares one promise across callers, but each caller's
-  // continuation would re-deliver the same unread rows; arm one per pty.
-  protected readonly probeDeferredDeliveryPtyIds = new Set<string>()
 
   protected readonly hostedReviews = new RuntimeHostedReviewCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
@@ -325,18 +325,4 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
 
   /** Worktrees whose persisted client-hosted rows this runtime is responsible for rewriting. */
   protected readonly persistedClientHostedBrowserWorktreeIds = new Set<string>()
-
-  // Why: the whole pointer→Enter span must be single-flight per pty. Triggers
-  // landing mid-flight park their mailbox and re-run once on settle. The
-  // flight object is the settle identity: a stale settle surviving an exit
-  // retire must not clear a newer same-id flight or flush its parked trigger.
-  protected readonly messageDeliveryFlightsByPtyId = new Map<
-    string,
-    { enterTimer: ReturnType<typeof setTimeout> | null }
-  >()
-
-  protected readonly parkedMessageRedeliveriesByPtyId = new Map<
-    string,
-    Map<string, { leaf: RuntimeLeafRecord; reservedTypes?: ReadonlySet<string> }>
-  >()
 }

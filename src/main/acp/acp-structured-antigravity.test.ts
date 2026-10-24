@@ -1,9 +1,7 @@
-// Antigravity's row against its recorded ACP server (1.3.0) and the environment it launches with.
-
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -43,7 +41,7 @@ it('signs a first chat in, asks in default mode, and answers a question with one
     initialize: result(initialized),
     script: (agent) => {
       replay.attach(agent)
-      // A fresh folder names no sign-in method until a client picks one.
+      // The recorded server requires explicit authentication even with a fresh folder.
       agent.on('session/new', (frame) =>
         agent.frames.some((sent) => sent.method === 'authenticate')
           ? agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
@@ -82,6 +80,7 @@ it('signs a first chat in, asks in default mode, and answers a question with one
 
 it('launches on its own private folder with file sign-in and no other Google credentials', async () => {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-antigravity-'))
+  onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
   const folder = join(stateDirectory, 'antigravity-chat')
   const user = {
     GEMINI_HOME: '/data/.gemini',
@@ -97,7 +96,7 @@ it('launches on its own private folder with file sign-in and no other Google cre
   })
   expect(command).toBe(ANTIGRAVITY.command)
   expect(env).toMatchObject({ GEMINI_HOME: folder, AGY_ACP_FORCE_FILE_STORAGE: '1' })
-  // A key deleted at spawn beats its overlay, so the file sign-in must not be among them.
+  // Spawn deletions override overlays; preserve the file sign-in keys.
   expect(envToDelete.sort()).toEqual([
     'ANTIGRAVITY_HARNESS_PATH',
     'GCLOUD_PROJECT',
@@ -111,12 +110,11 @@ it('launches on its own private folder with file sign-in and no other Google cre
   for (const mode of await Promise.all(modes)) {
     expect(process.platform === 'win32' || (mode & 0o777) === 0o700).toBe(true)
   }
-  await rm(stateDirectory, { recursive: true, force: true })
 })
 
 it('runs the chat permission mode picked mid-chat as the server mode on the next send', async () => {
   let resumed = false
-  const { rig, host, fence } = await openHostRig({
+  const { rig, host, fence, ready } = await openHostRig({
     spec: ANTIGRAVITY,
     initialize: RESUMES,
     script: (agent) => {
@@ -137,6 +135,7 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
     providerHandle: undefined
   })
   expect(await host.attach(CALLER, attach)).toMatchObject({ ok: true })
+  await ready()
   resumed = true
   const modes: unknown[] = []
   let child = rig.child()
@@ -151,7 +150,6 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
     }
     expect(await host.setOption(CALLER, { envelope, ...fields })).toMatchObject({ ok: true })
     await send(host, value)
-    // The child launched with the earlier mode is replaced before the send reaches it.
     const previous = child
     child = await waitFor(() => {
       expect(rig.child()).not.toBe(previous)
@@ -172,20 +170,27 @@ it('refuses a new start while its sign-in changes, and stops one already startin
     spec: ANTIGRAVITY,
     script: (agent) => agent.on('session/new', () => {})
   })
-  const starting = rig.acquire().catch((error: unknown) => error)
+  const starting = rig.acquire()
   await rig.frame('session/new')
   const signIn = deferred<void>()
+  onTestFinished(() => signIn.resolve())
   const operation = gate.run(
     async () => {},
     () => signIn.promise
   )
-  expect(String(await starting)).toContain('closed while starting')
+  await starting
+  expect(rig.openFailure()).toMatchObject({ name: 'AcpConnectionClosedError' })
+  expect(rig.child().exited).toBe(true)
   await expect(rig.acquire()).rejects.toMatchObject({ reason: 'accountSwitchInProgress' })
   signIn.resolve()
   await operation
 
   const lateStart = gate.enter(undefined)
   let left = false
+  onTestFinished(() => {
+    left = true
+    lateStart.leave()
+  })
   let stopped = false
   let worked = false
   const failedOperation = gate.run(
@@ -198,6 +203,7 @@ it('refuses a new start while its sign-in changes, and stops one already startin
       worked = true
     }
   )
+  void failedOperation.catch(() => {})
   expect(lateStart.signal.aborted).toBe(true)
   expect(stopped).toBe(false)
   left = true
@@ -216,7 +222,7 @@ it('stops a chat that has left the gate but is not loaded yet before the operati
         agent.reply(frame, { ...result(opened), sessionId: PROVIDER_SESSION })
       )
   })
-  // Its start returned, so the gate has no start to abort and no loaded chat lists it yet.
+  // Acquisition ended, but no loaded chat owns this child yet.
   await rig.acquire()
   const child = rig.child()
   let ranOverLiveChild: boolean | null = null

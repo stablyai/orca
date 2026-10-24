@@ -27,7 +27,7 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 
-// Why: the guest identity probe needs wsl.exe; a failed probe leaves the grant unstamped.
+// Unavailable wsl.exe leaves guest grants unstamped.
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async () => ({
     code: 1,
@@ -45,8 +45,7 @@ let previousUserDataPath: string | undefined
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-grant-userdata-'))
   runtimeHomeDir = join(userDataDir, 'codex-runtime-home', 'home')
-  // Why: production writes hooks.json before granting trust; keeping that
-  // ordering prevents test-only canonical-path drift during ledger setup.
+  // Create hooks.json before granting trust to match production canonical-path resolution.
   mkdirSync(runtimeHomeDir, { recursive: true })
   writeFileSync(join(runtimeHomeDir, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -177,7 +176,7 @@ describe('grantManagedCodexHookTrust', () => {
       sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
     }
     const plan = buildPlan([entry])
-    // Why: the managed fallback lane's write, both separator variants.
+    // Seed fallback trust under both Windows separator variants.
     upsertHookTrustEntries(plan.tomlPath, [entry])
     expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
       computeTrustedHash(entry)
@@ -205,7 +204,7 @@ describe('grantManagedCodexHookTrust', () => {
     upsertHookTrustEntries(plan.tomlPath, [
       { ...entries[0], trustedHash: 'sha256:codex-session_start' }
     ])
-    // Why: a clear before the ledger check would delete the record the ledger proves, forcing a session per launch.
+    // Clearing before ledger validation would force a session on every launch.
     expect(await grantManagedCodexHookTrust(plan, beforeSession)).toMatchObject({ lane: 'rpc' })
     expect(beforeSession).toHaveBeenCalledTimes(1)
   })
@@ -220,8 +219,7 @@ describe('grantManagedCodexHookTrust', () => {
     expect(first.lane).toBe('rpc')
     expect(runner).toHaveBeenCalledTimes(1)
 
-    // Why: the ledger skip only holds while config.toml still carries the
-    // granted hash at the granted key — write it the way codex left it.
+    // Model Codex's write: ledger hits require the granted hash still at its key.
     upsertHookTrustEntries(plan.tomlPath, [
       { ...entries[0], trustedHash: 'sha256:codex-session_start' }
     ])
@@ -230,7 +228,6 @@ describe('grantManagedCodexHookTrust', () => {
     expect(runner).toHaveBeenCalledTimes(1)
     expect(getCodexTrustGrantDiagnostics()).toMatchObject({ granted: 1, ledgerHits: 1 })
 
-    // Config drift (user wiped the trust entry) must re-run the session.
     upsertHookTrustEntries(plan.tomlPath, [{ ...entries[0], trustedHash: 'sha256:wiped' }])
     const third = await grantManagedCodexHookTrust(plan)
     expect(third.lane).toBe('rpc')
@@ -269,7 +266,6 @@ describe('grantManagedCodexHookTrust', () => {
     })
     expect(runner).toHaveBeenCalledTimes(1)
 
-    // Cached: the second install skips the probe entirely.
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({
       lane: 'fallback',
       reason: 'unsupported-cached'
@@ -297,7 +293,7 @@ describe('grantManagedCodexHookTrust', () => {
     })
     expect(runner).toHaveBeenCalledTimes(1)
     expect(codexAppServerCapabilityCache.shouldTry('wsl:Ubuntu')).toBe(true)
-    // Why: an inline grant costs its launch the full timeout, so it keeps the long cooldown.
+    // Inline grants pay the full launch timeout, so their cooldown exceeds 10s.
     vi.setSystemTime(1_000 + 10_001)
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ reason: 'retry-cached' })
     expect(runner).toHaveBeenCalledTimes(1)
@@ -365,8 +361,6 @@ describe('grantManagedCodexHookTrust', () => {
     })
   })
 
-  // Why no restore: the session writes trust only at Orca's own keys, and a
-  // snapshot restore would also undo a save that landed during it.
   it('keeps a config.toml save made during a failed session', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
@@ -423,8 +417,7 @@ describe('grantManagedCodexHookTrust', () => {
     const entries = [managedEntry('session_start')]
     const otherHome = join(userDataDir, 'codex-accounts', 'other', 'home')
     mkdirSync(otherHome, { recursive: true })
-    // Why: the probe dedupe only holds the first session on an unproven host.
-    // A known-supported host must keep its intended launch concurrency.
+    // Mark support proven so first-probe deduplication does not mask launch concurrency.
     codexAppServerCapabilityCache.rememberSupported('wsl:Ubuntu')
     let inFlight = 0
     let maxInFlight = 0

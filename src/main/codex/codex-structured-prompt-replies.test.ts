@@ -114,11 +114,8 @@ describe('CodexPromptRegistry', () => {
     ask(1, 'approval-a')
     ask(2, 'approval-b')
 
-    // The second ask must not have replaced the first, or the turn blocks on a
-    // request nobody can address any more.
     expect(registry.find('approval-a')?.requestId).toBe(1)
     expect(registry.find('approval-b')?.requestId).toBe(2)
-    // Nothing addresses the shared item id, because it names two live prompts.
     expect(registry.find('codex-item-1')).toBeNull()
   })
 

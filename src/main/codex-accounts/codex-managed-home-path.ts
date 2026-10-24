@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { quotePosixShell } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
@@ -79,7 +79,7 @@ export class CodexManagedHomePath {
     if (!this.pathsEqual(account.managedHomePath, expectedPath)) {
       throw originalError
     }
-    // Why: re-auth may recreate a lost empty home, but only at the exact Orca-owned path persisted for this account.
+    // Recreate missing homes only at this account's exact persisted Orca path.
     mkdirSync(expectedPath, { recursive: true })
     writeFileSync(join(expectedPath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
     return this.assert(expectedPath, account.id)
@@ -113,8 +113,7 @@ export class CodexManagedHomePath {
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
     })
-    // Why: 41/42 mean the path is not this account's home; re-auth must refuse
-    // rather than write credentials into someone else's directory.
+    // Exit 41/42 refuses writing credentials into an unmarked or differently owned home.
     if (result.code !== 0 || result.timedOut) {
       throw new Error(
         `Could not prepare the managed Codex home in WSL ${wslInfo.distro} for re-authentication.`

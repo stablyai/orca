@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readAssignmentInventorySnapshot } from './assignment-inventory-snapshot.js'
+import { readAssignmentInventorySnapshot } from './assignment/assignment-inventory-snapshot.js'
 import { REGIONAL_REHOME_ARRIVAL_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   RelayAssignmentStore as BaseRelayAssignmentStore,
@@ -264,40 +264,14 @@ describe('regional rehome assignment state', () => {
     ).toEqual([{ completed_at: context.now(), aborted_at: null }])
     expect(
       await context.database.query(
-        `SELECT completed_at, aborted_at FROM relay_region_rehome_attempts`
+        `SELECT drain_receipt_at, completed_at, aborted_at FROM relay_region_rehome_attempts`
       )
-    ).toEqual([{ completed_at: context.now(), aborted_at: null }])
+    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
     expect(targetControl).toMatch(/^control:/)
     await context.database.close()
   })
 
-  it('completes from durable activity with the source-owned receipt', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    const attempt = await context.store.tryIdleRehome()
-    await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch
-    })
-    await context.store.releaseActivity(identity, sourceControl)
-
-    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
-    expect(
-      await context.database.query(
-        `SELECT drain_receipt_at, completed_at, aborted_at
-       FROM relay_region_rehome_attempts`
-      )
-    ).toEqual([{ drain_receipt_at: context.now(), completed_at: context.now(), aborted_at: null }])
-    await context.database.close()
-  })
-
-  it('requires a fresh preference and an advertised source capability', async () => {
+  it('requires an advertised source capability', async () => {
     const context = await setup({ sourceProtocol: 0 })
     await activatePreferredSource(context, {
       userId: 'user-1',
@@ -951,52 +925,6 @@ describe('regional rehome assignment state', () => {
   // rather than through candidate selection, so it needs its own coverage.
   // Why: one contended candidate must cost its own tick, not the whole page. The
   // sweeps are explicitly per-candidate isolated for exactly this reason.
-  it('completes the candidates behind a contended one', async () => {
-    const probe = new CellInventoryLockProbe()
-    const context = await setup({ wrap: (database) => probe.wrap(database) })
-    const identities = [
-      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
-      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
-    ]
-    for (const identity of identities) {
-      // Dispatch is rate limited, so each claim needs its own interval.
-      context.advance(60_000)
-      await freshHeartbeats(context)
-      const sourceControl = await activatePreferredSource(context, identity)
-      const attempt = await context.store.tryIdleRehome()
-      await context.store.activateControl(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2,
-        generation: 1
-      })
-      await context.store.markMigrationTargetRegistered(identity, {
-        cellId: target.id,
-        assignmentEpoch: 2
-      })
-      await context.store.releaseActivity(identity, sourceControl)
-    }
-    probe.reset()
-    probe.failNoWaitTimes = 1
-    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
-
-    let completed: number
-    try {
-      completed = await context.store.completeReadyRegionalRehomes()
-    } finally {
-      busy.restore()
-    }
-
-    expect(completed).toBe(1)
-    expect(busy.entries).toEqual([
-      {
-        event: 'orca_relay_sweep_cell_inventory_busy',
-        sweep: 'complete-ready-regional-rehomes',
-        skipped: 1
-      }
-    ])
-    await context.database.close()
-  })
-
   // Why: with `continue` replaced by `break` a single contended candidate drops
   // the rest of the page. Two in a row prove the sweep resumes, not just that it
   // survived one, and that the summary counts both.
@@ -1290,8 +1218,11 @@ describe('regional rehome assignment state', () => {
     })
     await context.store.releaseActivity(identity, sourceControl)
     await context.store.releaseActivity(identity, targetControl)
-    context.advance(24 * 60 * 60_000)
-    await heartbeat(context.store, source, sourceIncarnation, 3, 2)
+    context.advance(24 * 60 * 60_000 - 1)
+    await freshHeartbeats(context)
+    expect(await context.store.abortExpiredRegionalRehomes()).toBe(0)
+    context.advance(1)
+    await heartbeat(context.store, source, sourceIncarnation, 3, context.now())
     expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
     expect(await context.store.resolve(identity)).toMatchObject({
       cellId: source.id,

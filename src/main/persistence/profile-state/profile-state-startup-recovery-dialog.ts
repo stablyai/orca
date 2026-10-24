@@ -2,6 +2,11 @@ import { statSync } from 'node:fs'
 import type { MessageBoxOptions, MessageBoxReturnValue } from 'electron'
 import { getActiveProfileStateLocation } from './profile-state-active-location'
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
+import type { ProfileStateRepairSection } from './profile-state-section-repair'
+import {
+  includesProjectListSection,
+  profileStateSectionLabels
+} from './profile-state-section-labels'
 
 export type ProfileStateStartupRecoveryDialogDeps = {
   message: string
@@ -97,4 +102,54 @@ export async function chooseProfileStateCopy(
     ].join('\n')
   })
   return response === 0 ? 'current-sqlite' : response === 1 ? 'current-json' : undefined
+}
+
+export type ProfileStateRepairChoiceDialogDeps = {
+  sections: readonly ProfileStateRepairSection[]
+  formatTime?: (time: Date) => string
+  showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+}
+
+/** Ask before replacing damaged sections with older copies; false means quit unchanged. */
+export async function chooseProfileStateRepair(
+  deps: ProfileStateRepairChoiceDialogDeps
+): Promise<boolean> {
+  const format = deps.formatTime ?? ((time: Date) => time.toLocaleString())
+  const lines = deps.sections.map(({ domain, backupCreatedAtMs }) => {
+    const [label] = profileStateSectionLabels([domain])
+    return backupCreatedAtMs === undefined
+      ? `${label}: no readable backup, so it will start empty.`
+      : `${label}: restored from the backup saved ${format(new Date(backupCreatedAtMs))}.`
+  })
+  const projectSections = deps.sections.filter(({ domain }) => includesProjectListSection([domain]))
+  const projectNote =
+    projectSections.length === 0
+      ? []
+      : projectSections.some(({ backupCreatedAtMs }) => backupCreatedAtMs === undefined)
+        ? [
+            'Orca will forget your projects and their workspace details. Files on disk are not touched.',
+            ''
+          ]
+        : [
+            'Projects added after that backup will be removed from Orca, along with their workspace details. Files on disk are not touched.',
+            ''
+          ]
+  const { response } = await deps.showMessageBox({
+    type: 'warning',
+    buttons: ['Repair and Restart', 'Quit'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+    title: 'Repair profile',
+    message: "Part of this profile's saved state is damaged.",
+    detail: [
+      ...new Set(lines),
+      '',
+      'Everything else stays as it is now.',
+      '',
+      ...projectNote,
+      'Orca keeps a copy of the damaged file in its data folder, then restarts.'
+    ].join('\n')
+  })
+  return response === 0
 }

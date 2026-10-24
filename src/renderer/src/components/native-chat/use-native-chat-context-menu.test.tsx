@@ -70,10 +70,6 @@ vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
 
 vi.mock('./NativeChatSelectionQuote', () => ({ NativeChatSelectionQuote: () => null }))
 
-vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
-  TabWorkspaceLayoutMenuSection: () => 'Move Tab to Split'
-}))
-
 function childrenText(children: ReactNode): string {
   return React.Children.toArray(children)
     .map((child) => {
@@ -102,7 +98,6 @@ function Harness({
     composerRef: createRef(),
     onSwitchToTerminal,
     showTerminalPaneActions: !structured,
-    workspaceLayout: structured ? { unifiedTabId: 'chat-tab', groupId: 'group-1' } : undefined,
     resolveOrcaSessionId: orcaSessionId === undefined ? undefined : async () => orcaSessionId,
     actions: {
       ...emptyNativeChatContextMenuActions,
@@ -137,6 +132,10 @@ function ImageHarness({
       </button>
       <p>text</p>
       <textarea aria-label="composer" />
+      <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
+        typo
+        <span contentEditable={false}>pill</span>
+      </div>
       {menu}
     </div>
   )
@@ -223,12 +222,28 @@ describe('useNativeChatContextMenu', () => {
     expect(copyTextItem()).toBeUndefined()
   })
 
-  it('offers Paste in a text field but not on the transcript', () => {
+  it.each(['composer', 'prompt'])(
+    'leaves a right-click in the %s field to the native menu with spelling suggestions',
+    (name) => {
+      const markPlainTextContextMenuTarget = vi.fn()
+      vi.stubGlobal('api', { ui: { markPlainTextContextMenuTarget } })
+      render(<ImageHarness />)
+      const field = screen.getByRole('textbox', { name })
+
+      // fireEvent returns false when the handler prevented the default.
+      expect(fireEvent.pointerDown(field, { button: 2 })).toBe(true)
+      expect(fireEvent.contextMenu(field)).toBe(true)
+      expect(markPlainTextContextMenuTarget).toHaveBeenCalledOnce()
+      expect(pasteItem()).toBeUndefined()
+    }
+  )
+
+  it('keeps the chat menu on the transcript and on a pill inside the prompt', () => {
     render(<ImageHarness />)
-    fireEvent.contextMenu(screen.getByText('text'))
+    expect(fireEvent.contextMenu(screen.getByText('text'))).toBe(false)
     expect(pasteItem()).toBeUndefined()
 
-    fireEvent.contextMenu(screen.getByRole('textbox', { name: 'composer' }))
+    expect(fireEvent.contextMenu(screen.getByText('pill'))).toBe(false)
     expect(pasteItem()).toBeDefined()
   })
 
@@ -385,9 +400,9 @@ describe('useNativeChatContextMenu', () => {
     // Keep the assertions tied to the mocked menu item's semantic children.
     const labels = items.list.map((candidate) => childrenText(candidate.children))
 
-    expect(labels.some((label) => label.startsWith('Switch to terminal view'))).toBe(true)
+    expect(labels.some((label) => label.startsWith('Continue with Terminal Agent'))).toBe(true)
     const item = items.list.find((candidate) =>
-      childrenText(candidate.children).startsWith('Switch to terminal view')
+      childrenText(candidate.children).startsWith('Continue with Terminal Agent')
     )
     expect(item).toBeDefined()
     item?.onSelect?.()
@@ -398,16 +413,10 @@ describe('useNativeChatContextMenu', () => {
     renderToStaticMarkup(<Harness />)
 
     expect(
-      items.list.some((candidate) => childrenText(candidate.children) === 'Switch to terminal view')
+      items.list.some(
+        (candidate) => childrenText(candidate.children) === 'Continue with Terminal Agent'
+      )
     ).toBe(false)
-  })
-
-  it('reuses workspace layout actions without terminal-only pane commands', () => {
-    const markup = renderToStaticMarkup(<Harness structured />)
-
-    expect(markup).toContain('Move Tab to Split')
-    expect(markup).not.toContain('Split Terminal Right')
-    expect(markup).not.toContain('Fork Agent Session')
   })
 
   describe('Copy Orca Session ID', () => {

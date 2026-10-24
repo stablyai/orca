@@ -14,9 +14,14 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   }
 })
 
-import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
+import {
+  buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
+  EXTERNAL_MUTATION_DEBOUNCE_MS
+} from './editor-external-watch-event-reconciliation'
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
+import type { OpenFile } from '@/store/slices/editor'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
 import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'
 import {
@@ -24,7 +29,7 @@ import {
   beginEditorPathMove,
   settleEditorPathMove
 } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 
 const findTarget = (worktreePath: string, runtimeEnvironmentId: string | null = null) =>
   worktreePath === '/repo'
@@ -43,6 +48,7 @@ describe('self-move source suppression (in-flight)', () => {
     worktreePath: '/repo',
     filePath: '/repo/notes.md',
     relativePath: 'notes.md',
+    language: 'markdown',
     mode: 'edit' as const,
     isDirty: false
   }
@@ -51,9 +57,10 @@ describe('self-move source suppression (in-flight)', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
       openFiles: [fileNotes],
       setExternalMutation
-    } as never)
+    })
   })
 
   afterEach(() => {
@@ -77,7 +84,7 @@ describe('self-move source suppression (in-flight)', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'renamed')
@@ -94,13 +101,15 @@ describe('self-move source suppression (in-flight)', () => {
       worktreePath: '/repo',
       filePath: '/repo/src/late.md',
       relativePath: 'src/late.md',
+      language: 'markdown',
       mode: 'edit' as const,
       isDirty: true
     }
     vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
       openFiles: [lateTab],
       setExternalMutation
-    } as never)
+    })
     beginEditorPathMove({
       operationId: 'op-dir',
       worktreeId: 'wt-1',
@@ -116,7 +125,7 @@ describe('self-move source suppression (in-flight)', () => {
         { kind: 'create', absolutePath: '/repo/dst/late.md' }
       ])
     )
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-late', 'renamed')
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-late', 'deleted')
@@ -129,7 +138,7 @@ describe('self-move source suppression (in-flight)', () => {
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
-    vi.advanceTimersByTime(200)
+    vi.advanceTimersByTime(EXTERNAL_MUTATION_DEBOUNCE_MS)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'deleted')
     dispose()
@@ -138,20 +147,19 @@ describe('self-move source suppression (in-flight)', () => {
 
 describe('self-move echo verification (content identity)', () => {
   const setExternalMutation = vi.fn()
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
 
   const BASELINE_CONTENT = 'the file on disk\n'
   const baselineSignature = getDiskBaselineSignature(BASELINE_CONTENT)
   const TARGET_PATH = '/repo/subdir/notes.md'
 
-  function movedDirtyTab(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  function movedDirtyTab(overrides: Partial<OpenFile> = {}): OpenFile {
     return {
       id: 'file-notes',
       worktreeId: 'wt-1',
-      worktreePath: '/repo',
       filePath: TARGET_PATH,
       relativePath: 'subdir/notes.md',
+      language: 'markdown',
       mode: 'edit' as const,
       isDirty: true,
       lastKnownDiskSignature: baselineSignature,
@@ -161,14 +169,14 @@ describe('self-move echo verification (content identity)', () => {
     }
   }
 
-  function mockState(file: Record<string, unknown>): void {
+  function mockState(file: OpenFile): void {
     vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
       openFiles: [file],
       setExternalMutation,
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho
-    } as never)
-    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+    })
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file])
   }
 
   function payloadFor(): FsChangedPayload {
@@ -195,17 +203,15 @@ describe('self-move echo verification (content identity)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('suspends autosave synchronously and suppresses when disk matches the baseline', async () => {
+  it('suppresses when disk matches the baseline', async () => {
     mockState(movedDirtyTab())
     stubDiskRead({ isBinary: false, content: BASELINE_CONTENT })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payloadFor())
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', true)
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     expect(clearSelfMoveEcho).toHaveBeenCalledWith('file-notes')
     dispose()
   })
@@ -243,7 +249,6 @@ describe('self-move echo verification (content identity)', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     dispose()
   })
 
@@ -274,7 +279,6 @@ describe('self-move echo verification (content identity)', () => {
 })
 
 describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () => {
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
   const setExternalMutation = vi.fn()
 
@@ -290,6 +294,7 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     filePath: FLOATING_FILE_PATH,
     relativePath: '../notes/readme.md',
     runtimeEnvironmentId: null,
+    language: 'markdown',
     mode: 'edit' as const,
     isDirty: true,
     lastKnownDiskSignature: baseline,
@@ -303,11 +308,11 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     readFile = vi.fn().mockResolvedValue({ isBinary: false, content: CONTENT })
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     vi.mocked(useAppStore.getState).mockReturnValue({
+      ...createTestStore().getState(),
       openFiles: [floatingTab],
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho,
       setExternalMutation
-    } as never)
+    })
   })
 
   afterEach(() => {
@@ -320,9 +325,8 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     await vi.advanceTimersByTimeAsync(50)
 
     expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: FLOATING_FILE_PATH }))
-    // Disk == baseline -> echo -> suppress + release the gate, no false banner.
+    // Disk == baseline -> echo -> suppress, no false banner.
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-x', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-x', false)
     // Safety net does NOT consume provenance (a later watcher event still needs it).
     expect(clearSelfMoveEcho).not.toHaveBeenCalled()
   })

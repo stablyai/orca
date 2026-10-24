@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '@/store/types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { revealWorkspaceSurface, selectWorkspaceSurface } from './workspace-surface-reveal'
 
 const dispatchEvent = vi.fn()
 
-function revealState(isNavigatingHistory = false) {
+function revealState(
+  isNavigatingHistory = false,
+  active: { worktreeId: string; hostId: ExecutionHostId } | null = null
+) {
   return {
     settings: { ...getDefaultSettings('/home/test'), floatingTerminalEnabled: true },
     floatingWorkspacePanelOpen: false,
@@ -17,8 +21,8 @@ function revealState(isNavigatingHistory = false) {
     recordWorktreeVisit: vi.fn(),
     isNavigatingHistory,
     revealWorktreeInSidebar: vi.fn(),
-    activeWorktreeId: null,
-    activeWorkspaceExecutionHostId: null
+    activeWorktreeId: active?.worktreeId ?? null,
+    activeWorkspaceExecutionHostId: active?.hostId ?? null
   }
 }
 
@@ -68,6 +72,17 @@ describe('revealWorkspaceSurface', () => {
     expect(state.markWorktreeVisited).toHaveBeenCalledWith('repo::/wt')
     expect(state.recordWorktreeVisit).not.toHaveBeenCalled()
   })
+})
+
+it.each([
+  ['revealWorkspaceSurface', revealWorkspaceSurface],
+  ['selectWorkspaceSurface', selectWorkspaceSurface]
+] as const)('%s keeps the selected host of the active workspace', (_name, surface) => {
+  const state = revealState(false, { worktreeId: 'repo::/wt', hostId: 'ssh:box' })
+
+  surface(state, 'repo::/wt')
+
+  expect(state.setActiveWorktree).toHaveBeenCalledWith('repo::/wt', 'ssh:box')
 })
 
 describe('selectWorkspaceSurface', () => {

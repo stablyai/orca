@@ -12,8 +12,9 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -86,6 +87,31 @@ describe('Store', () => {
     store.flush()
     const persisted = readDataFile() as { automations: { baseBranch: string | null }[] }
     expect(persisted.automations[0].baseBranch).toBeNull()
+  })
+
+  it('records the dispatch time a headless launch stamped before prompting its agent', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, Date.now())
+
+    const dispatched = store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      dispatchedAt: 1_234,
+      error: null
+    })
+
+    expect(dispatched.dispatchedAt).toBe(1_234)
   })
 
   it('returns the existing automation for a repeated creation key', async () => {
@@ -197,8 +223,7 @@ describe('Store', () => {
   })
 
   it('treats undefined update fields as omitted, never as explicit clears', async () => {
-    // The renderer forwards a Partial verbatim, so an untouched field arrives as explicit undefined
-    // and must not take the `null` clear branch reserved for a real user clear.
+    // Renderer patches can carry explicit undefined for untouched fields; only null clears them.
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
     const automation = store.createAutomation({
@@ -228,7 +253,6 @@ describe('Store', () => {
     expect(updated.sourceContext).toEqual(automation.sourceContext)
     expect(updated.baseBranch).toBe('origin/release')
     expect(updated.setupDecision).toBe('run')
-    // Explicit nulls still clear.
     expect(store.updateAutomation(automation.id, { baseBranch: null }).baseBranch).toBeNull()
 
     const existing = store.updateAutomation(automation.id, {
@@ -290,8 +314,7 @@ describe('Store', () => {
       timezone: 'UTC',
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime(),
-      // A paired client names this host 'runtime:<id>' — an id the client assigned,
-      // which this store cannot interpret and must not persist.
+      // Client-assigned runtime IDs have no meaning in the owning host’s namespace.
       runContext: {
         kind: 'workspace-run',
         projectId: 'github:stablyai/orca',
@@ -320,7 +343,7 @@ describe('Store', () => {
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
     const persisted = readDataFile() as { automations: Record<string, unknown>[] }
-    // A record a pre-fix host stored from a paired client's create input.
+    // Simulate a legacy host persisting a client-assigned runtime ID.
     persisted.automations[0].runContext = {
       kind: 'workspace-run',
       projectId: 'github:stablyai/orca',
@@ -334,7 +357,7 @@ describe('Store', () => {
     const reloaded = await createStore()
     expect(reloaded.listAutomationsForScope().items[0]?.selector.kind).toBe('orphan')
 
-    // A toggle is not a move: the record must not silently re-adopt.
+    // Toggling enabled must not reassign an orphaned automation.
     reloaded.updateAutomation(automation.id, { enabled: false })
     expect(reloaded.listAutomationsForScope().items[0]?.selector.kind).toBe('orphan')
 
@@ -474,7 +497,7 @@ describe('Store', () => {
     seed.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
     seed.flush()
 
-    // Why: a second load+flush settles the one-shot UI migration flags first, so they (not the prune) don't mark the store dirty.
+    // Settle unrelated one-shot migrations so only pruning can dirty this load.
     const warm = await createStore()
     warm.flush()
 
@@ -484,12 +507,12 @@ describe('Store', () => {
       const legacy: Record<string, unknown> = {
         ...template,
         id: `legacy-run-${i}`,
-        // Only final runs are evictable; the real-world blowup was skipped_precheck rows.
+        // skipped_precheck is final and eligible for pruning.
         status: 'skipped_precheck',
         createdAt: 1_000 + i,
         scheduledFor: 1_000 + i
       }
-      // Legacy files predate runNumber; backfill must run BEFORE the prune so survivors keep their true ordinals.
+      // Remove legacy runNumber fields to verify backfill precedes pruning.
       delete legacy.runNumber
       return legacy
     })
@@ -500,7 +523,7 @@ describe('Store', () => {
       const reloaded = await createStore()
       expect(reloaded.listAutomationRuns(automation.id)).toHaveLength(100)
 
-      // The load-path prune must mark state dirty on its own; nothing else here saves.
+      // Rely on the debounced save to prove pruning itself dirtied the state.
       vi.advanceTimersByTime(1000)
       await reloaded.waitForPendingWrite()
     } finally {
@@ -510,7 +533,6 @@ describe('Store', () => {
     const healed = readDataFile() as { automationRuns: Record<string, unknown>[] }
     expect(healed.automationRuns).toHaveLength(100)
     expect(healed.automationRuns.at(-1)?.id).toBe('legacy-run-249')
-    // Survivors carry their true lifetime ordinals (151..250), not restarted ones.
     expect(healed.automationRuns[0]?.runNumber).toBe(151)
     expect(healed.automationRuns.at(-1)?.runNumber).toBe(250)
   })
@@ -542,7 +564,6 @@ describe('Store', () => {
       error: null
     })
 
-    // 120 later runs reach a final status while the first one is still dispatched.
     let firstCompletedId = ''
     for (let i = 1; i <= 120; i++) {
       const later = store.createAutomationRun(automation, base + i * 60_000)
@@ -555,7 +576,6 @@ describe('Store', () => {
       })
     }
 
-    // The late completion must still find its row.
     const completed = store.updateAutomationRun({
       runId: inFlight.id,
       status: 'completed',
@@ -566,7 +586,7 @@ describe('Store', () => {
 
     const runs = store.listAutomationRuns(automation.id)
     expect(runs.some((run) => run.id === inFlight.id)).toBe(true)
-    // Store can briefly hold cap+2: the last-created run finalizes after its creation-time prune, and the late completion lands without a prune of its own.
+    // Finalization follows creation-time pruning; late completion permits a temporary cap+2.
     expect(runs.some((run) => run.id === firstCompletedId)).toBe(false)
     expect(runs.length).toBeLessThanOrEqual(102)
   })
@@ -681,7 +701,9 @@ describe('Store', () => {
   it('snapshots automation run workspace names for deleted-workspace history', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
-    store.setWorktreeMeta('wt1', { displayName: 'Nightly workspace' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      displayName: 'Nightly workspace'
+    })
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -695,7 +717,7 @@ describe('Store', () => {
     })
 
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
-    store.removeWorktreeMeta('wt1')
+    removeWorktreeMetaRow(store, 'wt1', undefined)
 
     expect(run.workspaceDisplayName).toBe('Nightly workspace')
     expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
@@ -719,12 +741,41 @@ describe('Store', () => {
     })
     store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
 
-    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName('wt1', 'Deleted workspace')
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName(
+      hostWorktreeTarget({ id: 'wt1', hostId: 'local' }),
+      'Deleted workspace'
+    )
 
     expect(updatedCount).toBe(1)
     expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
       'Deleted workspace'
     )
+  })
+
+  it("deleting an SSH twin's workspace leaves the local twin's run label", async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const before = store.listAutomationRuns(automation.id)[0].workspaceDisplayName
+
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName(
+      hostWorktreeTarget({ id: 'wt1', hostId: toSshExecutionHostId('ssh-1') }),
+      'SSH twin'
+    )
+
+    expect(updatedCount).toBe(0)
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(before)
   })
 
   it('persists automation run output snapshots across later status updates', async () => {

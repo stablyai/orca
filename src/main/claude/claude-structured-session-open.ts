@@ -11,7 +11,6 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-/** The host awaits this under its own start signal after the process is published. */
 export async function openClaudeStructuredSession(input: {
   request: StructuredAgentSessionProviderOpenInput
   session: ClaudeSession

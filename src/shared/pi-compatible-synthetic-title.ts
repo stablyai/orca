@@ -6,12 +6,12 @@ export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
   /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
 // Why: legacy Pi/OMP-compatible shells can emit the delimiter before cwd text exists.
-const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?π(?:\s*[-:]|\s)\s*.*$/u
+const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?\u03C0(?:\s*[-:]|\s)\s*.*$/u
 // Why: the state separator sits directly after the brand — `π ! label`, `OMP > label`. The brand
 // may already have been swapped for the owner's label, so accept those too — but only in their
 // exact profile casing, since a lowercase `pi - refactor…` is ordinary prose, not a Pi title.
 // The separator must be delimited (`:` attached, or spaced) or `omp-harness` reads as a state.
-const PI_COMPATIBLE_SEPARATOR_RE = /^\s*(?:π|Pi|OMP)(?::|\s+([!>-]))(?=\s|$)/u
+const PI_COMPATIBLE_SEPARATOR_RE = /^\s*(?:\u03C0|Pi|OMP)(?::|\s+([!>-]))(?=\s|$)/u
 const PI_COMPATIBLE_PERMISSION_TAIL_RE = /\baction required\b/i
 
 function containsBrailleSpinner(title: string): boolean {

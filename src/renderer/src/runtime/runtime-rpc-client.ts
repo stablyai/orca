@@ -272,6 +272,16 @@ export async function getRuntimeEnvironmentStatus(
   return entry.status
 }
 
+/** The capability as last probed, without waiting (for synchronous terminal replies); null before
+ *  the environment's first status probe. */
+export function readCachedRuntimeEnvironmentCapability(
+  environmentId: string,
+  capability: RuntimeCapability
+): boolean | null {
+  const status = runtimeCompatibilityChecks.get(environmentId.trim())?.status
+  return status ? status.capabilities?.includes(capability) === true : null
+}
+
 export async function runtimeEnvironmentSupportsCapability(
   environmentId: string,
   capability: RuntimeCapability,

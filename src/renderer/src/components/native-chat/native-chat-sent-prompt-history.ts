@@ -76,7 +76,15 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
       push(`command:${command.id}`, command.command)
     }
     const text = deriveNativeChatRowContent(message.blocks).markdown
-    push(message.id, source.withoutImageMarkers ? stripSentImagePromptMarkers(text) : text)
+    push(
+      message.id,
+      source.withoutImageMarkers
+        ? stripSentImagePromptMarkers(
+            text,
+            message.blocks.filter((block) => block.type === 'image-ref').length
+          )
+        : text
+    )
   }
   for (const command of commands.slice(nextCommand)) {
     push(`command:${command.id}`, command.command)

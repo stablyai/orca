@@ -61,7 +61,12 @@ export function resolveAgentAccountRestartResumeStartup(
     return null
   }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+  // Why Codex only: a WSL Claude resume reads the guest's selected-account pointer at launch.
+  if (
+    agent === 'codex' &&
+    projectRuntime?.status === 'resolved' &&
+    projectRuntime.runtime.kind === 'wsl'
+  ) {
     return null
   }
   const worktree = state.getKnownWorktreeById(args.worktreeId)
@@ -91,13 +96,13 @@ export function resolveAgentAccountRestartResumeStartup(
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs)
+          ? resolveTuiAgentLaunchArgs(agent, state.settings)
           : null,
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv)
+          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
           : null,
     ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
     ...(launchConfig?.ompResumeFilePath

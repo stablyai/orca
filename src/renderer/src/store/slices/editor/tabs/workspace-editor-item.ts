@@ -6,7 +6,11 @@ import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { recordOpenedEditorTabInLayoutOwner } from './editor-tab-layout-owner'
+import type { Tab } from '../../../../../../shared/tab-types'
+import {
+  openEditorTabThroughLayoutOwner,
+  sendReusedEditorTabToLayoutOwner
+} from './editor-tab-open-through-layout-owner'
 
 export function openWorkspaceEditorItem(
   state: AppState,
@@ -16,7 +20,9 @@ export function openWorkspaceEditorItem(
   contentType: EditorTabContentType,
   isPreview?: boolean,
   targetGroupId?: string,
-  selection: EditorTabSelection = 'focus'
+  selection: EditorTabSelection = 'focus',
+  /** Where in its group a reopened tab goes back to. */
+  index?: number
 ): string {
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
@@ -27,6 +33,10 @@ export function openWorkspaceEditorItem(
       contentType
     )
     if (existing) {
+      // Switch point: an open that rewrote the tab's file record or view reaches main.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        sendReusedEditorTabToLayoutOwner(state, existing)
+      }
       if (selection !== 'none') {
         // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
         state.activateTab?.(existing.id, {
@@ -37,25 +47,40 @@ export function openWorkspaceEditorItem(
       return existing.id
     }
   }
-  const file =
-    contentType === 'editor'
-      ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
-      : undefined
-  const created = state.createUnifiedTab?.(worktreeId, contentType, {
-    entityId: fileId,
-    label,
-    isPreview,
-    // The tab follows the captured file owner even when another host has UI focus.
-    ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
-    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
-    ...(selection === 'none' ? { activate: false } : {}),
-    ...(selection === 'background' ? { recordFocus: false } : {})
-  })
-  // Switch point: main records the tab the window just drew, under its ids.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN && created) {
-    recordOpenedEditorTabInLayoutOwner(state, created)
+  const drawHere = (id?: string): Tab | undefined => {
+    const file =
+      contentType === 'editor'
+        ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
+        : undefined
+    return state.createUnifiedTab?.(worktreeId, contentType, {
+      ...(id ? { id } : {}),
+      entityId: fileId,
+      label,
+      isPreview,
+      // The tab follows the captured file owner even when another host has UI focus.
+      ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
+      ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
+      ...(selection === 'none' ? { activate: false } : {}),
+      ...(selection === 'background' ? { recordFocus: false } : {})
+    })
   }
-  return created?.id ?? fileId
+  // Switch point: main opens the tab under the window's proposed id and its frame draws it.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    const sent = openEditorTabThroughLayoutOwner(state, {
+      fileId,
+      worktreeId,
+      contentType,
+      isPreview: isPreview === true,
+      groupId: resolvedGroupId,
+      selection,
+      index,
+      drawHere
+    })
+    if (sent) {
+      return sent
+    }
+  }
+  return drawHere()?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,

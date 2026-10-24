@@ -40,6 +40,7 @@ import {
 } from './app-command-handlers'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /**
  * Registers the window-level shortcut listeners and the app command dispatcher.
@@ -104,7 +105,7 @@ export function useGlobalKeybindings(args: {
         terminalShortcutPolicy
       } = state
 
-      // Child handlers (e.g. terminal search) share this window capture phase and fire first; bail if they already preventDefault'd so both don't act.
+      // Other app owners share this routed stage and may fire first; bail if they already preventDefault'd so both don't act.
       if (input.defaultPrevented || input.isComposing || input.key === 'Process') {
         return
       }
@@ -322,13 +323,13 @@ export function useGlobalKeybindings(args: {
     // Why: a window blur mid-gesture must not leave the detector armed.
     const onBlur = (): void => doubleTapDetector.reset()
 
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    addAppKeyListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
     return () => {
       unregisterAppCommandDispatcher()
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
   }, [])

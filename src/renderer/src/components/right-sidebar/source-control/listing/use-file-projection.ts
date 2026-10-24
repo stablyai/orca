@@ -5,7 +5,6 @@ import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-t
 import { compareFileNames } from '../../../../../../shared/file-name-sort'
 import { compareGitStatusEntries } from '../../source-control-status-sort'
 import {
-  filterSourceControlGroupedPathEntries,
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
   type SourceControlFileFilterState
@@ -25,7 +24,7 @@ import {
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
-  type SourceControlSectionArea
+  type SourceControlDisplaySectionArea
 } from './section-order'
 import {
   collectListSelectionEntries,
@@ -44,7 +43,6 @@ export type SourceControlFileProjection = {
   fileFilterState: SourceControlFileFilterState
   normalizedFilter: string
   isGitHistoryVisible: boolean
-  filteredGrouped: SourceControlEntryGroups
   displaySections: SourceControlDisplaySection[]
   unfilteredDisplaySectionsById: ReadonlyMap<
     SourceControlDisplaySectionId,
@@ -96,7 +94,7 @@ export function useSourceControlFileProjection({
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
   filterQuery: string
-  sourceControlGroupOrder: readonly SourceControlSectionArea[]
+  sourceControlGroupOrder: readonly SourceControlDisplaySectionArea[]
   activeWorktreeId: string | null
   worktreePath: string | null
   isFolder: boolean
@@ -128,18 +126,19 @@ export function useSourceControlFileProjection({
     !fileFilterState.tooLarge &&
     Boolean(activeWorktreeId && worktreePath && !isFolder)
 
-  const filteredGrouped = useMemo(
-    () => filterSourceControlGroupedPathEntries(grouped, fileFilterState),
-    [fileFilterState, grouped]
-  )
-
-  const displaySections = useMemo(
-    () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
-    [filteredGrouped, sourceControlGroupOrder]
-  )
   const unfilteredDisplaySections = useMemo(
     () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
     [grouped, sourceControlGroupOrder]
+  )
+  const displaySections = useMemo(
+    () =>
+      unfilteredDisplaySections
+        .map((section) => ({
+          ...section,
+          items: filterSourceControlPathEntries(section.items, fileFilterState)
+        }))
+        .filter((section) => section.items.length > 0),
+    [fileFilterState, unfilteredDisplaySections]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
@@ -170,13 +169,12 @@ export function useSourceControlFileProjection({
       const sectionRoots = compactSourceControlTree(
         buildGitStatusSourceControlTree(section.area, section.items)
       )
-      roots[section.id] =
+      // Conflict folders need section-local collapse keys even when their paths match Changes.
+      roots[section.id] = applyGitStatusEntryAreasToSourceControlTree(
         section.id === 'conflicts'
-          ? applyGitStatusEntryAreasToSourceControlTree(
-              // Why: conflict rows can mirror normal paths, so their folder collapse keys must not share state with normal sections.
-              namespaceSourceControlTreeDirectoryKeys(sectionRoots, 'conflicts')
-            )
+          ? namespaceSourceControlTreeDirectoryKeys(sectionRoots, 'conflicts')
           : sectionRoots
+      )
     }
     return roots
   }, [displaySections, sourceControlViewMode])
@@ -274,7 +272,6 @@ export function useSourceControlFileProjection({
     fileFilterState,
     normalizedFilter,
     isGitHistoryVisible,
-    filteredGrouped,
     displaySections,
     unfilteredDisplaySectionsById,
     filteredBranchEntries,

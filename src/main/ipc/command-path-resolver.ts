@@ -14,9 +14,7 @@ export type ResolveCommandOptions = {
   maxResults?: number
 }
 
-// Why: Windows env keys are case-insensitive (PATH is usually stored as `Path`,
-// PATHEXT as `PathExt`), but the merged env object we search is a plain,
-// case-sensitive Record — so look the key up case-insensitively.
+// Windows environment keys are case-insensitive even though this Record is not.
 function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
   const direct = env[key]
   if (direct !== undefined) {
@@ -34,8 +32,7 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
 function getWindowsExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
   const extensions = pathext.split(';').filter((ext) => ext.length > 0)
-  // Why: when the command already carries an extension (e.g. `node.exe`), an
-  // exact-name match must be allowed alongside the PATHEXT permutations.
+  // Explicit extensions also permit exact-name matches alongside PATHEXT variants.
   if (command.includes('.')) {
     extensions.unshift('')
   }
@@ -147,10 +144,10 @@ export function resolveSelectedLocalCommand(
 
 async function isExecutableFile(candidate: string, isWin: boolean): Promise<boolean> {
   try {
-    // Why: stat (not lstat) so symlinked CLIs resolve to their real target.
+    // Follow symlinked CLIs to their real targets.
     const stats = await stat(candidate)
     if (stats.isDirectory()) {
-      // Why: PATH dirs carry the search/exec bit; reject them like `[ ! -d ]`.
+      // PATH directories are not executable files despite their search bit.
       return false
     }
     if (isWin) {
@@ -164,16 +161,7 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
   }
 }
 
-/**
- * Resolve whether `command` is an executable on PATH using only `node:fs`
- * — zero `where`/`which` subprocess spawns. Mirrors the canonical
- * which(1)/where.exe lookup, including the current preflight quirk that only
- * counts matches which resolve to an ABSOLUTE path (so relative PATH entries
- * and relative command paths stay not-found, exactly as before).
- *
- * Stops at the first match; use {@link listLocalCommandPaths} when the rest of
- * the PATH matters too.
- */
+/** Filesystem-only PATH lookup preserving the preflight absolute-path filter; use listLocalCommandPaths for shadowed candidates. */
 export async function isCommandOnLocalPath(
   command: string,
   options: ResolveCommandOptions = {}
@@ -209,15 +197,13 @@ async function findLocalCommandPaths(
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
   const isWin = platform === 'win32'
-  // Why: apply platform-correct absolute-path semantics (e.g. `C:\..` is
-  // absolute on win32 but not posix) for the same-as-before isAbsolute gate.
+  // Use the requested platform's absolute-path rules, not the test host's.
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
   const delimiter = isWin ? ';' : ':'
 
   const hasPathSeparator = command.includes('/') || (isWin && command.includes('\\'))
   const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '').split(delimiter)
-  // Why: a slash short-circuits PATH (resolve the command directly), matching
-  // which(1). On win32, where.exe searches the current directory first.
+  // Separators bypass PATH; Windows searches cwd first.
   const searchDirs = hasPathSeparator ? [''] : isWin ? [cwd, ...pathDirs] : pathDirs
   const extensions = isWin ? getWindowsExtensions(env, command) : ['']
 
@@ -225,11 +211,9 @@ async function findLocalCommandPaths(
   const seen = new Set<string>()
   for (const dir of searchDirs) {
     for (const ext of extensions) {
-      // Why: forward-slash joins so candidates are statable on every platform
-      // (Windows fs accepts `/`), keeping the win32 lookup testable off-Windows.
+      // Windows accepts forward slashes; POSIX joins keep synthetic Windows lookups testable everywhere.
       const candidate = path.posix.join(dir, command) + ext
-      // Why: preserve the prior `.some(line => path.isAbsolute(line))` filter
-      // over where/which stdout — only absolute resolutions count.
+      // Preserve the prior where/which absolute-resolution filter.
       const candidateKey = isWin ? candidate.toLowerCase() : candidate
       if (!isAbsolute(candidate) || seen.has(candidateKey)) {
         continue

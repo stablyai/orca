@@ -9,6 +9,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
+import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
 
 // #29968: on a host with no window a chat tab lives only in the runtime's snapshot; rebuilding that
 // snapshot from the saved terminals and editors must not drop it.
@@ -68,9 +73,43 @@ function sessionWithTerminalAndEditor(): WorkspaceSessionState {
   })
 }
 
-function headlessRuntimeWithChat() {
+/**
+ * `asProfileStore`: the store names its session partitions and tells its write listeners, as a
+ * profile store does, so main's layout projects the workspace and follows its writes.
+ */
+function headlessRuntimeWithChat({ asProfileStore = false } = {}) {
   const harness = makeRuntimeStoreWithWorkspaceSession(sessionWithTerminalAndEditor())
-  const runtime = new OrcaRuntimeService(harness.runtimeStore)
+  const written = new Set<(hostId: ExecutionHostId | null) => void>()
+  const setSession = (next: WorkspaceSessionState): void => {
+    harness.setSession(next)
+    written.forEach((listener) => listener(LOCAL_EXECUTION_HOST_ID))
+  }
+  const runtime = new OrcaRuntimeService(
+    asProfileStore
+      ? {
+          ...harness.runtimeStore,
+          getWorkspaceSessionHostIds: () => ['local'],
+          onWorkspaceSessionWritten: (listener: (hostId: ExecutionHostId | null) => void) => {
+            written.add(listener)
+            return () => {
+              written.delete(listener)
+            }
+          },
+          setWorkspaceSession: setSession,
+          applyLayoutCommand: async (command: LayoutCommand, hostIds?: readonly string[]) => {
+            const change = applyCommandToSession(
+              resolveHostId(hostIds?.[0] ?? 'local'),
+              harness.getSession(),
+              command
+            )
+            if (change.session) {
+              setSession(change.session)
+            }
+            return change.value
+          }
+        }
+      : harness.runtimeStore
+  )
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -83,7 +122,8 @@ function headlessRuntimeWithChat() {
 
 async function openChat(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listMobileSessionTabs(WORKTREE)
-  runtime.projectStructuredAgentSessionTab({
+  // As every product path opens one: main's layout records the tab first.
+  await runtime.publishStructuredAgentSessionTab({
     workspaceId: TEST_WORKTREE_ID,
     sessionId: 'claude_29968',
     agent: 'claude',
@@ -121,5 +161,87 @@ describe('a chat tab on a host with no window', () => {
       'tab-readme',
       CHAT_TAB_ID
     ])
+  })
+
+  it('lists tabs to phones in the order desktop clients draw after a rebuild', async () => {
+    const runtime = headlessRuntimeWithChat({ asProfileStore: true })
+    // Layout-owner builds: main's layout holds a chat the host opens and moves it, so it stays first.
+    await runtime.listMobileSessionTabs(WORKTREE)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: TEST_WORKTREE_ID,
+      sessionId: 'claude_29968',
+      agent: 'claude',
+      activate: true
+    })
+    const groupId = (await runtime.listMobileSessionTabs(WORKTREE)).tabGroups?.[0]?.id ?? ''
+    await runtime.moveMobileSessionTab(WORKTREE, {
+      kind: 'reorder',
+      tabId: CHAT_TAB_ID,
+      targetGroupId: groupId,
+      tabOrder: [CHAT_TAB_ID, 'serve-tab', 'tab-readme']
+    })
+
+    await runtime.closeMobileSessionTab(WORKTREE, 'tab-readme', { reason: 'user' })
+
+    const listed = await runtime.listMobileSessionTabs(WORKTREE)
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual([CHAT_TAB_ID, 'serve-tab'])
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual([
+      CHAT_TAB_ID,
+      'serve-tab'
+    ])
+  })
+
+  it('keeps the place a window gave a chat across a graph resend before the chat is restored', async () => {
+    const runtime = headlessRuntimeWithChat()
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:test',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'win-term::leaf-1',
+          activeTabType: 'terminal',
+          tabGroups: [
+            { id: 'group-1', activeTabId: 'win-term', tabOrder: [CHAT_TAB_ID, 'win-term'] }
+          ],
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'win-term::leaf-1',
+              parentTabId: 'win-term',
+              leafId: 'leaf-1',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID]
+    })
+    // As every product path opens one: main's layout records the tab first.
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: TEST_WORKTREE_ID,
+      sessionId: 'claude_29968',
+      agent: 'claude',
+      activate: false
+    })
+
+    const listed = await runtime.listMobileSessionTabs(WORKTREE)
+    // Switch point: main's layout owns the workspace's tabs and their order; a window draws them and
+    // cannot add a tab or an order main lacks, so the chat takes its place in main's order.
+    const expectedOrder = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? ['serve-tab', 'tab-readme', CHAT_TAB_ID]
+      : [CHAT_TAB_ID, 'win-term', 'serve-tab']
+    expect(listed.tabGroups?.flatMap((group) => group.tabOrder)).toEqual(expectedOrder)
+    expect(listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))).toEqual(
+      expectedOrder
+    )
   })
 })

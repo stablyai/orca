@@ -11,13 +11,12 @@ import { removeTabsAttention } from './subject-attention-transitions'
 import {
   markWorkspaceUnreadFlag,
   onScreenHostId,
-  settleWorkspaceUnreadFlag
+  settleWorkspaceUnreadFlag,
+  noteWorkspaceRead
 } from './workspace-unread-flag'
 import { workspaceMarkerTabIds } from './workspace-live-markers'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
-import { noteWindowUnreadDecision } from '@/lib/sidebar-shadow/window-unread-decisions'
 
 export const createWorkspaceAttentionSlice: StateCreator<
   AppState,
@@ -120,10 +119,8 @@ export const createWorkspaceAttentionSlice: StateCreator<
       }
     },
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
-      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-        noteWindowUnreadDecision(worktreeId, isUnread)
-      }
       if (!isUnread) {
+        noteWorkspaceRead(worktreeId)
         removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
       }
       // Why: the toggle writes only the clicked host's row; the markers it removes are

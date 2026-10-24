@@ -121,8 +121,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       { distro: 'No Interop', outcome: 'unchanged', state: 'unsupported', managed: false }
     ])
     expect(registry.recordObservations).toHaveBeenCalledTimes(1)
-    // Why: unsupported gets a TTL-stamped inspection (managed: null) so an
-    // interop-off distro is not re-probed and VM-booted on every startup.
+    // Cache unsupported inspections without changing ownership or repeating startup probes.
     expect(registry.recordObservations).toHaveBeenCalledWith([
       { distro: 'No Interop', inspected: true, managed: null, reconciled: null }
     ])

@@ -1,4 +1,5 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
+import { tabHasProtectedTitle } from '../../../../shared/agent-generated-tab-title-rules'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -221,12 +222,7 @@ export function applyGeneratedTabTitleUpdates(
     const stage = getOwnerStage(state, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
-    if (
-      !currentTab ||
-      !tabIndexes ||
-      currentTab.customTitle?.trim() ||
-      currentTab.quickCommandLabel?.trim()
-    ) {
+    if (!currentTab || !tabIndexes || tabHasProtectedTitle(currentTab)) {
       continue
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()

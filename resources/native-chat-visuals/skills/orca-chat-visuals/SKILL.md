@@ -15,8 +15,8 @@ clearer.
 
 - Save it in the folder named by `ORCA_CHAT_SCRATCH_DIR` (`printenv ORCA_CHAT_SCRATCH_DIR`; in
   PowerShell `$env:ORCA_CHAT_SCRATCH_DIR`). If it's unset or you can't write there, skip the visual.
-  This folder is temporary: Orca may remove it after 30 days without chat activity or changes.
-  Save files meant to last in the workspace.
+  This folder belongs to this chat and is kept as long as the chat. Save files meant for the
+  project in the workspace.
 - One complete HTML file per visual, directly in that folder, under 512 KB, with a new file name
   each time (e.g. `latency-by-region-7c1e.html`): letters, digits, `.`, `_`, `-`, ending in `.html`.
 - Inline your styles, scripts and data. Libraries and fonts may load only from cdn.jsdelivr.net,

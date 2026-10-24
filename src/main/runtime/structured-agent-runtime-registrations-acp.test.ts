@@ -11,6 +11,9 @@ describe('ACP agents in the runtime registrations', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
     ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'opencode2', 'omp', 'antigravity'])
+    expect(structuredAgentRuntimeRegistration('codex')?.definition.capabilities.contextUsage).toBe(
+      true
+    )
     expect(structuredAgentRuntimeRegistration('grok')?.definition).toMatchObject({
       handleTransport: 'acp',
       accountHomeVariable: 'GROK_HOME',
@@ -19,7 +22,7 @@ describe('ACP agents in the runtime registrations', () => {
         compact: true,
         threadGoal: false,
         contextUsage: true,
-        imagePrompts: false,
+        imagePrompts: true,
         steering: 'queue',
         approvalEnforcement: 'orca'
       }
@@ -50,7 +53,7 @@ describe('ACP agents in the runtime registrations', () => {
       agent: 'omp',
       handleTransport: 'acp',
       accountHomeVariable: 'PI_CODING_AGENT_DIR',
-      capabilities: { imagePrompts: false, steering: 'queue', approvalEnforcement: 'orca' }
+      capabilities: { imagePrompts: true, steering: 'queue', approvalEnforcement: 'orca' }
     })
     expect(registration?.launchCheck).toBeDefined()
   })

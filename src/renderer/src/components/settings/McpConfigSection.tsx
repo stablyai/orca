@@ -33,8 +33,13 @@ import { loadMcpConfigInspections } from './mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  assertFileWriteApplied,
+  missingOrIdenticalPrecondition
+} from '../../../../shared/file-write-disk-precondition'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -54,7 +59,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const repos = useAppStore((state) => state.repos)
   const allWorktreesForRepo = useAppStore(
-    (state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES
+    (state) => selectWorktreesByRepo(state)[repo.id] ?? EMPTY_WORKTREES
   )
   // Why: a path only means something on the host that owns this repo row, not the focused one.
   const repoHostId = getRepoExecutionHostId(repo)
@@ -251,7 +256,16 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         : {}
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
-      await writeRuntimeFile({ ...fileContext, ...sshExpectation }, target, MCP_STARTER_CONFIG)
+      // Why: the listing can be stale; never replace a config something else just created.
+      assertFileWriteApplied(
+        await writeRuntimeFile(
+          { ...fileContext, ...sshExpectation },
+          target,
+          MCP_STARTER_CONFIG,
+          undefined,
+          missingOrIdenticalPrecondition(MCP_STARTER_CONFIG)
+        )
+      )
       clearCreateConfirmResetTimer()
       if (mountedRef.current) {
         setCreateConfirm(false)

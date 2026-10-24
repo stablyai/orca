@@ -40,7 +40,7 @@ export async function verifyUnstoppedPtys(
   const sessions = await settleBeforeDeadline(
     async () => {
       try {
-        return await provider.listProcesses({ deadlineMs: verifyDeadline })
+        return await provider.listProcesses({ deadlineMs: verifyDeadline, ptyIds: failedPtyIds })
       } catch (error) {
         listError = error
         return null

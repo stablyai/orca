@@ -79,14 +79,13 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         />
         <p
           className={cn(
-            'min-w-0 flex-1 select-text py-px leading-5',
-            notice.kind === 'host' ? 'truncate' : '[overflow-wrap:anywhere]',
+            'min-w-0 flex-1 select-text py-px leading-5 [overflow-wrap:anywhere]',
             'text-muted-foreground',
             isError && 'text-foreground',
             isHostWarning && 'text-destructive'
           )}
         >
-          {notice.text}
+          {notice.content ?? notice.text}
         </p>
         {notice.action ? (
           <Button

@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
+import { orderMobileSessionTabsByGroups } from './mobile-session-tab-merge'
 import type {
   RuntimeMobileSessionProjectionHost,
   RuntimeMobileSessionProjectionInput
@@ -48,6 +49,10 @@ export function finalizeRuntimeMobileSessionTabsResult(
           )
         }
       : {}),
-    tabs: normalizedTabs
+    // Why: clients draw `tabs` as the strip, but merges append runtime-kept tabs (every chat);
+    // desktop clients draw the group order, so the strip follows it.
+    tabs: tabGroups
+      ? orderMobileSessionTabsByGroups(normalizedTabs, tabGroups, tabGroupLayout)
+      : normalizedTabs
   }
 }

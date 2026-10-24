@@ -27,9 +27,20 @@ on:
         required: false
         type: boolean
         default: true
+      managed_ssh_shards:
+        description: JSON shard assignments for the selected managed SSH specs
+        required: false
+        type: string
+        default: '["1/2","2/2"]'
       # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
       artifact_suffix:
         description: Appended to the build and trace artifact names so two calls in one run do not collide
+        required: false
+        type: string
+        default: ''
+      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
+      layout_owner:
+        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
         type: string
         default: ''
@@ -43,6 +54,12 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
+      managed_ssh_shards:
+        description: Managed SSH shard assignments (use one for small selections)
+        required: false
+        type: choice
+        default: '["1/2","2/2"]'
+        options: ['["1/2","2/2"]', '["1/1"]']
   schedule:
     # One complete daily reference run; targeted PR coverage remains unchanged.
     - cron: '0 17 * * *'
@@ -51,7 +68,7 @@ jobs:
   build:
     name: build e2e app
     if: inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 15
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -71,17 +88,21 @@ jobs:
             exit 0
           fi
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          # Why apt-mirrors.txt: runner images resolve mirror+file: sources through it, so editing the lists alone leaves Azure in use.
-          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            if [ -f "$source" ]; then
-              sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
-            fi
-          done
-          sudo tee /etc/apt/apt.conf.d/99-orca-e2e >/dev/null <<'APTCONF'
+          if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
+            bash .github/scripts/prepare-ubuntu-apt.sh
+          else
+            # Dispatched refs can predate the shared preparation script.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+              fi
+            done
+            sudo tee /etc/apt/apt.conf.d/99-orca-ci >/dev/null <<'APTCONF'
           Acquire::http::Timeout "15";
           Acquire::https::Timeout "15";
           Acquire::Retries "1";
           APTCONF
+          fi
           timeout 120 sudo apt-get update
           timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
@@ -107,7 +128,12 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
           ORCA_CI_MAIN_SOURCEMAPS: '0'
-        run: pnpm run build:electron-vite:parallel --mode e2e
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+          fi
+          pnpm run build:electron-vite:parallel --mode e2e
 
       # The CLI emits into out/main too; start only after Electron finishes clearing that tree.
       - name: Build shared E2E CLI
@@ -125,6 +151,11 @@ jobs:
 
       - wait: e2e-cli
 
+      # The switch-on specs skip, rather than fail, when the build left no marker.
+      - name: Check layout-owner build marker
+        if: inputs.layout_owner == 'main'
+        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+
       - name: Check shared native runtime action
         id: native-runtime-action
         run: |
@@ -138,10 +169,8 @@ jobs:
       - uses: ./.github/actions/build-mobile-web-bundle
         if: hashFiles('.github/actions/build-mobile-web-bundle/action.yml') != ''
 
-      # Only the completed output upload overlaps the change from Node to Electron ABI.
+      # Foreground: a background JavaScript action reads the event payload while later steps rewrite it.
       - name: Upload E2E build output
-        id: e2e-build-upload
-        background: true
         uses: actions/upload-artifact@v7
         with:
           name: e2e-build-out${{ inputs.artifact_suffix }}
@@ -164,13 +193,11 @@ jobs:
         with:
           native-runtime: electron
 
-      - wait: e2e-build-upload
-
   e2e:
     name: e2e ${{ matrix.shard_name }}
     needs: [build]
     if: inputs.test_files == ''
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -297,7 +324,7 @@ jobs:
     name: changed e2e specs
     needs: [build]
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
 
     steps:
@@ -325,6 +352,7 @@ jobs:
       - name: Run changed E2E specs
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           if [ -f config/scripts/ci-e2e-job-selection.mjs ]; then
             printf '%s\n' "$TEST_FILES_JSON" | node config/scripts/ci-e2e-job-selection.mjs > "$RUNNER_TEMP/general-e2e-specs"
@@ -347,11 +375,42 @@ jobs:
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
           E2E_PROJECT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
+            E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
+            E2E_PROJECT_ARGS+=('--reporter=list,json')
+          fi
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: &summarize_layout_divergence |
+          # Either file names a run: a log with no report is unattributed, a report with no log is zero.
+          shopt -s nullglob
+          runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
+          for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
+            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            if [ -f "$run-results.json" ]; then
+              node config/scripts/ci-e2e-failure-summary.mjs "$run-results.json"
+            fi
+          done
+
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-changed${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
 
       - name: Upload Playwright traces
         if: failure() || cancelled()
@@ -365,7 +424,7 @@ jobs:
   ssh-browser-network-route:
     name: ssh browser network route
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -389,7 +448,7 @@ jobs:
       inputs.test_files == '' ||
       contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/workspace-layout-oracle-headless.spec.ts')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -410,12 +469,24 @@ jobs:
       # The packaged orcad slot the T6-11 launcher runs: its own node-pty under the pinned Node.
       # The template is what `orca serve`'s default selection materializes that slot from.
       - name: Build this runner's orcad slot and template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           slot="$(node config/scripts/build-orcad-prebuilds.mjs --print-slot)"
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots "$slot"
-          pnpm build:orcad
-          node config/scripts/build-orcad-template.mjs --targets "$slot"
+          # The headless oracle's orcad host must hold the same layout owner as the Electron host,
+          # and so must the template `orca serve` materializes its server from.
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot" --dark-test-template
+            test -f out/orcad/ORCA_LAYOUT_OWNER_MAIN
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            pnpm build:orcad
+            node config/scripts/build-orcad-template.mjs --targets "$slot"
+          fi
       - name: Switch serve hosts on one profile
         if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/orcad-serve-mode-switch.spec.ts')
         env:
@@ -423,6 +494,15 @@ jobs:
           ORCA_E2E_ORCAD_SERVE: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
         run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/orcad-serve-mode-switch.spec.ts --project=electron-headless --workers=1
+      # Only this job builds out/orcad, so the spec's orcad case runs here; the e2e shards run its Electron case.
+      - name: Phone Markdown on headless orcad serve
+        if: >-
+          !cancelled() &&
+          (inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/headless-serve-mobile-markdown.spec.ts'))
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/headless-serve-mobile-markdown.spec.ts --grep "headless orcad server" --project=electron-headless --workers=1
       # The layout oracle's headless scenarios run on both serve hosts, so they need this job's orcad.
       - name: Layout oracle on headless serve (orcad and Electron)
         if: >-
@@ -431,7 +511,30 @@ jobs:
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/headless-oracle.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/headless-oracle-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/workspace-layout-oracle-headless.spec.ts --project=electron-headless --workers=1 "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-headless${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -440,18 +543,18 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Every managed-orcad SSH spec on a Docker host, including #24979's relay-era conversion. Needs the
+  # Selected managed-orcad SSH specs on a Docker host; daily runs keep the full suite. Needs the
   # orcad template for the fixture's target (Debian, linux-x64-glibc), which only this job builds.
   orcad-ssh-docker:
     name: ssh on managed orcad (Docker ${{ matrix.shard }})
     needs: [build]
     if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-orcad-')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: ['1/2', '2/2']
+        shard: ${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
     steps:
@@ -472,23 +575,68 @@ jobs:
           name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
       # Built to a path the app does not look at by default, so the relay-era phase has no template.
+      # The switch-on leg deploys a switch-on server, so both sides of the host run one layout owner.
       - name: Build the linux-x64-glibc orcad template
+        env:
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
           pnpm build:orcad-prebuilds
           pnpm build:orcad-prebuilds --require-slots linux-x64-glibc
-          node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          if [ -n "$LAYOUT_OWNER" ]; then
+            ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc --dark-test-template
+            test -f out/orcad-template/ORCA_LAYOUT_OWNER_MAIN
+          else
+            node config/scripts/build-orcad-template.mjs --targets linux-x64-glibc
+          fi
           mv out/orcad-template "$RUNNER_TEMP/orcad-convert-template"
       # The Windows CLI matrix collects here too and skips: it needs a Windows host descriptor.
       - name: Run managed SSH specs on a Docker host
         env:
+          TEST_FILES_JSON: ${{ inputs.test_files }}
           SKIP_BUILD: '1'
           ORCA_E2E_SSH_DOCKER: '1'
           ORCA_E2E_ORCAD_CONVERT_HOST: docker
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           SHARD: ${{ matrix.shard }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+          SHARD_INDEX: ${{ strategy.job-index }}
         run: |
+          node --input-type=module <<'NODE' > "$RUNNER_TEMP/managed-ssh-specs"
+          import { existsSync } from 'node:fs'
+          const modulePath = './config/scripts/ci-e2e-job-selection.mjs'
+          const selection = existsSync(modulePath) ? await import(modulePath) : {}
+          // Older checkout refs retain their full-suite behavior.
+          const specs = selection.selectManagedSshE2eSpecs
+            ? selection.selectManagedSshE2eSpecs(process.env.TEST_FILES_JSON)
+            : ['tests/e2e/ssh-orcad-']
+          for (const spec of specs) {
+            console.log(spec.endsWith('.spec.ts') ? spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$' : spec)
+          }
+          NODE
+          mapfile -t TEST_FILES < "$RUNNER_TEMP/managed-ssh-specs"
           export ORCA_E2E_ORCAD_CONVERT_TEMPLATE="$RUNNER_TEMP/orcad-convert-template"
-          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-orcad- --project=electron-headless --workers=1 --shard="$SHARD"
+          REPORT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            export ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX.jsonl"
+            export PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/managed-ssh-$SHARD_INDEX-results.json"
+            REPORT_ARGS=('--reporter=list,json')
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts "${TEST_FILES[@]}" --project=electron-headless --workers=1 --shard="$SHARD" "${REPORT_ARGS[@]}"
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: *summarize_layout_divergence
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-managed-ssh-${{ strategy.job-index }}${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

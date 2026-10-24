@@ -1,6 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import type { ClientChannel } from 'ssh2'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import type {
   PortForwardStartOptions,
   SshPortForwardProvider,

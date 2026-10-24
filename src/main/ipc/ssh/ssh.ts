@@ -1,8 +1,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
-import { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
-import { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
 import {
@@ -11,7 +11,7 @@ import {
   setSshTargetMutations,
   setSshTargetRegistryHandlers,
   setSshTargetRegistryStore
-} from '../../ssh/ssh-target-registry'
+} from '../../ssh/targets/ssh-target-registry'
 
 import { registerSshBrowseHandler } from './ssh-browse'
 import { registerCredentialHandler } from './ssh-passphrase'
@@ -19,7 +19,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
-} from '../../ssh/ssh-connection-generation'
+} from '../../ssh/connection/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../../ssh/ssh-provider-authority'
 import { installManagedOrcadStartStatus } from '../runtime-environments/runtime-environment-managed-tunnel'
 import {
@@ -32,6 +32,7 @@ import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { resetSshCredentialDeclinesForTests } from '../../ssh/ssh-credential-decline'
 import { resetSshUserDisconnectsForTests } from '../../ssh/ssh-user-disconnect'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
+import { registerPlainSshTerminalHandlers } from './plain-ssh-terminal-handlers'
 import {
   registerPowerMonitorReconnect,
   unregisterPowerMonitorReconnect
@@ -53,6 +54,7 @@ import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
 import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
+import { retainUnretainedOrcadMigrationSources } from '../../ssh/orcad-migration-source-retention'
 import { reconcileManagedOrcadSshTargets } from '../../ssh/orcad-retained-source'
 import { installOrcadMigrationScrollbackRetention } from '../../ssh/orcad-migration-scrollback-retention-wiring'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -89,7 +91,7 @@ export function registerSshHandlers(
   runtime?: OrcaRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
   initializeSshConnectionGenerationSession()
-  // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
+  // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
   }
@@ -99,6 +101,7 @@ export function registerSshHandlers(
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
   reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
+  void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)
   installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
   installManagedOrcadStartStatus()
 
@@ -109,7 +112,7 @@ export function registerSshHandlers(
     connectionManager.setCallbacks(callbacks)
   } else {
     setConnectionManager(new SshConnectionManager(callbacks))
-    // Why only here: a window re-registration must not re-gate a host the user already signed in to.
+    // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
@@ -133,6 +136,7 @@ export function registerSshHandlers(
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
   registerSshPortForwardHandlers()
+  registerPlainSshTerminalHandlers()
   // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
   registerLegacyRelayBridgeIpc({
     store,

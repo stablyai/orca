@@ -10,7 +10,7 @@ import { resolveLoginShellEnvironment } from '../startup/login-shell-environment
 
 // Why an allowlist: the snapshot is the whole rc environment, and PATH has its own hydration with
 // the Windows-drive rules; askpass helpers are left out because a GUI one would block a headless git.
-export const WSL_HOST_LOGIN_ENV_NAMES: readonly string[] = [
+const WSL_HOST_LOGIN_ENV_NAMES: readonly string[] = [
   'SSH_AUTH_SOCK',
   'SSH_AGENT_PID',
   'GIT_SSH',

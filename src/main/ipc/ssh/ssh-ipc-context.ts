@@ -1,11 +1,9 @@
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
-// Why live bindings rather than getters: every SSH IPC module reads these singletons on the hot
-// path, and only registerSshHandlers/the test reset write them (through the setters below).
 export let connectionManager: SshConnectionManager | null = null
 export let portForwardManager: SshPortForwardManager | null = null
 export let persistedStore: Store | null = null

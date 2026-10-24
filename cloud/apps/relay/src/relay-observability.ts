@@ -18,6 +18,8 @@ export type RelayRuntimeCounts = {
   splices: number
   pendingSplices: number
   queuedBytes: number
+  // Step 6: resume audit rows a memory cell dropped since boot; the watcher pages on any.
+  resumeAuditDropped?: number
 }
 
 export function observedRelayRequests(counts: RelayRuntimeCounts): number {
@@ -68,6 +70,8 @@ export type AssignmentUnavailableCause =
   | 'reserve-map-incomplete'
   | 'reserve-database'
   | 'reserve-paced'
+  // Intake pacing for a host re-asking off a draining cell: scheduled by the drain, like a deferral.
+  | 'reserve-paced-drained'
 
 // Row-lock waiters seen in one pg_stat_activity sample, by who waits, on which
 // table, behind whom. Roles come from each pool's application_name.
@@ -101,9 +105,16 @@ export interface RelayRuntimeObserver {
     fallback: boolean
   }): void
   recordControlClose?(code: number): void
+  recordPostProofClose?(reason: string): void
   recordSpliceClose?(trigger: string): void
   recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
   recordClientAcceptCompleted?(sample: RelayClientAcceptSample): void
+  // Step 6: every phone refusal by close code, and the phone-path failures the watcher reads.
+  recordPhoneRejection?(code: number): void
+  recordPhoneAttachDeadline?(): void
+  recordPhoneAcceptDatabaseError?(): void
+  recordResumeConfirmFailure?(code: string): void
+  recordResumeRenewalFailure?(): void
   recordControlRtt?(rttMs: number): void
   recordHostPreAuth?(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void
 }
@@ -114,6 +125,12 @@ export interface RelayRuntimeObserver {
 export type HostPreAuthPath = 'beforeCheck' | 'db' | 'reserve'
 // Abandoned: the host hung up before a decision, or before the cell could act on one.
 export type HostPreAuthOutcome = 'admitted' | 'refused' | 'abandoned'
+
+// Left out of assignNonDrain503sDelta: the drain schedules these 503s.
+const DRAIN_503_CAUSES: ReadonlySet<string> = new Set<AssignmentUnavailableCause>([
+  'drain-return-deferred',
+  'reserve-paced-drained'
+])
 
 // Upper bounds in ms; the last bucket is unbounded. 450 is the step-5 t_preauth gate.
 const PRE_AUTH_BUCKET_BOUNDS_MS = [50, 100, 200, 300, 450, 700, 1_000, 2_000, 5_000] as const
@@ -162,6 +179,7 @@ export const RELAY_CLIENT_ACCEPT_TIMED_STAGES = [
 export type RelayClientAcceptSample = {
   totalMs: number
   stageMs: Record<RelayClientAcceptTimedStage, number>
+  phonePath?: 'db' | 'memory'
 }
 
 type RelayMetricDeltas = {
@@ -200,11 +218,18 @@ type RelayMetricDeltas = {
   regionFallbacks: Record<string, number>
   unavailableRegions: Record<string, number>
   controlClosesByCode: Record<string, number>
+  postProofClosesByReason: Record<string, number>
   spliceClosesByTrigger: Record<string, number>
   clientAcceptsAbandonedByStage: Record<string, number>
   clientAcceptAbandonedMsMax: number
   clientAcceptTotalsMs: number[]
   clientAcceptStageSamplesMs: Record<RelayClientAcceptTimedStage, number[]>
+  clientAcceptsByPhonePath: Record<string, number>
+  phoneRejectionsByCode: Record<string, number>
+  phoneAttachDeadlines: number
+  phoneAcceptDatabaseErrors: number
+  resumeConfirmFailuresByCode: Record<string, number>
+  resumeRenewalFailures: number
   controlRttSamplesMs: number[]
   controlRttObserved: number
   controlRenewalLatenciesMs: number[]
@@ -288,6 +313,7 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   regionFallbacks: {},
   unavailableRegions: {},
   controlClosesByCode: {},
+  postProofClosesByReason: {},
   spliceClosesByTrigger: {},
   clientAcceptsAbandonedByStage: {},
   clientAcceptAbandonedMsMax: 0,
@@ -299,6 +325,12 @@ const emptyDeltas = (): RelayMetricDeltas => ({
     attach: [],
     basis: []
   },
+  clientAcceptsByPhonePath: {},
+  phoneRejectionsByCode: {},
+  phoneAttachDeadlines: 0,
+  phoneAcceptDatabaseErrors: 0,
+  resumeConfirmFailuresByCode: {},
+  resumeRenewalFailures: 0,
   controlRttSamplesMs: [],
   controlRttObserved: 0,
   controlRenewalLatenciesMs: [],
@@ -529,6 +561,10 @@ export class RelayObservability implements RelayRuntimeObserver {
     this.deltas.controlClosesByCode[key] = (this.deltas.controlClosesByCode[key] ?? 0) + 1
   }
 
+  recordPostProofClose(reason: string): void {
+    increment(this.deltas.postProofClosesByReason, reason)
+  }
+
   recordSpliceClose(trigger: string): void {
     this.deltas.spliceClosesByTrigger[trigger] =
       (this.deltas.spliceClosesByTrigger[trigger] ?? 0) + 1
@@ -543,10 +579,31 @@ export class RelayObservability implements RelayRuntimeObserver {
   }
 
   recordClientAcceptCompleted(sample: RelayClientAcceptSample): void {
+    if (sample.phonePath) increment(this.deltas.clientAcceptsByPhonePath, sample.phonePath)
     this.deltas.clientAcceptTotalsMs.push(sample.totalMs)
     for (const stage of RELAY_CLIENT_ACCEPT_TIMED_STAGES) {
       this.deltas.clientAcceptStageSamplesMs[stage].push(sample.stageMs[stage])
     }
+  }
+
+  recordPhoneRejection(code: number): void {
+    increment(this.deltas.phoneRejectionsByCode, String(code))
+  }
+
+  recordPhoneAttachDeadline(): void {
+    this.deltas.phoneAttachDeadlines += 1
+  }
+
+  recordPhoneAcceptDatabaseError(): void {
+    this.deltas.phoneAcceptDatabaseErrors += 1
+  }
+
+  recordResumeConfirmFailure(code: string): void {
+    increment(this.deltas.resumeConfirmFailuresByCode, code)
+  }
+
+  recordResumeRenewalFailure(): void {
+    this.deltas.resumeRenewalFailures += 1
   }
 
   recordControlRtt(rttMs: number): void {
@@ -655,7 +712,7 @@ export class RelayObservability implements RelayRuntimeObserver {
       ...stickySlotFields(deltas),
       assign503sByCauseDelta: deltas.assign503sByCause,
       assignNonDrain503sDelta: Object.entries(deltas.assign503sByCause)
-        .filter(([cause]) => cause !== 'drain-return-deferred')
+        .filter(([cause]) => !DRAIN_503_CAUSES.has(cause))
         .reduce((sum, [, count]) => sum + count, 0),
       // Waiters summed over samples; divided by samples it is the mean number of
       // backends waiting, i.e. lock-wait seconds per second.
@@ -670,10 +727,19 @@ export class RelayObservability implements RelayRuntimeObserver {
       regionFallbacksDelta: deltas.regionFallbacks,
       unavailableRegionsDelta: deltas.unavailableRegions,
       controlClosesByCodeDelta: deltas.controlClosesByCode,
+      // Closes after a host proof but before its control was wired; none is in the line above.
+      postProofClosesByReasonDelta: deltas.postProofClosesByReason,
       spliceClosesByTriggerDelta: deltas.spliceClosesByTrigger,
       clientAcceptsAbandonedByStageDelta: deltas.clientAcceptsAbandonedByStage,
       clientAcceptAbandonedMsMax: roundMs(deltas.clientAcceptAbandonedMsMax),
       clientAcceptCompletedDelta: deltas.clientAcceptTotalsMs.length,
+      clientAcceptsByPhonePathDelta: deltas.clientAcceptsByPhonePath,
+      // Phone refusals by close code; attach deadlines are the 4404s sent with the control still up.
+      phoneRejectionsByCodeDelta: deltas.phoneRejectionsByCode,
+      phoneAttachDeadlinesDelta: deltas.phoneAttachDeadlines,
+      phoneAcceptDatabaseErrorsDelta: deltas.phoneAcceptDatabaseErrors,
+      resumeConfirmFailuresByCodeDelta: deltas.resumeConfirmFailuresByCode,
+      resumeRenewalFailuresDelta: deltas.resumeRenewalFailures,
       // Accepts are sparse: publishing a zero percentile for every empty window
       // would pin the p50 at 0 forever and collapse the p95 at low accept rates.
       ...(deltas.clientAcceptTotalsMs.length === 0

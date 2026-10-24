@@ -16,6 +16,7 @@ import {
 } from './structured-agent-session-item-retention'
 import { foldStructuredAgentSubagentRosterPage } from './structured-agent-session-subagent-roster'
 import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
+import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
 export function hostClockField(
@@ -41,7 +42,7 @@ export function replacePage(
     submissions: page.submissions,
     retainedOwnItemLimit: Math.max(MAX_RETAINED_OWN_ITEMS, ownItemCount(page.items)),
     retainedItemCap: Math.max(MAX_RETAINED_ITEMS, page.items.length),
-    hasOlder: page.hasOlder,
+    hasOlder: agentSessionHasOlderTranscript(page.items, page.hasOlder),
     status: 'ready',
     subagentRoster: foldStructuredAgentSubagentRosterPage(undefined, page),
     activity: activity ?? null,

@@ -16,6 +16,7 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useRemoteBrowserPageContextMenu({
   busy,
@@ -65,8 +66,8 @@ export function useRemoteBrowserPageContextMenu({
         setContextMenu(null)
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [contextMenu])
 
   const handleRemoteContextMenu = (event: React.MouseEvent<HTMLImageElement>): void => {

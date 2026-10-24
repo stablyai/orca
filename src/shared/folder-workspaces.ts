@@ -129,7 +129,11 @@ export function normalizeFolderWorkspaces(
         typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
       // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
       // PersistedState.folderWorkspaceDiffComments.
-      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
+      // Entries are validated where they are read (external-conversation-links.ts).
+      ...(Array.isArray(raw.externalConversations)
+        ? { externalConversations: raw.externalConversations }
+        : {})
     })
   }
   return workspaces.sort(

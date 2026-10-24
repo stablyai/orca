@@ -39,6 +39,8 @@ import {
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 
+import { isResourceWindowVisible } from '../window/resource-view-admission'
+
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
@@ -94,13 +96,13 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       state.isQuitting = false
       clearExpectedRendererReload()
     },
-    onRendererProcessGone: (details, webContentsId) => {
+    onRendererProcessGone: (details, webContentsId, liveness) => {
       recordProcessGoneCrash(
         'renderer',
         'renderer',
         details.reason,
         details.exitCode ?? null,
-        { processType: 'renderer' },
+        { processType: 'renderer', ...liveness },
         webContentsId
       )
       // Why: launch-failed only says a spawn failed; the probe's errno (EAGAIN = process limit) names the cause.
@@ -192,6 +194,15 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  const publishResourceVisibility = (): void => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
+    }
+  }
+  window.on('show', publishResourceVisibility)
+  window.on('restore', publishResourceVisibility)
+  window.on('hide', publishResourceVisibility)
+  window.on('minimize', publishResourceVisibility)
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)

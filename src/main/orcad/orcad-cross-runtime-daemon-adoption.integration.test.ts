@@ -40,7 +40,7 @@ import {
   getOrcaProfileIndexPath,
   getOrcaProfileStateDatabaseFile
 } from '../orca-profiles/profile-storage-paths'
-import type { SshConnection } from '../ssh/ssh-connection'
+import type { SshConnection } from '../ssh/connection/ssh-connection'
 import {
   emptyOrcadActivationRecord,
   orcadGcPinnedDirNames

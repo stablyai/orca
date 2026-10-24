@@ -29,7 +29,7 @@ function makeController(): {
   const store = {
     getProjects: () => projectHostSetupProjectionFromRepos([repo]).projects,
     getProjectHostSetups: () => [],
-    updateRepo: (_id: string, updates: Record<string, unknown>) => ({ ...repo, ...updates })
+    updateRepo: (_target: unknown, updates: Record<string, unknown>) => ({ ...repo, ...updates })
   }
   const addRepo = vi.fn().mockResolvedValue(repo)
   const cloneRepo = vi.fn().mockResolvedValue(repo)

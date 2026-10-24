@@ -1,10 +1,15 @@
+import { extractAllOscTitles } from '../../../../shared/agent-detection'
 import {
-  extractAllOscTitles,
-  isCursorNativeAgentTitle,
-  normalizeTerminalTitle,
-  shouldSuppressCursorNativeTitle
-} from '../../../../shared/agent-detection'
-import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
+  createAgentStatusOscProcessor,
+  type ProgramActivityChange
+} from '../../../../shared/agent-status-osc'
+import { createProgramStatusSideEffectScanner } from '../../../../shared/terminal-agent-status-processor'
+import { extractAllOscTitleEntries } from '../../../../shared/osc-title-extraction'
+import { placeProgramActivityAmongTitles } from '../../../../shared/program-status/title-activity-order'
+import {
+  enqueueOrderedPtyEffects,
+  removeSuppressedCursorNativeTitles
+} from './pty-output-effect-ordering'
 import { createBellDetector } from '../../../../shared/terminal-bell-detector'
 import type { PtyDataMeta } from './pty-dispatcher'
 import {
@@ -44,25 +49,6 @@ export type ProcessPtyOutputOptions = {
   carriesHistory?: boolean
 }
 
-function removeSuppressedCursorNativeTitles(
-  titles: string[],
-  precedingTitle: string | null
-): boolean {
-  let writeIndex = 0
-  let previousTitle = precedingTitle
-  for (const title of titles) {
-    if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
-      continue
-    }
-    previousTitle = normalizeTerminalTitle(title)
-    titles[writeIndex] = title
-    writeIndex += 1
-  }
-  const removed = writeIndex < titles.length
-  titles.length = writeIndex
-  return removed
-}
-
 export function createPtyOutputProcessor({
   onTitleChange,
   onBell,
@@ -74,6 +60,7 @@ export function createPtyOutputProcessor({
 }: PtyOutputProcessorOptions) {
   const bellDetector = createBellDetector()
   let processAgentStatusChunk = createAgentStatusOscProcessor()
+  let scanProgramStatus = createProgramStatusSideEffectScanner()
   let partialEscapeTail = ''
   const titleObserver = createPtyOutputTitleObserver({
     onTitleChange,
@@ -85,6 +72,15 @@ export function createPtyOutputProcessor({
   const sideEffects = createPtyOutputSideEffectQueue({
     countWorkingTitles: titleObserver.countWorkingTitles,
     apply: (effect) => {
+      // Why seeded on replay: like replayed titles, restored bytes must not move live status, yet the
+      // tracker must still agree with the scanner, which only reports later changes.
+      for (const activity of effect.programActivity ?? []) {
+        if (effect.suppressAttentionEvents) {
+          titleObserver.seedProgramActivity(activity)
+        } else {
+          titleObserver.applyProgramActivity(activity)
+        }
+      }
       if (onAgentStatus) {
         for (const payload of effect.payloads) {
           onAgentStatus(payload)
@@ -104,14 +100,28 @@ export function createPtyOutputProcessor({
   function enqueueSideEffects(
     data: string,
     payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
-    suppressAttentionEvents: boolean
+    suppressAttentionEvents: boolean,
+    programActivity: readonly ProgramActivityChange[]
   ): void {
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
-    const titles = scannedForTitles ? extractAllOscTitles(data) : []
+    // Why offsets only with activity: ordinary chunks keep the cheaper title-only scan.
+    const titleEntries =
+      scannedForTitles && programActivity.length > 0 ? extractAllOscTitleEntries(data) : null
+    const titles = titleEntries
+      ? titleEntries.map((entry) => entry.title)
+      : scannedForTitles
+        ? extractAllOscTitles(data)
+        : []
+    const titleEnds = titleEntries?.map((entry) => entry.end)
     const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
       titles,
-      sideEffects.isDrained() ? titleObserver.getLastEmittedTitle() : null
+      sideEffects.isDrained() ? titleObserver.getLastEmittedTitle() : null,
+      titleEnds
     )
+    const placedActivity =
+      programActivity.length > 0
+        ? placeProgramActivityAmongTitles(titleEnds ?? [], programActivity)
+        : []
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
@@ -131,12 +141,20 @@ export function createPtyOutputProcessor({
       : shouldEmitEmptyTitleScan
         ? 'stale-probe'
         : 'none'
-    if (!shouldEmitEmptyTitleScan && deliveredPayloads.length === 0 && !containsBell) {
+    if (
+      !shouldEmitEmptyTitleScan &&
+      deliveredPayloads.length === 0 &&
+      !containsBell &&
+      placedActivity.length === 0
+    ) {
       return
     }
 
     if (deliveredPayloads.length === 0 && titles.length === 0) {
       sideEffects.enqueue({
+        ...(placedActivity.length > 0
+          ? { programActivity: placedActivity.map(({ activity }) => activity) }
+          : {}),
         payloads: [],
         titles: [],
         titleScanEffect,
@@ -144,60 +162,16 @@ export function createPtyOutputProcessor({
         suppressAttentionEvents
       })
     } else {
-      enqueueOrderedEffects(
-        deliveredPayloads,
+      enqueueOrderedPtyEffects(sideEffects.enqueue, {
+        payloads: deliveredPayloads,
         titles,
-        shouldEmitEmptyTitleScan ? titleScanEffect : 'none',
+        placedActivity,
+        emptyTitleScanEffect: shouldEmitEmptyTitleScan ? titleScanEffect : 'none',
         containsBell,
         suppressAttentionEvents
-      )
+      })
     }
     sideEffects.scheduleDrain()
-  }
-
-  function enqueueOrderedEffects(
-    payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
-    titles: string[],
-    emptyTitleScanEffect: PendingPtySideEffect['titleScanEffect'],
-    containsBell: boolean,
-    suppressAttentionEvents: boolean
-  ): void {
-    for (const payload of payloads) {
-      sideEffects.enqueue({
-        payloads: [payload],
-        titles: [],
-        titleScanEffect: 'none',
-        containsBell: false,
-        suppressAttentionEvents
-      })
-    }
-    if (titles.length === 0 && emptyTitleScanEffect !== 'none') {
-      sideEffects.enqueue({
-        payloads: [],
-        titles: [],
-        titleScanEffect: emptyTitleScanEffect,
-        containsBell: false,
-        suppressAttentionEvents
-      })
-    }
-    for (const title of titles) {
-      sideEffects.enqueue({
-        payloads: [],
-        titles: [title],
-        titleScanEffect: 'none',
-        containsBell: false,
-        suppressAttentionEvents
-      })
-    }
-    if (containsBell) {
-      sideEffects.enqueue({
-        payloads: [],
-        titles: [],
-        titleScanEffect: 'none',
-        containsBell: true,
-        suppressAttentionEvents
-      })
-    }
   }
 
   function processData(
@@ -214,6 +188,7 @@ export function createPtyOutputProcessor({
     }
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
+    const programStatus = scanProgramStatus(data)
     if (options.replayingBufferedData && callbacks.onReplayData) {
       const replayMeta = {
         ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
@@ -244,7 +219,8 @@ export function createPtyOutputProcessor({
     } else {
       callbacks.onData?.(data)
     }
-    enqueueSideEffects(data, processed.payloads, suppressAttentionEvents)
+    // Why only activity: the execution host owns OSC 7501 rows, their lifetime and hook precedence.
+    enqueueSideEffects(data, processed.payloads, suppressAttentionEvents, programStatus.activity)
   }
 
   return {
@@ -252,6 +228,8 @@ export function createPtyOutputProcessor({
     clearAccumulatedState: () => {
       sideEffects.clear()
       titleObserver.reset()
+      // Reset together: the scanner only reports changes against the activity the tracker held.
+      scanProgramStatus = createProgramStatusSideEffectScanner()
       bellDetector.reset()
       partialEscapeTail = ''
     },
@@ -264,6 +242,7 @@ export function createPtyOutputProcessor({
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
       processAgentStatusChunk = createAgentStatusOscProcessor()
+      scanProgramStatus = createProgramStatusSideEffectScanner()
     },
     getPendingEscapeTailAnsi: () => partialEscapeTail,
     disposePendingSideEffectGauge: sideEffects.disposeGauge

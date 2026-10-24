@@ -136,11 +136,12 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         connectionId
       }
     }
-    if (pty?.paneKey) {
+    const recorded = this.paneOfPty(pty)
+    if (pty && recorded.paneKey) {
       return {
         worktreeId: pty.worktreeId,
-        ...(pty.tabId ? { tabId: pty.tabId } : {}),
-        paneKey: pty.paneKey,
+        ...(recorded.tabId ? { tabId: recorded.tabId } : {}),
+        paneKey: recorded.paneKey,
         connectionId
       }
     }

@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { SshTarget } from '../shared/ssh-types'
 import { isRemoteCliControlAllowed } from '../shared/ssh-remote-cli-control'
-import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { SshConnectionStore } from './ssh/connection/ssh-connection-store'
 
 vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -57,7 +57,7 @@ async function reopenStore(): Promise<ReturnType<typeof createStore>> {
   return createStore()
 }
 
-// The orcad serve host persists its SSH targets through this same Store load path.
+// The orcad serve host uses the same SSH-target loading path.
 describe("pinning existing hosts' orca CLI control switch on upgrade", () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -112,7 +112,7 @@ describe("pinning existing hosts' orca CLI control switch on upgrade", () => {
   })
 
   it('does not re-run after a downgrade wrote an absent switch alongside the marker', async () => {
-    // An older build keeps unknown settings keys, so the marker survives its saves.
+    // Older builds preserve unknown migration markers when saving settings.
     writeProfile([host('added-by-older-build')], {
       sshRemoteCliControlExistingHostsMigrated: true
     })

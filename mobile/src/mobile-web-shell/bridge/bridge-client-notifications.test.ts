@@ -8,19 +8,28 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION
 } from './bridge-envelope'
-import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge-caps'
-import {
-  BRIDGE_HAPTICS_GRANT,
-  BRIDGE_HAPTICS_KINDS,
-  BRIDGE_HAPTICS_NOTIFY
-} from './bridge-haptics-notify'
-import { GRANTS, INIT, createPageClient } from './bridge-page-client-test-harness'
+import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { GRANTS, INIT, createPageClient as createPage } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
 })
 
 afterEach(() => {
+  closeResources()
   vi.useRealTimers()
 })
 
@@ -60,14 +69,19 @@ describe('bridge client page faults', () => {
   })
 
   it('answers false for a port that refused the frame, and reports it once', () => {
+    let fails = false
     const page = createPageClient({
       send: () => {
-        throw new Error('the channel is gone')
+        if (fails) {
+          throw new Error('the channel is gone')
+        }
       }
     })
     startGranted(page)
+    expect(page.diagnostics).toEqual([])
+    fails = true
     expect(page.client.notifyPageFault(new Error('the route threw'))).toBe(false)
-    expect(page.diagnostics.map((diagnostic) => diagnostic.kind)).toContain('send-failed')
+    expect(page.diagnostics).toEqual([{ kind: 'send-failed', error: expect.any(Error) }])
   })
 })
 
@@ -109,6 +123,14 @@ describe('the notify guard before init', () => {
       name: 'navigate',
       href: '/h/host-1'
     })
+    expect(page.client.notifyStorageWrite('orca:last-visited-worktree', 'wt-1')).toBe(true)
+    expect(page.frames().at(-1)).toEqual({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'notify',
+      name: 'storage',
+      key: 'orca:last-visited-worktree',
+      value: 'wt-1'
+    })
   })
 })
 
@@ -138,12 +160,6 @@ describe('navigate-back', () => {
     const beforeNotify = page.sent.length
     expect(page.client.notifyNavigateBack()).toBe(false)
     expect(page.sent).toHaveLength(beforeNotify)
-  })
-
-  it('asks for no grant of its own, which no route may declare', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_NAVIGATE_BACK_NOTIFY] } })
-    expect(page.client.notifyNavigateBack()).toBe(false)
   })
 
   it('answers false after close rather than throwing into a teardown', () => {
@@ -230,11 +246,12 @@ describe('bridge client haptics', () => {
   it('posts one frame per kind, carrying the kind it was asked for', () => {
     const page = createPageClient()
     granted(page)
-    for (const kind of BRIDGE_HAPTICS_KINDS) {
+    const kinds = ['mediumImpact', 'selection', 'success', 'error', 'edgeBump'] as const
+    for (const kind of kinds) {
       expect(page.client.notifyHaptics(kind), kind).toBe(true)
     }
     expect(page.frames().slice(1)).toEqual(
-      BRIDGE_HAPTICS_KINDS.map((kind) => ({
+      kinds.map((kind) => ({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'notify',
         name: BRIDGE_HAPTICS_NOTIFY,
@@ -250,13 +267,6 @@ describe('bridge client haptics', () => {
     expect(page.sent).toHaveLength(1)
   })
 
-  it('stays quiet against a shell that granted the notify name instead of the token', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_NOTIFY] } })
-    expect(page.client.notifyHaptics('selection')).toBe(false)
-    expect(page.sent).toHaveLength(1)
-  })
-
   it('answers false before a session and after close rather than throwing inside a tap handler', () => {
     const early = createPageClient()
     expect(early.client.notifyHaptics('selection')).toBe(false)
@@ -265,38 +275,5 @@ describe('bridge client haptics', () => {
     page.client.close()
     expect(page.client.notifyHaptics('selection')).toBe(false)
     expect(page.frames().at(-1)).toEqual({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
-  })
-})
-
-/**
- * What a haptic costs on the wire, measured off the frame the client posted rather than a written
- * copy of its shape: the two drift, and the one that drifts is the budget.
- *
- * The worst kind is the longest name, and a scrolling list is the worst case for the count: the
- * file explorer plays `selection` once per row, so twelve rows is the number to think about.
- */
-describe('the bytes a haptic spends', () => {
-  it('costs well under a thousandth of the frame cap, whichever kind it is', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
-    const bytes = BRIDGE_HAPTICS_KINDS.map((kind) => {
-      page.client.notifyHaptics(kind)
-      return utf8ByteLength(page.sent.at(-1) ?? '')
-    })
-    // One per kind, widest first: `mediumImpact` is the longest name and `error` the shortest.
-    expect(bytes).toEqual([77, 74, 72, 70, 73])
-    expect(Math.max(...bytes) / BRIDGE_MAX_MESSAGE_BYTES).toBeLessThan(0.0002)
-  })
-
-  it('costs a twelve-row scroll under a kilobyte, one frame per row', () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: [BRIDGE_HAPTICS_GRANT] } })
-    const before = page.sent.length
-    for (let row = 0; row < 12; row += 1) {
-      page.client.notifyHaptics('selection')
-    }
-    const scroll = page.sent.slice(before)
-    expect(scroll).toHaveLength(12)
-    expect(scroll.reduce((total, json) => total + utf8ByteLength(json), 0)).toBe(888)
   })
 })

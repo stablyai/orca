@@ -1,6 +1,6 @@
-import type { SshConnectionCallbacks } from '../../ssh/ssh-connection-utils'
+import type { SshConnectionCallbacks } from '../../ssh/connection/ssh-connection-callbacks'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { isSshHostCensusInFlight } from '../../ssh/ssh-connection-attribution'
+import { isSshHostCensusInFlight } from '../../ssh/connection/ssh-connection-attribution'
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined
@@ -11,7 +11,7 @@ import {
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { recordSshSignInRequirement } from './ssh-sign-in-requirement'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
 import { requestCredential } from './ssh-passphrase'
@@ -29,8 +29,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     state.status === 'connected' &&
     (connectInFlight.has(targetId) || isSshHostCensusInFlight(targetId))
   ) {
-    // Why: the raw transport reaches 'connected' while the connect is still deciding the host's
-    // server; forwarding it would let the renderer treat the host as up before anything serves it.
+    // Raw transport connected is premature while the host server decision is still pending.
     broadcastSshState(getCurrentMainWindow, targetId, {
       targetId,
       status: 'connecting',
@@ -49,7 +48,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
 export function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
     onCredentialRequest: (targetId, kind, detail, echo, signal) => {
-      // Why: after a Cancel only an explicit connect may prompt; answer the rest as cancelled.
+      // After Cancel, only explicit connects may prompt again.
       if (isSshCredentialDeclined(targetId, signal)) {
         return Promise.resolve(null)
       }

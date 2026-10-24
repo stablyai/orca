@@ -32,6 +32,18 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('blocks conflicts on merge-queue branches', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({ mergeQueueRequired: true, mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' })
+      )
+    ).toMatchObject({
+      label: 'Conflicts',
+      directMergeAvailable: false,
+      autoMergeAction: null
+    })
+  })
+
   it('offers enable auto-merge for open PRs that are waiting on requirements', () => {
     expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: null })).autoMergeAction).toBeNull()
     // Approval-required and required-check-blocked PRs are exactly when auto-merge helps.
@@ -78,24 +90,31 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
-  it('does not offer enable auto-merge for GitHub unstable PRs', () => {
-    expect(
-      presentGitHubPRMergeState(
-        pr({
-          mergeable: 'UNKNOWN',
-          mergeStateStatus: 'UNSTABLE',
-          checksSummary: {
-            state: 'failure',
-            total: 1,
-            passed: 0,
-            failed: 1,
-            pending: 0,
-            neutral: 0
-          }
-        })
-      ).autoMergeAction
-    ).toBeNull()
-  })
+  it.each(['UNSTABLE', 'HAS_HOOKS'])(
+    'allows a direct merge for %s even before conflict detection finishes',
+    (mergeStateStatus) => {
+      expect(
+        presentGitHubPRMergeState(
+          pr({
+            mergeable: 'UNKNOWN',
+            mergeStateStatus,
+            checksSummary: {
+              state: 'failure',
+              total: 1,
+              passed: 0,
+              failed: 1,
+              pending: 0,
+              neutral: 0
+            }
+          })
+        )
+      ).toMatchObject({
+        label: 'Checks failed',
+        directMergeAvailable: true,
+        autoMergeAction: null
+      })
+    }
+  )
 
   it('does not offer enable auto-merge on conflicting PRs (GitHub would reject it)', () => {
     expect(

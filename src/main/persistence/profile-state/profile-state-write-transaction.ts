@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { storageCapacityErrorCode } from '../../../shared/storage-capacity-error'
 
 export class ProfileStateIndeterminateWriteError extends Error {
   readonly code = 'profile-state-write-indeterminate' as const
@@ -26,8 +27,10 @@ export function withProfileStateWriteTransaction<T>(db: Database.Database, write
     return result
   } catch (error) {
     if (!db.isTransaction) {
-      // SQLite can roll back a failed statement itself; a failed COMMIT is ambiguous.
-      if (committing) {
+      // SQLite can roll back a failed statement itself; a failed COMMIT is ambiguous, except
+      // SQLITE_FULL: with powersafe overwrite (the default VFS) the WAL commit frame is the last
+      // write, so a write that ran out of room means no commit frame landed.
+      if (committing && storageCapacityErrorCode(error) !== 'SQLITE_FULL') {
         throw new ProfileStateIndeterminateWriteError(error, undefined)
       }
       throw error

@@ -1,5 +1,7 @@
+import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
-import { SessionNotFoundError } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
@@ -12,13 +14,16 @@ import type { InternalCreateOrAttachOptions } from './terminal-host-agent-sessio
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
-import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
+import {
+  listLiveTerminalHostSessions,
+  hasLiveTerminalHostSessions
+} from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
-import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
+import { inspectTerminalHostSession } from './terminal-host-process-inspection'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
   confirmTerminalHostForegroundProcess,
@@ -73,9 +78,7 @@ export class TerminalHost {
       inFlight !== undefined;
       inFlight = this.pendingCreations.get(opts.sessionId)
     ) {
-      // Why: the create ahead of us can be stuck on an unreachable share for
-      // minutes. Waiting unconditionally is what let one dead path strand every
-      // later create and attach for the session, so a canceled caller leaves.
+      // Let canceled callers leave rather than wait behind a cwd probe stuck on an unreachable share.
       await waitForTerminalAttachOperation(inFlight, opts.cancelSignal, opts.sessionId)
       this.assertCreateOrAttachAllowed(opts)
     }
@@ -95,7 +98,10 @@ export class TerminalHost {
         isLive: (owner) =>
           this.agentSessionGenerations.isCurrent(
             owner,
-            Boolean(this.sessions.get(owner.ptyId)?.isAlive)
+            Boolean(
+              this.sessions.get(owner.ptyId)?.isAlive &&
+              !this.sessions.get(owner.ptyId)?.isTerminating
+            )
           ),
         createOrAttach: async (options) => {
           this.assertCreateOrAttachAllowed(options)
@@ -161,7 +167,7 @@ export class TerminalHost {
     getAliveTerminalHostSession(this.sessions, sessionId).resize(cols, rows)
   }
 
-  // Why null-not-throw (unlike write/resize): pause/resume are best-effort hints against a session that may have exited.
+  // Producer flow-control hints tolerate sessions that have already exited.
   pauseProducer(sessionId: string, source?: 'stream', onStreamStall?: () => void): void {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
@@ -187,7 +193,16 @@ export class TerminalHost {
     return Promise.resolve(killed)
   }
 
-  // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
+  beginFencedTermination(request: PtyFencedTerminationRequest) {
+    return beginTerminalHostFencedTermination(request, {
+      sessions: this.sessions,
+      pendingCreations: this.pendingCreations,
+      owners: this.agentSessionOwners,
+      kill: (id, options) => this.kill(id, options)
+    })
+  }
+
+  // Reap the emulator so dead sessions do not retain scrollback for the daemon’s lifetime.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session || session.isAlive) {
@@ -218,7 +233,7 @@ export class TerminalHost {
     )
   }
 
-  // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
+  // A vanished pane has no agent icon to display.
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
@@ -229,31 +244,16 @@ export class TerminalHost {
 
   inspectProcess(
     sessionId: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: PtyProcessInspectionOptions
   ): Promise<TerminalHostProcessInspection> {
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
-    const session = this.sessions.get(sessionId)
-    if (
-      (!session || !session.isAlive) &&
-      !(
-        (this.retiredIncarnations.get(sessionId)?.expiresAt ?? 0) > Date.now() &&
-        options?.expectedIncarnationId === this.retiredIncarnations.get(sessionId)?.incarnationId
-      )
-    ) {
-      // Preserve the historical synchronous missing-session failure.
-      throw new SessionNotFoundError(sessionId)
-    }
-    return inspectTerminalHostProcess({
+    return inspectTerminalHostSession(
+      this.sessions,
+      this.retiredIncarnations,
       sessionId,
-      session: session?.isAlive ? session : null,
-      ...(options?.expectedIncarnationId
-        ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {}),
-      ...(options?.steadyState === true ? { steadyState: true } : {}),
-      retiredIncarnation: this.retiredIncarnations.get(sessionId),
-      authorityGeneration: this.authorityGeneration,
-      nextObservationEpoch: () => ++this.observationEpoch
-    })
+      options,
+      this.authorityGeneration,
+      () => ++this.observationEpoch
+    )
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {
@@ -274,7 +274,7 @@ export class TerminalHost {
     getAliveTerminalHostSession(this.sessions, sessionId).resetInputModes()
   }
 
-  // Why: null-not-throw — checkpoint is best-effort against a session that may have just exited.
+  // Checkpoint reads tolerate sessions that have just exited.
   getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     return getTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
@@ -286,17 +286,16 @@ export class TerminalHost {
     return getSettledTerminalHostSnapshot(this.sessions.get(sessionId), opts)
   }
 
-  // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — emulator's dangling incomplete escape at the stream position.
+  // Seed scan-authority handoff with the incomplete escape at the current stream position.
   getPartialEscapeTailAnsi(sessionId: string): string {
     return getTerminalHostPartialEscapeTail(this.sessions.get(sessionId))
   }
 
-  // Why: renderer diffs this against xterm to detect a dropped/coerced daemon-side resize; null-not-throw like getSnapshot.
+  // Let the renderer detect dropped or coerced resizes from the applied dimensions.
   getAppliedSize(sessionId: string): { cols: number; rows: number } | null {
     return getTerminalHostAppliedSize(this.sessions.get(sessionId))
   }
 
-  // Why: null-not-throw like getSnapshot — incremental checkpoints are best-effort against a just-exited session.
   takePendingOutput(
     sessionId: string,
     includeSnapshot: boolean,
@@ -314,12 +313,7 @@ export class TerminalHost {
   }
 
   hasLiveSessions(): boolean {
-    let hasLive = false
-    // Read every Session, even after a live one, to preserve the inventory's error order.
-    for (const session of this.sessions.values()) {
-      hasLive = session.isAlive || hasLive
-    }
-    return hasLive
+    return hasLiveTerminalHostSessions(this.sessions)
   }
 
   dispose(): Promise<void> {
@@ -330,7 +324,7 @@ export class TerminalHost {
     const disposePromise = this.disposeSessions()
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
-      // Why: keep failed native owners retryable on a later shutdown request.
+      // Keep failed native owners retryable on the next shutdown request.
       if (this.disposePromise === disposePromise) {
         this.disposePromise = null
       }

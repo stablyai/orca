@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -30,7 +30,7 @@ describe('the WSL launch (setsid)', () => {
     }
   })
 
-  // Regression: `nohup … &` is killed when its `wsl.exe --exec` exits on a distro without systemd.
+  // WSL without systemd can kill nohup children when wsl.exe exits; detach into a new session.
   it('never backgrounds under nohup, and starts the runtime in a session of its own', () => {
     const command = orcadLaunchCommand(
       host,
@@ -39,18 +39,19 @@ describe('the WSL launch (setsid)', () => {
     )
     expect(command).not.toContain('nohup')
     expect(command).toContain('setsid -f "$@"')
-    // busybox has no `-f`; a background child of a non-interactive shell can still setsid.
+    // BusyBox lacks -f; background non-interactive children can still create their own session.
     expect(command).toContain('else setsid "$@" & fi')
     expect(command).toContain(`${ORCAD_WSL_HOST_ENV}=1 sh -c`)
   })
 
   it('has the child record its own PID, since the setsid -f parent exits at once', () => {
     const command = orcadLaunchCommand(host, spec('/d/orcad-1'), 'setsid')
-    const removeStale = command.indexOf(`rm -f '/d/orcad-1/${ORCAD_PID_FILENAME}'`)
-    const recordOwn = command.indexOf(`echo $$ > "$1" && shift && exec "$@"`)
+    expect(command.startsWith(`orcad_pid='/d/orcad-1/${ORCAD_PID_FILENAME}';`)).toBe(true)
+    const removeStale = command.indexOf('rm -f "$orcad_pid"')
+    const recordOwn = command.indexOf(`echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"`)
     expect(removeStale).toBeGreaterThan(-1)
     expect(recordOwn).toBeGreaterThan(removeStale)
-    expect(command.trimEnd().endsWith(`cat '/d/orcad-1/${ORCAD_PID_FILENAME}'`)).toBe(true)
+    expect(command.trimEnd().endsWith('cat "$orcad_pid"')).toBe(true)
   })
 
   it('passes host facts the guest cannot read, quoted, and refuses a malformed name', () => {
@@ -101,9 +102,30 @@ describe('the WSL launch (setsid)', () => {
         try {
           process.kill(pid)
         } catch {
-          // Already gone.
+          // Cleanup tolerates children already reaped.
         }
       }
+    }
+  )
+
+  // Daemon children create user files and must retain login umask (#31125).
+  it.skipIf(process.platform !== 'linux')(
+    'runs the daemon at the login umask while its PID and readiness files stay owner-only',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orcad-setsid-umask-'))
+      dirs.push(dir)
+      const runtime = join(dir, 'fake-node')
+      writeFileSync(runtime, `#!/bin/sh\n: > daemon-file\necho '{"type":"orca_server_ready"}'\n`)
+      chmodSync(runtime, 0o755)
+      const command = orcadLaunchCommand(host, spec(dir, runtime), 'setsid')
+      execFileSync('sh', ['-c', `umask 022; ${command}`])
+      for (let i = 0; i < 50 && !readFileSync(join(dir, ORCAD_READINESS_FILENAME), 'utf8'); i++) {
+        execFileSync('sleep', ['0.05'])
+      }
+      const mode = (name: string): number => statSync(join(dir, name)).mode & 0o777
+      expect(mode('daemon-file')).toBe(0o644)
+      expect(mode(ORCAD_PID_FILENAME)).toBe(0o600)
+      expect(mode(ORCAD_READINESS_FILENAME)).toBe(0o600)
     }
   )
 })

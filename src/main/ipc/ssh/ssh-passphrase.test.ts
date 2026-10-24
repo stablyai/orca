@@ -1,7 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerCredentialHandler, requestCredential } from './ssh-passphrase'
-import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/ssh-connection-utils'
+import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/connection/ssh-connection-timing'
 import {
   isSshCredentialDeclined,
   resetSshCredentialDeclinesForTests

@@ -126,8 +126,8 @@ function matchesWorktreeCardProperties(
 export type WorktreeCardDetails = {
   /** The Compact layout as it applies: the new card style overrides it. */
   compactCards: boolean
-  /** Repo identity is an icon chip in the title row, not a name in the meta row (compact cards and
-   *  the new card style). Read by the phone row and the desktop card's repo badge. */
+  /** Repo identity sits in the title row, not the meta row (compact cards and the new card style).
+   *  Read by the phone row and the desktop card's repo badge. */
   repoInTitle: boolean
   /** The identity meta row (repo, host, branch or folder path, detached HEAD); compact cards drop it. */
   metaRow: boolean

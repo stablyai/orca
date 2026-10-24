@@ -6,7 +6,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { REMOTE_INSTALL_MODELS } from './remote-install-model'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -56,7 +56,6 @@ describe.each([
           sshChannelCloseConfirmed: true
         })
       )
-      // abandonInstall also reports that the lock was not confirmed removed.
       await expect(release(conn, remoteDir, host)).resolves.toBeFalsy()
     }
   )

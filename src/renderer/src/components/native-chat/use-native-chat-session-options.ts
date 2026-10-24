@@ -216,7 +216,9 @@ export function useNativeChatSessionOptions(args: {
     const matched =
       agent === 'omp'
         ? reportedModel.trim()
-        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel)
+        : matchNativeChatCatalogModelId({ ...catalog, models }, reportedModel, {
+            allowUnlisted: agent === 'codex'
+          })
     if (!matched || appliedReportedModelRef.current === matched) {
       return
     }

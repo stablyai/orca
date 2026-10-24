@@ -33,18 +33,27 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     inventory: PtyControllerInventory
   ): Promise<RuntimeTerminalOrphanAdoptionResult> {
     const store = this.store
-    const session = this.getWorkspaceSessionForWorktree(workspace.id)
-    if (
-      !store?.setWorkspaceSession ||
-      (!store.flushPendingOrThrowAsync && !store.flushOrThrow) ||
-      !session
-    ) {
+    if (!store?.setWorkspaceSession || (!store.flushPendingOrThrowAsync && !store.flushOrThrow)) {
       throw new Error('workspace_session_unavailable')
     }
-    const sessionWorktreeId = resolveTerminalSessionWorktreeId(session, workspace.id)
-    if (!sessionWorktreeId) {
-      throw new Error('terminal_orphan_competing_owner')
+    const readSession = () => {
+      const session = this.getWorkspaceSessionForWorktree(workspace.id)
+      if (!session) {
+        throw new Error('workspace_session_unavailable')
+      }
+      const sessionWorktreeId = resolveTerminalSessionWorktreeId(session, workspace.id)
+      if (!sessionWorktreeId) {
+        throw new Error('terminal_orphan_competing_owner')
+      }
+      return {
+        session,
+        sessionWorktreeId,
+        currentRevision: this.getTerminalTopologyRevision(workspace.id)
+      }
     }
+    // Refuse an unreadable session before any owner lookup, as before.
+    readSession()
+    const runDurableMutation = store.runDurableMutation?.bind(store)
     const worktreeConnectionId = workspace.connectionId
     let worktreeWslDistro: string | null = null
     if (!worktreeConnectionId && workspace.repo) {
@@ -60,13 +69,12 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       request,
       workspace,
       inventory,
-      session,
-      sessionWorktreeId,
       repoId: getRepoIdFromWorktreeId(workspace.id),
       worktreeWslDistro,
-      currentRevision: this.getTerminalTopologyRevision(workspace.id),
       ports: {
+        readSession,
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
+        paneOf: (pty) => this.paneOfPty(pty),
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),
         getDisplayTitle: (pty) => getLatestPtyTitle(this.getPtyDisplayRecord(pty)),
@@ -77,6 +85,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         getMobileSnapshots: () => this.mobileSessionTabsByWorktree.values(),
         getSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
         setSession: (worktreeId, next) => this.setWorkspaceSessionForWorktree(worktreeId, next),
+        ...(runDurableMutation ? { runDurableMutation } : {}),
         flushSession: () => this.flushWorkspaceSessionOrThrowAsync(),
         hydrateSession: (worktreeId) =>
           this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
@@ -225,7 +234,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
     }
     const runtimePty = this.getLivePtyForHandle(handle)
     if (runtimePty) {
-      return runtimePty.pty.connected ? (runtimePty.pty.paneKey ?? null) : null
+      return runtimePty.pty.connected ? this.paneOfPty(runtimePty.pty).paneKey : null
     }
     try {
       const leaf = this.resolveLiveLeafForHandle(handle)

@@ -37,10 +37,11 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
+import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
@@ -391,7 +392,7 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     })
 
     const state = useAppStore.getState()
-    const fileId = '/repo-b/README.md'
+    const fileId = buildOwnedEditorFileId('/repo-b/README.md', WORKTREE, ENV_B)
     expect(
       state.openFiles
         .filter((file) => file.worktreeId === WORKTREE)

@@ -44,9 +44,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       }
     })()
 
-    // Why: a client-hosted page's bytes belong on the remote workspace, so main stages them itself
-    // instead of reserving a name in the desktop Downloads folder. A popup downloads to its
-    // opener's page: the popup itself is a client-local transient with no logical page of its own.
+    // Stage client-hosted downloads for the remote workspace; popups use their opener.
     const ownerContext = this.resolvePopupOwnerContext(guestWebContentsId)
     const decision = routeBrowserClientDownload({
       guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
@@ -60,8 +58,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
           reservationKey: null
         }
       }
-      // Why: a client-hosted download with no resolvable remote destination is canceled rather than
-      // written to this desktop's Downloads folder.
+      // Never fall back to local Downloads for an unresolved remote destination.
       if (decision.kind === 'blocked') {
         return null
       }
@@ -117,7 +114,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       try {
         item.cancel()
       } catch {
-        // Why: with no destination Chromium must not keep writing invisibly; cancel is best-effort after surfacing the failure.
+        // Cancellation can fail after the item is finalized.
       }
       return
     }
@@ -130,7 +127,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       try {
         item.cancel()
       } catch {
-        // Why: a failed setSavePath can leave Electron partially finalized; cancel is best-effort after the UI is made terminal.
+        // setSavePath failure can leave the item finalized.
       }
       return
     }
@@ -138,9 +135,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     const updatedHandler = (_event: Electron.Event, state: 'progressing' | 'interrupted'): void => {
       download.receivedBytes = this.getDownloadReceivedBytes(download.item)
       if (state === 'interrupted' && this.isAwaitingManualResume(download.item)) {
-        // Why: Chromium's automatic retries run before observers hear 'interrupted', so a resumable
-        // interruption here waits for a resume Orca never offers; end it instead of showing "paused".
-        // Deferred because canceling inside a native updated callback nests observer updates.
+        // Orca offers no manual resume; defer cancellation to avoid nested native observer updates.
         setImmediate(() => {
           if (
             this.downloadsById.get(downloadId) === download &&
@@ -181,7 +176,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
         download.item.off('updated', updatedHandler)
         download.item.off('done', doneHandler)
       } catch {
-        // Why: a completed DownloadItem may already be finalized; keep cleanup best-effort so teardown never crashes main.
+        // The completed item may already be finalized.
       }
     }
     item.on('updated', updatedHandler)

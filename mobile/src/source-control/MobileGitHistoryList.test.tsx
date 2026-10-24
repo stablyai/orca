@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState, RpcResponse } from '../transport/types'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
 
 vi.mock('react-native', () => ({
@@ -39,8 +39,9 @@ vi.mock('../transport/host-client-hooks', () => ({
 // so a 3h offset stays inside the '3h' relative-time bucket.
 const RENDER_NOW = Date.now()
 
-function historyResponse(subject: string) {
+function historyResponse(subject: string): RpcResponse {
   return {
+    id: 'history',
     ok: true,
     result: {
       items: [
@@ -57,7 +58,8 @@ function historyResponse(subject: string) {
   }
 }
 
-const compareResponse = {
+const compareResponse: RpcResponse = {
+  id: 'compare',
   ok: true,
   result: { entries: [{ path: 'src/app.ts', added: 3, removed: 1 }] }
 }
@@ -169,7 +171,7 @@ describe('MobileGitHistoryList', () => {
     await update(client, 'disconnected')
 
     const row = renderer?.root.findAll(
-      (node) => node.type === 'Pressable' && node.props.onPress !== undefined
+      (node) => String(node.type) === 'Pressable' && node.props.onPress !== undefined
     )[0]
     await act(async () => {
       row?.props.onPress()
@@ -186,11 +188,81 @@ describe('MobileGitHistoryList', () => {
     expect(tree()).toContain('src/app.ts')
   })
 
+  it.each(['refusal', 'transport', 'malformed'])(
+    'shows a retryable %s instead of claiming the commit has no changes',
+    async (failure) => {
+      let attempts = 0
+      const client = createFakeRpcClient()
+      client.sendRequest = vi.fn(async (method): Promise<RpcResponse> => {
+        if (method === 'git.history') {
+          return historyResponse('expandable')
+        }
+        attempts += 1
+        if (attempts > 1) {
+          return compareResponse
+        }
+        if (failure === 'transport') {
+          throw new Error('Connection lost')
+        }
+        if (failure === 'malformed') {
+          return { id: 'compare', ok: true, result: {} }
+        }
+        return {
+          id: 'compare',
+          ok: false,
+          error: { code: 'runtime_error', message: 'Unable to read commit' }
+        }
+      })
+      await render(client, 'connected')
+      await act(async () => {
+        renderer?.root.findAll((node) => String(node.type) === 'Pressable')[0]?.props.onPress()
+      })
+      expect(tree()).not.toContain('No file changes')
+      expect(tree()).not.toContain('ActivityIndicator')
+      const retry = renderer?.root.findAll(
+        (node) =>
+          String(node.type) === 'Pressable' &&
+          node.props.accessibilityLabel === 'Retry commit files'
+      )[0]
+      expect(retry).toBeDefined()
+      await act(async () => retry?.props.onPress())
+      expect(tree()).toContain('src/app.ts')
+      expect(tree()).not.toContain('Retry commit files')
+    }
+  )
+
+  it('keeps previously loaded files when their reconnect refresh is refused', async () => {
+    let attempts = 0
+    const client = createFakeRpcClient()
+    client.sendRequest = vi.fn(async (method): Promise<RpcResponse> => {
+      if (method === 'git.history') {
+        return historyResponse('expandable')
+      }
+      attempts += 1
+      return attempts === 1
+        ? compareResponse
+        : {
+            id: 'compare',
+            ok: false,
+            error: { code: 'runtime_error', message: 'Commit refresh failed' }
+          }
+    })
+    await render(client, 'connected')
+    await act(async () =>
+      renderer?.root.findAll((node) => String(node.type) === 'Pressable')[0]?.props.onPress()
+    )
+    await update(client, 'reconnecting')
+    await update(client, 'connected')
+    expect(tree()).toContain('src/app.ts')
+    expect(tree()).toContain('Commit refresh failed')
+    expect(tree()).not.toContain('No file changes')
+  })
+
   describe('Retry while the host is unreachable', () => {
     function retryControls() {
       return (
         renderer?.root.findAll(
-          (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Retry'
+          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retry'
         ) ?? []
       )
     }

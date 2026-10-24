@@ -63,6 +63,8 @@ export type ManagedProfileOptions = {
   repoPath?: string
   /** Overrides the host's folder workspace, e.g. to keep /tmp outside every workspace. */
   folderPath?: string
+  /** Passed through to the relay-era seed, e.g. an unsaved editor draft. */
+  seed?: Pick<NonNullable<Parameters<typeof seedRelayEraProfile>[3]>, 'draftContent'>
   /** Runs on the profile-creating launch, before the SSH profile is seeded. */
   beforeSeed?: (page: Page) => Promise<void>
   /** Runs as soon as the converting launch starts, before the session is ready. */
@@ -82,10 +84,15 @@ export async function launchConvertedProfile(
   await options.beforeSeed?.(first.page)
   await session.close(first.app)
   fixture.app = null
-  const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
-    repoPath: options.repoPath ?? host.remoteRepoPath,
-    folderPath: options.folderPath ?? host.remoteFolderPath
-  })
+  const seeded = seedRelayEraProfile(
+    session.userDataDir,
+    host.input,
+    {
+      repoPath: options.repoPath ?? host.remoteRepoPath,
+      folderPath: options.folderPath ?? host.remoteFolderPath
+    },
+    options.seed
+  )
   const { app, page } = await session.launch()
   fixture.app = app
   await options.onLaunch?.(page, seeded)

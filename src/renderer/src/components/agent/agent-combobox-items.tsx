@@ -19,6 +19,10 @@ type ItemRenderArgs = {
   onSetDefault?: () => void
   icon: React.ReactNode
   label: string
+  disabled?: boolean
+  title?: string
+  /** After the label: an unavailable row's reason, or a chat row's terminal button. */
+  trailing?: React.ReactNode
 }
 
 type AgentDefaultContextMenuProps = {
@@ -75,19 +79,25 @@ export function renderAgentComboboxItem({
   onSelect,
   onSetDefault,
   icon,
-  label
+  label,
+  disabled,
+  title,
+  trailing
 }: ItemRenderArgs): React.ReactNode {
   const row = (
     <CommandItem
       key={key}
       value={itemValue}
       onSelect={onSelect}
+      disabled={disabled}
+      title={title}
       className="items-center gap-2 px-3 py-1.5"
     >
       <Check
         className={cn('size-4 shrink-0 text-foreground', isChecked ? 'opacity-100' : 'opacity-0')}
       />
       <AgentIconLabel icon={icon} label={label} />
+      {trailing}
     </CommandItem>
   )
   return (

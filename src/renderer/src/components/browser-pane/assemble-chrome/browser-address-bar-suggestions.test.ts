@@ -3,6 +3,7 @@ import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspac
 import {
   BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES,
   buildBrowserAddressBarSuggestions,
+  getBrowserAddressBarInlineCompletion,
   isBrowserAddressBarQueryTooLarge,
   MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS
 } from './browser-address-bar-suggestions'
@@ -269,10 +270,17 @@ describe('browser address bar suggestions', () => {
       )
     })
 
-    it('folds the synthetic row away when history already offers the same url', () => {
+    it('folds the synthetic row into the history row and keeps it on top, where Enter goes', () => {
       const suggestions = buildBrowserAddressBarSuggestions({
         value: 'acme.dev',
         browserUrlHistory: [
+          historyEntry({
+            url: 'https://acme.dev/docs',
+            normalizedUrl: 'https://acme.dev/docs',
+            title: 'Acme docs',
+            lastVisitedAt: now,
+            visitCount: 40
+          }),
           historyEntry({
             url: 'https://acme.dev/',
             normalizedUrl: 'https://acme.dev',
@@ -284,9 +292,139 @@ describe('browser address bar suggestions', () => {
       })
 
       expect(suggestions).toEqual([
-        expect.objectContaining({ url: 'https://acme.dev/', title: 'Acme', isSearch: false })
+        expect.objectContaining({ url: 'https://acme.dev/', title: 'Acme', isSearch: false }),
+        expect.objectContaining({ url: 'https://acme.dev/docs' })
       ])
     })
+
+    it('puts the completed host first and the typed search last while the bar completes inline', () => {
+      const suggestions = buildBrowserAddressBarSuggestions({
+        value: 'git',
+        inline: true,
+        searchEngine: 'duckduckgo',
+        browserUrlHistory: [
+          historyEntry({
+            url: 'https://github.com/stablyai/orca/pulls',
+            normalizedUrl: 'https://github.com/stablyai/orca/pulls',
+            title: 'Pull requests',
+            lastVisitedAt: now,
+            visitCount: 9
+          }),
+          historyEntry({
+            url: 'https://github.com/stablyai/orca',
+            normalizedUrl: 'https://github.com/stablyai/orca',
+            title: 'Orca',
+            lastVisitedAt: now,
+            visitCount: 2
+          })
+        ]
+      })
+
+      expect(suggestions.map((suggestion) => suggestion.url)).toEqual([
+        'https://github.com/',
+        'https://github.com/stablyai/orca/pulls',
+        'https://github.com/stablyai/orca',
+        'https://duckduckgo.com/?q=git'
+      ])
+    })
+
+    // Background tabs re-rank or evict history while the bar shows `github.com`.
+    it('keeps the completion the bar shows on top whatever history does', () => {
+      const suggestions = buildBrowserAddressBarSuggestions({
+        value: 'git',
+        inline: 'github.com',
+        browserUrlHistory: [
+          historyEntry({
+            url: 'https://gitlab.com/',
+            normalizedUrl: 'https://gitlab.com',
+            title: 'GitLab',
+            lastVisitedAt: now,
+            visitCount: 9
+          })
+        ]
+      })
+
+      expect(suggestions[0]).toMatchObject({
+        url: 'https://github.com/',
+        inlineText: 'github.com'
+      })
+    })
+  })
+})
+
+describe('suggestion favicons', () => {
+  it("gives page rows without an icon of their own the site's icon", () => {
+    const faviconUrl = 'https://www.youtube.com/s/favicon.ico'
+    const history = [
+      historyEntry({
+        url: 'https://www.youtube.com/watch?v=1',
+        normalizedUrl: 'https://www.youtube.com/watch?v=1',
+        title: 'Video',
+        faviconUrl
+      }),
+      historyEntry({
+        url: 'https://www.youtube.com/feed',
+        normalizedUrl: 'https://www.youtube.com/feed',
+        title: 'Feed',
+        faviconUrl: null
+      })
+    ]
+    const suggestions = buildBrowserAddressBarSuggestions({
+      value: 'you',
+      browserUrlHistory: history,
+      inline: true
+    })
+    // Row 0 is the host completion `youtube.com`, which has no history entry and no `www.`.
+    expect(
+      Object.fromEntries(
+        suggestions.filter((row) => !row.isSearch).map((row) => [row.url, row.faviconUrl])
+      )
+    ).toEqual({
+      'https://youtube.com/': faviconUrl,
+      'https://www.youtube.com/watch?v=1': faviconUrl,
+      'https://www.youtube.com/feed': faviconUrl
+    })
+  })
+})
+
+describe('getBrowserAddressBarInlineCompletion', () => {
+  it.each([
+    ['git', 'https://github.com/stablyai/orca', 'github.com', 'https://github.com/'],
+    // A fully typed host must never complete to a deeper page of that site.
+    [
+      'localhost:3000',
+      'http://localhost:3000/dashboard',
+      'localhost:3000',
+      'http://localhost:3000/'
+    ],
+    ['www.ex', 'https://www.example.com/a', 'www.example.com', 'https://www.example.com/'],
+    ['ex', 'https://www.example.com/a', 'example.com', 'https://example.com/'],
+    ['https://gi', 'https://github.com/x', 'https://github.com', 'https://github.com/'],
+    [
+      'GitHub.com/st',
+      'https://github.com/stablyai/orca',
+      'GitHub.com/stablyai/orca',
+      'https://github.com/stablyai/orca'
+    ]
+  ])('completes %s against %s', (typed, url, text, target) => {
+    expect(getBrowserAddressBarInlineCompletion(typed, url)).toEqual({ text, url: target })
+  })
+
+  it.each([
+    ['orca', 'https://github.com/stablyai/orca'],
+    ['git hub', 'https://github.com/'],
+    ['fi', 'file:///Users/me/report.html'],
+    // A UNC path's host is a file server, not a site.
+    ['fil', 'file://files.example.com/share/report.html'],
+    // The bare host submits with the default scheme, not the visited one.
+    ['loc', 'https://localhost:3000/dashboard'],
+    ['exa', 'http://example.com/'],
+    // Paths are case-sensitive, so /D must not complete to (and then open) /docs.
+    ['example.com/D', 'https://example.com/docs'],
+    // Submit would search for a bare single-label word, so it must not look like an address.
+    ['in', 'https://intranet/docs']
+  ])('does not complete %s against %s', (typed, url) => {
+    expect(getBrowserAddressBarInlineCompletion(typed, url)).toBeNull()
   })
 })
 

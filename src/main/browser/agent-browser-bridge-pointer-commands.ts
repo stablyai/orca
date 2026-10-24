@@ -10,6 +10,7 @@ import {
   type CdpPointerState
 } from './cdp-pointer-input'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
 import { isEmbeddedGuest } from './guest-direct-key-input'
 import { enablePageFocusEmulation } from './agent-input-focus-guard'
@@ -25,15 +26,8 @@ type CdpPointerEventParams = {
   deltaY?: number
 }
 
-/**
- * Coordinate pointer input (move/down/up/wheel), dispatched over the Electron debugger.
- *
- * Element-ref interactions stay on the agent-browser helper because they need its
- * accessibility snapshot; these four carry their own coordinates and need nothing from it.
- */
+/** Coordinate input needs no snapshot and can bypass the helper. */
 export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBridgeInputCommands {
-  // Why: coordinate pointer input needs no accessibility snapshot, so it dispatches over
-  // the debugger `mouseClick` already uses instead of spawning a helper per event.
   private async dispatchPointerEvent<T>(
     sessionName: string,
     target: ResolvedBrowserCommandTarget,
@@ -52,9 +46,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
       )
     }
     const state = cdpPointerStateFor(wc)
-    // Why: build() mutates the tracked state before the event is on the wire; a rejected
-    // dispatch changed nothing in the page, so the pre-dispatch state is what is real —
-    // keeping the mutation would leave a phantom held button on every later event.
+    // Restore tracked state if dispatch fails, or later events report phantom held buttons.
     const preDispatch = { ...state }
     let releaseDebugger = (): void => {}
     let releaseFocusGuard = (): void => {}
@@ -64,13 +56,11 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
       if (press) {
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
-      await wc.debugger.sendCommand('Input.dispatchMouseEvent', params)
+      await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
       return result
     } catch (error) {
       Object.assign(state, preDispatch)
-      // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
-      // runtime_error — the helper path this replaced always produced a browser_* code, and
-      // the pane only reclaims a dead page when it sees one.
+      // Browser error codes let the pane recognize and reclaim a dead page.
       if (error instanceof BrowserError) {
         throw error
       }
@@ -87,9 +77,8 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     }
   }
 
-  // Why: a press on an embedded guest takes Chromium focus whatever we do; its pane gives the
-  // user's focus back (#20595) and emulation keeps the page from seeing that as a blur.
-  // Offscreen pages keep the native focus their caret and IME need.
+  // Guard embedded-guest presses to restore user focus; emulation prevents page blur.
+  // Offscreen pages need native focus for caret and IME input.
   protected async focusPageForPress(
     wc: Electron.WebContents,
     webContentsId: number
@@ -196,8 +185,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
           assertFinitePointerValues({ dy, ...(dx == null ? {} : { dx }) })
           const deltaX = dx ?? 0
           return {
-            // Why: dispatch at the tracked position so the scrollable under the cursor
-            // scrolls; the helper always dispatched wheel at (0,0).
+            // Wheel events must target the scrollable under the tracked cursor.
             params: {
               type: 'mouseWheel',
               x: state.x,

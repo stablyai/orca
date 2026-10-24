@@ -15,6 +15,12 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { useAppStore } from '../../store'
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import {
+  AntigravityChatSignInRow,
+  antigravityChatSignInBlocked,
+  useAntigravityChatSignIn
+} from './AntigravityChatSignInRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -48,6 +54,9 @@ export function AntigravityAccountsSection({
   const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const chats = nativeChat && runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  // A remote host's sign-in finishes from the address pasted back into its row.
+  const chatSignIn = chats && chatRuntime.kind === 'active'
+  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -288,25 +297,37 @@ export function AntigravityAccountsSection({
         )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <ManagedRuntimeInstallRow
-          observation={chatRuntime}
-          agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-        >
-          {(line, button) => (
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'settings.chat.providers.antigravityDescription',
-                    'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
-                  )}
-                </p>
-                {line}
+        <div className="space-y-4">
+          <ManagedRuntimeInstallRow
+            observation={chatRuntime}
+            agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+            signInRunning={antigravityChatSignInRunning(signIn.flow)}
+          >
+            {(line, actions) => (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {translate(
+                      'settings.chat.providers.antigravityDescription',
+                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
+                    )}
+                  </p>
+                  {line}
+                </div>
+                {actions}
               </div>
-              {button}
-            </div>
-          )}
-        </ManagedRuntimeInstallRow>
+            )}
+          </ManagedRuntimeInstallRow>
+          <AntigravityChatSignInRow
+            owner={owner}
+            label={label}
+            description={translate(
+              'accounts.antigravity.chatDescription',
+              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
+            )}
+            disabled={antigravityChatSignInBlocked(chatRuntime)}
+          />
+        </div>
       ) : null}
     </section>
   )

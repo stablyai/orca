@@ -51,6 +51,15 @@ describe('nativeChatSentPrompts', () => {
     expect(nativeChatSentPrompts({ messages, withoutImageMarkers: true })).toEqual([
       { id: '2', prompt: 'fix' }
     ])
+    // A marker the user typed, with no image of that number, is their text.
+    const typed = [
+      message('3', 'user', '[Image #1]'),
+      message('4', 'user', '', { blocks: [image, { type: 'text', text: 'not [Image #2]' }] })
+    ]
+    expect(nativeChatSentPrompts({ messages: typed, withoutImageMarkers: true })).toEqual([
+      { id: '3', prompt: '[Image #1]' },
+      { id: '4', prompt: 'not [Image #2]' }
+    ])
     // A terminal chat's transcript text is the agent's own, markers included.
     expect(nativeChatSentPrompts({ messages }).map(({ prompt }) => prompt)).toEqual([
       '[Image #1]',

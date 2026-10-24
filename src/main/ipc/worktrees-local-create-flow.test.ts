@@ -22,6 +22,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -45,9 +49,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -232,8 +233,7 @@ describe('registerWorktreeHandlers', () => {
       baseBranch: sha
     })
 
-    // The warm-up is speculative, so it stays at the default tier; only the create the user is
-    // waiting on is promoted.
+    // Speculative warm-up stays at default priority; only awaited creation is promoted.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
       { cwd: '/workspace/repo' }
@@ -332,7 +332,6 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
-    // Why: new-workspace flow should silently try improve-dashboard-2, -3, … rather than failing back to the name picker.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -394,7 +393,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/rocket',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/rocket', hostId: 'local' }),
       expect.objectContaining({ displayName: '🚀' })
     )
   })
@@ -446,7 +445,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      hostWorktreeTarget({ id: 'repo-1::../worktrees/feature', hostId: 'local' }),
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
@@ -504,7 +503,6 @@ describe('registerWorktreeHandlers', () => {
     await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'existing-sibling' })
     const listingCalls = listWorktreesMock.mock.calls.length
 
-    // Only the new checkout needs verification, even when the full listing is unavailable.
     listWorktreesMock.mockRejectedValue(new Error('git worktree list timed out.'))
     describeCreatedWorktreeMock.mockResolvedValue({
       path: '/workspace/improve-dashboard',
@@ -517,11 +515,10 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'improve-dashboard' })
     ).resolves.toMatchObject({ worktree: { path: '/workspace/improve-dashboard' } })
-    // Why: registration replaces the repo's root set, so a one-row recovery must not revoke it.
+    // Full registration replaces roots; one-row recovery must preserve siblings.
     await expect(
       resolveRegisteredWorktreePath('/workspace/existing-sibling', store as never)
     ).resolves.toBe(resolve('/workspace/existing-sibling'))
-    // Why: the recovered create is still a real worktree, so its own path must be usable at once.
     await expect(
       resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
     ).resolves.toBe(resolve('/workspace/improve-dashboard'))
@@ -584,7 +581,7 @@ describe('registerWorktreeHandlers', () => {
       kind: 'folder' as const
     }
     store.getRepo.mockReturnValue(repo)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => ({
       displayName: '',
       comment: '',
       linkedIssue: null,
@@ -710,8 +707,7 @@ describe('registerWorktreeHandlers', () => {
     if (!startupCreateCall || !setupCreateCall) {
       throw new Error('expected startup and setup terminal calls')
     }
-    // The submitting renderer decides whether to open the new workspace, so the host must not
-    // activate it for the startup terminal (#9944).
+    // The submitting renderer controls navigation; host startup panes must not activate the workspace (#9944).
     expect(startupCreateCall[1]).not.toHaveProperty('activate')
     const startupCommand = (startupCreateCall[1] as { command: string }).command
     const setupCommand = (setupCreateCall[1] as { command: string }).command
@@ -732,7 +728,6 @@ describe('registerWorktreeHandlers', () => {
         'spawn_startup_terminal'
       ])
     )
-    // Nothing warmed this repo, so the create must report the cold path rather than stay silent.
     expect(result.timing?.preparedCheckout).toEqual({ status: 'miss', reason: 'none_armed' })
   })
 
@@ -820,7 +815,6 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
     expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
-    // A user who moved on must not be scrolled to the new workspace by its setup pane (#9944).
     expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
       'id:repo-1::/workspace/improve-dashboard',
       {

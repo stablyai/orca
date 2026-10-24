@@ -22,7 +22,9 @@ export function recentStamp(row: StampOrderRow): number {
 }
 
 // A tier a newer host knows and this client does not reads as Rest. Done holds only while unread:
-// opening the workspace clears the flag, and the next prompt moves the tier to Working.
+// opening the workspace clears the flag, and the next prompt moves the tier to Working. A host
+// re-tiers a read Done to a pane still Working (workspaceSmartStamp); an older host does not, so
+// its read Done beside a Working pane still reads as Rest here.
 function tierRank(row: StampOrderRow): number {
   if (!isSmartTier(row.smartTier) || (row.smartTier === 'done' && row.isUnread !== true)) {
     return REST_RANK

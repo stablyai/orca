@@ -14,7 +14,6 @@ const {
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
-vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
 vi.mock('./ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
@@ -45,7 +44,7 @@ describe('updater', () => {
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
-    // Why: recent timestamp defers the startup check so the nudge check runs without hitting the 'checking' guard.
+    // Defer startup checks so they cannot block the nudge check.
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now()
     })
@@ -126,7 +125,6 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
-      // Stay in 'checking' state — don't resolve
       return new Promise(() => {})
     })
 
@@ -137,10 +135,8 @@ describe('updater', () => {
       setLastUpdateCheckAt: vi.fn()
     })
 
-    // Wait for the startup nudge check to run
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // The 'checking' guard should block runBackgroundUpdateCheck while the startup check is in progress.
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
   })
 
@@ -159,18 +155,14 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never)
 
-    // Wait for the startup nudge check to complete
     await vi.advanceTimersByTimeAsync(0)
 
-    // Startup check set lastNudgeCheckAt, so browser-window-focus is blocked by the 5-minute cooldown.
     fetchNudgeMock.mockClear()
     appMock.emit('browser-window-focus')
     await vi.advanceTimersByTimeAsync(0)
 
-    // fetchNudge should NOT have been called again — cooldown blocks it
     expect(fetchNudgeMock).not.toHaveBeenCalled()
 
-    // Advance past the cooldown
     vi.advanceTimersByTime(5 * 60 * 1000 + 1)
     appMock.emit('browser-window-focus')
     await vi.advanceTimersByTimeAsync(0)
@@ -203,13 +195,10 @@ describe('updater', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Nudge was applied — pending id was set
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
 
-    // Now simulate the updater finding no update
     autoUpdaterMock.emit('update-not-available')
 
-    // Pending cleared and campaign auto-dismissed so it doesn't re-fire next poll cycle.
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
     expect(setDismissedUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
   })
@@ -279,10 +268,8 @@ describe('updater', () => {
 
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
 
-    // Simulate an error during the nudge-triggered check
     autoUpdaterMock.emit('error', new Error('network timeout'))
 
-    // Campaign should be auto-dismissed to prevent re-fire loop
     expect(setDismissedUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
     expect(setPendingUpdateNudgeId).toHaveBeenCalledWith(null)
   })
@@ -345,7 +332,6 @@ describe('updater', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Simulate update found, then user dismisses
     autoUpdaterMock.emit('update-available', { version: '1.0.61' })
     await new Promise((resolve) => setTimeout(resolve, 0))
 

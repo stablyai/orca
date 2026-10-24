@@ -31,18 +31,32 @@ export function isAgentStatusForRecentlyClosedTab(
 /** A host replay the renderer has already seen; a replayed `done` that differs from the current row
  *  ended while the host was unreachable, so it is not a replay of anything this renderer saw. */
 export function isSeenHostReplay(
-  data: Pick<AgentStatusIpcPayload, 'isReplay' | 'stateStartedAt'>,
+  data: Pick<
+    AgentStatusIpcPayload,
+    'isReplay' | 'stateStartedAt' | 'turnCompletedAt' | 'turnEndedAt'
+  >,
   state: string,
-  existing: Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt'> | undefined
+  existing:
+    | Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt' | 'turnEndedAt'>
+    | undefined
 ): boolean {
   if (data.isReplay !== true) {
     return false
   }
   // Why: with no row there is no proof the turn was unseen, so keep seeding (no reload re-fires).
+  if (existing === undefined) {
+    return true
+  }
+  // Why: rows don't keep the stamp; the completion observer dedupes the ones it already handled.
+  if (state === 'working' && Number.isFinite(data.turnCompletedAt)) {
+    return false
+  }
+  // Why: the same done segment can hold a later turn end (a Stop re-entered while unreachable).
   return (
     state !== 'done' ||
-    existing === undefined ||
-    (existing.state === 'done' && existing.stateStartedAt === data.stateStartedAt)
+    (existing.state === 'done' &&
+      existing.stateStartedAt === data.stateStartedAt &&
+      existing.turnEndedAt === data.turnEndedAt)
   )
 }
 
@@ -125,4 +139,4 @@ export function resolveHookPayloadAgentType(
   return { ...payload, agentType: 'openclaude' }
 }
 
-export { resolvePaneKey, resolveWorktreeConnection } from '../../lib/agent-status-pane-ownership'
+export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

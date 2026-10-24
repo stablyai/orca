@@ -319,7 +319,7 @@ describe('profile daemon cleanup after loss of contact', () => {
       expect(await result).toMatchObject({
         errors: [
           expect.objectContaining({
-            message: 'Daemon descendants did not exit: OpenConsole.exe 77'
+            message: `Daemon descendants did not exit: OpenConsole.exe 77 (ppid ${daemonPid}, created 1)`
           })
         ]
       })

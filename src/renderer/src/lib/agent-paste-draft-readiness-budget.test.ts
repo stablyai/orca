@@ -31,7 +31,9 @@ vi.mock('./agent-draft-readiness', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  inspectRuntimeTerminalProcess: testState.inspectProcess,
+  inspectRuntimeTerminalProcess: testState.inspectProcess
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: testState.sendInput
 }))
 

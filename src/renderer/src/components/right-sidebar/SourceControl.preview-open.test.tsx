@@ -279,33 +279,37 @@ function clickBranchRow(init: MouseEventInit = {}): void {
 }
 
 describe('SourceControl preview row opens', () => {
-  it('passes preview=true when plain uncommitted row clicks open diff tabs', () => {
+  it.each([
+    ['src/file.ts', 'src/staged.ts', 'typescript'],
+    ['report.html', 'staged.html', 'html'],
+    ['REPORT.HTM', 'STAGED.HTM', 'html']
+  ])('opens %s and %s as preview diff tabs on plain clicks', (path, stagedPath, language) => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'src/file.ts' }),
-          gitEntry({ path: 'src/staged.ts', area: 'staged' })
+          gitEntry({ path }),
+          gitEntry({ path: stagedPath, area: 'staged' })
         ]
       }
     })
     renderSourceControl()
 
-    clickUncommitted('src/file.ts')
-    clickUncommitted('src/staged.ts')
+    clickUncommitted(path)
+    clickUncommitted(stagedPath)
 
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/file.ts',
-      'src/file.ts',
-      'typescript',
+      `/repo/wt/${path}`,
+      path,
+      language,
       false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openDiff).toHaveBeenCalledWith(
       mocks.activeWorktree.id,
-      '/repo/wt/src/staged.ts',
-      'src/staged.ts',
-      'typescript',
+      `/repo/wt/${stagedPath}`,
+      stagedPath,
+      language,
       true,
       { targetGroupId: undefined, preview: true }
     )
@@ -352,11 +356,12 @@ describe('SourceControl preview row opens', () => {
     )
   })
 
-  it('passes preview through markdown edit-in-changes and conflict file opens', () => {
+  it('passes preview through new markdown rich editor and conflict file opens', () => {
     resetState({
       gitStatusByWorktree: {
         [mocks.activeWorktree.id]: [
-          gitEntry({ path: 'docs/readme.md' }),
+          gitEntry({ path: 'docs/readme.md', status: 'untracked', area: 'untracked' }),
+          gitEntry({ path: 'docs/existing.md' }),
           gitEntry({
             path: 'src/conflict.ts',
             conflictKind: 'both_modified',
@@ -368,6 +373,7 @@ describe('SourceControl preview row opens', () => {
     renderSourceControl()
 
     clickUncommitted('docs/readme.md')
+    clickUncommitted('docs/existing.md')
     clickUncommitted('src/conflict.ts')
 
     expect(mocks.calls.openFile).toHaveBeenCalledWith(
@@ -378,6 +384,14 @@ describe('SourceControl preview row opens', () => {
         language: 'markdown',
         mode: 'edit'
       },
+      { targetGroupId: undefined, preview: true }
+    )
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/docs/existing.md',
+      'docs/existing.md',
+      'markdown',
+      false,
       { targetGroupId: undefined, preview: true }
     )
     expect(mocks.calls.openConflictFile).toHaveBeenCalledWith(

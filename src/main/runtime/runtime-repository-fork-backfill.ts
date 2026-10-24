@@ -74,7 +74,7 @@ export class RuntimeRepositoryForkBackfill {
         ) {
           updates.repoIcon = repoIcon
         }
-        store.updateRepo(repo.id, updates, hostId)
+        store.updateRepo(current, updates)
         changed = true
       }
       if (changed) {

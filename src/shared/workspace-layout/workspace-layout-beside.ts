@@ -30,6 +30,7 @@ export const SESSION_FIELD_OWNERS = {
   activeBrowserTabIdByWorktree: 'view',
   clientHostedBrowserPagesByWorktree: 'layout',
   clientHostedBrowserCloseIntentsByEnvironment: 'carried',
+  pairedTerminalTabCloseIntentsByEnvironment: 'carried',
   activeTabTypeByWorktree: 'view',
   browserUrlHistory: 'carried',
   workspaceDocHistory: 'carried',
@@ -47,7 +48,8 @@ export const SESSION_FIELD_OWNERS = {
   terminalTopologyRevisionByRepoId: 'layout',
   // Applied and cleared by the Loader; never written again.
   terminalSurfaceTombstonesByPaneKey: 'legacy',
-  closedTerminalTabTombstonesByTabId: 'layout'
+  closedTerminalTabTombstonesByTabId: 'layout',
+  closedTerminalPanesByPaneKey: 'layout'
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldOwner>
 
 type FieldsOwnedBy<Owner extends SessionFieldOwner> = {

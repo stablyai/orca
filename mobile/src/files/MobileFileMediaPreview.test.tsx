@@ -89,24 +89,30 @@ describe('mobile media lifecycle', () => {
   it('does not stage late bytes after the preview closes during download', async () => {
     let deliver: ((reply: RpcResponse) => void) | undefined
     const waiting = {
-      sendRequest: vi.fn(
-        async () =>
-          new Promise<RpcResponse>((resolve) => {
-            deliver = resolve
-          })
-      )
+      sendRequest: vi.fn(async (method: string) => {
+        if (method === 'files.stat') {
+          return ok({ size: 3, isDirectory: false, mtime: 1 })
+        }
+        return new Promise<RpcResponse>((resolve) => {
+          deliver = resolve
+        })
+      })
     }
     await act(async () => {
       tree = create(
         createElement(MobileFileMediaPreview, { media, client: waiting, title: 'Movie' })
       )
     })
+    expect(waiting.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'files.stat',
+      'files.readChunk'
+    ])
     act(() => tree?.unmount())
     tree = null
     await act(async () => {
-      deliver?.(ok({ size: 3, isDirectory: false, mtime: 1 }))
+      deliver?.(ok({ contentBase64: 'AQID', bytesRead: 3, eof: true }))
     })
-    expect(waiting.sendRequest).toHaveBeenCalledOnce()
+    expect(waiting.sendRequest).toHaveBeenCalledTimes(2)
     expect(downloads.sinks[0]?.append).not.toHaveBeenCalled()
     expect(downloads.sinks[0]?.finish).not.toHaveBeenCalled()
     expect(downloads.sinks[0]?.dispose).toHaveBeenCalled()

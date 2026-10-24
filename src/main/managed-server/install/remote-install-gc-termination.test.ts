@@ -6,7 +6,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import { gcOldRemoteInstallVersions } from './remote-install-gc'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
@@ -35,7 +35,6 @@ function failAfter(replies: readonly string[], confirmed = false): Error {
   return error
 }
 
-// The liveness probe runs through the same exec, so its termination is covered like any other step.
 function collectVersions(): Promise<void> {
   return gcOldRemoteInstallVersions(conn, ORCAD_INSTALL_MODEL, home, currentDir, host, {
     isDirLive: async (dir) => (await execCommand(conn, `liveness ${dir}`)).trim() !== 'DEAD'

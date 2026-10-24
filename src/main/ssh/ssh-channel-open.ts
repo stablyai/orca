@@ -1,5 +1,6 @@
-import { trackSshConnectionChannelLifetime } from './ssh-connection-channel-lifetime'
-import { CONNECT_TIMEOUT_MS, createSshOperationAbortError } from './ssh-connection-utils'
+import { trackSshConnectionChannelLifetime } from './connection/ssh-connection-channel-lifetime'
+import { CONNECT_TIMEOUT_MS } from './connection/ssh-connection-timing'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Upper bound on waiting for an aborted channel's open/close to settle before rejecting anyway.
@@ -8,6 +9,11 @@ const ABORTED_CHANNEL_CLOSE_GRACE_MS = 5_000
 // Why: MaxSessions servers can transiently refuse a channel open; a refused open never ran the command, so retry is safe.
 const SESSION_LIMIT_OPEN_RETRIES = 4
 const SESSION_LIMIT_OPEN_RETRY_DELAY_MS = 150
+
+/** The host never answered a channel open: contact, not the host, is what failed. */
+export function sshChannelOpenTimeoutError(message: string): Error {
+  return Object.assign(new Error(message), { name: 'SshChannelOpenTimeoutError' })
+}
 
 export async function openSshSessionChannelWithRetry<T>(
   open: () => Promise<T>,
@@ -86,7 +92,9 @@ export function waitForSshChannelOpen<T>(
       cleanup()
       reject(
         markOpenUnconfirmed(
-          abortRequested ? createSshOperationAbortError() : new Error(timeoutMessage)
+          abortRequested
+            ? createSshOperationAbortError()
+            : sshChannelOpenTimeoutError(timeoutMessage)
         )
       )
     }, CONNECT_TIMEOUT_MS)

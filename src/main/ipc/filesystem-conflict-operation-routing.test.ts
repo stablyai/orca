@@ -29,10 +29,6 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
 vi.mock('./local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock,
   getLocalGitOptionsForRepo: vi.fn(() => ({})),
@@ -45,8 +41,7 @@ import {
   invalidateAuthorizedRootsCache
 } from './registered-worktree-roots-cache'
 
-// Why: `git:conflictOperation` reads the worktree's `.git` pointer directly, so it has to run in
-// the same host namespace as that worktree's git — a WSL project answers in the guest namespace.
+// Read .git in the worktree's own host namespace, including WSL.
 describe('git:conflictOperation local routing', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()

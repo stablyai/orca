@@ -5,8 +5,9 @@ import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
 } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
+import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
@@ -20,12 +21,12 @@ import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invali
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
   listReferenceWorkspaces,
-  selectReferenceWorkspace,
+  selectWarmedReferenceWorkspace,
   listWorkspaceReferences
 } from './runtime-reference-catalog'
 import { findWorkspaceReferences } from './runtime-reference-find'
@@ -36,6 +37,10 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
@@ -49,9 +54,9 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 
 // Switch point: a window-fed build keeps no sidebar facts layer.
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithMigrationCatalog = ORCA_SIDEBAR_INPUTS_IS_MAIN
+const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithMigrationCatalog
+  : OrcaRuntimeWithAgentTransitions
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
@@ -67,7 +72,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
           (this.authoritativeWindowId !== null &&
             this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
             this.store?.getUI?.().sidebarOpen !== false),
-        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.getClientSettings())
+        hostLabelOverrides: () => getHostDisplayLabelOverrides(this.requireStore().getSettings())
       })
     : null
   // Switch point: the phone's icon source.
@@ -90,10 +95,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
         store: this.store,
-        // Merged fresh (git scans keep their own cache): the window's metadata writes emit no
-        // client event, so the shared listing may predate them.
-        listVisibleWorktrees: async () =>
-          this.visibleResolvedWorktreeSnapshot(await this.computeResolvedWorktrees()),
+        // Its own scans, not the shared listing: metadata joins at read, so no write waits on git.
+        scan: () => this.scanResolvedWorktreeRepos(),
+        join: (scans) => this.joinResolvedWorktreeScans(scans),
+        visible: (snapshot) => this.visibleResolvedWorktreeSnapshot(snapshot),
+        lifecycle: this.workspaceLifecycle,
         onClientEvent: (listener, options) => this.onClientEvent(listener, options)
       })
     : null
@@ -104,8 +110,9 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
           sidebarInputsFeedDomains({
             facts: requireSwitchedOn(this.sidebarFacts),
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
-            workspaceCreations: requireSwitchedOn(this.workspaceCreations),
+            workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
+            repoIcons: requireSwitchedOn(this.repoIconDataUrls),
             store: () => this.store,
             onClientEvent: (listener, options) => this.onClientEvent(listener, options)
           }),
@@ -113,24 +120,16 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
       )
     : null
 
-  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
-    const catalog = listReferenceWorkspaces(
+  private selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
+    return selectWarmedReferenceWorkspace(
       this.requireStore(),
-      this.resolvedWorktrees.peek()?.worktrees
+      {
+        cached: () => this.resolvedWorktrees.peek()?.worktrees,
+        scan: () => this.listResolvedWorktrees()
+      },
+      selector,
+      cwd
     )
-    try {
-      return selectReferenceWorkspace(catalog, selector, cwd)
-    } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
-        throw error
-      }
-      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
-      const warmed = listReferenceWorkspaces(
-        this.requireStore(),
-        await this.listResolvedWorktrees()
-      )
-      return selectReferenceWorkspace(warmed, selector, cwd)
-    }
   }
 
   async listWorkspaceReferences(selector: string, cwd?: string) {
@@ -166,7 +165,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     })
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
     super(...args)
     // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
     // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
@@ -174,6 +173,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+  }
+
+  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+
+  /** This host's agent health snapshot and every replacement, from first use; returns the release. */
+  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+    return this.structuredAgentAvailability.subscribe(read)
   }
 
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
@@ -226,16 +233,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.resolveAgentTerminalCreateOptions(workspace, opts)
   }
 
-  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
-  hasLiveTerminalForPaneKey(paneKey: string): boolean {
-    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
-  }
-
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     // An empty title is no title.
-    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null
+    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
+    ...this.paneFactSources()
   })
 
   protected markPaneLiveTitlesDirty(): void {
@@ -249,20 +252,30 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.workspaceLayoutStream.subscribe(listener)
   }
 
+  /** Main's one layout projection for readers beside the stream, with or without a window. */
+  get workspaceLayoutReads(): WorkspaceLayoutReads {
+    return this.workspaceLayoutStream
+  }
+
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
   async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
-    const reply = await applyWindowLayoutCommand(
-      this.requireStore(),
-      (worktreeId, tabId) => {
-        if (tabId !== null) {
-          return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-        }
-        const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-        return routed ? [routed] : []
-      },
-      command,
-      (move) => rekeyMovedPaneOwners(this, move)
-    )
+    // A workspace's first surface comes after the live terminals main is placing.
+    const placing = this.livePlacementSettledFor(command)
+    const apply = (): Promise<LayoutApplyReply> =>
+      applyWindowLayoutCommand(
+        this.requireStore(),
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
+        command,
+        (move) => rekeyMovedPaneOwners(this, move),
+        this.layoutCommandRun(command)
+      )
+    // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
+      ? this.inResumeRecordOrder(apply)
+      : (placing?.then(apply) ?? apply()))
     // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }

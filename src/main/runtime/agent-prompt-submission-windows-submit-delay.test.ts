@@ -4,7 +4,7 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
-import { setSshTargetRegistryHandlers } from '../ssh/ssh-target-registry'
+import { setSshTargetRegistryHandlers } from '../ssh/targets/ssh-target-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 

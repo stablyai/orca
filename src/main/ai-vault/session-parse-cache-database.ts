@@ -1,6 +1,4 @@
-// One row per transcript, so a write costs what changed and no size cap has to
-// sit below the working set (the old single JSON file needed one, and that cap
-// was the gap a restart re-parsed through). Owned by the scanner child.
+// Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../sqlite/sqlite-read-failure'
 import { hardenSqliteDatabaseFiles } from '../sqlite/harden-database-files'
 import type SyncDatabase from '../sqlite/sync-database'
@@ -9,12 +7,20 @@ import {
   removeVersionedCacheDatabase
 } from '../sqlite/versioned-cache-database'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { PersistedSessionParseCacheEntry } from './session-parse-cache-store'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
+import type {
+  PersistedSessionParseCacheEntry,
+  SessionScopeCwdLookup,
+  SessionScopeCwdStamp
+} from './session-parse-cache-store'
+import {
+  ensureScopeCwdsTable,
+  readScopeCwdRows,
+  writeScopeCwdRows
+} from './session-scope-cwds-table'
+import { parsePersistedSidecar } from './session-sidecar-stat'
 
-// Bump when the row layout or cached session semantics change; a mismatched
-// database is dropped whole.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 4
+// Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 6
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -68,10 +74,22 @@ export class SessionParseCacheDatabase {
     }, undefined)
   }
 
-  /**
-   * One transaction; a caller chunks large writes so the event loop gets turns
-   * between them. `keepExisting` leaves rows already present untouched.
-   */
+  /** Read parse and scope cwds without decoding cached sessions. */
+  readScopeCwds(paths: readonly string[]) {
+    const parsed = this.run((db) => readScopeCwdRows(db, paths, 'parsed'), undefined)
+    const read = this.run((db) => readScopeCwdRows(db, paths, 'read'), undefined)
+    const found = parsed ?? new Map<string, SessionScopeCwdLookup>()
+    for (const [path, row] of read ?? []) {
+      found.set(path, { ...found.get(path), ...row })
+    }
+    return { found, parsed: parsed !== undefined, read: read !== undefined }
+  }
+
+  writeScopeCwds(rows: Iterable<[string, SessionScopeCwdStamp]>, seenAt: number): void {
+    this.run((db) => writeScopeCwdRows(db, rows, seenAt), undefined)
+  }
+
+  /** One transaction; callers chunk for event-loop fairness, and keepExisting preserves stored rows. */
   write(
     rows: Iterable<[string, PersistedSessionParseCacheEntry]>,
     seenAt: number,
@@ -105,16 +123,20 @@ export class SessionParseCacheDatabase {
   }
 
   delete(path: string): void {
-    this.run((db) => db.prepare('DELETE FROM rows WHERE path = ?').run(path), undefined)
+    this.run((db) => {
+      db.prepare('DELETE FROM rows WHERE path = ?').run(path)
+      db.prepare('DELETE FROM scope_cwds WHERE path = ?').run(path)
+    }, undefined)
   }
 
-  /** Oldest first, so repeated calls work through every stale row outside `excludeGlob`. */
+  /** Return stale paths oldest first so successive batches make progress. */
   pathsSeenBefore(cutoff: number, limit: number, excludeGlob: string): string[] {
     return this.run(
       (db) =>
         db
           .prepare(
-            'SELECT path FROM rows WHERE seen_at < ? AND path NOT GLOB ? ORDER BY seen_at LIMIT ?'
+            `SELECT path FROM (SELECT path, seen_at FROM rows UNION ALL SELECT path, seen_at FROM scope_cwds)
+             WHERE seen_at < ? AND path NOT GLOB ? GROUP BY path ORDER BY MIN(seen_at) LIMIT ?`
           )
           .all(cutoff, excludeGlob, limit)
           .flatMap((row) => (typeof row.path === 'string' ? [row.path] : [])),
@@ -122,25 +144,28 @@ export class SessionParseCacheDatabase {
     )
   }
 
-  /** True when any row was deleted. */
   deleteSeenBefore(cutoff: number, glob: string): boolean {
     return this.run(
       (db) =>
-        Number(
-          db.prepare('DELETE FROM rows WHERE seen_at < ? AND path GLOB ?').run(cutoff, glob).changes
-        ) > 0,
+        ['rows', 'scope_cwds']
+          .map((table) =>
+            Number(
+              db.prepare(`DELETE FROM ${table} WHERE seen_at < ? AND path GLOB ?`).run(cutoff, glob)
+                .changes
+            )
+          )
+          .some((changes) => changes > 0),
       false
     )
   }
 
   markSeen(path: string, seenAt: number): void {
-    this.run(
-      (db) => db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path),
-      undefined
-    )
+    this.run((db) => {
+      db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path)
+      db.prepare('UPDATE scope_cwds SET seen_at = ? WHERE path = ?').run(seenAt, path)
+    }, undefined)
   }
 
-  /** Hands freed pages back to the file system after deletes. */
   reclaimSpace(): void {
     this.run((db) => db.pragma('incremental_vacuum'), undefined)
   }
@@ -150,14 +175,10 @@ export class SessionParseCacheDatabase {
     this.db = null
     try {
       db?.close()
-    } catch {
-      // Already closed by a failed statement; nothing left to release.
-    }
+    } catch {}
   }
 
-  // Every failure is a miss, so History only ever pays a re-parse. SQLite can
-  // report a torn page at any statement, not only at open: rebuild once, then
-  // stay memory-only for this process rather than retry per lookup.
+  // Failures return misses; rebuild corruption once, then disable the database if corruption recurs.
   private run<T>(operation: (db: SyncDatabase) => T, fallback: T): T {
     const db = this.db
     if (db === null) {
@@ -189,13 +210,13 @@ function openDatabase(path: string): SyncDatabase {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
     sql: SCHEMA_SQL,
     directoryMode: PRIVATE_DIRECTORY_MODE,
-    pageSize: PAGE_SIZE
+    pageSize: PAGE_SIZE,
+    afterSchema: ensureScopeCwdsTable
   })
   hardenSqliteDatabaseFiles(path)
   return db
 }
 
-/** Validates one `[path, entry]` row read back from disk; null when it can't be trusted. */
 export function parsePersistedSessionParseCacheRow(
   item: unknown
 ): [string, PersistedSessionParseCacheEntry] | null {
@@ -232,20 +253,4 @@ export function parsePersistedSessionParseCacheRow(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-// Why: added after SCHEMA_VERSION 2 shipped, so a row an older build wrote has
-// no such field. Absent (or unreadable) means unknown, which costs one re-parse
-// of the rows that have a sibling and nothing at all for the rest.
-function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
-  if (value === 'none' || value === 'unknown') {
-    return value
-  }
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const { path, mtimeMs, sizeBytes } = value
-  return typeof path === 'string' && typeof mtimeMs === 'number' && typeof sizeBytes === 'number'
-    ? { path, mtimeMs, sizeBytes }
-    : undefined
 }

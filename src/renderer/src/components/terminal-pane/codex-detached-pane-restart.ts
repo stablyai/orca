@@ -24,27 +24,42 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { ptyDataHandlers, unregisterPtyDataHandlers } from './pty-dispatcher'
+import { ptyDataHandlers } from './pty-dispatcher'
 import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
-import { disposeParkedTerminalWatchersForPtyIds } from './terminal-parked-watcher-registry'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
+import { restartPaneOwner } from './codex-restart-main-pane'
+import {
+  hasFreeDetachedRestartSlot,
+  holdDetachedRestartSlot,
+  resetDetachedRestartSlotsForTests
+} from './detached-pane-restart-slots'
+import {
+  killReplacedCodexPanePty,
+  reapUnboundCodexPty,
+  releaseReplacedCodexPanePty
+} from './detached-pane-restart-pty-release'
 
 const inFlightPtyIds = new Set<string>()
 
 export function resetDetachedCodexPaneRestartClaimsForTests(): void {
   inFlightPtyIds.clear()
+  resetDetachedRestartSlotsForTests()
 }
 
-export async function sweepUnclaimedCodexPaneRestarts(): Promise<void> {
+export async function sweepUnclaimedCodexPaneRestarts(onSettled?: () => void): Promise<void> {
+  const restarts: Promise<void>[] = []
   for (const ptyId of Object.keys(useAppStore.getState().pendingPaneAccountRestarts)) {
-    await sweepUnclaimedCodexPaneRestart(ptyId)
+    if (!hasFreeDetachedRestartSlot()) {
+      break
+    }
+    restarts.push(restartUnclaimedPane(ptyId, onSettled))
   }
+  await Promise.all(restarts)
 }
 
-async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
+async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Promise<void> {
   let located: LocatedCodexPane | null = null
-  let claimed = false
+  let releaseSlot: (() => void) | null = null
   try {
     // Why: remote-runtime spawns need that machine's transport assembly, which
     // only the mounted pane path carries today; leave those queued for mount.
@@ -89,7 +104,13 @@ async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
       return
     }
     inFlightPtyIds.add(ptyId)
-    claimed = true
+    const claimedPane = located
+    releaseSlot = holdDetachedRestartSlot(ptyId, () => {
+      console.warn('[codex-restart] detached restart spawn stalled; asking again')
+      // Why: a late result still adopts and clears this prompt, since main may have stopped the old PTY.
+      reopenCurrentCodexRestartPrompt(claimedPane, ptyId)
+      onSettled?.()
+    })
     await executeDetachedCodexPaneRestart(located, ptyId, agent)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
@@ -101,8 +122,10 @@ async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
       useAppStore.getState().reopenCodexRestartPrompt(ptyId)
     }
   } finally {
-    if (claimed) {
+    if (releaseSlot) {
+      releaseSlot()
       inFlightPtyIds.delete(ptyId)
+      onSettled?.()
     }
   }
 }
@@ -195,6 +218,12 @@ async function executeDetachedCodexPaneRestart(
     currentState.queuePaneAccountRestarts([ptyId], agent)
     return
   }
+  const paneOwner = restartPaneOwner(currentState, worktreeId, tab.id, leafId)
+  if (paneOwner === 'missing') {
+    // A pane main's layout lacks has no tab to start into; a graft would invent one (L197).
+    reopenCurrentCodexRestartPrompt(located, ptyId)
+    return
+  }
 
   // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
   // Main stops `ptyId` first and labels its exit as a replacement, so parked watchers and the
@@ -203,14 +232,14 @@ async function executeDetachedCodexPaneRestart(
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
-    cwdFallback: 'worktree',
     ...startup,
     env: { ...startup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
     worktreeId,
     tabId: tab.id,
     leafId,
     replacesPtyId: ptyId,
-    ...(restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
+    ...(paneOwner === 'window' &&
+    restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
       ? { placement: { kind: 'root' as const } }
       : {}),
     ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {}),
@@ -234,7 +263,9 @@ async function executeDetachedCodexPaneRestart(
     reapUnboundCodexPty(spawned.id, 'retired-tab spawn')
     return
   }
-  rebindCodexPaneLayoutLeaf(tab.id, leafId, spawned.id)
+  if (paneOwner === 'window') {
+    rebindCodexPaneLayoutLeaf(tab.id, leafId, spawned.id)
+  }
   // Why both ids: updateTabPtyId migrates the replaced pane's notice onto the
   // new PTY; the restart it recorded is now done, so the block must lift.
   store.clearCodexRestartNotice(spawned.id)
@@ -320,30 +351,4 @@ function rebindCodexPaneLayoutLeaf(tabId: string, leafId: string, newPtyId: stri
     return
   }
   store.replaceTerminalLayoutPanePtyId(tabId, leafId, newPtyId)
-}
-
-function reapUnboundCodexPty(ptyId: string, reason: string): void {
-  try {
-    void window.api.pty.kill(ptyId).catch((err) => {
-      console.warn(`[codex-restart] failed to reap ${reason}:`, err)
-    })
-  } catch (err) {
-    console.warn(`[codex-restart] failed to reap ${reason}:`, err)
-  }
-  discardPreHandlerPtyState(ptyId)
-}
-
-function releaseReplacedCodexPanePty(ptyId: string): void {
-  // Why the disposal: a parked tab's exit sidecar treats an unlabeled exit as the pane
-  // dying — it would collapse the just-rebound leaf or close the whole tab.
-  disposeParkedTerminalWatchersForPtyIds([ptyId])
-  for (const snapshot of unregisterPtyDataHandlers([ptyId])) {
-    snapshot.commit()
-  }
-  discardPreHandlerPtyState(ptyId)
-}
-
-function killReplacedCodexPanePty(ptyId: string): void {
-  releaseReplacedCodexPanePty(ptyId)
-  reapUnboundCodexPty(ptyId, 'replaced Codex pane PTY')
 }

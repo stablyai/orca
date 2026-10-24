@@ -19,6 +19,7 @@ import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat-agent-support'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
@@ -114,9 +115,7 @@ export function NativeChatResolvedView({
   )
   // Why: Stop suppression must clear on a newer working epoch even when status
   // never leaves 'working' (interrupt + immediate next turn coalesced).
-  const hookWorkingEpoch = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
-  )
+  const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
@@ -279,19 +278,19 @@ export function NativeChatResolvedView({
       shouldClearNativeChatWorkingSuppression({
         working: liveWorking,
         interrupted: workingInterrupted,
-        workingEpoch: hookWorkingEpoch,
+        workingEpoch,
         previousWorkingEpoch: previousWorkingEpochRef.current
       })
     ) {
       setWorkingInterrupted(false)
     }
-    if (liveWorking && hookWorkingEpoch != null) {
-      previousWorkingEpochRef.current = hookWorkingEpoch
+    if (liveWorking && workingEpoch != null) {
+      previousWorkingEpochRef.current = workingEpoch
     }
     if (!liveWorking) {
       previousWorkingEpochRef.current = null
     }
-  }, [liveWorking, workingInterrupted, hookWorkingEpoch])
+  }, [liveWorking, workingInterrupted, workingEpoch])
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
@@ -404,6 +403,8 @@ export function NativeChatResolvedView({
             key={promptCardPresentation.occurrenceKey ?? 'prompt'}
             card={mountedPromptCard}
             send={interactiveSend}
+            requiresTerminal={nativeChatAskRequiresTerminal(agent)}
+            onAnswerInTerminal={onSwitchToTerminal}
             onDismiss={promptCardPresentation.dismiss}
             onCollapse={promptCardPresentation.collapse}
             shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}

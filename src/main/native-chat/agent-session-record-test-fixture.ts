@@ -1,5 +1,3 @@
-// A complete, typed agent-session record for tests that care about a few of its fields.
-
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionExecutionLocation,
@@ -32,7 +30,6 @@ export function agentSessionRecordFixture(
       leaseDeadlineAt: 0,
       lastRenewedAt: 0,
       handoffOperationId: null,
-      journalCheckpoint: null,
       claimKeyId: 'test-key',
       claimStatus: 'released',
       unreconciled: false,

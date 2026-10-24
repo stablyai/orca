@@ -8,6 +8,7 @@ import {
   type NativeChatNoticeTone
 } from '../../../src/shared/native-chat-notice'
 import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { usageLimitLineText } from '../../../src/shared/agent-session-usage-limit-words'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -97,6 +98,7 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
+      const lineText = usageLimitLineText(notice)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
@@ -105,7 +107,7 @@ export function MobileNativeChatNoticeRow({
       if (!look.tone) {
         return (
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
-            {notice.text}
+            {lineText}
           </Text>
         )
       }
@@ -120,7 +122,7 @@ export function MobileNativeChatNoticeRow({
             style={styles.toneIcon}
           />
           <Text selectable={INLINE_TEXT_SELECTION} style={[...textStyle, styles.toneText]}>
-            {notice.text}
+            {lineText}
           </Text>
         </View>
       )

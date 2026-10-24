@@ -18,6 +18,7 @@ import type { AgentSessionFailureFact } from '../../../../shared/agent-session-f
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
+import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
 
 /**
  * Host-held drafts stacked between the transcript and the composer — never in
@@ -30,7 +31,8 @@ export function NativeChatQueuedMessageList({
   agentName,
   statedFailures,
   steerHeld = false,
-  focusComposer
+  focusComposer,
+  editAttachTo
 }: {
   controller: StructuredAgentSessionQueuedMessagesController
   /** Where a card's sender is opened from; null shows it unlinked. */
@@ -41,6 +43,8 @@ export function NativeChatQueuedMessageList({
   steerHeld?: boolean
   /** Where focus goes once Steer, Delete or a closing edit takes the focused card away. */
   focusComposer?: () => void
+  /** The chat files added in a card's editor attach to, as its chat box attaches them. */
+  editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
   const updateSettings = useAppStore((store) => store.updateSettings)
   const regionRef = useRef<HTMLDivElement>(null)
@@ -129,8 +133,12 @@ export function NativeChatQueuedMessageList({
                 'components.native-chat.queuedMessages.listLabel',
                 'Queued messages'
               )}
-              // Scrolls on its own so a long queue never squeezes the transcript or the composer.
-              className="scrollbar-sleek max-h-40 divide-y divide-border overflow-y-auto"
+              // Scrolls on its own so a long queue never squeezes the transcript or the composer;
+              // taller while an edit shows thumbnails, so they and the field fit.
+              className={cn(
+                'scrollbar-sleek divide-y divide-border overflow-y-auto',
+                controller.editor?.images?.chips.length ? 'max-h-72' : 'max-h-40'
+              )}
             >
               {cards.map((card) => (
                 <NativeChatQueuedMessageCard
@@ -150,6 +158,7 @@ export function NativeChatQueuedMessageList({
                   editor={
                     controller.editor?.messageId === card.messageId ? controller.editor : undefined
                   }
+                  editAttachTo={editAttachTo}
                   editDisabled={controller.editor !== undefined}
                   onTurnOffQueueing={turnOffQueueing}
                 />

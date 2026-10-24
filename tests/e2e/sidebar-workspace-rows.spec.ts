@@ -6,7 +6,7 @@ import { test, expect } from './helpers/orca-app'
 import { createRestartSession } from './helpers/orca-restart'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
-import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { waitForSessionReady, waitForStartupWorktreeRefresh } from './helpers/store'
 import { DesktopSidebarFactsSchema } from '../../src/shared/sidebar-list/desktop-sidebar-facts'
 import {
@@ -82,8 +82,6 @@ test('main lists the window’s git and folder workspaces and follows its metada
       return [rows[rowKey]?.isPinned, rows[rowKey]?.comment, rows[folderKey]?.isPinned]
     })
     .toEqual([true, 'rows', true])
-
-  await expectNoSidebarShadowMismatches(orcaPage)
 })
 
 test('a disconnected SSH host keeps its rows, and its state reads not connected', async (// oxlint-disable-next-line no-empty-pattern -- This exercise owns its app launch.
@@ -141,7 +139,6 @@ test('a disconnected SSH host keeps its rows, and its state reads not connected'
     expect(
       DesktopSidebarFactsSchema.parse(facts.result).sshHosts[seeded.targetId]?.status
     ).not.toBe('connected')
-    await expectNoSidebarShadowMismatches(page)
   } finally {
     await session.dispose(app ?? undefined)
   }

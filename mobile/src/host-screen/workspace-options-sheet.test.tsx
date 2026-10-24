@@ -57,7 +57,8 @@ function buildController(options: SheetOptions) {
     setFilter: vi.fn(),
     setProjectOrderBy: vi.fn(),
     toggleCardProperty: vi.fn(),
-    toggleRepoFilter: vi.fn()
+    toggleRepoFilter: vi.fn(),
+    pendingViewChanges: { pending: [], stale: false }
   }
   const controller = {
     activeFilterCount: 0,
@@ -135,36 +136,6 @@ const flip = (label: string, value: boolean) => {
 }
 
 describe('the phone Workspace options sheet', () => {
-  it('shows the classic card options as rows with their values, and filters as switches', () => {
-    render({ newCardStyle: false, hideSleeping: true })
-    const shown = texts()
-    for (const label of [
-      'Show',
-      'Hosts',
-      'All hosts',
-      'Projects',
-      'All projects',
-      'Group by',
-      'Project',
-      'Sort by',
-      'Agent Activity',
-      'Project order',
-      'Card layout',
-      'Detailed',
-      'Show properties',
-      'Filters',
-      'Hide sleeping',
-      'Except default branch',
-      'Hide other-client workspaces',
-      'Hide detached HEAD'
-    ]) {
-      expect(shown).toContain(label)
-    }
-    expect(shown).not.toContain('Card display')
-    // The choices themselves live on each option's page.
-    expect(shown).not.toContain('Agent activity layout')
-  })
-
   it('swaps in Card display for the new card style and drops the exemption when nothing sleeps', () => {
     render({ newCardStyle: true, hideSleeping: false })
     const shown = texts()
@@ -186,6 +157,9 @@ describe('the phone Workspace options sheet', () => {
 
   it('opens an option page from its row, stays there after a pick, and goes back', () => {
     const settings = render({ newCardStyle: false, hideSleeping: false })
+    expect(texts()).toContain('Card layout')
+    expect(texts()).toContain('Show properties')
+    expect(texts()).not.toContain('Card display')
     press('Sort by, Agent Activity')
     expect(texts()).toContain('Agents that need attention, then most recent activity.')
     press('Recent')
@@ -196,7 +170,8 @@ describe('the phone Workspace options sheet', () => {
   })
 
   it('writes each control to the shared value it names', () => {
-    const settings = render({ newCardStyle: false, hideSleeping: false })
+    const settings = render({ newCardStyle: false, hideSleeping: true })
+    expect(texts()).toContain('Except default branch')
     flip('Hide CLI-created', true)
     expect(settings.setFilter).toHaveBeenCalledWith('hideCliCreatedWorkspaces', true)
     press('PR')

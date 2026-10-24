@@ -30,9 +30,7 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // `persistPtyBinding` grafts the leaf by assigning `layout.root` on the SAME layout object inside
-  // the SAME layouts record (pty-binding-persistence.ts), so the resolver has to answer from the
-  // tree that is there now, not from anything derived on an earlier call.
+  // Bindings mutate layout trees in place; a resolver cache must not retain an earlier tree’s answer.
   it('resolves a leaf grafted in place by a split spawn', async () => {
     const store = await createStore()
     store.setWorkspaceSession({
@@ -49,7 +47,7 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
         }
       }
     })
-    // A reader runs first, exactly as the syncWindowGraph lease sweep does.
+    // Warm the resolver as the window-graph lease sweep does before a split spawn.
     expect(findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)).toBe('tab1')
 
     expect(
@@ -65,7 +63,6 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
     expect(findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)).toBe('tab1')
   })
 
-  // The other in-place graft: an empty persisted layout gets its first durable root.
   it('resolves the first leaf grafted onto an empty layout', async () => {
     const store = await createStore()
     store.setWorkspaceSession({

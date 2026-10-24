@@ -53,7 +53,9 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../ssh/ssh-target-registry', () => ({ getSshTargetRegistryStore: () => h.store }))
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
+  getSshTargetRegistryStore: () => h.store
+}))
 vi.mock('./ssh-ipc-context', () => ({
   connectionManager: h.connectionManager,
   portForwardManager: h.portForwardManager,

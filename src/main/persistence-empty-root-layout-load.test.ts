@@ -23,7 +23,7 @@ vi.mock('electron', () => ({
 
 const WORKTREE_ID = 'repo-1::/worktree'
 
-// A session saved before tabs named their first pane: the tab exists, its layout has no root.
+// Legacy tabs can exist before their first pane has been named.
 function oldSession(layout: TerminalLayoutSnapshot): WorkspaceSessionState {
   return {
     ...getDefaultWorkspaceSession(),
@@ -56,14 +56,10 @@ describe('a saved layout with an empty root', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // The order that lost the binding once the save-time swap was gone: main binds first, then a
-  // stale window write of the loaded (unmounted) tab arrives. Without the load repair that write
-  // carries an empty root and the bound pane reads as removed.
+  // A stale unmounted window write must not erase a binding main attached after load.
   it('keeps the binding when main binds first and a stale write of the loaded tab follows', async () => {
     const store = loadOldSession({ root: null, activeLeafId: null, expandedLeafId: null })
-    // The window's copy of the session as it was loaded.
     const loaded = structuredClone(store.getWorkspaceSession())
-    // Main binds the pane the loaded layout names (any pane, if it names none).
     const leafId = loaded.terminalLayoutsByTabId['tab-1']?.activeLeafId ?? TEST_LEAF_1
 
     await store.persistPtyBinding({
@@ -72,7 +68,7 @@ describe('a saved layout with an empty root', () => {
       leafId,
       ptyId: 'pty-1'
     })
-    // Stale write: the window never mounted the tab, so it saves the layout as loaded, unbound.
+    // The unmounted window republishes its original unbound layout.
     store.setWorkspaceSession({
       ...loaded,
       terminalLayoutsByTabId: {

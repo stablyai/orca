@@ -97,6 +97,7 @@ describe('DesktopBrowserBridgeManager', () => {
     expect(h.execute).toHaveBeenCalledWith(
       HOST,
       expect.objectContaining({ requestId: 'req-1' }),
+      expect.any(AbortSignal),
       expect.any(AbortSignal)
     )
     expect(socket.sendRequest).toHaveBeenCalledWith(
@@ -314,5 +315,68 @@ describe('DesktopBrowserBridgeManager', () => {
     await vi.waitFor(() => expect(seen).not.toBeNull())
     expect(seen!.aborted).toBe(false)
     await vi.waitFor(() => expect(seen!.aborted).toBe(true))
+  })
+
+  it('stops a queued or running command when orcad cancels it, and stays attached', async () => {
+    const h = harness()
+    let seen: AbortSignal | null = null
+    let finish = (): void => {}
+    h.execute.mockImplementationOnce(async (_candidate, _request, signal) => {
+      seen = signal
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true, result: {} }
+    })
+    h.manager.reconcile()
+    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(1))
+    const socket = h.subscriptions[0]!
+    socket.callbacks.onResponse(event({ type: 'ready', attachmentId: 'att-1' }))
+    socket.callbacks.onResponse(
+      event({ type: 'request', requestId: 'r', method: 'browser.click', params: {} })
+    )
+    await vi.waitFor(() => expect(seen).not.toBeNull())
+    expect(seen!.aborted).toBe(false)
+
+    socket.callbacks.onResponse(event({ type: 'cancel', requestId: 'r' }))
+
+    expect(seen!.aborted).toBe(true)
+    expect(h.manager.isAttached('env-a')).toBe(true)
+    finish()
+  })
+
+  it("hands each command a host signal that one command's cancel leaves alone", async () => {
+    const h = harness()
+    let host: AbortSignal | null = null
+    h.execute.mockImplementationOnce(async (_candidate, _request, _signal, hostRevoked) => {
+      host = hostRevoked
+      return { ok: true, result: {} }
+    })
+    h.manager.reconcile()
+    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(1))
+    const socket = h.subscriptions[0]!
+    socket.callbacks.onResponse(event({ type: 'ready', attachmentId: 'att-1' }))
+    socket.callbacks.onResponse(
+      event({ type: 'request', requestId: 'r', method: 'browser.mouseDown', params: {} })
+    )
+    await vi.waitFor(() => expect(host).not.toBeNull())
+
+    socket.callbacks.onResponse(event({ type: 'cancel', requestId: 'r' }))
+    expect(host!.aborted).toBe(false)
+
+    socket.callbacks.onClose()
+    expect(host!.aborted).toBe(true)
+  })
+
+  it('ignores a cancel for a request it is not running', async () => {
+    const h = harness()
+    h.manager.reconcile()
+    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(1))
+    const socket = h.subscriptions[0]!
+    socket.callbacks.onResponse(event({ type: 'ready', attachmentId: 'att-1' }))
+
+    socket.callbacks.onResponse(event({ type: 'cancel', requestId: 'unknown' }))
+
+    expect(h.manager.isAttached('env-a')).toBe(true)
   })
 })

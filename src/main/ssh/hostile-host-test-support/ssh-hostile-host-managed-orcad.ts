@@ -3,7 +3,9 @@
  * the cell's runtime, uploaded no other and ran no toolchain. An activated server must be live; an
  * unavailable host must fail with the classified reason the connect reports.
  */
-import { posix } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, posix } from 'node:path'
 import { expect } from 'vitest'
 import { NODE_RUNTIME_ASSETS, pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
@@ -15,13 +17,18 @@ import { managedOrcadSlot } from '../../managed-server/lifecycle/orcad-managed-r
 import { orcadSlotDir, type OrcadSlotOptions } from '../orcad-recovery-slot'
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
 import { deployOrcad } from '../orcad-remote-deploy'
+import { getMainHttpClient, setMainHttpClient } from '../../network/http-client'
 import {
   orcadLivenessProbeCommand,
   parseOrcadLiveness
 } from '../../managed-server/install/orcad-remote-launch'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
+import {
+  ORCAD_PID_FILENAME,
+  ORCAD_READINESS_FILENAME
+} from '../../managed-server/install/orcad-remote-host-support'
 import { decommissionRemoteOrcad } from '../../managed-server/install/orcad-remote-decommission'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   forbiddenToolActions,
   type HostileHostCellCore,
@@ -43,7 +50,15 @@ export async function proveManagedOrcadCell(
     const context = await resolveOrcadRemoteContext(sshTarget, conn)
     expect(context.serverTarget).toBe(expected.runtime)
     const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT)
-    const deploy = deployOrcad({ ...slot, target: context.serverTarget, census: EMPTY_CENSUS })
+    const desktop = cell.desktopNoEgress ? refuseDesktopDownloads() : null
+    const deploy = deployOrcad({
+      ...slot,
+      target: context.serverTarget,
+      census: EMPTY_CENSUS,
+      recountCensus: async () => EMPTY_CENSUS,
+      releaseIncumbentAdmission: async () => {},
+      ...(desktop ? { runtimeCacheRoot: desktop.cacheRoot } : {})
+    }).finally(() => desktop?.restore())
     if (expected.outcome === 'unavailable') {
       const failure = await deploy.then(
         (deployed) => new Error(`deploy did not fail: ${JSON.stringify(deployed)}`),
@@ -60,9 +75,13 @@ export async function proveManagedOrcadCell(
       })
       await assertLiveThenDecommissioned(slot, slotDir, deployed.fullVersion)
     }
+    if (desktop) {
+      // With an empty cache and every fetch refused there was nothing to upload, so the host fetched it.
+      expect(desktop.refusedUrls().length).toBeGreaterThan(0)
+    }
     const toolLog = await hostExec(
       target,
-      `cat ${shellEscape(target.forbiddenToolLog)} 2>/dev/null || true`
+      `cat ${quotePosixShell(target.forbiddenToolLog)} 2>/dev/null || true`
     )
     expect(forbiddenToolActions(toolLog)).toEqual([])
   } finally {
@@ -97,6 +116,7 @@ async function assertLiveThenDecommissioned(
   const liveness = async (): Promise<string> =>
     parseOrcadLiveness(await execOrcadRemote(slot, orcadLivenessProbeCommand(slot.host, slotDir)))
   expect(await liveness()).toBe('LIVE')
+  await assertOrcadRunsAtLoginUmask(slot, slotDir)
   const decommission = await decommissionRemoteOrcad({
     ...slot,
     record: await readOrcadActivationRecord(slot),
@@ -107,4 +127,56 @@ async function assertLiveThenDecommissioned(
     version
   })
   expect(await liveness()).toBe('DEAD')
+}
+
+/**
+ * #31125: orcad runs at the SSH login's umask, so the git, terminals and agents it spawns create
+ * the user's files, while the readiness file holding the pairing token stays owner-only.
+ * Linux only: macOS has no /proc to read another process's umask from.
+ */
+async function assertOrcadRunsAtLoginUmask(slot: OrcadSlotOptions, slotDir: string): Promise<void> {
+  if (slot.host.os !== 'linux') {
+    return
+  }
+  const pidFile = quotePosixShell(posix.join(slotDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(posix.join(slotDir, ORCAD_READINESS_FILENAME))
+  const [login, daemon, readinessMode] = (
+    await execOrcadRemote(
+      slot,
+      `umask; sed -n 's/^Umask:[[:space:]]*//p' "/proc/$(cat ${pidFile})/status"; stat -c %a ${readiness}`
+    )
+  )
+    .trim()
+    .split('\n')
+    .map((line) => line.trim())
+  expect(Number.parseInt(daemon ?? '', 8), `login ${login}, orcad ${daemon}`).toBe(
+    Number.parseInt(login ?? '', 8)
+  )
+  expect(readinessMode).toBe('600')
+}
+
+/** An empty runtime cache and a refusing network on this computer, until `restore`. */
+function refuseDesktopDownloads(): {
+  cacheRoot: string
+  refusedUrls: () => string[]
+  restore: () => void
+} {
+  const cacheRoot = mkdtempSync(join(tmpdir(), 'orca-hostile-desktop-no-egress-'))
+  const refused: string[] = []
+  const previous = getMainHttpClient()
+  setMainHttpClient({
+    fetch: async (url) => {
+      refused.push(url)
+      throw new Error('net::ERR_CONNECTION_REFUSED')
+    },
+    proxySession: () => null
+  })
+  return {
+    cacheRoot,
+    refusedUrls: () => refused,
+    restore: () => {
+      setMainHttpClient(previous)
+      rmSync(cacheRoot, { recursive: true, force: true })
+    }
+  }
 }

@@ -9,7 +9,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/project-execution-runtime'
 import {
   saveSourceControlActionRecipe,
@@ -223,7 +223,7 @@ export function useChecksPanelControllerState() {
       ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), repo, activeWorktree)
       : undefined
   const runtimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
   const ownerSettings = useMemo<AppState['settings']>(
     () =>

@@ -12,6 +12,15 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
 
   protected abstract rejectWaitersForHandle(handle: string, code: string): void
 
+  protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
+    pty.lastExitCode = null
+    pty.lastExitCause = null
+    for (const leaf of this.getLeavesForPty(pty.ptyId)) {
+      leaf.lastExitCode = null
+      leaf.lastExitCause = null
+    }
+  }
+
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
     const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
     const preallocatedHandle = this.handleByPtyId.get(ptyId)
@@ -158,12 +167,23 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
         this.invalidateAllHandlesForPty(ptyId),
         true
       )
+      if (incarnationId) {
+        this.retirePredecessorPtyExitEvidence(existingPty)
+      }
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.stopRequestedPtyIds.delete(ptyId)
     if (options.awaitsRegistration !== false) {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
-      this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
+      const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+      if (pending && (pending.incarnationId === null || pending.incarnationId === incarnationId)) {
+        pending.incarnationId = incarnationId ?? null
+      } else {
+        this.pendingPtyRegistrationIncarnations.set(ptyId, {
+          incarnationId: incarnationId ?? null,
+          exitedIncarnations: new Set()
+        })
+      }
     }
     this.terminalViewSubscribers.markSpawnPublished(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)

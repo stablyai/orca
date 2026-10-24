@@ -1,5 +1,4 @@
-// A Claude that keeps retrying a refused request is working, so the idle sweep must not stop it.
-// Every retry frame's publish is the activity the sweep reads, even though a run writes one row.
+// Each retry frame must publish activity even when all attempts revise one row.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -45,7 +44,6 @@ function apiRetry(attempt: number): Record<string, unknown> {
   }
 }
 
-/** Long enough for many sweep ticks, so "still open" means the sweep declined. */
 function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
@@ -58,6 +56,9 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   const store = await openTestAgentSessionRecordStore(root)
   const adapter: StructuredAgentSessionAdapter = {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: async ({ fence, spawnToken, events }) => {
       sink = events ?? null
       return {
@@ -107,7 +108,6 @@ describe('a Claude retrying a refused request', () => {
     }
     const translator = createClaudeJournalTranslator({ sink, fallbackIdPrefix: '1' })
 
-    // Five frames ten minutes apart: fifty minutes, well past the thirty-minute idle window.
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       clock += RETRY_GAP_MS
       translator.handle({ type: 'message', sessionId: SESSION, message: apiRetry(attempt) })
@@ -125,7 +125,6 @@ describe('a Claude retrying a refused request', () => {
       failure: { detail: { text: expect.stringContaining('"attempt":5') } }
     })
 
-    // Once the frames stop, the same clock does let the sweep close it.
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS
     await vi.waitFor(() => {
       expect(closeSession).toHaveBeenCalledWith(SESSION)

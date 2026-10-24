@@ -26,8 +26,8 @@ export function TerminalPaneResumeInChatButton({
   )
   const pending = useCliChatResumePending(source)
   const label = translate(
-    'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-    'Resume in New Native Chat'
+    'components.tab.bar.SortableTabContextMenu.switchToChatView',
+    'Continue in Chat UI'
   )
 
   return (
@@ -35,10 +35,8 @@ export function TerminalPaneResumeInChatButton({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="pane-title"
           size="icon-xs"
-          // Same class as split so it shares the hover/active reveal.
-          className="pane-title-split-trigger"
           aria-label={label}
           disabled={!source || pending}
           aria-busy={pending || undefined}

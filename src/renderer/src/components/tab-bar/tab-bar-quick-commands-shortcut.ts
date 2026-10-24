@@ -11,6 +11,7 @@ import {
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { useAppStore } from '@/store'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type UseTabBarQuickCommandsShortcutParams = {
   isFocused: boolean
@@ -126,12 +127,12 @@ export function useTabBarQuickCommandsShortcut({
       )
     }
     const onBlur = (): void => doubleTapDetector.reset()
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    addAppKeyListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
   }, [activeView, isFocused, keybindings, menuOpen, onOpenChange, terminalShortcutPolicy])

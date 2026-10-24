@@ -3,11 +3,10 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import type { PaneLayoutEditIntent } from '../../../shared/rpc-contract/session-tabs-schemas-params'
 import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
@@ -15,6 +14,9 @@ import {
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
 } from './web-runtime-session-environment'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspaces'
+import { redrawServerLayoutWorkspace } from './server-layout-apply-routes'
 import {
   beginWebRuntimeSplitFocusRequest,
   captureWebRuntimeSplitFocusTarget,
@@ -160,7 +162,11 @@ function getPendingWebRuntimeSplitMirrorTelemetryKey(
   return `${direction}:${sourcePtyId}`
 }
 
-export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
+/** `worktreeId`: the pane's workspace, whose server frames redraw a pane the server kept. */
+export function closeWebRuntimeTerminal(
+  ptyId: string | null | undefined,
+  worktreeId?: string
+): boolean {
   if (!ptyId) {
     return false
   }
@@ -184,6 +190,10 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
     })
     .catch((error) => {
+      // Switch point: the window already dropped the pane; the server's frames draw what it kept.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId) {
+        redrawServerLayoutWorkspace(environmentId, worktreeId)
+      }
       console.warn(
         '[web-runtime-session] failed to close terminal pane:',
         error instanceof Error ? error.message : String(error)
@@ -200,7 +210,7 @@ export async function updateWebRuntimePaneLayout(args: {
   expandedLeafId: string | null
   chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
-  intent?: PaneLayoutEditIntent
+  renamedLeafIds?: string[]
 }): Promise<boolean> {
   // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
   const environmentId = runtimeEnvironmentIdUnlessTwin(
@@ -210,6 +220,11 @@ export async function updateWebRuntimePaneLayout(args: {
   )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+  // Switch point: a frame-drawn workspace's pane geometry goes as layout.apply intents (sizes, moves,
+  // chat pane) and its frames draw it back; only a pane rename still needs this push.
+  if (!args.renamedLeafIds?.length && isServerFrameDrawnWorkspace(environmentId, args.worktreeId)) {
+    return true
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
@@ -225,7 +240,7 @@ export async function updateWebRuntimePaneLayout(args: {
         expandedLeafId: args.expandedLeafId,
         ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {}),
-        ...(args.intent ? { intent: args.intent } : {})
+        ...(args.renamedLeafIds ? { renamedLeafIds: args.renamedLeafIds } : {})
       },
       timeoutMs: 15_000
     })

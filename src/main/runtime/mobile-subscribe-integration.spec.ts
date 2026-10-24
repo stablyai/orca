@@ -100,7 +100,6 @@ function createRuntime() {
     renameTerminal: vi.fn(),
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) => {
       notifications.push({ ptyId, mode, cols, rows })
     },

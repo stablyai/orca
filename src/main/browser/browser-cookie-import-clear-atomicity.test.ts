@@ -50,9 +50,7 @@ function createJarSession(
         jar = jar.filter((entry) => entry.name !== name)
       }
     },
-    // Why: the snapshot runs after the plan is frozen and before the first removal, which is
-    // exactly where a cookie the user creates mid-clear lands. Injecting the arrival here is what
-    // makes a re-read of the jar visible: a widened plan would sweep it up.
+    // Inject an arrival after snapshotting to expose any later widening of the removal plan.
     snapshotClearIdentities: async (items) => {
       if (options.arrivalDuringClear) {
         jar.push(options.arrivalDuringClear)
@@ -90,8 +88,7 @@ describe('STA-4090 failed full cookie clear', () => {
       removeTransplantableCookies(
         session,
         new Set(),
-        // google.com is in the import scope on purpose: the non-transplantable exemption, not the
-        // scope, has to be what keeps SID out of the removal plan.
+        // Include google.com in scope to exercise its policy exemption.
         importedDomainScope(['google.com', 'example.com', 'other.test'])
       )
     ).rejects.toThrow(/existing cookies were restored/)
@@ -179,8 +176,6 @@ describe('STA-4090 failed full cookie clear', () => {
     )
   })
 
-  // Why (STA-4170): the fallback used to re-read the jar, so a login completed mid-clear was
-  // deleted with no snapshot identity to restore it — permanent auth loss reported as a restore.
   it('leaves a cookie that arrived during the clear in the jar', async () => {
     const session = createJarSession(
       [cookie('.example.com', 'removed-first', '/one'), cookie('.other.test', 'stale', '/two')],
@@ -191,21 +186,17 @@ describe('STA-4090 failed full cookie clear', () => {
       removeTransplantableCookies(
         session,
         new Set(),
-        // arrived.test is inside the import scope, so only the frozen plan can be what spares the
-        // login — being out of scope must not stand in for it.
+        // Keep arrived.test in scope so only the frozen plan protects it.
         importedDomainScope(['example.com', 'other.test', 'arrived.test'])
       )
     ).rejects.toThrow(/existing cookies were restored/)
 
     expect(session.removedNames()).toEqual(['removed-first'])
     expect(session.names()).toEqual(['fresh-login', 'removed-first', 'stale'])
-    // The restore set is exactly the mutated set: the arrival never needed restoring.
     expect(session.restoredNames()).toEqual(['removed-first', 'stale'])
   })
 
-  // Why (STA-4170): an arrival that reuses a snapshotted url+name IS removed — that coordinate is
-  // what the clear was asked to empty. It is not a loss: the identity is in the snapshot, so the
-  // rollback repopulates it with the pre-clear value and the coordinate is never left empty.
+  // Same-coordinate arrivals restore the snapshotted value after rollback.
   it('rolls a same-coordinate arrival back to its pre-clear value', async () => {
     let jar = [valueCookie('.example.com', 'session', 'pre-clear'), cookie('.other.test', 'stale')]
     const restored: CookieClearIdentity[] = []
@@ -221,8 +212,6 @@ describe('STA-4090 failed full cookie clear', () => {
       },
       snapshotClearIdentities: async (items) => {
         const identities = identitiesFromClearCookies(items)
-        // The site re-sets the same cookie after the plan is frozen but before its coordinate is
-        // emptied.
         jar = jar.filter((entry) => entry.name !== 'session')
         jar.push(valueCookie('.example.com', 'session', 'mid-clear'))
         return identities

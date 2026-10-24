@@ -48,16 +48,20 @@ export function MobileQueuedMessageScrollList({
       }
     }
   }
-  // The nearest scroll that shows the whole row, as desktop's editor does.
+  // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
   const reveal = (row: LayoutRectangle) => {
-    const { offset, viewport } = metrics.current
+    const { offset, viewport, content } = metrics.current
     if (viewport === 0) {
       return
     }
-    if (row.y < offset) {
-      scrollRef.current?.scrollTo({ y: row.y, animated: false })
-    } else if (row.y + row.height > offset + viewport) {
-      scrollRef.current?.scrollTo({ y: row.y + row.height - viewport, animated: false })
+    const rowBottom = row.y + row.height
+    // Never past the content's end, which may not have caught up with a row that just grew.
+    const top = Math.max(0, row.y - spacing.lg)
+    const bottom = Math.min(Math.max(content, rowBottom), rowBottom + spacing.lg)
+    if (top < offset) {
+      scrollRef.current?.scrollTo({ y: top, animated: false })
+    } else if (bottom > offset + viewport) {
+      scrollRef.current?.scrollTo({ y: bottom - viewport, animated: false })
     }
   }
   return (

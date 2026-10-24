@@ -34,7 +34,9 @@ export function routeNewTabLaunch(
   if (requestId === undefined) {
     return { plan: args.agentSessionLaunchPlan }
   }
-  const awaited = awaitStructuredRouteHostAnswer(store, request, HOST_ANSWER_WAIT_MS)
+  const awaited = request.requestedSurface
+    ? null
+    : awaitStructuredRouteHostAnswer(store, request, HOST_ANSWER_WAIT_MS)
   return awaited
     ? {
         awaited,

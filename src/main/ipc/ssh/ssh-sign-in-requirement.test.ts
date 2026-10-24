@@ -7,9 +7,9 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
-vi.mock('../../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
@@ -42,7 +42,6 @@ describe('SSH hosts that need a typed credential', () => {
   const harness = createSshIpcHarness(mocks)
   const { handlers, mockStore, mockWindow } = harness
 
-  /** A fresh app launch: the main process registers SSH with the persisted targets. */
   async function launch(targets: SshTarget[]): Promise<void> {
     await resetSshHandlerStateForTests()
     mockSshStore.listTargets.mockReturnValue(targets)
@@ -50,7 +49,6 @@ describe('SSH hosts that need a typed credential', () => {
     registerAgain()
   }
 
-  /** What the main process does at launch, and again when macOS recreates the window. */
   function registerAgain(): void {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same partial store and window the shared harness registers with.
     registerSshHandlers(mockStore as never, () => mockWindow as never)

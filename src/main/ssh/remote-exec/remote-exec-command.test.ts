@@ -334,7 +334,7 @@ describe('execCommand', () => {
     // onStderr must not leak into the SSH exec options.
     expect(conn.exec).toHaveBeenCalledWith(
       expect.stringContaining("\n(node -e 'x' || echo MISSING)\n"),
-      {}
+      { compressCommand: true }
     )
   })
 
@@ -351,7 +351,10 @@ describe('execCommand', () => {
       })
 
       await Promise.resolve()
-      expect(conn.exec).toHaveBeenCalledWith('npm install', { wrapCommand: false })
+      expect(conn.exec).toHaveBeenCalledWith('npm install', {
+        wrapCommand: false,
+        compressCommand: true
+      })
       const rejection = expect(commandPromise).rejects.toThrow('timed out after 240s')
       await vi.advanceTimersByTimeAsync(240_000)
       expect(channel.close).toHaveBeenCalledOnce()

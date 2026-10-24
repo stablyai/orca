@@ -238,11 +238,6 @@ describe('readNewWorktreeRuntimeCapabilities', () => {
   })
 
   it('fails closed when capability detection is unavailable', async () => {
-    await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toEqual({
-      tasksSupported: false,
-      worktreeCreateIdempotency: false,
-      agentLaunch: false,
-      hostPlatform: null
-    })
+    await expect(readNewWorktreeRuntimeCapabilities(statusClient(['error']))).resolves.toBeNull()
   })
 })

@@ -15,7 +15,6 @@
 1 src/renderer/src/components/status-bar/workspace-space-decision-inputs.ts
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
 3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
-1 src/renderer/src/components/tab-group/tab-group-layout-owner-commands.ts
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
 1 src/renderer/src/components/terminal-pane/pty-connection-test-deps.ts
 4 src/renderer/src/components/terminal-pane/terminal-recovery-ledger-test-store.ts
@@ -45,7 +44,6 @@
 2 src/renderer/src/runtime/web-session-tabs-sync/apply-preparation-groups.ts
 5 src/renderer/src/runtime/web-session-tabs-sync/apply-terminal-records.ts
 4 src/renderer/src/runtime/web-session-tabs-sync/apply-worktree-records.ts
-1 src/renderer/src/runtime/web-session-tabs-sync/mirrored-editor-file-identity.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/session-tabs-inventory-absence.ts
 1 src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts
 2 src/renderer/src/runtime/web-session-terminal-orphan-topology.ts
@@ -67,12 +65,12 @@
 13 src/renderer/src/store/slices/editor/actions/open-conflict-file.ts
 14 src/renderer/src/store/slices/editor/actions/open-conflict-review.ts
 4 src/renderer/src/store/slices/editor/actions/open-file-apply.ts
-4 src/renderer/src/store/slices/editor/actions/open-file-mutations.ts
+3 src/renderer/src/store/slices/editor/actions/open-file-mutations.ts
 7 src/renderer/src/store/slices/editor/actions/open-file-state.ts
 26 src/renderer/src/store/slices/editor/actions/open-history-diff.ts
 1 src/renderer/src/store/slices/editor/actions/open-unstaged-diff.ts
 10 src/renderer/src/store/slices/editor/actions/recently-closed-editor-tabs.ts
-4 src/renderer/src/store/slices/editor/actions/rekey-open-files-action.ts
+2 src/renderer/src/store/slices/editor/actions/rekey-open-files-action.ts
 5 src/renderer/src/store/slices/editor/actions/restored-editor-owner-in-place.ts
 10 src/renderer/src/store/slices/editor/actions/restored-editor-owner-transition.ts
 3 src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts
@@ -88,7 +86,7 @@
 23 src/renderer/src/store/slices/tabs/tabs-drag-preview-actions.ts
 11 src/renderer/src/store/slices/tabs/tabs-drop-actions.ts
 4 src/renderer/src/store/slices/tabs/tabs-focus-actions.ts
-13 src/renderer/src/store/slices/tabs/tabs-group-actions.ts
+12 src/renderer/src/store/slices/tabs/tabs-group-actions.ts
 1 src/renderer/src/store/slices/tabs/tabs-host-mirroring.ts
 8 src/renderer/src/store/slices/tabs/tabs-label-actions.ts
 10 src/renderer/src/store/slices/tabs/tabs-move-actions.ts

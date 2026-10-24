@@ -22,6 +22,9 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   responding: 'Agent is responding'
 } as const
 
+/** The composer's placeholder while the chat takes a message as usual. */
+export const NATIVE_CHAT_COMPOSER_PLACEHOLDER = 'Ask anything, @ to mention files, / for commands'
+
 /** Format turn time without exposing an ever-growing raw seconds count. */
 export function formatNativeChatDuration(seconds: number): string {
   const totalSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0

@@ -3,8 +3,10 @@ import { withDurableRuntimeStore } from '../runtime/runtime-durable-store-fixtur
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
+import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -53,7 +55,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('still retires and respawns when the routed provider confirms absence', async () => {
+  it('restores hidden delivery before respawning an absent caller session', async () => {
     const worktreeId = 'repo-1::/tmp/proven-absent-owner'
     const cwd = '/tmp/proven-absent-owner'
     const tabId = 'tab-proven-absent-owner'
@@ -64,7 +66,9 @@ describe('registerPtyHandlers', () => {
         if (options.attachOnly) {
           throw new SessionNotFoundError('pty-proven-absent-owner')
         }
-        return { id: 'pty-fresh-proven', incarnationId: 'inc-fresh-proven' }
+        expect(options.sessionId).toBe('pty-proven-absent-owner')
+        expect(isHiddenRendererPty('pty-proven-absent-owner')).toBe(true)
+        return { id: 'pty-proven-absent-owner', incarnationId: 'inc-fresh-proven' }
       }
     )
     setLocalPtyProvider({
@@ -149,6 +153,8 @@ describe('registerPtyHandlers', () => {
       rows: 24,
       cwd,
       command: 'codex resume proven-absent-session',
+      sessionId: 'pty-proven-absent-owner',
+      initiallyHidden: true,
       worktreeId,
       tabId,
       leafId,
@@ -159,21 +165,29 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    expect(mounted).toMatchObject({ id: 'pty-fresh-proven' })
+    expect(mounted).toMatchObject({ id: 'pty-proven-absent-owner' })
     expect(providerSpawn).toHaveBeenCalledTimes(2)
     expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
       command: 'codex resume proven-absent-session'
     })
-    // The registry that owns the PTY answered, so this exit is confirmed — but the code stays the
-    // -1 sentinel; a synthesized zero would be indistinguishable from a clean shell exit.
+    // Proven owner absence keeps the -1 sentinel; synthesizing zero would misreport a clean shell exit.
     expect(runtime.onPtyExit).toHaveBeenCalledWith(
       'pty-proven-absent-owner',
       -1,
       'inc-proven-absent-owner',
       { hostExitConfirmed: true }
     )
-    expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-    expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The dead binding stays until the fresh spawn's one bind swaps it.
+      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+      const [swap] = vi.mocked(store.persistPtyBinding).mock.calls[0] ?? []
+      expect(typeof swap === 'function' ? swap() : swap).toMatchObject({
+        ptyId: 'pty-proven-absent-owner'
+      })
+    } else {
+      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    }
   })
   it('does not poll after the routed provider confirms absence', async () => {
     const worktreeId = 'repo-1::/tmp/probe-blip-owner'
@@ -293,10 +307,7 @@ describe('registerPtyHandlers', () => {
       { hostExitConfirmed: true }
     )
   })
-  // Why: a parked pane (stopped with keepHistory) leaves the runtime holding the binding while
-  // persistence has already dropped it. Reading "nothing left to retire" as a competing owner
-  // aborted materialization *after* signalling the exit, which destroyed the pane instead of
-  // rebuilding it — the reconnect path then had no surface to attach to (#11541).
+  // keepHistory may retire persistence before the runtime binding; that absence must permit replacement instead of aborting after exit (#11541).
   it('respawns a proven-dead owner whose persisted binding was already retired', async () => {
     const worktreeId = 'repo-1::/tmp/already-retired-owner'
     const cwd = '/tmp/already-retired-owner'
@@ -336,8 +347,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    // Persistence kept the tab but already dropped this leaf's PTY binding, exactly as an
-    // earlier keep-history stop leaves it.
+    // Model persistence after keepHistory: tab retained, leaf binding retired.
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: null }]
@@ -389,8 +399,7 @@ describe('registerPtyHandlers', () => {
       noteTerminalSpawnCommand: vi.fn(),
       seedHeadlessTerminal: vi.fn(),
       onPtySpawned: vi.fn(),
-      // Why: the real runtime drops its pane binding on exit; the guard after retirement must
-      // see that release rather than a resurrected owner.
+      // Mirror real exit cleanup so retirement observes release instead of a resurrected runtime owner.
       onPtyExit: vi.fn(() => {
         runtimeOwnsPane = false
       }),

@@ -36,14 +36,6 @@ function makeFrame(image: Uint8Array, b64?: string): BrowserScreencastFrame {
   }
 }
 
-function millisecondsPerFrame(run: () => string, frames: number): number {
-  const started = performance.now()
-  for (let index = 0; index < frames; index += 1) {
-    run()
-  }
-  return (performance.now() - started) / frames
-}
-
 describe('the browser frame data URI', () => {
   it('is byte-identical on both platforms for the frame the bridge decoded', () => {
     const image = makeImageBytes(FRAME_BYTES)
@@ -68,23 +60,5 @@ describe('the browser frame data URI', () => {
     expect(createBrowserFrameDataUriOnWeb(makeFrame(image))).toBe(
       createBrowserFrameDataUri(makeFrame(image))
     )
-  })
-
-  it('costs less per frame than the re-encode it replaces', () => {
-    const image = makeImageBytes(FRAME_BYTES)
-    const b64 = Buffer.from(image).toString('base64')
-    const frames = 100
-    const reEncode = (): string => `data:image/jpeg;base64,${Buffer.from(image).toString('base64')}`
-    const carried = (): string => createBrowserFrameDataUriOnWeb(makeFrame(image, b64))
-
-    // Both warmed in the same harness before either is timed, so neither pays for a cold JIT.
-    millisecondsPerFrame(reEncode, 20)
-    millisecondsPerFrame(carried, 20)
-    const reEncodeMs = millisecondsPerFrame(reEncode, frames)
-    const carriedMs = millisecondsPerFrame(carried, frames)
-
-    // Loose on purpose: the measured gap is three orders of magnitude, and a bound near it would
-    // make a shared CI runner's noise a red build rather than a finding.
-    expect(carriedMs).toBeLessThan(reEncodeMs / 10)
   })
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   OrcaRuntimeService,
@@ -347,7 +348,7 @@ describe('OrcaRuntimeService', () => {
     const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -396,7 +397,7 @@ describe('OrcaRuntimeService', () => {
     const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -455,7 +456,7 @@ describe('OrcaRuntimeService', () => {
       .mockReturnValueOnce(freshForegroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -518,7 +519,7 @@ describe('OrcaRuntimeService', () => {
       .mockReturnValueOnce(freshForegroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -577,7 +578,7 @@ describe('OrcaRuntimeService', () => {
     const getForegroundProcess = vi.fn(async () => 'pi')
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess

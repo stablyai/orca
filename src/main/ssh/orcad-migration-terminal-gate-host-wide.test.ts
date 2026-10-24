@@ -3,7 +3,7 @@
 // and leaves B's relay alone, so the census reads `bridged` with nothing of A's to serve.
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import { relaySocketNameForInstanceId } from './legacy-relay/ssh-relay-instance-id'
 import { windowsRelayPipePathsForSocketName } from './legacy-relay/ssh-relay-endpoints'
 import { getRemoteHostPlatform, joinRemotePath } from './ssh-remote-platform'

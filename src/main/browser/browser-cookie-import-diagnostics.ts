@@ -3,7 +3,7 @@ import { appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: write the diag log to userData, not world-readable /tmp, so only the current user can read it.
+// Keep import diagnostics in userData, away from shared temporary directories.
 let _diagLog: string | null = null
 export function getDiagLogPath(): string {
   if (!_diagLog) {
@@ -21,7 +21,7 @@ export function reasonWithDiagLog(reason: string): string {
 const COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS = 180
 const COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS = 512
 
-// Why: error messages can embed large pasted/file payloads; cap the scan since diagnostics only need a short preview.
+// Bound diagnostic scans because errors can embed large import payloads.
 export function summarizeCookieImportError(err: unknown): string {
   const raw = err instanceof Error && err.message ? err.message : String(err)
   let summary = ''

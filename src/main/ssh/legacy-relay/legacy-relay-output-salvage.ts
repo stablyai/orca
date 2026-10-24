@@ -46,7 +46,7 @@ function bells(text: string): string {
   return kept
 }
 
-export type OutputSalvage = {
+type OutputSalvage = {
   kept: string
   /** Queries answered from cursor or mode state, which the window's dropped output left stale. */
   stateful: string

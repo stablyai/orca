@@ -4,7 +4,7 @@ vi.mock('../../store', () => ({
   useAppStore: { getState: () => ({}) }
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
@@ -30,6 +30,7 @@ function captureHoldHandler(unsubs: (() => void)[] = []): (event: CapturePaintHo
         onActivateView: subscribe,
         onPaneFocus: subscribe,
         onOpenLinkInOrcaTab: subscribe,
+        onSessionProfilesChanged: subscribe,
         onCapturePaintHold: (callback: (event: CapturePaintHoldEvent) => void) => {
           handler = callback
           return () => {}

@@ -1,4 +1,3 @@
-/** Process-wide stop and spawn gate for `orca serve --supervise`, shared with the update loop. */
 let supervisedStopRequested = false
 let supervisedStop = new AbortController()
 let supervisedSpawnGate: (() => Promise<boolean>) | null = null
@@ -26,7 +25,7 @@ export function isSupervisedSpawnHeld(): boolean {
   return supervisedStopRequested || (supervisedSpawnHeld?.() ?? false)
 }
 
-/** Why: update replacements spawn inside this loop, so the install hold must gate them too. */
+/** Update-loop replacements must honor the same install hold. */
 export async function mayRespawn(): Promise<boolean> {
   if (supervisedStopRequested) {
     return false
@@ -41,7 +40,6 @@ export function supervisedStopSignal(): AbortSignal {
 type ServeChild = { pid: number | null; stop: () => void }
 let currentChild: ServeChild | null = null
 
-/** The child a supervised serve is waiting on right now, so a desktop install can park it. */
 export function currentServeChild(): ServeChild | null {
   return currentChild
 }

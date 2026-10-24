@@ -5,6 +5,7 @@ import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
 import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
 import {
   ClaudeProfileRouter,
@@ -59,7 +60,6 @@ it('launches each acquisition under the current selection, not the account it wa
     providerHandle: claudeProviderHandle('unused', null)
   }
 
-  // A missing folder is set up first; typed when that fails, so the chat names the situation.
   await expect(resolve({ identity })).rejects.toMatchObject({
     name: 'AgentSessionPreSpawnError',
     reason: 'claudeAccountSetupFailed',
@@ -68,7 +68,6 @@ it('launches each acquisition under the current selection, not the account it wa
 
   const home = join(root, 'claude-profiles', 'a', 'home')
   mkdirSync(home, { recursive: true })
-  // Already set up, so the launch does not wait for setup.
   writeFileSync(join(root, 'claude-profiles', 'a', 'profile.json'), '{}')
   const routed = await resolve({ identity })
   expect(routed.claudeConfigDir).toBe(home)
@@ -81,7 +80,7 @@ it('launches each acquisition under the current selection, not the account it wa
   expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
 })
 
-function routedResumeFixture() {
+function routedResumeFixture(rewind?: AgentSessionRewindRecord) {
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
   const home = join(root, 'claude-profiles', 'a', 'home')
@@ -106,7 +105,8 @@ function routedResumeFixture() {
     ...agentSessionRecordFixture(),
     providerHandleChain: [
       { linkId: 'link-1', origin: 'created' as const, mintedAtFence: 1, observedAt: 1, handle }
-    ]
+    ],
+    ...(rewind ? { rewind } : {})
   }
   const transcriptHomes = new Set<string>()
   const resolve = createClaudeStructuredLaunchResolver({
@@ -149,4 +149,23 @@ it('resumes a chat with a stored leaf whose transcript is in no known folder', a
   const resumed = await launch()
   expect(resumed.options).toMatchObject({ resume: 'ran-under-b' })
   expect(resumed.resumeLeafUuid).toBe('leaf-1')
+})
+
+it('refuses a rewound chat whose kept conversation is in another account', async () => {
+  const { root, transcriptHomes, launch } = routedResumeFixture({
+    operationId: 'rewind-1',
+    callerKey: 'desktop',
+    itemId: 'item-1',
+    expectedEpoch: 'epoch-1',
+    phase: 'completed',
+    providerFork: {
+      sessionId: 'forked',
+      sourceSessionId: 'ran-under-b',
+      throughEntryId: 'entry-1',
+      replacesSessionId: 'ran-under-b'
+    }
+  })
+  transcriptHomes.add(join(root, 'personal', '.claude'))
+
+  await expect(launch()).rejects.toMatchObject({ reason: 'historyInOtherAccount' })
 })

@@ -15,8 +15,7 @@ const {
 
 vi.mock('child_process', () => ({
   spawn: spawnMock,
-  // runner.ts imports these from child_process; stubs prevent
-  // "missing export" errors when the mock is resolved transitively.
+  // Transitive runner imports require both child_process exports in the mock.
   execFile: vi.fn(),
   execFileSync: vi.fn()
 }))
@@ -160,9 +159,7 @@ describe('filesystem-list-files', () => {
     await expect(listQuickOpenFiles('/repo', {} as Store)).rejects.toThrow('EMFILE')
   })
 
-  // Why close(97) and not a spawn error: this is the WSL wrapper's "cd failed" code. It is above
-  // rg's own 0/1/2, so a handler that checks it after the unavailable branch reports a broken
-  // install instead -- a regression this file would otherwise not catch.
+  // WSL cd failure is 97; classify it before generic unavailable checks for codes above rg's 0/1/2.
   it('names the unreachable root when the WSL wrapper cannot enter it', async () => {
     const child = createMockProcess()
     spawnMock.mockReturnValue(child)
@@ -239,19 +236,18 @@ describe('filesystem-list-files', () => {
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock.mock.calls[0]?.[1]).toContain('--no-ignore-vcs')
 
-    // Simulate stdout output for normal files
     setTimeout(() => {
       p1.stdout?.emit('data', 'file1.ts\0')
       p1.stdout?.emit('data', 'node_modules/bad.js\0')
       p1.stdout?.emit('data', '.git/config\0')
       p1.stdout?.emit('data', '.github/workflows/ci.yml\0')
-      p1.stdout?.emit('data', 'dir1/') // incomplete line
+      p1.stdout?.emit('data', 'dir1/')
       p1.stdout?.emit('data', 'file2.js\0')
 
-      // The broad pass includes ignored files too.
+      // Broad pass includes ignored files.
       p1.stdout?.emit('data', '.env.local\0')
       p1.stdout?.emit('data', 'dist/generated.js\0')
-      p1.stdout?.emit('data', 'file1.ts\0') // Duplicate
+      p1.stdout?.emit('data', 'file1.ts\0')
       p1.stdout?.emit('data', 'node_modules/ignored.js\0')
       p1.emit('close', 0, null)
     }, 10)

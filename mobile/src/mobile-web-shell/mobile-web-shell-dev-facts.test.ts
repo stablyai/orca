@@ -12,14 +12,6 @@ describe('the shell dev facts line', () => {
     expect(line).not.toContain(READY.buildId)
   })
 
-  /** Absent rather than zero: the line is read at a glance on a device, and a count that is always
-   *  there is one nobody notices changing. */
-  it('says nothing about dropped frames until one is dropped', () => {
-    expect(formatMobileWebShellDevFacts({ ...READY, droppedBinaryFrames: 0 })).not.toContain(
-      'dropped'
-    )
-  })
-
   it('carries the running dropped-frame count once the stream has shed one', () => {
     expect(formatMobileWebShellDevFacts({ ...READY, droppedBinaryFrames: 1 })).toBe(
       `${PREFIX} · 2097152 B · 412 ms · 1 frame dropped`

@@ -474,6 +474,27 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     ssh.dispose()
   })
 
+  it('keeps a finished OSC 7501 program result on SSH command finished until dismissed', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'done',
+      agentType: 'brew',
+      programStatus: { state: 'done', observedAt: 1000 }
+    })
+    const ssh = await createPolicy(PTY_ID_SSH)
+
+    ssh.onCommandFinished(0)
+    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
+
+    const { dismissRetainedProgramResult } = await import('@/lib/program-status/result-retention')
+    const dropAgentStatus = vi.fn<(paneKey: string) => void>()
+    dismissRetainedProgramResult(PANE_KEY, {
+      agentStatusByPaneKey: mockStoreState.agentStatusByPaneKey,
+      dropAgentStatus
+    })
+    expect(dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
+    ssh.dispose()
+  })
+
   it('clears the launch registry on SSH command finished when no status row exists', async () => {
     const ssh = await createPolicy(PTY_ID_SSH)
 

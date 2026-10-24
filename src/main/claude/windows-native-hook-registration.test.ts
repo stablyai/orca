@@ -1,4 +1,3 @@
-// Claude alone registers the native Windows hook (#20913); every other agent keeps its form.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
@@ -128,7 +127,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
   const exeCommand = (hooksDir: string): string =>
     `${join(hooksDir, EXE).replaceAll('\\', '/')} claude`
 
-  // In-pane env with stdin held open keeps the hook running and its image mapped.
+  // Holding stdin open keeps the hook image mapped to exercise locked-executable replacement.
   function startHeldHook(program: string): PipedChildProcess {
     return spawnProcess({
       program,
@@ -174,17 +173,14 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     const cmdCommand = join(hooksDir, 'claude-hook.cmd').replaceAll('\\', '/')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([cmdCommand])
 
-    // A later install with the exe sweeps the .cmd entry rather than adding a second hook.
     bundledHook.path = bundle
     expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([exeCommand(hooksDir)])
 
-    // A build that cannot read its bundle (a dev checkout) keeps the copy already installed...
     bundledHook.path = join(home, 'missing.exe')
     expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([exeCommand(hooksDir)])
 
-    // ...and returns to the .cmd hook only when no copy is left.
     rmSync(join(hooksDir, EXE))
     expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([cmdCommand])
@@ -262,7 +258,6 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
         await once(refreshing, 'close')
       }
 
-      // Once nothing runs the displaced copy, the next install deletes it.
       expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
       expect(existsSync(`${installed}.old`)).toBe(false)
     }

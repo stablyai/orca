@@ -21,7 +21,7 @@ function withCliTab(bound: boolean) {
   return { context, model: next, tabId: tabId!, leafId: leafId!, paneKey: paneKey! }
 }
 
-const adopt = (extra: { recordedPaneKey?: string } = {}) => ({
+const adopt = (extra: { recordedPaneKey?: string; incarnationId?: string } = {}) => ({
   type: 'createTerminalTab' as const,
   workspace: WS,
   tabId: 'window-tab',
@@ -38,11 +38,21 @@ describe('a live terminal no pane shows, through main', () => {
     expect(applied.ok && applied.effects.startPaneKeys).toEqual([])
   })
 
-  it('names the pane the host recorded for it while main has not bound it yet', () => {
-    const { context, model, tabId, paneKey } = withCliTab(false)
-    const applied = applyLayoutCommand(model, adopt({ recordedPaneKey: paneKey }), context)
+  it('binds the pane the host recorded for it while main has not bound it yet', () => {
+    const { context, model, tabId, leafId, paneKey } = withCliTab(false)
+    const applied = applyLayoutCommand(
+      model,
+      adopt({ recordedPaneKey: paneKey, incarnationId: 'inc-1' }),
+      context
+    )
     expect(applied).toMatchObject({ ok: true, result: { tabId, paneKey } })
     expect(applied.ok && applied.model.workspaces[WS]!.tabs).toHaveLength(1)
+    // Bound, so the pane reattaches to the running terminal instead of starting a second one.
+    expect(applied.ok && applied.model.workspaces[WS]!.leaves?.[leafId]).toEqual({
+      ptyId: PTY,
+      incarnationId: 'inc-1'
+    })
+    expect(applied.ok && applied.effects.startPaneKeys).toEqual([])
   })
 
   it('makes a new tab when the recorded pane now shows another terminal', () => {

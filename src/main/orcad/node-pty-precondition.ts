@@ -49,7 +49,7 @@ const PROBE_TIMEOUT_MS = 20_000
  * a reason that was never established. Same verdict discipline as the SSH execution
  * boundary: loss of contact is not proof of death.
  */
-export type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
+type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
 
 export type NodePtyPreconditionVerdict = {
   status: NodePtyPreconditionStatus
@@ -61,20 +61,14 @@ export type NodePtyPreconditionVerdict = {
   prebuilt?: PrebuiltSlotOutcome
 }
 
-export type NodePtyProbeFailure = {
+type NodePtyProbeFailure = {
   status: 'blocked' | 'unverifiable'
   reason: RuntimeTerminalUnavailableReason
   detail: string
 }
 
-/**
- * What the child actually reported, before any judgement is made about it.
- *
- * Split from the classification so callers that need the loader's own words — the relay,
- * which quotes them back when nothing recognizes the shape — do not have to re-derive
- * them from a formatted verdict.
- */
-export type NodePtyProbeOutcome =
+/** What the child actually reported, before any judgement is made about it. */
+type NodePtyProbeOutcome =
   | { kind: 'loaded'; loadedDir: string | null }
   | { kind: 'noBinary' }
   | { kind: 'loaderError'; message: string }
@@ -84,7 +78,7 @@ export type NodePtyProbeOutcome =
   /** It answered, but with nothing that names a cause. */
   | { kind: 'unexplained'; detail: string }
 
-export function readNodePtyProbeOutcome(
+function readNodePtyProbeOutcome(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
 ): NodePtyProbeOutcome {
   const stdout = result.stdout
@@ -166,7 +160,7 @@ function readReportedLoadError(stdout: string): string | null {
 }
 
 /** Read a dynamic-loader message. Pure, so shapes this host cannot reproduce are testable. */
-export function classifyLoaderMessage(message: string): NodePtyProbeFailure {
+function classifyLoaderMessage(message: string): NodePtyProbeFailure {
   return { status: 'blocked', ...classifyNodePtyLoaderMessage(message) }
 }
 
@@ -197,7 +191,7 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
     `const fs=require('fs'),p=require('path');`,
     `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
     `let f=null;`,
-    `for(const d of ['build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
+    `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,
     `const c=p.join(r,d,n+'.node');if(fs.existsSync(c)){f=c;break}}if(f)break}`,
     `if(!f){console.log(${JSON.stringify(NO_BINARY_TOKEN)});process.exit(3)}`,
@@ -222,14 +216,13 @@ function resolveNodePtyDir(): string | null {
   }
 }
 
-/** Local equivalent of the relay's remote toolchain probe, reusing its pure half. */
+/** Probes this machine's build toolchain for install hints. */
 export function probeLocalBuildToolchainHints(platform: NodeJS.Platform): string[] {
   if (platform === 'win32') {
     return []
   }
-  // Why macOS is not routed through the relay's hints: that function answers with a
-  // cross-distro apt/dnf/pacman/apk menu when it finds no package manager, and none of
-  // those lines is the macOS answer. Printing them here would be confidently wrong.
+  // Why macOS skips the generic hints: with no package manager found they list a
+  // cross-distro apt/dnf/pacman/apk menu, and none of those lines is the macOS answer.
   if (platform === 'darwin') {
     return ['  xcode-select --install']
   }

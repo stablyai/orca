@@ -2,11 +2,15 @@ import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
 import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
-import type { JiraFavouriteFilter } from '../../../shared/jira-favourite-filters'
-import type { JiraSavedFilter } from '../../../shared/jira-saved-filters'
-import type { TaskPageLinearViewStateModel } from './use-task-page-linear-view-state'
+import type { JiraFavouriteFilter } from '../../../shared/jira/jira-favourite-filters'
+import type { JiraSavedFilter } from '../../../shared/jira/jira-saved-filters'
+import type { TaskPageLinearViewStateModel } from './task-page/linear/use-task-page-linear-view-state'
 import { useState, useMemo, useEffect, useCallback, type SetStateAction } from 'react'
-import type { JiraIssue, JiraProjectStatusOrder, JiraPriority } from '../../../shared/jira-types'
+import type {
+  JiraIssue,
+  JiraProjectStatusOrder,
+  JiraPriority
+} from '../../../shared/jira/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
 import type { TaskPageJiraJqlRejection } from '@/components/task-page-jira-search'
 import type { JiraPresetId } from '@/components/task-page-localized-options'

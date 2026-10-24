@@ -10,7 +10,7 @@ export const PetManifestSchema = z
       .string()
       .min(1)
       .max(255)
-      // Why: belt-and-suspenders vs malicious manifests — downstream resolve+prefix check still runs as defense in depth.
+      // Reject unsafe manifest paths before the later resolved-path containment check.
       .refine(
         (p) => !p.includes('\0') && !p.startsWith('/') && !p.startsWith('\\') && !p.includes('..'),
         'invalid spritesheetPath'
@@ -30,13 +30,13 @@ export const PetManifestSchema = z
         z.object({
           row: z.number().int().min(0).max(256),
           frames: z.number().int().positive().max(512),
-          // Why: cap each hold at 60s so a bad manifest can't freeze the overlay.
+          // Bound frame holds so malformed manifests cannot freeze the overlay.
           frameDurationsMs: z.array(z.number().positive().max(60_000)).max(512).optional()
         })
       )
       .optional()
   })
-  // Why: .loose() ignores unknown manifest fields — generators emit metadata we don't consume; strict would reject imports.
+  // Accept generator metadata beyond the fields Orca consumes.
   .loose()
 
 export type PetManifest = z.infer<typeof PetManifestSchema> & PetManifestLike

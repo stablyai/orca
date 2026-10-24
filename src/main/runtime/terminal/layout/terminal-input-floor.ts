@@ -53,6 +53,11 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
     this.stopRequestedPtyIds.add(ptyId)
   }
 
+  /** A stop that failed or was refused: the PTY runs on, so nothing may read it as closing. */
+  clearPtyStopRequest(ptyId: string): void {
+    this.stopRequestedPtyIds.delete(ptyId)
+  }
+
   isPtyStopRequested(ptyId: string): boolean {
     return this.stopRequestedPtyIds.has(ptyId)
   }

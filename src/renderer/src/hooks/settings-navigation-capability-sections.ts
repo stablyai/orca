@@ -72,7 +72,7 @@ export function buildCapabilitySettingsSections({
       ),
       icon: Network,
       searchEntries: getOrchestrationPaneSearchEntries({
-        includeNestedWorkerDepth: !isWebClient
+        includeLocalRuntimeSettings: !isWebClient
       }),
       group: 'capabilities'
     },

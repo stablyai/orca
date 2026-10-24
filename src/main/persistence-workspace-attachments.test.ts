@@ -12,6 +12,7 @@ import {
 import { getWorkspaceAttachments } from '../shared/workspace-attachments'
 import type { WorkspaceAttachment } from '../shared/worktree/types'
 import { mergeWorktree } from './ipc/worktree-metadata-merge'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -35,8 +36,12 @@ describe('workspace attachment persistence', () => {
   it('round-trips collections and active selection through host-qualified metadata and git projections', async () => {
     writeDataFile({ repos: [makeRepo({ id: 'repo', path: '/work', connectionId: 'test' })] })
     const store = await createStore()
-    store.setWorktreeMetaForHost('repo::/work', 'ssh:test', { linkedPR: 7 })
-    store.setWorktreeMetaForHost('repo::/work', 'ssh:test', { linkedPR: 8 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo::/work', hostId: 'ssh:test' }), {
+      linkedPR: 7
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo::/work', hostId: 'ssh:test' }), {
+      linkedPR: 8
+    })
     store.flush()
     const restored = await createStore()
     const meta = restored.getWorktreeMetaForHost('repo::/work', 'ssh:test')
@@ -49,7 +54,9 @@ describe('workspace attachment persistence', () => {
     )
     expect(projected.linkedItems).toEqual([pr(7), pr(8)])
     expect(
-      restored.setWorktreeMetaForHost('repo::/work', 'ssh:test', { linkedItems: [pr(7)] }).linkedPR
+      restored.setWorktreeMeta(hostWorktreeTarget({ id: 'repo::/work', hostId: 'ssh:test' }), {
+        linkedItems: [pr(7)]
+      }).linkedPR
     ).toBe(7)
     restored.flush()
     expect(
@@ -67,7 +74,7 @@ describe('workspace attachment persistence', () => {
     const store = await createStore()
     expect(getWorkspaceAttachments(store.getWorktreeMeta('legacy'))).toEqual([pr(7)])
     expect(store.getWorktreeMeta('repaired')?.linkedItems).toEqual([pr(7), pr(8)])
-    store.setWorktreeMeta('legacy', { linkedPR: 8 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'legacy', hostId: 'local' }), { linkedPR: 8 })
     expect(store.getWorktreeMeta('legacy')?.linkedItems).toEqual([pr(7), pr(8)])
   })
 
@@ -97,11 +104,13 @@ describe('workspace attachment persistence', () => {
   })
   it('applies stale client add/remove deltas atomically for worktrees and folders', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('wt', { linkedItems: [pr(1)] })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), {
+      linkedItems: [pr(1)]
+    })
     const firstClient = { linkedItemsBase: [pr(1)], linkedItems: [pr(1), pr(2)] }
     const secondClient = { linkedItemsBase: [pr(1)], linkedItems: [pr(3)] }
-    store.setWorktreeMeta('wt', firstClient)
-    store.setWorktreeMeta('wt', secondClient)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), firstClient)
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), secondClient)
     expect(store.getWorktreeMeta('wt')?.linkedItems).toEqual([pr(2), pr(3)])
     expect(store.getWorktreeMeta('wt')).not.toHaveProperty('linkedItemsBase')
     const group = store.createProjectGroup({
@@ -123,8 +132,12 @@ describe('workspace attachment persistence', () => {
   it('keeps the current review target when a stale collection edit resolved another review', async () => {
     const store = await createStore()
     const currentTarget = { remoteName: 'origin', branchName: 'pr-2' }
-    store.setWorktreeMeta('wt', { linkedItems: [pr(2)], linkedPR: 2, pushTarget: currentTarget })
-    store.setWorktreeMeta('wt', {
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), {
+      linkedItems: [pr(2)],
+      linkedPR: 2,
+      pushTarget: currentTarget
+    })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), {
       linkedItemsBase: [],
       linkedItems: [pr(1)],
       linkedPR: 1,
@@ -136,7 +149,7 @@ describe('workspace attachment persistence', () => {
       linkedItems: [pr(2), pr(1)],
       pushTarget: currentTarget
     })
-    store.setWorktreeMeta('wt', {
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt', hostId: 'local' }), {
       linkedItemsBase: [pr(2), pr(1)],
       linkedItems: [pr(2), pr(1)],
       linkedPR: 1,

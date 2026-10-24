@@ -6,7 +6,7 @@ import {
   currentSshOwner,
   isSshConnectionSolelyOwnedBy,
   runAttributedToSshOwner
-} from '../ssh-connection-attribution'
+} from '../connection/ssh-connection-attribution'
 import {
   censusSshHostRelaysBeforeSession,
   hostTerminalProofFromCensus

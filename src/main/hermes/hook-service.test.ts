@@ -180,8 +180,7 @@ describe('HermesHookService', () => {
           '    platform="cli",',
           ')'
         ].join('\n')
-        // Why: the Python hook POSTs back into this process. A synchronous
-        // child process blocks the HTTP server from replying, deadlocking the test.
+        // The Python hook calls this HTTP server; synchronous execution would deadlock its response.
         execFile(
           'python3',
           ['-c', script],

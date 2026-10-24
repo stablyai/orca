@@ -64,3 +64,40 @@ export class LegacyRelayWaiters {
     }
   }
 }
+
+/** Stops awaiting the relay's exit proof (its report, or a complete listing without the pane). */
+export class LegacyRelayExitProofs {
+  private readonly waiting = new Map<string, Set<(exited: boolean) => void>>()
+
+  /** Each caller settles on its own: true on the exit, false at its deadline or on dispose. */
+  wait(ptyId: string, timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const waiters = this.waiting.get(ptyId) ?? new Set()
+      this.waiting.set(ptyId, waiters)
+      const settle = (exited: boolean): void => {
+        clearTimeout(timer)
+        waiters.delete(settle)
+        if (waiters.size === 0 && this.waiting.get(ptyId) === waiters) {
+          this.waiting.delete(ptyId)
+        }
+        resolve(exited)
+      }
+      const timer = setTimeout(() => settle(false), timeoutMs)
+      waiters.add(settle)
+    })
+  }
+
+  observe(ptyId: string): void {
+    for (const settle of Array.from(this.waiting.get(ptyId) ?? [])) {
+      settle(true)
+    }
+  }
+
+  dispose(): void {
+    for (const ptyId of Array.from(this.waiting.keys())) {
+      for (const settle of Array.from(this.waiting.get(ptyId) ?? [])) {
+        settle(false)
+      }
+    }
+  }
+}

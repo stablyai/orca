@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 
 describe('CodexSubagentExecutions retention and identity', () => {
-  it('bounds settled history through repeated execution without evicting live children', () => {
+  it('bounds settled turn history through repeated execution without evicting live children', () => {
     const executions = new CodexSubagentExecutions()
     executions.register('long-lived', 'long-lived')
     executions.observeTurn('long-lived', 'long-lived-turn', 'working')
@@ -13,12 +14,10 @@ describe('CodexSubagentExecutions retention and identity', () => {
       executions.observeTurn(id, id, 'completed')
     }
     expect(executions.workingChildren().map((child) => child.agentThreadId)).toEqual(['long-lived'])
-    const { children, settledTurns } = executions.retentionSizes()
-    expect(children).toBeLessThanOrEqual(128)
-    expect(settledTurns).toBeLessThanOrEqual(256)
+    expect(executions.retentionSizes().settledTurns).toBeLessThanOrEqual(256)
   })
 
-  it('keeps every running child past the settled-history bound', () => {
+  it('keeps every child, running or ended, however many run', () => {
     const executions = new CodexSubagentExecutions()
     for (let index = 0; index < 200; index++) {
       expect(executions.observeTurn(`child-${index}`, `turn-${index}`, 'working')).not.toBeNull()
@@ -26,36 +25,42 @@ describe('CodexSubagentExecutions retention and identity', () => {
     }
     expect(executions.workingChildren()).toHaveLength(200)
     executions.observeTurn('child-0', 'turn-0', 'completed')
-    executions.register('next', 'next')
-    expect(executions.find('child-0')).toBeUndefined()
+    expect(executions.find('child-0')).toBeDefined()
     expect(executions.workingChildren()).toHaveLength(199)
   })
 
-  it('evicts a child that ended before one announced but not yet started, which keeps its spawner', () => {
+  it('targets live descendants through settled ancestors without losing historical lineage order', () => {
     const executions = new CodexSubagentExecutions()
-    executions.register('announced', 'announced', 'spawner')
-    for (let index = 0; index < 127; index++) {
-      executions.observeTurn(`child-${index}`, `turn-${index}`, 'working')
+    executions.register('root', 'root', 'primary')
+    executions.observeTurn('root', 'root-turn', 'working')
+    const finished = Array.from({ length: 10_000 }, (_, index) => `finished-${index}`)
+    for (const id of finished) {
+      executions.register(id, id, 'root')
+      executions.observeTurn(id, `${id}-turn`, 'completed')
     }
-    executions.observeTurn('child-5', 'turn-5', 'completed')
-    executions.register('next', 'next')
-    expect(executions.find('child-5')).toBeUndefined()
-    expect(executions.find('announced')).toMatchObject({
-      registered: true,
-      spawnerThreadId: 'spawner'
-    })
-    executions.observeTurn('announced', 'turn-a', 'working')
-    expect(executions.workingChildren().map((child) => child.agentThreadId)).toContain('announced')
-  })
+    executions.register('settled-parent', 'settled parent', 'root')
+    executions.observeTurn('settled-parent', 'settled-turn', 'completed')
+    executions.register('live-descendant', 'live descendant', 'settled-parent')
+    executions.observeTurn('live-descendant', 'live-turn', 'working')
+    executions.register('sibling', 'sibling', 'root')
+    executions.observeTurn('sibling', 'sibling-turn', 'working')
 
-  it('past the bound, evicts the oldest never-started child once no child has ended', () => {
-    const executions = new CodexSubagentExecutions()
-    for (let index = 0; index < 200; index++) {
-      executions.register(`restored-${index}`, `restored-${index}`)
-    }
-    expect(executions.retentionSizes().children).toBe(128)
-    expect(executions.find('restored-0')).toBeUndefined()
-    expect(executions.find('restored-199')).toBeDefined()
+    expect(executions.lineage('root').map((child) => child.agentThreadId)).toEqual([
+      'root',
+      'sibling',
+      'settled-parent',
+      'live-descendant',
+      ...finished.toReversed()
+    ])
+    const tracker = new CodexBackgroundTaskTracker('primary', executions)
+    expect(tracker.subagentStopTargets(['root'])).toEqual({
+      turns: [
+        { threadId: 'root', turnId: 'root-turn' },
+        { threadId: 'sibling', turnId: 'sibling-turn' },
+        { threadId: 'live-descendant', turnId: 'live-turn' }
+      ],
+      terminals: []
+    })
   })
 
   it('collapses a label’s whitespace, and keeps the first label a child was given', () => {

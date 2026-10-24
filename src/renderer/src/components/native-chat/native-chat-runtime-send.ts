@@ -3,10 +3,8 @@
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
 
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import {
-  sendRuntimePtyInput,
-  sendRuntimePtyInputVerified
-} from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
   clearConfirmDurationMs,
@@ -19,7 +17,10 @@ import {
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS
 } from '../../../../shared/native-chat-answer-stepping'
-import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
+import {
+  buildNativeChatPasteBytes,
+  NATIVE_CHAT_SUBMIT
+} from '../../../../shared/native-chat-paste-bytes'
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand

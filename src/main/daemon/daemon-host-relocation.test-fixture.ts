@@ -1,8 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Build a win-unpacked fixture: exe + blobs + DLLs at root, daemon bundle and
-// node-pty under resources, mirroring the packaged layout the copy expects.
 export function buildInstallFixture(root: string): void {
   mkdirSync(root, { recursive: true })
   writeFileSync(join(root, 'Orca.exe'), 'exe-bytes')
@@ -43,8 +41,7 @@ export function buildInstallFixture(root: string): void {
   writeFileSync(join(nativeDir, 'conpty.pdb'), 'debug-symbols')
   mkdirSync(join(nativeDir, 'conpty'), { recursive: true })
   writeFileSync(join(nativeDir, 'conpty', 'conpty.dll'), 'conpty-dll')
-  // Both win32 prebuilds exist in the packaged tree (build-time prune keeps the
-  // `win32-` prefix); the copy filter keeps the host arch's and drops the other.
+  // Seed both packaged Windows architectures so the copy filter must select the host prebuild.
   const prebuildsRoot = join(root, 'resources', 'node_modules', 'node-pty', 'prebuilds')
   for (const arch of ['win32-x64', 'win32-arm64']) {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })

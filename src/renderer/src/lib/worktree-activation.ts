@@ -7,7 +7,7 @@ import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-regist
 import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
@@ -39,6 +39,7 @@ import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
 import { markVisited, readPreviousActive } from './worktree-activation-visit'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -76,7 +77,7 @@ export function activateAndRevealFolderWorkspace(
     folderWorkspaceId,
     opts?.executionHostId
   )
-  const folderWorkspace = state.folderWorkspaces.find(
+  const folderWorkspace = selectFolderWorkspaces(state).find(
     (workspace) => workspace === folderWorkspaceOwner
   )
   if (!folderWorkspace) {
@@ -210,7 +211,10 @@ export function activateAndRevealWorktree(
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
   state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
-  const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
+  const ownerRuntimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
+    postActivationState,
+    wt.id
+  )
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({

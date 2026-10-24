@@ -13,6 +13,7 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -105,8 +106,6 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
-    // Why listed above the preview: the preview is where a reader would otherwise have to
-    // spot the prompt by eye, which is the work this line exists to remove.
     `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
@@ -142,8 +141,6 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
     ...(limitedWarning ? [limitedWarning] : []),
-    // Why: the caller asked for the rendered screen; say plainly that this is not it rather
-    // than let repaint fragments be read as what the terminal displayed.
     ...(terminal.source === 'screen-unavailable'
       ? [
           'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
@@ -207,8 +204,7 @@ function promptObservationWarning(
   if (prompt.observation === 'incarnation_replaced') {
     return 'delivery was not observed because the terminal process was replaced. Inspect the current terminal before sending a new prompt; do not retry with this request ID.'
   }
-  // Ordered before the unsupported arm: an agent provider that never reached turn_started
-  // needs the swallowed-Enter recovery even if this host could not observe the submit.
+  // Providers need swallowed-Enter recovery without turn_started, even if submit observation failed.
   if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
     return prompt.stages.includes('turn_started')
       ? null
@@ -226,6 +222,14 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
   return result.rename.title
     ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
     : `Cleared title for terminal ${result.rename.handle}.`
+}
+
+export function formatTerminalSetPaneTitle(result: {
+  paneTitle: RuntimeTerminalSetPaneTitle
+}): string {
+  return result.paneTitle.title
+    ? `Set title of pane ${result.paneTitle.leafId} to "${result.paneTitle.title}".`
+    : `Cleared title of pane ${result.paneTitle.leafId}.`
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {

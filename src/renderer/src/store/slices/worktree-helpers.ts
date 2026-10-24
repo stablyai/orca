@@ -1,5 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import type { WorkspaceReferenceTerminalContext } from '@/lib/workspace-attachment-terminal-origin'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
 import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
@@ -162,7 +162,7 @@ export type WorktreeSlice = {
   lastVisitedAtByWorktreeId: Record<string, number>
   /**
    * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
-   * `true` only after the first launch where every repo's `worktrees.list` IPC
+   * `true` only after the first launch where every repo's `worktrees.listDetected` IPC
    * call succeeded AND at least one repo returned a non-empty result — at that
    * moment the renderer has enough signal to treat the union of fetched ids as
    * authoritative and purge stale `tabsByWorktree` keys left behind by pre-fix
@@ -280,11 +280,15 @@ export type WorktreeSlice = {
    * the shortcut action visible even though pinned worktrees also remain in
    * their normal sidebar groups.
    */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
+  /** Each target names its copy; a host-less id two hosts publish is skipped, not guessed. */
+  setWorktreesPinnedAndReveal: (
+    targets: readonly Pick<Worktree, 'id' | 'hostId'>[],
+    isPinned: boolean
+  ) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
-    context?: WorkspaceReferenceTerminalContext
+    context?: WorkspaceReferenceObservationContext
   ) => void
   bumpWorktreeActivity: (worktreeId: string) => void
   /**

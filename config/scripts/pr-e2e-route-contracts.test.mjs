@@ -16,6 +16,7 @@ import { testImportClosure } from './e2e-test-import-closure.mjs'
 import { isLayoutOracleSource, LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
 import {
   hasNativeImeSourceChange,
+  MANUAL_ONLY_E2E_SPECS,
   PR_E2E_SOURCE_ROUTES,
   selectPrE2eSpecs,
   shouldRunReusablePrE2e
@@ -274,7 +275,7 @@ describe('ssh-browser-e2e-routing', () => {
     const run = job.steps.find(
       (step) => step.name === 'Run Docker SSH browser network route journeys'
     )
-    expect(job['runs-on']).toBe('ubuntu-latest')
+    expect(job['runs-on']).toBe('blacksmith-4vcpu-ubuntu-2404')
     expect(job.if).toContain("inputs.test_files == ''")
     expect(job.if).toContain(spec)
     expect(install.with['native-runtime']).toBe('node')
@@ -376,8 +377,7 @@ describe('orcad-e2e-routing', () => {
         'tests/e2e/helpers/orcad-convert-flow.ts',
         'tests/e2e/helpers/orcad-convert-host.ts'
       ],
-      ORCAD_IDLE_EXIT_E2E_SPEC,
-      ORCAD_OPEN_IN_OWNER_E2E_SPEC
+      ORCAD_IDLE_EXIT_E2E_SPEC
     )
   })
 
@@ -396,14 +396,16 @@ describe('orcad-e2e-routing', () => {
     expect(jobs['orcad-ssh-docker'].needs).toEqual(['build'])
   })
 
-  it('runs every managed-SSH spec in one sharded lane, only when one is routed', () => {
+  it('passes the requested managed-SSH specs to the sharded lane', () => {
     const lane = jobs['orcad-ssh-docker']
     expect(lane.if).toBe(
       `inputs.test_files == '' || contains(inputs.test_files, '${MANAGED_SSH_E2E_SPEC_PREFIX}')`
     )
-    expect(lane.strategy.matrix.shard).toEqual(['1/2', '2/2'])
+    expect(lane.strategy.matrix.shard).toBe(
+      `\${{ fromJSON(inputs.managed_ssh_shards || '["1/2","2/2"]') }}`
+    )
     const run = lane.steps.find((step) => step.env?.ORCA_E2E_SSH_DOCKER === '1').run
-    expect(run).toContain(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `)
+    expect(run).toContain('"${TEST_FILES[@]}"')
     expect(run).toContain('--shard="$SHARD"')
     for (const spec of [
       ORCAD_AUTO_CONVERT_E2E_SPEC,
@@ -468,7 +470,7 @@ describe('orcad-e2e-routing', () => {
           'src/main/ipc/ssh/ssh-connection-handlers.ts',
           'src/main/ipc/runtime-environments/runtime-environment-connectivity-handlers.ts',
           'src/main/ipc/runtime-environments/runtime-environment-manual-disconnect.ts',
-          'src/main/ssh/ssh-connection-manager.ts',
+          'src/main/ssh/connection/ssh-connection-manager.ts',
           'src/main/ssh/ssh-user-disconnect.ts',
           'src/renderer/src/runtime/web-session-close-intent.ts',
           'src/renderer/src/runtime/web-session-close-replay.ts'
@@ -494,7 +496,9 @@ describe('managed-SSH remote sources routing', () => {
       .filter((name) => /^ssh-orcad-.*\.spec\.ts$/.test(name))
       .map((name) => `tests/e2e/${name}`)
     expect(specs.length).toBeGreaterThan(0)
-    expect(specs.filter((spec) => !routed.has(spec))).toEqual([])
+    expect(
+      specs.filter((spec) => !routed.has(spec) && !MANUAL_ONLY_E2E_SPECS.includes(spec))
+    ).toEqual([])
   })
 
   it('starts the lane for remote product sources no hand-kept route names', () => {
@@ -503,15 +507,19 @@ describe('managed-SSH remote sources routing', () => {
       'src/main/ipc/ssh/ssh.ts',
       'src/cli/runtime/serve-orcad-launch.ts',
       'src/main/orcad/orcad-entry.ts',
-      'src/main/ssh/ssh-connection.ts',
+      'src/main/ssh/connection/ssh-connection.ts',
       'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
       'src/main/ipc/runtime-environments/orcad-runtime-lifecycle-handlers.ts',
       'src/shared/protocol-version.ts',
-      'src/shared/remote-runtime-client-error-classification.ts',
+      'src/shared/remote-runtime/remote-runtime-client-error-classification.ts',
       // #30047 and #30060: sidebar sleep and project removal.
       'src/renderer/src/components/sidebar/sleep-worktree-flow.ts',
       'src/renderer/src/components/sidebar/ssh-host-remove-resolution.ts',
-      'src/renderer/src/store/repos/repo-removal.ts'
+      'src/renderer/src/store/repos/repo-removal.ts',
+      // #30775: the pane banner for a managed server that refused this desktop.
+      'src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.tsx',
+      'src/renderer/src/components/terminal-pane/use-managed-pairing-refused.ts',
+      'src/renderer/src/components/terminal-pane/TerminalPaneRuntimePortals.tsx'
     ]) {
       expect(existsSync(join(projectDir, file)), file).toBe(true)
       expect(selectsManagedSshLane(file), file).toBe(true)
@@ -520,7 +528,7 @@ describe('managed-SSH remote sources routing', () => {
 
   it('leaves unit tests and local-only sources alone', () => {
     for (const file of [
-      'src/main/ssh/ssh-connection.test.ts',
+      'src/main/ssh/connection/ssh-connection.test.ts',
       'src/main/ipc/ssh/ssh.test.ts',
       'src/main/daemon/daemon-server.ts',
       'src/main/runtime/rpc/methods/accounts.ts',

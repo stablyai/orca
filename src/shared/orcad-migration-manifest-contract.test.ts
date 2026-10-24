@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest
-} from './orcad-migration-manifest-validation'
+} from './orcad-migration/orcad-migration-manifest-validation'
 
 const digest = 'a'.repeat(64)
 
@@ -112,6 +112,16 @@ describe('orcad migration manifest contract', () => {
         manifest({ dormantState: dormantLineage(key, 'folder:folder-1') })
       )
     ).toThrow('orcad_migration_dormant_workspace_lineage_scope_invalid')
+  })
+
+  // The field a build that shed drafts into a blob would send; no released desktop ever did.
+  it('accepts and drops the retired editorDraftsBlob declaration', () => {
+    const dormantState = {
+      ...dormantLineage('folder:folder-1', 'worktree:repo-1::/srv/repo-1'),
+      editorDraftsBlob: { sha256: digest, byteLength: 4, entries: [] }
+    }
+    const parsed = parseOrcadMigrationManifest(manifest({ dormantState }))
+    expect(parsed.payload.dormantState).not.toHaveProperty('editorDraftsBlob')
   })
 
   it('rejects a malformed workspace key rather than treating it as a worktree id', () => {

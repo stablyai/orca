@@ -36,7 +36,7 @@ export class RuntimeGitSyncCommands {
         )
       : undefined
     if (materialized?.remoteCreated) {
-      this.host.persistMaterializedPushTarget?.(target.worktree.id, materialized)
+      this.host.persistMaterializedPushTarget?.(target.worktree, materialized)
     }
     return { provider, pushTarget: materialized }
   }

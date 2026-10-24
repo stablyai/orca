@@ -9,36 +9,40 @@ import type {
   LegacyRelayBridgedPane
 } from '../../../shared/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import type { SshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { waitForSentinel } from './ssh-relay-sentinel'
-import { probeRelayEndpointIncumbent } from './ssh-relay-endpoint-incumbent'
-import { isWindowsRemoteHost } from '../ssh-remote-platform'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { LegacyRelayClient } from './legacy-relay-client'
 import { createLegacyRelayCliServer } from './legacy-relay-cli-server'
-import { listLegacyRelayEndpoints, type LegacyRelayEndpoint } from './legacy-relay-endpoints'
+import { listLegacyRelayEndpoints, posixEndpointExited } from './legacy-relay-endpoints'
 import { LegacyRelayTargetBridge } from './legacy-relay-target-bridge'
 import { LegacyRelayHiddenOutput } from './legacy-relay-hidden-output'
-import { LegacyRelayPaneStops } from './legacy-relay-pane-stops'
+import { LegacyRelayPaneStops, type LegacyRelayStopProof } from './legacy-relay-pane-stops'
 import { reportDailyRelayActivity, watchDailyRelayActivity } from './legacy-relay-daily-activity'
 import {
   bridgeableLeasesByRelayId,
   isBridgeableLease,
-  leasedAppPtyIds
+  listedAppPtyIds,
+  listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
+import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
+import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
 const START_BUDGET_MS = 20_000
 /** How long an attach waits for a target whose connection is still coming up. */
 const CONNECTION_WAIT_MS = 20_000
 
-type TerminalsBucket = EventProps<'ssh_host_server_legacy_relay_bridge'>['terminals']
 type ReportPhase = EventProps<'ssh_host_server_legacy_relay_bridge'>['phase']
 
 export type LegacyRelayBridgeHost = {
   leases: (targetId: string) => SshRemotePtyLease[]
-  retireLease: (targetId: string, relayPtyId: string) => void
+  /** Ends the lease and any stop recorded on it: on the relay's proof, or on a stop it can't be sent. */
+  retireLease: (targetId: string, relayPtyId: string, evidence: PtyRetirementEvidence) => void
+  /** Persists a closed tab's stop on its lease, so a restart still sends it. */
+  recordStop: (targetId: string, relayPtyId: string, pendingKill: SshPendingPtyKill) => void
   connection: (targetId: string) => SshConnection | null
   onPanesChanged: (panes: LegacyRelayBridgedPane[]) => void
   onData: (ptyId: string, data: string) => void
@@ -62,6 +66,8 @@ const bridges = new Map<string, LegacyRelayTargetBridge>()
  */
 const heldPanes = new Map<string, LegacyRelayBridgedPane[]>()
 const paneStops = new Map<string, LegacyRelayPaneStops>()
+/** Each target's relay-id owners, which outlive a bridge: a reconnect must not forget them. */
+const paneOwners = new Map<string, LegacyRelayPaneOwners>()
 
 export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): void {
   for (const bridge of bridges.values()) {
@@ -69,6 +75,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
   }
   bridges.clear()
   heldPanes.clear()
+  paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
   paneStops.clear()
   watchDailyRelayActivity(next, () =>
@@ -84,21 +91,9 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
     : null
 }
 
-export function terminalsBucket(count: number): TerminalsBucket {
-  if (count <= 0) {
-    return 'none'
-  }
-  if (count === 1) {
-    return '1'
-  }
-  if (count < 5) {
-    return '2_4'
-  }
-  return count < 10 ? '5_9' : '10_plus'
-}
-
-function hasBridgeableLeases(targetId: string): boolean {
-  return host?.leases(targetId).some(isBridgeableLease) ?? false
+/** Panes it serves, or closed tabs' stops it still owes. */
+function hasListedLeases(targetId: string): boolean {
+  return listedLeasesByRelayId(host?.leases(targetId) ?? []).size > 0
 }
 
 function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
@@ -127,7 +122,8 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
   const bridge: LegacyRelayTargetBridge = new LegacyRelayTargetBridge({
     targetId,
     leases: () => installed.leases(targetId),
-    retireLease: (relayPtyId) => installed.retireLease(targetId, relayPtyId),
+    retireLease: (relayPtyId, proof) =>
+      installed.retireLease(targetId, relayPtyId, PtyExitProof.from(proof, undefined)),
     listEndpoints: async (signal) => {
       const conn = installed.connection(targetId)
       return conn ? listLegacyRelayEndpoints(conn, targetId, signal) : { kind: 'unverifiable' }
@@ -157,12 +153,20 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
     onData: (ptyId, data) => hiddenOutput?.onData(ptyId, data),
     onExit: (ptyId, code) => {
       hiddenOutput?.forget(ptyId)
+      stopsFor(targetId).exited(ptyId)
       installed.onExit(ptyId, code)
     },
-    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0)
+    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0),
+    owners: ownersFor(targetId)
   })
   bridges.set(targetId, bridge)
   return bridge
+}
+
+function ownersFor(targetId: string): LegacyRelayPaneOwners {
+  const owners = paneOwners.get(targetId) ?? new LegacyRelayPaneOwners()
+  paneOwners.set(targetId, owners)
+  return owners
 }
 
 function stopsFor(targetId: string): LegacyRelayPaneStops {
@@ -170,26 +174,9 @@ function stopsFor(targetId: string): LegacyRelayPaneStops {
   if (existing) {
     return existing
   }
-  const created = new LegacyRelayPaneStops(targetId, () => host?.leases(targetId) ?? [])
+  const created = new LegacyRelayPaneStops(targetId, () => host)
   paneStops.set(targetId, created)
   return created
-}
-
-/** A dead socket is the one failed open that proves its relay gone; Windows pipes never are. */
-async function posixEndpointExited(
-  conn: SshConnection,
-  endpoint: LegacyRelayEndpoint
-): Promise<boolean> {
-  if (isWindowsRemoteHost(endpoint.host) || !endpoint.nodePath) {
-    return false
-  }
-  const incumbent = await probeRelayEndpointIncumbent(
-    conn,
-    endpoint.host,
-    endpoint.nodePath,
-    endpoint.endpoint
-  )
-  return incumbent.verdict === 'exited'
 }
 
 /**
@@ -197,7 +184,7 @@ async function posixEndpointExited(
  * so the panes they still run are known before the renderer remounts them on the new server.
  */
 export async function startLegacyRelayBridge(targetId: string): Promise<void> {
-  if (!hasBridgeableLeases(targetId)) {
+  if (!hasListedLeases(targetId)) {
     // Leases retired while hung up publish nothing themselves; this connect is the next answer.
     releaseHeldPanes(targetId)
     return
@@ -241,6 +228,7 @@ export function forgetLegacyRelayTarget(targetId: string): void {
   releaseHeldPanes(targetId)
   paneStops.get(targetId)?.dispose()
   paneStops.delete(targetId)
+  paneOwners.delete(targetId)
 }
 
 function releaseHeldPanes(targetId: string): void {
@@ -266,7 +254,9 @@ export async function attachLegacyRelayPane(
   replayInStream = false
 ): Promise<LegacyRelayBridgeAttachResult> {
   const targetId = parseAppSshPtyId(ptyId)?.connectionId
-  if (!targetId || !host || !hasBridgeableLeases(targetId)) {
+  const serves = targetId ? host?.leases(targetId).some(isBridgeableLease) : false
+  // A closed tab's pane whose stop is owed is never served again.
+  if (!targetId || !serves || stopsFor(targetId).owes(ptyId)) {
     return { status: 'not-bridged' }
   }
   const bridge = bridgeFor(targetId)
@@ -329,20 +319,31 @@ export function setLegacyRelayPaneOutputPaused(ptyId: string, paused: boolean): 
   hiddenOutput?.setPaused(ptyId, paused)
 }
 
-/** Whether this PTY is an older relay's terminal the bridge serves, so only the bridge stops it. */
+/** Whether this PTY is an older relay's terminal the bridge serves or owes a stop, so only the
+ *  bridge stops it. */
 export function isLegacyRelayBridgedPty(ptyId: string): boolean {
   const targetId = parseAppSshPtyId(ptyId)?.connectionId
-  return Boolean(targetId && host && leasedAppPtyIds(targetId, host.leases(targetId)).has(ptyId))
+  return Boolean(targetId && host && listedAppPtyIds(targetId, host.leases(targetId)).has(ptyId))
 }
 
 /** Its tab closed: the relay stops the shell, or is asked once it can be reached. */
 export async function closeLegacyRelayPane(ptyId: string): Promise<LegacyRelayBridgeCloseResult> {
   const targetId = parseAppSshPtyId(ptyId)?.connectionId
-  if (!targetId || !host || !hasBridgeableLeases(targetId)) {
+  if (!targetId || !host || !hasListedLeases(targetId)) {
     return { status: 'not-bridged' }
   }
   // Disconnected: recorded now, and the target's next connect lists the relay and sends the stop.
   return stopsFor(targetId).stop(ptyId, host.connection(targetId) ? bridgeFor(targetId) : null)
+}
+
+/** A close that settles only on the relay's exit proof, by the deadline. */
+export async function stopLegacyRelayPaneAndWait(
+  ptyId: string,
+  deadlineMs: number
+): Promise<LegacyRelayStopProof | null> {
+  const targetId = parseAppSshPtyId(ptyId)?.connectionId
+  const bridge = targetId && host?.connection(targetId) ? bridgeFor(targetId) : null
+  return targetId && host ? stopsFor(targetId).stopAndWait(ptyId, bridge, deadlineMs) : null
 }
 
 export function detachLegacyRelayPane(ptyId: string, acquisitionId: number): void {

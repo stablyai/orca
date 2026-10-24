@@ -1,5 +1,6 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
+import type { NodeDistMirrorAttempt } from './node-dist-mirror'
 
 // ─── SSH Connection Types ───────────────────────────────────────────
 
@@ -13,7 +14,6 @@ export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
  */
 export const SSH_REMOTE_RUNTIMES = ['legacy', 'pinned-node'] as const
 export type SshRemoteRuntime = (typeof SSH_REMOTE_RUNTIMES)[number]
-export const DEFAULT_SSH_REMOTE_RUNTIME: SshRemoteRuntime = 'pinned-node'
 
 /** Where the design D6 fallback ladder landed; `legacy` is the opt-in host-npm path outside it. */
 export const SSH_REMOTE_RUNTIME_RUNGS = ['A', 'B', 'C', 'D', 'legacy'] as const
@@ -34,12 +34,15 @@ export type SshRemoteRuntimeResolution = {
   orcaMajor: number
 }
 
+/** Who created a hidden target as an implementation detail, and so owns its lifecycle. */
+export type SshTargetOwner = { type: 'on-demand-runtime'; runtimeId: string }
+
 export type SshTarget = {
   id: string
   label: string
   /** Internal owner for targets that Orca creates as implementation details.
    *  Owned targets are hidden from normal SSH-host management surfaces. */
-  owner?: { type: 'on-demand-runtime'; runtimeId: string }
+  owner?: SshTargetOwner
   /** Host alias to resolve through OpenSSH config (ssh -G). */
   configHost?: string
   host: string
@@ -86,7 +89,10 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
-  /** Relay runtime for this host; undefined means DEFAULT_SSH_REMOTE_RUNTIME. */
+  /** Windows only: hold one loopback tunnel through a ProxyCommand/ProxyJump and run later
+   *  commands over it. Opt-in; undefined means off. */
+  systemSshProxyConnectionReuse?: boolean
+  /** Relay runtime for this host; undefined means pinned-node. */
   remoteRuntime?: SshRemoteRuntime
   /** Main-owned ladder cache; renderer updates never set it. */
   remoteRuntimeResolution?: SshRemoteRuntimeResolution
@@ -102,7 +108,7 @@ export type SshTarget = {
    */
   /** Main-owned: managed orcad can't run on this host; retried once this app version changes. */
   managedServerUnavailable?: { reason: string; appVersion: string }
-  /** Main-owned: the one-time "move now" offer was shown under this app version. */
+  /** Retired with the move offer (hosts convert on connect); kept so a downgraded build doesn't re-offer. */
   managedServerMoveOffered?: { appVersion: string }
   /**
    * Main-owned: the user confirmed "Move anyway", so saved state the move can't carry stays in this
@@ -113,7 +119,7 @@ export type SshTarget = {
   managedServerUpdateFailure?: { reason: string; appVersion: string }
   orcadFence?: {
     environmentId: string
-    /** An older build changed the retained source rows: the host stays on the relay until moved again. */
+    /** The retained source holds projects no move took: the host is unserved until moved again. */
     sourceChangedAt?: string
   }
 }
@@ -349,9 +355,16 @@ export type SshManagedServerStatus =
       canLeaveBehind?: true
       /** A move to the managed server stopped short and keeps the host locked until it resumes. */
       held?: true
+      /** Setup lost contact with the host, so nothing proves it failed there. */
+      contactLost?: true
+      /** Neither this computer nor the host could download the pinned Node runtime. */
+      nodeDownloadBlocked?: SshManagedServerNodeDownloadBlocked
       /** COMPAT(legacy-relay-bridge): the connect stayed up so the bridge serves those terminals. */
       bridged?: true
     }
+
+/** `mirror`: whether that download went through a mirror; admission drops an unknown value. */
+export type SshManagedServerNodeDownloadBlocked = { mirror: NodeDistMirrorAttempt }
 
 /** Plain SSH terminals and SFTP browsing only; `reason` is the ladder's classified cause. */
 export type SshPlainSshMode = {
@@ -465,14 +478,4 @@ export type DetectedPort = {
 export type EnrichedDetectedPort = DetectedPort & {
   advertisedUrl?: string
   advertisedProtocol?: 'http' | 'https'
-}
-
-/** Outcome of `ssh:terminateSessions`. Uses the fixed verdict vocabulary from
- *  docs/reference/ssh-execution-boundary.md: a host we could not reach yields `unverifiable`,
- *  never `exited`, so an offline sweep can never be read as a successful remote kill (issue #12661). */
-export type SshTerminateSessionsResult = {
-  /** Remote PTYs the host acknowledged stopping. */
-  terminated: number
-  /** Leases whose remote shells were never reached because the relay was offline. */
-  unverifiable: number
 }

@@ -30,6 +30,7 @@ import {
 import { useIpynbCellExecution } from './useIpynbCellExecution'
 import { resolveNotebookExecutionHost } from './ipynb-execution-host'
 import { useIpynbScrollRestoration } from './useIpynbScrollRestoration'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type IpynbViewerProps = {
   content: string
@@ -53,7 +54,9 @@ export default function IpynbViewer({
   onSave
 }: IpynbViewerProps): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
-  const rootPath = useAppStore((s) => findWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null)
+  const rootPath = useAppStore(
+    (s) => findWorktreeById(selectWorktreesByRepo(s), worktreeId)?.path ?? null
+  )
   const executionHost = useAppStore((s) => resolveNotebookExecutionHost(s, worktreeId))
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
   const parsed = useMemo(() => {
@@ -70,6 +73,7 @@ export default function IpynbViewer({
   const {
     rootRef,
     setRootRef,
+    flushOnFocusLeave,
     sourceDrafts,
     flushSourceDrafts,
     applyContent,
@@ -166,6 +170,7 @@ export default function IpynbViewer({
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
       style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
+      onBlur={flushOnFocusLeave}
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
@@ -255,7 +260,7 @@ export default function IpynbViewer({
           }
         }}
       >
-        <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+        <DialogContent surface="security" className="max-w-md sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-sm">
               {translate('auto.components.editor.IpynbViewer.9e06ae5d36', 'Run Notebook Code?')}

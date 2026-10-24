@@ -306,9 +306,9 @@ export function TabBarQuickCommandsMenu({
               menuImeEnter.setComposing(true)
             }
           }}
-          onCompositionEnd={() => {
+          onCompositionEnd={(event) => {
             if (!showSearch) {
-              menuImeEnter.setComposing(false)
+              menuImeEnter.setComposing(false, event.data)
             }
           }}
           onKeyDown={(event) => {

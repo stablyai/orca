@@ -68,6 +68,10 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 
 function message(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'source', role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -126,6 +130,51 @@ describe('mobile tool result availability', () => {
     }
     return renderer!
   }
+
+  // The page's window unmounts a row scrolled past; older messages joining its fold change its id.
+  it('keeps what the reader opened in a windowed-out row by its row key', () => {
+    const row = message([
+      { type: 'tool-call', callId: 'one', name: 'Bash', input: 'first input' },
+      { type: 'tool-result', callId: 'one', output: 'first output' },
+      { type: 'tool-call', callId: 'two', name: 'Bash', input: 'second input' },
+      { type: 'tool-result', callId: 'two', output: 'second output' }
+    ])
+    function Window({ shown, id }: { shown: boolean; id: string }) {
+      const disclosures = useMobileNativeChatDisclosures('chat')
+      return createElement(
+        MobileNativeChatDisclosureContext.Provider,
+        { value: disclosures },
+        shown
+          ? createElement(MobileNativeChatMessage, {
+              message: { ...row, id },
+              rowKey: 'kept'
+            })
+          : null
+      )
+    }
+    const draw = (shown: boolean, id = 'source') =>
+      act(() => {
+        const element = createElement(Window, { shown, id })
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    const header = () =>
+      renderer!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+      )
+    draw(true)
+    press(header())
+    press(button(renderer!.root, 'first input'))
+    draw(false)
+    draw(true, 'older-head')
+    expect(toolLines(renderer!.root)).toHaveLength(2)
+    expect(textIn(renderer!.root)).toContain('first output')
+    expect(textIn(renderer!.root)).not.toContain('second output')
+  })
 
   it('draws each orphan output as its own Result row under one Result header', () => {
     const raw = message(
@@ -268,8 +317,7 @@ describe('mobile tool result availability', () => {
               key: row.id,
               message: row,
               ...disclosure.resolveRow(index, row),
-              structuredActivityUi: true,
-              toolsExpanded: true
+              structuredActivityUi: true
             })
           )
         )
@@ -278,6 +326,18 @@ describe('mobile tool result availability', () => {
         renderer = create(createElement(Phone, { journal: items }))
       })
       const tree = renderer!
+      // Open every run, then every line in it, as a reader would.
+      const headers = () =>
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+        )
+      for (let index = 0; index < headers().length; index += 1) {
+        press(headers()[index]!)
+      }
+      for (let index = 0; index < toolLines(tree.root).length; index += 1) {
+        press(toolLines(tree.root)[index]!)
+      }
       const orphan = drawn.find((row) => row.role === 'tool')!
       expect(orphan.id).not.toBe('source')
       expect(orphan.journalPosition).toEqual({ sequence: 5, index: 0 })

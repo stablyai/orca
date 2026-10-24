@@ -5,8 +5,14 @@ import type { ForegroundProcessEvidence } from '../../shared/foreground-process-
 export type PtyProcessInfo = {
   id: string
   incarnationId?: PtyIncarnationId
+  /** Local diagnostic provenance supplied by a multi-daemon router. */
+  inventorySourceId?: string
+  /** Whether this diagnostic candidate is the established route for its id. */
+  routed?: boolean
   /** Root process owned by this exact PTY incarnation, when the provider can prove it. */
   rootProcessId?: number
+  /** Recently observed process name; inventory reads never initiate process inspection. */
+  foregroundProcess?: string
   cwd: string
   title: string
   /** Owning worktree when the provider can report it authoritatively. */

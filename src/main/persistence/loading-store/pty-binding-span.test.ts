@@ -104,4 +104,34 @@ describe('persistence.pty-binding span', () => {
     finishFastLane()
     expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW + 2)
   })
+
+  it('shares the match budget while retaining dirty-match failures and refusals', () => {
+    const finishDirtyMatch = (outcome: 'flushed' | 'threw' | 'refused') => {
+      const span = startPtyBindingSpan({
+        hostKind: 'ssh',
+        origin: 'reattach',
+        savePending: true,
+        generationGap: 1
+      })
+      span.setEligibility({ eligible: false, misses: ['not_durable'] })
+      span.setPath('durability_only')
+      span.finish(outcome, outcome === 'threw' ? new Error('disk refused') : undefined)
+    }
+    for (let i = 0; i < PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW; i++) {
+      finishDirtyMatch('flushed')
+    }
+    finishFastLane()
+    finishDirtyMatch('flushed')
+    expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW)
+
+    finishDirtyMatch('threw')
+    finishDirtyMatch('refused')
+    expect(records.slice(-2)).toMatchObject([
+      { attributes: { 'binding.path': 'durability_only', 'binding.outcome': 'threw' } },
+      { attributes: { 'binding.path': 'durability_only', 'binding.outcome': 'refused' } }
+    ])
+    vi.advanceTimersByTime(60_000)
+    finishDirtyMatch('flushed')
+    expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW + 3)
+  })
 })

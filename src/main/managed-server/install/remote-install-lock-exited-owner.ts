@@ -1,8 +1,4 @@
-/**
- * The steal's exited-holder condition, as each host's command reads it: `*Check` before the steal
- * claim, `*ClaimCheck` inside it, and `*Release` where the claim is cleaned up.
- */
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import {
@@ -10,12 +6,7 @@ import {
   posixStateMutationPidRecord
 } from '../host-state/orcad-state-mutation-owner-record'
 
-/**
- * A lock whose owner file still names `token` once it has been quiet past `quietSeconds`: the
- * caller proved that holder exited, and the steal checks both inside its arbitration (BUG-23).
- * With `mutationLock`, the steal also holds that state-mutation lock across the takeover, so no
- * mutation can be admitted under the fence it replaces.
- */
+/** Verify exited-holder token and quiet time during takeover; optionally fence state mutations. */
 export type InstallLockExitedOwner = InstallLockOwnerFile & {
   quietSeconds: number
   mutationLock?: string
@@ -30,9 +21,9 @@ export function posixCheck(
   if (!exitedOwner) {
     return `${variableName}=0;`
   }
-  const ownerPath = shellEscape(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
+  const ownerPath = quotePosixShell(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
   return (
-    `${variableName}=0; if [ "$(cat ${ownerPath} 2>/dev/null)" = ${shellEscape(exitedOwner.token)} ] && ` +
+    `${variableName}=0; if [ "$(cat ${ownerPath} 2>/dev/null)" = ${quotePosixShell(exitedOwner.token)} ] && ` +
     `[ "\${${ageVariable}:-0}" -gt ${exitedOwner.quietSeconds} ] 2>/dev/null; then ${variableName}=1; fi;`
   )
 }
@@ -52,13 +43,8 @@ export function windowsCheck(
   )
 }
 
-/**
- * Inside the steal claim: takes the state-mutation lock, which a mutation must hold before it
- * rechecks its fence, then rereads the owner and only then the lock's identity, so a heartbeat
- * or a re-owning after the first sample fails the takeover. Any existing mutation lock, live,
- * unverifiable or dead, refuses: its removal could race a mutation taking it over. The steal
- * records itself the way a mutation holder does, so only proof of its exit frees the lock.
- */
+/** Hold mutation admission, then reread owner and lock identity to reject heartbeat/reownership races.
+ * Refuse every existing mutation lock; only proven exit permits its removal. */
 function posixMutationAdmission(
   lockDir: string,
   exitedOwner: InstallLockExitedOwner | undefined,
@@ -67,31 +53,25 @@ function posixMutationAdmission(
   if (!exitedOwner?.mutationLock) {
     return ''
   }
-  const ownerPath = shellEscape(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
+  const ownerPath = quotePosixShell(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
   return [
     'if [ "$current_exited" = 1 ]; then current_exited=0;',
-    `if mkdir ${shellEscape(exitedOwner.mutationLock)} 2>/dev/null; then held_mutation=${shellEscape(exitedOwner.mutationLock)};`,
+    `if mkdir ${quotePosixShell(exitedOwner.mutationLock)} 2>/dev/null; then held_mutation=${quotePosixShell(exitedOwner.mutationLock)};`,
     `owns_mutation=1; ${posixStateMutationPidRecord('"$held_mutation"', 'owns_mutation=0;')}`,
     posixStateMutationGroupRecord('"$held_mutation"'),
-    `[ "$owns_mutation" = 1 ] && [ "$(cat ${ownerPath} 2>/dev/null)" = ${shellEscape(exitedOwner.token)} ] &&`,
+    `[ "$owns_mutation" = 1 ] && [ "$(cat ${ownerPath} 2>/dev/null)" = ${quotePosixShell(exitedOwner.token)} ] &&`,
     `${identityAssignment(lockDir, 'again_key')} && [ "$again_key" = "$lock_key" ] && current_exited=1;`,
     'fi; fi;'
   ].join(' ')
 }
 
-/** Releases only a mutation lock that still names this steal's shell. */
 export function posixRelease(exitedOwner: InstallLockExitedOwner | undefined): string {
   return exitedOwner?.mutationLock
     ? ' [ -n "$held_mutation" ] && [ "$(cat "$held_mutation/pid" 2>/dev/null)" = "$$" ] && rm -rf "$held_mutation";'
     : ''
 }
 
-/**
- * The Windows admission: the host script's mutation lock is owned by whoever creates its
- * `owner.json` exclusively. This moves a written record into place, so the file never exists
- * empty; its live pid without a creation time reads as unverifiable, as a host-script holder's
- * would, and only the pid's absence frees it.
- */
+/** Atomically publish ownership; a live PID without creation time remains unverifiable. */
 function windowsMutationAdmission(exitedOwner: InstallLockExitedOwner | undefined): string[] {
   if (!exitedOwner?.mutationLock) {
     return []

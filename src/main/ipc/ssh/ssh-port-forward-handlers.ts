@@ -10,6 +10,7 @@ import {
   portForwardManager
 } from './ssh-ipc-context'
 import { persistPortForwards } from './ssh-port-forward-persistence'
+import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
 
 export function registerSshPortForwardHandlers(): void {
@@ -73,8 +74,11 @@ export function registerSshPortForwardHandlers(): void {
         broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
         return entry
       } catch (err) {
-        // Why: edit/rollback may have failed, so resync renderer to actual runtime state.
-        persistPortForwards(args.targetId)
+        // Disconnect clears runtime forwards; persisting that empty list would erase saved configuration.
+        if (!(err instanceof PortForwardTornDownError)) {
+          persistPortForwards(args.targetId)
+        }
+        // Edit or rollback may fail; resync the renderer with actual forwarding state.
         broadcastPortForwards(getCurrentMainWindow, args.targetId)
         throw err
       }
@@ -93,7 +97,7 @@ export function registerSshPortForwardHandlers(): void {
   ipcMain.handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
     const all = portForwardManager!.listForwards(args?.targetId)
     if (!persistedStore || !args?.targetId) {
-      // Why: cross-target entries can't be mapped to worktrees in one call, so serve the raw list.
+      // Cross-target rows cannot be attributed to worktrees in one enrichment call.
       return all
     }
     return enrichSshForwardEntries(all, getWorktreeIdsForConnection(persistedStore, args.targetId))

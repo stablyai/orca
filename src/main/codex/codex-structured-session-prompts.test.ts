@@ -1,14 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
-import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import {
+  acquireReadyCodexForTest,
   THREAD_ID,
   acquired,
   adapterFor,
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi } from 'vitest'
+import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 describe('CodexStructuredSessionAdapter prompts', () => {
   function askApproval(codex: ReturnType<typeof fakeCodex>): void {
@@ -61,7 +62,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'closed' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -101,7 +102,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'backpressure' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -126,7 +127,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
       tryAppendItem: vi.fn(() => ({ accepted: false as const, reason: 'failed' as const }))
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -149,8 +150,7 @@ describe('CodexStructuredSessionAdapter prompts', () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
-    // A shell bridge re-asks per command under one parent tool item, so only the
-    // approval id tells the two requests apart.
+    // Shell-bridge commands share a tool item; approval IDs distinguish their requests.
     const ask = (id: number, approvalId: string): void => {
       codex.connections[0].handlers.onServerRequest?.({
         id,
@@ -204,7 +204,6 @@ describe('CodexStructuredSessionAdapter prompts', () => {
         commit
       })
     ).rejects.toThrow(AgentSessionPromptAnswerRejectedError)
-    // Refused before the journal records an answer the agent never receives.
     expect(commit).not.toHaveBeenCalled()
     expect(codex.connections[0].replies).toEqual([])
   })

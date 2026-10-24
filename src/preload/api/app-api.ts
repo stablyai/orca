@@ -1,5 +1,5 @@
+import type { UiLanguageDetection } from '../../shared/ui-locale'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -15,55 +15,43 @@ import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapsh
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
 export type AppApi = {
-  /** A local profile storage operation is delayed and holds up subsequent saves. */
+  getSystemLanguageDetection?: (
+    browserPreferences?: readonly string[]
+  ) => Promise<UiLanguageDetection | null>
   isProfileStateSaveDelayed: () => Promise<boolean>
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
-  /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
   /** Local Windows desktop elevation; null when unavailable. Does not describe remote hosts. */
   getWindowsAdministratorStatus: () => Promise<boolean | null>
   /** Restarts the installed Windows desktop with administrator approval and replaces its local terminal host. */
   restartAsAdministrator: () => Promise<void>
-  /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
-   *  in packaged builds this is file:// resources. Renderer appends filenames. */
+  /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
-  /** Relaunches the app (app.relaunch() + app.exit(0)) for settings that need a full restart to apply. */
+  /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
-  /** Restarts Orca through the normal quit pipeline so daemon-backed terminal
-   *  sessions survive and can reattach after the new process starts. */
+  /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
-  /** Reloads the current app renderer through main so expected renderer
-   *  teardown can be classified before Electron emits process-gone events. */
+  /** Main classifies teardown before Electron emits process-gone events. */
   reload: () => Promise<void>
-  /** Stages the renderer's final state synchronously before unload. */
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
-    /** Layout-owner builds: the resume records the quit capture changed. */
-    sleepRecords?: SleepingAgentSessionRecord[]
   }) => void
-  /** Resolves once the last staged checkpoint is durably written; rejects if that
-   *  write failed, so a reload/restart can abort instead of losing the snapshot. */
+  /** Waits for durable persistence; rejection lets reload/restart abort without losing state. */
   awaitBeforeUnloadCheckpoint: () => Promise<void>
-  /** Resolves when the daemon PTY provider and hook receiver have either
-   *  started or failed open for the first BrowserWindow. */
+  /** Waits for daemon PTY and hook startup to succeed or fail open. */
   awaitFirstWindowStartupServices: () => Promise<void>
-  /** Resolves when host Git can run: shell-PATH generation is published and the
-   *  managed WSL CLI registration has reconciled. Does not wait on PTY services. */
+  /** Waits for shell PATH and managed WSL CLI registration, independently of PTY startup. */
   awaitGitEnvironmentStartupBarrier: () => Promise<void>
-  /** Inventories retained PTYs and restores durable structured ownership before renderer adoption. */
+  /** Restore durable PTY ownership before renderer adoption. */
   prepareTerminalStartupRestoration: () => Promise<void>
   /** Whether this machine's runtime holds a structured chat, saved or live. */
   holdsStructuredAgentSessions: () => Promise<boolean>
-  /** Fires when that answer changes, e.g. when a paired client creates the first chat here. */
   onStructuredAgentSessionsHeldChanged: (callback: (held: boolean) => void) => () => void
-  /** Reconciles legacy worker authority around persisted terminal reconnect. */
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
-  /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
+  /** Enabled only by ORCA_STARTUP_DIAGNOSTICS. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
-  /** macOS active input mode, or layout ID when no IME is selected (e.g. `com.apple.keylayout.PolishPro`).
-   *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
-   *  Returns null on non-Darwin or when the defaults read fails. */
+  /** macOS input mode or non-IME layout ID; null off macOS or if the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
   /** Physical Mission Control chords before layout resolution. */
   getMacCapturedDigitRowChords: () => Promise<MacCapturedDigitRowChord[]>
@@ -71,26 +59,20 @@ export type AppApi = {
   getKeyboardLayoutSnapshot: () => Promise<KeyboardLayoutSnapshot | null>
   /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
-  /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
+  /** No-op on Windows/Linux. */
   setUnreadDockBadgeCount: (count: number) => Promise<void>
-  /** Resolves the launch directory for global Floating Terminal tabs. */
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
-  /** Resolves Orca's app-owned directory for auto-created Floating Workspace
-   *  markdown notes. */
+  /** App-owned directory for auto-created Floating Workspace notes. */
   getFloatingMarkdownDirectory: () => Promise<string>
-  /** Opens a native picker for markdown documents, rooted in the floating
-   *  workspace, and authorizes the selected file for editor reads/writes. */
+  /** Picks a Floating Workspace document and authorizes editor reads/writes. */
   pickFloatingMarkdownDocument: () => Promise<MarkdownDocument | null>
-  /** Opens a native directory picker and authorizes the selected directory
-   *  for Floating Workspace markdown file creation. */
+  /** Picks a directory and authorizes Floating Workspace markdown creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
   /** Persists flag-gated terminal render evidence under app-owned userData. */
   writeTerminalRenderDesyncEvidence: (
     args: WriteTerminalRenderDesyncEvidenceArgs
   ) => Promise<WriteTerminalRenderDesyncEvidenceResult>
 }
-
-/** Panel contribution as surfaced by the main-process plugin service. */
 
 export type PlatformApi = {
   get: () => {

@@ -68,6 +68,8 @@ export type NativeChatTextBlock = {
   failure?: AgentSessionFailureFact
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
+  /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
+  usageLimitTurnItemId?: string
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -112,6 +114,8 @@ export type NativeChatToolResultBlock = {
   callId?: string
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
+  /** The journal item to fetch when `output` is only a head of what the tool returned. */
+  fullOutputItemId?: string
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field
@@ -254,6 +258,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
+  shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */
   state?: AgentJournalMessageState
   /** Host clock when the row's message was seen to end; absent when no end was seen live. */

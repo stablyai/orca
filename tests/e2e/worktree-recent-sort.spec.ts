@@ -9,7 +9,7 @@
  *   `lastActivityAt` descending, so those worktrees landed dead last —
  *   even though the user had just added them.
  *
- *   The `worktrees:list` / `worktrees:listAll` handlers now stamp
+ *   The `worktrees:listDetected` handler now stamps
  *   `lastActivityAt = Date.now()` on first discovery. This test locks that
  *   behavior in end-to-end.
  */

@@ -16,7 +16,8 @@ export function fingerprintRuntimeSshTarget(target: SshTarget): string {
         gssapiAuthentication: target.gssapiAuthentication,
         proxyCommand: target.proxyCommand,
         jumpHost: target.jumpHost,
-        systemSshConnectionReuse: target.systemSshConnectionReuse
+        systemSshConnectionReuse: target.systemSshConnectionReuse,
+        systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse
       })
     )
     .digest('hex')

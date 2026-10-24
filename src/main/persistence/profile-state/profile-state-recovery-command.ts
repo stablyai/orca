@@ -27,6 +27,7 @@ import {
 } from './legacy-json/profile-state-authority-exports'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { readProfileStateDomain } from './profile-state-domain-reader'
+import { repairProfileStateSections } from './profile-state-section-repair'
 import { isRecord } from './profile-state-document-validation'
 import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
 import {
@@ -72,6 +73,24 @@ export function rollbackProfileState(
   }
   if (selector.kind === 'current-sqlite') {
     return adoptCurrentDatabase(userDataPath, result, maintenance)
+  }
+  if (selector.kind === 'repair') {
+    const repaired = repairProfileStateSections({
+      maintenance,
+      location: { ...result, userDataPath },
+      approved: selector.sections,
+      beforeRepair: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
+    })
+    syncHttp1CompatibilityMarkerFromDatabase(userDataPath, result)
+    return {
+      ...result,
+      storage: 'sqlite',
+      restoredPath: result.databaseFile,
+      revision: repaired.revision,
+      quarantineDirectory: repaired.quarantineDirectory,
+      removedDatabaseFiles: [],
+      repairedSections: repaired.sections
+    }
   }
   const revision =
     selector.kind === 'latest-json'

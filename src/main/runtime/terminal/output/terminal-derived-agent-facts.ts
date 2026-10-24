@@ -10,9 +10,24 @@ import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../runtime-worktree-status-projection'
+import type { RuntimeTerminalAgentStatusEvent } from '../../runtime-terminal-contracts'
+import { programStatusStateOutlivesProgram } from '../../../../shared/program-status/protocol'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+
+// Why: programs report only changes, so a long `working` renews its row inside AGENT_STATUS_STALE_AFTER_MS.
+const PROGRAM_STATUS_LEASE_RENEWAL_MS = 10 * 60 * 1000
+
+type TerminalAgentStatusTarget = Pick<
+  RuntimeTerminalAgentStatusEvent,
+  'source' | 'paneKey' | 'tabId' | 'worktreeId' | 'connectionId' | 'terminalHandle'
+>
 
 export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends OrcaRuntimeWithApplyTrackedPtyTitle {
   abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
+
+  /** Each live OSC 7501 program's latest row payload; renewed while its PTY keeps a live facet. */
+  private readonly liveProgramStatusPayloadByPtyId = new Map<string, ParsedAgentStatusPayload>()
+  private programStatusLeaseTimer: ReturnType<typeof setInterval> | null = null
 
   protected createTerminalSideEffectCommandCodeDetector(
     ptyId: string
@@ -89,22 +104,129 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
   protected emitTerminalAgentStatusEvents(
     ptyId: string,
     chunk: Pick<ProcessedAgentStatusChunk, 'payloads'> & Partial<ProcessedAgentStatusChunk>,
-    provenance?: { origin: 'process'; yieldsToHookSince: number }
+    provenance?:
+      | { origin: 'process'; yieldsToHookSince: number }
+      | { renewsProgramStatusLease: true }
   ): void {
-    if (chunk.payloads.length === 0) {
+    const facet = chunk.programStatusFacet
+    if (chunk.payloads.length === 0 && facet === undefined) {
       return
     }
-    const targets = new Map<
-      string,
-      {
-        source: 'mounted-leaf' | 'pty-record'
-        paneKey: string
-        tabId?: string
-        worktreeId?: string
-        connectionId?: string | null
-        terminalHandle?: string
+    if (facet !== undefined) {
+      if (facet && !programStatusStateOutlivesProgram(facet.state)) {
+        this.liveProgramStatusFacetPtyIds.add(ptyId)
+      } else {
+        this.liveProgramStatusFacetPtyIds.delete(ptyId)
       }
-    >()
+    }
+    const targets = this.resolveTerminalAgentStatusTargets(ptyId)
+    // Why before the payloads: each row this chunk publishes must already carry the program's
+    // latest report, or a reader acting between the two (the 133;D drop) sees a stale facet.
+    if (facet !== undefined && this.onTerminalProgramStatusFacet) {
+      for (const target of targets) {
+        try {
+          this.onTerminalProgramStatusFacet({ ptyId, paneKey: target.paneKey, facet })
+        } catch (err) {
+          console.error('[runtime] terminal program status listener threw', {
+            ptyId,
+            paneKey: target.paneKey,
+            err
+          })
+        }
+      }
+    }
+    for (const payload of chunk.payloads) {
+      if (chunk.programStatusPayloads?.has(payload)) {
+        this.trackProgramStatusLease(ptyId, payload)
+      }
+      // Why not gated on a listener: the prompt lifecycle is main's own state, read by
+      // terminal waits that run with no status consumer attached.
+      this.recordAgentPromptLifecycleState(
+        ptyId,
+        mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
+      )
+      for (const target of targets) {
+        if (!this.onTerminalAgentStatus) {
+          continue
+        }
+        try {
+          this.onTerminalAgentStatus({
+            ptyId,
+            ...target,
+            payload,
+            ...provenance,
+            ...(chunk.programStatusPayloads?.has(payload) ? { fromProgramStatus: true } : {}),
+            ...(chunk.programStatusRowRemovals?.has(payload)
+              ? { removesProgramStatusRow: true }
+              : {})
+          })
+        } catch (err) {
+          console.error('[runtime] terminal agent status listener threw', {
+            ptyId,
+            paneKey: target.paneKey,
+            state: payload.state,
+            agentType: payload.agentType,
+            err
+          })
+        }
+      }
+    }
+  }
+
+  private trackProgramStatusLease(ptyId: string, payload: ParsedAgentStatusPayload): void {
+    if (payload.state === 'done') {
+      this.liveProgramStatusPayloadByPtyId.delete(ptyId)
+      return
+    }
+    this.liveProgramStatusPayloadByPtyId.set(ptyId, payload)
+    if (this.programStatusLeaseTimer === null) {
+      this.programStatusLeaseTimer = setInterval(
+        () => this.renewProgramStatusLeases(),
+        PROGRAM_STATUS_LEASE_RENEWAL_MS
+      )
+      this.programStatusLeaseTimer.unref?.()
+    }
+  }
+
+  private renewProgramStatusLeases(): void {
+    for (const [ptyId, payload] of this.liveProgramStatusPayloadByPtyId) {
+      // The live facet set is the authority on whether the program still runs.
+      if (!this.liveProgramStatusFacetPtyIds.has(ptyId) || !this.ptysById.has(ptyId)) {
+        this.liveProgramStatusPayloadByPtyId.delete(ptyId)
+        continue
+      }
+      this.emitTerminalAgentStatusEvents(
+        ptyId,
+        { payloads: [payload], programStatusPayloads: new Set([payload]) },
+        { renewsProgramStatusLease: true }
+      )
+    }
+    if (this.liveProgramStatusPayloadByPtyId.size === 0 && this.programStatusLeaseTimer) {
+      clearInterval(this.programStatusLeaseTimer)
+      this.programStatusLeaseTimer = null
+    }
+  }
+
+  override notePtyDataGap(ptyId: string, droppedChars = 0): void {
+    super.notePtyDataGap(ptyId, droppedChars)
+    // The gap may hold the program's end, and the fresh parser no longer knows its records.
+    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
+    if (entry && entry.programActivity !== null) {
+      entry.tracker.endProgramActivity()
+    }
+    this.clearLiveProgramStatusFacet(ptyId)
+  }
+
+  /** The PTY's program ended: drop its live facet (done/error stay). Call while its panes resolve. */
+  protected clearLiveProgramStatusFacet(ptyId: string): void {
+    if (this.liveProgramStatusFacetPtyIds.has(ptyId)) {
+      this.emitTerminalAgentStatusEvents(ptyId, { payloads: [], programStatusFacet: null })
+    }
+  }
+
+  /** The panes a PTY's in-band status belongs to: its mounted leaves, else its own pane record. */
+  private resolveTerminalAgentStatusTargets(ptyId: string): TerminalAgentStatusTarget[] {
+    const targets = new Map<string, TerminalAgentStatusTarget>()
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId ?? null
     for (const leaf of this.getLeavesForPty(ptyId)) {
@@ -117,11 +239,12 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
         connectionId
       })
     }
-    if (targets.size === 0 && pty?.paneKey) {
-      targets.set(pty.paneKey, {
+    const recorded = targets.size === 0 && pty ? this.paneOfPty(pty) : null
+    if (pty && recorded?.paneKey) {
+      targets.set(recorded.paneKey, {
         source: 'pty-record',
-        paneKey: pty.paneKey,
-        tabId: pty.tabId ?? undefined,
+        paneKey: recorded.paneKey,
+        tabId: recorded.tabId ?? undefined,
         worktreeId: pty.worktreeId,
         connectionId
       })
@@ -136,34 +259,6 @@ export abstract class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector
         }
       }
     }
-    for (const payload of chunk.payloads) {
-      // Why not gated on a listener: the prompt lifecycle is main's own state, read by
-      // terminal waits that run with no status consumer attached.
-      this.recordAgentPromptLifecycleState(
-        ptyId,
-        mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
-      )
-      for (const target of targets.values()) {
-        if (!this.onTerminalAgentStatus) {
-          continue
-        }
-        try {
-          this.onTerminalAgentStatus({
-            ptyId,
-            ...target,
-            payload,
-            ...provenance
-          })
-        } catch (err) {
-          console.error('[runtime] terminal agent status listener threw', {
-            ptyId,
-            paneKey: target.paneKey,
-            state: payload.state,
-            agentType: payload.agentType,
-            err
-          })
-        }
-      }
-    }
+    return [...targets.values()]
   }
 }

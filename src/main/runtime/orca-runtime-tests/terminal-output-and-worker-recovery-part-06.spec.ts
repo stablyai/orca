@@ -88,6 +88,8 @@ describe('OrcaRuntimeService', () => {
         getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
         getWorkspaceSession,
         setWorkspaceSession,
+        // Every partition the store holds, as the profile Store lists them.
+        getWorkspaceSessionHostIds: () => ['local' as const, `ssh:${connectionId}` as const],
         flushOrThrow: vi.fn()
       }),
       undefined,

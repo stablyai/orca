@@ -1,3 +1,5 @@
+import { toSshExecutionHostId } from '../shared/execution-host'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 import {
   closeTestStores,
   testState,
@@ -19,8 +21,8 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import { isTerminalLeafId } from '../shared/stable-pane-id'
 
 import { worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -96,7 +98,7 @@ describe('Store host-partitioned workspace sessions', () => {
     }
   }
 
-  // Registered on purpose: rows owned by an unregistered repo id are swept as orphans on load.
+  // Register fixture repos so orphan cleanup cannot erase host partitions on reload.
   const makeRepos = (...repoIds: string[]) => repoIds.map((id) => makeRepo({ id, path: `/${id}` }))
 
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
@@ -107,10 +109,9 @@ describe('Store host-partitioned workspace sessions', () => {
 
     const store = await createStore()
 
-    // The legacy blob is the 'local' partition; an explicit/default hostId reads it.
     expect(store.getWorkspaceSession().activeRepoId).toBe('legacy-repo')
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('legacy-repo')
-    // No data was moved, so a downgrade still finds the legacy field intact.
+    // Keep the legacy field readable after a downgrade.
     store.flush()
     const persisted = readDataFile() as { workspaceSession?: { activeRepoId?: string } }
     expect(persisted.workspaceSession?.activeRepoId).toBe('legacy-repo')
@@ -145,7 +146,6 @@ describe('Store host-partitioned workspace sessions', () => {
     second.flush()
     const afterSecond = readSessionPartitions()
 
-    // Re-running the partition migration must not move or reshape any host.
     expect(afterSecond).toEqual(afterFirst)
     expect(second.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('runtime-repo')
     expect(second.getWorkspaceSession('ssh:host-b').activeRepoId).toBe('ssh-repo')
@@ -193,7 +193,6 @@ describe('Store host-partitioned workspace sessions', () => {
     const root = store.getWorkspaceSession('ssh:ssh-1').terminalLayoutsByTabId['tab-shared']?.root
     const leafId = root?.type === 'leaf' ? root.leafId : null
     expect(leafId && isTerminalLeafId(leafId)).toBe(true)
-    // The lease follows the partition's rewritten leaf, not the legacy `pane:1`.
     expect(store.getSshRemotePtyLeases('ssh-1')[0]?.leafId).toBe(leafId)
   })
 
@@ -307,7 +306,6 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
     expect(store.getWorkspaceSession('runtime:env-b').activeRepoId).toBe('repo-b')
 
-    // Overwriting host A leaves host B and local untouched.
     store.setWorkspaceSession(makeHostSession('repo-a2'), 'runtime:env-a')
     expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a2')
     expect(store.getWorkspaceSession('runtime:env-b').activeRepoId).toBe('repo-b')
@@ -337,7 +335,6 @@ describe('Store host-partitioned workspace sessions', () => {
 
     expect(store.getWorkspaceSession('runtime:env-a').activeTabId).toBe('tab-a')
     expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
-    // Local was never given that tab id.
     expect(store.getWorkspaceSession('local').activeTabId).toBeNull()
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
   })
@@ -388,7 +385,6 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
     store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
 
-    // No hostId → local, which is still empty/default and unaffected by host A.
     store.setWorkspaceSession(makeHostSession('repo-local'))
     expect(store.getWorkspaceSession().activeRepoId).toBe('repo-local')
     expect(store.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
@@ -421,7 +417,9 @@ describe('Store host-partitioned workspace sessions', () => {
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'runtime:env-b')
 
-    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-a' })
+    )
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.flush()
 
@@ -436,8 +434,7 @@ describe('Store host-partitioned workspace sessions', () => {
       lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
       terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
     })
-    // The local blob is a co-owner surface for every remote host, since the renderer parks state
-    // there whenever worktree ownership is unresolved; leaving it behind leaks the removed worktree.
+    // Unresolved ownership can park remote state locally; removal must clean that surface too.
     expect(reloaded.getWorkspaceSession('local')).toMatchObject({
       tabsByWorktree: {},
       activeWorktreeId: null,
@@ -459,13 +456,13 @@ describe('Store host-partitioned workspace sessions', () => {
     store.setWorkspaceSession(session, 'local')
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'runtime:env-b')
-    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-a' }), {
+      hostId: 'runtime:env-a'
+    })
 
-    store.removeWorktreeMeta(worktreeId)
+    removeWorktreeMetaRow(store, worktreeId, undefined)
 
     expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
-    // Only the owning host's partition and the local blob it may spill into are cleaned; a same-id
-    // worktree on another host is a different workspace and must survive.
     expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]).toHaveLength(1)
     expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
   })
@@ -481,13 +478,14 @@ describe('Store host-partitioned workspace sessions', () => {
         [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
       }
     })
-    // The renderer persists SSH workspaces in the local blob; the main process writes their
-    // terminal state to the host's own `ssh:*` partition. Removal must clear both.
+    // SSH workspace state can be split between renderer-local and main’s ssh partition; clear both.
     store.setWorkspaceSession(makeSession(), 'local')
     store.setWorkspaceSession(makeSession(), 'ssh:conn-1')
-    store.setWorktreeMeta(worktreeId, { hostId: 'ssh:conn-1' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:conn-1' }), {
+      hostId: 'ssh:conn-1'
+    })
 
-    store.removeWorktreeMeta(worktreeId, 'ssh:conn-1')
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:conn-1' }))
 
     for (const hostId of ['local', 'ssh:conn-1'] as const) {
       expect(store.getWorkspaceSession(hostId)).toMatchObject({
@@ -503,8 +501,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
     const worktreeId = 'repo-split::/workspace/stale'
     const otherWorktreeId = 'repo-split::/workspace/live'
-    // Why this matters: the fence is keyed by repo, so a bump here would make every later write
-    // for repo-split rebase onto main's copy and silently drop the live worktree's unsaved tabs.
+    // An unnecessary repo-wide fence could discard unsaved tabs in sibling worktrees.
     store.setWorkspaceSession(
       {
         ...makeHostSession('repo-split'),
@@ -523,9 +520,11 @@ describe('Store host-partitioned workspace sessions', () => {
       },
       'runtime:env-a'
     )
-    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-a' }), {
+      hostId: 'runtime:env-a'
+    })
 
-    store.removeWorktreeMeta(worktreeId, 'local')
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }))
 
     expect(
       store.getWorkspaceSession('runtime:env-a').terminalTopologyRevisionByRepoId?.['repo-split']
@@ -548,17 +547,21 @@ describe('Store host-partitioned workspace sessions', () => {
     }
     store.setWorkspaceSession(session, 'local')
     store.setWorkspaceSession(session, 'runtime:env-b')
-    store.setWorktreeMeta(worktreeId, { hostId: 'local' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'local' }), {
+      hostId: 'local'
+    })
     const worktreeLineage = makeWorktreeLineage({ worktreeId })
     const workspaceLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(worktreeId)
     })
-    store.setWorktreeLineage(worktreeId, worktreeLineage)
+    store.setWorktreeLineage(
+      hostWorktreeTarget({ id: worktreeId, hostId: 'local' }),
+      worktreeLineage
+    )
     store.setWorkspaceLineage(workspaceLineage)
 
-    // The confirmed removal target is env-b. Bare metadata belongs to the same-id
-    // local owner and must not redirect the post-delete purge back to local.
-    store.removeWorktreeMeta(worktreeId, 'runtime:env-b')
+    // A same-ID local metadata row must not redirect removal away from the confirmed remote host.
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-b' }))
 
     expect(store.getWorktreeMeta(worktreeId)?.hostId).toBe('local')
     expect(store.getWorktreeLineage(worktreeId)).toEqual(worktreeLineage)
@@ -593,9 +596,11 @@ describe('Store host-partitioned workspace sessions', () => {
     }
     store.setWorkspaceSession(localSession, 'local')
     store.setWorkspaceSession(remoteSession, 'ssh:ssh-b')
-    store.setWorktreeMeta(worktreeId, { hostId: 'ssh:ssh-b' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:ssh-b' }), {
+      hostId: 'ssh:ssh-b'
+    })
 
-    store.removeWorktreeMeta(worktreeId, 'ssh:ssh-b')
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:ssh-b' }))
 
     expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toEqual([
       expect.objectContaining({ id: 'same-id-local-tab' })
@@ -616,14 +621,32 @@ describe('Store host-partitioned workspace sessions', () => {
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'local')
 
-    store.removeWorktreeMeta(worktreeId, 'runtime:env-a')
+    store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-a' }))
 
     expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
     expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
   })
 
-  // Trade-off: the fence is repo-wide, so claiming authority over a partition main never wrote would
-  // rebase every sibling worktree of that repo onto an empty copy. A delayed write wins here instead.
+  it("removing one SSH host's copy leaves a same-id copy on another SSH host", async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-twin::/workspace/shared'
+    const session = {
+      ...makeHostSession('repo-twin'),
+      tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'twin-tab', worktreeId })] }
+    }
+    store.setWorkspaceSession(session, toSshExecutionHostId('ssh-a'))
+    store.setWorkspaceSession(session, toSshExecutionHostId('ssh-b'))
+
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: worktreeId, hostId: toSshExecutionHostId('ssh-a') })
+    )
+
+    const tabsOn = (host: string) => store.getWorkspaceSession(host).tabsByWorktree[worktreeId]
+    expect(tabsOn(toSshExecutionHostId('ssh-a'))).toBeUndefined()
+    expect(tabsOn(toSshExecutionHostId('ssh-b'))?.[0]?.id).toBe('twin-tab')
+  })
+
+  // Fencing an unwritten host partition would rebase sibling worktrees onto empty state.
   it('does not fence a delayed session write when its host partition was never persisted', async () => {
     const store = await createStore()
     const worktreeId = 'repo-gone::/workspace/stale'
@@ -634,7 +657,9 @@ describe('Store host-partitioned workspace sessions', () => {
       }
     }
 
-    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.removeWorkspaceSessionStateForWorktree(
+      hostWorktreeTarget({ id: worktreeId, hostId: 'runtime:env-a' })
+    )
     store.setWorkspaceSession(delayedSession, 'runtime:env-a')
 
     const session = store.getWorkspaceSession('runtime:env-a')
@@ -649,7 +674,6 @@ describe('Store host-partitioned workspace sessions', () => {
       repos: makeRepos('repo-1'),
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
-        // activeRepoId must be string|null; a number fails the zod parse.
         'runtime:bad': {
           ...makeHostSession('x'),
           activeRepoId: 123,
@@ -661,7 +685,6 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
 
     expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
-    // The unsalvageable field falls back to its default; the partition's tabs survive.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
     expect(
       store.getWorkspaceSession('runtime:bad').tabsByWorktree[worktreeId]?.map((tab) => tab.id)
@@ -675,8 +698,7 @@ describe('Store host-partitioned workspace sessions', () => {
       repos: makeRepos('repo-1'),
       workspaceSession: {
         ...makeHostSession('local-repo'),
-        // A projected/truncated write can leave a top-level field the wrong type;
-        // that must not cost every worktree's tabs the way a full reset did.
+        // A malformed scalar must not reset otherwise valid workspace tabs.
         activeTabId: 42,
         tabsByWorktree: {
           [worktreeId]: [makeTerminalTab({ id: 'local-keep', worktreeId })]
@@ -702,10 +724,7 @@ describe('Store host-partitioned workspace sessions', () => {
     >
   }
 
-  // Why: flush() writes whatever the state hash says is dirty, so it passes even
-  // when nothing scheduled a save — it cannot see the repair write at all. Loading
-  // once first canonicalizes the profile (a second load of a canonical file
-  // schedules nothing), so a later rewrite proves the salvage scheduled it.
+  // Settle unrelated migrations, then rely on the debounce to prove salvage schedules its own write.
   async function loadAndAwaitScheduledSave(): Promise<void> {
     vi.useFakeTimers()
     try {
@@ -721,9 +740,7 @@ describe('Store host-partitioned workspace sessions', () => {
     writeDataFile(fixture)
     await loadAndAwaitScheduledSave()
     const canonical = readFileSync(dataFile(), 'utf-8')
-    // Why: the save assertions below are only meaningful if a clean load schedules
-    // nothing. Prove that here rather than assume it — a future migration that
-    // dirtied every load would otherwise leave those tests silently vacuous.
+    // Prove clean loads do not rewrite, or unrelated migration writes could mask missing salvage saves.
     await loadAndAwaitScheduledSave()
     expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
     return JSON.parse(canonical) as PersistedSessionsFile

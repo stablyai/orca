@@ -23,6 +23,10 @@ import {
 } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  assertFileWriteApplied,
+  missingOrIdenticalPrecondition
+} from '../../../../shared/file-write-disk-precondition'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
 
@@ -166,14 +170,19 @@ export function useFileDeletion({
           commitFileExplorerOp({
             undo: async () => {
               const currentRoute = operationGuard.assertCurrent()
-              await writeRuntimeFile(
-                {
-                  ...fileContext,
-                  target: currentRoute.target,
-                  connectionId: currentRoute.connectionId
-                },
-                node.path,
-                undoContent
+              // Why: something may have recreated the path since the delete; undo must not replace it.
+              assertFileWriteApplied(
+                await writeRuntimeFile(
+                  {
+                    ...fileContext,
+                    target: currentRoute.target,
+                    connectionId: currentRoute.connectionId
+                  },
+                  node.path,
+                  undoContent,
+                  undefined,
+                  missingOrIdenticalPrecondition(undoContent)
+                )
               )
               await refreshDir(parentDir)
             },

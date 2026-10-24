@@ -93,8 +93,6 @@ describe('createGitLabMergeRequest', () => {
         '--draft'
       ])
     )
-    // Why: a local workspace resolves the host from cwd, so neither the flag
-    // nor the env override belongs on the command.
     expect(args).not.toContain('--hostname')
     expect(options).toMatchObject({
       cwd: '/repo-root',
@@ -232,8 +230,7 @@ describe('createGitLabMergeRequest', () => {
     )
   })
 
-  // Why: `glab mr create` has no --hostname flag either, so an SSH workspace
-  // has to reach its instance through GITLAB_HOST (#12193).
+  // mr create rejects --hostname; self-hosted SSH workspaces need GITLAB_HOST.
   it('creates a merge request through GITLAB_HOST on an SSH workspace', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.example.internal', path: 'acme/widgets' })
     glabExecFileAsyncMock.mockResolvedValueOnce({
@@ -263,8 +260,7 @@ describe('createGitLabMergeRequest', () => {
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
   })
 
-  // Why: `glab mr list` has no --hostname flag, so the duplicate lookup has to
-  // reach a self-hosted instance through GITLAB_HOST instead (#12193).
+  // Duplicate lookup uses mr list, which also requires GITLAB_HOST instead of --hostname.
   it('looks up an existing merge request through GITLAB_HOST on an SSH workspace', async () => {
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('merge request already exists'))

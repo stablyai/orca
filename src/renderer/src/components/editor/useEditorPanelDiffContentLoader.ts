@@ -12,6 +12,7 @@ import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -160,6 +161,14 @@ export function useEditorPanelDiffContentLoader({
           return
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        // Why: an unstaged diff saves its modified side to the working-tree file, so that side is its baseline.
+        if (
+          file.diffSource === 'unstaged' &&
+          result.kind === 'text' &&
+          result.largeDiffRenderLimit === undefined
+        ) {
+          stampCleanTabDiskBaseline(file.id, { content: result.modifiedContent, isBinary: false })
+        }
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return

@@ -3,13 +3,13 @@ import { useAppStore } from '@/store'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { classifyTransitionRequirements } from '../../../shared/jira-transition-fields'
+import { classifyTransitionRequirements } from '../../../shared/jira/jira-transition-fields'
 import type {
   JiraIssue,
   JiraIssueUpdate,
   JiraProjectStatusOrder,
   JiraTransition
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { TaskPageJiraBoard, jiraBoardIssueRefKey } from './task-page-jira-board'

@@ -8,7 +8,11 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import {
+  editPersistedTestAgentSessionStore,
+  openTestAgentSessionRecordStore,
+  type PersistedTestAgentSessionStore
+} from '../../runtime/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -73,14 +77,15 @@ async function openHost(): Promise<void> {
     claimKeyId: 'key',
     now: () => clock,
     mintSpawnToken: () => `spawn-${acquisitions}`,
-    // The owners a restarted host finds died with the process that started them, unless a test says otherwise.
     probeOwner: async () => ownerProbe
   })
   hosts.push(host)
 }
 
-/** A crash and relaunch: the next host opens what the dying one had written, and nothing after. */
-async function restartHost(): Promise<void> {
+/** Relaunch over crash-time persisted state, optionally converted to an older build’s shape. */
+async function restartHost(
+  olderBuild?: (persisted: PersistedTestAgentSessionStore) => void
+): Promise<void> {
   await store.renewLeases([])
   const dying = generationRoot()
   generation++
@@ -88,6 +93,9 @@ async function restartHost(): Promise<void> {
     recursive: true,
     filter: (source) => !source.endsWith('.tmp') && !source.includes('.lock')
   })
+  if (olderBuild) {
+    await editPersistedTestAgentSessionStore(generationRoot(), olderBuild)
+  }
   await openHost()
 }
 
@@ -103,21 +111,13 @@ beforeEach(async () => {
   adapter = {
     supportsLocation: (location) =>
       location.executionHostId === 'local' && location.wslDistro === null,
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi.fn(async (input) => {
       acquisitions++
       const acquisitionGeneration = `acquisition-${acquisitions}`
-      const starter = host
-      // The handshake answers at once, reporting what the child runs with.
-      void starter.handleAdapterEvent({
-        type: 'started',
-        sessionId: input.identity.sessionId,
-        fence: input.fence,
-        acquisitionGeneration,
-        reportedOptions: { model: '' }
-        // Never admitted, so the empty report persists nothing.
-      })
       return {
-        providerChildPhase: 'starting' as const,
         acquisitionGeneration,
         process: {
           hostId: 'local',
@@ -129,7 +129,7 @@ beforeEach(async () => {
           linkId: `link-${acquisitions}`,
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
-          // A start with no thread to resume creates one, whatever its fence.
+          // A missing resume handle creates a thread even at a later fence.
           origin:
             input.fence > 1 && input.identity.providerHandle
               ? ('resumed' as const)
@@ -347,15 +347,17 @@ describe('same-conversation clear', () => {
   })
 
   it('allows independently sending a record with an old-build replacement pointer', async () => {
-    const source = store.getRecord(HOST_TEST_SESSION)!
-    await store.setConversationCommand(HOST_TEST_SESSION, source.lease.runtimeFence, {
-      command: 'clear',
-      phase: 'committed',
-      state: 'completed',
-      operationId: hostTestOperationId(),
-      callerKey: caller.callerKey,
-      replacementSessionId: 'old-clear-destination'
+    await restartHost((persisted) => {
+      persisted.records[HOST_TEST_SESSION].conversationCommand = {
+        command: 'clear',
+        phase: 'committed',
+        state: 'completed',
+        operationId: hostTestOperationId(),
+        callerKey: caller.callerKey,
+        replacementSessionId: 'old-clear-destination'
+      }
     })
+    await host.restoreReadableSessions(store.listVisibleSessionIds())
     expect(await host.send(caller, sendParams('still this conversation'))).toMatchObject({
       ok: true
     })

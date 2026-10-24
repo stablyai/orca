@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   serializeOrcadMigrationValue,
   type OrcadMigrationCatalogPayload
-} from '../../shared/orcad-migration-manifest'
-import { isRecord } from '../../shared/orcad-migration-manifest-fields'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { ownedEditorFileId } from '../../shared/workspace-session-pane-ownership'
 import {
   ORCAD_MIGRATION_PATH_FIELDS,

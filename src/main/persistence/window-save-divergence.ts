@@ -21,16 +21,22 @@ import type {
   WorkspaceLayoutModel
 } from '../../shared/workspace-layout/workspace-layout-model'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { droppedTabBarEntries, terminalTabBarEntries } from './window-save-raw-session-divergence'
+import { compactFieldChanges, type FieldChange } from './window-save-divergence-values'
 
 /** Set by evidence runs: each divergence is appended there as one JSON line. */
 const LOG_PATH_ENV = 'ORCA_LAYOUT_SAVE_DIVERGENCE_LOG'
 const MAX_PATHS = 12
 /** A pane's terminal binding and resume record: main writes them on every spawn and capture. */
-const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping'])
+const BINDING_FIELDS = new Set(['ptyId', 'incarnationId', 'sleeping', 'resume'])
 
-export type WindowSaveDivergence = { workspace: string; paths: string[] }
+/** `values`: main's and the save's values of each changed field, content left out. */
+export type WindowSaveDivergence = { workspace: string; paths: string[]; values?: FieldChange[] }
+
+/** One report path, with the field values behind a `changed` one. */
+type Difference = { path: string; changes?: (FieldChange & { kind: string })[] }
 
 /** Main's layout model of one partition, as the session holds it. */
 export function layoutModelOf(
@@ -54,25 +60,47 @@ function changedFields(before: unknown, after: unknown): string[] {
   )
 }
 
+function fieldOf(item: unknown, field: string): unknown {
+  return field === 'value' || typeof item !== 'object' || !item
+    ? item
+    : Object.entries(item).find(([key]) => key === field)?.[1]
+}
+
+/** Values logged beside a changed record's own fields, by its id and changed fields. */
+type Alongside = (id: string, fields: string[]) => Omit<FieldChange, 'record'>[]
+
 function diffKeyed(
   prefix: string,
   before: Map<string, unknown>,
-  after: Map<string, unknown>
-): string[] {
-  const paths: string[] = []
+  after: Map<string, unknown>,
+  alongside?: Alongside
+): Difference[] {
+  const paths: Difference[] = []
   for (const [id, item] of after) {
     if (!before.has(id)) {
-      paths.push(`${prefix} ${id} added`)
+      paths.push({ path: `${prefix} ${id} added` })
       continue
     }
-    const fields = changedFields(before.get(id), item)
+    const was = before.get(id)
+    const fields = changedFields(was, item)
     if (fields.length > 0) {
-      paths.push(`${prefix} ${id} changed: ${fields.join(', ')}`)
+      const record = `${prefix} ${id}`
+      paths.push({
+        path: `${record} changed: ${fields.join(', ')}`,
+        changes: [
+          ...fields.map((field) => ({
+            field,
+            before: fieldOf(was, field),
+            after: fieldOf(item, field)
+          })),
+          ...(alongside?.(id, fields) ?? [])
+        ].map((change) => ({ kind: prefix, record, ...change }))
+      })
     }
   }
   for (const id of before.keys()) {
     if (!after.has(id)) {
-      paths.push(`${prefix} ${id} removed`)
+      paths.push({ path: `${prefix} ${id} removed` })
     }
   }
   return paths
@@ -80,6 +108,22 @@ function diffKeyed(
 
 function listById<T>(items: readonly T[] | undefined, id: (item: T) => string) {
   return new Map<string, unknown>((items ?? []).map((item) => [id(item), item]))
+}
+
+/** A terminal tab's panes in tree order with the terminal each is bound to, null while unbound. */
+function paneBindings(workspace: WorkspaceLayout, tabId: string) {
+  const tab = workspace.tabs.find((candidate) => candidate.id === tabId)
+  const leafIds: string[] = []
+  const visit = (node: TerminalPaneLayoutNode | null): void => {
+    if (node?.type === 'leaf') {
+      leafIds.push(node.leafId)
+    } else if (node) {
+      visit(node.first)
+      visit(node.second)
+    }
+  }
+  visit(tab?.kind === 'terminal' ? tab.panes.root : null)
+  return leafIds.map((leafId) => ({ leafId, ptyId: workspace.leaves?.[leafId]?.ptyId ?? null }))
 }
 
 function recordById(items: Readonly<Record<string, unknown>> | undefined) {
@@ -145,14 +189,14 @@ function groupTreeOf(workspace: WorkspaceLayout): TabGroupLayoutNode | null {
 function diffWorkspaceLayouts(
   before: WorkspaceLayout | undefined,
   after: WorkspaceLayout | undefined
-): string[] {
+): Difference[] {
   if (!hasContent(before) || !hasContent(after)) {
     return hasContent(before) || hasContent(after)
-      ? [hasContent(after) ? 'workspace added' : 'workspace removed']
+      ? [{ path: hasContent(after) ? 'workspace added' : 'workspace removed' }]
       : []
   }
   const leaves = unboundLeaves(before.leaves, after.leaves)
-  const paths = [
+  const paths: Difference[] = [
     ...diffKeyed(
       'group',
       listById(before.groups, (g) => g.id),
@@ -161,7 +205,12 @@ function diffWorkspaceLayouts(
     ...diffKeyed(
       'tab',
       listById(before.tabs, (t) => t.id),
-      listById(after.tabs, (t) => t.id)
+      listById(after.tabs, (t) => t.id),
+      // Bindings are main's to write, so they never make a path; they show who holds a changed pane.
+      (id, fields) =>
+        fields.includes('panes')
+          ? [{ field: 'ptys', before: paneBindings(before, id), after: paneBindings(after, id) }]
+          : []
     ),
     ...diffKeyed(
       'file',
@@ -176,8 +225,21 @@ function diffWorkspaceLayouts(
     ),
     ...diffKeyed('leaf', leaves.was, leaves.now)
   ]
-  if (stableJson(groupTreeOf(before)) !== stableJson(groupTreeOf(after))) {
-    paths.push('group layout changed')
+  const wasTree = groupTreeOf(before)
+  const nowTree = groupTreeOf(after)
+  if (stableJson(wasTree) !== stableJson(nowTree)) {
+    paths.push({
+      path: 'group layout changed',
+      changes: [
+        {
+          kind: 'group layout',
+          record: 'group layout',
+          field: 'tree',
+          before: wasTree,
+          after: nowTree
+        }
+      ]
+    })
   }
   return paths
 }
@@ -199,12 +261,17 @@ export function windowSaveDivergences(
   // Ignored, as main's own writes: pane bindings, resume records, default-tab marks, closed-tab records, row owners,
   // clientHostedBrowserPagesByWorkspace and the topology revision.
   for (const workspace of workspaces) {
-    const paths = [
+    const differences: Difference[] = [
       ...diffWorkspaceLayouts(was?.workspaces[workspace], now?.workspaces[workspace]),
-      ...(rawPaths.get(workspace) ?? [])
-    ]
-    if (paths.length > 0) {
-      result.push({ workspace, paths: paths.slice(0, MAX_PATHS) })
+      ...(rawPaths.get(workspace) ?? []).map((path) => ({ path }))
+    ].slice(0, MAX_PATHS)
+    if (differences.length > 0) {
+      const changes = differences.flatMap((difference) => difference.changes ?? [])
+      result.push({
+        workspace,
+        paths: differences.map((difference) => difference.path),
+        ...(changes.length > 0 ? { values: compactFieldChanges(changes) } : {})
+      })
     }
   }
   return result

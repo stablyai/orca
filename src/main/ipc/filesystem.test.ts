@@ -20,6 +20,8 @@ import {
   localFileHandleMock
 } from './filesystem-test-harness'
 
+const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
+vi.mock('./filesystem/local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock('node:fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
@@ -40,10 +42,6 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
@@ -70,8 +68,7 @@ import {
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
     resetFilesystemIpcMocks()
-    // Reset module-level auth cache so each test starts with a fresh dirty
-    // flag — prevents stale worktree data from a prior test's cache rebuild.
+    // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
@@ -92,14 +89,12 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  // Why: handler-level WSL UNC authorization depends on native Windows path
-  // resolution; path-shape classification has separate cross-platform coverage.
+  // Handler UNC authorization needs native Windows resolution; shape tests run cross-platform.
   it.runIf(process.platform === 'win32')(
     'records a redacted breadcrumb when fs:readDir throws on a WSL UNC path',
     async () => {
       registerFilesystemHandlers(store as never)
       const wslPath = path.win32.join('\\\\wsl.localhost\\Ubuntu', 'home', 'user', 'repo')
-      // resolveAuthorizedPath authorizes the path, then readdir fails (distro stopped).
       realpathMock.mockResolvedValue(wslPath)
       registerWorktreeRootsForRepo(store as never, 'repo-1', [wslPath])
       readdirMock.mockRejectedValue(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
@@ -114,7 +109,6 @@ describe('registerFilesystemHandlers', () => {
         isUNC: true,
         isWsl: true
       })
-      // The raw path must never appear in the breadcrumb payload.
       const [, breadcrumbData] = recordCrashBreadcrumbMock.mock.calls[0]
       expect(JSON.stringify(breadcrumbData)).not.toContain('user')
     }
@@ -247,6 +241,13 @@ describe('registerFilesystemHandlers', () => {
     )
 
     expect(statMock).toHaveBeenCalledWith(targetPath)
+    realpathMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    await expect(
+      handlers.get('fs:pathExists')!(null, {
+        filePath: path.resolve('/state/agent-session-attachments/upload/gone.png'),
+        access: { kind: 'chat-image' }
+      })
+    ).resolves.toBe(false)
   })
 
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
@@ -307,6 +308,30 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Cannot write to a directory')
 
     expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a guarded save through the shared compare-and-write and returns its refusal', async () => {
+    lstatMock.mockResolvedValue({ isDirectory: () => false })
+    diskPreconditionMock.writeLocalTextFileWithDiskPrecondition.mockResolvedValueOnce({
+      ok: false,
+      diskConflict: 'changed'
+    })
+    registerFilesystemHandlers(store as never)
+    const diskPrecondition = { expectedSignature: 'a-b-1' }
+
+    await expect(
+      handlers.get('fs:writeFile')!(null, {
+        filePath: path.resolve('/workspace/repo/file.txt'),
+        content: 'data',
+        diskPrecondition
+      })
+    ).resolves.toEqual({ ok: false, diskConflict: 'changed' })
+
+    expect(diskPreconditionMock.writeLocalTextFileWithDiskPrecondition).toHaveBeenCalledWith(
+      path.resolve('/workspace/repo/file.txt'),
+      'data',
+      diskPrecondition
+    )
   })
 
   it.each([
@@ -423,17 +448,9 @@ describe('registerFilesystemHandlers', () => {
     expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: undefined })
   })
 
-  // Regression for #6415: WSL UNC paths have no Recycle Bin, so shell.trashItem
-  // throws. The handler must hard-delete via the distro instead of surfacing an
-  // error popup.
+  // WSL UNC has no Recycle Bin; delete inside the distro instead (#6415).
   it('hard-deletes a WSL UNC path instead of trashing it', async () => {
-    // Why: build the UNC-style root with path.join so it resolves as a real
-    // parent/child pair under the host's path semantics. A literal
-    // '\\wsl.localhost\...' string only resolves correctly under win32 path
-    // rules — on the Linux CI runner POSIX treats the backslashes as filename
-    // characters, so the target would not be a descendant of the root and auth
-    // would deny it before the WSL hard-delete ran (the real production path is
-    // Windows-only).
+    // Build with host path semantics so root/child containment also holds on POSIX CI.
     const wslUncRoot = path.join(
       `${path.sep}${path.sep}wsl.localhost`,
       'Ubuntu',
@@ -450,14 +467,11 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('fs:deletePath')!(null, { targetPath, recursive: true })
 
     expect(tryDeleteWslUncPathMock).toHaveBeenCalledWith(targetPath, { recursive: true })
-    // Critical: we must NOT call trashItem for WSL UNC paths — that is exactly
-    // the call that throws and produced the user-facing error.
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
   it('propagates a WSL hard-delete failure instead of swallowing it', async () => {
-    // Why: see sibling test — path.join keeps the UNC root/target a real
-    // parent/child pair under both win32 and POSIX (Linux CI) path semantics.
+    // Build a host-valid root/child pair as in the sibling test.
     const wslUncRoot = path.join(
       `${path.sep}${path.sep}wsl.localhost`,
       'Ubuntu',

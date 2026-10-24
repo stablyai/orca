@@ -1,14 +1,14 @@
 import type * as ExecCommandModule from './remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  parseGlibcVersion,
-  parseOrcadLinuxLibc,
-  resolveOrcadDeploymentTargetFacts
-} from './orcad-deployment-target'
-import { SshConnection } from './ssh-connection'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { resolveOrcadDeploymentTargetFacts } from './orcad-deployment-target'
+import { SshConnection } from './connection/ssh-connection'
+import { createCallbacks, createTarget } from './connection/ssh-connection-test-fixtures'
 import { execCommand } from './remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+
+// Captured from the official DS920+ DSM 7.4.1-90080 firmware's dynamic loader.
+const SYNOLOGY_LOADER_VERSION =
+  'ld.so (GNU libc) stable release version 2.36.\nCopyright (C) 2022 Free Software Foundation, Inc.\n'
 
 vi.mock('./remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),
@@ -25,7 +25,7 @@ beforeEach(() => vi.mocked(execCommand).mockReset())
 describe('deployment C library selection', () => {
   it.each([
     ['glibc 2.31', 'linux-x64-glibc'],
-    ['musl', 'linux-x64-musl']
+    ['musl libc', 'linux-x64-musl']
   ])('uses host fallback evidence %j when ldd is unavailable', async (evidence, target) => {
     vi.mocked(execCommand).mockResolvedValueOnce('ldd: not found').mockResolvedValueOnce(evidence)
     const conn = new SshConnection(createTarget(), createCallbacks())
@@ -39,7 +39,7 @@ describe('deployment C library selection', () => {
     )
   })
 
-  it('never guesses when neither probe identifies the host library', async () => {
+  it('never guesses when no probe identifies the host library', async () => {
     vi.mocked(execCommand).mockResolvedValue('')
     await expect(
       resolveOrcadDeploymentTarget({
@@ -47,6 +47,28 @@ describe('deployment C library selection', () => {
         host: getRemoteHostPlatform('linux-x64')
       })
     ).rejects.toThrow('Could not identify')
+  })
+
+  it('identifies DSM through its loader when ldd and getconf are missing', async () => {
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('/bin/sh: ldd: command not found\n')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce(SYNOLOGY_LOADER_VERSION)
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await expect(
+      resolveOrcadDeploymentTargetFacts({ conn, host: getRemoteHostPlatform('linux-x64') })
+    ).resolves.toEqual({ target: 'linux-x64-glibc', glibc: { major: 2, minor: 36 } })
+  })
+
+  it('propagates loss of contact during the loader probe', async () => {
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('ldd: not found')
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('SSH connection changed'))
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await expect(
+      resolveOrcadDeploymentTargetFacts({ conn, host: getRemoteHostPlatform('linux-x64') })
+    ).rejects.toThrow('SSH connection changed')
   })
 
   it('checks connection ownership again before the fallback probe', async () => {
@@ -73,30 +95,6 @@ describe('deployment C library selection', () => {
     await expect(pending).rejects.toThrow('SSH connection changed')
     expect(exec).toHaveBeenLastCalledWith(expect.stringContaining('getconf GNU_LIBC_VERSION'))
     expect(execCommand).toHaveBeenCalledOnce()
-  })
-
-  it.each([
-    ['ldd (Ubuntu GLIBC 2.31-0ubuntu9) 2.31', 'glibc'],
-    ['ldd (GNU libc) 2.28', 'glibc'],
-    ['musl libc (x86_64)\nVersion 1.2.5', 'musl']
-  ])('recognizes %s', (output, expected) => {
-    expect(parseOrcadLinuxLibc(output)).toBe(expected)
-  })
-
-  it.each(['', 'ldd: command not found', 'Linux x86_64'])(
-    'refuses unproven target %j',
-    (output) => {
-      expect(() => parseOrcadLinuxLibc(output)).toThrow('Could not identify')
-    }
-  )
-
-  it.each([
-    ['ldd (Ubuntu GLIBC 2.31-0ubuntu9.16) 2.31\nCopyright (C) 2020', { major: 2, minor: 31 }],
-    ['ldd (GNU libc) 2.17', { major: 2, minor: 17 }],
-    ['glibc 2.28', { major: 2, minor: 28 }],
-    ['ldd (GNU libc) unknown', null]
-  ])('reads glibc major.minor from %j', (output, expected) => {
-    expect(parseGlibcVersion(output)).toEqual(expected)
   })
 
   it('returns the glibc version with the target, from either probe', async () => {

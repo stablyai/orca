@@ -1,3 +1,4 @@
+import { useChatSettingsTypedPermissions } from '@/runtime/structured-agent-session-host-capability'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../../../shared/agent-chat-permission-mode'
 import { NativeChatPermissionModePicker } from '../native-chat/NativeChatPermissionModePicker'
@@ -15,11 +16,12 @@ export function ChatPermissionSetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisible: boolean
 }): React.JSX.Element | null {
+  const typedPermissions = useChatSettingsTypedPermissions()
   const current = settings.nativeChatPermissionMode
   if (current === undefined) {
     return null
   }
-  const entry = getChatPermissionSearchEntry()
+  const entry = getChatPermissionSearchEntry(typedPermissions)
   return (
     <SearchableSetting
       {...entry}
@@ -34,7 +36,9 @@ export function ChatPermissionSetting({
           <NativeChatPermissionModePicker
             current={current}
             modes={AGENT_CHAT_PERMISSION_MODES}
-            onSelect={(nativeChatPermissionMode) => updateSettings({ nativeChatPermissionMode })}
+            onSelect={(nativeChatPermissionMode) =>
+              updateSettings({ nativeChatPermissionMode, agentNativeChatPermissionModes: {} })
+            }
           />
         }
       />

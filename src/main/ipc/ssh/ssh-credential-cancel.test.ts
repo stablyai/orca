@@ -7,14 +7,14 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
-vi.mock('../../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
 vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import type { SshCredentialKind } from '../../ssh/ssh-connection-utils'
+import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { isSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
@@ -39,7 +39,6 @@ describe('a cancelled SSH sign-in', () => {
     mockSshStore.getTarget.mockReturnValue(target)
   })
 
-  /** The prompt every connect (explicit, reconnect ladder, tunnel, census) reaches for a credential. */
   function requestCredential(
     targetId: string,
     kind: SshCredentialKind,
@@ -69,7 +68,6 @@ describe('a cancelled SSH sign-in', () => {
     )
   }
 
-  /** What any connect does when its key or password is needed: ask, and the user cancels. */
   async function promptAndCancel(attempt?: AbortSignal): Promise<void> {
     const pending = requestCredential(target.id, 'passphrase', '~/.ssh/id_ed25519', attempt)
     await submitCredential(null)
@@ -105,7 +103,6 @@ describe('a cancelled SSH sign-in', () => {
     void requestCredential(target.id, 'password', target.host, cancelledAttempt)
     expect(credentialRequests()).toHaveLength(1)
 
-    // A later automatic attempt.
     await expect(
       requestCredential(target.id, 'password', target.host, new AbortController().signal)
     ).resolves.toBeNull()

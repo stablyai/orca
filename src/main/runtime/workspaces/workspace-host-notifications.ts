@@ -1,3 +1,4 @@
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../session-tabs/mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
@@ -117,7 +118,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   ): Promise<void> {
     const repoIds = new Set(
       (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.connectionId === targetId)
+        .filter((repo) => getRepoRoutingConnectionId(repo) === targetId)
         .map((repo) => repo.id)
     )
     if (repoIds.size === 0) {
@@ -175,7 +176,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
     this.invalidateWorktreeScanCacheForRepo(repoId)
     const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
-    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
+    if (matchingRepos.length !== 1 || getRepoRoutingConnectionId(matchingRepos[0])) {
       return
     }
     this.notifyWorktreesChangedForRemoteClients(repoId)
@@ -186,6 +187,12 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   // got its own repos:changed and must not be re-notified (#11994).
   notifyReposChangedForRemoteClients(): void {
     this.emitClientEvent({ type: 'reposChanged' })
+  }
+
+  // Why: browser profiles change in main's session registry, outside runtime methods.
+  notifyBrowserProfilesChanged(): void {
+    this.notifier?.browserProfilesChanged?.()
+    this.emitClientEvent({ type: 'browserProfilesChanged' })
   }
 
   /** `setup` and `defaultTabs` go to the host window only: main tried and failed to start them. */

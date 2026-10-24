@@ -1,5 +1,4 @@
-// The branch rules a Claude transcript must satisfy, read off the marker tip. The live replay
-// proves from the file tail instead and falls back to these rules when no tail row qualifies.
+// Live replay uses the file tail; these marker rules apply when no eligible tail row exists.
 
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

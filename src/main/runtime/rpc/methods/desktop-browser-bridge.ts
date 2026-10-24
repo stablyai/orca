@@ -1,4 +1,5 @@
 import {
+  DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
@@ -35,7 +36,13 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
     handler: async (params, context, emit) => {
       const caller = requireBridgeCaller(context)
       const { runtime, signal } = context
-      const handle = getDesktopBrowserBridgeRegistry(runtime).attach({ ...caller, emit })
+      const acceptsCancel =
+        context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY) ?? false
+      const handle = getDesktopBrowserBridgeRegistry(runtime).attach({
+        ...caller,
+        acceptsCancel,
+        emit
+      })
       let release = (): void => {}
       const released = new Promise<void>((resolve) => {
         release = resolve

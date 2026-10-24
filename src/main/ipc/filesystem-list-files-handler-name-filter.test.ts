@@ -24,10 +24,6 @@ vi.mock(
 )
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
 vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
-)
-vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
@@ -99,7 +95,7 @@ describe('fs:listFiles local name filter', () => {
     expect(listQuickOpenFilesMock).not.toHaveBeenCalled()
   })
 
-  // Why #7721: a workspace switch must stop the previous workspace's full-tree scan.
+  // Workspace switches must cancel prior full-tree scans (#7721).
   it.each(['cancel', 'did-navigate', 'render-process-gone', 'destroyed'])(
     'aborts an in-flight file listing on %s (#7721)',
     async (eventName) => {
@@ -115,7 +111,7 @@ describe('fs:listFiles local name filter', () => {
       )
       registerHandlers()
 
-      // Why: cancellation keys are scoped to the issuing webContents.
+      // Cancellation tokens belong to the issuing WebContents.
       const senderEvent = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
       const pending = Promise.resolve(
         handlers.get('fs:listFiles')!(senderEvent, { rootPath: '/repo', requestToken: 'token-1' })
@@ -132,7 +128,6 @@ describe('fs:listFiles local name filter', () => {
       await expect(pending).rejects.toThrow('listing cancelled')
       expect(senderEvent.sender.eventNames()).toEqual([])
 
-      // Unknown or already-settled tokens are a no-op, not an error.
       expect(() =>
         handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
       ).not.toThrow()

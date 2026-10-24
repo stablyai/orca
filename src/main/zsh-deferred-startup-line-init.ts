@@ -1,4 +1,4 @@
-// Why: stock zshrc can replace line-init after the user clears the prompt-hook array.
+// Stock zshrc can replace line-init after user config clears the prompt-hook array.
 export const ZSH_DEFERRED_LINE_INIT_BLOCK = `__orca_deferred_line_init() {
   builtin emulate -L zsh
   (( \${+functions[__orca_deferred_init]} )) || return 0
@@ -12,7 +12,7 @@ export const ZSH_DEFERRED_LINE_INIT_BLOCK = `__orca_deferred_line_init() {
     __orca_prompt_mark "$@"
   fi
 }
-# Why: scheduled callbacks run after user prompt hooks without copying their function metadata.
+# Run after user prompt hooks without copying their function metadata.
 __orca_deferred_sched_init() {
   local __orca_prompt_status=$?
   builtin emulate -L zsh
@@ -34,7 +34,7 @@ __orca_arm_deferred_line_init() {
   fi
 }`
 
-// Why: restore the exact prior widget before the existing readiness hook captures it.
+// Restore the prior widget before the readiness hook captures it.
 export const ZSH_DEFERRED_LINE_INIT_RETIRE_BLOCK = `  if (( \${+widgets[__orca_saved_line_init]} )); then
     if [[ "\${widgets[zle-line-init]:-}" == user:__orca_deferred_line_init ]]; then
       zle -A __orca_saved_line_init zle-line-init
@@ -44,5 +44,5 @@ export const ZSH_DEFERRED_LINE_INIT_RETIRE_BLOCK = `  if (( \${+widgets[__orca_s
     zle -D zle-line-init
   fi`
 
-// Why: plugins can copy a call to line-init into their own body; its guard makes it inert after startup.
+// Plugin-copied callbacks stay inert after startup through their own guards.
 export const ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK = `  (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init`

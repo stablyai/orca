@@ -15,6 +15,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/nat
 import { NATIVE_CHAT_STREAMING_ID } from '../../../src/shared/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
+import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -132,6 +133,7 @@ export function useMobileNativeChatTurnDisclosure({
   scopeKey: string
 }): {
   active: NativeChatTurnStatus | null
+  presentation: MobileNativeChatRunPresentation
   /** The live turn's provider activity copy, for the footer row. */
   activeActivityText: string | null
   onToggleTurn: (turnKey: string) => void
@@ -233,6 +235,10 @@ export function useMobileNativeChatTurnDisclosure({
     expandedTurnKeys: expandedTurnIds,
     liveReasoningId
   })
+  const presentation = useMemo(
+    () => ({ rows, workRuns, turnKeys, receipts }),
+    [rows, workRuns, turnKeys, receipts]
+  )
   const latestAssistantId = useMemo(
     () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
     [waiting.listMessages]
@@ -316,6 +322,7 @@ export function useMobileNativeChatTurnDisclosure({
 
   return {
     active,
+    presentation,
     activeActivityText,
     /** Stable for a given chat scope, so it never disturbs a row's memo. */
     onToggleTurn: toggleExpandedTurn,

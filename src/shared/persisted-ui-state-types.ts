@@ -1,5 +1,5 @@
 import type { JiraQuickFilterState } from './jira-quick-filters'
-import type { JiraSavedFilterState } from './jira-saved-filters'
+import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'

@@ -53,7 +53,7 @@ describe('AgentHookServer pane authority', () => {
     ])
   })
 
-  // A pane move is announced by main and again by the renderer; the repeat must change nothing.
+  // Main and renderer can both announce the same pane transfer.
   it('ignores a transfer that is already in place', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

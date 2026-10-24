@@ -1,16 +1,18 @@
+import { compareGitStatusEntries } from '../../source-control-status-sort'
 import { normalizeSourceControlGroupOrder } from '../../../../../../shared/source-control-group-order'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlGroupOrder } from '../../../../../../shared/ui-chrome-types'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]
-export type SourceControlDisplaySectionId = SourceControlSectionArea | 'conflicts'
+export type SourceControlDisplaySectionArea = Exclude<SourceControlSectionArea, 'untracked'>
+export type SourceControlDisplaySectionId = SourceControlDisplaySectionArea | 'conflicts'
 
 export type SourceControlEntryGroups = Record<SourceControlSectionArea, GitStatusEntry[]>
 
 export type SourceControlDisplaySection = {
   id: SourceControlDisplaySectionId
-  area: SourceControlSectionArea
+  area: SourceControlDisplaySectionArea
   items: GitStatusEntry[]
 }
 
@@ -23,15 +25,17 @@ export type SourceControlSectionViewAction =
   | { kind: 'conflict-review'; entries: SourceControlConflictReviewEntry[] }
   | { kind: 'combined-diff'; area?: SourceControlSectionArea; entries: GitStatusEntry[] }
 
-const ORDER_BY_PRESET: Record<SourceControlGroupOrder, readonly SourceControlSectionArea[]> = {
-  'changes-first': ['unstaged', 'staged', 'untracked'],
-  'staged-first': ['staged', 'unstaged', 'untracked'],
-  'untracked-first': ['untracked', 'unstaged', 'staged']
+const ORDER_BY_PRESET: Record<
+  ReturnType<typeof normalizeSourceControlGroupOrder>,
+  readonly SourceControlDisplaySectionArea[]
+> = {
+  'changes-first': ['unstaged', 'staged'],
+  'staged-first': ['staged', 'unstaged']
 }
 
 export function resolveSourceControlGroupOrder(
   value: SourceControlGroupOrder | null | undefined
-): readonly SourceControlSectionArea[] {
+): readonly SourceControlDisplaySectionArea[] {
   return ORDER_BY_PRESET[normalizeSourceControlGroupOrder(value)]
 }
 
@@ -100,7 +104,7 @@ export function splitPinnedSourceControlConflicts(
 
 export function buildSourceControlDisplaySectionsFromSplit(
   split: SplitSourceControlGroups,
-  order: readonly SourceControlSectionArea[]
+  order: readonly SourceControlDisplaySectionArea[]
 ): SourceControlDisplaySection[] {
   const { pinnedConflicts, normalGroups } = split
   const sections: SourceControlDisplaySection[] = []
@@ -109,8 +113,11 @@ export function buildSourceControlDisplaySectionsFromSplit(
     sections.push({ id: 'conflicts', area: 'unstaged', items: pinnedConflicts })
   }
 
+  const changes = [...normalGroups.unstaged, ...normalGroups.untracked].sort(
+    compareGitStatusEntries
+  )
   for (const area of order) {
-    const items = normalGroups[area]
+    const items = area === 'unstaged' ? changes : normalGroups[area]
     if (items.length > 0) {
       sections.push({ id: area, area, items })
     }
@@ -121,7 +128,7 @@ export function buildSourceControlDisplaySectionsFromSplit(
 
 export function buildSourceControlDisplaySections(
   groups: SourceControlEntryGroups,
-  order: readonly SourceControlSectionArea[]
+  order: readonly SourceControlDisplaySectionArea[]
 ): SourceControlDisplaySection[] {
   return buildSourceControlDisplaySectionsFromSplit(
     splitPinnedSourceControlConflicts(groups),

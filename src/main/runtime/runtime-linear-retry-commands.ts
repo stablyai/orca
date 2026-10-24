@@ -1,9 +1,11 @@
 import {
   type LinearAgentAccessError,
-  type LinearAgentWriteTarget,
-  type LinearCreateFieldIntent,
   linearError,
   sanitizeLinearErrorMessage
+} from '../linear/issue-context/errors'
+import type {
+  LinearAgentWriteTarget,
+  LinearCreateFieldIntent
 } from './runtime-linear-command-dependencies'
 import { RuntimeLinearCommandBase } from './runtime-linear-command-base'
 

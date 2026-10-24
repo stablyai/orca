@@ -19,8 +19,8 @@ import {
   type OrcadMigrationBlobDescriptor,
   type OrcadMigrationBlobKind,
   type OrcadMigrationBlobUploadState
-} from '../../../shared/orcad-migration-blob-transfer'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 import {
   appendOrcadMigrationStagedChunk,

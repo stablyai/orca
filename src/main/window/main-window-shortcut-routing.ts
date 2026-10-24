@@ -1,5 +1,5 @@
+import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -116,7 +116,7 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
+    if (input.type === 'keyDown' && !app.isPackaged && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()

@@ -10,7 +10,7 @@ import type { BrowserClientPageMetadataSnapshot } from './browser-client-page-me
  * can no longer reach its guest.
  *
  * `eventUrl` wins when a navigation event carries one: the tag's own getURL() can still report the
- * previous page while the event is being delivered. `loading` is forced for did-start-loading,
+ * previous page while the event is being delivered. `loading` is forced for a navigation start,
  * which fires before isLoading() flips.
  *
  * Why total rather than throwing: a guest destroyed in main leaves the tag holding its id, so
@@ -63,5 +63,28 @@ export function createBrowserClientPageLoadFailureHandler(
     } else if (loadError) {
       onFailure(loadError)
     }
+  }
+}
+
+/** Binds the guest events a client-hosted pane mirrors and returns the matching unbind. */
+export function bindBrowserClientPageGuestEvents(
+  webview: Electron.WebviewTag,
+  onStart: (event: Electron.DidStartNavigationEvent) => void,
+  syncNavigation: (event?: Event) => void,
+  onFailLoad: (event: Event) => void
+): () => void {
+  webview.addEventListener('did-start-navigation', onStart)
+  webview.addEventListener('did-stop-loading', syncNavigation)
+  webview.addEventListener('did-navigate', syncNavigation)
+  webview.addEventListener('did-navigate-in-page', syncNavigation)
+  webview.addEventListener('page-title-updated', syncNavigation)
+  webview.addEventListener('did-fail-load', onFailLoad)
+  return () => {
+    webview.removeEventListener('did-start-navigation', onStart)
+    webview.removeEventListener('did-stop-loading', syncNavigation)
+    webview.removeEventListener('did-navigate', syncNavigation)
+    webview.removeEventListener('did-navigate-in-page', syncNavigation)
+    webview.removeEventListener('page-title-updated', syncNavigation)
+    webview.removeEventListener('did-fail-load', onFailLoad)
   }
 }

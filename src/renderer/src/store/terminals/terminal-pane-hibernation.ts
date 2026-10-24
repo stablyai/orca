@@ -13,7 +13,7 @@ import {
 } from '../slices/agent-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveRuntimeOwnerForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
@@ -32,7 +32,7 @@ export function createTerminalPaneHibernationActions(
       )
       const rendererShutdownPtyIds = [opts.ptyId]
       const state = get()
-      const worktreeOwner = resolveRuntimeOwnerForWorktree(state, worktreeId)
+      const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
       const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
       // Why: a twin-published worktree must route by the PTY's own owner; a remote PTY with no
       // host stop to run would otherwise lose its binding while the agent keeps running.

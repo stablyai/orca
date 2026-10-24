@@ -27,7 +27,12 @@ export type JsonlRpcTimelineLaneDeps = {
 export class JsonlRpcTimelineLane {
   private readonly assembler: ProviderTimelineAssembler
   private readonly identity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
-  private readonly held: { event: ProviderTimelineEvent; bytes: number }[] = []
+  private readonly held: {
+    events: { event: ProviderTimelineEvent; bytes: number }[]
+    bytes: number
+  }[] = []
+  private heldEvents = 0
+  private sealed = false
   private heldBytes = 0
   private draining = false
   private ended = false
@@ -55,7 +60,7 @@ export class JsonlRpcTimelineLane {
 
   beginCommand(command: StructuredAgentSessionCommandRun): void {
     this.retry()
-    if (this.ended || this.held.length > 0) {
+    if (this.ended || this.sealed || this.held.length > 0) {
       throw new Error('Provider timeline has not drained for this command')
     }
     this.assembler.beginCommand(command)
@@ -66,19 +71,50 @@ export class JsonlRpcTimelineLane {
   }
 
   apply(events: readonly ProviderTimelineEvent[]): void {
-    if (this.ended) {
+    if (this.ended || this.sealed) {
       return
     }
-    for (const event of events) {
-      const bytes = Buffer.byteLength(JSON.stringify(event))
-      if (this.held.length >= MAX_HELD_EVENTS || this.heldBytes + bytes > MAX_HELD_BYTES) {
-        this.fail('Agent timeline queue capacity exceeded')
-        return
+    const pending = events.map((event) => ({
+      event,
+      bytes: Buffer.byteLength(JSON.stringify(event))
+    }))
+    // Try the current frame first; only a refused suffix becomes retained head work.
+    while (this.held.length === 0 && pending.length > 0 && !this.ended) {
+      if (!this.consume(pending[0].event)) {
+        break
       }
-      this.held.push({ event, bytes })
-      this.heldBytes += bytes
-      this.retry()
+      pending.shift()
     }
+    this.notify()
+    if (pending.length === 0 || this.ended) {
+      return
+    }
+    const bytes = pending.reduce((total, entry) => total + entry.bytes, 0)
+    if (
+      this.heldEvents + pending.length > MAX_HELD_EVENTS ||
+      (this.held.length > 0 && this.heldBytes - this.held[0].bytes + bytes > MAX_HELD_BYTES)
+    ) {
+      this.fail('Agent timeline queue capacity exceeded')
+      return
+    }
+    this.held.push({ events: pending, bytes })
+    this.heldEvents += pending.length
+    this.heldBytes += bytes
+    this.retry()
+  }
+
+  private consume(event: ProviderTimelineEvent): boolean {
+    const result = this.assembler.apply(event)
+    if (!result.admission.accepted) {
+      if (result.admission.reason !== 'backpressure') {
+        this.fail(result.admission.reason)
+      }
+      return false
+    }
+    if (event.type === 'input.accepted' && !result.dropped) {
+      this.deps.onInputAccepted(event.clientMessageId)
+    }
+    return true
   }
 
   retry(): void {
@@ -90,29 +126,31 @@ export class JsonlRpcTimelineLane {
     this.draining = true
     try {
       while (this.held.length > 0 && !this.ended) {
-        const entry = this.held[0]
-        const result = this.assembler.apply(entry.event)
-        if (!result.admission.accepted) {
-          if (result.admission.reason !== 'backpressure') {
-            this.fail(result.admission.reason)
-          } else {
+        const batch = this.held[0]
+        const entry = batch.events[0]
+        if (!this.consume(entry.event)) {
+          if (!this.ended) {
             this.deps.pauseReading()
             this.retryTimer = setTimeout(() => this.retry(), 250)
             this.retryTimer.unref()
           }
           return
         }
-        this.held.shift()
+        batch.events.shift()
+        batch.bytes -= entry.bytes
         this.heldBytes -= entry.bytes
-        if (entry.event.type === 'input.accepted' && !result.dropped) {
-          this.deps.onInputAccepted(entry.event.clientMessageId)
+        this.heldEvents -= 1
+        if (batch.events.length === 0) {
+          this.held.shift()
         }
       }
     } finally {
       this.draining = false
       this.notify()
     }
-    this.deps.resumeReading()
+    if (!this.sealed && !this.ended) {
+      this.deps.resumeReading()
+    }
   }
 
   whenTurnLeaves(turnId: string): Promise<void> {
@@ -161,11 +199,23 @@ export class JsonlRpcTimelineLane {
     this.assembler.flush()
   }
 
-  finalize(): void {
-    // Admission must precede the host's exit barrier even when lifecycle writes are full.
+  finalize(end?: Extract<ProviderTimelineEvent, { type: 'session.ended' }>): void {
+    if (this.sealed || this.ended) {
+      return
+    }
+    // At most 256 held events + 128 dirty streams + this internal end: below 512 tail slots.
+    this.sealed = true
     this.finalizing = true
     this.retry()
+    if (this.ended) {
+      return
+    }
+    if (this.held.length > 0 || (end && !this.consume(end))) {
+      this.fail('Agent final timeline could not be transferred')
+      return
+    }
     this.flush()
+    this.assembler.dispose()
   }
 
   dispose(): void {
@@ -173,6 +223,7 @@ export class JsonlRpcTimelineLane {
     clearTimeout(this.retryTimer)
     this.held.length = 0
     this.heldBytes = 0
+    this.heldEvents = 0
     this.assembler.dispose()
     this.notify()
   }

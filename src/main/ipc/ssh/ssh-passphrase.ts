@@ -1,6 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { SSH_CREDENTIAL_TIMEOUT_MS, type SshCredentialKind } from '../../ssh/ssh-connection-utils'
+import { SSH_CREDENTIAL_TIMEOUT_MS } from '../../ssh/connection/ssh-connection-timing'
+import type { SshCredentialKind } from '../../ssh/connection/ssh-connection-callbacks'
 import { recordSshCredentialDeclined } from '../../ssh/ssh-credential-decline'
 const pendingRequests = new Map<
   string,
@@ -38,14 +39,14 @@ export function requestCredential(
     resolve(value)
   }
   const onAbort = (): void => finish(null)
-  // Why: an abort is the connection's own teardown; only the user's Cancel (or silence) declines.
+  // Teardown abort is not a credential decline; only user cancellation or timeout declines.
   const decline = (): void => {
     if (!pendingRequests.has(requestId)) {
       return
     }
     recordSshCredentialDeclined(targetId, signal)
     finish(null)
-    // Why: one Cancel answers the host; a queued prompt for it would otherwise open next.
+    // One Cancel declines the host, including queued prompts that would otherwise open next.
     for (const [otherId, other] of pendingRequests) {
       if (otherId !== requestId && other.targetId === targetId) {
         other.close()

@@ -1,4 +1,4 @@
-import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
@@ -46,8 +46,11 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`Generated: ${new Date(now).toISOString()}`)
   lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
   lines.push(`Bridge protocol: ${args.bridgeProtocolVersion}`)
-  const desktopAppVersion = normalizeHostAppVersion(args.desktopAppVersion)
-  lines.push(`Host Orca version: ${desktopAppVersion ?? 'unknown'}`)
+  const desktopAppVersion =
+    args.state === 'connected' ? normalizeHostAppVersion(args.desktopAppVersion) : null
+  lines.push(
+    `Host Orca version: ${desktopAppVersion ?? (args.state === 'connected' ? 'unknown' : 'unknown (not currently connected)')}`
+  )
   lines.push(`Host: ${redactConnectionLogText(args.hostName)}`)
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`

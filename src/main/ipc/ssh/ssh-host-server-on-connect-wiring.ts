@@ -1,4 +1,3 @@
-/** The live collaborators behind each connect's server decision. */
 import { getAppEnvironment } from '../../../shared/app-environment'
 import {
   getManagedOrcadFenceEnvironmentId,
@@ -9,6 +8,7 @@ import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migrat
 import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
 import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
+import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
 import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
@@ -30,12 +30,13 @@ import { setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { trackSshHostServerEvent } from '../../ssh/ssh-host-server-telemetry'
 import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
 import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { releaseUnreachableOrcadSetup } from '../../ssh/orcad-unreachable-setup-release'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState } from './ssh-renderer-broadcast'
 import { connectInFlight } from './ssh-connect-attempt-registry'
 import { startLegacyRelayBridge } from '../../ssh/legacy-relay/legacy-relay-bridge-registry'
+import { isBridgeableLease } from '../../ssh/legacy-relay/legacy-relay-bridge-leases'
 
 export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConnectDeps {
   const registry = getSshTargetRegistryStore()!
@@ -45,7 +46,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const isRegistered = (environmentId: string): boolean =>
     listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
   return {
-    // Why registered only: a fence whose server never registered is an unfinished setup, not a server.
+    // A fence alone may be unfinished setup; only registered servers count.
     managedEnvironmentId: (target) => {
       const environmentId = getManagedOrcadFenceEnvironmentId(target)
       return environmentId && isRegistered(environmentId) ? environmentId : null
@@ -54,10 +55,10 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
     },
     ensureServing: (environmentId) => verifyOrcadManagedServing(userDataPath, environmentId),
-    retainCommittedSource: (target) => {
+    retainCommittedSource: async (target) => {
       const head = findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id)
       if (head?.phase === 'destination-committed') {
-        retainOrcadMigrationSource(userDataPath, head.migrationId)
+        await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
       }
     },
     hasTemplate: hasOrcadTemplate,
@@ -66,7 +67,9 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         ? target.managedServerUnavailable.reason
         : null,
     recordUnavailable: (target, reason) => {
-      registry.updateTarget(target.id, { managedServerUnavailable: { reason, appVersion } })
+      if (!isOrcadHostUnavailableFixableOnHost(reason)) {
+        registry.updateTarget(target.id, { managedServerUnavailable: { reason, appVersion } })
+      }
     },
     ...managedServerUpdateDeps(userDataPath),
     isEmptyHost: (target) => {
@@ -105,14 +108,14 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         // The connect's own census already answered; a conversion before any session reuses it.
         censusHost: (host) =>
           hostProof ? Promise.resolve(hostProof) : censusHostRelayTerminalsFor(host)(),
-        // Why no releaseDirectSession: a disconnect here would cancel the connect that asked for it.
+        isBridgedPaneLease: isBridgeableLease,
+        // Releasing the direct session here would cancel the connect that requested conversion.
         destinationFor: orcadMigrationDestinationFor,
         serverRepositoriesFor: orcadServerRepositoriesFor,
         serverFolderCatalogFor: orcadServerFolderCatalogFor
       })
       if (converted.outcome === 'converted' || converted.outcome === 'refused') {
-        // "Move anyway" covers one attempt; a later move, or a later delta, asks again.
-        // Kept on a throw: verifyFence re-exports with it, so a held fence could never resume.
+        // Move-anyway consent covers one attempt; retain it on failure so held-fence verification can resume.
         registry.updateTarget(target.id, { managedServerLeaveBehind: undefined })
       }
       return converted
@@ -155,7 +158,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         knownOrcadTunnelTransport(target.id)
       ),
     progress: (target, phase) => {
-      // A cancelled connect's decision keeps running; its progress must not revive the status.
+      // Cancelled decisions keep running; their progress must not revive connection status.
       if (!connectInFlight.has(target.id)) {
         return
       }

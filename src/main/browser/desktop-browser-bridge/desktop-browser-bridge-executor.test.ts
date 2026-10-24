@@ -18,19 +18,17 @@ import {
 
 const HOST_WORKSPACE = 'repo-host::/srv/app'
 const LOCAL_WORKSPACE = 'repo-local::/Users/me/app'
-// What the renderer knows: every page record, mounted or not.
+// The renderer knows page records before their webviews mount.
 const PAGE_OWNERS: Record<string, string> = {
   'host-page': HOST_WORKSPACE,
   'unmounted-host-page': HOST_WORKSPACE,
   'local-page': LOCAL_WORKSPACE
 }
-// What main's browser registry knows: only pages whose webview has mounted.
 const MOUNTED_PAGE_OWNERS: Record<string, string> = {
   'host-page': HOST_WORKSPACE,
   'local-page': LOCAL_WORKSPACE
 }
 
-/** The renderer's answer: the page's or named workspace, if this host owns it. */
 async function rendererScope(scope: {
   workspaceId: string | null
   page: string | null
@@ -69,7 +67,6 @@ function deps(overrides: Partial<DesktopBrowserBridgeExecutorDeps> = {}) {
     isHostBrowsingRouted: () => true,
     isGuestRoutedThroughHost: () => true,
     dispatch: async (method, params) => {
-      // Inside the dispatch, a selector for any other workspace must be refused.
       const scopeProbe = await resolveRemoteCliBrowserScopeSelector(`id:${LOCAL_WORKSPACE}`)?.catch(
         (error: Error) => error.message
       )
@@ -103,7 +100,7 @@ describe('executeDesktopBrowserBridgeRequest', () => {
         scopeProbe: 'An SSH host can only reach browser tabs in its own workspaces.'
       }
     ])
-    // The audit names the origin only: query strings can carry credentials.
+    // Query strings can contain credentials; audit only the origin.
     expect(audit).toEqual([
       expect.objectContaining({
         method: 'browser.goto',
@@ -592,7 +589,6 @@ describe('captureRemoteCliBrowserRevocation guest routing', () => {
     expect(() => assertAdmitted(7)).not.toThrow()
     routed = false
     expect(() => assertAdmitted(7)).toThrow('not browsing through the SSH host')
-    // A check with no guest yet (before the queue resolves one) still only checks revocation.
     expect(() => assertAdmitted()).not.toThrow()
   })
 })

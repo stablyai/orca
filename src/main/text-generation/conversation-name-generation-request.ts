@@ -4,14 +4,10 @@ import {
   sanitizeGeneratedConversationName,
   type ConversationNameContext
 } from '../../shared/conversation-name-generation'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { captureAgentGenerationFailureOutput } from './agent-failure-output'
-import {
-  commandBackslashMode,
-  executeGenerationPlan
-} from './source-control-text-generation-requests'
+import { runGenerationRequest } from './agent-generation-request'
 import type {
   CommitMessageGenerationTarget,
   GenerateConversationNameResult,
@@ -24,7 +20,7 @@ export async function generateConversationName(input: {
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateConversationNameResult> {
-  const { context, params, target } = input
+  const { context, params } = input
   const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)
   const basePrompt = buildConversationNamePrompt({ firstPrompt })
   const prompt =
@@ -34,17 +30,10 @@ export async function generateConversationName(input: {
           firstPrompt
         })
       : buildConversationNamePrompt({ firstPrompt }, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(
-    { ...params, backslash: commandBackslashMode(target) },
-    prompt
-  )
-  if (!planned.ok) {
-    return { success: false, error: planned.error }
-  }
 
-  const result = await executeGenerationPlan({
+  const result = await runGenerationRequest({
     ...input,
-    plan: planned.plan,
+    prompt,
     emptyResultName: 'chat name',
     operation: 'conversation-name'
   })
@@ -59,7 +48,11 @@ export async function generateConversationName(input: {
         success: false,
         error: 'Generated chat name was empty after sanitization.',
         failureOutput:
-          captureAgentGenerationFailureOutput(planned.plan.label, 0, result.rawOutput, '') ??
-          undefined
+          captureAgentGenerationFailureOutput(
+            result.agentLabel ?? params.agentId,
+            0,
+            result.rawOutput,
+            ''
+          ) ?? undefined
       }
 }

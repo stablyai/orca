@@ -1,8 +1,8 @@
 import type * as ExecCommandModule from '../../ssh/remote-exec/remote-exec-command'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveOrcadRuntimeTarget } from './orcad-runtime-target'
-import { SshConnection } from '../../ssh/ssh-connection'
-import { createCallbacks, createTarget } from '../../ssh/ssh-connection-test-fixtures'
+import { SshConnection } from '../../ssh/connection/ssh-connection'
+import { createCallbacks, createTarget } from '../../ssh/connection/ssh-connection-test-fixtures'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 

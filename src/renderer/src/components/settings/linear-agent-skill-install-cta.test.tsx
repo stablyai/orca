@@ -2,13 +2,14 @@
 
 import { act, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../ui/tooltip'
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
-import { SKILLS_CLI_VERSION } from '../../../../shared/agent-feature-install-commands'
 
 const mocks = vi.hoisted(() => ({
+  agentRuntime: ((): ProjectAgentSkillRuntime | undefined => undefined)(),
   skillState: {
     installed: false,
     loading: false,
@@ -17,9 +18,11 @@ const mocks = vi.hoisted(() => ({
     refresh: vi.fn(async () => true)
   },
   useInstalledAgentSkillNames: vi.fn(),
-  clipboardWrite: vi.fn(async () => {}),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn()
+  plan: vi.fn(async () => ({ kind: 'unsupported', reason: 'update-server' }))
+}))
+
+vi.mock('@/hooks/use-bundled-skill-install-action', () => ({
+  useBundledSkillInstallAction: () => ({ kind: 'run' })
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
@@ -27,12 +30,16 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
-vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command
+vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+  planBundledSkillsOnTarget: mocks.plan,
+  executeBundledSkillsOnTarget: vi.fn()
 }))
 
-vi.mock('sonner', () => ({
-  toast: { success: mocks.toastSuccess, error: mocks.toastError }
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    bundledSkillTarget: mocks.agentRuntime?.runtime === 'wsl' ? null : { kind: 'local' },
+    agentRuntime: mocks.agentRuntime
+  })
 }))
 
 let root: Root | null = null
@@ -80,19 +87,14 @@ async function renderCta(
 describe('LinearAgentSkillInstallCta', () => {
   beforeEach(() => {
     mocks.skillState.installed = false
+    mocks.agentRuntime = undefined
     mocks.skillState.loading = false
     mocks.skillState.error = null
     mocks.skillState.skills = []
     mocks.skillState.refresh.mockClear()
     mocks.useInstalledAgentSkillNames.mockReset()
     mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
-    mocks.clipboardWrite.mockClear()
-    mocks.toastSuccess.mockClear()
-    mocks.toastError.mockClear()
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { writeClipboardText: mocks.clipboardWrite } }
-    })
+    mocks.plan.mockClear()
   })
 
   afterEach(async () => {
@@ -104,10 +106,9 @@ describe('LinearAgentSkillInstallCta', () => {
     root = null
     container?.remove()
     container = null
-    Reflect.deleteProperty(window, 'api')
   })
 
-  it('shows the install command and explanation when the skill is missing', async () => {
+  it('offers Install and the explanation when the skill is missing', async () => {
     const rendered = await renderCta()
 
     expect(rendered.textContent).toContain('Agent skill:')
@@ -116,37 +117,31 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(rendered.textContent).toContain(
       'Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
     )
-    expect(rendered.textContent).toContain(
-      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orca-linear --global`
-    )
+    expect(rendered.textContent).toContain('Install skill')
+    expect(rendered.textContent).not.toContain('Copy command')
   })
 
-  it('copies the install command to the clipboard', async () => {
+  it("installs the skill directly on the agents' host", async () => {
     const rendered = await renderCta()
 
     await act(async () => {
-      rendered
-        .querySelector<HTMLButtonElement>('button[aria-label="Copy command"]')
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Install skill')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(mocks.clipboardWrite).toHaveBeenCalledWith(
-      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orca-linear --global`
-    )
-    expect(mocks.toastSuccess).toHaveBeenCalled()
+    expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['orca-linear'] })
+    expect(rendered.textContent).toContain('Update Orca on the server to install its skills.')
   })
 
-  it('shows a subtle confirmation and the update command when installed', async () => {
+  it('shows a subtle confirmation and Update when installed', async () => {
     mocks.skillState.installed = true
     mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' })]
 
     const rendered = await renderCta()
 
     expect(rendered.textContent).toContain('Installed')
-    expect(rendered.textContent).toContain('Agent skill installed. To update it, run:')
-    expect(rendered.textContent).toContain(
-      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill orca-linear --global`
-    )
+    expect(rendered.textContent).toContain('Update')
     expect(rendered.textContent).not.toContain('Not installed')
   })
 
@@ -162,9 +157,13 @@ describe('LinearAgentSkillInstallCta', () => {
 
     const rendered = await renderCta()
 
-    expect(rendered.textContent).toContain(
-      `npx skills@${SKILLS_CLI_VERSION} add https://github.com/stablyai/orca/tree/${ORCA_BUILD_COMMIT} --skill linear-tickets --global`
-    )
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Update')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['linear-tickets'] })
   })
 
   it('notes that remote agent environments need their own setup', async () => {
@@ -174,6 +173,35 @@ describe('LinearAgentSkillInstallCta', () => {
 
     expect(rendered.textContent).toContain(
       'This installs host setup; remote agent environments may need separate setup.'
+    )
+  })
+
+  it('keeps the resolved WSL project on the old command flow', async () => {
+    mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
+    const rendered = await renderCta()
+    expect(rendered.textContent).toContain(
+      `npx skills@1.7.2 add https://github.com/stablyai/orca/tree/${'0'.repeat(40)} --skill orca-linear --global`
+    )
+    expect(rendered.textContent).not.toContain('Install skill')
+    expect(mocks.plan).not.toHaveBeenCalled()
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ discoveryTarget: { runtime: 'wsl', wslDistro: 'Debian' } })
+    )
+  })
+
+  it('uses project host discovery even when legacy global settings still prefer WSL', async () => {
+    mocks.agentRuntime = { runtime: 'host', label: 'Windows' }
+    await renderCta({
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu',
+        terminalWindowsShell: 'wsl.exe'
+      }
+    })
+    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ discoveryTarget: undefined })
     )
   })
 

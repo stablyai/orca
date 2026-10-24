@@ -1,3 +1,4 @@
+import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -65,10 +66,10 @@ describe('pty spawn placement threading', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
   function register(): {
-    store: { persistPtyBinding: ReturnType<typeof vi.fn> }
+    store: ReturnType<typeof createPaneBindingStore>
     controller: () => RuntimeSpawnController
   } {
-    const store = { persistPtyBinding: vi.fn(async () => true) }
+    const store = createPaneBindingStore()
     let controller: RuntimeSpawnController | null = null
     const runtime = {
       setPtyController: vi.fn((value) => {
@@ -120,16 +121,20 @@ describe('pty spawn placement threading', () => {
   it('passes a valid renderer placement to the binding write', async () => {
     const { store } = register()
     await ipcSpawn({ placement: SPLIT })
-    expect(store.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({ tabId: 'tab-placement', leafId: LEAF, placement: SPLIT })
+    expect(store.bindingWrites).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-placement',
+        leafId: LEAF,
+        placement: SPLIT
+      })
     )
   })
 
   it('keeps an old client request (no placement) byte-for-byte as before', async () => {
     const { store } = register()
     await ipcSpawn({})
-    expect(store.persistPtyBinding).toHaveBeenCalledOnce()
-    expect(store.persistPtyBinding.mock.calls[0]).toEqual([
+    expect(store.bindingWrites).toHaveBeenCalledOnce()
+    expect(store.bindingWrites.mock.calls[0]).toEqual([
       {
         worktreeId: WORKTREE,
         tabId: 'tab-placement',
@@ -145,15 +150,28 @@ describe('pty spawn placement threading', () => {
   it('drops a malformed or future-kind placement instead of failing the spawn', async () => {
     const { store } = register()
     await ipcSpawn({ placement: { kind: 'floating-window', anchor: 'x' } })
-    await ipcSpawn({ placement: { kind: 'split', parentLeafId: 'pane-1', direction: 'vertical' } })
-    expect(store.persistPtyBinding).toHaveBeenCalledTimes(2)
-    for (const [binding] of store.persistPtyBinding.mock.calls) {
+    await ipcSpawn({
+      tabId: 'tab-malformed-second',
+      placement: {
+        kind: 'split',
+        parentLeafId: 'pane-1',
+        direction: 'vertical'
+      }
+    })
+    expect(store.bindingWrites).toHaveBeenCalledTimes(2)
+    for (const [binding] of store.bindingWrites.mock.calls) {
       expect(binding).not.toHaveProperty('placement')
     }
   })
 
   it('passes a main runtime spawn placement through the host-admitted binding', async () => {
     const { store, controller } = register()
+    await store.admitTerminalPane({
+      type: 'createTerminalTab',
+      workspace: WORKTREE,
+      tabId: 'tab-runtime',
+      leafId: LEAF
+    })
     await controller().spawn({
       cols: 80,
       rows: 24,
@@ -164,7 +182,7 @@ describe('pty spawn placement threading', () => {
       persistHostSessionBinding: true,
       placement: SPLIT
     })
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+    expect(store.bindingWrites).toHaveBeenCalledWith({
       worktreeId: WORKTREE,
       tabId: 'tab-runtime',
       leafId: LEAF,

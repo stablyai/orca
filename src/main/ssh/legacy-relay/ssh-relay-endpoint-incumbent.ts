@@ -21,8 +21,8 @@
  *   kernel may hold it, and this machine's connect and `lsof` cannot see that machine.
  */
 import { RELAY_LSOF_PROBE_JS } from '@orca/process-host/posix-lsof-probe'
-import type { SshConnection } from '../ssh-connection'
-import { shellEscape } from '../ssh-connection-utils'
+import type { SshConnection } from '../connection/ssh-connection'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   RELAY_CHILD_COUNT_VAR,
   RELAY_UNRECOGNIZED_CHILD_COUNT_VAR,
@@ -34,13 +34,9 @@ import { filesystemTypeIsLocalDisk } from '../../orcad/orcad-data-root-locality'
 
 type RelayEndpointVerdict = 'live' | 'unverifiable' | 'exited'
 
-export type RelayEndpointEvidence =
-  | 'accepted-connection'
-  | 'holder-process'
-  | 'no-holder'
-  | 'inconclusive'
+type RelayEndpointEvidence = 'accepted-connection' | 'holder-process' | 'no-holder' | 'inconclusive'
 
-export type RelayEndpointHolder = {
+type RelayEndpointHolder = {
   pid: number
   /** The holder's argv names relay.js AND this exact socket path. */
   matchesRelayArgv: boolean
@@ -94,7 +90,7 @@ const DARWIN_MOUNT_TYPE_AWK =
 // Only these macOS filesystems live on a disk this machine owns.
 const DARWIN_LOCAL_FILESYSTEM_NAMES = new Set(['apfs', 'hfs'])
 
-export class RelayProbeCleanupUnconfirmedError extends Error {
+class RelayProbeCleanupUnconfirmedError extends Error {
   readonly name = 'RelayProbeCleanupUnconfirmedError'
   constructor() {
     super('Remote relay probe cleanup is unverifiable; refusing to race a replacement launch')
@@ -106,15 +102,15 @@ export class RelayProbeCleanupUnconfirmedError extends Error {
  * explicit "could not tell" value; nothing is inferred from a missing tool.
  */
 export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: string): string {
-  const sock = shellEscape(sockPath)
-  const node = shellEscape(nodePath)
+  const sock = quotePosixShell(sockPath)
+  const node = quotePosixShell(nodePath)
   return [
     `sock=${sock}`,
     `node=${node}`,
-    `printf '%s\\n' ${shellEscape(PROBE_BEGIN)}`,
+    `printf '%s\\n' ${quotePosixShell(PROBE_BEGIN)}`,
     'if [ -S "$sock" ]; then',
     "  printf 'PRESENT=yes\\n'",
-    `  listen=$("$node" -e ${shellEscape(RELAY_CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
+    `  listen=$("$node" -e ${quotePosixShell(RELAY_CONNECT_PROBE_JS)} "$sock" 2>/dev/null) || listen=unknown`,
     '  [ -n "$listen" ] || listen=unknown',
     'else',
     "  printf 'PRESENT=no\\n'",
@@ -122,19 +118,19 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'fi',
     'printf \'LISTEN=%s\\n\' "$listen"',
     'dir=$(dirname "$sock")',
-    `fs_type=$("$node" -e ${shellEscape(ENDPOINT_FILESYSTEM_PROBE_JS)} "$dir" 2>/dev/null) || fs_type=`,
+    `fs_type=$("$node" -e ${quotePosixShell(ENDPOINT_FILESYSTEM_PROBE_JS)} "$dir" 2>/dev/null) || fs_type=`,
     'if [ -n "$fs_type" ]; then :',
     // BSD stat has no filesystem type; macOS names it in `mount` against df's mount point.
     'elif [ "$(uname -s 2>/dev/null)" = Darwin ]; then',
     `  mp=$(df -P "$dir" 2>/dev/null | awk 'NR==2{print $NF}')`,
-    `  fs_type="darwin-mount $(mount 2>/dev/null | awk -v mp="$mp" ${shellEscape(DARWIN_MOUNT_TYPE_AWK)})"`,
+    `  fs_type="darwin-mount $(mount 2>/dev/null | awk -v mp="$mp" ${quotePosixShell(DARWIN_MOUNT_TYPE_AWK)})"`,
     'else',
     '  fs_type="$(uname -s 2>/dev/null) $(stat -f -c %t "$dir" 2>/dev/null) $(stat -f -c %t / 2>/dev/null)"',
     'fi',
     'printf \'FS_TYPE=%s\\n\' "$fs_type"',
     'if command -v lsof >/dev/null 2>&1; then',
     // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders (#8762).
-    `  lsof_result=$("$node" -e ${shellEscape(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
+    `  lsof_result=$("$node" -e ${quotePosixShell(RELAY_LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
     '  case "$lsof_result" in',
     '    cleanup-unconfirmed*)',
     "      printf 'PROBE_CLEANUP=unconfirmed\\n'",
@@ -159,7 +155,7 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'else',
     "  printf 'HOLDERS_SOURCE=unavailable\\n'",
     'fi',
-    `printf '%s\\n' ${shellEscape(PROBE_END)}`
+    `printf '%s\\n' ${quotePosixShell(PROBE_END)}`
   ].join('\n')
 }
 

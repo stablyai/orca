@@ -37,7 +37,7 @@ import {
   ORCAD_STOP_COMPLETION_POLL_MS
 } from './orcad-stop-deadlines'
 
-export type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
+type OrcadProcessProbe = (pid: number) => 'alive' | 'missing' | 'unverifiable'
 
 export type OrcadManagedStopCompletionOptions = OrcadProcessIdentityReaders & {
   probeProcess?: OrcadProcessProbe

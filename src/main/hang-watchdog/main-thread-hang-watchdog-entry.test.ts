@@ -72,7 +72,6 @@ describe('recordHangObservation', () => {
   })
 
   it('never spawns, signals, or exits', () => {
-    // Why: a false positive must never kill a live main thread while writes may be in flight.
     recordHangObservation({
       parentPid: 4242,
       markerPath: join(dir, 'marker.json'),

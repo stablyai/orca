@@ -16,16 +16,15 @@ export type MobileGitStatusResult = MobileGitStatusHostPayload
 
 export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = MobileGitStatusEntry> =
   {
-    area: MobileGitStagingArea
+    area: Exclude<MobileGitStagingArea, 'untracked'>
     title: string
     data: TEntry[]
   }
 
-const AREA_ORDER: MobileGitStagingArea[] = ['unstaged', 'untracked', 'staged']
+const AREA_ORDER = ['unstaged', 'staged'] as const
 
-const AREA_TITLES: Record<MobileGitStagingArea, string> = {
+const AREA_TITLES: Record<MobileSourceControlSection['area'], string> = {
   unstaged: 'Changes',
-  untracked: 'Untracked Files',
   staged: 'Staged Changes'
 }
 
@@ -54,7 +53,9 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
   const sections = AREA_ORDER.map((area) => ({
     area,
     title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area)
+    data: entries.filter(
+      (entry) => entry.area === area || (area === 'unstaged' && entry.area === 'untracked')
+    )
   })).filter((section) => section.data.length > 0)
   if (sections.some((section) => section.data.length > 1)) {
     const collator = new Intl.Collator(undefined, { numeric: true })

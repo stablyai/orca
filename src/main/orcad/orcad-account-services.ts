@@ -26,7 +26,7 @@ import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 
 type StructuredLaunchInput = { launchEnv: NodeJS.ProcessEnv }
 
-export type OrcadAccountServices = {
+type OrcadAccountServices = {
   prepareCodexHome: ReturnType<typeof createCodexRuntimeHomeLaunchPreparation>
   prepareClaudeAuth: PrepareClaudeAuth
   /** Pins an automatic resume to the account home its session was recorded in. */
@@ -107,7 +107,7 @@ export function createOrcadAccountServices(args: {
       prepareCodexCatalogProbeHome: (homePath) =>
         codexRuntimeHome.prepareHostCodexHomeForReadOnlyAppServer(
           homePath,
-          resolveTuiAgentLaunchEnv('codex', store.getSettings().agentDefaultEnv)
+          resolveTuiAgentLaunchEnv('codex', store.getSettings())
         ),
       prepareAiVaultSessionResume: (resumeArgs) =>
         prepareCodexAiVaultSessionResume(resumeArgs, {

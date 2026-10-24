@@ -195,7 +195,15 @@ describe('registerPtyHandlers', () => {
 
       expect(mainWindow.webContents.send.mock.calls).toEqual([
         ['pty:data', { id: finalSpawn.id, data: 'final-tail' }],
-        ['pty:exit', { id: finalSpawn.id, code: 0, incarnationId: finalSpawn.incarnationId }]
+        [
+          'pty:exit',
+          {
+            id: finalSpawn.id,
+            code: 0,
+            incarnationId: finalSpawn.incarnationId,
+            hostId: 'local'
+          }
+        ]
       ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 8 * 1024 * 1024,
@@ -278,7 +286,7 @@ describe('registerPtyHandlers', () => {
       setActiveRendererPty(null, { id: spawns[activeIndex]!.id, active: true })
       vi.advanceTimersByTime(2)
 
-      // Why: the fully gated arrival also emits a delivery resync probe, so count pty:data sends not raw webContents.send.
+      // Gated arrivals also send resync probes; count only pty:data delivery.
       expect(getPtyDataSendCalls()).toHaveLength(513)
       expect(getPtyDataSendCalls()[512]).toEqual([
         'pty:data',

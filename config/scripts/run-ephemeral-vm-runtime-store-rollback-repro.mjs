@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -49,11 +49,22 @@ try {
 }
 
 function extractSource(commit, name) {
+  const available = run('git', ['cat-file', '-e', `${commit}^{tree}`], {
+    allowedExitCodes: [0, 128]
+  })
+  if (available.status !== 0) {
+    run('git', ['fetch', '--no-tags', '--depth=1', 'origin', commit])
+  }
   const destination = join(tempRoot, name)
   const archive = join(tempRoot, `${name}.tar`)
   mkdirSync(destination)
   run('git', ['archive', '--format=tar', `--output=${archive}`, commit, 'src/main', 'src/shared'])
   run('tar', ['-xf', archive, '-C', destination])
+  symlinkSync(
+    join(root, 'node_modules'),
+    join(destination, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir'
+  )
   return destination
 }
 
@@ -109,7 +120,7 @@ function run(command, args, options = {}) {
     encoding: options.encoding,
     maxBuffer: 16 * 1024 * 1024
   })
-  if (result.status !== 0) {
+  if (!(options.allowedExitCodes ?? [0]).includes(result.status)) {
     throw new Error(
       `${command} ${args.join(' ')} failed\n${String(result.stdout ?? '')}${String(result.stderr ?? '')}`
     )

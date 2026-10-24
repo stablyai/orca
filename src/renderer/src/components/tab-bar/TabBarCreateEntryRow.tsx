@@ -191,7 +191,7 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??
@@ -221,12 +221,16 @@ function getActionPresentation(
       showDetail: true
     }
   }
-  if (classification.kind === 'existing-file' || classification.kind === 'absolute-file') {
+  if (
+    classification.kind === 'existing-file' ||
+    classification.kind === 'absolute-file' ||
+    classification.kind === 'html-file-url'
+  ) {
     return {
       detail:
-        classification.kind === 'absolute-file'
-          ? classification.filePath
-          : classification.relativePath,
+        classification.kind === 'existing-file'
+          ? classification.relativePath
+          : classification.filePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
       label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
       prioritizeFilename: true,

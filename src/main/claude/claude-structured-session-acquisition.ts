@@ -18,6 +18,7 @@ import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { adoptClaudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import { observeClaudeExecutionModel } from './claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from './claude-structured-session-options'
 import { createClaudeSessionPublication } from './claude-structured-session-publication'
 import {
@@ -26,7 +27,8 @@ import {
   type ClaudeSession,
   type ClaudeSessionExit,
   type ClaudeStructuredSessionAdapterDeps,
-  type ClaudeAcquireCallbacks
+  type ClaudeAcquireCallbacks,
+  type ClaudeLateDispatchOutcome
 } from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
@@ -61,10 +63,8 @@ export async function acquireClaudeSession({
   let liveSession: ClaudeSession | null = null
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
-  // The CLI's own account of why it ended (stderr included): the only reason a user can act on.
+  // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
   let childEnded: Error | null = null
-  // Frames are admitted only after launch resolution proves the provider session
-  // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initProof = createClaudeInitProof()
   const translator = createClaudeSessionJournalTranslator(
     input.events,
@@ -80,26 +80,19 @@ export async function acquireClaudeSession({
         ? liveSession.backgroundTasks.goalBackgroundWork
         : 'unverifiable'
   )
-
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
-      // An init proof for another (or unnamed) provider must fail the start or end the session
-      // promptly, while ordinary foreign frames stay quarantined silently.
+      // Foreign init frames refuse startup; ordinary foreign frames are ignored.
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initProof.refuse()
       }
       return
     }
+    const modelChanged =
+      liveSession && init?.model ? observeClaudeExecutionModel(liveSession, init.model) : false
     if (init) {
       initProof.resolve(init)
-      // Every turn opens with an init frame naming the model the CLI is actually
-      // running; set_model answers success for a model it never resolves, so this
-      // report is the session's only adoption evidence.
-      if (liveSession && init.model) {
-        liveSession.reportedOptions.model = init.model
-        liveSession.reportedModelMutation = liveSession.optionMutationSequence
-      }
       if (liveSession) {
         liveSession.capabilities = readClaudeCapabilities(liveSession.capabilities, init.message)
       }
@@ -108,43 +101,66 @@ export async function acquireClaudeSession({
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
-      // Recording a turn end is an owner action; a result that trails the child's exit has no owner.
+      // Late results after exit cannot update the resume point.
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         persistClaudeTurnResumePoint(sessionId, liveSession, deps)
       }
-      // The CLI's idle wakes whatever waits for its turn to end.
       if (claudeSessionStateEndsTurn(message) && sessions.get(sessionId) === liveSession) {
         settleClaudeTurnEndWaiters(liveSession)
       }
     }
-    // Settled after the turn this echo opens is emitted: a send read as answered before its turn
-    // lands reads as nothing running, and Stop and Working blink off in between.
-    const settlements: (() => void)[] = []
+    // Publish the echoed turn before settling its send to avoid transient idle status.
+    const settlements: ClaudeLateDispatchOutcome[] = []
     const turnOrigin = liveSession
-      ? resolveClaudeReplayTurn(liveSession, message, (settlement) =>
-          settlements.push(() => deps.onDispatchSettledLate?.({ sessionId, ...settlement }))
-        )
+      ? resolveClaudeReplayTurn(liveSession, message, (settlement) => settlements.push(settlement))
       : null
     const startsTurn = turnOrigin !== null
-    // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
+    // Use host time for turn endpoints; provider timestamps may use a different clock.
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
     const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
-    callbacks.deliver(attempt, sessionId, () =>
-      callbacks.emit(liveSession, input.events, {
-        type: 'message',
-        sessionId,
-        message,
-        ...(startsTurn ? { startsTurn: true } : {}),
-        ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
-        ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
-        ...(startedSend ? { startedSend } : {}),
-        ...observedAt
+    // Retain send ownership during publication until the host receives its settlement.
+    const session = liveSession
+    const reported = session?.unreportedSettlements
+    if (session && settlements.length > 0) {
+      session.unreportedSettlements = new Set([
+        ...(reported ?? []),
+        ...settlements.map((settlement) => settlement.clientMessageId)
+      ])
+    }
+    try {
+      callbacks.deliver(attempt, sessionId, () => {
+        if (modelChanged && liveSession && init?.model) {
+          callbacks.emit(liveSession, input.events, {
+            type: 'options-reported',
+            sessionId,
+            fence: liveSession.fence,
+            acquisitionGeneration: liveSession.acquisitionGeneration,
+            reportedOptions: { model: init.model }
+          })
+        }
+        callbacks.emit(liveSession, input.events, {
+          type: 'message',
+          sessionId,
+          message,
+          ...(startsTurn ? { startsTurn: true } : {}),
+          ...(requestedAt === null || requestedAt === undefined ? {} : { requestedAt }),
+          ...(turnOrigin?.clientMessageId ? { clientMessageId: turnOrigin.clientMessageId } : {}),
+          ...(startedSend ? { startedSend } : {}),
+          ...observedAt
+        })
       })
-    )
-    for (const settle of settlements) {
-      settle()
+    } finally {
+      try {
+        for (const settlement of settlements) {
+          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+        }
+      } finally {
+        if (session) {
+          session.unreportedSettlements = reported
+        }
+      }
     }
   }
   const emit = (event: Parameters<typeof callbacks.emit>[2]): void =>
@@ -174,9 +190,7 @@ export async function acquireClaudeSession({
           cwd: launch.cwd,
           env: {
             ...launch.env,
-            // Compared against what the child would otherwise inherit, so the record's
-            // account home still wins over a diverging overlay without a needless pin.
-            // (`process` is shadowed by a local later in this function, so it is not named here.)
+            // The saved account directory must override a conflicting environment overlay.
             ...claudeConfigDirEnvPatch(
               launch.claudeConfigDir,
               launch.env ? { env: launch.env } : {}
@@ -188,18 +202,16 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
-          ...(input.onOutput ? { onOutput: input.onOutput } : {}),
           onFault: (error) => {
             childEnded ??= error
             initProof.reject(error)
           },
           onExit: (error, exit) => {
             if (exit?.expected) {
-              // The end of a close Orca began; that close settles it, or finishes it now.
               callbacks.finishClose(sessionId, attempt)
               return
             }
-            // The child exited on its own; marked in place, as the fault report may hold this error.
+            // Mark in place because the fault report may retain this error object.
             withObservedProviderExit(error)
             childEnded ??= error
             initProof.reject(error)
@@ -217,14 +229,13 @@ export async function acquireClaudeSession({
     )
     acquisitions.assertCurrent(sessionId, attempt)
     if (connection.pid === undefined) {
-      // A pid-less spawn always reports its error next; surface that, not the missing pid.
+      // Await the spawn diagnostic instead of reporting only a missing PID.
       await initProof.promise
     }
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
     ).catch((error: unknown) => {
-      // A child that already ended explains a missing pid or a failed read.
       throw childEnded ?? error
     })
     acquisitions.assertCurrent(sessionId, attempt)
@@ -241,6 +252,7 @@ export async function acquireClaudeSession({
       turnEndLeafUuid: launch.resumeLeafUuid,
       fence: input.fence,
       continuesChain: launch.continuesChain,
+      ...(launch.forkedFromKey ? { forkedFromKey: launch.forkedFromKey } : {}),
       prompts,
       translator,
       events: input.events,
@@ -268,15 +280,13 @@ export async function acquireClaudeSession({
         event()
       }
     })
-    // A child whose exit already reached `handleExit` is not handed over as live: the create
-    // fails with the CLI's own diagnostic, as one that died before publish does.
+    // Buffered exit delivery can remove the session during publication.
     if (sessions.get(sessionId) !== session) {
       throw (
         exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
       )
     }
-    // The host calls open after publication and holds input until it settles.
-    return { ...publication.acquisition, providerChildPhase: 'starting' }
+    return publication.acquisition
   } catch (error) {
     unbindReadingControl?.()
     const acquisitionError = await resolveClaudeAcquisitionError({
@@ -285,9 +295,9 @@ export async function acquireClaudeSession({
       sessions,
       attempt,
       translator,
-      prompts
+      prompts,
+      releaseAcquisition: () => acquisitions.deleteIfCurrent(sessionId, attempt)
     })
-    acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {
     attempt.finish()

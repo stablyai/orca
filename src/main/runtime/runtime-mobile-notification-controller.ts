@@ -16,6 +16,7 @@ import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
+import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'
 import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
 
 export type MobileNotificationDispatchEvent = {
@@ -28,6 +29,8 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  /** The pane the phone opens on tap; old phones ignore it and open the workspace's default tab. */
+  paneKey?: string
   /** See `NotificationDispatchRequest.executionHost`; old phones ignore it and open the desktop's. */
   executionHost?: `runtime:${string}`
   notificationId?: string
@@ -66,6 +69,7 @@ export class RuntimeMobileNotificationController {
   private readonly replay = new MobileNotificationReplayBuffer()
   private pushRegistrar: MobilePushRegistrar | null = null
   private dismissalStore: MobileNotificationDismissalStore | null = null
+  private readonly desktopClients = new DesktopClientPresenceTracker()
 
   configureDismissalStore(userDataPath: string): void {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
@@ -107,6 +111,29 @@ export class RuntimeMobileNotificationController {
     return (await this.pushRegistrar?.unregister(deviceId)) ?? { unregistered: false }
   }
 
+  /** `bindForget` runs for a connection without a live report, before it is recorded. */
+  reportDesktopClientPresence(
+    connectionId: string,
+    away: boolean,
+    bindForget: (forget: () => void) => void
+  ): void {
+    if (!this.desktopClients.has(connectionId)) {
+      bindForget(() => this.desktopClients.forget(connectionId))
+    }
+    this.desktopClients.report(connectionId, away, Date.now())
+  }
+
+  // Why: undefined means unknown and must never silence a phone; only a fresh report or the local
+  // idle state proves someone is at a desktop. A host with no desktop of its own (orca serve) has
+  // only its attached desktops to ask, so their silence is away rather than unknown (#31570).
+  private resolveDesktopAway(): boolean | undefined {
+    if (this.desktopClients.anyPresent(Date.now())) {
+      return false
+    }
+    const surface = getRuntimeDesktopSurface()
+    return surface.isAwayForMobileNotifications ? surface.isAwayForMobileNotifications() : true
+  }
+
   onDispatched(listener: (event: MobileNotificationEvent) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -130,7 +157,7 @@ export class RuntimeMobileNotificationController {
       event = {
         ...event,
         legacySocketAllowed,
-        desktopAway: getRuntimeDesktopSurface().isAwayForMobileNotifications?.()
+        desktopAway: this.resolveDesktopAway()
       }
     }
     const seq = this.replay.record(event)

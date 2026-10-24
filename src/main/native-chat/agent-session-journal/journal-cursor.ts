@@ -1,8 +1,4 @@
-// Epoch-qualified cursor resume.
-//
-// A cursor is only meaningful inside its epoch: rollover invalidates every one
-// of them, and the client takes a clean snapshot reload rather than being
-// handed rows that belong to a rebuilt timeline.
+// Cursors from replaced epochs require a fresh snapshot; partial replay would mix timelines.
 
 import type {
   AgentJournalCursor,
@@ -13,30 +9,20 @@ import type { JournalRow } from './journal-row-schema'
 
 export type JournalCursorRange = {
   epoch: string
-  /** Sequence of the newest appended row; 0 when the epoch is empty. */
   lastSequence: number
-  /** Lowest sequence still individually replayable after compaction. */
+  /** Earliest individually replayable sequence. */
   oldestSequence: number
 }
 
 export type JournalResume =
-  /** Replay rows with `seq > afterSequence`. */
-  { ok: true; afterSequence: number } | { ok: false; reset: AgentJournalResetReason }
+  | { ok: true; afterSequence: number }
+  | { ok: false; reset: AgentJournalResetReason }
 
-/** Total order over cursors within one epoch; cross-epoch comparison is
- *  meaningless, so callers must check the epoch first. */
 export function sameJournalCursor(a: AgentJournalCursor, b: AgentJournalCursor): boolean {
   return a.epoch === b.epoch && a.sequence === b.sequence
 }
 
-/**
- * Decide whether a reconnecting client can resume from `cursor`.
- *
- * An epoch mismatch, a cursor ahead of the journal (the client saw rows this
- * host no longer has — a rolled-back or rebuilt prefix), and a cursor below the
- * compaction floor all resolve to a snapshot reload. None of them is recoverable
- * by shipping a partial batch.
- */
+/** Reload snapshots for epoch mismatches, rolled-back prefixes or compacted cursors. */
 export function resolveJournalResume(
   range: JournalCursorRange,
   cursor: AgentJournalCursor
@@ -47,17 +33,14 @@ export function resolveJournalResume(
   if (cursor.sequence > range.lastSequence) {
     return { ok: false, reset: 'cursor_ahead' }
   }
-  // `oldestSequence - 1` is the compaction boundary: a client sitting exactly on
-  // it has seen everything folded into the snapshot and can take the tail.
+  // The boundary cursor already includes snapshot-folded rows and may resume from the tail.
   if (cursor.sequence < range.oldestSequence - 1) {
     return { ok: false, reset: 'cursor_compacted' }
   }
   return { ok: true, afterSequence: cursor.sequence }
 }
 
-/** Contiguity check over a replayed row sequence. A gap means the journal lost
- *  a row; the reader must treat it as corrupt and force epoch rollover rather
- *  than render a partial timeline. */
+/** Gaps invalidate replay; never render a partial timeline. */
 export function findSequenceGap(
   sequences: readonly number[],
   expectedFirst: number
@@ -72,7 +55,6 @@ export function findSequenceGap(
   return null
 }
 
-/** Rows appended after `cursor`, or the reset a client must take instead. */
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }

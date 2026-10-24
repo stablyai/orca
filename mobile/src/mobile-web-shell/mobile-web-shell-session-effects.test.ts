@@ -19,7 +19,11 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
 import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
-import type { GenerationStore } from './generation-store'
+import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
+import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import { createGenerationStore, type GenerationStore } from './generation-store'
+import { createFakeGenerationFileSystem } from './generation-file-system-fake'
+import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 
 // The mocked operations never touch the client; they only need one to exist.
@@ -58,8 +62,9 @@ function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
     commitGeneration:
       fail === 'commit'
         ? reject
-        : async () => ({ buildId: 'c', directory: 'd', manifest: MANIFEST }),
+        : async () => ({ buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }),
     abortStagedGeneration: async () => undefined,
+    openReusableAssets: async () => ({ has: () => false, check: async () => false }),
     sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => undefined,
     recordUpdateFailure: async () => undefined,
@@ -76,7 +81,11 @@ function collect(): {
   return { events, send: (event) => events.push(event) }
 }
 
-async function runDownload(client: RpcClient | null, store: GenerationStore) {
+async function downloadEvents(
+  client: RpcClient | null,
+  store: GenerationStore,
+  downloads = new Set<AbortController>()
+) {
   const { events, send } = collect()
   await download({
     client,
@@ -90,10 +99,14 @@ async function runDownload(client: RpcClient | null, store: GenerationStore) {
       setTimer: () => () => {}
     },
     startedAt: 0,
-    downloads: new Set(),
+    downloads,
     send
   })
-  return events.filter((event) => event.type === 'download-failed')
+  return events
+}
+
+async function runDownload(client: RpcClient | null, store: GenerationStore) {
+  return (await downloadEvents(client, store)).filter((event) => event.type === 'download-failed')
 }
 
 describe('the manifest read', () => {
@@ -186,6 +199,150 @@ describe('the download', () => {
   })
 
   it('that lands whole reports no failure', async () => {
-    expect(await runDownload(CLIENT, storeThat(null))).toEqual([])
+    const downloads = new Set<AbortController>()
+    const fetch = doubles.fetch
+    doubles.fetch = () => {
+      expect(downloads.size).toBe(1)
+      return fetch()
+    }
+    expect(await downloadEvents(CLIENT, storeThat(null), downloads)).toEqual([
+      { type: 'download-staged', flow: 3 },
+      {
+        type: 'activated',
+        flow: 3,
+        generationDirectory: 'd',
+        sessionId: 's',
+        buildId: MANIFEST.buildId,
+        totalBytes: 1,
+        elapsedMs: 0
+      }
+    ])
+    expect(downloads.size).toBe(0)
+  })
+})
+
+/**
+ * Against the real store: the copies a reused asset needs are made by the stage, on the store's
+ * queue, so what other mounts do to the staging tree mid-download cannot take them away.
+ */
+describe('a download that reuses the cached generation', () => {
+  const HOST = deriveHostCacheKey('host-a')
+
+  function bundle(pageBytes: number): MobileWebBundleFetchResult {
+    const assets = [
+      {
+        path: 'index.html',
+        sha256: 'a'.repeat(64),
+        byteLength: pageBytes,
+        contentType: 'text/html'
+      },
+      { path: 'app.js', sha256: 'b'.repeat(64), byteLength: 2, contentType: 'text/javascript' }
+    ]
+    return {
+      manifest: { ...MANIFEST, buildId: computeMobileWebBundleId(assets), totalBytes: 0, assets },
+      assets: new Map(assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength)])),
+      reused: [],
+      totalBytes: 0,
+      elapsedMs: 1
+    }
+  }
+  const CACHED = bundle(4)
+  // The page changed; the script is left to the stage to copy.
+  const UPDATE = {
+    ...bundle(8),
+    assets: new Map([['index.html', new Uint8Array(8)]]),
+    reused: ['app.js']
+  }
+
+  async function cachedStore() {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    await store.commitGeneration(await store.stageGeneration(HOST, CACHED))
+    return { fileSystem, store }
+  }
+
+  function runFor(store: GenerationStore) {
+    const { events, send } = collect()
+    const done = download({
+      client: CLIENT,
+      store,
+      hostKey: HOST,
+      flow: 3,
+      runtime: {
+        createStore: () => store,
+        mintSessionId: () => 's',
+        now: () => 0,
+        setTimer: () => () => {}
+      },
+      startedAt: 0,
+      downloads: new Set(),
+      send
+    })
+    return done.then(() => events)
+  }
+
+  it('commits whole when another mount sweeps the staging trees mid-download', async () => {
+    const { fileSystem, store } = await cachedStore()
+    doubles.fetch = async () => {
+      fileSystem.seed(`${HOST}/tmp/${UPDATE.manifest.buildId}/app.js`, {
+        kind: 'file',
+        bytes: new Uint8Array(1)
+      })
+      await store.sweepStagedGenerations()
+      return UPDATE
+    }
+
+    const events = await runFor(store)
+
+    expect(events.filter((event) => event.type === 'download-failed')).toEqual([])
+    const active = await store.readActiveGeneration(HOST)
+    expect(active?.buildId).toBe(UPDATE.manifest.buildId)
+    expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
+      new Uint8Array(2)
+    )
+  })
+
+  it('commits once when two downloads of the same build finish together', async () => {
+    const { fileSystem, store } = await cachedStore()
+    doubles.fetch = async () => UPDATE
+    const moveDirectory = fileSystem.moveDirectory.bind(fileSystem)
+    const moves: [string, string][] = []
+    fileSystem.moveDirectory = async (from, to) => {
+      moves.push([from, to])
+      await moveDirectory(from, to)
+    }
+    try {
+      const [first, second] = await Promise.all([runFor(store), runFor(store)])
+      const expected = [
+        { type: 'download-staged', flow: 3 },
+        {
+          type: 'activated',
+          flow: 3,
+          generationDirectory: `/cache/mobile-web/${HOST}/generations/${UPDATE.manifest.buildId}`,
+          sessionId: 's',
+          buildId: UPDATE.manifest.buildId,
+          totalBytes: UPDATE.manifest.totalBytes,
+          elapsedMs: 0
+        }
+      ]
+      expect(first).toEqual(expected)
+      expect(second).toEqual(expected)
+      expect(moves).toEqual([
+        [
+          `${fileSystem.rootUri}/${HOST}/tmp/${UPDATE.manifest.buildId}`,
+          `${fileSystem.rootUri}/${HOST}/generations/${UPDATE.manifest.buildId}`
+        ]
+      ])
+      expect(await store.readActiveGeneration(HOST)).toEqual({
+        buildId: UPDATE.manifest.buildId,
+        directory: `${fileSystem.rootUri}/${HOST}/generations/${UPDATE.manifest.buildId}`,
+        manifest: UPDATE.manifest
+      })
+      expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
+        new Uint8Array(2)
+      )
+    } finally {
+      fileSystem.moveDirectory = moveDirectory
+    }
   })
 })

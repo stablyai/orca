@@ -68,6 +68,9 @@ concurrency:
   group: computer-e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
   native-smoke:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
@@ -77,7 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204"}')[matrix.os] || matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -147,7 +150,7 @@ jobs:
   # grants. Keep the real native build/owner-loss checks on every trigger instead.
   mac-native-owner-smoke:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: macos-15
+    runs-on: blacksmith-6vcpu-macos-15
     permissions:
       contents: read
     steps:
@@ -175,7 +178,7 @@ jobs:
 
   linux:
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-22.04
+    runs-on: blacksmith-4vcpu-ubuntu-2204
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'

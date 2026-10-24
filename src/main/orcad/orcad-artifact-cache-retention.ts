@@ -10,11 +10,8 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
-import {
-  ORCAD_LOCK_FILE_NAME,
-  orcadPeerPidIsJudgeableHere,
-  readOrcadInstanceLockRecord
-} from './orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
+import { orcadPeerPidIsJudgeableHere } from './orcad-lock-holder-locality'
 import { materializedOrcadArtifactVersions } from './orcad-artifact-materializer'
 import { isProcessAlive } from '../daemon/daemon-process-inspection'
 import {
@@ -24,11 +21,11 @@ import {
 } from './orcad-daemon-slot-pins'
 
 /** The in-use slot plus the two most recent others (the newest three when none is in use). */
-export const ORCAD_ARTIFACT_CACHE_KEEP = 3
+const ORCAD_ARTIFACT_CACHE_KEEP = 3
 
 const REPAIR_SUFFIX = /\.repair-\d+$/u
 
-export type OrcadArtifactCachePruneOptions = {
+type OrcadArtifactCachePruneOptions = {
   keep?: number
   /** Slot versions to keep whatever their age. */
   inUseVersions?: ReadonlySet<string>

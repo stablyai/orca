@@ -4,10 +4,9 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
-  statSync,
   symlinkSync,
-  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,9 +14,9 @@ import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromises from 'node:fs/promises'
 
-const fsFaults = vi.hoisted(
-  (): { operation: 'utimes' | 'copyFile' | 'unlink' | 'rename' | null } => ({ operation: null })
-)
+const fsFaults = vi.hoisted((): { operation: 'copyFile' | 'unlink' | 'rename' | null } => ({
+  operation: null
+}))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const fsp = await importOriginal<typeof NodeFsPromises>()
   function throwFilesystemFault(operation: typeof fsFaults.operation): void {
@@ -27,10 +26,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
   return {
     ...fsp,
-    utimes: async (...args: Parameters<typeof fsp.utimes>) => {
-      throwFilesystemFault('utimes')
-      return fsp.utimes(...args)
-    },
     copyFile: async (...args: Parameters<typeof fsp.copyFile>) => {
       throwFilesystemFault('copyFile')
       return fsp.copyFile(...args)
@@ -76,7 +71,6 @@ function seed(folder: string, files: Record<string, string>): string {
   return folder
 }
 
-/** A chat's folder as v1.4.227 wrote it, under the old root with the same hashed name. */
 function legacyFor(state: string, sessionId: string, files: Record<string, string>): string {
   return seed(
     join(legacyRootOf(state), basename(nativeChatScratchFolderFor(state, sessionId))),
@@ -95,22 +89,22 @@ function logger(): StructuredAgentSessionLogger & {
 }
 
 describe('moving pre-rename chat visuals folders', () => {
-  it('moves each chat folder under the current root with a fresh window and removes the old root', async () => {
+  it('moves each chat folder under the current root and removes the old root', async () => {
     const state = stateDirectory()
-    const folder = legacyFor(state, 'chat-old', { 'chart.html': '<p>old chart</p>' })
-    const then = new Date(Date.now() - 40 * 24 * 60 * 60_000)
-    utimesSync(join(folder, 'chart.html'), then, then)
-    utimesSync(folder, then, then)
+    legacyFor(state, 'chat-old', { 'chart.html': '<p>old chart</p>' })
     writeFileSync(join(legacyRootOf(state), 'notes.txt'), 'not ours')
-    const before = Date.now() - 1_000
+    const canonical = currentFor(state, 'chat-resume', { 'chart.html': '<p>saved</p>' })
+    renameSync(canonical, `${canonical}.expired`)
+    mkdirSync(canonical)
 
     await migrateLegacyNativeChatVisualsFolders(state, logger())
 
     const moved = nativeChatScratchFolderFor(state, 'chat-old')
     expect(readFileSync(join(moved, 'chart.html'), 'utf8')).toBe('<p>old chart</p>')
-    // The move is the first time the 30-day rule applies to this chat: it starts counting now.
-    expect(statSync(moved).mtimeMs).toBeGreaterThanOrEqual(before)
-    // Only what this host minted moves; the old root stays while anything else is in it.
+    expect(await readNativeChatVisualFile(canonical, 'chart.html')).toMatchObject({
+      ok: true,
+      html: '<p>saved</p>'
+    })
     expect(readdirSync(legacyRootOf(state))).toEqual(['notes.txt'])
     rmSync(join(legacyRootOf(state), 'notes.txt'))
     await migrateLegacyNativeChatVisualsFolders(state, logger())
@@ -172,11 +166,13 @@ describe('moving pre-rename chat visuals folders', () => {
     'keeps failed work retryable after a %s failure',
     async (operation) => {
       const state = stateDirectory()
-      const legacy = legacyFor(state, 'chat-both', {
+      let legacy = legacyFor(state, 'chat-both', {
         'chart.html': '<p>older</p>',
         'other.html': '<p>saved visual</p>'
       })
       const both = currentFor(state, 'chat-both', { 'chart.html': '<p>current</p>' })
+      renameSync(legacy, `${both}.expired`)
+      legacy = `${both}.expired`
       fsFaults.operation = operation
       const log = logger()
 
@@ -242,22 +238,6 @@ describe('moving pre-rename chat visuals folders', () => {
         )
       )
     ).toBe(true)
-    expect(log.warn.mock.calls.map(([, meta]) => meta?.scope)).toEqual([
-      'nativeChatVisuals.migration'
-    ])
-  })
-
-  it('leaves a folder in the old root when its fresh window cannot be set', async () => {
-    const state = stateDirectory()
-    const folder = legacyFor(state, 'chat-old', { 'chart.html': '<p>old chart</p>' })
-    fsFaults.operation = 'utimes'
-
-    const log = logger()
-    await migrateLegacyNativeChatVisualsFolders(state, log)
-
-    // Still where the next install retries it, rather than moved with a time the sweep would act on.
-    expect(readFileSync(join(folder, 'chart.html'), 'utf8')).toBe('<p>old chart</p>')
-    expect(existsSync(nativeChatScratchFolderFor(state, 'chat-old'))).toBe(false)
     expect(log.warn.mock.calls.map(([, meta]) => meta?.scope)).toEqual([
       'nativeChatVisuals.migration'
     ])

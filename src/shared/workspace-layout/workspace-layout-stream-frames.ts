@@ -2,6 +2,7 @@
 // one client that reads them.
 
 import type { PublishedWorkspaceLayout } from './workspace-layout-published'
+import type { WorkspaceLayoutRecordChange } from './workspace-layout-records'
 
 /** `seq`: the stream's position after this frame. It rises by one per change frame for the host's
  *  life, so a subscriber to every workspace sees each one. A `layout.apply` reply names the
@@ -14,6 +15,21 @@ export type WorkspaceLayoutEvent = (
 ) &
   Sequenced
 
+/**
+ * A layout-owner host's one frame per operation: the records it changed, workspace by workspace.
+ * `epoch` names the host's stream for its life; a reader whose epoch differs, or whose last
+ * position is not `seq - 1`, missed frames and must take a fresh snapshot.
+ */
+export type WorkspaceLayoutRecordsFrame = {
+  type: 'records'
+  epoch: string
+  seq: number
+  workspaces: WorkspaceLayoutRecordChange[]
+}
+
+/** What a host's stream hands its subscribers: an older host's per-workspace events, or records. */
+export type WorkspaceLayoutStreamEvent = WorkspaceLayoutEvent | WorkspaceLayoutRecordsFrame
+
 export type WorkspaceLayoutSnapshotEntry = { key: string; layout: PublishedWorkspaceLayout }
 
 export type WorkspaceLayoutStreamFrame =
@@ -22,8 +38,10 @@ export type WorkspaceLayoutStreamFrame =
       type: 'snapshot'
       subscriptionId?: string
       workspaces: WorkspaceLayoutSnapshotEntry[]
+      /** A layout-owner host's stream epoch; its records frames carry the same one. */
+      epoch?: string
     } & Sequenced)
-  | WorkspaceLayoutEvent
+  | WorkspaceLayoutStreamEvent
   | { type: 'end' }
 
 /** What a reader's cache takes from the stream. */
@@ -64,6 +82,62 @@ function isSnapshotEntry(value: unknown): value is WorkspaceLayoutSnapshotEntry 
   return isRecord(value) && isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
 }
 
+const RECORD_KINDS = ['tabs', 'paneTrees', 'bindings', 'editorFiles', 'browserTabs'] as const
+
+const isKeyList = (value: unknown) =>
+  value === undefined || (Array.isArray(value) && value.every(isKey))
+
+function isRecordChanges(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecord(value) &&
+      (value.set === undefined || (Array.isArray(value.set) && value.set.every(isRecord))) &&
+      isKeyList(value.removed) &&
+      isKeyList(value.order))
+  )
+}
+
+// Top-level shape only, as for a whole layout: the records' fields are the host's contract.
+function isRecordChange(value: unknown): value is WorkspaceLayoutRecordChange {
+  if (!isRecord(value) || !isKey(value.key)) {
+    return false
+  }
+  switch (value.change) {
+    case 'removed':
+      return true
+    case 'layout':
+      return isPublishedWorkspaceLayout(value.layout)
+    case 'records':
+      return (
+        (value.workspace === undefined ||
+          (isRecord(value.workspace) &&
+            typeof value.workspace.worktreeId === 'string' &&
+            Array.isArray(value.workspace.groups))) &&
+        RECORD_KINDS.every((kind) => isRecordChanges(value[kind]))
+      )
+    default:
+      return false
+  }
+}
+
+function readRecordsFrame(value: Record<string, unknown>): WorkspaceLayoutRecordsFrame | null {
+  const seq = readWorkspaceLayoutFramePosition(value)
+  return typeof value.epoch === 'string' &&
+    value.epoch.length > 0 &&
+    seq !== undefined &&
+    Array.isArray(value.workspaces) &&
+    value.workspaces.every(isRecordChange)
+    ? { type: 'records', epoch: value.epoch, seq, workspaces: value.workspaces }
+    : null
+}
+
+const FRAME_TYPES: readonly unknown[] = ['snapshot', 'workspace', 'removed', 'records', 'end']
+
+/** A type this build reads: a newer host's other types are skipped, never a reason to resync. */
+export function isKnownWorkspaceLayoutFrameType(value: unknown): boolean {
+  return isRecord(value) && FRAME_TYPES.includes(value.type)
+}
+
 /** Null for a malformed frame or a frame type this build does not know (a newer host's). */
 export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutStreamFrame | null {
   if (!isRecord(value)) {
@@ -71,9 +145,18 @@ export function readWorkspaceLayoutStreamFrame(value: unknown): WorkspaceLayoutS
   }
   switch (value.type) {
     case 'snapshot':
-      return Array.isArray(value.workspaces) && value.workspaces.every(isSnapshotEntry)
-        ? { type: 'snapshot', workspaces: value.workspaces, ...sequenced(value) }
+      return Array.isArray(value.workspaces) &&
+        value.workspaces.every(isSnapshotEntry) &&
+        (value.epoch === undefined || isKey(value.epoch))
+        ? {
+            type: 'snapshot',
+            workspaces: value.workspaces,
+            ...sequenced(value),
+            ...(isKey(value.epoch) ? { epoch: value.epoch } : {})
+          }
         : null
+    case 'records':
+      return readRecordsFrame(value)
     case 'workspace':
       return isKey(value.key) && isPublishedWorkspaceLayout(value.layout)
         ? { type: 'workspace', key: value.key, layout: value.layout, ...sequenced(value) }

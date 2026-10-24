@@ -89,6 +89,25 @@ function sources(overrides: {
 }
 
 describe('readDesktopSidebarFacts', () => {
+  it('publishes the focused host and the user’s host names from the settings', () => {
+    const base = sources({})
+    const facts = readDesktopSidebarFacts({
+      ...base,
+      store: {
+        ...base.store,
+        getSettings: () => ({
+          activeRuntimeEnvironmentId: 'env-1',
+          showPinnedWorktreesInGroups: true,
+          hostSettingOverrides: { 'ssh:box': { displayLabel: ' GPU ' }, local: {} }
+        })
+      }
+    })
+    expect(facts.focusedHostId).toBe('runtime:env-1')
+    expect(facts.hostLabels).toEqual({ 'ssh:box': 'GPU' })
+    expect(facts.showPinnedInGroups).toBe(true)
+    expect(readDesktopSidebarFacts(sources({})).focusedHostId).toBe('local')
+  })
+
   it('publishes the desktop focus the window saved to the local session', () => {
     const facts = readDesktopSidebarFacts(
       sources({

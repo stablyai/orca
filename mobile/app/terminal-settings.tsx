@@ -16,7 +16,11 @@ import { useFocusedSettingsHostClients } from '../src/transport/settings-host-cl
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
-import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  readTerminalAutoRestoreFitMs,
+  saveTerminalAutoRestoreFitMs,
+  setTerminalAutoRestoreFitMsForHost
+} from '../src/terminal/terminal-auto-restore-fit-state'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
@@ -185,20 +189,13 @@ export default function TerminalSettingsScreen() {
       if (!client) {
         continue
       }
-      void client
-        .sendRequest('terminal.getAutoRestoreFit')
-        .then((resp) => {
-          if (cancelled) {
-            return
-          }
-          const value = (resp as { ms?: number | null } | null)?.ms
-          // Why: reconnect/status ticks can replay the same value; preserving
-          // object identity avoids rerendering every settings row again.
-          setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
-        })
-        .catch(() => {
+      void readTerminalAutoRestoreFitMs(client)
+        .catch(() => null)
+        .then((value) => {
           if (!cancelled) {
-            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, null))
+            // Why: reconnect/status ticks can replay the same value; preserving
+            // object identity avoids rerendering every settings row again.
+            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
           }
         })
     }
@@ -218,16 +215,12 @@ export default function TerminalSettingsScreen() {
     }
     setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
     try {
-      const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
-        ms: opt.ms
-      })) as { ms?: number | null } | null
-      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+      const saved = await saveTerminalAutoRestoreFitMs(client, opt.ms)
+      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, saved))
     } catch {
       try {
-        const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
-          ms?: number | null
-        } | null
-        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+        const current = await readTerminalAutoRestoreFitMs(client)
+        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, current))
       } catch {
         // give up silently — the next mount retries
       }
@@ -336,10 +329,9 @@ export default function TerminalSettingsScreen() {
 
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
         <Text style={styles.groupDescription}>
-          Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
-          command bar. Off by default so the keyboard never rewrites commands, flags, or paths.
-          Direct keyboard input (when keys go straight to the terminal) always sends raw keystrokes,
-          so suggestions don&apos;t apply there.
+          Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input.
+          Use the double-chevron button above the keyboard to switch from live input, then edit your
+          command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>

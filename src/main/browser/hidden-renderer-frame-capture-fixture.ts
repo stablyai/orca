@@ -1,5 +1,8 @@
 import type { Page } from 'playwright'
 
+// Cold CI renderers can take seconds to produce their first frame.
+export const HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS = 45_000
+
 export async function startHiddenRendererFrameCapture(
   page: Page,
   waitForFirstFrame: (hasFrame: () => boolean) => Promise<void>

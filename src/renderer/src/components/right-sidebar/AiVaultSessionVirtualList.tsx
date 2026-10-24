@@ -1,10 +1,11 @@
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type Ref } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
+import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
@@ -23,6 +24,13 @@ import {
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import { resolveAiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
+import { resumeAiVaultSessionHere, type AiVaultResumeHere } from './ai-vault-session-resume-here'
+import {
+  useAiVaultSessionListKeyboard,
+  useAiVaultSessionSelection,
+  type AiVaultSessionListKeyboard
+} from './use-ai-vault-session-keyboard-navigation'
 
 const VAULT_ROW_OVERSCAN = 8
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
@@ -60,7 +68,11 @@ export function AiVaultSessionVirtualList({
   onRevealLog,
   onOpenCwd,
   onRequestDelete,
-  searchHits
+  searchHits,
+  searchHitHostLabels,
+  keyboardRef,
+  query = '',
+  resumeHere
 }: {
   groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
@@ -96,6 +108,14 @@ export function AiVaultSessionVirtualList({
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
+  /** Set only when search hits span several hosts. */
+  searchHitHostLabels?: ReadonlyMap<string, string> | null
+  /** Present only where rows are keyboard-selectable. */
+  keyboardRef?: Ref<AiVaultSessionListKeyboard>
+  /** The search text; editing it moves the keyboard selection back to the top match. */
+  query?: string
+  /** Set in `/resume`: picking a row resumes it in that chat, and rows offer no other action. */
+  resumeHere?: AiVaultResumeHere
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -119,10 +139,13 @@ export function AiVaultSessionVirtualList({
   }, [collapsedGroups, groups])
 
   const stickyHeaderIndexes = useMemo(() => getVaultStickyHeaderIndexes(vaultRows), [vaultRows])
+  const selection = useAiVaultSessionSelection(vaultRows, keyboardRef !== undefined, query)
+  const { selectedIndex } = selection
 
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
+    measureElement: measureVirtualRowRetainingHiddenSize,
     estimateSize: (index) => {
       const row = vaultRows[index]
       if (row?.type === 'group') {
@@ -134,6 +157,8 @@ export function AiVaultSessionVirtualList({
       return VAULT_SESSION_ROW_HEIGHT
     },
     overscan: VAULT_ROW_OVERSCAN,
+    // Why: the pinned group header covers the list's top, so a row scrolled into view stops below it.
+    scrollPaddingStart: stickyHeaderIndexes.length > 0 ? VAULT_GROUP_HEADER_ROW_HEIGHT : 0,
     // Why: keep the active group header mounted so CSS sticky can pin it while
     // its sessions scroll underneath in the virtual list.
     rangeExtractor: useCallback(
@@ -163,6 +188,53 @@ export function AiVaultSessionVirtualList({
       return next
     })
   }, [])
+
+  // Why: the dialog stays up until the picked chat opens, and a second pick meanwhile would start
+  // a second resume; each pick settles, so this never stays set.
+  const pickInFlight = useRef(false)
+  const pickHere = (session: AiVaultSession): boolean => {
+    if (!resumeHere) {
+      return false
+    }
+    if (pickInFlight.current) {
+      return true
+    }
+    const picked = resumeAiVaultSessionHere({
+      session,
+      here: resumeHere,
+      actions: resolveAiVaultSessionRowChatActions({
+        session,
+        originalPaneTarget: getOriginalPaneTarget(session),
+        structuredSessionOpen: isStructuredSessionOpen(session),
+        resumeState: getSessionResumeState(session),
+        resumeInChat: getSessionResumeInChat(session),
+        searchHit: searchHits?.get(session.id)
+      }),
+      jump: onJumpToOriginalPane
+    })
+    if (!picked) {
+      return false
+    }
+    pickInFlight.current = true
+    const release = (): void => {
+      pickInFlight.current = false
+    }
+    void picked.then(release, release)
+    return true
+  }
+  // Enter resumes the row in the chat; a row that can't shows its details instead.
+  const activateSession = (session: AiVaultSession, index: number): void => {
+    if (!pickHere(session)) {
+      setExpandedSessionIds((current) => new Set(current).add(session.id))
+      virtualizer.scrollToIndex(index)
+    }
+  }
+  useAiVaultSessionListKeyboard(keyboardRef, {
+    rows: vaultRows,
+    selection,
+    scrollToIndex: (index) => virtualizer.scrollToIndex(index),
+    activate: activateSession
+  })
 
   const virtualItems = virtualizer.getVirtualItems()
   activeStickyHeaderIndexRef.current = getActiveStickyHeaderIndexForScroll({
@@ -222,6 +294,7 @@ export function AiVaultSessionVirtualList({
                 expandedSessionIds={expandedSessionIds}
                 vaultScope={vaultScope}
                 searchHits={searchHits}
+                searchHitHostLabels={searchHitHostLabels}
                 buildResumeStartup={buildResumeStartup}
                 getOriginalPaneTarget={getOriginalPaneTarget}
                 isStructuredSessionOpen={isStructuredSessionOpen}
@@ -245,6 +318,17 @@ export function AiVaultSessionVirtualList({
                 onRevealLog={onRevealLog}
                 onOpenCwd={onOpenCwd}
                 onRequestDelete={onRequestDelete}
+                selected={keyboardRef ? virtualRow.index === selectedIndex : undefined}
+                onSelect={keyboardRef ? () => selection.select(virtualRow.index) : undefined}
+                onPickSession={
+                  resumeHere
+                    ? (session) => {
+                        if (!pickHere(session)) {
+                          toggleSessionDetails(session.id)
+                        }
+                      }
+                    : undefined
+                }
               />
             ))}
           </div>

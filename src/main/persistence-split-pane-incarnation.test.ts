@@ -1,8 +1,9 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -15,7 +16,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -160,8 +160,7 @@ describe('Store', () => {
     }
   })
 
-  // Why: a session restored without an incarnation map still owns a valid source binding, so the
-  // split path must be able to fence on the pane alone instead of an id persistence never recorded.
+  // Legacy sessions lack incarnation IDs; source-pane ownership must still permit splitting.
   it('admits a split whose source pane has no persisted incarnation', async () => {
     const store = await createStore()
     store.setWorkspaceSession(
@@ -290,6 +289,7 @@ describe('Store', () => {
     'preserves a reconciled incarnation across a renderer snapshot ($label)',
     async ({ hostId }) => {
       const store = await createStore()
+      registerWorkspaceRepos(store, 'wt1')
       const paneKey = `tab1:${TEST_LEAF_1}`
       store.setWorkspaceSession(
         {

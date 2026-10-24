@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -21,8 +21,7 @@ import {
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 const RELAY_GC_CLAIM_SUFFIX = '.gc-claim'
 const RELAY_GC_OWNER_NAME = '.gc-owner'
-// Why: the claim guards only a bounded sibling rename or launch handoff, not
-// npm or deletion. Ten minutes bounds crashes while exceeding either sequence.
+// Ten minutes exceeds bounded rename/launch handoffs while permitting crashed-claim recovery.
 const RELAY_GC_CLAIM_STALE_SECONDS = 10 * 60
 
 export function relayGcClaimPath(remoteRelayDir: string): string {
@@ -100,7 +99,7 @@ async function writeRelayGcClaimOwner(
     ? powerShellCommand(
         `Set-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Value ${powerShellLiteral(token)} -NoNewline -ErrorAction Stop`
       )
-    : `printf %s ${shellEscape(token)} > ${shellEscape(ownerPath)}`
+    : `printf %s ${quotePosixShell(token)} > ${quotePosixShell(ownerPath)}`
   try {
     await execHostCommand(conn, host, command, { signal })
     return token
@@ -108,8 +107,7 @@ async function writeRelayGcClaimOwner(
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
     }
-    // Why: the write may have succeeded remotely before SSH lost its reply.
-    // A conditional release removes only the claim generation with our token.
+    // A lost reply may hide a successful write; release only our token's generation.
     await releaseRelayGcClaim(conn, remoteRelayDir, token, host)
     return null
   }
@@ -126,7 +124,7 @@ export async function isRelayGcClaimOwned(
     ? powerShellCommand(
         `if ((Get-Content -LiteralPath ${powerShellLiteral(ownerPath)} -Raw -ErrorAction SilentlyContinue) -ceq ${powerShellLiteral(token)}) { 'OWNED' } else { 'LOST' }`
       )
-    : `test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" = ${shellEscape(token)} && echo OWNED || echo LOST`
+    : `test "$(cat ${quotePosixShell(ownerPath)} 2>/dev/null)" = ${quotePosixShell(token)} && echo OWNED || echo LOST`
   const output = await execHostCommand(conn, host, command).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
@@ -136,7 +134,7 @@ export async function isRelayGcClaimOwned(
   return output.trim() === 'OWNED'
 }
 
-export type RelayGcClaimReleaseResult = 'released' | 'lost' | 'unknown'
+type RelayGcClaimReleaseResult = 'released' | 'lost' | 'unknown'
 
 export async function releaseRelayGcClaim(
   conn: RemoteInstallTransport,
@@ -155,10 +153,10 @@ export async function releaseRelayGcClaim(
           "if (Test-Path -LiteralPath $claim) { 'UNKNOWN' } else { 'RELEASED' } }"
       )
     : [
-        `if ! test -e ${shellEscape(claimPath)}; then echo RELEASED;`,
-        `elif test "$(cat ${shellEscape(ownerPath)} 2>/dev/null)" != ${shellEscape(token)}; then echo LOST;`,
+        `if ! test -e ${quotePosixShell(claimPath)}; then echo RELEASED;`,
+        `elif test "$(cat ${quotePosixShell(ownerPath)} 2>/dev/null)" != ${quotePosixShell(token)}; then echo LOST;`,
         `else ${removeRemoteTreeCommand(host, claimPath)} 2>/dev/null;`,
-        `if test -e ${shellEscape(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
+        `if test -e ${quotePosixShell(claimPath)}; then echo UNKNOWN; else echo RELEASED; fi; fi`
       ].join(' ')
   const output = await execHostCommand(conn, host, command).catch((error) => {
     if (isUnconfirmedSshCommandTermination(error)) {
@@ -227,8 +225,7 @@ export async function waitForRelayGcClaimRelease(
           return
         }
       }
-      // A lost or uncertain release can mean a successor owns the stable path.
-      // Probe again instead of treating recovery as complete.
+      // An uncertain release may leave a successor at the stable path; probe again.
       continue
     }
     await new Promise<void>((resolve, reject) => {

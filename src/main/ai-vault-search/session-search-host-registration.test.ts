@@ -13,13 +13,6 @@ import { searchSessionService } from './session-search-service-registry'
 import { resetSessionSearchPolicyForTests } from './session-search-policy'
 import { resetSessionSearchServiceInitForTests } from './session-search-service-init'
 
-/**
- * Every host that answers a search has to register a service, or its answer is
- * `no-service` — which means "this host does not have the feature", not "it is
- * off". Two halves: the installers really register, and each host's boot module
- * really calls the installer that suits it.
- */
-
 const updateSessionSearchInService = vi.hoisted(() => vi.fn())
 vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -124,7 +117,6 @@ it('registers an in-process service for a host with no scanner child', async () 
   })
   expect(installed).not.toBeNull()
 
-  // Off, not absent: the caller can tell consent from a host that lacks the feature.
   expect(await searchSessionService({ query: 'ledger' }, 'relay')).toEqual({
     kind: 'unavailable',
     reason: 'disabled'
@@ -183,8 +175,6 @@ it('orcad resolves no roots while disabled and discovers late roots when enabled
   }
 })
 
-// A host with no scanner child has nothing to forward a policy to, so the installed
-// service is itself how a settings write reaches the index.
 it('re-applies consent on an in-process host without reinstalling the service', async () => {
   installed = installInProcessSessionSearchService({
     dataRoot: harness.root,

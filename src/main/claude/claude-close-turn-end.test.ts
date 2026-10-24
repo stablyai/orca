@@ -1,6 +1,4 @@
-// Closing a Claude child settles its open turn in the adapter as interrupted, with no verdict: the
-// close names no cause. Whether the end was a person's is the journal's Stop event to say; an exit
-// the adapter saw before the close settles as that exit.
+// Close supplies no turn outcome; a prior observed exit keeps its own cause.
 
 import { describe, expect, it } from 'vitest'
 import type {
@@ -33,7 +31,6 @@ function turnSink() {
   return { sink, turns }
 }
 
-/** A live Claude child inside a turn the provider opened on its own (a background-task wake). */
 async function childInsideTurn() {
   const claude = fakeClaude()
   const events: ClaudeStructuredSessionEvent[] = []
@@ -54,20 +51,17 @@ async function childInsideTurn() {
 }
 
 describe('a Claude close settles the open turn with no verdict of its own', () => {
-  // Whose end it was is the journal's Stop event to say (`turnEndAfterStop`), never the close's.
   it('ends it interrupted, with no outcome', async () => {
-    const { adapter, events, turns } = await childInsideTurn()
+    const { adapter, turns } = await childInsideTurn()
 
     await expect(adapter.closeSession('session-1')).resolves.toBe(true)
 
     expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })
     expect(turns.at(-1)).not.toHaveProperty('outcome')
-    expect(events.find((event) => event.type === 'ended')).not.toHaveProperty('stopCause')
   })
 
   it('settles a crash it saw before the close once, as that exit', async () => {
     const { adapter, connection, events, turns } = await childInsideTurn()
-    // The child dies on its own first; the close arrives while that exit is still settling.
     connection.handlers.onExit?.(new Error('provider exited'))
 
     await adapter.closeSession('session-1')

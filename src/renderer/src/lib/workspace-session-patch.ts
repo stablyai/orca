@@ -178,6 +178,10 @@ export function buildWorkspaceSessionPatch(
     patch.clientHostedBrowserCloseIntentsByEnvironment =
       snapshot.clientHostedBrowserCloseIntentsByEnvironment
   }
+  if (changed.has('pairedTerminalTabCloseIntentsByEnvironment')) {
+    patch.pairedTerminalTabCloseIntentsByEnvironment =
+      snapshot.pairedTerminalTabCloseIntentsByEnvironment
+  }
   if (
     stagedVisibilityChanged ||
     hasAnyChangedField(changed, [

@@ -8,18 +8,10 @@ import {
   getServeUpdateHandoffPath
 } from '../shared/serve-update-handoff'
 
-/**
- * Guards app-environment initialization before resolving update-handoff paths (issue #16761).
- *
- * The sibling serve-update-handoff.test.ts mocks `./persistence`, so under it
- * getCanonicalUserDataPath() can never throw — which is exactly why a module-scope call to
- * installServeSupervisorDisconnectQuit() shipped and killed every `orca serve` process on
- * macOS. This file keeps the real path resolver so that dependency stays visible.
- */
+// Keep the real path resolver: mocking persistence hides access before app-environment setup.
 vi.mock('electron', () => ({ app: { getVersion: () => '1.0.51', quit: vi.fn() } }))
 
-// Why reach for the slot directly: there is no uninstall API, and vitest-host-ports-setup installs
-// a fake before every test — so the uninstalled state this guards can only be reproduced this way.
+// Test setup installs a fake environment, and there is no uninstall API.
 const APP_ENVIRONMENT_SLOT = Symbol.for('orca.host.appEnvironment')
 
 describe('serve supervisor disconnect quit', () => {
@@ -34,8 +26,7 @@ describe('serve supervisor disconnect quit', () => {
     const slot = globalThis as Record<symbol, unknown>
     installedEnvironment = slot[APP_ENVIRONMENT_SLOT]
     delete slot[APP_ENVIRONMENT_SLOT]
-    // Why pin darwin: hasServeUpdateSupervisor() short-circuits off-macOS, so the guard would
-    // silently cover nothing on Linux/Windows CI — where this suite actually runs.
+    // The supervisor check short-circuits on other platforms.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     process.env[SERVE_UPDATE_HANDOFF_PATH_ENV] = getServeUpdateHandoffPath(userDataDir)
   })
@@ -48,7 +39,6 @@ describe('serve supervisor disconnect quit', () => {
       slot[APP_ENVIRONMENT_SLOT] = installedEnvironment
     }
     Object.defineProperty(process, 'platform', originalPlatform)
-    // Why restore rather than delete: this suite can run inside a serve process that set it.
     if (installedHandoffPath === undefined) {
       delete process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
     } else {

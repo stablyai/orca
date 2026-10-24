@@ -144,7 +144,8 @@ describe('floating file links preserve main-window selection', () => {
     expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ filePath, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
       { forceContentReload: true },
-      null
+      null,
+      expect.any(Function)
     )
     expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
     expect(mainSelection()).toEqual(before)
@@ -157,7 +158,8 @@ describe('floating file links preserve main-window selection', () => {
     expect(openFileForLink).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID }),
       { forceContentReload: true },
-      null
+      null,
+      expect.any(Function)
     )
     expect(mainSelection()).toEqual(before)
   })

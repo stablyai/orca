@@ -222,6 +222,55 @@ describe('a host that just moved to its managed server', () => {
     expect(store.getState().activeWorktreeId).toBe(worktreeId)
   })
 
+  it('lists the server rows itself when the cold-start scan finished without them', async () => {
+    const executionHostId = 'runtime:env-scan-missed'
+    const call = vi.fn(async (args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'worktree.detectedList'
+        ? {
+            id: 'rpc',
+            ok: true,
+            result: {
+              repoId: 'repo-1',
+              authoritative: true,
+              source: 'git',
+              worktrees: [
+                makeWorktree({
+                  id: worktreeId,
+                  repoId: 'repo-1',
+                  path: '/root/repo',
+                  hostId: executionHostId
+                })
+              ]
+            },
+            _meta: { runtimeId: 'orcad' }
+          }
+        : serverReply(args)
+    )
+    Object.assign(window.api.runtimeEnvironments, { call })
+    const listedServerRows = (): boolean =>
+      call.mock.calls.some(([args]) => args.method === 'worktree.detectedList')
+    store.setState({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: worktreeId,
+      activeWorkspaceExecutionHostId: 'ssh:ssh-1'
+    })
+    applySshManagedServerTransition('ssh-1', undefined, {
+      kind: 'managed',
+      environmentId: 'env-scan-missed'
+    })
+    await vi.waitFor(() => expect(store.getState().worktreesByRepo['repo-1']).toEqual([]))
+    expect(listedServerRows()).toBe(false)
+
+    // Startup's scan began before the server's projects loaded, or failed for them.
+    store.setState({ startupWorktreeRefreshCompleted: true })
+
+    await vi.waitFor(() =>
+      expect(store.getState().activeWorkspaceExecutionHostId).toBe(executionHostId)
+    )
+    expect(listedServerRows()).toBe(true)
+    expect(store.getState().activeWorktreeId).toBe(worktreeId)
+  })
+
   describe('a project linked to the copy another desktop already put on the server', () => {
     const sourceRepo: Repo = { ...repo, id: 'repo-b', path: '/root/migrepo' }
     const sourceWorktreeId = 'repo-b::/root/migrepo'

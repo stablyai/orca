@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration-manifest-validation'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { Repo } from '../../../shared/repo-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
@@ -133,5 +133,45 @@ describe('orcad migration source dependency census', () => {
       totalCount: 1,
       counts: { 'terminal-lease': 1 }
     })
+  })
+
+  // A relay-era tab named its shell only on the tab; loading wrote one legacy key alias per leaf.
+  it('does not count legacy pane-key aliases of a tab-only relay shell as terminals to reconnect', () => {
+    const state = getDefaultPersistedState('/home/test')
+    state.sshTargets = [TARGET]
+    state.repos = [REPO]
+    const worktreeId = `${REPO.id}::/srv/repo`
+    const tabId = 'tab-relay'
+    const stablePaneKey = `${tabId}:11111111-1111-4111-8111-111111111111`
+    state.workspaceSessionsByHostId = {
+      [`ssh:${TARGET.id}`]: {
+        ...state.workspaceSession,
+        tabsByWorktree: {
+          [worktreeId]: [
+            {
+              id: tabId,
+              ptyId: 'pty-relay',
+              worktreeId,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        remoteSessionIdsByTabId: { [tabId]: 'pty-relay' }
+      }
+    }
+    state.legacyPaneKeyAliasEntries = [
+      { legacyPaneKey: `${tabId}:0`, stablePaneKey, ptyId: 'pty-relay', updatedAt: 1 },
+      { legacyPaneKey: `${tabId}:1`, stablePaneKey, ptyId: 'pty-relay', updatedAt: 1 }
+    ]
+
+    expect(
+      collectOrcadMigrationUntransferredDependencyCensus(state, MANIFEST).counts[
+        'terminal-recovery'
+      ]
+    ).toBe(0)
   })
 })

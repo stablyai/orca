@@ -19,8 +19,7 @@ import { estimateStructuredAgentSessionItemBytes } from '../native-chat/agent-se
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
-/** Room for what a Codex turn row holds beyond its lifecycle: a context report with no breakdown.
- *  The shared bound allows a full breakdown, which a history restore writing every turn would overrun. */
+/** Reserve for Codex's context report; the larger shared bound would overrun history restores. */
 const CODEX_TURN_ROW_KEPT_BYTES = 1_024
 
 function codexTurnRowReservedBytes(
@@ -30,8 +29,7 @@ function codexTurnRowReservedBytes(
   return estimateStructuredAgentSessionItemBytes(identity, lifecycle) + CODEX_TURN_ROW_KEPT_BYTES
 }
 
-/** A turn's lifecycle over its row as the journal holds it, so the row keeps every field this
- *  writer does not own, such as its context facts. */
+/** Preserve fields this lifecycle writer does not own, including context usage. */
 export function reviseCodexTurnRow(
   journal: StructuredAgentSessionRevisionJournal,
   identity: AgentJournalItemIdentity,
@@ -56,7 +54,6 @@ export function codexTurnLifecycleIdentity(
   }
 }
 
-/** Provider key of the user message that opened the turn; deterministic, so never remembered. */
 export function codexTurnUserItemId(threadId: string, turnId: string): string {
   return agentJournalItemKey({
     provider: 'codex',
@@ -72,24 +69,14 @@ export function codexTurnLifecycleBody(
   return agentJournalTurnBody(turnLifecycle)
 }
 
-/** Maps a `turn/completed` status, live or restored. Only `interrupted` is a stop;
- *  a failed turn completed, and `codexTurnOutcome` says it failed. */
+/** Failed turns are completed; codexTurnOutcome carries their failure verdict. */
 export function codexTurnLifecycleState(
   status: string | null
 ): Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'> {
   return status === 'interrupted' ? 'interrupted' : 'completed'
 }
 
-/**
- * Codex's own verdict on a turn, or null when this host cannot place one.
- *
- * `TurnStatus` in the app-server protocol is `completed | interrupted | failed |
- * inProgress` and `status` is REQUIRED on every `Turn`, on the live notification
- * and in resumed history alike. So a missing or unrecognised status is a payload
- * this host did not get, not a clean finish — unlike `codexTurnLifecycleState`,
- * which still has to name a terminal lifecycle arm for the row. `inProgress` on
- * a turn-end contradicts itself and is no verdict either.
- */
+/** Missing, unknown or inProgress statuses at turn-end cannot establish a verdict. */
 export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome | null {
   switch (status) {
     case 'completed':
@@ -98,7 +85,6 @@ export function codexTurnOutcome(status: string | null): AgentJournalTurnOutcome
       return 'failure'
     case 'interrupted':
       return 'cancellation'
-    // The fourth protocol arm, plus the two shapes that are no verdict at all.
     case 'inProgress':
     case null:
     default:
@@ -113,7 +99,7 @@ export function publishCodexTurnLifecycle(input: {
   threadId: string
   turnId: string
   state: AgentJournalTurnLifecycleState
-  /** Absent whenever Codex named no verdict, which reads as unknown. */
+  /** Absent means unknown, not success. */
   outcome?: AgentJournalTurnOutcome
   userItemId?: string
   startedAt?: number
@@ -135,7 +121,7 @@ export function publishCodexTurnLifecycle(input: {
     ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {})
   })
-  // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
+  // Anchor live counters to the host's turn-start receipt.
   const appendOptions = {
     lifecycle: true,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE,
@@ -158,7 +144,7 @@ export function publishCodexTurnLifecycle(input: {
   if (!admission.accepted) {
     return admission
   }
-  // Keyed apart, so a completion's publication never replaces a start one still waiting to run.
+  // Keep queued start publications separate from completion publications.
   const publishOptions = {
     lifecycle: true,
     ...(input.state === 'running'

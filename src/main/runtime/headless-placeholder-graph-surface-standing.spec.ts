@@ -4,6 +4,9 @@ import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { SURFACE_CLAIM_WITHOUT_STANDING } from './pty-recorded-surface-topology'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 
 export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   // #18191: a headless server publishes one empty placeholder graph at launch so status clients see
@@ -11,15 +14,20 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
   // a graph statement every claim written without standing — a persisted replay, an inventory
   // restore, a TUI-owner recovery — is contradicted by an empty leaf map that can never re-stamp it.
   // The terminal then reports `orphaned: true` under a `pty:` tabId for the life of the process.
+  // Layout-owner builds keep no graph stamp: a terminal holds its surface exactly when main's
+  // layout binds it, so a restore writes that binding and no window graph retracts it.
 
   const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
   const LEAF = '33333333-3333-4333-8333-333333333333'
   const PTY = 'pty-headless-restored'
 
   function makeStore() {
+    let session = getDefaultWorkspaceSession()
     return {
-      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
-      setWorkspaceSession: vi.fn(),
+      getWorkspaceSession: vi.fn(() => session),
+      setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => {
+        session = next
+      }),
       getRepos: vi.fn(() => [
         {
           id: 'repo-1',
@@ -59,6 +67,15 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
       recordPtyWorktree: (ptyId: string, worktreeId: string, state: Record<string, unknown>) => void
     }
     internals.recordPtyWorktree(PTY, WORKTREE_ID, { connected: true })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      bindPaneFirst(runtime, {
+        worktreeId: WORKTREE_ID,
+        tabId: 'tab-restored',
+        leafId: LEAF,
+        ptyId: PTY
+      })
+      return
+    }
     internals.recordPtyWorktree(PTY, WORKTREE_ID, {
       connected: true,
       tabId: 'tab-restored',
@@ -102,6 +119,16 @@ export function registerHeadlessPlaceholderGraphSurfaceStandingTests(): void {
       // such — otherwise this fix would have re-broken #18191 on every promoted host.
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        // A window's graph does not outrank main's binding; main's layout dropping the pane does.
+        const attached = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+        const kept = attached.terminals.find((terminal) => terminal.ptyId === PTY)
+        expect(kept?.orphaned).toBe(false)
+        expect(kept?.tabId).toBe('tab-restored')
+        runtime['store']?.setWorkspaceSession?.(getDefaultWorkspaceSession())
+        // The stub store announces no layout write; the next graph installs main's panes.
+        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      }
 
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
       const restored = terminals.find((terminal) => terminal.ptyId === PTY)

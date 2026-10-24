@@ -15,7 +15,10 @@ import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
+import { migratePortugueseUiLanguageOnLoad } from '../../../shared/portuguese-ui-language-migration'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
+import { hasTypedAgentPermission } from '../../../shared/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../shared/tui-agent-permission-lift'
 import {
   normalizeLoadedOnboardingState,
   normalizeNotificationSettings,
@@ -23,6 +26,10 @@ import {
 } from '../applying-settings/onboarding-normalization'
 
 export type PreparedLoadedProfileSettings = {
+  migratedPortugueseUiLanguage: Pick<
+    GlobalSettings,
+    'uiLanguage' | 'uiLanguagePortugueseMigrationApplied'
+  >
   migratedExperimentalActivity: GlobalSettings['experimentalActivity']
   migratedAutoRenameBranchFromWork: Pick<
     GlobalSettings,
@@ -44,6 +51,8 @@ export type PreparedLoadedProfileSettings = {
     GlobalSettings,
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
   >
+  /** The same launch profile with permissions moved into the stored choice; this is what's saved. */
+  migratedAgentPermission: ReturnType<typeof migrateAgentPermissionChoice>
   migratedWindowsRuntimeDefault: GlobalSettings['localWindowsRuntimeDefault']
   migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime']
   loadedCompactWorktreeCards: boolean
@@ -60,6 +69,13 @@ export function prepareLoadedProfileSettings(
   defaults: PersistedState,
   markNeedsSave: () => void
 ): PreparedLoadedProfileSettings {
+  const migratedPortugueseUiLanguage = migratePortugueseUiLanguageOnLoad(parsed.settings)
+  if (
+    parsed.settings?.uiLanguage !== migratedPortugueseUiLanguage.uiLanguage ||
+    parsed.settings?.uiLanguagePortugueseMigrationApplied !== true
+  ) {
+    markNeedsSave()
+  }
   const experimentalActivityDefaultedOffForAllUsers =
     parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
   // Why: preserve the legacy rollout boundary while loading profiles created before the Agents tab graduated.
@@ -134,8 +150,17 @@ export function prepareLoadedProfileSettings(
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
+  const migratedAgentPermission = migrateAgentPermissionChoice(
+    {
+      ...migratedAgentYoloDefaults,
+      agentPermissionDefault: parsed.settings?.agentPermissionDefault,
+      agentPermissionOverrides: parsed.settings?.agentPermissionOverrides
+    },
+    process.platform
+  )
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
+    !hasTypedAgentPermission(parsed.settings) ||
     parsed.settings?.agentDefaultArgs?.devin !==
       migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
@@ -232,6 +257,7 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   return {
+    migratedPortugueseUiLanguage,
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,
     migratedTerminalCursorStyle,
@@ -244,6 +270,7 @@ export function prepareLoadedProfileSettings(
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
     migratedAgentYoloDefaults,
+    migratedAgentPermission,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
     loadedCompactWorktreeCards,

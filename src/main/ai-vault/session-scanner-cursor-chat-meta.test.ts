@@ -4,12 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
 
-// Why: a refused WSL read is the one build failure that must not be cached.
 let failNextChatsReaddir = false
 let failNextChatsRootReaddir = false
 let failMetaJsonReads = false
 let failMetaJsonStats: false | true | 'eacces' = false
-// Stands in for the WSL gate rejecting a read the scan cancelled.
 let cancelMetaJsonReads: AbortController | null = null
 let chatsRootReads = 0
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
@@ -82,6 +80,9 @@ import {
 } from './session-scanner-parse-cache'
 import {
   getSessionParseCacheEntry,
+  lookupSessionScopeCwds,
+  resolveSessionScopeCwd,
+  scopeCwdStampOf,
   peekSessionParseCacheEntry,
   type PersistedSessionParseCacheEntry,
   setSessionParseCacheColdTier
@@ -90,7 +91,7 @@ import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import type { FileWithMtime } from './session-scanner-types'
 import type { SessionSidecarStat } from './session-sidecar-stat'
 
-// Cursor's real meta.json keys (~/.cursor/chats/<md5 of cwd>/<uuid>/meta.json, 2026-09).
+// Mirror Cursor meta.json keys (2026-09).
 type CursorMetaFixture = {
   schemaVersion: number
   createdAtMs: number
@@ -204,9 +205,7 @@ describe('cursor chat meta', () => {
     const transcriptPath = await writeTranscript(cursorHome, 'slug', 'chat-refused', [])
 
     failNextChatsReaddir = true
-    // A refusal degrades to "no metadata" rather than taking the session down.
     await expect(cursorChatMetaPath(transcriptPath)).resolves.toBeUndefined()
-    // The next scan rebuilds instead of replaying the rejected promise.
     await expect(cursorChatMetaPath(transcriptPath)).resolves.toBe(metaPath)
   })
 
@@ -225,7 +224,7 @@ describe('cursor chat meta', () => {
     expect(inScan.every(Boolean)).toBe(true)
     expect(chatsRootReads).toBe(1)
 
-    // Outside a scan every lookup re-validates, which is what the parse path needs.
+    // Outside a scan, each lookup must revalidate the index.
     chatsRootReads = 0
     await Promise.all(transcripts.map((path) => cursorChatMetaPath(path)))
     expect(chatsRootReads).toBe(3)
@@ -265,7 +264,7 @@ async function cursorCandidate(cursorHome: string): Promise<FileWithMtime> {
   return discovery.files[0]
 }
 
-/** The production path: the parse cache owns the sidecar merge, not the parser. */
+/** Exercise the production sidecar merge in the parse cache. */
 function parseCursorCached(
   file: FileWithMtime,
   stats: SessionParseStats = createSessionParseStats()
@@ -312,12 +311,10 @@ describe('cursor discovery sidecar observation', () => {
     await utimes(metaPath, future, future)
     const after = await cursorCandidate(cursorHome)
 
-    // The transcript's own key is untouched by a sibling rewrite.
     const transcriptStat = await stat(transcriptPath)
     expect(after.mtimeMs).toBe(transcriptStat.mtimeMs)
     expect(after.sizeBytes).toBe(transcriptStat.size)
     expect(after.mtimeMs).toBe(before.mtimeMs)
-    // The sibling is observed separately, and it did move.
     expect(before.sidecar).toMatchObject({ path: metaPath })
     expect(after.sidecar).toMatchObject({ path: metaPath })
     expect((after.sidecar as SessionSidecarStat).mtimeMs).toBeGreaterThan(
@@ -359,7 +356,6 @@ describe('cursor sidecar enrichment', () => {
 
     expect(session?.title).toBe('transcript first prompt')
     expect(session?.createdAt).toBe('2026-01-01T00:00:00.000Z')
-    // cwd is never in the transcript, so it still comes from meta.json.
     expect(session?.cwd).toBe('/private/tmp/workspace')
   })
 
@@ -406,12 +402,10 @@ describe('cursor sidecar enrichment', () => {
 
     const { session, stats } = await parseCursorCached(await cursorCandidate(cursorHome))
 
-    // The transcript is not re-read: the merge runs over the stored fold result.
     expect(stats.reused).toBe(1)
     expect(stats.fullParses).toBe(0)
     expect(stats.incremental).toBe(0)
-    // A rewritten cwd REPLACES the merged one; `??=` on the cached session could
-    // never do this, because the cached cwd is already non-null.
+    // An updated sidecar must replace already-merged metadata, not merely fill null fields.
     expect(session?.cwd).toBe('/repo/second')
     expect(session?.resumeCommand).toContain('/repo/second')
   })
@@ -445,7 +439,6 @@ describe('cursor sidecar enrichment', () => {
     ).rejects.toSatisfy(isAiVaultScanCancelledError)
     cancelMetaJsonReads = null
 
-    // Not cached as "no metadata" under the new sidecar stat.
     expect(getSessionParseCacheEntry(candidate.path)?.session?.cwd).toBe('/repo/first')
     expect(getSessionParseCacheEntry(candidate.path)?.sidecar).toEqual(before?.sidecar)
     const { session, stats } = await parseCursorCached(candidate)
@@ -462,7 +455,7 @@ describe('cursor sidecar enrichment', () => {
     resetSessionParseCacheForTests()
     await parseCursorCached(await cursorCandidate(cursorHome))
 
-    // What a build older than the sidecar field wrote: no such key.
+    // Simulate a persisted entry from before sidecar observations were stored.
     const candidate = await cursorCandidate(cursorHome)
     const {
       resume: _resume,
@@ -489,7 +482,6 @@ describe('cursor chat meta scan failures', () => {
     const refusedCursor = refused.sessions.filter((session) => session.agent === 'cursor')
     expect(refusedCursor).toHaveLength(2)
     expect(refusedCursor.map((session) => session.cwd)).toEqual([null, null])
-    // One issue for the chats root, not one per transcript.
     expect(refused.issues).toHaveLength(1)
     expect(refused.issues[0].path).toBe(join(cursorHome, 'chats'))
     expect(refused.issues[0].agent).toBe('cursor')
@@ -514,8 +506,7 @@ describe('cursor chat meta scan failures', () => {
     expect(listed?.cwd).toBeNull()
     expect(refused.issues).toHaveLength(1)
 
-    // The sibling alone is unknown; the transcript's work and its resume point
-    // are kept, so the next healthy scan merges without re-reading bytes.
+    // Unknown metadata must preserve the transcript fold and resume point for a byte-free retry.
     const entry = getSessionParseCacheEntry(listed?.filePath ?? '')
     expect(entry?.sidecar).toBe('unknown')
     expect(entry?.resume).not.toBeNull()
@@ -532,8 +523,7 @@ describe('cursor chat meta scan failures', () => {
     const { scanOptions } = await writeCursorScanFixture(['chat-a'])
     resetSessionParseCacheForTests()
 
-    // On mac/Linux/Windows the gated stat is a bare fs stat, so a permissions
-    // failure is not a WslTranscriptFsError and must not read as "no sidecar".
+    // Native EACCES lacks the WSL error wrapper but still cannot prove sidecar absence.
     failMetaJsonStats = 'eacces'
     const refused = await scanAiVaultSessions({ ...scanOptions, platform: 'darwin', limit: 20 })
     const listed = refused.sessions.find((session) => session.agent === 'cursor')
@@ -615,6 +605,16 @@ it('recovers a cold Cursor session when its sidecar appears without a transcript
   const read = vi.fn((key: string) => rows.get(key))
   const tier = {
     read,
+    readScopeCwds: (paths: readonly string[]) => ({
+      found: new Map(
+        paths.flatMap((key) => {
+          const row = rows.get(key)
+          return row === undefined ? [] : [[key, { parsed: scopeCwdStampOf(row) }] as const]
+        })
+      ),
+      parsed: true,
+      read: true
+    }),
     stored: (key: string, row: PersistedSessionParseCacheEntry) => rows.set(key, row),
     deleted: (key: string) => rows.delete(key)
   }
@@ -644,4 +644,31 @@ it('recovers a cold Cursor session when its sidecar appears without a transcript
   const found = (await scan()).sessions.filter((row) => row.filePath === path)
   expect(found.map((row) => row.cwd)).toEqual(['/repo'])
   expect(await stat(path)).toMatchObject({ mtimeMs: file.mtimeMs, size: file.sizeBytes })
+})
+
+it('lists a Cursor session once meta.json names the scope after a scan stored it as cwd-less', async () => {
+  const cursorHome = await createCursorHome()
+  const path = await writeTranscript(cursorHome, 'slug', 'chat-1', [
+    JSON.stringify({ role: 'user', message: { content: 'Find the bug' } })
+  ])
+  await utimes(path, 1, 1)
+  for (const chatId of ['busy-1', 'busy-2']) {
+    await writeTranscript(cursorHome, 'slug', chatId, [
+      JSON.stringify({ role: 'user', message: { content: chatId } })
+    ])
+  }
+  const scan = () =>
+    scanAiVaultSessions({
+      ...isolatedScanRoots(join(cursorHome, '..')),
+      cursorProjectsDir: join(cursorHome, 'projects'),
+      platform: 'darwin',
+      limit: 1,
+      scopePaths: ['/repo']
+    })
+  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
+  lookupSessionScopeCwds([path])
+  expect(resolveSessionScopeCwd(path, () => true)).toEqual({ cwd: null })
+  await writeChatMeta(cursorHome, 'workspace-hash', 'chat-1', { cwd: '/repo' })
+  const found = (await scan()).sessions.filter((row) => row.filePath === path)
+  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
 })

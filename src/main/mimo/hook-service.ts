@@ -51,8 +51,6 @@ export class MimoCodeHookService {
   clearPty(_ptyId: string): void {}
 
   buildPtyEnv(_ptyId: string, existingMimocodeHome?: string): Record<string, string> {
-    // Why: MiMo currently uses a shared home; per-source subdirs can come
-    // later if concurrent MiMo panes need isolated runtime state.
     const home = join(
       getAppEnvironment().getPath('userData'),
       MIMOCODE_HOOKS_DIR,

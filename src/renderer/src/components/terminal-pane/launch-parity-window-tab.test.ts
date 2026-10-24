@@ -29,6 +29,13 @@ import {
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
@@ -67,7 +74,6 @@ const load = perClientLoader(async () => ({
   quick: await import('@/lib/run-quick-command-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
   resume: await import('@/lib/ai-vault-resume-command'),
-  dashboard: await import('@/components/dashboard/launch-dashboard-agent'),
   pane: await import('./pty-connection'),
   paneOptions: await import('./terminal-pane-manager-options'),
   defaults: await import('@/lib/pane-manager/pane-terminal-options'),
@@ -105,10 +111,6 @@ async function openTab(c: WindowLaunchCase) {
       launchSource: 'terminal_context_menu',
       initialCwd: producer.initialCwd
     })
-  } else if (producer.kind === 'plus' && producer.via === 'dashboard') {
-    // Its workspace activation asks for a PR refresh, which this harness has no bridge for.
-    Object.assign(window.api, { gh: {} })
-    modules.dashboard.launchDashboardAgent({ worktreeId, agent: producer.agent })
   } else if (producer.kind === 'plus') {
     // Hand-built copies of what the "+" menu and the new-agent shortcut pass.
     modules.launch.launchAgentInNewTab({

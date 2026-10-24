@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
-import { act, type ReactNode } from 'react'
+import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadManagedRestartResult } from '../../../../shared/orcad-managed-runtime'
 import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
-import { SshHostRestartServerAction } from './SshHostRestartServerAction'
+import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
 
 vi.mock('../ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
@@ -39,13 +39,35 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+// The row menu's entry, reduced to the one button that opens the dialog.
+function Harness({
+  status,
+  onChanged
+}: {
+  status: SshManagedServerStatus
+  onChanged: () => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Restart Orca’s server…</button>
+      <SshHostRestartServerDialog
+        status={status}
+        open={open}
+        onOpenChange={setOpen}
+        onChanged={onChanged}
+      />
+    </>
+  )
+}
+
 async function render(status: SshManagedServerStatus, onChanged = vi.fn()) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(<SshHostRestartServerAction status={status} onChanged={onChanged} />)
+    root.render(<Harness status={status} onChanged={onChanged} />)
   })
   return container
 }
@@ -54,15 +76,16 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return [...container.querySelectorAll('button')].find((entry) => entry.textContent === text)!
 }
 
-describe('Restart managed server', () => {
+describe('Restart Orca’s server', () => {
   it('is offered only when the launching SSH session proved ended', async () => {
-    expect((await render({ kind: 'managed', environmentId: 'env-1' })).textContent).toBe('')
+    expect(canRestartSshHostServer({ kind: 'managed', environmentId: 'env-1' })).toBe(false)
+    expect(canRestartSshHostServer(ended)).toBe(true)
   })
 
   it('confirms first, then restarts and refreshes', async () => {
     const onChanged = vi.fn()
     const container = await render(ended, onChanged)
-    await act(async () => button(container, 'Restart managed server…').click())
+    await act(async () => button(container, 'Restart Orca’s server…').click())
     expect(restart).not.toHaveBeenCalled()
     expect(container.textContent).toContain('no terminals are running')
     await act(async () => button(container, 'Restart').click())
@@ -78,7 +101,7 @@ describe('Restart managed server', () => {
     restart.mockResolvedValueOnce(result)
     const onChanged = vi.fn()
     const container = await render(ended, onChanged)
-    await act(async () => button(container, 'Restart managed server…').click())
+    await act(async () => button(container, 'Restart Orca’s server…').click())
     await act(async () => button(container, 'Restart').click())
     expect(container.textContent).toContain(text)
     expect(onChanged).not.toHaveBeenCalled()

@@ -28,6 +28,7 @@ import { createFileSearchActions } from './actions/file-search-actions'
 import { createEditorRevealFocusState } from './actions/editor-reveal-focus-state'
 import { createMarkdownLinkAction } from './actions/markdown-link-action'
 import { createHydrateEditorSession } from './actions/hydrate-editor-session'
+import { createEditorBufferIdentityActions } from './actions/editor-buffer-identity-actions'
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   ...createEditorDraftState(set, get),
@@ -56,5 +57,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   ...createFileSearchActions(set, get),
   ...createEditorRevealFocusState(set, get),
   ...createMarkdownLinkAction(set, get),
-  ...createHydrateEditorSession(set, get)
+  ...createHydrateEditorSession(set, get),
+  ...createEditorBufferIdentityActions(set, get)
 })

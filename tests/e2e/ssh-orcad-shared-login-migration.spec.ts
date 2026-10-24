@@ -119,10 +119,13 @@ test('a relay-era desktop joins the server another version runs for the same log
     await waitForSessionReady(established.page)
     await desktopB.close(app)
     app = null
-    const seeded = seedRelayEraProfile(desktopB.userDataDir, host.input, {
-      repoPath: host.remoteRepoPath,
-      folderPath: host.remoteFolderPath
-    })
+    // B's sidebar shows only this host; A's server keeps its own all-hosts view.
+    const seeded = seedRelayEraProfile(
+      desktopB.userDataDir,
+      host.input,
+      { repoPath: host.remoteRepoPath, folderPath: host.remoteFolderPath },
+      { sidebarScopedToHost: true }
+    )
     const b = await desktopB.launch()
     app = b.app
     await waitForSessionReady(b.page)

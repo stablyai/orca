@@ -1,9 +1,4 @@
-/**
- * Per-runtime cache for `gh auth token --user` support (gh ≥ 2.40).
- *
- * Why: binding creation must not offer accounts when the execution host's gh
- * is too old; probe once per local/WSL runtime and recheck after fallbacks.
- */
+// Require gh >=2.40 multi-account support per execution runtime before offering bindings.
 import { ghExecFileAsync } from '../git/runner'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { GhMultiAccountCapability } from '../../shared/github/auth-types'
@@ -35,7 +30,7 @@ const probesByExecutionHost = new Map<string, CapabilityProbe>()
 /** Bumped on invalidate so in-flight probes cannot commit stale results. */
 const generationByExecutionHost = new Map<string, number>()
 
-/** Infers the WSL distro from a UNC `cwd` so capability and token probes run on the same host they are cached under. */
+/** Infer UNC distros so probe execution matches cache ownership. */
 export function normalizeGhCapabilityTarget(target: GhCapabilityTarget = {}): GhCapabilityTarget {
   const wslDistro =
     target.wslDistro ?? (target.cwd ? parseWslUncPath(target.cwd)?.distro : undefined)
@@ -56,8 +51,7 @@ function isNarrowMultiAccountUnsupported(error: unknown): boolean {
   const stderr =
     error && typeof error === 'object' && 'stderr' in error ? String(error.stderr ?? '') : ''
   const text = `${message}\n${stderr}`.toLowerCase()
-  // Why: only treat option-echo / unknown-flag shapes as unsupported — missing
-  // gh, auth failures, and timeouts stay unknown so Settings can Retry.
+  // Unsupported-option errors are definitive; missing gh/auth/timeouts remain retryable.
   return (
     text.includes('unknown flag: --user') ||
     text.includes('unknown command') ||

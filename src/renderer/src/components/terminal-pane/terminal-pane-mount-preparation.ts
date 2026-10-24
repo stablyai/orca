@@ -9,6 +9,7 @@ import {
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
+  resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
 } from './terminal-http-link-source-owner'
 import {
@@ -17,6 +18,7 @@ import {
   terminalUrlOpenHintOptionsFor
 } from './terminal-link-open-hints'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
@@ -156,7 +158,7 @@ export function prepareTerminalPaneMount(
       sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
   }
-  const pathExistsCache = new Map<string, boolean>()
+  const pathExistsCache: TerminalPathExistsCache = new Map()
   const linkDeps: LinkHandlerDeps = {
     worktreeId: deps.worktreeId,
     worktreePath,
@@ -167,10 +169,12 @@ export function prepareTerminalPaneMount(
     managerRef: deps.managerRef,
     linkProviderDisposablesRef: refs.linkProviderDisposablesRef,
     pathExistsCache,
-    getRuntimeEnvironmentIdForPane: (paneId) => {
-      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
-    },
+    getRuntimeEnvironmentIdForPane: (paneId) =>
+      resolveTerminalLinkRuntimeEnvironmentId(
+        paneTransports.get(paneId),
+        useAppStore.getState(),
+        deps.worktreeId
+      ),
     getRuntimeTerminalHandleForPane: (id) => resolveTerminalRuntimeHandle(paneTransports.get(id)),
     getLinkActionContext,
     sourceTabId: deps.tabId

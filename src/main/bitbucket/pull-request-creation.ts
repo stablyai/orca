@@ -21,10 +21,7 @@ import { getHostedReviewLocalGitOptions } from '../source-control/hosted-review-
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
-// Why: eligibility is evaluated proactively for the sidebar, so this must not
-// decrypt — forcing the secret open here would pop an OS keychain prompt just
-// from opening a worktree. Presence is enough; the create call itself still
-// fails closed if the credential turns out to be unusable.
+// Sidebar eligibility must avoid keychain prompts; creation validates the actual credential.
 export function isBitbucketReviewCreationAuthenticated(): boolean {
   return hasAuth(getEnvAuthConfig()) || hasStoredBitbucketCredential()
 }
@@ -52,8 +49,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
     }
   }
-  // Bitbucket answers a duplicate source branch with 400 plus this phrasing
-  // rather than a 409, so the text is the only reliable signal.
+  // Duplicate branches return HTTP 400, so inspect the message.
   if (lower.includes('already exists') || lower.includes('already a pull request')) {
     return {
       ok: false,
@@ -164,9 +160,7 @@ export async function createBitbucketPullRequest(
       error: 'Create PR failed: choose a different base branch before creating a pull request.'
     }
   }
-  // Why: Bitbucket Cloud has no draft pull requests and the composer hides the
-  // toggle, so `draft` here can only be an unreachable persisted default —
-  // rejecting it would dead-end the user with no control to clear.
+  // Ignore saved draft defaults because Bitbucket's composer has no control to clear them.
   const description =
     input.useTemplate && !input.body?.trim()
       ? await readHostedPullRequestTemplate(repoPath, connectionId)

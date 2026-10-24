@@ -2,36 +2,53 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
+import { mediaPlaybackPositionCache, setWithLRU } from '@/lib/scroll-cache'
 
 export default function MediaViewer({
   src,
   mimeType,
   filePath,
-  canOpenLocally
+  canOpenLocally,
+  playbackCacheKey = null
 }: {
   src: string
   mimeType: string
   filePath: string
   canOpenLocally: boolean
+  playbackCacheKey?: string | null
 }): React.JSX.Element {
   const mediaRef = useRef<HTMLMediaElement>(null)
   const [failed, setFailed] = useState(false)
   const [openFailed, setOpenFailed] = useState(false)
   useEffect(() => {
     const media = mediaRef.current
-    // Strict Mode replays cleanup while retaining the DOM element.
-    if (media) {
-      media.src = src
+    if (!media) {
+      return
     }
+    const restorePosition = (): void => {
+      const saved = playbackCacheKey ? mediaPlaybackPositionCache.get(playbackCacheKey) : undefined
+      if (saved !== undefined && Number.isFinite(media.duration)) {
+        media.currentTime = Math.min(saved, media.duration)
+      }
+    }
+    media.addEventListener('loadedmetadata', restorePosition, { once: true })
+    // Strict Mode replays cleanup while retaining the DOM element.
+    media.src = src
     return () => {
-      if (!media) {
-        return
+      media.removeEventListener('loadedmetadata', restorePosition)
+      // Why: before metadata loads, currentTime is 0 and would clobber the saved position.
+      if (playbackCacheKey && Number.isFinite(media.duration)) {
+        if (media.ended) {
+          mediaPlaybackPositionCache.delete(playbackCacheKey)
+        } else {
+          setWithLRU(mediaPlaybackPositionCache, playbackCacheKey, media.currentTime)
+        }
       }
       media.pause()
       media.removeAttribute('src')
       media.load()
     }
-  }, [src])
+  }, [src, playbackCacheKey])
 
   const playerProps = {
     ref: (element: HTMLMediaElement | null): void => {
