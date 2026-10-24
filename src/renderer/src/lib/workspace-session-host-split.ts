@@ -1,4 +1,7 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -19,6 +22,10 @@ import {
   worktreeIdForPaneKey,
   type WorkspaceSessionRecord
 } from '../../../shared/workspace-session-host-records'
+import {
+  removedWorkspaceKeys,
+  type PersistedWorkspaceKeysByField
+} from './workspace-session-persisted-keys'
 
 /**
  * Split / merge the unified WorkspaceSessionState across per-host partitions.
@@ -97,6 +104,15 @@ function assignWorktreeKeyed(
   }
 }
 
+function visitRecencyHostId(key: string, ctx: SplitContext): ExecutionHostId {
+  if (!isWorktreeHostIdentity(key)) {
+    return ctx.hostIdByWorktreeId(key)
+  }
+  // Why the qualified host wins: the key already names the host that owns the visit, so routing
+  // it anywhere else separates the recency row from the workspace it describes.
+  return parseExecutionHostId(key.slice(0, key.indexOf('|')))?.id ?? LOCAL_EXECUTION_HOST_ID
+}
+
 function assignVisitRecencyByHost(
   slices: HostSessionSlices,
   templates: SliceTemplates,
@@ -107,14 +123,7 @@ function assignVisitRecencyByHost(
     return
   }
   for (const [key, entry] of Object.entries(value)) {
-    // Why the qualified host wins: the key already names the host that owns the visit, so routing
-    // it anywhere else separates the recency row from the workspace it describes.
-    const qualifiedHost = isWorktreeHostIdentity(key)
-      ? parseExecutionHostId(key.slice(0, key.indexOf('|')))
-      : null
-    const host = isWorktreeHostIdentity(key)
-      ? (qualifiedHost?.id ?? LOCAL_EXECUTION_HOST_ID)
-      : ctx.hostIdByWorktreeId(key)
+    const host = visitRecencyHostId(key, ctx)
     const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
     const target = (slice.lastVisitedAtByWorktreeId ??= {}) as WorkspaceSessionRecord
     target[key] = entry
@@ -147,9 +156,13 @@ function assignKeyedByResolvedWorktree(
  *  to `worktreeIdByTabId` (orphan tabs, files, pages) stay in 'local' so they are
  *  never silently dropped. */
 export function splitWorkspaceSessionByHost(
-  state: WorkspaceSessionState,
+  state: WorkspaceSessionPatch,
   hostIdByWorktreeId: HostIdByWorktreeId,
-  options: { worktreeIdByTabId?: Map<string, string> } = {}
+  options: {
+    worktreeIdByTabId?: Map<string, string>
+    /** Workspace ids each workspace-keyed field held in the last write. */
+    previousKeysByField?: PersistedWorkspaceKeysByField
+  } = {}
 ): HostSessionSlices {
   // Template carries only the global fields; per-field assigners add the rest.
   // Why: copy only own-keys so a partial patch (where most globals are absent)
@@ -205,6 +218,15 @@ export function splitWorkspaceSessionByHost(
           assignVisitRecencyByHost(slices, templates, value, ctx)
         } else {
           assignWorktreeKeyed(slices, templates, field, value, ctx)
+        }
+        // Why: main merges a patch field by field, so an owner sent nothing keeps the removed row.
+        for (const key of removedWorkspaceKeys(value, options.previousKeysByField?.get(field))) {
+          const owner =
+            field === 'lastVisitedAtByWorktreeId'
+              ? visitRecencyHostId(key, ctx)
+              : hostIdByWorktreeId(key)
+          const slice: WorkspaceSessionRecord = ensureSlice(slices, owner, templates)
+          slice[field] ??= {}
         }
         break
       case 'worktreeArray': {
