@@ -136,8 +136,14 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionAgentTab
 
 export type RuntimeMobileSessionTerminalClientTab =
-  | (RuntimeMobileSessionTerminalTab & { status: 'pending-handle'; terminal: null })
-  | (RuntimeMobileSessionTerminalTab & { status: 'ready'; terminal: string })
+  | (RuntimeMobileSessionTerminalTab & {
+      status: 'pending-handle'
+      terminal: null
+    })
+  | (RuntimeMobileSessionTerminalTab & {
+      status: 'ready'
+      terminal: string
+    })
 
 export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionTerminalClientTab

@@ -1,3 +1,4 @@
+import { nativeChatShellForeground } from './terminal-interface-presentation'
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
@@ -96,7 +97,11 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
             getConnectionIdFromState(state, worktreeId)
           ),
-          isChatViewMode: tab.viewMode === 'chat'
+          isChatViewMode: tab.viewMode === 'chat',
+          shellForeground: nativeChatShellForeground(
+            state,
+            `${tab.entityId}:${resolveNativeChatActiveLayoutLeafId(terminalLayout) ?? ''}`
+          )
         })
       ) {
         return

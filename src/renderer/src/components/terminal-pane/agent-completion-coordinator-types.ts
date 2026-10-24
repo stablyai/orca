@@ -38,6 +38,7 @@ export type AgentCompletionCoordinatorOptions = {
     ptyId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
+  confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void
   dispatchHookLifecycle?: (payload: AgentCompletionStatusSnapshot) => void
@@ -48,6 +49,9 @@ export type AgentCompletionCoordinatorOptions = {
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
   /** Fired once per confirmed exit (settled local absence, or the host's `exited` verdict). */
   onForegroundAgentExited?: (exited: RecognizedAgentProcess) => void
+  onForegroundShellObserved?: (process: RecognizedAgentProcess) => void
+  onForegroundAgentObserved?: (process: RecognizedAgentProcess) => void
+  getObservationOwner?: () => string | null
   isLive: () => boolean
   /** How the hook lane identified the turn end a title edge (null: no title known) would announce:
    *  `identified` it announces it; `ambiguous` the title lane keeps main's role; null not hook-owned. */
@@ -83,6 +87,7 @@ export type AgentCompletionCoordinator = {
   startProcessTracking: () => void
   /** Another reader saw this agent in the foreground; lets the monitor confirm its exit. */
   observeForegroundAgentProcess: (process: RecognizedAgentProcess) => void
+  invalidateProcessInspection: () => void
   hasPendingHookDoneCompletion: () => boolean
   /** Whether a turn end observed now could be announced (live, with agent evidence, not re-arming). */
   canAnnounceCompletion: () => boolean

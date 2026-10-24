@@ -1,3 +1,4 @@
+import { projectSessionTabAgentStatus } from './rpc/methods/session-tab-agent-status-projection'
 import { expect, it, vi } from 'vitest'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
@@ -51,7 +52,17 @@ it.each(['pty', 'leaf', 'unknown', 'disconnected'] as const)(
       ]
     } as RuntimeMobileSessionTabsSnapshot
 
-    const tab = projectRuntimeMobileSessionTabs(snapshot, host).tabs[0]
+    const projected = projectRuntimeMobileSessionTabs(snapshot, host)
+    const tab = projected.tabs[0]
+    if (kind === 'pty' || kind === 'leaf') {
+      expect(tab).not.toHaveProperty('terminalInterface')
+      expect(tab).not.toHaveProperty('agentStatus')
+      const old = projectSessionTabAgentStatus(projected, 'mobile', []).tabs[0]
+      expect(old).not.toHaveProperty('terminalInterface')
+      const modern = projectSessionTabAgentStatus(projected, 'mobile', ['terminal.interface.v1'])
+        .tabs[0]
+      expect(modern).not.toHaveProperty('terminalInterface')
+    }
 
     if (kind === 'unknown' || kind === 'disconnected') {
       expect(tab).not.toHaveProperty('incarnationId')

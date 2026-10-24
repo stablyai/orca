@@ -17,6 +17,7 @@ export type SubprocessHandle = {
   confirmShellForeground?(): Promise<boolean>
   /** Skip stdin command delivery when shell arguments already delivered it. */
   startupCommandDeliveredInShellArgs?: boolean
+  loginWrapped?: boolean
   /** Report the actual fallback shell so unsupported readiness markers cannot stall startup. */
   shellPath?: string
   shellCwd?: string

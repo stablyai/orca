@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { useAppStore } from '@/store'
 import type { PtyReplayDataMeta } from '../pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal-color-scheme-protocol'
@@ -139,6 +140,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
+      notifyPaneStartupStateChanged()
       void (async () => {
         if (session.pendingStartupCommand !== startup || session.disposed) {
           return
@@ -159,8 +161,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
           session.releaseUnattemptedStartupDraftPasteDelivery()
         }
         session.pendingStartupCommand = null
+        notifyPaneStartupStateChanged()
       })()
     }, 50)
+    notifyPaneStartupStateChanged()
   }
 
   session.freshSpawnFollowResetDisposables = []

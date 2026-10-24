@@ -1,3 +1,5 @@
+import type { IPty } from 'node-pty'
+import type * as InterfaceEvidence from '../providers/terminal-interface-process-evidence'
 import type * as FsPromises from 'node:fs/promises'
 import type { Session } from './session'
 import type * as DarwinTerminalNames from '../../shared/darwin-terminal-names'
@@ -40,6 +42,7 @@ let fullReader: typeof FullReader
 let trackerModule: typeof TrackerModule
 let inspection: typeof Inspection
 let anchorModule: typeof AnchorModule
+let interfaceEvidence: typeof InterfaceEvidence
 
 const SHELL_PID = 4242
 const AGENT_PID = 4300
@@ -48,7 +51,8 @@ const START_AGENT = 'Thu Sep  3 16:02:05 2026'
 
 type Table = { agent: 'claude' | 'stopped' | 'gone' | 'replaced'; children?: number }
 
-const forks = { full: 0, cheap: 0 }
+const forks = { full: 0, cheap: 0, narrow: 0 }
+let population = 1
 let table: Table = { agent: 'claude' }
 
 function processRows(): PsFixtureRow[] {
@@ -103,7 +107,16 @@ function processRows(): PsFixtureRow[] {
       })
     }
   }
-  return rows
+  return Array.from({ length: population }, (_, index) =>
+    rows.map((row) => ({
+      ...row,
+      pid: row.pid + index * 10000,
+      ppid: row.ppid === 1 ? 1 : row.ppid + index * 10000,
+      pgid: row.pgid + index * 10000,
+      tpgid: row.tpgid + index * 10000,
+      terminalMinor: row.terminalMinor + index * 10
+    }))
+  ).flat()
 }
 const psFixture = createProcessTablePsFixture(processRows)
 const readProcStatMock = vi.fn((path: string) => psFixture.readProcStat(path))
@@ -117,6 +130,11 @@ function installPs(): void {
       callback: (err: unknown, r: { stdout: string; stderr: string }) => void
     ) => {
       expect(cmd).toBe('ps')
+      if (args[1] === 'pid=,ppid=,pgid=,tpgid=,stat=,command=') {
+        forks.narrow += 1
+        callback(null, { stdout: psFixture.render(args[1]), stderr: '' })
+        return
+      }
       expect(args).toEqual(
         process.platform === 'darwin'
           ? ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tdev=,lstart=,command=']
@@ -147,23 +165,43 @@ function installPs(): void {
   })
 }
 
-function createSession(processName: () => string): Session {
+type FixtureSession = Session & { markDead(): void }
+
+function createSession(processName: () => string, rootPid = SHELL_PID): FixtureSession {
   let dead = false
+  const process: IPty = {
+    pid: rootPid,
+    cols: 80,
+    rows: 24,
+    get process() {
+      return processName()
+    },
+    handleFlowControl: false,
+    onData: () => ({ dispose() {} }),
+    onExit: () => ({ dispose() {} }),
+    resize() {},
+    clear() {},
+    write() {},
+    kill() {},
+    pause() {},
+    resume() {}
+  }
   const tracker = trackerModule.createPtyForegroundProcessTracker({
-    process: {
-      pid: SHELL_PID,
-      get process() {
-        return processName()
-      }
-    } as never,
+    process,
     shellPath: '/bin/zsh',
     sessionId: 'wt-1:pane-1',
     startupAgentRecognition: null,
     isDead: () => dead
   })
-  return {
-    pid: SHELL_PID,
-    incarnationId: 'inc-1',
+  const session: Pick<
+    Session,
+    'pid' | 'inspectTerminalInterface' | 'incarnationId' | 'isAlive' | 'getForegroundProcess'
+  > & { markDead(): void } = {
+    pid: rootPid,
+    inspectTerminalInterface: (
+      snapshot?: Parameters<typeof interfaceEvidence.inspectPosixTerminalInterface>[3]
+    ) => interfaceEvidence.inspectPosixTerminalInterface(rootPid, '/bin/zsh', false, snapshot),
+    incarnationId: '00000000-0000-4000-8000-000000000001',
     get isAlive() {
       return !dead
     },
@@ -173,12 +211,18 @@ function createSession(processName: () => string): Session {
       dead = true
       tracker.markDead()
     }
-  } as unknown as Session & { markDead(): void }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inspection uses only these checked public members; constructing Session would start an unrelated PTY output pipeline.
+  return session as unknown as FixtureSession
 }
 
 async function inspect(
   session: Session,
-  options: { steadyState?: boolean; expectedIncarnationId?: string } = {}
+  options: {
+    steadyState?: boolean
+    terminalInterface?: boolean
+    expectedIncarnationId?: string
+  } = {}
 ): Promise<{
   tier: TerminalHostInspectionTier
   result: Awaited<ReturnType<typeof inspection.inspectTerminalHostProcess>>
@@ -217,7 +261,9 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     runProcessMock.mockReset()
     forks.full = 0
     forks.cheap = 0
+    forks.narrow = 0
     table = { agent: 'claude' }
+    population = 1
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: hostPlatform })
     // Column constants are chosen at import time, so each host needs a fresh module graph.
@@ -229,6 +275,7 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     trackerModule = await import('./pty-subprocess/foreground-process-tracker')
     inspection = await import('./terminal-host-process-inspection')
     anchorModule = await import('./terminal-host-steady-state-anchor')
+    interfaceEvidence = await import('../providers/terminal-interface-process-evidence')
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000_000)
     installPs()
@@ -248,7 +295,7 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     }
   })
 
-  async function anchoredSession(): Promise<Session> {
+  async function anchoredSession(): Promise<FixtureSession> {
     const session = createSession(() => 'node')
     const first = await inspect(session, { steadyState: true })
     await settle()
@@ -261,6 +308,47 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     expect(anchorModule.getSteadyStateAnchor(session)?.agentName).toBe('claude')
     return session
   }
+
+  it.each([1, 10, 100])(
+    'shares full discovery and cheap continuity across %i real terminal subtrees',
+    async (size) => {
+      population = size
+      const sessions = Array.from({ length: size }, (_, index) =>
+        createSession(() => 'node', SHELL_PID + index * 10000)
+      )
+      for (const session of sessions) {
+        const { result } = await inspect(session, { terminalInterface: true })
+        expect(result.terminalInterface).toMatchObject({
+          shellForeground: false,
+          children: 'children'
+        })
+        await advance(1)
+      }
+      const discovery = { ...forks }
+      expect(discovery).toEqual({ full: 1, cheap: 0, narrow: 0 })
+      await advance(2000)
+      for (const session of sessions) {
+        const { tier, result } = await inspect(session, {
+          terminalInterface: true,
+          steadyState: true
+        })
+        expect(tier).toBe('cheap')
+        expect(result.foregroundProcess).toBe('claude')
+        expect(result).not.toHaveProperty('terminalInterface')
+        await advance(1)
+      }
+      expect(forks).toEqual({ full: 1, cheap: 1, narrow: 0 })
+      await Promise.all(sessions.map(() => fullReader.getFreshShellForegroundSnapshot()))
+      expect(forks).toEqual({
+        full: hostPlatform === 'darwin' ? 1 : 2,
+        cheap: 1,
+        narrow: hostPlatform === 'darwin' ? 1 : 0
+      })
+      process.stdout.write(
+        `INTERFACE_CAPTURE_BOUND ${JSON.stringify({ hostPlatform, size, discovery, steady: forks })}\n`
+      )
+    }
+  )
 
   it('a pane with NO recognized anchor never takes the cheap path, even when asked', async () => {
     table = { agent: 'gone' }
@@ -357,7 +445,7 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
   })
 
   it('a dead session is never served from its anchor', async () => {
-    const session = (await anchoredSession()) as Session & { markDead(): void }
+    const session = await anchoredSession()
     session.markDead()
     await expect(inspect(session, { steadyState: true })).rejects.toThrow('not found')
     expect(forks.cheap).toBe(0)
@@ -371,6 +459,7 @@ describe.each(['darwin', 'linux'])('daemon cheap-tier process inspection (%s)', 
     expect(anchorModule.getSteadyStateAnchor(session)).toBeNull()
     // A returning agent must establish fresh identity through a full capture.
     table = { agent: 'claude' }
+    population = 1
     await advance(2_000)
     const cheapBefore = forks.cheap
     expect((await inspect(session, { steadyState: true })).tier).toBe('full')

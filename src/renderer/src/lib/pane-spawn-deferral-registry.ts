@@ -16,7 +16,7 @@ const deferralsByPaneKey = new Map<string, PaneSpawnDeferral>()
 const revealHoldsByPaneKey = new Map<string, () => boolean>()
 const listeners = new Set<() => void>()
 
-function notify(): void {
+export function notifyPaneStartupStateChanged(): void {
   for (const listener of listeners) {
     listener()
   }
@@ -24,12 +24,12 @@ function notify(): void {
 
 export function setPaneSpawnDeferral(paneKey: string, deferral: PaneSpawnDeferral): void {
   deferralsByPaneKey.set(paneKey, deferral)
-  notify()
+  notifyPaneStartupStateChanged()
 }
 
 export function clearPaneSpawnDeferral(paneKey: string): void {
   if (deferralsByPaneKey.delete(paneKey)) {
-    notify()
+    notifyPaneStartupStateChanged()
   }
 }
 
@@ -44,12 +44,14 @@ export function isPaneSpawnDeferred(paneKey: string): boolean {
 
 export function holdPaneResumeUntilShown(paneKey: string, isHolding: () => boolean): void {
   revealHoldsByPaneKey.set(paneKey, isHolding)
+  notifyPaneStartupStateChanged()
 }
 
 /** Only the hold's own pane releases it; a remount may already have replaced it. */
 export function releasePaneResumeHold(paneKey: string, isHolding: () => boolean): void {
   if (revealHoldsByPaneKey.get(paneKey) === isHolding) {
     revealHoldsByPaneKey.delete(paneKey)
+    notifyPaneStartupStateChanged()
   }
 }
 
@@ -62,8 +64,10 @@ export function holdPaneResumeInPlace(paneKey: string, isLive: () => boolean): (
   const holds = inPlaceResumesByPaneKey.get(paneKey) ?? new Set()
   holds.add(isLive)
   inPlaceResumesByPaneKey.set(paneKey, holds)
+  notifyPaneStartupStateChanged()
   return () => {
     holds.delete(isLive)
+    notifyPaneStartupStateChanged()
     if (holds.size === 0 && inPlaceResumesByPaneKey.get(paneKey) === holds) {
       inPlaceResumesByPaneKey.delete(paneKey)
     }
@@ -74,7 +78,7 @@ export function isPaneResumingInPlace(paneKey: string): boolean {
   return [...(inPlaceResumesByPaneKey.get(paneKey) ?? [])].some((isLive) => isLive())
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribePaneStartupState(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -82,5 +86,5 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function usePaneSpawnDeferral(paneKey: string): PaneSpawnDeferral | undefined {
-  return useSyncExternalStore(subscribe, () => deferralsByPaneKey.get(paneKey))
+  return useSyncExternalStore(subscribePaneStartupState, () => deferralsByPaneKey.get(paneKey))
 }

@@ -181,6 +181,7 @@ function Strip({
     unifiedTabByVisibleId: new Map(),
     tabAgentTypesByTabId: {},
     nativeChatTabWideFallbackUnsafeTabsById: {},
+    nativeChatShellForegroundTabsById: {},
     nativeChatTranscriptIsLocalReadable: false,
     managedBrowserCreationEnabled,
     statusByRelativePath

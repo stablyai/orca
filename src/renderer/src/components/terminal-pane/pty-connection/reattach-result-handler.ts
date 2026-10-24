@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types'
@@ -93,10 +94,12 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
     if (connectResult?.incarnationId) {
       session.remotePtyIncarnationId = connectResult.incarnationId
+      notifyPaneStartupStateChanged()
     } else if (connectResult?.isReattach || typeof result === 'string') {
       // Legacy hosts do not publish an incarnation; force client-only
       // unverifiable evidence until a fresh attach returns one.
       session.remotePtyIncarnationId = null
+      notifyPaneStartupStateChanged()
     }
 
     if (connectResult?.exitedBeforeAttach) {

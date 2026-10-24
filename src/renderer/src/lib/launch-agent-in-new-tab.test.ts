@@ -1,3 +1,4 @@
+import { registerTerminalStartupProducerFlow } from './terminal-interface-startup-flow.test-support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
@@ -210,23 +211,25 @@ describe('launchAgentInNewTab', () => {
     mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
   })
 
-  it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
+  registerTerminalStartupProducerFlow(async (prompt) => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const cancelFocus = vi.fn()
-
     launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'codex',
+      focusIntent: { request: vi.fn(), cancel: cancelFocus },
+      requestId: 'interface-startup',
+      agent: 'claude',
       worktreeId: 'wt-1',
-      focusIntent: { request: vi.fn(), cancel: cancelFocus }
+      prompt,
+      promptDelivery: 'draft'
     })
-
     expect(cancelFocus).toHaveBeenCalledOnce()
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex',
-      pendingStartup: expect.anything()
-    })
+    return {
+      startup: mockCreateTab.mock.calls.at(-1)?.[3]?.pendingStartup,
+      draft: mockSeedNativeChatLaunchDraft.mock.calls.at(-1)?.[0]?.text,
+      worktreeId: 'wt-1'
+    }
   })
+
   it('keeps Floating Workspace authority on native Windows beside an active WSL project', async () => {
     store.projects = [
       {

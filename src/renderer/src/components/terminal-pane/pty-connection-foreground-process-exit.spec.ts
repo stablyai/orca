@@ -99,7 +99,7 @@ export function registerPtyConnectionForegroundProcessExitTests(): void {
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: null,
-        shellForeground: false
+        shellForeground: true
       })
       expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(cacheKey)
 

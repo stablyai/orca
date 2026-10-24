@@ -1,3 +1,4 @@
+import type { TerminalInterfaceEvidence } from './terminal-interface-observation'
 import type { RemoteForegroundEvidence } from './foreground-process-evidence'
 
 /**
@@ -22,6 +23,7 @@ export type ClientOnlyUnverifiableReason =
  * transport failure cannot be promoted into a synthetic host observation.
  */
 export type ClientOnlyUnverifiableInspection = {
+  terminalInterface?: never
   foregroundProcess: null
   hasChildProcesses: false
   verdict: 'unverifiable'
@@ -37,6 +39,7 @@ export type ClientOnlyUnverifiableInspection = {
 
 /** Compatibility-shaped host/local inspection returned by the inspect RPC. */
 export type HostProcessInspection = {
+  terminalInterface?: TerminalInterfaceEvidence
   foregroundProcess: string | null
   hasChildProcesses: boolean
   /** Optional on old hosts; the renderer treats an omitted field as old-host unverifiable. */

@@ -119,6 +119,7 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree create/list and event subscription over the real socket only call the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
@@ -146,6 +147,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getTerminalInterfaceClientEventSnapshot: () => [],
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -287,6 +289,7 @@ describe('remote runtime request connection integration', () => {
           listener(event)
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal sleep and event subscription over the real socket only call the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
@@ -308,6 +311,7 @@ describe('remote runtime request connection integration', () => {
         },
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getTerminalInterfaceClientEventSnapshot: () => [],
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -556,6 +560,7 @@ describe('remote runtime request connection integration', () => {
         },
         cancelMobileDictationForConnection: () => {},
         onClientDisconnected: () => {},
+        getTerminalInterfaceClientEventSnapshot: () => [],
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)

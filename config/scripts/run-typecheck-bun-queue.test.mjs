@@ -41,7 +41,10 @@ it('fills a freed compiler slot while the other project is still running', async
   children[2].child.emit('close', 0, null)
   await vi.waitFor(() => expect(children).toHaveLength(4))
   expect(active).toBe(2)
-  children[3].child.emit('close', 0, null)
+  for (let index = 3; index < TYPECHECK_PROJECTS.length; index++) {
+    await vi.waitFor(() => expect(children[index]).toBeDefined())
+    children[index].child.emit('close', 0, null)
+  }
   children[0].child.emit('close', 0, null)
   expect(await result).toEqual([])
   expect(peak).toBe(2)
@@ -59,8 +62,10 @@ it('keeps checking after compiler failures and reports errors in project order',
   await vi.waitFor(() => expect(children).toHaveLength(3))
   children[0].child.emit('close', null, 'SIGKILL')
   await vi.waitFor(() => expect(children).toHaveLength(4))
-  children[2].child.emit('close', 0, null)
-  children[3].child.emit('close', 0, null)
+  for (let index = 2; index < TYPECHECK_PROJECTS.length; index++) {
+    await vi.waitFor(() => expect(children[index]).toBeDefined())
+    children[index].child.emit('close', 0, null)
+  }
   expect((await result).map(({ message }) => message)).toEqual([
     'bun config/tsconfig.node.json exited with signal SIGKILL',
     'bun config/tsconfig.tc.web.json exited with code 1'
@@ -72,7 +77,7 @@ it('reduces the queue to one slot when two reservations exceed the memory budget
   const result = start(4 * 1024 ** 3)
   expect(children).toHaveLength(1)
   for (let index = 0; index < TYPECHECK_PROJECTS.length; index++) {
-    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
+    await vi.waitFor(() => expect(children[index]).toBeDefined())
     children[index].child.emit('close', 0, null)
   }
   expect(await result).toEqual([])

@@ -6,7 +6,10 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import {
+  inspectPtyProviderProcess,
+  type PtyProcessInspectionOptions
+} from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,
@@ -158,7 +161,7 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
 
 export async function inspectProcessFromRuntimeController(
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: PtyProcessInspectionOptions
 ) {
   return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }

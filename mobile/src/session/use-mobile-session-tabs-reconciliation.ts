@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
   MobileSessionTabsStreamHealth,
+  RECONCILIATION_INTERVAL_MS,
   type SessionTabsApplyOutcome,
   type SessionTabsStreamSource
 } from './mobile-session-tabs-stream-health'
@@ -46,7 +47,6 @@ type ResultActions = {
 }
 
 const resolved = Promise.resolve()
-const RECONCILIATION_INTERVAL_MS = 2000
 
 export function useMobileSessionTabsReconciliation<Result, Tab>({
   client,

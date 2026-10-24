@@ -1,3 +1,8 @@
+import {
+  nativeChatShellForeground,
+  terminalInterfaceReleasesChat,
+  useTerminalInterfacePresentation
+} from '../native-chat/terminal-interface-presentation'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -15,6 +20,8 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
+
+const EMPTY_PANE_TITLES = {}
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -47,9 +54,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     )
   )
   const effectiveChatViewMode = isChatViewMode
-  const runtimePaneTitlesByPaneId = useAppStore(
-    useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
-  )
   const tabAgentTypeByLeaf = useAppStore((store) =>
     selectTerminalTabAgentTypesByLeaf(
       store.agentStatusByPaneKey,
@@ -74,6 +78,18 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     return [...new Set([...expectedLayoutLeafIds, ...mountedLeafIds])]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [expectedLayoutLeafIds])
+  const presentation = useTerminalInterfacePresentation(
+    (store) =>
+      [
+        store.runtimePaneTitlesByTabId[tabId] ?? EMPTY_PANE_TITLES,
+        ...getNativeChatLeafIds().flatMap((leafId) => [
+          leafId,
+          nativeChatShellForeground(store, `${tabId}:${leafId}`),
+          terminalInterfaceReleasesChat(store, `${tabId}:${leafId}`)
+        ])
+      ] as const
+  )
+  const runtimePaneTitlesByPaneId = presentation[0]
   const getTabWideAgentHintLeafId = useCallback((): string | null => {
     if (tabWideAgentHintLeafId !== undefined) {
       return tabWideAgentHintLeafId
@@ -128,14 +144,21 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       })
       return canToggleNativeChat({
         contentType: 'terminal',
+        // Departure callbacks can run before React commits the foreground subscription update.
+        shellForeground:
+          leafId !== null &&
+          nativeChatShellForeground(useAppStore.getState(), `${tabId}:${leafId}`),
         launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
         nativeChatTranscriptIsLocalReadable
       })
     },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- presentation only re-derives eligibility; the body reads the store so a departure sees the shell before React commits.
     [
       tabAgentTypeByLeaf,
+      presentation,
+      tabId,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
       getNativeChatLeafIds,

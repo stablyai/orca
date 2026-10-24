@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -104,11 +105,13 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   // on a brand-new worktree keeps its dead terminal visible instead of bouncing
   // the user to Landing.
   session.spawnedFreshPtyId = null
+  notifyPaneStartupStateChanged()
   // Why: hibernation suppresses its kill's exit while the pane is hidden, so
   // onExit must not tear the pane down — but the pane still owes the user a
   // wake. Remember the hibernated PTY and record; the visibility-resume hook
   // consumes both and cannot adopt a later record of a different session.
   session.hibernatedWakeTarget = null
+  notifyPaneStartupStateChanged()
   session.wakeHibernatedAgentPane = null
   // Why: a mobile wake can land after the sleeping record is written but
   // before the suppressed kill exit arms the wake target. The phone never
@@ -138,6 +141,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       getProviderSessionClaimKey(currentRecord) !== getProviderSessionClaimKey(target.record)
     ) {
       session.hibernatedWakeTarget = null
+      notifyPaneStartupStateChanged()
       session.pendingHibernatedWakeTarget = null
       return null
     }
@@ -148,6 +152,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // intentional restart) already rebound the pane — its spawn wins.
     if (currentPtyId !== null && currentPtyId !== target.ptyId) {
       session.hibernatedWakeTarget = null
+      notifyPaneStartupStateChanged()
       session.pendingHibernatedWakeTarget = null
       return null
     }
@@ -162,6 +167,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     // the same provider session. Claim synchronously before any spawn starts.
     claimedProviderSessions?.add(claimKey)
     session.hibernatedWakeTarget = null
+    notifyPaneStartupStateChanged()
     session.pendingHibernatedWakeTarget = null
     session.hibernatedWakeInFlightClaimKey = claimKey
     // Why: reveal is the wake signal for a hibernated pane. Resume the recorded
@@ -176,6 +182,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
           // mobile open can retry instead of stranding the frozen session;
           // consume revalidates disposal, binding, PTY, and record identity.
           session.hibernatedWakeTarget = target
+          notifyPaneStartupStateChanged()
         }
       })
       .finally(() => {
@@ -289,6 +296,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         // modes now and arm the reveal-time wake.
         session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }
+        notifyPaneStartupStateChanged()
         const pendingWakeMatches =
           session.pendingHibernatedWakeTarget?.ptyId === ptyId &&
           session.pendingHibernatedWakeTarget.record === sleepingRecordEntry.record

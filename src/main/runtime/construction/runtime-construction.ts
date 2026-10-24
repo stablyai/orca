@@ -53,6 +53,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly onTerminalProgramStatusFacet: HostServices['onTerminalProgramStatusFacet']
   declare protected readonly onTerminalSideEffects: HostServices['onTerminalSideEffects']
   declare protected readonly onClaudeTerminalEvidence: HostServices['onClaudeTerminalEvidence']
+  declare readonly terminalInterfaces: HostServices['terminalInterfaces']
   declare readonly getAgentStatusSnapshotFn: HostServices['getAgentStatusSnapshotFn']
   declare protected readonly structuredAgentStatusSinkFn: HostServices['structuredAgentStatusSinkFn']
   declare readonly readObservedAgentStatusPaneIdentityFn: HostServices['readObservedAgentStatusPaneIdentityFn']
@@ -209,6 +210,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     if (stats) {
       this.stats = stats
     }
+    this.terminalInterfaces = deps?.terminalInterfaces ?? null
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null

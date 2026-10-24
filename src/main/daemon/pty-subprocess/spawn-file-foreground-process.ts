@@ -85,9 +85,9 @@ export async function resolveSpawnFileForegroundProcess(
 ): Promise<AgentForegroundProcessResolution> {
   try {
     if (process.platform !== 'win32') {
-      const rows = options.fresh
-        ? await getFreshProcessTableSnapshot()
-        : await getProcessTableSnapshot()
+      const rows =
+        options.rows ??
+        (options.fresh ? await getFreshProcessTableSnapshot() : await getProcessTableSnapshot())
       return resolveSpawnFileForegroundFromRows(rows, proc.pid)
     }
     const resolution = await resolveAgentForegroundProcessWithAvailability(

@@ -105,7 +105,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
     })
 
-    it('clears pre-hook launch config when an Orca-started command exits', async () => {
+    it('preserves pre-hook launch intent when shell is observed before agent recognition', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout'] })
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
@@ -158,7 +158,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       await vi.advanceTimersByTimeAsync(350)
       await flushAsyncTicks()
 
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
       expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
     })
 
@@ -426,8 +426,10 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
+      mockStoreState.agentStatusByPaneKey[paneKey] = { agentType: 'droid', state: 'working' }
       mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
         agent: 'droid',
+        agentEvidence: 'process-read',
         routingTrusted: true,
         shellForeground: false
       }
@@ -437,6 +439,7 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
         agent: 'droid',
+        agentEvidence: 'process-read',
         routingRevoked: true,
         routingConfirmationPending: true,
         shellForeground: false

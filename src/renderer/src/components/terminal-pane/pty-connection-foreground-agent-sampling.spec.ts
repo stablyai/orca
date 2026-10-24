@@ -356,6 +356,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         })
         mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
+          agentEvidence: 'process-read',
           routingTrusted: true,
           shellForeground: false
         }
@@ -369,6 +370,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
         expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'pi',
+          agentEvidence: 'process-read',
           routingRevoked: true,
           routingConfirmationPending: true,
           shellForeground: false
@@ -494,7 +496,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         })
       })
 
-      it('retires stale daemon launch identity when warm reattach finds the shell', async () => {
+      it('keeps daemon launch identity provisional when warm reattach finds the shell', async () => {
         vi.useFakeTimers()
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
         const ptyId = 'pty-stale-daemon-launch-identity'
@@ -518,8 +520,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           vi.mocked(window.api.pty.confirmForegroundProcess).mock.calls.length
         ).toBeGreaterThanOrEqual(3)
         expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-          agent: null,
-          shellForeground: true
+          agent: 'droid',
+          agentEvidence: 'launch-record',
+          shellForeground: false
         })
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
       })
@@ -569,7 +572,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
       })
 
-      it('does not re-scan stale launch metadata after the local ladder confirms shell', async () => {
+      it('keeps launch discovery available after a shell-only ladder before exec', async () => {
         vi.useFakeTimers()
         const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
         getForegroundProcess.mockResolvedValue('powershell.exe')
@@ -605,25 +608,21 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await vi.advanceTimersByTimeAsync(SECOND_WRAPPER_RETRY_MS)
 
         expect(foregroundReadCallsFor(ptyId).length).toBeGreaterThanOrEqual(3)
-        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
-          agent: null,
-          shellForeground: true
-        })
-        expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(cacheKey)
-
-        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
-          agent: null,
-          shellForeground: false
-        }
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toBeUndefined()
+        expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
         expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
 
         vi.clearAllTimers()
-        const settledReadCount = foregroundReadCallsFor(ptyId).length
+        getForegroundProcess.mockResolvedValue('droid')
         binding.sampleForegroundAgentOnFocus()
         await vi.advanceTimersByTimeAsync(
           VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
         )
-        expect(foregroundReadCallsFor(ptyId)).toHaveLength(settledReadCount)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toMatchObject({
+          agent: 'droid',
+          agentEvidence: 'process-read',
+          routingTrusted: true
+        })
       })
 
       it('does not sample when a live hook row already supplies pane identity', async () => {

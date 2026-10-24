@@ -29,6 +29,8 @@ export type NativeChatAvailabilityInput = {
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
   isChatViewMode?: boolean
+  /** Positive foreground ownership overrides retained conversation identity. */
+  shellForeground?: boolean
 }
 
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
@@ -43,6 +45,9 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   }
   if (input.isChatViewMode === true) {
     return true
+  }
+  if (input.shellForeground === true) {
+    return false
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
   if (

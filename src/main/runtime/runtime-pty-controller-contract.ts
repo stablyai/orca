@@ -151,7 +151,12 @@ export type RuntimePtyController = {
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(
     ptyId: string,
-    options?: { expectedIncarnationId?: PtyIncarnationId; scanChildProcesses?: boolean }
+    options?: {
+      expectedIncarnationId?: PtyIncarnationId
+      scanChildProcesses?: boolean
+      terminalInterface?: boolean
+      steadyState?: boolean
+    }
   ): Promise<PtyProcessInspection>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>

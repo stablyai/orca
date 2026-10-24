@@ -1,11 +1,9 @@
+import { OrcaRuntimeWithTerminalInterfaces } from './orca-runtime-terminal-interfaces'
 import type { RuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
-import {
-  OrcaRuntimeWithSidebarTemporal,
-  sidebarFactsRuntime
-} from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
+import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
+import type { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
@@ -53,13 +51,8 @@ import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 
-// Switch point: a window-fed build keeps no sidebar facts layer.
-const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
-  ? OrcaRuntimeWithSidebarTemporal
-  : OrcaRuntimeWithAgentTransitions
-
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+class OrcaRuntimeService extends OrcaRuntimeWithTerminalInterfaces {
   /** This runtime as its sidebar facts layer; null unless built with ORCA_SIDEBAR_INPUTS=main. */
   get sidebarFacts() {
     return sidebarFactsRuntime(this)
@@ -173,6 +166,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+    this.installTerminalInterfaceHost()
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>

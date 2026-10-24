@@ -1,3 +1,5 @@
+import { terminalInterfaceObservationsEqual } from '../../../src/shared/terminal-interface-observation'
+import type { TerminalInterfaceObservation } from '../../../src/shared/terminal-interface-observation'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
@@ -18,6 +20,8 @@ export type TerminalRecord = {
 
 export type MobileTerminalSessionTab = {
   type: 'terminal'
+  incarnationId?: string | null
+  terminalInterface?: TerminalInterfaceObservation
   id: string
   title: string
   parentTabId?: string
@@ -134,6 +138,8 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
+        a.incarnationId === b.incarnationId &&
+        terminalInterfaceObservationsEqual(a.terminalInterface, b.terminalInterface) &&
         // A frame whose only delta is the launch draft appearing or retracting
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&

@@ -1,3 +1,4 @@
+import type { TerminalInterfaceObservation } from '../../../../shared/terminal-interface-observation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -30,6 +31,13 @@ export type PaneForegroundAgentEntry = {
  * resolution; covers agents that emit neither hooks nor titles.
  */
 export type PaneForegroundAgentSlice = {
+  terminalInterfaceByPtyId: Record<
+    string,
+    {
+      observation: TerminalInterfaceObservation
+      environmentId: string | null
+    }
+  >
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   setPaneForegroundAgent: (paneKey: string, entry: PaneForegroundAgentEntry) => void
   clearPaneForegroundAgent: (paneKey: string) => void
@@ -45,6 +53,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
   [],
   PaneForegroundAgentSlice
 > = (set) => ({
+  terminalInterfaceByPtyId: {},
   paneForegroundAgentByPaneKey: {},
   setPaneForegroundAgent: (paneKey, entry) => {
     set((s) => {

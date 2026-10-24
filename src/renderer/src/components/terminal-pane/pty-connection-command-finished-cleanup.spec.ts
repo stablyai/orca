@@ -34,9 +34,13 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
   let storeSubscribers: ((state: StoreState) => void)[] = []
+  const onAgentExited = vi.fn<(leafId: string) => void>()
 
   function createDeps(overrides: Record<string, unknown> = {}) {
-    return buildPaneConnectionDeps(() => mockStoreState, overrides)
+    return buildPaneConnectionDeps(() => mockStoreState, {
+      onAgentExitedRef: { current: onAgentExited },
+      ...overrides
+    })
   }
 
   describe('connectPanePty', () => {
@@ -203,7 +207,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
     })
 
-    it('retires pane launch routing after one fresh scan confirms shell', async () => {
+    it('preserves launch-only routing intent when a confirmation sees shell before exec', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
@@ -236,20 +240,17 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
 
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: true
-      })
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
       // Why: `agentStatus:drop` deliberately preserves a live pane's per-pane caches, so a
       // process-confirmed agent exit must go through the reconcile route instead — otherwise a
       // surviving Claude latch resolves the pane's next event straight back to 'working' (STA-4612).
-      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
     })
 
     it.each([
-      ['clears stale sleeping identity after a confirmed return to shell', false],
+      ['preserves sleeping identity when only foreground ownership changes', false],
       // Why: a hibernation records the pane's resume before its kill; the agent dying first
       // surfaces the shell, which is Orca's own stop rather than the agent exiting.
       ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
@@ -288,6 +289,15 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         capturedAt: 1,
         updatedAt: 1
       }
+      mockStoreState.agentStatusByPaneKey[paneKey] = { agentType: 'codex', state: 'working' }
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValueOnce('codex')
+      dataCallbackRef.current?.('\x1b]133;C\x07')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agentEvidence).toBe(
+        'process-read'
+      )
+
       if (stoppingOnPurpose) {
         mockStoreState.suppressedPtyExitIds[ptyId] = true
       }
@@ -295,19 +305,17 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350)
 
-      if (stoppingOnPurpose) {
-        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
-          agent: 'codex'
-        })
-      } else {
-        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
-        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
-      }
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: true
+      expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        agent: 'codex'
       })
+      if (stoppingOnPurpose) {
+        expect(onAgentExited).not.toHaveBeenCalled()
+        expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.shellForeground).not.toBe(true)
+      } else {
+        expect(onAgentExited).toHaveBeenCalledWith(LEAF_1)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.shellForeground).toBe(true)
+      }
     })
 
     it('keeps sleeping identity when the foreground check still sees the agent', async () => {
@@ -357,61 +365,6 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       })
     })
 
-    it('reconciles a pane that HAS a status row, whose own drop removes it first', async () => {
-      // Why this shape: the sibling test above covers a pane with no row, where the deferred drop
-      // early-returns and never touches the pane's accepted-status bookkeeping. That is not the
-      // production case. A pane worth reconciling always HAS a row — and settling runs the drop
-      // BEFORE the reconcile, so the reconcile must survive its own drop having already fired.
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('./pty-connection')
-      // Both imported after vi.resetModules() so they share pty-connection's module registry; a
-      // static top-level import here is a DIFFERENT instance and the assertion goes vacuous.
-      const { createCommandFinishedStatusStore } =
-        await import('./command-finished-status-store-test-fixture')
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
-      vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-claude-row-confirmed-shell'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-
-      connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        createDeps({ isVisibleRef: { current: false } }) as never
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-
-      // A real accepted status write, through the real slice, so the row carries whatever
-      // bookkeeping the store stamps on an accepted write. `working` is the shape STA-4612 is about:
-      // a latch is holding the pane open and the agent is about to exit out from under it.
-      const realStore = createCommandFinishedStatusStore()
-      const row = realStore.acceptWorkingClaudeStatus(paneKey)
-      expect(row).toBeDefined()
-      mockStoreState.agentStatusByPaneKey[paneKey] = row
-      // The real dismissal removes the row and runs the slice's own teardown; mirror both, or the
-      // ordering this test exists to pin is never exercised.
-      mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-        delete mockStoreState.agentStatusByPaneKey[key]
-        realStore.dropAgentStatus(key)
-      })
-
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      await vi.advanceTimersByTimeAsync(350)
-
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-      expect(realStore.getStatus(paneKey)).toBeUndefined()
-      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-    })
-
     it('does NOT reconcile when the process check could not confirm a shell', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
@@ -448,11 +401,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
-      // The unavailable branch really ran: it publishes an unproven foreground before settling.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: false
-      })
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
       expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
     })
 
@@ -483,10 +432,19 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
+      mockStoreState.agentStatusByPaneKey[paneKey] = { agentType: 'droid', state: 'working' }
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
         launchConfig: { agentArgs: '', agentEnv: {} },
         identity: { agentType: 'droid' }
       }
+
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValueOnce('droid')
+      dataCallbackRef.current?.('\x1b]133;C\x07')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agentEvidence).toBe(
+        'process-read'
+      )
 
       // The agent negotiates Kitty keys across a chunk split, then dies armed.
       dataCallbackRef.current?.('\x1b[>')
@@ -538,10 +496,18 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       )
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks()
+      mockStoreState.agentStatusByPaneKey[paneKey] = { agentType: 'droid', state: 'working' }
       mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
         launchConfig: { agentArgs: '', agentEnv: {} },
         identity: { agentType: 'droid' }
       }
+      vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValueOnce('droid')
+      dataCallbackRef.current?.('\x1b]133;C\x07')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]?.agentEvidence).toBe(
+        'process-read'
+      )
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350)
       await flushAsyncTicks()
@@ -607,7 +573,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
     })
 
-    it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
+    it('preserves launch intent after unavailable command-finish reads', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
@@ -643,15 +609,12 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
       await flushAsyncTicks()
 
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: false
-      })
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toBeUndefined()
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
     })
 
-    it('cancels deferred cleanup on a new command and retires identity at its later shell', async () => {
+    it('cancels deferred cleanup on a new command without retiring unexecuted launch intent', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
@@ -689,7 +652,7 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
+      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
     })
 

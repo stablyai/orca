@@ -1,7 +1,11 @@
+import type * as ProcessTableSnapshotReader from '../../shared/process-table-snapshot-reader'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as foregroundInspection from './local-pty-foreground-inspection'
+import * as childInspection from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
+  interfaceSnapshotMock,
   existsSyncMock,
   statSyncMock,
   accessSyncMock,
@@ -16,6 +20,7 @@ const {
   wslUncDirectoryExistsAsyncMock,
   createShellPromptReadinessProbeMock
 } = vi.hoisted(() => ({
+  interfaceSnapshotMock: vi.fn(),
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
@@ -29,6 +34,11 @@ const {
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
+}))
+
+vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessTableSnapshotReader>()),
+  getStrictProcessTableSnapshotWithAge: interfaceSnapshotMock
 }))
 
 vi.mock('fs', () => ({
@@ -115,6 +125,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { ptyLastRecognizedForeground } from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -158,6 +169,55 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('hasChildProcesses', () => {
+    it('returns unavailable with its stable name after failed admission, without another read', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      ptyLastRecognizedForeground.set(id, { name: 'claude', pid: null, at: Date.now() })
+      interfaceSnapshotMock.mockReset().mockRejectedValueOnce(new Error('capture unavailable'))
+      resolveAgentForegroundProcessMock.mockClear()
+      const children = vi.spyOn(foregroundInspection, 'inspectLocalPtyChildProcesses')
+      try {
+        await expect(
+          provider.inspectProcess(id, { terminalInterface: true })
+        ).resolves.toMatchObject({
+          foregroundProcess: 'claude',
+          childProcessEvidence: 'unverifiable',
+          hasChildProcesses: true,
+          terminalInterface: { shellForeground: false, children: 'unverifiable' }
+        })
+        expect(interfaceSnapshotMock).toHaveBeenCalledOnce()
+        expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+        expect(children).not.toHaveBeenCalled()
+      } finally {
+        children.mockRestore()
+      }
+    })
+    it('reuses only the current strict Windows full-job verdict for interface evidence', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const inspect = vi
+        .spyOn(childInspection, 'inspectSpawnFileWindowsChildProcesses')
+        .mockResolvedValue('no-children')
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+        for (const policy of [{}, { steadyState: true }, { ignoreDetached: true }]) {
+          inspect.mockClear()
+          await expect(
+            provider.inspectProcess(id, { terminalInterface: true, ...policy })
+          ).resolves.toMatchObject({
+            terminalInterface: { shellForeground: true, children: 'no-children' }
+          })
+          expect(inspect).toHaveBeenCalledTimes(
+            'steadyState' in policy || 'ignoreDetached' in policy ? 2 : 1
+          )
+          expect(inspect.mock.calls[0]?.slice(2)).toEqual([
+            !('steadyState' in policy),
+            'ignoreDetached' in policy
+          ])
+        }
+      } finally {
+        inspect.mockRestore()
+      }
+    })
     it('fences full inspection with the original PTY incarnation across awaits', async () => {
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
       await expect(

@@ -1,3 +1,4 @@
+import { disposeMobileTerminalInterfaceReplica } from '../session/mobile-terminal-interface-replica'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import {
@@ -175,6 +176,7 @@ export function createStableLogicalRpcClient(
         return
       }
       closed = true
+      disposeMobileTerminalInterfaceReplica(logical)
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
       for (const record of subscriptions.values()) {

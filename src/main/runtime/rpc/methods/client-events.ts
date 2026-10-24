@@ -1,3 +1,4 @@
+import { TERMINAL_INTERFACE_CAPABILITY } from '../../../../shared/terminal-interface-observation'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -13,15 +14,23 @@ export const CLIENT_EVENT_METHODS = [
     name: 'runtime.clientEvents.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (
+      _params,
+      { runtime, connectionId, clientKind, clientCapabilities, caller },
+      emit
+    ) => {
       await new Promise<void>((resolve) => {
-        // Why: mobile discards terminalSideEffects; excluding it stops the
-        // per-OSC batch frames from crossing the relay.
+        // Mobile discards OSC batches; desktop IPC already receives them through its PTY channel.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
-            emit(event)
+            if (
+              event.type !== 'terminalInterfaces' ||
+              clientCapabilities?.includes(TERMINAL_INTERFACE_CAPABILITY)
+            ) {
+              emit(event)
+            }
           },
-          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+          { consumesTerminalSideEffects: clientKind !== 'mobile' && caller?.kind !== 'desktop' }
         )
 
         const seq = ++clientEventSubscriptionSeq
@@ -43,6 +52,11 @@ export const CLIENT_EVENT_METHODS = [
         for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
           []) {
           emit(event)
+        }
+        if (clientCapabilities?.includes(TERMINAL_INTERFACE_CAPABILITY)) {
+          for (const event of runtime.getTerminalInterfaceClientEventSnapshot()) {
+            emit(event)
+          }
         }
         const sshStates = listRegisteredSshTargets().flatMap((target) => {
           const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)

@@ -1,3 +1,5 @@
+import type { TerminalInterfaceSnapshot } from '../providers/terminal-interface-process-evidence'
+import { inspectSessionTerminalInterface } from '../providers/terminal-interface-process-evidence'
 import { isValidPtySize } from './daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline } from './session-output-pipeline'
@@ -48,12 +50,7 @@ export class Session {
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
     const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      subprocess: this.subprocess,
+      ...opts,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
     this.output = pipeline.output
@@ -239,6 +236,10 @@ export class Session {
 
   inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
     return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'
+  }
+
+  inspectTerminalInterface(snapshot?: TerminalInterfaceSnapshot) {
+    return inspectSessionTerminalInterface(this.subprocess, snapshot)
   }
 
   getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null {

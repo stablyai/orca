@@ -10,9 +10,7 @@ import { toRuntimeTerminalWorktreeSelector } from '../../runtime/runtime-worktre
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
 
-/** `incarnationId` names which lifetime of the returned id this spawn owns; absent when the
- *  execution host predates the field. It is deliberately NOT on `PtyConnectResult` — only the
- *  connect handshake needs it, to fence buffered state left by an earlier owner of the same id. */
+/** The host incarnation fences buffered events and the pane's execution observations. */
 export type IpcPtySpawnResponse = PtyConnectResult & {
   isReattach?: boolean
   incarnationId?: string

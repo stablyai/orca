@@ -21,6 +21,7 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
  * act on it; everywhere else the answer was already captured.
  */
 export type PtyProcessInspectionOptions = {
+  terminalInterface?: boolean
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
   /** Adoption only: on Windows, a job member that left both the shell's tree and its console no

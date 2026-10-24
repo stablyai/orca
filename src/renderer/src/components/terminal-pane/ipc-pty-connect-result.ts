@@ -10,6 +10,7 @@ export function projectIpcPtyConnectResult(
   if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
     return {
       id: spawnResult.id,
+      ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       ...(spawnResult.isReattach ? { isReattach: true } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
@@ -44,6 +45,7 @@ export function projectIpcPtyConnectResult(
     }
   }
   if (
+    spawnResult.incarnationId ||
     launchAgent ||
     spawnResult.launchConfig ||
     spawnResult.startupCwdFallback ||
@@ -51,6 +53,7 @@ export function projectIpcPtyConnectResult(
   ) {
     return {
       id: spawnResult.id,
+      ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
       ...(spawnResult.startupCwdFallback

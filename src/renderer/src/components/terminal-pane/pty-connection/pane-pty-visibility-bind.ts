@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -158,6 +159,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // just-created worktree) can be kept visible rather than tearing down the
     // worktree. Reattach/coldRestore skip onPtySpawn (pty-transport.ts).
     session.spawnedFreshPtyId = ptyId
+    notifyPaneStartupStateChanged()
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     const bound = session.bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
@@ -182,6 +184,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       return
     }
     session.remotePtyIncarnationId = incarnationId ?? null
+    notifyPaneStartupStateChanged()
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })

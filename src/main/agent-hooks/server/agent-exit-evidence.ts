@@ -147,3 +147,12 @@ export function readPersistedAgentExits(
     ]
   })
 }
+
+export function forgetPaneAgentExit(
+  exits: Map<string, AgentExitEvidence>,
+  paneKey: string,
+  alias: string
+): boolean {
+  const forgotten = forgetAgentExit(exits, paneKey)
+  return forgetAgentExit(exits, alias) || forgotten
+}

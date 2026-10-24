@@ -215,10 +215,11 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
       await flushAsyncTicks()
 
-      expect(storeSubscribers).toHaveLength(1)
+      // One shared notification subscription plus each pane's interface transition effects.
+      expect(storeSubscribers).toHaveLength(3)
 
       firstBinding.dispose()
-      expect(storeSubscribers).toHaveLength(1)
+      expect(storeSubscribers).toHaveLength(2)
       secondBinding.dispose()
       expect(storeSubscribers).toHaveLength(0)
     })

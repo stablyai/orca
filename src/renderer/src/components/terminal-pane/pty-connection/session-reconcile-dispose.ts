@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './restart-replacement-on-show'
 import { shouldReconcileMissingSession, type HasPty } from '../terminal-dead-session-reconcile'
@@ -148,6 +149,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.unregisterTerminalInterfacePresentation?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
@@ -221,6 +223,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       if (session.startupInjectTimer !== null) {
         clearTimeout(session.startupInjectTimer)
         session.startupInjectTimer = null
+        notifyPaneStartupStateChanged()
       }
       session.cleanupStartupDraftPasteTimers()
       session.releaseUnattemptedStartupDraftPasteDelivery()

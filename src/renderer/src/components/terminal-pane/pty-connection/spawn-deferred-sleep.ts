@@ -12,6 +12,7 @@ import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
 import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
+  notifyPaneStartupStateChanged,
   setPaneSpawnDeferral
 } from '@/lib/pane-spawn-deferral-registry'
 import {
@@ -148,6 +149,7 @@ function offerHostResume(
 export function installSpawnDeferredSleep(session: ConnectPanePtySession): void {
   // Set by the transport for the spawn in flight; read when that spawn settles without a PTY.
   session.pendingSpawnDeferral = null
+  notifyPaneStartupStateChanged()
   session.deferredSpawn = null
 
   session.enterSpawnDeferredSleep = (

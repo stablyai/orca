@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
@@ -123,6 +124,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         onSpawnDeferred: (reason: SpawnDeferralReason): void => {
           if (isCurrent()) {
             session.pendingSpawnDeferral = reason
+            notifyPaneStartupStateChanged()
           }
         }
       }

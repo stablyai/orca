@@ -335,11 +335,24 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('wires the shared agent projection selector into the production TabBar', async () => {
-    const { selectTabBarAgentProjections } = await import('./tab-agent-types-by-tab-id')
+    const projections = await import('./tab-agent-types-by-tab-id')
+    const selectProjections = vi.spyOn(projections, 'selectTabBarAgentProjections')
 
-    await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
+    try {
+      await renderTabBar({ tabs: [], editorFiles: [], browserTabs: [], tabBarOrder: [] })
 
-    expect(useAppStoreMock).toHaveBeenCalledWith(selectTabBarAgentProjections)
+      expect(selectProjections).toHaveBeenCalledWith(
+        expect.objectContaining({ unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree })
+      )
+      expect(selectProjections).toHaveReturnedWith({
+        nativeChatEnabled: false,
+        tabAgentTypesByTabId: {},
+        nativeChatTabWideFallbackUnsafeTabsById: {},
+        nativeChatShellForegroundTabsById: {}
+      })
+    } finally {
+      selectProjections.mockRestore()
+    }
   })
 
   it('counts every tab kind for SortableTab.tabCount', async () => {

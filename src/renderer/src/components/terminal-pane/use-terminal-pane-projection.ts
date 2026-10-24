@@ -1,3 +1,4 @@
+import { terminalInterfaceReleasesChat } from '../native-chat/terminal-interface-presentation'
 import { useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -121,10 +122,17 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
         chatLeafId,
         activeLeafId,
         chatLeafStillMounted,
+        chatLeafHasConfirmedAgentExit:
+          chatLeafId !== null &&
+          terminalInterfaceReleasesChat(
+            useAppStore.getState(),
+            `${controller.tabId}:${chatLeafId}`
+          ),
         activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
       })
     )
   }, [
+    controller.tabId,
     isChatViewMode,
     chatLeafId,
     activePane?.leafId,

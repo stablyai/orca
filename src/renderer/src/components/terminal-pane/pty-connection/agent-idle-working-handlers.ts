@@ -29,9 +29,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     }
   }
   session.onAgentExited = (): void => {
-    // Why: eligibility can disappear transiently during reconnect, but a
-    // confirmed shell-title transition is authoritative for native-chat exit.
-    session.deps.onAgentExitedRef.current(session.pane.leafId)
+    session.acceptAgentDeparture('title')
     session.clearSuppressedTitleSideEffects()
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()

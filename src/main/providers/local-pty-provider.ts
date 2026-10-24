@@ -1,3 +1,6 @@
+import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
+import { inspectPosixTerminalInterface } from './terminal-interface-process-evidence'
+import { inspectSpawnFileWindowsChildProcesses } from '../daemon/pty-subprocess/spawn-file-child-processes'
 import type * as pty from 'node-pty'
 import type {
   IPtyProvider,
@@ -29,7 +32,10 @@ import {
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ptyLastRecognizedForeground,
   ptyIncarnations,
+  ptyShellPath,
+  ptyReportsChildExitStatus,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -162,13 +168,62 @@ export class LocalPtyProvider implements IPtyProvider {
         childProcessEvidence: 'unverifiable'
       }
     }
-    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    if (options?.terminalInterface && options.steadyState && process.platform !== 'win32') {
+      const anchored = await getLocalPtyForegroundProcess(id, undefined, true)
+      if (anchored && ptyProcesses.get(id) === proc && ptyIncarnations.get(id) === incarnation) {
+        return { foregroundProcess: anchored, hasChildProcesses: true }
+      }
+    }
+    const snapshot =
+      options?.terminalInterface && process.platform !== 'win32'
+        ? await getStrictProcessTableSnapshotWithAge().catch(() => null)
+        : undefined
+    if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
+      return {
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable'
+      }
+    }
+    if (snapshot === null) {
+      return {
+        foregroundProcess: ptyLastRecognizedForeground.get(id)?.name ?? null,
+        hasChildProcesses: true,
+        childProcessEvidence: 'unverifiable',
+        terminalInterface: { shellForeground: false, children: 'unverifiable', capturedAgeMs: 0 }
+      }
+    }
+    const foregroundProcess = await getLocalPtyForegroundProcess(id, snapshot?.rows)
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     const childProcessEvidence = await inspectLocalPtyChildProcesses(
       id,
       options?.steadyState !== true,
-      options?.ignoreDetached === true
+      options?.ignoreDetached === true,
+      snapshot?.rows
     )
+    const terminalInterface =
+      options?.terminalInterface === true
+        ? process.platform === 'win32'
+          ? await (
+              options?.steadyState !== true && options?.ignoreDetached !== true
+                ? Promise.resolve(childProcessEvidence)
+                : inspectSpawnFileWindowsChildProcesses(proc, ptyShellPath.get(id) ?? '', true)
+            ).then((children) => ({
+              shellForeground: children === 'no-children',
+              children,
+              capturedAgeMs: 0
+            }))
+          : await inspectPosixTerminalInterface(
+              proc.pid,
+              ptyShellPath.get(id) ?? '',
+              ptyReportsChildExitStatus.get(id) === false,
+              snapshot
+            ).catch(() => ({
+              shellForeground: false,
+              children: 'unverifiable' as const,
+              capturedAgeMs: 0
+            }))
+        : undefined
     // Neither asynchronous inspection may publish a replacement pane's identity.
     if (ptyProcesses.get(id) !== proc || ptyIncarnations.get(id) !== incarnation) {
       return {
@@ -180,7 +235,8 @@ export class LocalPtyProvider implements IPtyProvider {
     return {
       foregroundProcess,
       hasChildProcesses: childProcessEvidence !== 'no-children',
-      childProcessEvidence
+      childProcessEvidence,
+      ...(terminalInterface ? { terminalInterface } : {})
     }
   }
 

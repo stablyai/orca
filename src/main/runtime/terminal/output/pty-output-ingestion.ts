@@ -98,6 +98,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     sequenceChars = data.length,
     transformed = false
   ): number {
+    this.terminalInterfaces?.activity(ptyId)
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.scanProviderModeTrackers(ptyId, data)

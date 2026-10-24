@@ -4,6 +4,9 @@ import type { RpcClient } from './rpc-client'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 
 const scopedViews = new WeakMap<RpcClient, Map<ExecutionHostId, RpcClient>>()
+export function executionHostScopedClients(client: RpcClient): Iterable<RpcClient> {
+  return scopedViews.get(client)?.values() ?? []
+}
 
 /**
  * Whether this phone can reach the desktop's servers: the desktop relays, over a transport that

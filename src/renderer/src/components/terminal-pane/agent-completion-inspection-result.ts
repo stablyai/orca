@@ -1,4 +1,5 @@
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { admitRemoteForegroundEvidence } from '../../../../shared/remote-foreground-evidence-admission'
@@ -56,10 +57,7 @@ export function handleAgentCompletionInspectionResult(args: {
     remoteInspection
   } = args
   const remote = options.isRemotePtyId?.(options.getPtyId() ?? '') === true
-  if (
-    isClientOnlyUnverifiableInspection(result) ||
-    (!remote && result.childProcessEvidence === 'unverifiable')
-  ) {
+  if (isClientOnlyUnverifiableInspection(result)) {
     state.pendingProcessExit = null
     state.consecutiveInspectionErrors += 1
     scheduleNextPoll()
@@ -135,10 +133,26 @@ export function handleAgentCompletionInspectionResult(args: {
     handleRecognizedProcess(recognizedRemote)
     return true
   }
-  state.consecutiveInspectionErrors = 0
+  const childProcessesUnverifiable = result.childProcessEvidence === 'unverifiable'
+  state.consecutiveInspectionErrors = childProcessesUnverifiable
+    ? state.consecutiveInspectionErrors + 1
+    : 0
   const recognized = recognizeAgentProcess(result.foregroundProcess)
   if (recognized) {
     handleRecognizedProcess(recognized)
+  } else if (
+    state.lastForegroundAgent &&
+    result.foregroundProcess !== null &&
+    isShellProcess(result.foregroundProcess)
+  ) {
+    options.onForegroundShellObserved?.(state.lastForegroundAgent)
+  }
+  if (childProcessesUnverifiable) {
+    state.pendingProcessExit = null
+    scheduleNextPoll()
+    return false
+  }
+  if (recognized) {
     return true
   }
   if (hasPendingHookDone()) {

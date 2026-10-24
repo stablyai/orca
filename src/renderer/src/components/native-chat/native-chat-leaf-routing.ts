@@ -30,6 +30,18 @@ export function resolveNativeChatActiveLayoutLeafId(
   return layout.root?.type === 'leaf' ? layout.root.leafId : null
 }
 
+/** The tab's active pane has its shell back in front: chat would type into the shell. */
+export function isNativeChatActiveLeafShellForeground(
+  terminalTabId: string,
+  layout: TerminalLayoutSnapshot | null | undefined,
+  foregroundByPaneKey: Readonly<Record<string, { shellForeground?: boolean }>>
+): boolean {
+  const leafId = resolveNativeChatActiveLayoutLeafId(layout)
+  return (
+    leafId !== null && foregroundByPaneKey[`${terminalTabId}:${leafId}`]?.shellForeground === true
+  )
+}
+
 export function isNativeChatTabWideFallbackSafe(
   layout: TerminalLayoutSnapshot | null | undefined
 ): boolean {

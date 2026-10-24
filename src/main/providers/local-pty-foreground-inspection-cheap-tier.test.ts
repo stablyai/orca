@@ -1,3 +1,4 @@
+import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessTableSnapshotReader from '../../shared/process-table-snapshot-reader'
 
@@ -29,9 +30,9 @@ const ID = 'pty-1'
 type Table = 'agent' | 'shell-only'
 let table: Table = 'agent'
 
-function rows(): Record<string, unknown>[] {
+function rows(): ProcessTableRow[] {
   const tpgid = table === 'agent' ? AGENT_PID : SHELL_PID
-  const out: Record<string, unknown>[] = [
+  const out: ProcessTableRow[] = [
     {
       pid: SHELL_PID,
       ppid: 1,
@@ -127,6 +128,20 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     expect(await getLocalPtyForegroundProcess(ID)).toBe('zsh')
     expect(cheapSnapshotMock).not.toHaveBeenCalled()
     expect(resolveMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('feeds supplied rows through the stable foreground policy without another capture', async () => {
+    const supplied = rows()
+    expect(await getLocalPtyForegroundProcess(ID, supplied)).toBe('claude')
+    expect(resolveMock).toHaveBeenLastCalledWith(
+      SHELL_PID,
+      'node',
+      expect.objectContaining({ rows: supplied })
+    )
+    resolveMock.mockResolvedValueOnce({ available: false, processName: 'zsh' })
+    expect(await getLocalPtyForegroundProcess(ID, supplied)).toBe('claude')
+    expect(fullSnapshotMock).not.toHaveBeenCalled()
+    expect(cheapSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('a cheap capture failure falls through to the full scan', async () => {

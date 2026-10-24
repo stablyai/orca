@@ -1,3 +1,4 @@
+import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
@@ -41,7 +42,8 @@ import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-
 export async function inspectLocalPtyChildProcesses(
   id: string,
   fresh = true,
-  ignoreDetached = false
+  ignoreDetached = false,
+  rows?: readonly ProcessTableRow[]
 ): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
@@ -61,7 +63,7 @@ export async function inspectLocalPtyChildProcesses(
       return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
     }
     if (ptyProcessNameIsSpawnFile(proc)) {
-      const snapshot = await getStrictProcessTableSnapshotWithAge()
+      const snapshot = rows ? { rows } : await getStrictProcessTableSnapshotWithAge()
       return ptyProcesses.get(id) === proc
         ? inspectSpawnFileChildProcessesFromRows(
             snapshot.rows,
@@ -114,7 +116,11 @@ async function revalidateCachedPosixAgent(
   }
 }
 
-export async function getLocalPtyForegroundProcess(id: string): Promise<string | null> {
+export async function getLocalPtyForegroundProcess(
+  id: string,
+  rows?: readonly ProcessTableRow[],
+  anchoredOnly = false
+): Promise<string | null> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     ptyLastRecognizedForeground.delete(id)
@@ -170,6 +176,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
   }
   if (
     process.platform !== 'win32' &&
+    !rows &&
     cachedEntry &&
     cachedAgent !== null &&
     (await revalidateCachedPosixAgent(proc, cachedEntry, fallbackProcess))
@@ -180,9 +187,13 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     ptyLastRecognizedForeground.set(id, { ...cachedEntry, at: Date.now() })
     return cachedAgent
   }
+  if (anchoredOnly) {
+    return null
+  }
   try {
     const resolution = await createPtyForegroundResolver(proc)(proc.pid, fallbackProcess, {
       contextPaths: ptyAgentForegroundContextPaths.get(id),
+      rows,
       ...(cachedEntry?.pid != null
         ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
         : {})
@@ -209,7 +220,7 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         : resolution
     const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
     if (stable.lastRecognizedAgent && stableResolution.available) {
-      const steady = await readPosixSteadyState(proc.pid, fallbackProcess)
+      const steady = await readPosixSteadyState(proc.pid, fallbackProcess, rows)
       if (ptyProcesses.get(id) !== proc) {
         return null
       }
@@ -247,13 +258,17 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
  *  when the pane is unfenced, which simply means the next read pays for the full scan. */
 async function readPosixSteadyState(
   shellPid: number,
-  fallbackProcess: string | null
+  fallbackProcess: string | null,
+  rows?: readonly ProcessTableRow[]
 ): Promise<{ fingerprint: string; fallbackProcess: string | null } | null> {
   if (process.platform === 'win32') {
     return null
   }
   try {
-    const fingerprint = await buildPaneProcessFingerprint(await getProcessTableSnapshot(), shellPid)
+    const fingerprint = await buildPaneProcessFingerprint(
+      rows ?? (await getProcessTableSnapshot()),
+      shellPid
+    )
     return fingerprint === null ? null : { fingerprint, fallbackProcess }
   } catch {
     return null

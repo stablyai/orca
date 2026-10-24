@@ -1,3 +1,4 @@
+import type { TerminalInterfaceOwner } from './terminal-interface-authority'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { transitionHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
@@ -11,7 +12,6 @@ import {
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
@@ -21,14 +21,10 @@ import {
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
-import { AgentHookServerStatusApplication } from './server-status-application'
+import { AgentHookServerTerminalInterfaceStatus } from './server-terminal-interface-status'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
-  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
-    this.state
-  )
-
+export abstract class AgentHookServerStatusUpdate extends AgentHookServerTerminalInterfaceStatus {
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
@@ -51,7 +47,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    newRun = false
+    newRun = false,
+    acceptInterfaceHook?: (owner: TerminalInterfaceOwner) => void
   ): EnrichedAgentHookEventPayload | undefined {
     const transitioned = transitionHookPresence(
       incoming,
@@ -303,6 +300,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return undefined
     }
     this.commitStatusRowMutation(rowBefore, enriched)
+    this.acceptTerminalInterfaceReceipt(acceptInterfaceHook, origin, payload, incoming, enriched)
     // Structured rows serialize nothing; skip the persistence walk for streaming chat updates.
     if (!enriched.structuredHost) {
       this.scheduleStatusPersist()

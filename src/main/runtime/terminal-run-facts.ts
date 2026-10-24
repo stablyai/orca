@@ -38,6 +38,15 @@ export class TerminalRunFactsRegister {
   >()
   private readonly inputListeners = new Set<(ptyId: string, now: number) => void>()
 
+  private readonly observationInputListeners = new Set<
+    (ptyId: string, kind: 'driving' | 'launch') => void
+  >()
+
+  onObservationInput(listener: (ptyId: string, kind: 'driving' | 'launch') => void): () => void {
+    this.observationInputListeners.add(listener)
+    return () => this.observationInputListeners.delete(listener)
+  }
+
   /** Called on driving input from any client (not launch writes or replies); keep it cheap. */
   onInput(listener: (ptyId: string, now: number) => void): () => void {
     this.inputListeners.add(listener)
@@ -97,6 +106,13 @@ export class TerminalRunFactsRegister {
   recordInput(ptyId: string, inputKind: TerminalInputKind, data: string, now = Date.now()): void {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return
+    }
+    for (const listener of this.observationInputListeners) {
+      try {
+        listener(ptyId, inputKind)
+      } catch (error) {
+        console.error('[terminal-interface] input:', error)
+      }
     }
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)

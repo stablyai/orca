@@ -283,11 +283,13 @@ describe('agent completion coordinator', () => {
   ])('resets exit confirmation across $label', async ({ result: unavailableResult }) => {
     let result: RuntimeTerminalProcessInspection = processResult('codex')
     const dispatchCompletion = vi.fn()
+    const onForegroundShellObserved = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
       inspectProcess: vi.fn(async () => result),
       dispatchCompletion,
+      onForegroundShellObserved,
       isLive: () => true
     })
 
@@ -297,6 +299,9 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(750)
     result = unavailableResult
     await vi.advanceTimersByTimeAsync(750)
+    expect(onForegroundShellObserved).toHaveBeenCalledTimes(
+      unavailableResult.childProcessEvidence === 'unverifiable' ? 1 : 0
+    )
     result = processResult(null, false)
 
     // Unavailable evidence resets the exit candidate, so the next idle sample

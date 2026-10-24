@@ -1,3 +1,4 @@
+import type { TerminalInterfaceObservation } from './terminal-interface-observation'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -12,6 +13,12 @@ import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 
 export type RuntimeClientEvent =
+  | {
+      type: 'terminalInterfaces'
+      epoch: string
+      revision: number
+      observations: TerminalInterfaceObservation[]
+    }
   | { type: 'reposChanged' }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }

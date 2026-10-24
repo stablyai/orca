@@ -3,7 +3,10 @@ import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import {
+  confirmRuntimeTerminalForegroundProcess,
+  inspectRuntimeTerminalProcess
+} from '@/runtime/runtime-terminal-inspection'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
@@ -19,9 +22,9 @@ import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
-import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { readPaneObservationOwner } from './agent-departure'
 
 /** Keydown intent, PTY fit binding, side-effect fact consumption, and the agent completion coordinator. */
 export function installTerminalKeydownFit(session: ConnectPanePtySession): void {
@@ -61,7 +64,10 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     // equivalent; the sample is gated to panes with no live agent identity
     // and publishes nothing for an idle shell.
     if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      session.sampleVisiblePaneForegroundAgent()
+      session.sampleVisiblePaneForegroundAgent(
+        useAppStore.getState().paneForegroundAgentByPaneKey[session.cacheKey]?.shellForeground ===
+          true
+      )
     }
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
@@ -179,6 +185,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     isRemotePtyId: isRemoteExecutionHostPtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     inspectProcess: inspectRuntimeTerminalProcess,
+    confirmForegroundProcess: confirmRuntimeTerminalForegroundProcess,
     dispatchHookLifecycle: (payload) =>
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),
     titleTurnEndEvidence: (title, foregroundAgent) =>
@@ -221,12 +228,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
         currentAgentForExited !== exited.agent
       )
     },
-    // Why: the pane's only re-derivation of a process read where the shell emits no command marks.
-    onForegroundAgentExited: (exited) => {
-      session.paneForegroundAgentTracker?.onProcessExitConfirmed(exited)
-      // Why: not behind the tracker's process-read guard, so hook-identified panes retire too.
-      retireLiveAgentRowOnConfirmedProcessExit(session, exited)
-    },
+    getObservationOwner: () => readPaneObservationOwner(session),
+    onForegroundAgentObserved: (process) =>
+      session.paneForegroundAgentTracker.onForegroundAgentObserved(process),
+    onForegroundShellObserved: (process) =>
+      session.acceptAgentDeparture('foreground-release', process),
+    onForegroundAgentExited: (process) => session.acceptAgentDeparture('process-exit', process),
     dispatchCompletion: (title, meta) => {
       if (meta?.source === 'process-exit') {
         session.clearSuppressedTitleSideEffects()

@@ -564,7 +564,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(onConfirmedShellForeground).toHaveBeenCalledTimes(1)
   })
 
-  it('returns to the no-RPC finished path after the agent is confirmed gone', async () => {
+  it('clears presentation history after accepted D without another foreground read', async () => {
     readForegroundProcess.mockResolvedValueOnce('codex').mockResolvedValue('zsh')
     const tracker = makeTracker()
 
@@ -579,7 +579,9 @@ describe('createPaneForegroundAgentTracker', () => {
     readForegroundProcess.mockClear()
     tracker.onCommandFinished()
 
+    await flushSettleRead(COMMAND_SETTLE_MS)
     expect(readForegroundProcess).not.toHaveBeenCalled()
+    expect(onConfirmedShellForeground).toHaveBeenCalledOnce()
     expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: true })
   })
 
@@ -680,7 +682,7 @@ describe('createPaneForegroundAgentTracker', () => {
     })
   })
 
-  it('retires known identity when the bounded command-finish ladder remains unavailable', async () => {
+  it('preserves known identity when the bounded command-finish ladder remains unavailable', async () => {
     readForegroundProcess.mockResolvedValue(null)
     const tracker = makeTracker(() => true)
 
@@ -693,7 +695,7 @@ describe('createPaneForegroundAgentTracker', () => {
     await flushSettleRead(SECOND_WRAPPER_RETRY_MS)
 
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
-    expect(publish).toHaveBeenCalledExactlyOnceWith({ agent: null, shellForeground: false })
+    expect(publish).not.toHaveBeenCalled()
     expect(onConfirmedShellForeground).not.toHaveBeenCalled()
     expect(onCommandFinishedUnavailable).toHaveBeenCalledTimes(1)
   })

@@ -10,7 +10,7 @@ import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,
-  type AgentForegroundResolutionOptions
+  type AgentForegroundResolutionOptions as WindowsAgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import {
@@ -23,7 +23,9 @@ import {
   type WindowsProcessIdentityRow
 } from '../windows/windows-process-table'
 
-export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
+export type AgentForegroundResolutionOptions = WindowsAgentForegroundResolutionOptions & {
+  rows?: readonly ProcessTableRow[]
+}
 export {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex,
@@ -163,10 +165,10 @@ export async function resolveAgentForegroundProcessWithAvailability(
   }
 
   try {
-    const rows = options.fresh
-      ? await getFreshProcessTableSnapshot()
-      : await getProcessTableSnapshot()
-    if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
+    const rows =
+      options.rows ??
+      (options.fresh ? await getFreshProcessTableSnapshot() : await getProcessTableSnapshot())
+    if ((options.fresh || options.rows) && !getProcessTableIndex(rows).byPid.has(shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
     return {

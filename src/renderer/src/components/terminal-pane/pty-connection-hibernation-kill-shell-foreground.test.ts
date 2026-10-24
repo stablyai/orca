@@ -185,6 +185,7 @@ describe('shell showing through a hibernation kill', () => {
       launchConfig: { agentArgs: '', agentEnv: {} },
       identity: { agentType: 'claude' }
     }
+    mockStoreState.agentStatusByPaneKey[paneKey] = { agentType: 'claude', state: 'working' }
     // Hibernation writes the wake record and suppresses the exit before it kills the PTY.
     const record: SleepingAgentSessionRecord = {
       paneKey,
@@ -222,10 +223,9 @@ describe('shell showing through a hibernation kill', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]).toEqual({
-      agent: null,
-      shellForeground: true
-    })
+    expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]?.shellForeground).not.toBe(
+      true
+    )
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
     expect(mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
       providerSession: { id: 'sess-hibernating' }
@@ -251,9 +251,8 @@ describe('shell showing through a hibernation kill', () => {
       foreground.resolve('zsh')
       await flushAsyncTicks()
 
-      // A detached transport rejects the stale read; a retained binding reaches shell cleanup.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]?.shellForeground).toBe(
-        boundPtyId === null ? undefined : true
+      expect(mockStoreState.paneForegroundAgentByPaneKey[pane.paneKey]?.shellForeground).not.toBe(
+        true
       )
       expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey]).toMatchObject({
@@ -262,7 +261,7 @@ describe('shell showing through a hibernation kill', () => {
     }
   )
 
-  it('clears the record once another PTY is bound in place of the hibernated one', async () => {
+  it('preserves lifetime identity on shell return after a replacement PTY binds', async () => {
     const pane = await connectHibernatingPane(true)
 
     pane.exitPty()
@@ -273,19 +272,19 @@ describe('shell showing through a hibernation kill', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 
-  it('still clears a record beside a PTY that is not being hibernated', async () => {
+  it('preserves sleeping lifetime identity when foreground alone returns to shell', async () => {
     const pane = await connectHibernatingPane(false)
 
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 
-  it('does not protect a replacement record with the old wake target', async () => {
+  it('preserves a replacement record on foreground release', async () => {
     const pane = await connectHibernatingPane(true)
 
     pane.exitPty()
@@ -297,6 +296,6 @@ describe('shell showing through a hibernation kill', () => {
     pane.finishCommand()
     await vi.advanceTimersByTimeAsync(350)
 
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
   })
 })

@@ -53,9 +53,12 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
         {},
         {
           get: (_target, property: string) => {
-            if (name === 'runtimeEnvironments' && property === 'subscribe') {
+            if (
+              (name === 'runtimeEnvironments' || name === 'runtime') &&
+              property === 'subscribe'
+            ) {
               return async () => {
-                registrationOrder.push('runtimeEnvironments.subscribe')
+                registrationOrder.push(`${name}.subscribe`)
                 const unsubscribe = vi.fn()
                 runtimeSubscriptions.push(unsubscribe)
                 return { unsubscribe }

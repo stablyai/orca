@@ -128,7 +128,8 @@ export class DaemonRequestRouter {
             ? { expectedIncarnationId: request.payload.expectedIncarnationId }
             : {}),
           ...(request.payload.steadyState === true ? { steadyState: true } : {}),
-          ...(request.payload.ignoreDetached === true ? { ignoreDetached: true } : {})
+          ...(request.payload.ignoreDetached === true ? { ignoreDetached: true } : {}),
+          ...(request.payload.terminalInterface === true ? { terminalInterface: true } : {})
         }
         return Object.keys(options).length > 0
           ? this.options.host.inspectProcess(request.payload.sessionId, options)

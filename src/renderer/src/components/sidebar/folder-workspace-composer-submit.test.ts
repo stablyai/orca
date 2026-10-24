@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { proveTerminalStartupInterfaceFlow } from '../../lib/terminal-interface-startup-flow.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -722,6 +723,33 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
     useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
     vi.restoreAllMocks()
   })
+
+  it.each([false, true])(
+    'publishes real folder startup through unbound and bound mobile snapshots (draft=%s)',
+    async (withDraft) => {
+      await submitFolderWorkspaceCreate({
+        projectGroup: makeProjectGroup(),
+        name: 'Startup',
+        lastAutoName: '',
+        linkedWorkItem: withDraft ? linkedIssue : null,
+        note: '',
+        quickAgent: 'claude',
+        autoRenameBranchFromWork: false,
+        agentCmdOverrides: {},
+        createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+        onOpenChange: vi.fn()
+      })
+      const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+      expect(startup).toBeDefined()
+      const draft = seededDraftFor('tab-1')?.text
+      expect(draft).toBe(withDraft ? ISSUE_URL : undefined)
+      await proveTerminalStartupInterfaceFlow(
+        startup,
+        draft,
+        folderWorkspaceKey('folder-workspace-1')
+      )
+    }
+  )
 
   it('mirrors a startup-paste draft into the chat composer', async () => {
     await submitFolderWorkspaceCreate({

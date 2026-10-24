@@ -214,6 +214,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialResolved: () => () => {}
         },
         runtime: {
+          subscribe: async () => ({ unsubscribe: () => {} }),
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
           getBrowserDrivers: () => Promise.resolve([]),
@@ -484,6 +485,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCredentialResolved: () => () => {}
         },
         runtime: {
+          subscribe: async () => ({ unsubscribe: () => {} }),
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
           getBrowserDrivers: () => Promise.resolve([]),

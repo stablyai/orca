@@ -104,7 +104,11 @@ export async function installTerminalTestGlobals(): Promise<void> {
   vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (id) => {
     const foregroundProcess = await window.api.pty.getForegroundProcess(id)
     const hasChildProcesses = await window.api.pty.hasChildProcesses(id)
-    return { foregroundProcess, hasChildProcesses }
+    return {
+      foregroundProcess,
+      hasChildProcesses,
+      childProcessEvidence: hasChildProcesses ? 'children' : 'no-children'
+    }
   })
   globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
     callback(0)

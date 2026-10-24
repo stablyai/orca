@@ -79,6 +79,16 @@ export class TerminalIntentionalStops {
     return [...stop.ownersByKind.keys()]
   }
 
+  /** A presentation read must not claim an exit or pin an unknown incarnation. */
+  hasStop(ptyId: string, incarnationId: string): boolean {
+    const stop = this.stopsByPtyId.get(ptyId)
+    return Boolean(
+      stop &&
+      (!stop.incarnationId || stop.incarnationId === incarnationId) &&
+      stop.ownersByKind.size
+    )
+  }
+
   /** Whether a stop of this PTY that may still be undone is in flight. */
   isReversibleStopInFlight(ptyId: string): boolean {
     return (this.stopsByPtyId.get(ptyId)?.ownersByKind.get('reversible')?.inFlight ?? 0) > 0

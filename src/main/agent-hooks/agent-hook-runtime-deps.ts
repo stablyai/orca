@@ -11,6 +11,7 @@ export function agentHookRuntimeDeps(
   getSettings: () => Parameters<typeof isAgentStatusHooksEnabled>[0]
 ) {
   return {
+    terminalInterfaces: server.terminalInterfaces,
     // OSC-derived PTY status feeds the store read by worktree.ps and mobile projections.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
     onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),

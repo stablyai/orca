@@ -1,3 +1,4 @@
+import { notifyPaneStartupStateChanged } from '@/lib/pane-spawn-deferral-registry'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
@@ -221,6 +222,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   // (issue #8104 class). None of the dead-session reconciles cover it because
   // the PTY is live; recover by remounting the tab over the live PTY.
   session.transportConnectInFlightSince = null
+  notifyPaneStartupStateChanged()
   session.requestRecoveryForUndeliverableInput = (providerRejected = false): void => {
     if (
       !providerRejected &&

@@ -1,5 +1,6 @@
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 
 export type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
@@ -26,14 +27,38 @@ export type PaneForegroundAgentTrackerDeps = {
   getPublishedEntry?: () => PaneForegroundAgentEntry | undefined
   /** A local read recognized an agent; lets the pane's process monitor watch for its exit. */
   onAgentProcessRead?: (process: RecognizedAgentProcess) => void
-  /** True when the pane is otherwise known to run an agent (launchAgent, live
-   *  hook status). Lets a restored agent pane confirm — rather than trust — a
-   *  133;D before any command-start read has recorded its own evidence. */
+  /** Actual live hook evidence, excluding launch and restored display hints. */
   hasKnownAgentIdentity?: () => boolean
-  /** Fired when a confirming read proves the foreground genuinely returned to a
-   *  shell (agent exited). Lets callers clear a stale agent-named tab title that
-   *  the shell never repaints. */
-  onConfirmedShellForeground?: (reason: 'visible-pty' | 'command-finished' | 'process-exit') => void
+  hasAgentExpectation?: () => boolean
+  /** The known agent type that owns the pane now, or null. */
+  getObservationOwner?: () => string | null
+  /** Positive shell ownership releases presentation independently of lifetime. */
+  onConfirmedShellForeground?: (
+    reason: 'visible-pty' | 'command-finished' | 'process-exit'
+  ) => boolean | void
   onCommandFinishedUnavailable?: () => void
   onVisibleForegroundSettled?: (outcome: 'agent' | 'shell' | 'inconclusive') => void
+}
+
+/** A read is stale only when a different known agent took the pane; a row ending or clearing is not a new owner. */
+export function isObservationOwnerSuperseded(
+  ownerAtRequest: string | null | undefined,
+  ownerNow: string | null | undefined
+): boolean {
+  return Boolean(ownerNow) && ownerNow !== ownerAtRequest
+}
+
+export type PaneForegroundAgentTracker = {
+  /** True while any read is scheduled or running, whatever its authority. */
+  hasReadInFlight: () => boolean
+  onVisiblePtyBound: (expectsAgent?: boolean) => boolean
+  onCommandStarted: (expectedAgent?: TerminalAgent | null) => void
+  onAgentStartupObserved: () => void
+  /** True when pane identity must remain visible until an async shell confirmation. */
+  onCommandFinished: () => boolean
+  /** The process monitor confirmed this agent exited (no agent, no children, settled). */
+  onProcessExitConfirmed: (process: RecognizedAgentProcess) => void
+  onForegroundAgentObserved: (process: RecognizedAgentProcess) => void
+  onShellForegroundObserved: () => void
+  dispose: () => void
 }

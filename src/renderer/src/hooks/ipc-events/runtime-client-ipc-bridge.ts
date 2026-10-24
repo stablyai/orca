@@ -1,3 +1,4 @@
+import { applyTerminalInterfaceSnapshot } from '@/components/native-chat/terminal-interface-presentation'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
@@ -40,6 +41,20 @@ export function registerRuntimeClientIpcBridge(
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
   let stopped = false
+  void window.api.runtime
+    .subscribe({ method: 'runtime.clientEvents.subscribe' }, (response) => {
+      if (!stopped && response.ok) {
+        applyTerminalInterfaceSnapshot(response.result, null)
+      }
+    })
+    .then((subscription) => {
+      if (stopped) {
+        subscription.unsubscribe()
+      } else {
+        unsubs.push(subscription.unsubscribe)
+      }
+    })
+    .catch(console.error)
   unsubs.push(() => {
     stopped = true
   })
@@ -94,6 +109,10 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'terminalInterfaces') {
+      applyTerminalInterfaceSnapshot(event, environmentId)
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
