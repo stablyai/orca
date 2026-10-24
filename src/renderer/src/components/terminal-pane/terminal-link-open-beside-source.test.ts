@@ -127,6 +127,25 @@ describe('terminal file links carry their source tab', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps an explicit request for a binary in the editor, not the system app', async () => {
+    setPlatform('Macintosh')
+    seedSourceTab()
+
+    openDetectedFilePath('/tmp/media/clip.mp4', null, null, {
+      ...sourceDeps,
+      openInSourceGroup: true
+    })
+    await flushAsyncWork()
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileForLinkMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/media/clip.mp4' }),
+      expect.anything(),
+      expect.objectContaining({ targetGroupId: 'group-a' }),
+      expect.any(Function)
+    )
+  })
+
   it('refuses a closed explicit group before activating its workspace', async () => {
     setPlatform('Macintosh')
     seedSourceTab()

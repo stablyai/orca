@@ -4,16 +4,15 @@ import { IMAGE_FILE_EXTENSIONS } from './image-file-extensions'
 // the binary set even though it lives in IMAGE_FILE_EXTENSIONS.
 const TEXT_IMAGE_EXTENSIONS = new Set(['.svg'])
 
-const NON_IMAGE_BINARY_EXTENSIONS = [
+// Data files the OS hands to a viewer app; a plain link click may open them there.
+const OS_VIEWER_BINARY_EXTENSIONS = [
   // Archives
   '.7z',
   '.bz2',
   '.gz',
-  '.jar',
   '.rar',
   '.tar',
   '.tgz',
-  '.war',
   '.xz',
   '.zip',
   '.zst',
@@ -43,8 +42,12 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.ttc',
   '.ttf',
   '.woff',
-  '.woff2',
-  // Compiled artifacts and datastores
+  '.woff2'
+]
+
+// Why: never routed to the OS app by a plain click — for some the OS default runs code
+// (a .exe executes, a .jar launches Java).
+const COMPILED_AND_DATASTORE_EXTENSIONS = [
   '.a',
   '.bin',
   '.class',
@@ -52,6 +55,7 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.dylib',
   '.exe',
   '.idx',
+  '.jar',
   '.lockb',
   '.node',
   '.o',
@@ -61,30 +65,51 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.so',
   '.sqlite',
   '.sqlite3',
+  '.war',
   '.wasm'
 ]
 
 export const BINARY_FILE_EXTENSIONS: readonly string[] = Object.freeze([
   ...IMAGE_FILE_EXTENSIONS.filter((extension) => !TEXT_IMAGE_EXTENSIONS.has(extension)),
-  ...NON_IMAGE_BINARY_EXTENSIONS
+  ...OS_VIEWER_BINARY_EXTENSIONS,
+  ...COMPILED_AND_DATASTORE_EXTENSIONS
 ])
 
 const BINARY_FILE_EXTENSION_SET = new Set(BINARY_FILE_EXTENSIONS)
 
-/**
- * Extension-only guess at "this file is not text". Content-based detection
- * lives in `isBinaryBuffer`; use this only where the bytes are unavailable.
- */
-export function hasBinaryFileExtension(filePath: string | undefined): boolean {
+// Why: PDFs open in the editor's own viewer.
+const OS_VIEWER_ONLY_EXTENSION_SET = new Set(
+  OS_VIEWER_BINARY_EXTENSIONS.filter((extension) => extension !== '.pdf')
+)
+
+function lowerFileExtension(filePath: string | undefined): string | null {
   if (filePath === undefined) {
-    return false
+    return null
   }
   const lowerPath = filePath.toLowerCase()
   const dotIndex = lowerPath.lastIndexOf('.')
   const separatorIndex = Math.max(lowerPath.lastIndexOf('/'), lowerPath.lastIndexOf('\\'))
   // A leading dot is a dotfile (.gitignore), not an extension.
   if (dotIndex <= separatorIndex + 1) {
-    return false
+    return null
   }
-  return BINARY_FILE_EXTENSION_SET.has(lowerPath.slice(dotIndex))
+  return lowerPath.slice(dotIndex)
+}
+
+/**
+ * Extension-only guess at "this file is not text". Content-based detection
+ * lives in `isBinaryBuffer`; use this only where the bytes are unavailable.
+ */
+export function hasBinaryFileExtension(filePath: string | undefined): boolean {
+  const extension = lowerFileExtension(filePath)
+  return extension !== null && BINARY_FILE_EXTENSION_SET.has(extension)
+}
+
+/**
+ * A binary the editor has no viewer for and the OS opens in a viewer app (audio, video,
+ * archives, Office documents, fonts). Executables and other loadable code are excluded.
+ */
+export function hasOsViewerOnlyFileExtension(filePath: string | undefined): boolean {
+  const extension = lowerFileExtension(filePath)
+  return extension !== null && OS_VIEWER_ONLY_EXTENSION_SET.has(extension)
 }

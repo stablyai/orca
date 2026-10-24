@@ -1,5 +1,6 @@
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import { openOsViewerOnlyTerminalFile } from './terminal-os-viewer-file-open'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { canClientOsOpenWorkspaceFile } from '@/lib/workspace-file-host-routing'
@@ -213,7 +214,7 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrantId === null) {
       // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
       // cannot launch a remote path, so the direct gesture must reach the same download.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, isCurrentOpen)
       return
     }
 
@@ -239,6 +240,22 @@ export function openDetectedFilePath(
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
         return
       }
+    }
+
+    // Why: a grant serves only text and images, so a granted binary stays in Orca, as upstream does;
+    // "Open in this group" asked for an editor, never a system app or download.
+    if (
+      !openWithSystemDefault &&
+      !explicitGroupRequest &&
+      hostGrantId === null &&
+      (await openOsViewerOnlyTerminalFile(
+        fileContext,
+        mappedFilePath,
+        canOpenWithSystemDefault,
+        isCurrentOpen
+      ))
+    ) {
+      return
     }
 
     const runtimeOwnerId = runtimeTargetEnvironmentId(fileContext.target) ?? sourceRuntimeOwnerId
