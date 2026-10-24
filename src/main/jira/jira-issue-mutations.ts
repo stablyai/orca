@@ -27,6 +27,26 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   return value
 }
 
+/** Shapes edit-screen values: user ids into references, rich text into the site's body format. */
+async function shapeEditFields(site: JiraSite, updates: JiraIssueUpdate): Promise<JiraRecord> {
+  const userFieldKeys = new Set(updates.userFieldKeys ?? [])
+  const richTextFieldKeys = new Set(updates.richTextFieldKeys ?? [])
+  const shaped: JiraRecord = {}
+  for (const [fieldKey, value] of Object.entries(updates.fields ?? {})) {
+    if (!fieldKey) {
+      continue
+    }
+    if (userFieldKeys.has(fieldKey)) {
+      shaped[fieldKey] = toUserFieldValue(site, value)
+    } else if (richTextFieldKeys.has(fieldKey) && typeof value === 'string') {
+      shaped[fieldKey] = value.trim() ? await toBodyText(site, value.trim()) : null
+    } else {
+      shaped[fieldKey] = value
+    }
+  }
+  return shaped
+}
+
 /** Shape customFields named by userFieldKeys into user references. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
@@ -46,7 +66,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
       summary: title
     }
     if (args.description?.trim()) {
-      fields.description = toBodyText(entry.site, args.description.trim())
+      fields.description = await toBodyText(entry.site, args.description.trim())
     }
     const userFieldKeys = new Set(args.userFieldKeys ?? [])
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
@@ -89,7 +109,8 @@ export async function updateIssue(
   }
   await acquire()
   try {
-    const fields: JiraRecord = {}
+    // Dedicated update keys win over the same field sent through `fields`.
+    const fields: JiraRecord = await shapeEditFields(entry.site, updates)
     if (updates.title !== undefined) {
       fields.summary = updates.title
     }
@@ -127,7 +148,9 @@ export async function updateIssue(
       }
       if (updates.transitionComment?.trim()) {
         transitionBody.update = {
-          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+          comment: [
+            { add: { body: await toBodyText(entry.site, updates.transitionComment.trim()) } }
+          ]
         }
       }
       await jiraRequest(entry, `${issueBase}/transitions`, {
@@ -163,7 +186,7 @@ export async function addIssueComment(
       `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment`,
       {
         method: 'POST',
-        body: JSON.stringify({ body: toBodyText(entry.site, body) })
+        body: JSON.stringify({ body: await toBodyText(entry.site, body) })
       }
     )
     return { ok: true, id: comment.id }

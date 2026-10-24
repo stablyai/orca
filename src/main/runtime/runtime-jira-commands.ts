@@ -23,6 +23,7 @@ import {
   createIssue,
   getIssue,
   getIssueComments,
+  getIssueEditFields,
   getIssueSummary,
   getProjectStatusOrder,
   listAssignableUsers,
@@ -199,6 +200,15 @@ export class RuntimeJiraCommands {
     strict = false
   ): ReturnType<typeof listTransitions> {
     return listTransitions(key, siteId, strict)
+  }
+
+  jiraGetIssueEditFields(
+    key: string,
+    siteId?: string,
+    strict = false,
+    includeRaw = false
+  ): ReturnType<typeof getIssueEditFields> {
+    return getIssueEditFields(key, siteId, strict, includeRaw)
   }
 
   jiraGetProjectStatusOrder(

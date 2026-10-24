@@ -28,6 +28,7 @@ import { main } from './index'
 import { okFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../shared/jira/jira-agent-capability'
+import { JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY } from '../shared/jira/jira-detail-capabilities'
 import { RuntimeClientError } from './runtime/types'
 
 const site = {
@@ -50,6 +51,35 @@ const issue = {
   updatedAt: '2026-10-13',
   createdAt: '2026-10-12'
 }
+const editFields = [
+  {
+    key: 'customfield_10050',
+    name: 'Acceptance criteria',
+    required: false,
+    schema: {
+      type: 'string',
+      custom: 'com.atlassian.jira.plugin.system.customfieldtypes:textarea'
+    },
+    operations: ['set'],
+    value: { kind: 'text', text: 'Logs in\nRedirects home' },
+    richText: true,
+    writable: true,
+    rawValue: { type: 'doc', version: 1, content: [] }
+  },
+  {
+    key: 'customfield_10010',
+    name: 'Sprint',
+    required: false,
+    schema: { type: 'array', items: 'json' },
+    operations: [],
+    value: { kind: 'unsupported', display: 'Sprint 7' },
+    writable: false,
+    rawValue: [{ id: 7, name: 'Sprint 7', state: 'active' }]
+  }
+]
+const editFieldsHost = {
+  capabilities: [JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY, JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY]
+}
 const transition = {
   id: '31',
   name: 'Start progress',
@@ -68,6 +98,7 @@ function responses(overrides: Record<string, unknown> = {}): void {
     'jira.listIssueTypes': [issue.issueType],
     'jira.listCreateFields': [],
     'jira.listTransitions': [transition],
+    'jira.getIssueEditFields': editFields,
     'jira.listPriorities': [],
     'jira.listAssignableUsers': [],
     'jira.createIssue': {
@@ -203,6 +234,31 @@ describe('Jira CLI', () => {
     await run(['comment', 'list', 'ENG-123'])
     expect(output()).toMatchObject({ ok: true, result: [] })
     expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it('lists edit fields with their raw Jira values on the resolved site', async () => {
+    await run(['field', 'list', `${site.siteUrl}/browse/eng-123`], { 'status.get': editFieldsHost })
+    expect(mocks.callMock).toHaveBeenCalledWith('jira.getIssueEditFields', {
+      key: 'ENG-123',
+      siteId: site.id,
+      strict: true,
+      includeRaw: true
+    })
+    expect(output()).toMatchObject({ ok: true, result: editFields })
+  })
+
+  it('prints one line per edit field without raw values', async () => {
+    responses({ 'status.get': editFieldsHost })
+    await main(['jira', 'field', 'list', 'ENG-123'], '/tmp/workspace')
+    expect(console.log).toHaveBeenCalledWith(
+      'customfield_10050\tAcceptance criteria\tLogs in…\ncustomfield_10010\tSprint\tSprint 7\t(read-only)'
+    )
+  })
+
+  it('rejects hosts without edit-field reads before any Jira request', async () => {
+    await run(['field', 'list', 'ENG-123'])
+    expect(output()).toMatchObject({ error: { code: 'incompatible_runtime' } })
+    expect(mocks.callMock.mock.calls).toEqual([['status.get']])
   })
 
   it('reads built-in filters and custom JQL on one site', async () => {

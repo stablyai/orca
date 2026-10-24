@@ -17,6 +17,7 @@ import {
 import { addIssueComment, createIssue, updateIssue } from '../../jira/jira-issue-mutations'
 import { getIssue, getIssueSummary } from '../../jira/jira-issue-read'
 import { getIssueComments } from '../../jira/jira-issue-comments'
+import { getIssueEditFields } from '../../jira/jira-issue-edit-fields'
 import { getProjectStatusOrder, listTransitions } from '../../jira/jira-transition-queries'
 import { listIssues, searchIssues } from '../../jira/jira-issue-search'
 import type {
@@ -239,6 +240,20 @@ export function registerJiraHandlers(): void {
         return []
       }
       return listTransitions(
+        args.key.trim(),
+        normalizeJiraSiteId(args.siteId),
+        args.strict === true
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'jira:getIssueEditFields',
+    async (_event, args: { key: string; siteId?: string; strict?: boolean }) => {
+      if (typeof args?.key !== 'string' || !args.key.trim()) {
+        return []
+      }
+      return getIssueEditFields(
         args.key.trim(),
         normalizeJiraSiteId(args.siteId),
         args.strict === true

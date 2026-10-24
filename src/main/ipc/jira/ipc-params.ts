@@ -74,5 +74,19 @@ export function normalizeJiraIssueUpdate(value: unknown): JiraIssueUpdate | null
   if (input.transitionComment !== undefined && typeof input.transitionComment !== 'string') {
     return null
   }
+  if (
+    input.fields !== undefined &&
+    (input.fields === null || typeof input.fields !== 'object' || Array.isArray(input.fields))
+  ) {
+    return null
+  }
+  if (
+    (input.userFieldKeys !== undefined &&
+      normalizeStringArray(input.userFieldKeys) === undefined) ||
+    (input.richTextFieldKeys !== undefined &&
+      normalizeStringArray(input.richTextFieldKeys) === undefined)
+  ) {
+    return null
+  }
   return input
 }
