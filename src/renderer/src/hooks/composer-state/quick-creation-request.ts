@@ -111,6 +111,14 @@ export function buildQuickCreationRequest(
       ? { linkedGitLabIssue: input.linkedGitLabIssue }
       : {}),
     ...(input.startup ? { startup: input.startup } : {}),
+    ...(input.agent &&
+    input.startup &&
+    input.agentLaunchRoute === 'terminal-tui' &&
+    !input.quickPrompt.trim() &&
+    !input.launchDraftPrompt?.trim() &&
+    !input.ephemeralVmRecipe
+      ? { startupAgent: input.agent }
+      : {}),
     ...(input.hookPreparation ? { hookPreparation: input.hookPreparation } : {}),
     ...(input.issueCommand ? { issueCommand: input.issueCommand } : {}),
     pendingFirstAgentMessageRename: input.pendingFirstAgentMessageRename,

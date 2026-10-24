@@ -100,6 +100,8 @@ export async function executeWorktreeCreation(
         preparedRequest.compareBaseRef,
         {
           setupOnly: preparedRequest.setupOnly,
+          startupAgent:
+            structuredLaunch || provisionedRoot ? undefined : preparedRequest.startupAgent,
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind

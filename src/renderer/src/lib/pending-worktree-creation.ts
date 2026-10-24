@@ -106,6 +106,8 @@ export type WorktreeCreationRequest = {
    *  agent launch is self-contained; otherwise the renderer drives startup via
    *  `startupPlan`. */
   startup?: WorktreeStartupLaunch
+  /** Empty composer launches may use host settings; startup remains the older-host fallback. */
+  startupAgent?: TuiAgent
   /** Repo Custom GitHub Issue Command to run in a side-pane split after the
    *  workspace's first terminal is created. Mirrors the composer's trust-gated issueCommand. */
   issueCommand?: { command: string; env?: Record<string, string> }

@@ -1,3 +1,5 @@
+import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch-runtime-capability'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -20,6 +22,7 @@ import {
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
 import {
   assertRuntimeEnvironmentCapability,
+  runtimeEnvironmentSupportsCapability,
   callRuntimeRpc
 } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -59,6 +62,24 @@ async function runCreateAttempt(
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
+  let hostStartupAgent: NonNullable<WorktreeCreateRequest['options']>['startupAgent']
+  if (!provisionedRoot && target.kind === 'environment' && request.options?.startupAgent) {
+    try {
+      if (
+        await runtimeEnvironmentSupportsCapability(
+          target.environmentId,
+          AGENT_LAUNCH_RUNTIME_CAPABILITY
+        )
+      ) {
+        hostStartupAgent = request.options.startupAgent
+      }
+    } catch (error) {
+      if (isRuntimeCompatBlockError(error)) {
+        throw error
+      }
+      // A failed read-only probe keeps the prebuilt older-host startup.
+    }
+  }
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
   ): Promise<CreateWorktreeResult> =>
@@ -83,7 +104,11 @@ async function runCreateAttempt(
             target,
             'worktree.create',
             {
-              ...buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
+              ...buildRuntimeWorktreeCreateParams(
+                request,
+                { ...attempt, parentWorkspace },
+                hostStartupAgent
+              ),
               // Why: the host's own store defaults would otherwise override the user's choices.
               ...clientCreateSettings
             },

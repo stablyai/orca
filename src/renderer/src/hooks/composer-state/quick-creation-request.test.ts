@@ -50,6 +50,22 @@ function createInput(
 }
 
 describe('quick composer creation request', () => {
+  it('lets an empty terminal launch use the owning host settings without replacing its fallback', () => {
+    const startup = { command: '/client/claude --client-only', launchAgent: 'claude' as const }
+    const input = createInput({ agent: 'claude', startup, agentLaunchRoute: 'terminal-tui' })
+    const request = buildQuickCreationRequest(input)
+
+    expect(request).toMatchObject({ startupAgent: 'claude', startup })
+    for (const changes of [
+      { quickPrompt: 'review this' },
+      { launchDraftPrompt: 'unsent context' },
+      { agentLaunchRoute: 'structured-native-chat' as const },
+      { ephemeralVmRecipe: { sourceRepoId: 'repo-1', recipeId: 'recipe', projectId: 'project' } }
+    ]) {
+      expect(buildQuickCreationRequest({ ...input, ...changes })).not.toHaveProperty('startupAgent')
+    }
+  })
+
   it('preserves omission semantics for unset optional creation fields', () => {
     const request = buildQuickCreationRequest(createInput())
 
