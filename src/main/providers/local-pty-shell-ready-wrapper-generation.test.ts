@@ -397,6 +397,29 @@ describePosix('local PTY shell-ready launch config', () => {
     expectBashOsc133Lifecycle(output)
   })
 
+  itWithBash('starts each command after its prompt under functrace', () => {
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      ['set -T', "PS0='$(:)'", "PS1='ORCA_PS1> '"].join('\n')
+    )
+    const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
+    const startBeforePrompt = new RegExp(
+      `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+    )
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(startBeforePrompt)
+    expectBashOsc133Lifecycle(output)
+  })
+
+  itWithBash('starts each command once after a DEBUG trap change with a PS0 substitution', () => {
+    writeFileSync(join(userDataPath, '.bash_profile'), ['set -T', "PS0='$(:)'"].join('\n'))
+    const input = "trap ':' DEBUG\nfalse\nexit 0\n"
+    const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath, input)
+
+    expectBashOsc133Lifecycle(output)
+  })
+
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
     writeFileSync(
       join(userDataPath, '.bash_profile'),
