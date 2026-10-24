@@ -53,7 +53,8 @@ export function orchestrationSenderName(
         terminal.agent,
         sources.generatedTitlesEnabled,
         terminal.paneTitle,
-        terminal.providerSessionId
+        terminal.providerSessionId,
+        terminal.paneKey ?? undefined
       )
     : null
   return (

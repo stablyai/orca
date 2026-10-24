@@ -41,6 +41,7 @@ function layoutTab(tab: PublishedTab): LayoutTab {
   return {
     ...fields,
     kind: 'terminal',
+    ...pickStoredFields(terminal, ['generatedTitlePaneKey']),
     terminal: pickStoredFields(terminal, [
       'defaultTitle',
       'shellOverride',

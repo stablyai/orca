@@ -56,4 +56,21 @@ describe('rowConversationName', () => {
       'Redis cache strategy'
     )
   })
+
+  it('publishes a generated title only for the split pane that produced it', () => {
+    const paneTitles = { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
+    const tab = {
+      ...TAB,
+      aiVaultTitle: null,
+      generatedTitle: 'Fix intake flow',
+      generatedTitlePaneKey: makePaneKey(TAB_ID, LEAF_A)
+    }
+
+    expect(
+      rowConversationName({ ...row(LEAF_A, 'session-a'), tab }, true, LAYOUT, paneTitles)
+    ).toBe('Fix intake flow')
+    expect(
+      rowConversationName({ ...row(LEAF_B, 'session-b'), tab }, true, LAYOUT, paneTitles)
+    ).toBe('Redis cache strategy')
+  })
 })

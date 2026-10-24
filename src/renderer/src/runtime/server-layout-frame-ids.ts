@@ -9,6 +9,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TabContentType } from '../../../shared/tab-types'
 import {
   isWebTerminalSurfaceTabId,
@@ -20,6 +21,7 @@ import type {
   PublishedEditorFile,
   PublishedPane,
   PublishedTab,
+  PublishedTerminal,
   PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import {
@@ -99,6 +101,17 @@ function desktopPane(
     : rest
 }
 
+/** A generated title's source pane under its tab's id on the other side; both share the leaf. An
+ *  unreadable source is dropped, which shows the title tab-wide as before it was recorded. */
+function titleSourceUnder(terminal: PublishedTerminal, tabId: string): PublishedTerminal {
+  if (!terminal.generatedTitlePaneKey) {
+    return terminal
+  }
+  const { generatedTitlePaneKey, ...rest } = terminal
+  const leafId = parsePaneKey(generatedTitlePaneKey)?.leafId
+  return leafId ? { ...rest, generatedTitlePaneKey: `${tabId}:${leafId}` } : rest
+}
+
 function desktopTab(
   tab: PublishedTab,
   layout: PublishedWorkspaceLayout,
@@ -120,7 +133,7 @@ function desktopTab(
     ...(tab.terminal
       ? {
           terminal: {
-            ...tab.terminal,
+            ...titleSourceUnder(tab.terminal, toWebTerminalSurfaceTabId(tab.entityId)),
             panes: tab.terminal.panes.map((pane) =>
               desktopPane(pane, tab.entityId, environmentId, handleOf)
             )
@@ -206,7 +219,7 @@ export function desktopLayoutForServer(layout: PublishedWorkspaceLayout): Publis
         ...(tab.terminal
           ? {
               terminal: {
-                ...tab.terminal,
+                ...titleSourceUnder(tab.terminal, serverTabIdOf(tab.entityId)),
                 panes: tab.terminal.panes.map(
                   ({ ptyId: _handle, ptyGeneration: _g, ...pane }) => pane
                 )

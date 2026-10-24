@@ -10,7 +10,7 @@ import {
   testContext,
   WS
 } from './workspace-layout-command.test-fixture'
-import type { WorkspaceLayoutModel } from './workspace-layout-model'
+import { paneKeyOf, type WorkspaceLayoutModel } from './workspace-layout-model'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 
 const context = testContext()
@@ -631,6 +631,18 @@ describe('layout command effects', () => {
     ).model
     const root = terminalTab(three, tabA).panes!.root!
     expect(root.type === 'split' && root.ratio).toBeCloseTo(1 / 3)
+  })
+
+  it('a generated title set by command no longer names the pane the previous one came from', () => {
+    const { model, tabA, leafA, ctx } = setup()
+    const tagged = structuredClone(model)
+    const tab = terminalTab(tagged, tabA)
+    tab.generatedTitle = 'Fix login'
+    tab.generatedTitlePaneKey = paneKeyOf(tab.entityId, leafA)
+    const rename = { type: 'renameTab', workspace: WS, tabId: tabA, kind: 'generated' } as const
+    const renamed = build(ctx, [{ ...rename, title: 'Ship docs', replaceExisting: true }], tagged)
+    expect(terminalTab(renamed.model, tabA).generatedTitle).toBe('Ship docs')
+    expect(terminalTab(renamed.model, tabA)).not.toHaveProperty('generatedTitlePaneKey')
   })
 
   it('reuses the open tab for a file and replaces a preview tab of the same kind', () => {

@@ -277,6 +277,17 @@ describe("a sender's name, from what Orca shows for it", () => {
     expect(names().nameOf(terminalParty('term_plain'))).toBe('Lint fixes')
   })
 
+  it('uses a generated tab title only for the pane whose prompt produced it', () => {
+    generatedTitles = true
+    const tab = { id: 'tab_term_plain', title: 'Codex ready', generatedTitle: 'Lint fixes' }
+    const sourcedAt = (generatedTitlePaneKey: string) => {
+      session.tabsByWorktree = { [WORKTREE]: [{ ...tab, generatedTitlePaneKey }] }
+      return names().nameOf(terminalParty('term_plain'))
+    }
+    expect(sourcedAt('tab_term_plain:sibling')).toBe('Codex')
+    expect(sourcedAt('tab_term_plain:leaf')).toBe('Lint fixes')
+  })
+
   it.each([
     { id: 'current-session', expected: 'Parser work' },
     { id: 'another-session', expected: 'Claude' },
