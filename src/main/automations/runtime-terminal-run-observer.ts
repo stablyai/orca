@@ -193,7 +193,9 @@ function resolveRunObserverHandle(
 ): string | null {
   if (run.sessionKind === 'structured' && run.chatSessionId) {
     const host = getStructuredAgentSessionHost()
-    return host?.deps.store.getRecord(run.chatSessionId)
+    // Why: a host nobody installed yet has no record to read, and that is not proof the chat is
+    // gone — the structured observer waits for the host. Only a mounted host can say "no such chat".
+    return !host || host.deps.store.getRecord(run.chatSessionId)
       ? structuredAutomationRunHandle(run.chatSessionId)
       : null
   }

@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredAutomationRunHandle } from './runtime-structured-run-observer'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -39,12 +41,46 @@ function makeStore() {
   }
 }
 
-const retainedRun = {
+/** Only the fields `resolveRunTerminal` reads matter; the rest of a stored run is not built here. */
+function runStub(fields: Partial<AutomationRun>): AutomationRun {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these fields of a run.
+  return fields as AutomationRun
+}
+
+/** A runtime whose store answers only what the observer reads. */
+function makeRuntime(): OrcaRuntimeService {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only the runtime members this store stub provides.
+  return new OrcaRuntimeService(makeStore() as never)
+}
+
+const retainedRun = runStub({
   id: 'run-1',
   automationId: 'auto-1',
   terminalPaneKey: PANE_KEY,
   status: 'dispatched'
-} as unknown as AutomationRun
+})
+
+const structuredRun = runStub({
+  id: 'run-2',
+  automationId: 'auto-1',
+  sessionKind: 'structured',
+  chatSessionId: 'sess-1',
+  terminalPaneKey: null,
+  status: 'dispatched'
+})
+
+/** A mounted host whose record index answers `getRecord` for `knownSessionId` only. */
+function installHost(knownSessionId: string | null): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only `deps.store.getRecord` off the host.
+  const host = {
+    deps: { store: { getRecord: (id: string) => (id === knownSessionId ? {} : undefined) } }
+  } as never
+  setStructuredAgentSessionHost(host)
+}
+
+afterEach(() => {
+  setStructuredAgentSessionHost(null)
+})
 
 describe('resolving an automation run terminal across startup states', () => {
   it('cannot answer for any pane while no graph has published', () => {
@@ -78,5 +114,28 @@ describe('resolving an automation run terminal across startup states', () => {
     expect(observer.resolveRunTerminal(retainedRun)).toBeNull()
     runtime.registerPty('pty-1', WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_ID })
     expect(observer.resolveRunTerminal(retainedRun)).toBeTruthy()
+  })
+})
+
+describe('resolving a structured run terminal while the chat host is absent', () => {
+  it('keeps watching a structured run whose host nobody has installed yet', () => {
+    const observer = createRuntimeAutomationRunTerminalObserver(makeRuntime())
+
+    // Why: a host installed lazily later still owns this chat; stranding here would fail a live run.
+    expect(observer.resolveRunTerminal(structuredRun)).toBe(structuredAutomationRunHandle('sess-1'))
+  })
+
+  it('answers once the host mounts and holds the chat', () => {
+    installHost('sess-1')
+    const observer = createRuntimeAutomationRunTerminalObserver(makeRuntime())
+
+    expect(observer.resolveRunTerminal(structuredRun)).toBe(structuredAutomationRunHandle('sess-1'))
+  })
+
+  it('says no such chat once a mounted host has no record for it', () => {
+    installHost('another-session')
+    const observer = createRuntimeAutomationRunTerminalObserver(makeRuntime())
+
+    expect(observer.resolveRunTerminal(structuredRun)).toBeNull()
   })
 })
