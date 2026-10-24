@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   assertPackagedDaemonEntryExists,
+  assertPackagedOrcadServeSelectionEntryExists,
   runTerminalHostRoundTrip,
   verifyPackagedDaemonEntryBoots,
   verifyPackagedMacTerminalHostBoots
@@ -38,6 +39,31 @@ describe('verify-packaged-daemon-entry', () => {
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
       /missing unpacked daemon entry/
     )
+  })
+
+  /**
+   * Writes a stub orcad serve-selection entry into the fake packaged layout, so
+   * the present-entry path of `assertPackagedOrcadServeSelectionEntryExists`
+   * can be exercised without a real build.
+   */
+  function writePackagedOrcadEntry() {
+    const entryDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'orcad')
+    mkdirSync(entryDir, { recursive: true })
+    writeFileSync(join(entryDir, 'orcad-local-serve-selection-entry.js'), 'module.exports = {}\n')
+  }
+
+  // Why: the entry was missing from app.asar.unpacked in two releases (#27307,
+  // then a regression after the fix lived only on main). `orca serve` fell back
+  // to Electron with a one-line notice instead of failing, so nothing caught it.
+  it('throws when the unpacked orcad serve-selection entry is missing', () => {
+    expect(() => assertPackagedOrcadServeSelectionEntryExists(resourcesDir)).toThrow(
+      /missing unpacked orcad serve-selection entry/
+    )
+  })
+
+  it('passes when the packaged orcad serve-selection entry is present', () => {
+    writePackagedOrcadEntry()
+    expect(() => assertPackagedOrcadServeSelectionEntryExists(resourcesDir)).not.toThrow()
   })
 
   it('passes when the packaged entry loads and reaches argv parsing', () => {

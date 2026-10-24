@@ -28,6 +28,41 @@ function assertPackagedDaemonEntryExists(resourcesDir) {
   return entryPath
 }
 
+/**
+ * Asserts the unpacked orcad serve-selection entry exists and returns its path.
+ *
+ * `orca serve` runs this entry under `ELECTRON_RUN_AS_NODE`
+ * (src/shared/orcad-local-serve-selection.ts), which bypasses Electron's asar
+ * integration exactly like the CLI and daemon do. `asarUnpack` lists the path on
+ * every platform, but the entry silently went missing from `app.asar.unpacked`
+ * in two separate releases (#27307, then again after the fix landed on `main`
+ * only and not in the release branch). Both times serve fell back to Electron
+ * with a one-line notice instead of failing, so the regression shipped twice.
+ *
+ * @param {string} resourcesDir Packaged Resources dir (Contents/Resources on
+ *   macOS, <appOutDir>/resources elsewhere).
+ * @returns {string} Absolute path to the unpacked serve-selection entry.
+ * @throws {Error} When the entry is missing from the packaged layout.
+ */
+function assertPackagedOrcadServeSelectionEntryExists(resourcesDir) {
+  const entryPath = join(
+    resourcesDir,
+    'app.asar.unpacked',
+    'out',
+    'main',
+    'orcad',
+    'orcad-local-serve-selection-entry.js'
+  )
+  if (!existsSync(entryPath)) {
+    throw new Error(
+      `[verify-packaged-daemon-entry] missing unpacked orcad serve-selection entry at ${entryPath} — ` +
+        `asarUnpack expects out/main/orcad/orcad-local-serve-selection-entry.js on every platform, ` +
+        `so packaged \`orca serve\` cannot select the orcad runtime and silently falls back to Electron`
+    )
+  }
+  return entryPath
+}
+
 // Why: v1.4.129-rc.1 shipped a terminal daemon that could not load (an electron
 // `require` leaked into its bundle) while every build check passed. This boots
 // the PACKAGED daemon-entry under plain Node against the asar-unpacked layout,
@@ -307,6 +342,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
 
 module.exports = {
   assertPackagedDaemonEntryExists,
+  assertPackagedOrcadServeSelectionEntryExists,
   macCommandPrefixForArch,
   runTerminalHostRoundTrip,
   verifyPackagedDaemonEntryBoots,
