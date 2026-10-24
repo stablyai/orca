@@ -13,8 +13,8 @@ type WorktreesByRepo = Record<string, Worktree[]>
  * and re-runs cycle detection on each PTY, tab and agent-status write.
  *
  * Why not the store's `getIndexedWorktreeMap`: this index excludes archived rows
- * (an archived parent resolving as a valid ancestor would inject a phantom row),
- * and keeps both rows of a two-host id collision.
+ * and bare GIT_COMMON_DIR stores (either resolving as a valid ancestor would inject
+ * a phantom row), and keeps both rows of a two-host id collision.
  */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
 
@@ -25,7 +25,7 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   }
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
-    if (!worktree.isArchived) {
+    if (!worktree.isArchived && !worktree.isBare) {
       index.set(getWorktreeHostIdentity(worktree), worktree)
     }
   }

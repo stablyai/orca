@@ -51,8 +51,10 @@ export function computeVisibleWorktrees(
   const keyOf = opts.sortedByHostIdentity
     ? getWorktreeHostIdentity
     : (worktree: Worktree) => worktree.id
+  // Bare GIT_COMMON_DIR is storage, not a checkout (#16553). Drop it before lineage
+  // so a bare parent cannot come back as a sidebar card.
   return selectVisibleSidebarWorktrees({
-    rows: getIndexedAllWorktrees(worktreesByRepo),
+    rows: getIndexedAllWorktrees(worktreesByRepo).filter((worktree) => !worktree.isBare),
     ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),
