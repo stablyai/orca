@@ -15,6 +15,7 @@ import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
+import { MobileTerminalCommandRecovery } from './MobileTerminalCommandRecovery'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
@@ -257,6 +258,15 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           </ScrollView>
         </View>
 
+        {bufferedTerminalDraftState.unconfirmedCommand !== null && (
+          <MobileTerminalCommandRecovery
+            command={bufferedTerminalDraftState.unconfirmedCommand}
+            pending={bufferedTerminalDraftState.awaitingCommandConfirmation}
+            canEdit={bufferedTerminalDraftState.input.length === 0}
+            onEdit={bufferedTerminalDraftState.editUnconfirmedSend}
+            onDismiss={bufferedTerminalDraftState.dismissUnconfirmedSend}
+          />
+        )}
         {/* Input bar */}
         {liveInputEnabled ? (
           <View style={[styles.inputBar, styles.liveInputBar]}>
@@ -365,8 +375,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onDictationCancel={cancelDictation}
             />
             <Pressable
-              style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
-              disabled={!canSend}
+              style={[
+                styles.sendButton,
+                (!canSend || bufferedTerminalDraftState.unconfirmedCommand !== null) &&
+                  styles.sendButtonDisabled
+              ]}
+              disabled={!canSend || bufferedTerminalDraftState.unconfirmedCommand !== null}
               onPress={() => void handleSend()}
               accessibilityLabel="Send command"
             >

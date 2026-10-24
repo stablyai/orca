@@ -12,7 +12,25 @@
       "liveAccepted": "unsent",
       "sending": false
     },
-    "3c80a8ff0cc7": {
+    "350d308a50ee": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls -la\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"},\"requireWriteSettlement\":true}}"
+    },
+    "5e9826c92f7b": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "input": "ls -la",
+      "liveAccepted": "unsent",
+      "sending": false
+    },
+    "85a38010bc83": {
+      "name": "orchestration.workerTerminalUserInput#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
+    },
+    "a5a1cd8487a7": {
       "name": "terminal.send#1",
       "ordinal": 1,
       "args": [
@@ -28,6 +46,7 @@
               "type": "mobile"
             },
             "enter": true,
+            "requireWriteSettlement": true,
             "terminal": "terminal-1",
             "text": "ls -la"
           }
@@ -53,19 +72,6 @@
           }
         }
       }
-    },
-    "5e9826c92f7b": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "input": "ls -la",
-      "liveAccepted": "unsent",
-      "sending": false
-    },
-    "85a38010bc83": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "b4bb58c36536": {
       "name": "orchestration.workerTerminalUserInput#1",
@@ -110,11 +116,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f63b98989963": {
-      "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls -la\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -136,8 +137,8 @@
       {
         "id": "sent",
         "observation": {
-          "sender": ["3c80a8ff0cc7", "b4bb58c36536"],
-          "payloads": ["f63b98989963", "85a38010bc83"],
+          "sender": ["a5a1cd8487a7", "b4bb58c36536"],
+          "payloads": ["350d308a50ee", "85a38010bc83"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "type": "eb79a9b3682a",

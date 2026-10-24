@@ -72,6 +72,10 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
     terminalGestureInputInFlightRef: ref(new Set()),
     bufferedTerminalDraftState: {
       input: 'command',
+      recoveryReady: () => true,
+      prepareSend: async () => true,
+      hasUnconfirmedSend: () => false,
+      retainUnconfirmedSend: vi.fn(),
       beginBufferedTerminalDraftSend: vi.fn(),
       restoreRejectedDraft: vi.fn(),
       settleBufferedTerminalDraftSend: () => true
