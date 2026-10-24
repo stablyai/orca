@@ -29,13 +29,15 @@ import {
   AgentModelCatalogListingWaiters
 } from './agent-model-catalog-listing-waiters'
 
+import { AGENT_MODEL_CATALOG_FRESH_MS } from '../../../shared/agent-model-catalog-refresh-policy'
+
 export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export { AGENT_MODEL_CATALOG_FRESH_MS }
 export type { AgentModelCatalogFailure }
 
 // Persist successful catalogs only; failures/unavailability are held separately.
 // Saved display data may be stale, while launch proof requires fresh discovery in this process.
 
-export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
 import {

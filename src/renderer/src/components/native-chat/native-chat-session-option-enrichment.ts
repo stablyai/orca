@@ -1,5 +1,9 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
+  AGENT_MODEL_CATALOG_FRESH_MS,
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS
+} from '../../../../shared/agent-model-catalog-refresh-policy'
+import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
   mergeDiscoveredAuthoritativeModels,
@@ -14,6 +18,7 @@ import type {
 type CatalogEnrichmentEntry = {
   agent: AgentType
   state: 'idle' | 'pending' | 'settled'
+  refreshAfter: number
   models: CatalogModel[] | null
   listeners: Set<(models: CatalogModel[]) => void>
 }
@@ -56,6 +61,7 @@ export function subscribeNativeChatEnrichedModels(
   const entry = enrichmentByAgentHost.get(key) ?? {
     agent,
     state: 'idle' as const,
+    refreshAfter: 0,
     models: null,
     listeners: new Set<(models: CatalogModel[]) => void>()
   }
@@ -95,24 +101,25 @@ export function ensureNativeChatModelEnrichment(args: {
   }
   const key = enrichmentKey(args.agent, args.hostKey)
   const existing = enrichmentByAgentHost.get(key)
-  if (existing?.state === 'pending' || existing?.state === 'settled') {
+  if (existing?.state === 'pending' || (existing && Date.now() < existing.refreshAfter)) {
     return
   }
   const entry: CatalogEnrichmentEntry = existing ?? {
     agent: args.agent,
     state: 'idle',
+    refreshAfter: 0,
     models: null,
     listeners: new Set()
   }
   entry.state = 'pending'
   retainEnrichmentEntry(key, entry)
 
-  // Why: model discovery must never delay rendering or launching; the seed is
-  // immediately usable while this once-per-host probe runs in the background.
+  // Keep the last successful list usable while its execution host refreshes it.
   void args
     .discover()
     .then((discovered) => {
       entry.state = 'settled'
+      entry.refreshAfter = Date.now() + AGENT_MODEL_CATALOG_FAILURE_TTL_MS
       retainEnrichmentEntry(key, entry)
       if (!discovered || discovered.length === 0) {
         return
@@ -123,12 +130,14 @@ export function ensureNativeChatModelEnrichment(args: {
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
             : mergeCatalogModels(catalog.models, discovered)
+      entry.refreshAfter = Date.now() + AGENT_MODEL_CATALOG_FRESH_MS
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }
     })
     .catch(() => {
       entry.state = 'settled'
+      entry.refreshAfter = Date.now() + AGENT_MODEL_CATALOG_FAILURE_TTL_MS
       retainEnrichmentEntry(key, entry)
     })
 }

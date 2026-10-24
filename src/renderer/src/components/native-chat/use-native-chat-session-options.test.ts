@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import { AGENT_MODEL_CATALOG_FRESH_MS } from '../../../../shared/agent-model-catalog-refresh-policy'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
 
@@ -386,4 +387,47 @@ describe('useNativeChatSessionOptions model reporting', () => {
     )
     expect(modelDescriptor(result.current.snapshot).currentValue).toBeUndefined()
   })
+})
+
+it('updates an open surface with new models without dispatching or changing its selection', async () => {
+  clearNativeChatModelEnrichmentForTests()
+  Object.defineProperty(window, 'api', { configurable: true, value: undefined })
+  const initial = [{ id: 'opus', label: 'Opus', options: [] }]
+  discoverModels.mockReset().mockResolvedValue(initial)
+  const dispatchCommand = vi.fn<NativeChatSessionOptionDispatchCommand>(async () => undefined)
+  const { result, unmount } = renderHook(() =>
+    useNativeChatSessionOptions({
+      agent: 'claude',
+      terminalTabId: 'tab-refresh',
+      targetPtyId: 'pty-refresh',
+      dispatchCommand,
+      readTerminalScreen: () => null
+    })
+  )
+  await waitFor(() =>
+    expect(
+      modelDescriptor(result.current.snapshot).choices.map((c) => c.value)
+    ).toContain('opus')
+  )
+  await act(async () => result.current.surface?.refresh?.())
+  expect(discoverModels).toHaveBeenCalledOnce()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + AGENT_MODEL_CATALOG_FRESH_MS)
+  try {
+    discoverModels.mockResolvedValue([
+      ...initial,
+      { id: 'haiku', label: 'Haiku', options: [] }
+    ])
+    await act(async () => result.current.surface?.refresh?.())
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).choices.map(({ value }) => value)).toEqual([
+        'opus',
+        'haiku'
+      ])
+    )
+    expect(dispatchCommand).not.toHaveBeenCalled()
+    expect(discoverModels).toHaveBeenCalledTimes(2)
+  } finally {
+    clock.mockRestore()
+    unmount()
+  }
 })
