@@ -1,4 +1,5 @@
 import { RateLimitServiceFetchQueue } from './service-fetch-queue'
+import { hasCodexAuthChangedSinceLastProbe } from '../codex-auth-presence'
 import {
   ACTIVE_FAILURE_REFETCH_MS,
   DEFERRED_STARTUP_ACTIVE_REFRESH_MS,
@@ -183,7 +184,68 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (!this.shouldBackgroundPoll()) {
       return
     }
+    if (
+      this.state.codex &&
+      !(await this.refreshCodexAfterAuthChange(() => this.shouldBackgroundPoll()))
+    ) {
+      return
+    }
+    if (!this.shouldBackgroundPoll()) {
+      return
+    }
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
+  }
+
+  protected async refreshCodexAfterAuthChange(
+    shouldRefresh: () => boolean = () => true
+  ): Promise<boolean> {
+    const status = this.state.codex?.status
+    if (status !== 'error' && status !== 'unavailable' && status !== 'fetching') {
+      return true
+    }
+    if (this.isRetryAfterActive(this.state.codex)) {
+      return true
+    }
+    const generation = this.codexFetchGeneration
+    const target = this.codexFetchTarget
+    const controller = this.beginFetchCycle()
+    try {
+      const home = await this.resolveCodexHome(target).catch(() => null)
+      if (controller.signal.aborted) {
+        return false
+      }
+      if (!home || home.skip || (target.runtime === 'wsl' && !home.homePath)) {
+        return true
+      }
+      const changed = await hasCodexAuthChangedSinceLastProbe(
+        home.homePath,
+        controller.signal,
+        () =>
+          generation === this.codexFetchGeneration &&
+          this.isSameCodexTarget(target, this.codexFetchTarget) &&
+          shouldRefresh() &&
+          !this.isRetryAfterActive(this.state.codex)
+      )
+      if (
+        controller.signal.aborted ||
+        generation !== this.codexFetchGeneration ||
+        !this.isSameCodexTarget(target, this.codexFetchTarget)
+      ) {
+        return false
+      }
+      if (!changed || this.isRetryAfterActive(this.state.codex) || !shouldRefresh()) {
+        return true
+      }
+      this.codexFetchGeneration += 1
+      this.activeFailureStreakByProvider.codex = 0
+      this.lastActiveFailureRetryAtByProvider.codex = Date.now()
+      // Why: an old-token result still in flight must not overwrite the post-login refresh.
+      this.updateState({ ...this.state, codex: this.withFetchingStatus(null, 'codex') })
+      await this.fetchCodexOnly({ force: true })
+      return !controller.signal.aborted
+    } finally {
+      this.finishFetchCycle(controller)
+    }
   }
 }
