@@ -1,5 +1,6 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
+import { PANE_DIVIDER_EQUALIZE_HINT } from './pane-divider-adjacent-equalize'
 export { createDividerFlexFrameScheduler } from './pane-divider-drag'
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,15 @@ export function createDivider(
   }
   divider.style.flex = 'none'
   divider.style.position = 'relative'
+  // Why: VS Code-style double-click equalize is easy to miss; native tooltip
+  // teaches the gesture without permanent chrome (#9644).
+  divider.title = PANE_DIVIDER_EQUALIZE_HINT
+  // Real DOM always has setAttribute; unit tests use partial doubles.
+  if (typeof divider.setAttribute === 'function') {
+    divider.setAttribute('role', 'separator')
+    divider.setAttribute('aria-orientation', isVertical ? 'vertical' : 'horizontal')
+    divider.setAttribute('aria-label', PANE_DIVIDER_EQUALIZE_HINT)
+  }
 
   attachDividerDrag(divider, isVertical, callbacks)
   return divider
