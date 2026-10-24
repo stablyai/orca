@@ -57,6 +57,20 @@ export class SttService {
     return stopSttDictation(this.state, owner, options)
   }
 
+  retireActiveLocal(owner: string, sink: SttEventSink): Promise<void> {
+    // Owner strings repeat after reload; the accepted sink identifies the old document.
+    if (
+      this.state.starting ||
+      !this.state.worker ||
+      this.state.cloudSession ||
+      this.state.activeOwner !== owner ||
+      this.state.eventSink !== sink
+    ) {
+      return Promise.resolve()
+    }
+    return stopSttDictation(this.state, owner, { cancelStarting: false })
+  }
+
   isActive(): boolean {
     return this.state.worker !== null || this.state.cloudSession !== null
   }
