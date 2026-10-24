@@ -101,7 +101,14 @@ export function useSourceControlFileListing({
     sourceControlViewMode,
     collapsedSections
   })
-  const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
+  const {
+    gitHistoryState,
+    refreshGitHistory,
+    refreshGitHistoryRef,
+    loadMoreGitHistory,
+    gitHistoryScope,
+    setGitHistoryScope
+  } = useSourceControlGitHistory({
     activeRepoTarget,
     activeWorktreeId,
     worktreePath,
@@ -206,6 +213,8 @@ export function useSourceControlFileListing({
     filteredBranchEntries,
     flatEntriesByKey,
     gitHistoryState,
+    gitHistoryScope,
+    setGitHistoryScope,
     grouped,
     handleBulkStage,
     handleBulkUnstage,
@@ -223,6 +232,7 @@ export function useSourceControlFileListing({
     openCommittedDiff,
     pushRecovery,
     refreshGitHistory,
+    loadMoreGitHistory,
     refreshGitHistoryRef,
     resolveSplitTargetGroupId,
     selectedKeySet,

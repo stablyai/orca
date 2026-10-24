@@ -29,11 +29,12 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
   const fixtureEnv = Object.fromEntries(
     Object.entries(inheritedEnv).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
   )
-  const git = async (args: string[], cwd = repo, date = '2000-01-04T00:00:00Z') => {
+  const git = async (args: string[], cwd = repo, date = '2000-01-04T00:00:00Z', input?: string) => {
     const result = await runProcess({
       program: gitBinary,
       args,
       cwd,
+      input,
       env: {
         ...fixtureEnv,
         GIT_CONFIG_NOSYSTEM: '1',
@@ -63,6 +64,93 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
 }
 
 describe('real unrelated Git histories', () => {
+  it('shows unmerged local and remote branches in date order, rather than hiding them behind one ancestry', async () => {
+    const { repo, git } = await createRepository()
+    const executor = (args: string[], cwd: string, stdin?: string) =>
+      git(args, cwd, undefined, stdin)
+    await git(['checkout', '-b', 'feature', 'first~1'])
+    await git(
+      ['commit', '--quiet', '--allow-empty', '-m', 'Unmerged feature'],
+      repo,
+      '2000-01-05T00:00:00Z'
+    )
+    await git(['update-ref', 'refs/remotes/origin/feature', 'HEAD'])
+    await git(['checkout', 'first'])
+    await git(
+      ['commit', '--quiet', '--allow-empty', '-m', 'Latest main'],
+      repo,
+      '2000-01-06T00:00:00Z'
+    )
+    await git(['update-ref', 'refs/remotes/origin/old', 'first~1'])
+    await git(['update-ref', 'refs/remotes/origin/base', 'first~2'])
+    const current = await loadGitHistoryFromExecutor(executor, repo, { scope: 'current' })
+    expect(current.items.map((item) => item.subject)).toEqual(['Latest main', 'A', 'B'])
+    const all = await loadGitHistoryFromExecutor(executor, repo, { scope: 'all' })
+    expect(all.items.slice(0, 3).map((item) => item.subject)).toEqual([
+      'Latest main',
+      'Unmerged feature',
+      'V'
+    ])
+    expect(all.items).toHaveLength(5)
+    const rows = buildGitHistoryViewModels(
+      all.items,
+      buildDefaultGitHistoryColorMap(all),
+      all.currentRef
+    )
+    expect(
+      rows.find((row) => row.historyItem.subject === 'Unmerged feature')?.outputSwimlanes
+    ).toHaveLength(2)
+    expect(
+      rows
+        .find((row) => row.historyItem.subject === 'Unmerged feature')
+        ?.historyItem.references?.every((ref) => Boolean(ref.color))
+    ).toBe(true)
+    const first = await loadGitHistoryFromExecutor(executor, repo, { scope: 'all', limit: 2 })
+    expect(first.nextCursor?.revisions.length).toBeGreaterThan(3)
+    await git(['branch', '-D', 'feature'])
+    await git(['update-ref', '-d', 'refs/remotes/origin/feature'])
+    const second = await loadGitHistoryFromExecutor(executor, repo, {
+      cursor: first.nextCursor,
+      limit: 20
+    })
+    expect([...first.items, ...second.items].map((item) => item.id)).toEqual(
+      all.items.map((item) => item.id)
+    )
+  }, 30000)
+
+  it('pages past 50 commits with a stable graph while branch tips move', async () => {
+    const { repo, git } = await createRepository()
+    await git(['checkout', '-b', 'comparison', 'first~1'])
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'Comparison branch'])
+    await git(['checkout', 'first'])
+    const start = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+    const commits = Array.from({ length: 55 }, (_, index) => {
+      const message = `Commit ${index}`
+      return `commit refs/heads/first\ncommitter Graph Fixture <graph-fixture@example.test> ${946944000 + index} +0000\ndata ${message.length}\n${message}\n${index === 0 ? `from ${start}\n` : ''}\n`
+    }).join('')
+    await git(['fast-import', '--quiet'], repo, undefined, `${commits}done\n`)
+    const options = { baseRef: 'comparison', includeRelatedRefs: true }
+    const full = await loadGitHistoryFromExecutor(git, repo, { ...options, limit: 200 })
+    const first = await loadGitHistoryFromExecutor(git, repo, { ...options, limit: 11 })
+    const items = [...first.items]
+    let cursor = first.nextCursor
+    await git(['commit', '--quiet', '--allow-empty', '-m', 'Created after snapshot'])
+    await git(['update-ref', 'refs/heads/comparison', 'HEAD'])
+    while (cursor) {
+      const page = await loadGitHistoryFromExecutor(git, repo, { limit: 11, cursor })
+      expect(page.items.length).toBeLessThanOrEqual(11)
+      items.push(...page.items)
+      cursor = page.nextCursor
+    }
+    expect(items.map((item) => item.id)).toEqual(full.items.map((item) => item.id))
+    expect(items).toHaveLength(58)
+    expect(new Set(items.map((item) => item.id)).size).toBe(items.length)
+    const rows = buildGitHistoryViewModels(items)
+    expect(rows.some((row) => row.inputSwimlanes.length > 1)).toBe(true)
+    expect(rows.at(-1)?.outputSwimlanes).toEqual([])
+    expect(buildGitHistoryViewModels(first.items)).toEqual(rows.slice(0, first.items.length))
+  }, 30000)
+
   it.each(['repository pointers', 'config overrides'] as const)(
     'ignores inherited Git %s when creating a fixture',
     async (contamination) => {

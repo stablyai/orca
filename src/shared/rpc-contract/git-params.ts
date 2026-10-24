@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GIT_HISTORY_MAX_REVISIONS } from '../git-history-types'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
 
@@ -77,7 +78,16 @@ export const GitCommitCompare = WorktreeSelector.extend({
 
 export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
+  baseRef: z.string().nullable().optional(),
+  includeRelatedRefs: z.boolean().optional(),
+  scope: z.enum(['all', 'current']).optional(),
+  cursor: z
+    .object({
+      revisions: z.array(FullGitObjectId).min(1).max(GIT_HISTORY_MAX_REVISIONS),
+      offset: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+      order: z.literal('date').optional()
+    })
+    .optional()
 })
 
 export const GitBranchDiff = GitFilePath.extend({

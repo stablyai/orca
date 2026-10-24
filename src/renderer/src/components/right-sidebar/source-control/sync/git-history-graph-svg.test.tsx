@@ -17,6 +17,20 @@ function renderGraph(viewModel: GitHistoryItemViewModel): string {
 }
 
 describe('Git history graph rendering', () => {
+  it('reserves the same gutter for rows with different numbers of active lanes', () => {
+    const rows = buildGitHistoryViewModels([
+      item('main', ['base']),
+      item('feature', ['base']),
+      item('base', [])
+    ])
+    for (const viewModel of rows) {
+      const markup = renderToStaticMarkup(
+        <GitHistoryGraphSvg viewModel={viewModel} laneCount={3} />
+      )
+      expect(markup).toContain('width="44"')
+    }
+  })
+
   it('shifts a surviving lane past a root to its left without changing the root color', () => {
     const markup = renderGraph({
       historyItem: item('root', []),

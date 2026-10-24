@@ -4,6 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
+import type { GitHistoryResult, GitHistoryScope } from '../../../../../../shared/git-history'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 
@@ -40,13 +41,19 @@ export function useSourceControlGitHistory({
 }): {
   gitHistoryState: GitHistoryPanelState
   refreshGitHistory: () => Promise<void>
+  loadMoreGitHistory: () => Promise<void>
   refreshGitHistoryRef: RefObject<() => Promise<void>>
+  gitHistoryScope: GitHistoryScope
+  setGitHistoryScope: (scope: GitHistoryScope) => void
 } {
+  const [gitHistoryScope, setGitHistoryScope] = useState<GitHistoryScope>('all')
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+  const pageRequestsRef = useRef<Record<string, number>>({})
+  const loadedResultsRef = useRef<Record<string, GitHistoryResult>>({})
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -70,6 +77,8 @@ export function useSourceControlGitHistory({
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
+        delete pageRequestsRef.current[key]
+        delete loadedResultsRef.current[key]
       }
     }
   }, [worktreeMap])
@@ -89,6 +98,8 @@ export function useSourceControlGitHistory({
     const requestId = gitHistoryRequestSeqRef.current + 1
     gitHistoryRequestSeqRef.current = requestId
     gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
+    delete loadedResultsRef.current[worktreeId]
+    delete pageRequestsRef.current[worktreeId]
     setGitHistoryByWorktree((prev) => {
       const previous = prev[worktreeId]
       return {
@@ -108,11 +119,17 @@ export function useSourceControlGitHistory({
           worktreePath,
           connectionId
         },
-        { limit: 50, baseRef: compareBaseRef }
+        {
+          limit: 50,
+          baseRef: compareBaseRef,
+          includeRelatedRefs: gitHistoryScope === 'all',
+          scope: gitHistoryScope
+        }
       )
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
       }
+      loadedResultsRef.current[worktreeId] = result
       setGitHistoryByWorktree((prev) => ({
         ...prev,
         [worktreeId]: { status: 'ready', result }
@@ -136,11 +153,99 @@ export function useSourceControlGitHistory({
     activeRepoTarget,
     activeWorktreeId,
     compareBaseRef,
+    gitHistoryScope,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
     isGitHistoryVisible,
     worktreePath
+  ])
+  const loadMoreGitHistory = useCallback(async (): Promise<void> => {
+    const result = gitHistoryState.result
+    if (
+      !activeWorktreeId ||
+      !worktreePath ||
+      isFolder ||
+      !isBranchVisible ||
+      !isGitHistoryExpanded ||
+      !isGitHistoryVisible ||
+      gitHistoryState.status !== 'ready' ||
+      !result?.hasMore ||
+      !result.nextCursor ||
+      loadedResultsRef.current[activeWorktreeId] !== result ||
+      pageRequestsRef.current[activeWorktreeId] !== undefined
+    ) {
+      return
+    }
+    const worktreeId = activeWorktreeId
+    const requestId = ++gitHistoryRequestSeqRef.current
+    gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
+    pageRequestsRef.current[worktreeId] = requestId
+    setGitHistoryByWorktree((prev) => ({
+      ...prev,
+      [worktreeId]: { status: 'ready', result, isLoadingMore: true }
+    }))
+    try {
+      const page = await getRuntimeGitHistory(
+        {
+          target: requireGitOwnerTarget(activeRepoTarget),
+          worktreeId,
+          worktreePath,
+          connectionId: getConnectionId(worktreeId) ?? undefined
+        },
+        { limit: 50, cursor: result.nextCursor }
+      )
+      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+        return
+      }
+      const ids = new Set(result.items.map((item) => item.id))
+      const additions = page.items.filter((item) => !ids.has(item.id))
+      if (
+        (!additions.length && page.hasMore) ||
+        (page.nextCursor && page.nextCursor.offset <= result.nextCursor.offset)
+      ) {
+        throw new Error('History did not advance. Refresh commits to try again.')
+      }
+      const mergedResult = {
+        ...result,
+        items: [...result.items, ...additions],
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor
+      }
+      loadedResultsRef.current[worktreeId] = mergedResult
+      setGitHistoryByWorktree((prev) => ({
+        ...prev,
+        [worktreeId]: {
+          status: 'ready',
+          result: mergedResult
+        }
+      }))
+    } catch (error) {
+      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+        return
+      }
+      setGitHistoryByWorktree((prev) => ({
+        ...prev,
+        [worktreeId]: {
+          status: 'ready',
+          result,
+          loadMoreError: error instanceof Error ? error.message : 'Failed to load more commits'
+        }
+      }))
+    } finally {
+      if (pageRequestsRef.current[worktreeId] === requestId) {
+        delete pageRequestsRef.current[worktreeId]
+      }
+    }
+  }, [
+    activeRepoTarget,
+    activeWorktreeId,
+    worktreePath,
+    isFolder,
+    isBranchVisible,
+    isGitHistoryExpanded,
+    isGitHistoryVisible,
+    gitHistoryState
   ])
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   // Why: publish in an effect, not the render body — a discarded render must not install its callback. Declared first so the effect below sees the fresh one.
@@ -158,6 +263,7 @@ export function useSourceControlGitHistory({
     // Why: history is fetched with compareBaseRef, so re-run when it changes (effectiveBaseRef can stay put while it moves).
     activeWorktreeId,
     compareBaseRef,
+    gitHistoryScope,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
@@ -167,5 +273,12 @@ export function useSourceControlGitHistory({
     worktreePath
   ])
 
-  return { gitHistoryState, refreshGitHistory, refreshGitHistoryRef }
+  return {
+    gitHistoryState,
+    refreshGitHistory,
+    refreshGitHistoryRef,
+    loadMoreGitHistory,
+    gitHistoryScope,
+    setGitHistoryScope
+  }
 }

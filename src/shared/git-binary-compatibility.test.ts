@@ -31,6 +31,7 @@ import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import { buildGitGrepArgs } from './text-search'
 import { parseGitRemoteFetchUrls } from './git-remote-url-index'
 import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from './git-history-log-parser'
+import { loadGitHistoryFromExecutor } from './git-history'
 import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
@@ -111,6 +112,35 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   registerGitRepositoryRegistrationBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
+
+  it('pages a pinned all-branch history using stdin, date-order and skip on the baseline Git', async () => {
+    for (let index = 0; index < 3; index++) {
+      await runGit(['commit', '--allow-empty', '-qm', `History page ${index}`])
+    }
+    await runGit(['update-ref', 'refs/remotes/history/one', 'HEAD~1'])
+    await runGit(['update-ref', 'refs/remotes/history/two', 'HEAD~2'])
+    await runGit(['update-ref', 'refs/remotes/history/three', 'HEAD~3'])
+    const executor = (args: string[], _cwd: string, stdin?: string) =>
+      runGit(args, undefined, stdin)
+    const full = await loadGitHistoryFromExecutor(executor, fixture.executionRoot, {
+      scope: 'all',
+      limit: 10
+    })
+    const first = await loadGitHistoryFromExecutor(executor, fixture.executionRoot, {
+      limit: 2,
+      scope: 'all'
+    })
+    expect(first.nextCursor?.revisions.length).toBeGreaterThan(3)
+    expect(first.nextCursor?.order).toBe('date')
+    await runGit(['commit', '--allow-empty', '-qm', 'After history snapshot'])
+    const second = await loadGitHistoryFromExecutor(executor, fixture.executionRoot, {
+      limit: 2,
+      cursor: first.nextCursor
+    })
+    expect([...first.items, ...second.items].map((item) => item.id)).toEqual(
+      full.items.slice(0, 4).map((item) => item.id)
+    )
+  })
 
   it('stages, unstages and restores NUL-delimited literal pathspecs from stdin', async () => {
     const fixturePath = join(repoPath, 'stdin-pathspec')
