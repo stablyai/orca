@@ -114,6 +114,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nimble': 'nim',
   '.lean': 'lean',
   '.typ': 'typst',
+  '.http': 'http',
+  '.rest': 'http',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.abap': 'abap',
