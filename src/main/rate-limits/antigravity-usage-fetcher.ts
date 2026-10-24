@@ -1,7 +1,7 @@
 import { runProcess } from '@orca/process-host'
 import { hasReachedAppVersion, parseCliVersion } from '../../shared/app-version'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { hostShellEnvironment } from '../runtime/structured-agent-shell-environment'
 import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
@@ -118,10 +118,10 @@ export async function fetchAntigravityRateLimits(
   const run = options.runCommand ?? runProcess
   const resolve = options.resolveCommand ?? resolveCommandOnLocalPath
   const platform = options.platform ?? process.platform
-  const resolveEnvironment = options.resolveEnvironment ?? (() => resolveLoginShellEnvironment())
+  const resolveEnvironment = options.resolveEnvironment ?? hostShellEnvironment
 
-  // Why the login shell's env: agy installs to ~/.local/bin, which is on the user's PATH but not on
-  // the PATH an Electron app inherits from the window server or a desktop launcher.
+  // Why the host shell env: agy installs onto the login PATH or the saved Windows PATH, which an
+  // Electron app does not inherit from a desktop launcher.
   const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
   const program = await resolve(command, { platform, env })

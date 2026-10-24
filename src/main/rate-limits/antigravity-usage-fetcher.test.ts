@@ -6,6 +6,14 @@ import {
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
+const { hostShellEnvironmentMock } = vi.hoisted(() => ({
+  hostShellEnvironmentMock: vi.fn(async () => ({ PATH: '/usr/bin' }))
+}))
+
+vi.mock('../runtime/structured-agent-shell-environment', () => ({
+  hostShellEnvironment: hostShellEnvironmentMock
+}))
+
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',
   status: 'SUCCESS',
@@ -135,6 +143,40 @@ describe('fetchAntigravityRateLimits', () => {
     expect(h.resolveCommand).toHaveBeenCalledWith('agy', { platform: 'darwin', env: probeEnv })
     // The login-shell env is a shared cache entry; the probe must not write into it.
     expect(loginShellEnv).toEqual({ PATH: '/Users/x/.local/bin:/usr/bin' })
+  })
+
+  it('reads agy from the host shell environment when none is injected', async () => {
+    hostShellEnvironmentMock.mockClear()
+    hostShellEnvironmentMock.mockResolvedValue({
+      PATH: 'C:\\Users\\x\\AppData\\Local\\agy\\bin'
+    })
+    const resolveCommand = vi
+      .fn()
+      .mockResolvedValue('C:\\Users\\x\\AppData\\Local\\agy\\bin\\agy.exe')
+    const runCommand = vi
+      .fn()
+      .mockImplementation(async (spec: { args?: readonly string[] }) =>
+        spec.args?.[0] === '--version'
+          ? processResult({ stdout: 'agy version 1.2.11\n' })
+          : processResult({ stdout: USAGE_ENVELOPE })
+      )
+    const result = await fetchAntigravityRateLimits({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock returns a ProcessResult, which is the whole contract runProcess exposes to this fetcher.
+      runCommand: runCommand as never,
+      resolveCommand,
+      platform: 'win32',
+      now: () => 1
+    })
+
+    expect(result.status).toBe('ok')
+    expect(hostShellEnvironmentMock).toHaveBeenCalledTimes(1)
+    expect(resolveCommand).toHaveBeenCalledWith('agy', {
+      platform: 'win32',
+      env: {
+        PATH: 'C:\\Users\\x\\AppData\\Local\\agy\\bin',
+        AGY_CLI_DISABLE_AUTO_UPDATE: 'true'
+      }
+    })
   })
 
   it('reports an absent CLI as unavailable and never spawns', async () => {
