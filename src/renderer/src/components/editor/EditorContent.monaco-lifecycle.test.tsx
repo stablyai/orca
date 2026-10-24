@@ -248,8 +248,6 @@ describe('EditorContent Monaco lifecycle boundary', () => {
   })
 
   it('keeps the diff editor mounted when a save updates the modified content', () => {
-    // Why: saves must rotate the retained model for freshness without remounting
-    // the editor and flashing Monaco's loading placeholder.
     const diff = file('/repo/notes.ts', { mode: 'diff', diffSource: 'unstaged' })
 
     const view = render(<EditorContent {...diffProps(diff, 'first save')} />)
@@ -257,7 +255,7 @@ describe('EditorContent Monaco lifecycle boundary', () => {
 
     expect(lifecycle.events).toEqual(['mount-diff:/repo/notes.ts'])
     expect(lifecycle.diffModelKeys).toHaveLength(2)
-    expect(lifecycle.diffModelKeys[1]).not.toBe(lifecycle.diffModelKeys[0])
+    expect(lifecycle.diffModelKeys[1]).toBe(lifecycle.diffModelKeys[0])
   })
 
   it('still remounts the diff editor for an explicit reload request', () => {

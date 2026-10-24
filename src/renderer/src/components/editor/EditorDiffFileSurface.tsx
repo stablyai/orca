@@ -140,10 +140,10 @@ export function EditorDiffFileSurface({
 
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(diffContent.originalContent)}`
-  const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(diffContent.modifiedContent)}:${diffReloadNonce}`
+  const modifiedModelKey = `${diffViewStateKey}:modified:${diffReloadNonce}`
   const diffViewer = (
     <DiffViewer
-      // Why: content refreshes via modifiedModelKey; keying off content too would remount Monaco and flash on every save.
+      // Why: saves keep the editing session; explicit reloads start a fresh model.
       key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
       originalModelKey={originalModelKey}
