@@ -109,6 +109,7 @@ export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openF
               mode: file.mode,
               diffSource: file.diffSource,
               isDirty: file.isDirty,
+              mirroredFromRuntimeSession: file.mirroredFromRuntimeSession,
               isUntitled: file.isUntitled,
               deleteUntouchedOnClose: file.deleteUntouchedOnClose,
               markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
