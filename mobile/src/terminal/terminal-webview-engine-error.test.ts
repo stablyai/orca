@@ -179,6 +179,119 @@ describe('TerminalWebView engine errors', () => {
     }
   })
 
+  it('recovers a missed document web-ready through the post-load ping', () => {
+    vi.useFakeTimers()
+    try {
+      const terminalRef = createRef<TerminalWebViewHandle>()
+      const onWebReady = vi.fn()
+      const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), {
+        ref: terminalRef,
+        onWebReady
+      })
+      const webView = renderer.root.findByType('WebView')
+
+      act(() => {
+        webView.props.onLoadEnd()
+      })
+
+      const ping = postedCommands()[0]
+      expect(ping?.type).toBe('ping')
+      postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: true })
+
+      act(() => {
+        vi.advanceTimersByTime(15000)
+      })
+
+      expect(onWebReady).toHaveBeenCalledTimes(1)
+      expect(onEngineError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not treat a ping response from a missing xterm engine as ready', () => {
+    vi.useFakeTimers()
+    try {
+      const { onEngineError, renderer } = createTerminalWebViewRenderer()
+      const webView = renderer.root.findByType('WebView')
+
+      act(() => {
+        webView.props.onLoadEnd()
+      })
+      const ping = postedCommands()[0]
+      postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: false })
+
+      act(() => {
+        vi.advanceTimersByTime(15000)
+      })
+
+      expect(onEngineError).toHaveBeenCalledWith(
+        'Terminal did not initialize - no ready signal from the terminal view'
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers when load-start arrives after the document already announced readiness', () => {
+    vi.useFakeTimers()
+    try {
+      const onWebReady = vi.fn()
+      const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), { onWebReady })
+      const webView = renderer.root.findByType('WebView')
+
+      postWebViewMessage(renderer, { type: 'web-ready' })
+      // A repeated web-ready means a new document, so the parent must hear it to resubscribe.
+      postWebViewMessage(renderer, { type: 'web-ready' })
+      expect(onWebReady).toHaveBeenCalledTimes(2)
+      nativeWebViewMethods.postMessage.mockClear()
+
+      act(() => {
+        webView.props.onLoadStart()
+        webView.props.onLoadEnd()
+      })
+      const ping = postedCommands()[0]
+      expect(ping?.type).toBe('ping')
+      postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: true })
+
+      act(() => {
+        vi.advanceTimersByTime(15000)
+      })
+
+      expect(onWebReady).toHaveBeenCalledTimes(3)
+      expect(onEngineError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not re-announce a document that a post-load pong already announced', () => {
+    const terminalRef = createRef<TerminalWebViewHandle>()
+    const onWebReady = vi.fn()
+    const { renderer } = createTerminalWebViewRenderer(vi.fn(), { ref: terminalRef, onWebReady })
+    const webView = renderer.root.findByType('WebView')
+
+    act(() => {
+      webView.props.onLoadEnd()
+    })
+    const loadPing = postedCommands()[0]
+    postWebViewMessage(renderer, { type: 'pong', pingId: loadPing?.id, terminalAvailable: true })
+    expect(onWebReady).toHaveBeenCalledTimes(1)
+    nativeWebViewMethods.postMessage.mockClear()
+
+    act(() => {
+      terminalRef.current?.prepareForForegroundRecovery()
+    })
+    const foregroundPing = postedCommands()[0]
+    expect(foregroundPing?.type).toBe('ping')
+    postWebViewMessage(renderer, {
+      type: 'pong',
+      pingId: foregroundPing?.id,
+      terminalAvailable: true
+    })
+    expect(onWebReady).toHaveBeenCalledTimes(1)
+  })
+
   it('queues iOS foreground traffic until the current document answers its ping', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
     const onWebReady = vi.fn()
@@ -201,10 +314,14 @@ describe('TerminalWebView engine errors', () => {
 
     const ping = postedCommands()[0]
     expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
-    postWebViewMessage(renderer, { type: 'pong', pingId: Number(ping?.id) + 1 })
+    postWebViewMessage(renderer, {
+      type: 'pong',
+      pingId: Number(ping?.id) + 1,
+      terminalAvailable: true
+    })
     expect(postedCommands().map((command) => command.type)).toEqual(['ping'])
 
-    postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id })
+    postWebViewMessage(renderer, { type: 'pong', pingId: ping?.id, terminalAvailable: true })
     expect(postedCommands().map((command) => command.type)).toEqual(['ping', 'set-theme', 'write'])
     expect(onWebReady).toHaveBeenCalledTimes(1)
   })
@@ -225,6 +342,27 @@ describe('TerminalWebView engine errors', () => {
     } finally {
       mutablePlatform.OS = 'ios'
     }
+  })
+
+  it('announces the reloaded document even when the reload skips load-start', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const terminalRef = createRef<TerminalWebViewHandle>()
+    const onWebReady = vi.fn()
+    const { renderer } = createTerminalWebViewRenderer(vi.fn(), { ref: terminalRef, onWebReady })
+    postWebViewMessage(renderer, { type: 'web-ready' })
+    postWebViewMessage(renderer, { type: 'error', fatal: true, message: 'terminal init failed' })
+    nativeWebViewMethods.postMessage.mockClear()
+
+    act(() => {
+      renderer.root.findByProps({ accessibilityRole: 'button' }).props.onPress()
+      terminalRef.current?.write('after reload')
+    })
+    expect(nativeWebViewMethods.reload).toHaveBeenCalledTimes(1)
+    expect(nativeWebViewMethods.postMessage).not.toHaveBeenCalled()
+
+    postWebViewMessage(renderer, { type: 'web-ready' })
+    expect(onWebReady).toHaveBeenCalledTimes(2)
+    expect(postedCommands().map((command) => command.type)).toEqual(['set-theme', 'write'])
   })
 
   it('reloads a terminated iOS content process and restores theme on readiness', () => {
