@@ -35,6 +35,8 @@ type Params<Result, Tab> = {
   onFetchSucceeded?: (result: Result) => void
   onFetchFailed?: (code: string) => void
   onFetchErrored?: (error: unknown) => void
+  /** Runs on every foreground reconciliation tick, for state the tab stream does not carry. */
+  onReconcileTick?: () => void
 }
 
 type ResultActions = {
@@ -64,14 +66,17 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
   onFetchStarted,
   onFetchSucceeded,
   onFetchFailed,
-  onFetchErrored
+  onFetchErrored,
+  onReconcileTick
 }: Params<Result, Tab>): ResultActions {
   const pendingTerminalRecoveryBudget = useMemo(() => new PendingTerminalHandleRecoveryBudget(), [])
   const onPendingTerminalRecoveryParkedRef = useRef(onPendingTerminalRecoveryParked)
+  const onReconcileTickRef = useRef(onReconcileTick)
   // Why: only poll/reset callbacks read this, and they run after commit — so writing it in
   // render would let a discarded render leak a callback that never mounted.
   useEffect(() => {
     onPendingTerminalRecoveryParkedRef.current = onPendingTerminalRecoveryParked
+    onReconcileTickRef.current = onReconcileTick
   })
   const combinedHasRecoveryNeed = useCallback(() => {
     const contextKey = getPendingTerminalRecoveryContextKey?.() ?? null
@@ -193,6 +198,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
           void refreshTerminalInventory()
         }
         resumePendingTerminalInventoryRecovery()
+        onReconcileTickRef.current?.()
       }
       const appStateSubscription = AppState.addEventListener('change', (state) => {
         if (state === 'active') {

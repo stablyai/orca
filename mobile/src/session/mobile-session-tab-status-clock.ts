@@ -1,5 +1,5 @@
 import { withMirroredEvidenceReceipt } from '../../../src/shared/agent-status-freshness'
-import type { AgentStatusEntry } from '../../../src/shared/types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import {
   getCachedWorktrees,
   peekCachedWorktrees,
@@ -7,6 +7,7 @@ import {
 } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
+import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { mobileSessionTabsEqual } from './mobile-terminal-records'
 
@@ -14,6 +15,11 @@ type SessionTabStatusReceiptOptions = {
   cachedWorktrees?: readonly unknown[] | null
   worktreeId?: string | null
 }
+
+const lastCatalogProbeAtByHost = new Map<string, number>()
+const catalogProbeInFlightByHost = new Set<string>()
+const snapshotClientByHost = new Map<string, WorktreeCatalogSnapshotClient>()
+const CATALOG_PROBE_COOLDOWN_MS = 1500
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -45,13 +51,40 @@ function findWorktreeAgentRow(
   return null
 }
 
+function applyCatalogRowToStatus(
+  base: AgentStatusEntry,
+  catalogRow: Record<string, unknown>
+): AgentStatusEntry | null {
+  if (typeof catalogRow.updatedAt !== 'number') {
+    return null
+  }
+  const state = catalogRow.state
+  if (state !== 'working' && state !== 'waiting' && state !== 'blocked' && state !== 'done') {
+    return null
+  }
+  const active = state !== 'done'
+  return {
+    ...base,
+    state,
+    updatedAt: Math.max(base.updatedAt, catalogRow.updatedAt),
+    ...(typeof catalogRow.stateStartedAt === 'number'
+      ? { stateStartedAt: catalogRow.stateStartedAt }
+      : {}),
+    workingMode: active && catalogRow.workingMode === 'monitoring' ? 'monitoring' : undefined,
+    toolName: active && typeof catalogRow.toolName === 'string' ? catalogRow.toolName : undefined,
+    toolInput:
+      active && typeof catalogRow.toolInput === 'string' ? catalogRow.toolInput : undefined,
+    interrupted: typeof catalogRow.interrupted === 'boolean' ? catalogRow.interrupted : undefined
+  }
+}
+
 function reconcileShellMaskedAgentStatus(
   tab: Extract<MobileSessionTab, { type: 'terminal' }>,
   agentStatus: AgentStatusEntry,
   known: AgentStatusEntry | undefined,
   options?: SessionTabStatusReceiptOptions
 ): AgentStatusEntry {
-  if (agentStatus.state !== 'done' || agentStatus.prompt !== '') {
+  if (agentStatus.prompt !== '') {
     return agentStatus
   }
   const paneKey =
@@ -61,29 +94,12 @@ function reconcileShellMaskedAgentStatus(
   if (
     catalogRow &&
     typeof catalogRow.updatedAt === 'number' &&
-    catalogRow.updatedAt > agentStatus.updatedAt
+    (catalogRow.updatedAt >= agentStatus.updatedAt ||
+      (agentStatus.state === 'done' && catalogRow.state !== 'done'))
   ) {
-    if (catalogRow.state === 'working' || catalogRow.state === 'waiting') {
-      return {
-        ...agentStatus,
-        state: catalogRow.state,
-        updatedAt: catalogRow.updatedAt,
-        ...(typeof catalogRow.stateStartedAt === 'number'
-          ? { stateStartedAt: catalogRow.stateStartedAt }
-          : {}),
-        ...(catalogRow.workingMode === 'monitoring' ? { workingMode: 'monitoring' as const } : {}),
-        ...(typeof catalogRow.toolName === 'string' ? { toolName: catalogRow.toolName } : {}),
-        ...(typeof catalogRow.toolInput === 'string' ? { toolInput: catalogRow.toolInput } : {}),
-        ...(typeof catalogRow.interrupted === 'boolean'
-          ? { interrupted: catalogRow.interrupted }
-          : {})
-      }
-    }
-    if (catalogRow.state === 'done') {
-      return {
-        ...agentStatus,
-        updatedAt: catalogRow.updatedAt
-      }
+    const applied = applyCatalogRowToStatus(agentStatus, catalogRow)
+    if (applied) {
+      return applied
     }
   }
   if (
@@ -123,6 +139,27 @@ export function withSessionTabStatusReceipts(
       const reconciled = reconcileShellMaskedAgentStatus(tab, tab.agentStatus, known, options)
       return { ...tab, agentStatus: withMirroredEvidenceReceipt(reconciled, known, now) }
     }
+    if (tab.type === 'terminal' && !tab.agentStatus && tab.parentTabId && tab.leafId) {
+      const paneKey = `${tab.parentTabId}:${tab.leafId}`
+      const catalogRow = findWorktreeAgentRow(
+        options?.cachedWorktrees,
+        options?.worktreeId,
+        paneKey
+      )
+      const base: AgentStatusEntry = {
+        state: 'done',
+        prompt: '',
+        paneKey,
+        stateHistory: [],
+        updatedAt: 0,
+        stateStartedAt: 0
+      }
+      const synthesized = catalogRow ? applyCatalogRowToStatus(base, catalogRow) : null
+      if (synthesized) {
+        const known = prior?.type === 'terminal' ? (prior.agentStatus ?? undefined) : undefined
+        return { ...tab, agentStatus: withMirroredEvidenceReceipt(synthesized, known, now) }
+      }
+    }
     if (tab.type === 'agent-session' && tab.chatStatus) {
       const known = prior?.type === 'agent-session' ? prior.chatStatus : undefined
       return { ...tab, chatStatus: withMirroredEvidenceReceipt(tab.chatStatus, known, now) }
@@ -137,17 +174,92 @@ export function unreconciledShellMaskedStatusKey(
 ): string | null {
   const keys: string[] = []
   for (const tab of tabs) {
-    if (
-      tab.type === 'terminal' &&
-      tab.agentStatus?.state === 'done' &&
-      tab.agentStatus.prompt === '' &&
-      typeof tab.agentStatus.stateStartedAt === 'number' &&
-      tab.agentStatus.stateStartedAt > tab.agentStatus.updatedAt
-    ) {
-      keys.push(`${tab.id}:${tab.agentStatus.stateStartedAt}`)
+    if (tab.type === 'terminal' && (!tab.agentStatus || tab.agentStatus.prompt === '')) {
+      keys.push(
+        `${tab.id}:${tab.agentStatus?.stateStartedAt ?? 0}:${tab.agentStatus?.updatedAt ?? 0}`
+      )
     }
   }
   return keys.length > 0 ? `${worktreeId ?? ''}::${keys.join('|')}` : null
+}
+
+function applyWorktreeCatalogToSessionTabs(
+  hostId: string,
+  worktreeId: string | null | undefined,
+  worktrees: unknown[],
+  sessionTabsRef: { current: MobileSessionTab[] },
+  setSessionTabs?: (tabs: MobileSessionTab[]) => void
+): void {
+  setCachedWorktrees(hostId, worktrees, { proven: true })
+  const refreshedTabs = withSessionTabStatusReceipts(
+    sessionTabsRef.current,
+    sessionTabsRef.current,
+    Date.now(),
+    { cachedWorktrees: worktrees, worktreeId }
+  )
+  if (!mobileSessionTabsEqual(sessionTabsRef.current, refreshedTabs)) {
+    sessionTabsRef.current = refreshedTabs
+    setSessionTabs?.(refreshedTabs)
+  }
+}
+
+export function refreshSessionTabWorktreeStatuses(args: {
+  hostId: string
+  worktreeId: string | null | undefined
+  client: RpcClient
+  sessionTabsRef: { current: MobileSessionTab[] }
+  setSessionTabs?: (tabs: MobileSessionTab[]) => void
+  force?: boolean
+}): void {
+  const { hostId, worktreeId, client, sessionTabsRef, setSessionTabs, force } = args
+  if (catalogProbeInFlightByHost.has(hostId)) {
+    return
+  }
+  const now = Date.now()
+  if (!force && now - (lastCatalogProbeAtByHost.get(hostId) ?? 0) < CATALOG_PROBE_COOLDOWN_MS) {
+    return
+  }
+  lastCatalogProbeAtByHost.set(hostId, now)
+  catalogProbeInFlightByHost.add(hostId)
+  let snapshotClient = snapshotClientByHost.get(hostId)
+  if (!snapshotClient) {
+    snapshotClient = new WorktreeCatalogSnapshotClient()
+    snapshotClientByHost.set(hostId, snapshotClient)
+  }
+  void snapshotClient
+    .fetch(client, hostId)
+    .then((fetched) => {
+      const confirmed = fetched.kind === 'response' ? snapshotClient.admit(fetched.pending) : null
+      if (confirmed) {
+        applyWorktreeCatalogToSessionTabs(
+          hostId,
+          worktreeId,
+          confirmed,
+          sessionTabsRef,
+          setSessionTabs
+        )
+      }
+    })
+    .catch(() =>
+      worktreeCatalogRead
+        .request(client, { limit: 10_000 })
+        .then((reply) => {
+          const catalog = worktreeCatalogRead.interpret(reply)
+          if (catalog.accepted && Array.isArray(catalog.value.worktrees)) {
+            applyWorktreeCatalogToSessionTabs(
+              hostId,
+              worktreeId,
+              catalog.value.worktrees,
+              sessionTabsRef,
+              setSessionTabs
+            )
+          }
+        })
+        .catch(() => {})
+    )
+    .finally(() => {
+      catalogProbeInFlightByHost.delete(hostId)
+    })
 }
 
 export function applySessionTabStatusReceipts(args: {
@@ -169,35 +281,17 @@ export function applySessionTabStatusReceipts(args: {
     worktreeId: args.worktreeId
   })
   const maskedKey = unreconciledShellMaskedStatusKey(nextTabs, args.worktreeId)
-  if (
-    maskedKey &&
-    args.hostId &&
-    args.client &&
-    args.probedKeys &&
-    !args.probedKeys.has(maskedKey)
-  ) {
-    const hostId = args.hostId
-    args.probedKeys.add(maskedKey)
-    void worktreeCatalogRead
-      .request(args.client, { limit: 10_000 })
-      .then((reply) => {
-        const catalog = worktreeCatalogRead.interpret(reply)
-        if (!catalog.accepted || !Array.isArray(catalog.value.worktrees) || !args.sessionTabsRef) {
-          return
-        }
-        setCachedWorktrees(hostId, catalog.value.worktrees, { proven: true })
-        const refreshedTabs = withSessionTabStatusReceipts(
-          args.sessionTabsRef.current,
-          args.sessionTabsRef.current,
-          Date.now(),
-          { cachedWorktrees: catalog.value.worktrees, worktreeId: args.worktreeId }
-        )
-        if (!mobileSessionTabsEqual(args.sessionTabsRef.current, refreshedTabs)) {
-          args.sessionTabsRef.current = refreshedTabs
-          args.setSessionTabs?.(refreshedTabs)
-        }
-      })
-      .catch(() => {})
+  if (maskedKey && args.hostId && args.client && args.sessionTabsRef) {
+    const firstSeenForKey = args.probedKeys ? !args.probedKeys.has(maskedKey) : false
+    args.probedKeys?.add(maskedKey)
+    refreshSessionTabWorktreeStatuses({
+      hostId: args.hostId,
+      worktreeId: args.worktreeId,
+      client: args.client,
+      sessionTabsRef: args.sessionTabsRef,
+      setSessionTabs: args.setSessionTabs,
+      force: firstSeenForKey
+    })
   }
   return nextTabs
 }

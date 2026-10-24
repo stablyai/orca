@@ -124,5 +124,26 @@ describe('session tab status on the phone clock', () => {
     // Even after the worktree cache is absent, a replay of the same masked snapshot keeps the reconciled state.
     const replay = withSessionTabStatusReceipts([maskedTab], first, PHONE_NOW + 2 * MINUTE)
     expect(dot(replay[0], PHONE_NOW + 2 * MINUTE)).toBe('working')
+
+    // When worktree.ps later reports the turn completed (done), reconciling the already-working
+    // in-memory tab transitions it back from yellow (working) to green (done).
+    const completedWorktrees = [
+      {
+        worktreeId: 'wt-1',
+        agents: [
+          {
+            paneKey: 'term:leaf',
+            state: 'done',
+            stateStartedAt: hookStartedStamp,
+            updatedAt: hookUpdatedStamp + MINUTE
+          }
+        ]
+      }
+    ]
+    const completed = withSessionTabStatusReceipts(first, first, PHONE_NOW + 3 * MINUTE, {
+      cachedWorktrees: completedWorktrees,
+      worktreeId: 'wt-1'
+    })
+    expect(dot(completed[0], PHONE_NOW + 3 * MINUTE)).toBe('done')
   })
 })

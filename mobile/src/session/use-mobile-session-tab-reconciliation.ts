@@ -15,10 +15,15 @@ import { PendingTerminalHandleRecoveryContextCache } from './pending-terminal-ha
 import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-records'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
-import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
+import {
+  refreshSessionTabWorktreeStatuses,
+  unreconciledShellMaskedStatusKey,
+  withoutSessionTabHostOwnership
+} from './mobile-session-tab-status-clock'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -110,6 +115,14 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     worktreeId,
     diagnosticsRef: terminalDiagnosticsRef
   })
+  // Why: hook state can be masked as `done` under a shell title in tab snapshots; worktree.ps
+  // carries the live state, so poll it while a masked tab is on screen.
+  const refreshMaskedTabStatuses = useCallback(() => {
+    if (!client || !unreconciledShellMaskedStatusKey(sessionTabsRef.current, worktreeId)) {
+      return
+    }
+    refreshSessionTabWorktreeStatuses({ hostId, worktreeId, client, sessionTabsRef, setSessionTabs })
+  }, [client, hostId, sessionTabsRef, setSessionTabs, worktreeId])
   const {
     fetchSessionTabs,
     ensureSessionTabs,
@@ -129,6 +142,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     getPendingTerminalRecoveryContextKey,
     onPendingTerminalRecoveryParked: setParkedPendingTerminalContext,
     getApplicationRevision: getSessionTabsApplicationRevision,
+    onReconcileTick: refreshMaskedTabStatuses,
     ...sessionTabsFetchReporting
   })
 
