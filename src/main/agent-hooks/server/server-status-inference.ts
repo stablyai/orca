@@ -3,6 +3,7 @@ import {
   markClaudeLeadTurnInterrupted,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { claudeRosterToSnapshots } from '../../../shared/claude-subagent-roster'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,
@@ -256,6 +257,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     // Update the producer too so later child hooks cannot resurrect the answered question.
     const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
+    // Why: ingestRemote never seeds a roster, so relayed panes keep payload.subagents; an empty local roster still drops stale children.
+    const roster = this.state.claudeSubagentRosterByPaneKey.get(existing.paneKey)
+    const subagents = roster ? claudeRosterToSnapshots(roster) : payload.subagents
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
@@ -280,7 +284,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         ...(restored.turnCompletedAt !== undefined
           ? { turnCompletedAt: restored.turnCompletedAt }
           : {}),
-        ...(payload.subagents ? { subagents: payload.subagents } : {}),
+        ...(subagents ? { subagents } : {}),
         mainAgent: restored.mainAgent
       }
     })
