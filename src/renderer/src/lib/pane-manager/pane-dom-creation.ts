@@ -146,6 +146,7 @@ export function createPaneDOM(
     ligaturesAddon: null,
     imageAddon: null,
     imageAttachmentDeferred: false,
+    imageCursorAdvanceDisposable: null,
     panePointerDownHandler,
     paneMouseEnterHandler,
     paneDragCleanup,

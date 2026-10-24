@@ -10,6 +10,7 @@ import {
   rearmTerminalImageAddonLoad,
   setTerminalImageAddonLoadHandlers
 } from './terminal-image-addon-loader'
+import { attachImageCursorAdvance } from './terminal-image-cursor-advance'
 import { buildInlineImageAddonOptions } from './terminal-inline-image-options'
 import { repaintTerminalAfterImageAdded } from './terminal-image-added-repaint'
 
@@ -72,9 +73,14 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
     if (repaint) {
       imageRepaintByPane.set(pane, repaint)
     }
+    pane.imageCursorAdvanceDisposable = attachImageCursorAdvance(pane.terminal, imageAddon)
     terminalsRenderingInlineImages.add(pane.terminal)
   } catch (err) {
     console.warn('[terminal] inline-image addon failed to attach for pane', pane.id, err)
+    pane.imageCursorAdvanceDisposable?.dispose()
+    pane.imageCursorAdvanceDisposable = null
+    imageRepaintByPane.get(pane)?.dispose()
+    imageRepaintByPane.delete(pane)
     try {
       imageAddon?.dispose()
     } catch {
@@ -93,6 +99,8 @@ export function detachInlineImages(pane: ManagedPaneInternal): void {
   terminalsRenderingInlineImages.delete(pane.terminal)
   imageRepaintByPane.get(pane)?.dispose()
   imageRepaintByPane.delete(pane)
+  pane.imageCursorAdvanceDisposable?.dispose()
+  pane.imageCursorAdvanceDisposable = null
   if (pane.imageAddon) {
     try {
       pane.imageAddon.dispose()
