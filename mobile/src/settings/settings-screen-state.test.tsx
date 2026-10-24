@@ -5,6 +5,8 @@ import NotificationsScreen from './notification-settings-screen'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 
+const polling = vi.hoisted(() => ({ refresh: async (): Promise<unknown> => undefined }))
+
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
@@ -26,6 +28,7 @@ vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: ({ refresh }: { refresh: () => Promise<unknown> }) => {
+    polling.refresh = refresh
     useEffect(() => {
       void refresh()
     }, [refresh])
@@ -123,21 +126,17 @@ describe('shared settings screen state', () => {
       download: vi.fn(),
       delete: vi.fn()
     }
-    const first = { ...shared } as VoiceSettingsOperations
+    const operations: VoiceSettingsOperations = { ...shared }
     await act(async () => {
       renderer = create(
-        createElement(VoiceSettingsScreen, { operations: first, focused: true, onBack: vi.fn() })
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
       )
     })
     const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
     expect(switchProps().value).toBe(true)
 
-    // A new operations identity restarts the poller, so a read is in flight below.
-    const second = { ...shared } as VoiceSettingsOperations
-    await act(async () => {
-      renderer.update(
-        createElement(VoiceSettingsScreen, { operations: second, focused: true, onBack: vi.fn() })
-      )
+    act(() => {
+      void polling.refresh()
     })
     expect(shared.load).toHaveBeenCalledTimes(2)
 

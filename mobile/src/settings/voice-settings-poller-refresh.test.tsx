@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
+import type { MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
 // Why: the sibling state test stubs the poller, so it can only prove the screen's local
 // machine. This one runs the real useDictationSetupPoller, whose refreshNow is gated on
@@ -158,5 +159,83 @@ describe('voice settings poller integration', () => {
     expect((operations.load as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       loadsBeforeRejection
     )
+  })
+  it('keeps the latest switch choice when multiple desktop writes are delayed', async () => {
+    const initial: MobileSpeechSetup = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: '',
+      models: []
+    }
+    const replies: Array<(value: typeof initial) => void> = []
+    const operations: VoiceSettingsOperations = {
+      load: vi.fn().mockResolvedValue(initial),
+      configure: vi.fn(() => new Promise<MobileSpeechSetup>((resolve) => replies.push(resolve))),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack() {} })
+      )
+    })
+    const toggle = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
+    await act(async () => {
+      toggle().onValueChange(false)
+    })
+    await act(async () => {
+      toggle().onValueChange(true)
+    })
+    expect(toggle().value).toBe(true)
+    expect(operations.configure).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      replies[0]!({ ...initial, enabled: false })
+    })
+    expect(operations.configure).toHaveBeenCalledTimes(2)
+    expect(toggle().value).toBe(true)
+    await act(async () => {
+      replies[1]!({ ...initial, enabled: true })
+    })
+    expect(toggle().value).toBe(true)
+  })
+
+  it('loads the replacement desktop independently of the previous desktop pending mutation', async () => {
+    const initial: MobileSpeechSetup = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: '',
+      models: []
+    }
+    let finishOldWrite = (_value: MobileSpeechSetup) => {}
+    const previous: VoiceSettingsOperations = {
+      load: vi.fn().mockResolvedValue(initial),
+      configure: vi.fn(
+        () =>
+          new Promise<MobileSpeechSetup>((resolve) => {
+            finishOldWrite = resolve
+          })
+      ),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    const next: VoiceSettingsOperations = {
+      load: vi.fn().mockResolvedValue({ ...initial, enabled: false, dictationMode: 'hold' }),
+      configure: vi.fn(),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    const props = { focused: true, onBack() {} }
+    await act(async () => {
+      renderer = create(createElement(VoiceSettingsScreen, { ...props, operations: previous }))
+    })
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'voice-enabled' }).props.onValueChange(false)
+    })
+    await act(async () => {
+      renderer.update(createElement(VoiceSettingsScreen, { ...props, operations: next }))
+    })
+    expect(next.load).toHaveBeenCalledOnce()
+    await act(async () => finishOldWrite(initial))
+    expect(renderer.root.findByProps({ testID: 'voice-enabled' }).props.value).toBe(false)
   })
 })

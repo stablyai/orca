@@ -24,25 +24,51 @@ const DICTATION_MODES = [
 
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
-export default function VoiceSettingsScreen({
-  operations,
-  focused,
-  onBack
-}: {
+type VoiceSettingsScreenProps = {
   operations: VoiceSettingsOperations | null
   focused: boolean
   onBack: () => void
-}): React.JSX.Element {
+}
+
+export default function VoiceSettingsScreen(props: VoiceSettingsScreenProps): React.JSX.Element {
+  const [runtime, setRuntime] = useState({ operations: props.operations, revision: 0 })
+  if (runtime.operations !== props.operations) {
+    setRuntime({ operations: props.operations, revision: runtime.revision + 1 })
+  }
+  return <VoiceSettingsScreenContent key={runtime.revision} {...props} />
+}
+
+function VoiceSettingsScreenContent({
+  operations,
+  focused,
+  onBack
+}: VoiceSettingsScreenProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const requestEpoch = useRef(0)
+  const mutationQueue = useRef<Promise<void>>(Promise.resolve())
+  const pendingMutations = useRef(0)
+  const runMutation = useCallback(<T,>(action: () => Promise<T>): Promise<T> => {
+    pendingMutations.current += 1
+    const result = mutationQueue.current.then(action)
+    mutationQueue.current = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result.finally(() => {
+      pendingMutations.current -= 1
+    })
+  }, [])
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!operations) {
       return false
+    }
+    if (pendingMutations.current > 0) {
+      return undefined
     }
     const epoch = requestEpoch.current
     // Own the spinner from the read that clears it, so a retry after a failed load shows
@@ -58,7 +84,9 @@ export default function VoiceSettingsScreen({
       setError(null)
       return next.models.some(isModelInFlight)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load voice settings')
+      if (epoch === requestEpoch.current && pendingMutations.current === 0) {
+        setError(err instanceof Error ? err.message : 'Failed to load voice settings')
+      }
       return undefined
     } finally {
       setLoading(false)
@@ -78,7 +106,7 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
-      requestEpoch.current += 1
+      const epoch = ++requestEpoch.current
       setError(null)
       // Optimistic flip so the control responds instantly; reconcile below.
       const { enabled, dictationMode } = params
@@ -92,13 +120,18 @@ export default function VoiceSettingsScreen({
           : prev
       )
       try {
-        setSetup(await operations.configure(params))
+        const next = await runMutation(() => operations.configure(params))
+        if (epoch === requestEpoch.current) {
+          setSetup(next)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
-        void refreshSetup()
+        if (epoch === requestEpoch.current) {
+          setError(err instanceof Error ? err.message : 'Could not update')
+          void refreshSetup()
+        }
       }
     },
-    [operations, refreshSetup]
+    [operations, refreshSetup, runMutation]
   )
 
   const handleUseModel = useCallback(
@@ -106,19 +139,26 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
-      requestEpoch.current += 1
+      const epoch = ++requestEpoch.current
       setBusyAction({ modelId: model.id, type: 'select' })
       setError(null)
       try {
-        setSetup(await operations.configure({ enabled: true, modelId: model.id }))
-        setModelDrawerOpen(false)
+        const next = await runMutation(() =>
+          operations.configure({ enabled: true, modelId: model.id })
+        )
+        if (epoch === requestEpoch.current) {
+          setSetup(next)
+          setModelDrawerOpen(false)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not select model')
+        if (epoch === requestEpoch.current) {
+          setError(err instanceof Error ? err.message : 'Could not select model')
+        }
       } finally {
         setBusyAction(null)
       }
     },
-    [operations]
+    [operations, runMutation]
   )
 
   const handleDownload = useCallback(
@@ -126,19 +166,23 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
-      requestEpoch.current += 1
+      const epoch = ++requestEpoch.current
       setBusyAction({ modelId: model.id, type: 'download' })
       setError(null)
       try {
-        await operations.download(model.id)
-        await refreshSetup()
+        await runMutation(() => operations.download(model.id))
+        if (epoch === requestEpoch.current) {
+          await refreshSetup()
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Download failed')
+        if (epoch === requestEpoch.current) {
+          setError(err instanceof Error ? err.message : 'Download failed')
+        }
       } finally {
         setBusyAction(null)
       }
     },
-    [operations, refreshSetup]
+    [operations, refreshSetup, runMutation]
   )
 
   const handleDelete = useCallback(
@@ -147,21 +191,26 @@ export default function VoiceSettingsScreen({
         return
       }
       const deletedSelectedModel = setup?.selectedModelId === model.id
-      requestEpoch.current += 1
+      const epoch = ++requestEpoch.current
       setBusyAction({ modelId: model.id, type: 'delete' })
       setError(null)
       try {
-        setSetup(await operations.delete(model.id))
-        if (deletedSelectedModel) {
-          setModelDrawerOpen(false)
+        const next = await runMutation(() => operations.delete(model.id))
+        if (epoch === requestEpoch.current) {
+          setSetup(next)
+          if (deletedSelectedModel) {
+            setModelDrawerOpen(false)
+          }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed')
+        if (epoch === requestEpoch.current) {
+          setError(err instanceof Error ? err.message : 'Delete failed')
+        }
       } finally {
         setBusyAction(null)
       }
     },
-    [operations, setup?.selectedModelId]
+    [operations, runMutation, setup?.selectedModelId]
   )
 
   const enabled = setup?.enabled ?? false
