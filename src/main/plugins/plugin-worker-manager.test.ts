@@ -363,6 +363,62 @@ describe('PluginWorkerManager idle reap', () => {
     await subject.disposeAll()
   })
 
+  it('does not count time the machine slept as idle time', async () => {
+    const minute = 60_000
+    const busy = worker(2 * minute)
+    const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(busy), {
+      idleReapMs: 5 * minute
+    })
+    await subject.ensureActive(spec('demo'))
+    subject.reapIdle(2 * minute)
+    subject.reapIdle(3 * minute)
+
+    // Lid closed for an hour: the next sweep is the first one after wake.
+    subject.reapIdle(63 * minute)
+    await flush()
+
+    expect(busy.dispose).not.toHaveBeenCalled()
+    expect(subject.runState('demo')).toBe('running')
+    await subject.disposeAll()
+  })
+
+  it('does not count a sleep before the first sweep as idle time', async () => {
+    const minute = 60_000
+    vi.useFakeTimers({ now: 0 })
+    const busy = worker(0)
+    const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(busy), {
+      idleReapMs: 5 * minute
+    })
+    await subject.ensureActive(spec('demo'))
+
+    // Lid closed before the reaper's first sweep, opened an hour later.
+    subject.reapIdle(60 * minute)
+    await flush()
+
+    expect(busy.dispose).not.toHaveBeenCalled()
+    expect(subject.runState('demo')).toBe('running')
+    await subject.disposeAll()
+  })
+
+  it('still reaps a worker that stays idle for a full window after waking', async () => {
+    const minute = 60_000
+    const idle = worker(2 * minute)
+    const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(idle), {
+      idleReapMs: 5 * minute
+    })
+    await subject.ensureActive(spec('demo'))
+    subject.reapIdle(3 * minute)
+    subject.reapIdle(63 * minute)
+    for (let at = 64; at <= 69; at++) {
+      subject.reapIdle(at * minute)
+    }
+    await flush()
+
+    expect(idle.dispose).toHaveBeenCalledOnce()
+    expect(subject.runState('demo')).toBe('inactive')
+    await subject.disposeAll()
+  })
+
   it('waits for an in-progress idle shutdown during manager disposal', async () => {
     let finishShutdown!: () => void
     const idle = worker(100)

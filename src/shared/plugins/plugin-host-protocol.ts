@@ -110,5 +110,7 @@ export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
 /** Idle reap: a worker with no in-flight work for this long is disposed and
  *  re-forked on the next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
+/** How often the main process sweeps for idle workers. */
+export const PLUGIN_WORKER_REAP_INTERVAL_MS = 60_000
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5
