@@ -92,7 +92,9 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
-      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+      // Why: a timed-out capture must not stay joinable. The next visible
+      // read would otherwise await the same hung provider RPC (#16531).
+      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, retireOnTimeout: true }
     )
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
