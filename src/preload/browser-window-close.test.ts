@@ -38,6 +38,7 @@ describe('browser window close preload', () => {
     }).outputFiles[0].text
 
     runInNewContext(preload, {
+      process: { platform: 'linux' },
       window: pageWindow,
       require: (name: string) => {
         expect(name).toBe('electron')
