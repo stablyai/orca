@@ -57,6 +57,7 @@ export type AutomationCreateDestinationInput = {
 
 export type AutomationCreateDestinationState = {
   control: AutomationCreateDestinationControl
+  hasUnsavedChanges: boolean
   check: (projectId: string) => AutomationCreateDestinationCheck
 }
 
@@ -96,6 +97,7 @@ export function useAutomationCreateDestination(
     projects
   } = input
   const [captured, setCaptured] = useState<AutomationCreateDestination | null>(null)
+  const [initialHostStableKey, setInitialHostStableKey] = useState<string | null>(null)
   const [reason, setReason] = useState<AutomationCreateDestinationChoiceReason>('unselected')
 
   // Adjusted during render rather than in an effect, so no frame paints the
@@ -104,6 +106,7 @@ export function useAutomationCreateDestination(
   if (!open && (captured !== null || reason !== 'unselected')) {
     setCaptured(null)
     setReason('unselected')
+    setInitialHostStableKey(null)
   }
   if (open && !captured) {
     // Re-resolves until it first captures: a catalog still hydrating must not lock
@@ -114,6 +117,7 @@ export function useAutomationCreateDestination(
     const resolved = resolveAutomationCreateDestination(entry)
     if (resolved.status === 'ready') {
       setCaptured(resolved)
+      setInitialHostStableKey(resolved.entry.stableKey)
     } else if (resolved.reason !== reason) {
       setReason(resolved.reason)
     }
@@ -192,6 +196,7 @@ export function useAutomationCreateDestination(
   )
 
   return {
+    hasUnsavedChanges: captured !== null && captured.entry.stableKey !== initialHostStableKey,
     control: useMemo(
       () => ({ entries, resolution, onSelect, projects: eligibleProjects }),
       [eligibleProjects, entries, onSelect, resolution]

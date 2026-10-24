@@ -1,6 +1,7 @@
 import React from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
@@ -64,6 +65,7 @@ type AutomationEditorDialogProps = {
   isEditing: boolean
   isSaving: boolean
   canSave: boolean
+  hasUnsavedChanges: boolean
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
   automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
@@ -95,6 +97,7 @@ export function AutomationEditorDialog({
   isEditing,
   isSaving,
   canSave,
+  hasUnsavedChanges,
   repos,
   projectHostSetups,
   automationYamlHooksByRepoKey,
@@ -119,6 +122,7 @@ export function AutomationEditorDialog({
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
   const dialogContentRef = React.useRef<HTMLDivElement>(null)
+  const guardOutsideDismiss = preventOutsideDismissWhenDirty(() => hasUnsavedChanges)
   const isCreateMode = !isEditing
   const destination = isCreateMode ? createDestination : editDestination
   const visibleAgents = React.useMemo(() => {
@@ -139,6 +143,8 @@ export function AutomationEditorDialog({
         className="flex h-[min(880px,90vh)] w-[min(1080px,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
         aria-describedby={undefined}
         ref={dialogContentRef}
+        onPointerDownOutside={guardOutsideDismiss}
+        onInteractOutside={guardOutsideDismiss}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
         }}
