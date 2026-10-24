@@ -10,6 +10,7 @@ import {
 } from '../../shared/orcad-profile-preflight'
 import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
 import { assertOrcadServerRuntime } from './orcad-bundled-runtime'
+import { forgetSlotStartupPreflightVerdict } from './orcad-startup-preflight-verdict'
 import {
   formatOrcadNativePreflightReport,
   ORCAD_NATIVE_PREFLIGHT_FLAG
@@ -36,6 +37,8 @@ if (process.argv.includes('--orcad-smoke-load-check')) {
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
+  // A skipped preflight is only trusted while starts succeed; any failure re-probes next start.
+  forgetSlotStartupPreflightVerdict()
   // Why a resolved code and not a bare 1: a data-root or bind-address refusal is a
   // configuration fault that restarting cannot fix, and a supervisor needs to tell the two
   // apart to avoid restart-spinning on it.

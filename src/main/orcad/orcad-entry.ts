@@ -41,6 +41,7 @@ import {
 } from '../../shared/ai-vault-search-settings'
 import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment'
+import * as skippedPreflight from './orcad-skipped-preflight-guard'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -113,7 +114,6 @@ async function startOrcadRuntime(
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
   const { servePublishMode } = await import('../server/serve-pairing-readiness')
   const { buildOrcadServeReadiness } = await import('./orcad-serve-readiness')
-  const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-provider-state')
   const { collectOrcadHealth } = await import('./orcad-health')
@@ -170,7 +170,7 @@ async function startOrcadRuntime(
   // Why before the profile store: it unseals protected settings as it loads.
   await prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath)
   const { store: profileStore, authority: profileStateAuthority } =
-    await createOrcadProfileStateStartup(runtimeUserDataPath)
+    await skippedPreflight.startGuardedProfileState(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   profileStoreForShutdown = profileStore
@@ -379,6 +379,7 @@ async function startOrcadRuntime(
   })
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
+  skippedPreflight.settleSlotStartupPreflightSkip()
 
   await idleExitStartup.start({
     rpc,
