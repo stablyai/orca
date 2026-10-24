@@ -1,13 +1,22 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RepoIconGlyph } from './repo-icon'
+import { REPO_LUCIDE_ICON_NAMES } from '../../../../shared/repo-lucide-icon-names'
+import { getRepoLucideIconOptions, RepoIconGlyph } from './repo-icon'
 
 afterEach(() => {
   cleanup()
 })
 
 const GHE_AVATAR = 'https://ghe.example.com/acme.png?size=64'
+
+describe('getRepoLucideIconOptions', () => {
+  it('lists every shared catalog icon in picker order', () => {
+    expect(getRepoLucideIconOptions().map((option) => option.name)).toEqual([
+      ...REPO_LUCIDE_ICON_NAMES
+    ])
+  })
+})
 
 describe('RepoIconGlyph', () => {
   it('falls back to a lucide icon when an image icon fails to load', () => {
@@ -49,6 +58,11 @@ describe('RepoIconGlyph', () => {
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe(GHE_AVATAR)
     expect(container.querySelector('svg')).toBeNull()
+  })
+
+  it('renders a newly cataloged lucide icon', () => {
+    const { container } = render(<RepoIconGlyph repoIcon={{ type: 'lucide', name: 'Guitar' }} />)
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('lucide-guitar')
   })
 
   it('renders emoji and lucide icons unchanged', () => {
