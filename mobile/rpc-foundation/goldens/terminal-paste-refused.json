@@ -4,7 +4,7 @@
   "family": "session.terminal-paste",
   "namedDeltas": [],
   "values": {
-    "10a954319977": {
+    "13f77da7bbea": {
       "name": "terminal.send#1",
       "ordinal": 5,
       "args": [
@@ -27,7 +27,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -87,17 +87,13 @@
         }
       }
     },
-    "528166d1face": {
-      "connectionId": "unresolved",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "sent"
-    },
-    "87b511344653": {
-      "name": "refresh-can-paste",
+    "86cf27deee09": {
+      "name": "toast",
       "ordinal": 7,
-      "value": {}
+      "value": {
+        "durationMs": 1500,
+        "message": "Paste failed"
+      }
     },
     "8e065efdacec": {
       "name": "flush-live-input",
@@ -128,6 +124,13 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ebe2af37c0a0": {
+      "connectionId": "unresolved",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "error"
     }
   },
   "recording": {
@@ -136,15 +139,15 @@
       {
         "id": "not-reported",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "10a954319977"],
+          "sender": ["3fb0e93ab6cb", "13f77da7bbea"],
           "payloads": ["c8c77ac17e0a", "26d0fe750677"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       }
     ]

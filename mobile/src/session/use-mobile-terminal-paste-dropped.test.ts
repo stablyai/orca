@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type * as MobileClipboardImage from './mobile-clipboard-image'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
 
@@ -80,6 +81,78 @@ function setup() {
 describe('mobile terminal paste that sends nothing', () => {
   beforeEach(() => {
     pasteboard.image = { data: 'png' }
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('lets a brief disconnect recover before transmitting the paste once', async () => {
+    vi.useFakeTimers()
+    const { options, sendRequest, connStateRef, onError } = setup()
+    if (!options.client) {
+      throw new Error('Missing client')
+    }
+    connStateRef.current = 'reconnecting'
+    vi.spyOn(options.client, 'getState').mockImplementation(() => connStateRef.current)
+    let notify: (state: ConnectionState) => void = () => {}
+    const unsubscribe = vi.fn()
+    vi.spyOn(options.client, 'onStateChange').mockImplementation((listener) => {
+      notify = listener
+      return unsubscribe
+    })
+    sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+    const pending = useMobileTerminalPaste(options)()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(sendRequest).not.toHaveBeenCalled()
+    connStateRef.current = 'connected'
+    notify('connected')
+    await pending
+    expect(sendRequest).toHaveBeenCalledOnce()
+    expect(options.onSuccess).toHaveBeenCalledOnce()
+    expect(onError).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('ends a reconnect wait after 1.5 seconds and never sends later', async () => {
+    vi.useFakeTimers()
+    const { options, sendRequest, connStateRef, onError } = setup()
+    if (!options.client) {
+      throw new Error('Missing client')
+    }
+    connStateRef.current = 'reconnecting'
+    vi.spyOn(options.client, 'getState').mockImplementation(() => connStateRef.current)
+    const pending = useMobileTerminalPaste(options)()
+    await vi.advanceTimersByTimeAsync(1_500)
+    await pending
+    expect(onError).toHaveBeenCalledOnce()
+    connStateRef.current = 'connected'
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(options.onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does not paste into another computer with an identical terminal handle', async () => {
+    const { options, sendRequest, showToast, setBeforeSend } = setup()
+    const replacement = setup()
+    setBeforeSend(() => {
+      options.clientRef.current = replacement.options.client
+      return true
+    })
+    await useMobileTerminalPaste(options)()
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(replacement.sendRequest).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith('Paste canceled (computer changed)', 1500)
+  })
+
+  it('warns about uncertain delivery without retrying an already transmitted paste', async () => {
+    const { options, sendRequest, showToast } = setup()
+    sendRequest.mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+    await useMobileTerminalPaste(options)()
+    expect(sendRequest).toHaveBeenCalledOnce()
+    expect(options.onSuccess).not.toHaveBeenCalled()
+    expect(showToast).toHaveBeenCalledWith(
+      'Could not confirm paste. Check the terminal before retrying.',
+      3000
+    )
   })
 
   it('says so when the clipboard image read comes back empty', async () => {

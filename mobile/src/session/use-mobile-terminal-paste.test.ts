@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 
 // `useMemo` joins `useCallback` because the paste now reads the clipboard through the platform
 // seam, which is a hook. Called rather than cached: this test mounts nothing, so there is no
@@ -27,6 +28,49 @@ vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
 }))
 
 describe('mobile clipboard image followed by typing', () => {
+  it.each([
+    { ok: true, result: { send: { accepted: false } } },
+    { ok: false, error: { code: 'conflict', message: 'Input locked' } }
+  ])('reports a refused paste as a failure', async (reply) => {
+    vi.mocked(reportWorkerTerminalUserInput).mockClear()
+    const sendRequest = vi.fn().mockResolvedValue(reply)
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: () => () => {},
+      updateTerminalSubscriptionViewport: vi.fn(),
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {},
+      notifyForeground: vi.fn(),
+      close: vi.fn()
+    }
+    const onSuccess = vi.fn()
+    const onError = vi.fn()
+    const showToast = vi.fn()
+    await useMobileTerminalPaste({
+      activeHandle: 'term-1',
+      activeHandleRef: { current: 'term-1' },
+      activeSessionTabTypeRef: { current: 'terminal' },
+      canSend: true,
+      client,
+      clientRef: { current: client },
+      connState: 'connected',
+      connStateRef: { current: 'connected' },
+      deviceTokenRef: { current: null },
+      flushPendingLiveInputBeforeExternalSend: async () => true,
+      getActiveWorktreeConnectionId: async () => null,
+      onError,
+      onSuccess,
+      ptyModesRef: { current: new Map() },
+      refreshCanPaste: vi.fn(),
+      showToast
+    })()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledOnce()
+    expect(showToast).toHaveBeenCalledWith('Paste failed', 1500)
+    expect(reportWorkerTerminalUserInput).not.toHaveBeenCalled()
+  })
   it.each(['omp', 'claude', 'codex', null, 'unknown'])(
     'separates a pasted image from subsequent %s input',
     async (agent) => {
@@ -64,11 +108,15 @@ describe('mobile clipboard image followed by typing', () => {
         showToast: vi.fn()
       })
       await paste()
-      expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
-        terminal: 'term-1',
-        text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/shot.png\x1b[201~ `,
-        enter: false
-      })
+      expect(sendRequest).toHaveBeenCalledWith(
+        'terminal.send',
+        {
+          terminal: 'term-1',
+          text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/shot.png\x1b[201~ `,
+          enter: false
+        },
+        { failWhenDisconnected: true }
+      )
     }
   )
 

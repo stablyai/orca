@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
+import { useMobileTerminalPaste } from '../session/use-mobile-terminal-paste'
+
+vi.mock('react', () => ({
+  useCallback: (callback: unknown) => callback,
+  useMemo: (factory: () => unknown) => factory()
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardReader: () => ({ readText: async () => 'clipboard bytes' })
+}))
+vi.mock('../session/mobile-clipboard-image', () => ({}))
+vi.mock('../session/mobile-clipboard-image-resize', () => ({}))
+vi.mock('../terminal/worker-terminal-takeover-report', () => ({
+  reportWorkerTerminalUserInput: vi.fn()
+}))
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -92,6 +106,49 @@ describe('mobile rpc-client connect-wait replay', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
+  })
+
+  it('never replays a clipboard paste when the socket drops after the UI guard', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    socket.open()
+    const sendRequest = client.sendRequest.bind(client)
+    client.sendRequest = (method, params, options) => {
+      socket.close()
+      return sendRequest(method, params, options)
+    }
+    const onError = vi.fn()
+    const onSuccess = vi.fn()
+    const paste = useMobileTerminalPaste({
+      activeHandle: 't1',
+      activeHandleRef: { current: 't1' },
+      activeSessionTabTypeRef: { current: 'terminal' },
+      canSend: true,
+      client,
+      clientRef: { current: client },
+      connState: 'connected',
+      connStateRef: { current: 'connected' },
+      deviceTokenRef: { current: null },
+      flushPendingLiveInputBeforeExternalSend: async () => true,
+      getActiveWorktreeConnectionId: async () => null,
+      onError,
+      onSuccess,
+      ptyModesRef: { current: new Map() },
+      refreshCanPaste: vi.fn(),
+      showToast: vi.fn()
+    })()
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(500)
+      mockSockets[1]!.open()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(terminalSendFrames(mockSockets[1]!)).toEqual([])
+      expect(onError).toHaveBeenCalledOnce()
+      expect(onSuccess).not.toHaveBeenCalled()
+    } finally {
+      client.close()
+      await paste
+    }
   })
 
   it('Given a cut connection When a send opts into failWhenDisconnected Then it rejects now and nothing replays after reconnect', async () => {
