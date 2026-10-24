@@ -90,7 +90,9 @@ async function performRuntimeLocalWorktreeCreate<T>(
       request.refreshLocalBaseRefOnWorktreeCreate ??
       hostSettings.refreshLocalBaseRefOnWorktreeCreate,
     localBaseRefSuggestionDismissed:
-      request.localBaseRefSuggestionDismissed ?? hostSettings.localBaseRefSuggestionDismissed
+      request.localBaseRefSuggestionDismissed ?? hostSettings.localBaseRefSuggestionDismissed,
+    branchPrefix: request.branchPrefix ?? hostSettings.branchPrefix,
+    branchPrefixCustom: request.branchPrefixCustom ?? hostSettings.branchPrefixCustom
   }
   const pathSettings = getWorktreePathSettings(repo, settings, getWorktreeMirrorDistro(store, repo))
   const gitExecOptions = getLocalProjectGitExecOptions(store, repo)
