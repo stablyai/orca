@@ -215,7 +215,8 @@ describe('floating workspace skill discovery', () => {
     floatingWorkspacePath: '/home/me/scratch',
     folderWorkspaces: [],
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     // Why a focused runtime: floating must stay local even when one is selected.

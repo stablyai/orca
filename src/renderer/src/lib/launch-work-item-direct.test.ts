@@ -177,12 +177,27 @@ describe('launchWorkItemDirect', () => {
           id: 'repo-1',
           path: '/repo',
           displayName: 'Repo',
+          badgeColor: '#000000',
           addedAt: 1
         }
-      ],
+      ] satisfies AppState['repos'],
       activeRepoId: 'repo-1',
       activeWorktreeId: null,
-      projects: [
+      endpointProjectHostSetups: [
+        {
+          id: 'repo-1',
+          projectId: 'repo-1',
+          repoId: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          hostId: 'local',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ] satisfies AppState['endpointProjectHostSetups'],
+      endpointProjects: [
         {
           id: 'repo-1',
           displayName: 'Repo',
@@ -191,7 +206,7 @@ describe('launchWorkItemDirect', () => {
           createdAt: 1,
           updatedAt: 1
         }
-      ],
+      ] satisfies AppState['endpointProjects'],
       worktreesByRepo: {},
       settings: {
         defaultTuiAgent: 'codex',

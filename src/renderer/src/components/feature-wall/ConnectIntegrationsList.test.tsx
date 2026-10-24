@@ -8,6 +8,8 @@ type StoreState = {
   activeRepoId: string | null
   activeWorktreeId: string | null
   worktreesByRepo: Record<string, unknown[]>
+  endpointProjects: never[]
+  endpointProjectHostSetups: never[]
   repos: unknown[]
   settings: { activeRuntimeEnvironmentId?: string | null }
   preflightStatus: PreflightStatus | null
@@ -90,6 +92,8 @@ function installStore(preflightStatus: PreflightStatus): void {
     activeRepoId: null,
     activeWorktreeId: null,
     worktreesByRepo: {},
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [],
     settings,
     preflightStatus,

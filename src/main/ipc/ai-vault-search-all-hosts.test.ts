@@ -127,20 +127,29 @@ it('answers an empty merge when no host is reachable to ask', async () => {
   })
 })
 
-it('asks every leg for the merged order and passes freshness through unchanged', async () => {
+it('asks every leg for the merged order and passes both Project keys and freshness unchanged', async () => {
   const host = new StubHost('local', sessions('a', 2))
+  const remote = new StubHost('runtime:remote', sessions('b', 2))
+  const within = {
+    kind: 'project' as const,
+    projectKey: 'project:P',
+    canonicalProjectKey: 'repo:b'
+  }
   await searchAllExecutionHosts(
     {
       query: 'needle',
       freshness: 'wait-until-current',
+      within,
       filters: { sort: 'newest' },
       debug: true
     },
-    [host.leg()]
+    [host.leg(), remote.leg()]
   )
+  expect(remote.lastRequests[0]).toEqual(host.lastRequests[0])
   expect(host.lastRequests[0]).toEqual({
     query: 'needle',
     freshness: 'wait-until-current',
+    within,
     filters: { sort: 'newest' }
   })
 })
@@ -232,37 +241,76 @@ it('names an unavailable host by its reason without losing the other hosts', asy
   expect(response.page.hasMore).toBe(false)
 })
 
-it('calls a leg that times out unreachable and retries it on the next page', async () => {
-  vi.useFakeTimers()
-  try {
-    const stalled: SessionSearchHostLeg = {
-      executionHostId: 'ssh:slow',
-      timeoutMs: 50,
-      search: () => new Promise(() => undefined)
-    }
-    const healthy = new StubHost('local', sessions('a', 2))
-    const pending = searchAllExecutionHosts({ query: 'needle' }, [healthy.leg(), stalled])
-    await vi.advanceTimersByTimeAsync(60)
-    const first = resultsOf(await pending)
-    expect(first.hosts).toContainEqual({
-      executionHostId: 'ssh:slow',
-      outcome: 'unreachable'
-    })
-    expect(first.page.hasMore).toBe(true)
-
-    const recovered = new StubHost('ssh:slow', sessions('s', 2))
-    const second = resultsOf(
-      await searchAllExecutionHosts({ query: 'needle', cursor: first.page.cursor! }, [
+it.each(['relevance', 'newest'] as const)(
+  'keeps available %s hits when another leg times out and retries it',
+  async (sort) => {
+    vi.useFakeTimers()
+    try {
+      const stalled: SessionSearchHostLeg = {
+        executionHostId: 'ssh:slow',
+        timeoutMs: 50,
+        search: () => new Promise(() => undefined)
+      }
+      const healthy = new StubHost('local', sessions('a', 2))
+      const pending = searchAllExecutionHosts({ query: 'needle', filters: { sort } }, [
         healthy.leg(),
-        recovered.leg()
+        stalled
+      ])
+      await vi.advanceTimersByTimeAsync(60)
+      const first = resultsOf(await pending)
+      expect(first.hosts).toContainEqual({
+        executionHostId: 'ssh:slow',
+        outcome: 'unreachable'
+      })
+      expect(first.page.hasMore).toBe(true)
+      expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'a-1'])
+
+      const recovered = new StubHost('ssh:slow', sessions('s', 2))
+      const second = resultsOf(
+        await searchAllExecutionHosts(
+          { query: 'needle', filters: { sort }, cursor: first.page.cursor! },
+          [healthy.leg(), recovered.leg()]
+        )
+      )
+      // The healthy host finished, so only the retried host is still in the walk.
+      expect(second.hosts).toEqual([{ executionHostId: 'ssh:slow', outcome: 'searched' }])
+      expect(second.hits.map((hit) => hit.sessionId)).toEqual(['s-0', 's-1'])
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)
+
+it.each(['relevance', 'newest'] as const)(
+  'keeps available %s hits and the retry cursor when another leg rejects',
+  async (sort) => {
+    const healthy = new StubHost('local', sessions('a', 2))
+    const first = resultsOf(
+      await searchAllExecutionHosts({ query: 'needle', filters: { sort } }, [
+        healthy.leg(),
+        {
+          executionHostId: 'ssh:down',
+          search: async () => {
+            throw new Error('connection refused')
+          }
+        }
       ])
     )
-    expect(second.hosts).toEqual([{ executionHostId: 'ssh:slow', outcome: 'searched' }])
+    expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'a-1'])
+    expect(first.hosts).toContainEqual({ executionHostId: 'ssh:down', outcome: 'unreachable' })
+    expect(first.page.hasMore).toBe(true)
+    const recovered = new StubHost('ssh:down', sessions('s', 2))
+    const second = resultsOf(
+      await searchAllExecutionHosts(
+        { query: 'needle', filters: { sort }, cursor: first.page.cursor! },
+        [healthy.leg(), recovered.leg()]
+      )
+    )
+    expect(second.hosts).toEqual([{ executionHostId: 'ssh:down', outcome: 'searched' }])
     expect(second.hits.map((hit) => hit.sessionId)).toEqual(['s-0', 's-1'])
-  } finally {
-    vi.useRealTimers()
+    expect(second.page.hasMore).toBe(false)
   }
-})
+)
 
 it('reads at most three pages from one host per merged request', async () => {
   // Three-page budget stops a six-page host walk; retain its unread cursor for the next merged page.

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAiVaultProjectKey } from '../../shared/ai-vault-project-key'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
@@ -58,6 +59,7 @@ const aiVaultSessionSchema = z.object({
     .max(AI_VAULT_SCOPE_PATHS_MAX_COUNT)
     .optional()
     .catch(undefined),
+  projectOwnerKey: z.string().refine(isAiVaultProjectKey).nullable().optional().catch(undefined),
   branch: z.string().nullable(),
   model: z.string().nullable(),
   filePath: z.string(),

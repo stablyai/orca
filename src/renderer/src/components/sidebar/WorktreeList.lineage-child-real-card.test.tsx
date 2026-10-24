@@ -308,6 +308,8 @@ function setLineageState(
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     setVisibleReviewCardWorktreeIds: mockStore.setVisibleReviewCardWorktreeIds,
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     retainedAgentsByPaneKey: {},
     revealWorktreeInSidebar: vi.fn(),

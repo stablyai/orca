@@ -40,8 +40,8 @@ const BASE_STATE = {
   agentStatusByPaneKey: {},
   browserTabsByWorktree: {},
   repos: [repo],
-  projects: [],
-  projectHostSetups: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   projectOrderBy: 'recent'
 }
 

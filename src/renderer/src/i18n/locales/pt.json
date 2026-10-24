@@ -4277,9 +4277,7 @@
           "show": "Mostrar",
           "hide": "Ocultar",
           "externalWorktreesGlobal": "Padrão global: {{value0}}",
-          "useGlobal": "Usar global",
-          "removeProjectCheckout": "Remova este checkout do Orca. Outros checkouts deste projeto permanecem.",
-          "removeProjectKeepCheckouts": "Remova este projeto do Orca. Os checkouts que têm suas próprias configurações permanecem."
+          "useGlobal": "Usar global"
         },
         "Settings": {
           "3bf149e873": "Configurações do Projeto > {{value0}}",

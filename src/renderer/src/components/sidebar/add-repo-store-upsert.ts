@@ -41,8 +41,8 @@ export function upsertAddedRepoWithProjectHostSetup(
   // action that normally keeps the project-first compatibility model synced.
   useAppStore.setState({
     repos,
-    projects: projection.projects,
-    projectHostSetups: projection.setups
+    endpointProjects: projection.projects,
+    endpointProjectHostSetups: projection.setups
   })
   return { alreadyPresent, repo: ownedRepo }
 }

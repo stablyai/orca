@@ -38,6 +38,14 @@ export function sessionRowFilter(
       filter.values.push(JSON.stringify(keys.map(scopeRange)))
     }
   }
+  if (filters.ownership) {
+    filter.conditions.push(`id IN (
+      SELECT scoped.id FROM json_each(?) AS scope JOIN sessions AS scoped
+      ON scoped.cwd_key >= scope.value ->> 0 AND scoped.cwd_key < scope.value ->> 1
+      WHERE canonical_project_owns(scoped.cwd_key, scoped.file_path)
+    )`)
+    filter.values.push(JSON.stringify(filters.ownership.ranges))
+  }
   return filter
 }
 

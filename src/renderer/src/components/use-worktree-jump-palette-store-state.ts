@@ -1,3 +1,7 @@
+import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -46,8 +50,8 @@ export function useWorktreeJumpPaletteStoreState({
   )
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
-  const projects = useAppStore((state) => state.projects)
-  const projectHostSetups = useAppStore((state) => state.projectHostSetups)
+  const projects = useAppStore((state) => selectCanonicalProjects(state))
+  const projectHostSetups = useAppStore((state) => selectCanonicalProjectHostSetups(state))
   const detectedWorktreesByRepo = useAppStore((state) => selectDetectedWorktreesByRepo(state))
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()

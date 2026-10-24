@@ -1,3 +1,7 @@
+import {
+  selectCanonicalProjects,
+  selectCanonicalProjectHostSetups
+} from '@/store/project-host-setup-selector'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -39,8 +43,8 @@ function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.
   const activeRepoId = resolveComposerActiveRepoId(state.repos, eligibleRepos, state.activeRepoId)
   const resolution = resolveWorkspaceCreationTarget({
     eligibleRepos,
-    projects: state.projects,
-    projectHostSetups: state.projectHostSetups,
+    projects: selectCanonicalProjects(state),
+    projectHostSetups: selectCanonicalProjectHostSetups(state),
     activeRepoId,
     focusedHostScope: state.workspaceHostScope
   })

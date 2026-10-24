@@ -1,3 +1,4 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
@@ -32,12 +33,12 @@ type CodexPaneLaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'projects'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  ProjectCatalogReadState
 
 /**
  * Lane keys for panes whose Codex credentials come from another machine.

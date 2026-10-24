@@ -433,7 +433,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
     const firstResult = latest?.scanResult
 
-    // Same scannedAt = the snapshot already on screen was replayed.
+    // Repeated stamp and equal content reuse the snapshot already on screen.
     listSessionsMock.mockResolvedValueOnce({ ...EMPTY_RESULT })
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()
@@ -451,8 +451,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
   // An 'all' result is a merge of legs on independent clocks, stamped with the
   // newest leg. A paired host whose clock lags the desktop can return new
-  // sessions while the merged stamp repeats, so the stamp guard above must not
-  // decide anything under 'all' — only the structural reconcile may.
+  // sessions while the merged stamp repeats; final content decides publication.
   it('applies a changed all-host result whose merged scannedAt stood still', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -477,8 +476,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
   })
 
   // The main process routes an empty or unrecognized scope to the same all-host
-  // merge, so the renderer has to read those as merged too or the guard returns
-  // for exactly the results it cannot reason about.
+  // merge; its changed content must also reach reconciliation.
   it('treats a scope that normalizes to all-host as merged', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
     listSessionsMock.mockResolvedValueOnce({
@@ -514,8 +512,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     const applied = latest?.scanResult
     const appliedSessions = latest?.sessions
 
-    // Dropping the stamp guard for 'all' must not reintroduce the churn: the
-    // reconcile still has to recognise an independently cloned identical body.
+    // Reconciliation recognises an independently cloned identical body.
     listSessionsMock.mockResolvedValueOnce(structuredClone(first))
     await advance(THROTTLE_MS + 1)
     await fireWindowFocused()

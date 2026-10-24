@@ -95,6 +95,7 @@ async function listAiVaultSessions(
         ? [...new Set(scopePaths)].sort()
         : scopePaths,
     executionHostScope,
+    historyOwnership: args?.historyOwnership,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true
   })
   const depth = requestedAiVaultSessionDepth(args)

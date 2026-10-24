@@ -17,7 +17,8 @@ vi.mock('@/store', () => ({
         activeModal: 'new-workspace-composer',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
-        projects: [],
+        endpointProjects: [],
+        endpointProjectHostSetups: [],
         repos: [],
         worktreesByRepo: {}
       }),

@@ -5,7 +5,6 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import * as paths from '../../../../shared/cross-platform-path'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
 import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById
@@ -38,14 +37,6 @@ const baseSession: AiVaultSession = {
   resumeCommand: "cd '/Users/ada/orca' && claude --resume 'session-1'",
   subagent: null
 }
-
-describe('toAiVaultProjectKey', () => {
-  it('does not double-wrap compatibility repo project ids', () => {
-    expect(toAiVaultProjectKey('project-1', 'repo-1')).toBe('project:project-1')
-    expect(toAiVaultProjectKey('repo:repo-1', 'repo-1')).toBe('repo:repo-1')
-    expect(toAiVaultProjectKey(null, 'repo-1')).toBe('repo:repo-1')
-  })
-})
 
 describe('buildAiVaultProjectContext', () => {
   it('uses durable worktree project ids before repo fallback', () => {
@@ -257,7 +248,7 @@ describe('buildAiVaultProjectContext', () => {
     expect(context.sessionProjectById.get(secondSession.id)?.label).toBe('Canonical Project')
   })
 
-  it('chooses the most specific nested path and lets worktrees win equal-length ties', () => {
+  it('keeps the most specific workspace path while using its current checkout affiliation', () => {
     const repo = makeRepo({ id: 'repo-root', displayName: 'Root', path: '/repo' })
     const childRepo = makeRepo({ id: 'repo-child', displayName: 'Child Repo', path: '/repo/pkg' })
     const worktree = makeWorktree({
@@ -272,7 +263,7 @@ describe('buildAiVaultProjectContext', () => {
       repos: [repo, childRepo],
       worktrees: [worktree],
       projectHostSetupProjection: makeProjection({
-        projects: [makeProject({ id: 'child-project', displayName: 'Child Project' })],
+        projects: [makeProject({ id: 'setup-child', displayName: 'Child Project' })],
         setups: [
           makeSetup({ repoId: repo.id, projectId: 'root-project', path: repo.path }),
           makeSetup({ repoId: childRepo.id, projectId: 'setup-child', path: childRepo.path })
@@ -284,7 +275,7 @@ describe('buildAiVaultProjectContext', () => {
     })
 
     expect(context.sessionProjectById.get(session.id)).toMatchObject({
-      key: 'project:child-project',
+      key: 'project:setup-child',
       label: 'Child Project'
     })
   })

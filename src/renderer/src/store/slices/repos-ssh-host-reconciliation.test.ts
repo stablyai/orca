@@ -157,7 +157,7 @@ describe('SSH repo host reconciliation', () => {
     const store = createTestStore()
     store.setState({
       repos: [staleRepo],
-      projectHostSetups: [directSshSetup('ssh-old')],
+      endpointProjectHostSetups: [directSshSetup('ssh-old')],
       worktreesByRepo: {
         [repoId]: [
           directSshWorktree('ssh-old', 'stale'),
@@ -172,7 +172,7 @@ describe('SSH repo host reconciliation', () => {
     store.getState().recordSshRepoReadoptions([readoption])
 
     expect(store.getState().repos).toEqual([liveRepo])
-    expect(store.getState().projectHostSetups).toEqual([directSshSetup('ssh-new')])
+    expect(store.getState().endpointProjectHostSetups).toEqual([directSshSetup('ssh-new')])
     expect(store.getState().worktreesByRepo[repoId]).toEqual([
       directSshWorktree('ssh-new', 'authoritative')
     ])
@@ -192,7 +192,7 @@ describe('SSH repo host reconciliation', () => {
     const store = createTestStore()
     store.setState({
       repos: [directSshRepo('ssh-old')],
-      projectHostSetups: [directSshSetup('ssh-old'), runtimeSetup]
+      endpointProjectHostSetups: [directSshSetup('ssh-old'), runtimeSetup]
     })
 
     store.getState().recordSshRepoReadoptions([readoption])
@@ -202,10 +202,10 @@ describe('SSH repo host reconciliation', () => {
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 
     expect(store.getState().repos).toEqual([liveRepo])
-    expect(store.getState().projectHostSetups).toEqual(
+    expect(store.getState().endpointProjectHostSetups).toEqual(
       expect.arrayContaining([directSshSetup('ssh-new'), runtimeSetup])
     )
-    expect(store.getState().projectHostSetups).toHaveLength(2)
+    expect(store.getState().endpointProjectHostSetups).toHaveLength(2)
     expect(store.getState().pendingSshRepoReadoptions).toEqual([])
   })
 
@@ -229,7 +229,7 @@ describe('SSH repo host reconciliation', () => {
       })
       .mockResolvedValueOnce([directSshSetup('ssh-new')])
     const store = createTestStore()
-    store.setState({ repos: [staleRepo], projectHostSetups: [directSshSetup('ssh-old')] })
+    store.setState({ repos: [staleRepo], endpointProjectHostSetups: [directSshSetup('ssh-old')] })
     store.getState().recordSshRepoReadoptions([readoption])
 
     const olderFetch = store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -240,7 +240,7 @@ describe('SSH repo host reconciliation', () => {
     await olderFetch
 
     expect(store.getState().repos).toEqual([liveRepo])
-    expect(store.getState().projectHostSetups).toEqual([directSshSetup('ssh-new')])
+    expect(store.getState().endpointProjectHostSetups).toEqual([directSshSetup('ssh-new')])
   })
 
   it('rejects an old-host worktree response that resolves after re-adoption', async () => {
@@ -387,14 +387,17 @@ describe('SSH repo host reconciliation', () => {
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-old')])
     const store = createTestStore()
-    store.setState({ repos: [localRepo, oldRepo], projectHostSetups: [directSshSetup('ssh-old')] })
+    store.setState({
+      repos: [localRepo, oldRepo],
+      endpointProjectHostSetups: [directSshSetup('ssh-old')]
+    })
 
     await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
 
     expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }, oldRepo])
-    expect(store.getState().projectHostSetups).toEqual(
+    expect(store.getState().endpointProjectHostSetups).toEqual(
       expect.arrayContaining([directSshSetup('ssh-old')])
     )
-    expect(store.getState().projectHostSetups).toHaveLength(2)
+    expect(store.getState().endpointProjectHostSetups).toHaveLength(2)
   })
 })

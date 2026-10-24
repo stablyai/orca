@@ -84,7 +84,7 @@ describe('fetchWorktrees', () => {
     await expect(store.getState().fetchWorktrees(sshRepo.id)).resolves.toBe(false)
 
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
-      { ...queued, hostId: 'ssh:ssh-1' }
+      { ...queued, hostId: 'ssh:ssh-1', projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
     ])
     expect(listKnownForExecutionHostMock).toHaveBeenCalledWith({
       repoId: sshRepo.id,
@@ -136,7 +136,7 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
       existing,
-      { ...queued, hostId: 'ssh:ssh-1' }
+      { ...queued, hostId: 'ssh:ssh-1', projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
     ])
   })
 
@@ -187,7 +187,12 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
       sshExisting,
-      { ...queued, hostId: 'ssh:ssh-1' },
+      {
+        ...queued,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-shared',
+        projectHostSetupId: 'repo-shared'
+      },
       localExisting
     ])
   })
@@ -286,14 +291,16 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees(sshRepo.id)
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
-      { ...stale, hostId: 'ssh:ssh-1' }
+      { ...stale, hostId: 'ssh:ssh-1', projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
     ])
 
     worktreeListMock.mockResolvedValueOnce([live])
     store.setState({ sshConnectionStates: connectedStates } as Partial<AppState>)
     await store.getState().fetchWorktrees(sshRepo.id)
 
-    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([live])
+    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
+      { ...live, projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
+    ])
   })
 
   it('keeps the repo detection entry authoritative while appending metadata rows', async () => {
@@ -381,21 +388,30 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees(sshRepo.id)
     expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
-      { ...deletedOnRemote, hostId: 'ssh:ssh-1' }
+      {
+        ...deletedOnRemote,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
 
     // The host connects and an authoritative scan proves the worktree is gone.
     worktreeListMock.mockResolvedValueOnce([live])
     store.setState({ sshConnectionStates: connectedStates } as Partial<AppState>)
     await store.getState().fetchWorktrees(sshRepo.id)
-    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([live])
+    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
+      { ...live, projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
+    ])
 
     // The host drops again; persisted metadata still lists the deleted worktree.
     listKnownForExecutionHostMock.mockResolvedValueOnce(metadataResult())
     store.setState({ sshConnectionStates: new Map() } as Partial<AppState>)
     await store.getState().fetchWorktrees(sshRepo.id)
 
-    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([live])
+    expect(store.getState().worktreesByRepo[sshRepo.id]).toEqual([
+      { ...live, projectId: 'repo:repo-ssh', projectHostSetupId: 'repo-ssh' }
+    ])
   })
 
   it('retires persisted metadata for worktrees an authoritative SSH scan proved gone', async () => {
@@ -474,7 +490,9 @@ describe('fetchWorktrees', () => {
 
     await store.getState().fetchWorktrees(localRepo.id)
 
-    expect(store.getState().worktreesByRepo[localRepo.id]).toEqual([survivor])
+    expect(store.getState().worktreesByRepo[localRepo.id]).toEqual([
+      { ...survivor, projectId: 'repo:repo-local', projectHostSetupId: 'repo-local' }
+    ])
     // Local metas are GC-eligible on their own; only the SSH exemption needs this IPC.
     expect(forgetRemovedForExecutionHostMock).not.toHaveBeenCalled()
   })

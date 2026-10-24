@@ -1,3 +1,4 @@
+import { selectCanonicalProjectHostSetups } from '../../src/renderer/src/store/project-host-setup-selector'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -103,7 +104,7 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     }
   }
 
-  const fixture = await orcaPage.evaluate(async (repoPaths): Promise<SidebarFixture> => {
+  const fixture = await orcaPage.evaluate(async (repoPaths) => {
     const store = window.__store!
     for (const repoPath of repoPaths) {
       await window.api.repos.add({ path: repoPath })
@@ -131,21 +132,35 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     const state = store.getState()
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
-    const collapsedSetup = state.projectHostSetups.find((setup) => setup.repoId === collapsed.id)
     const worktree = state.worktreesByRepo[expanded.id]?.find((entry) => entry.isMainWorktree)
-    if (!collapsedSetup || !worktree) {
+    if (!worktree) {
       throw new Error('Fixture project setup or worktree is missing')
     }
-    const collapsedGroups = [`project-group:${group.id}`, `project:${collapsedSetup.projectId}`]
-    await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
-    store.setState({ collapsedGroups: new Set(collapsedGroups) })
     return {
       groupId: group.id,
       collapsedRepoId: collapsed.id,
       expandedRepoId: expanded.id,
-      worktreeId: worktree.id
-    }
+      worktreeId: worktree.id,
+      repos: state.repos,
+      endpointProjects: state.endpointProjects,
+      endpointProjectHostSetups: state.endpointProjectHostSetups
+    } satisfies SidebarFixture &
+      Pick<typeof state, 'repos' | 'endpointProjects' | 'endpointProjectHostSetups'>
   }, paths)
+  const collapsedSetup = selectCanonicalProjectHostSetups(fixture).find(
+    (setup) => setup.repoId === fixture.collapsedRepoId
+  )
+  if (!collapsedSetup) {
+    throw new Error('Fixture project setup or worktree is missing')
+  }
+  const collapsedGroups = [
+    `project-group:${fixture.groupId}`,
+    `project:${collapsedSetup.projectId}`
+  ]
+  await orcaPage.evaluate(async (collapsedGroups) => {
+    await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
+    window.__store!.setState({ collapsedGroups: new Set(collapsedGroups) })
+  }, collapsedGroups)
 
   const sidebar = orcaPage.locator('[data-worktree-sidebar]')
   const group = sidebar.locator(`[data-project-group-header-id="${fixture.groupId}"]`)

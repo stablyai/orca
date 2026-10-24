@@ -64,6 +64,9 @@ describe('edge-wrapped terminal HTTP links', () => {
   beforeEach(() => {
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()

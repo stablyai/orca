@@ -352,8 +352,8 @@ describe('fetchWorktrees', () => {
     await refresh
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([
-      localWorktree,
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      { ...localWorktree, projectId: 'repo:repo1', projectHostSetupId: 'repo1' },
+      { ...sshWorktree, hostId: 'ssh:ssh-1', projectId: 'repo:repo1', projectHostSetupId: 'repo1' }
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
   })
@@ -402,7 +402,12 @@ describe('fetchWorktrees', () => {
 
     expect(visibleResult).toBe(true)
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      {
+        ...sshWorktree,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
     expect(store.getState().detectedWorktreesByRepo['repo-ssh']?.worktrees).toEqual([
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
@@ -454,7 +459,12 @@ describe('fetchWorktrees', () => {
 
     expect(visibleResult).toBe(true)
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...sshWorktree, hostId: 'ssh:ssh-1' }
+      {
+        ...sshWorktree,
+        hostId: 'ssh:ssh-1',
+        projectId: 'repo:repo-ssh',
+        projectHostSetupId: 'repo-ssh'
+      }
     ])
     expect(store.getState().detectedWorktreesByRepo['repo-ssh']?.worktrees).toEqual([
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })

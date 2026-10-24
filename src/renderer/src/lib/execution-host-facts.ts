@@ -1,3 +1,4 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -38,11 +39,11 @@ type WorktreeHostFactsState = HostFactsState &
     | 'detectedWorktreesByRepo'
     | 'folderWorkspaces'
     | 'projectGroups'
-    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  >
+  > &
+  ProjectCatalogReadState
 
 const SSH_PLATFORM_WITHHELD =
   'The SSH host has not reported its operating system yet. Connect to it and try again.'

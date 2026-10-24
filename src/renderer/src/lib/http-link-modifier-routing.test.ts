@@ -11,6 +11,9 @@ describe('modifier routing across link source owners', () => {
   const createBrowserTabMock = vi.fn()
   const openRuntimeBrowserTabMock = vi.fn((): Promise<string | null> => Promise.resolve(null))
   const storeState = {
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: {} as {
       openLinksInApp?: boolean
       openLinksInAppModifierInverts?: boolean

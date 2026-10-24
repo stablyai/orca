@@ -219,15 +219,14 @@ async function startOrcadRuntime(
     clientCodexHomes: codexAccountHomes
   })
 
+  const { orcadAiVaultSessionSources, installOrcadSessionSearchService } =
+    await import('./orcad-session-search')
   const { loadAgentSessionClaimSigner } = await import('../runtime/agent-session-claim-identity')
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     // Why persistent: the terminal daemon outlives orcad, so a per-process key would make a
     // restarted orcad unable to recognise (and adopt) the agent PTYs it already owns.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
-    getAdditionalAiVaultCodexHomePaths: () => [
-      ...codexAccountHomes.listSessionHomes(),
-      ...(accountLaunch?.listCodexSessionHomes() ?? [])
-    ],
+    ...orcadAiVaultSessionSources(profileStore, codexAccountHomes, accountLaunch),
     // Why absent on a WSL host: a resolver overrides the desktop-pushed CODEX_HOME.
     ...accountLaunch?.runtimeDeps,
     // Why here too: orcad serves `worktree.ps` and `agentSession.*`; unwired it lists no agents.
@@ -263,7 +262,6 @@ async function startOrcadRuntime(
   const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
 
-  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
     getSettings: () => profileStore.getSettings()

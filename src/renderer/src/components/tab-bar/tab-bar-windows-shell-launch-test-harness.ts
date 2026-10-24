@@ -1,3 +1,4 @@
+import type { ProjectHostSetup } from '../../../../shared/project-types'
 import { vi } from 'vitest'
 
 export const appStoreSnapshot: {
@@ -6,7 +7,8 @@ export const appStoreSnapshot: {
   activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
   activeRuntimeEnvironmentId: string | null
   activeWorktreeId: string | null
-  projects: {
+  endpointProjectHostSetups: readonly ProjectHostSetup[]
+  endpointProjects: {
     id: string
     localWindowsRuntimePreference?:
       | { kind: 'inherit-global' | 'windows-host' }
@@ -44,7 +46,8 @@ export const appStoreSnapshot: {
   activeTabType: null,
   activeRuntimeEnvironmentId: null,
   activeWorktreeId: null,
-  projects: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
   repos: [],
   sshConnectionStates: new Map(),
   worktreesByRepo: {},
@@ -69,7 +72,8 @@ const useAppStoreMock = vi.fn(
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       activeWorktreeId: string | null
       gitStatusByWorktree: Record<string, never[]>
-      projects: typeof appStoreSnapshot.projects
+      endpointProjectHostSetups: readonly ProjectHostSetup[]
+      endpointProjects: typeof appStoreSnapshot.endpointProjects
       repos: { id: string; connectionId?: string | null }[]
       sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
       worktreesByRepo: typeof appStoreSnapshot.worktreesByRepo
@@ -98,7 +102,8 @@ const useAppStoreMock = vi.fn(
       activeTabType: appStoreSnapshot.activeTabType,
       activeWorktreeId: appStoreSnapshot.activeWorktreeId,
       gitStatusByWorktree: {},
-      projects: appStoreSnapshot.projects,
+      endpointProjects: appStoreSnapshot.endpointProjects,
+      endpointProjectHostSetups: appStoreSnapshot.endpointProjectHostSetups,
       repos: appStoreSnapshot.repos,
       sshConnectionStates: appStoreSnapshot.sshConnectionStates,
       worktreesByRepo: appStoreSnapshot.worktreesByRepo,
@@ -130,7 +135,8 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabType: appStoreSnapshot.activeTabType,
   activeWorktreeId: appStoreSnapshot.activeWorktreeId,
   gitStatusByWorktree: {},
-  projects: appStoreSnapshot.projects,
+  endpointProjects: appStoreSnapshot.endpointProjects,
+  endpointProjectHostSetups: appStoreSnapshot.endpointProjectHostSetups,
   repos: appStoreSnapshot.repos,
   sshConnectionStates: appStoreSnapshot.sshConnectionStates,
   worktreesByRepo: appStoreSnapshot.worktreesByRepo,
@@ -159,7 +165,8 @@ export function resetAppStoreSnapshot(): void {
   appStoreSnapshot.activeTabType = null
   appStoreSnapshot.activeRuntimeEnvironmentId = null
   appStoreSnapshot.activeWorktreeId = null
-  appStoreSnapshot.projects = []
+  appStoreSnapshot.endpointProjects = []
+  appStoreSnapshot.endpointProjectHostSetups = []
   appStoreSnapshot.repos = []
   appStoreSnapshot.sshConnectionStates = new Map()
   appStoreSnapshot.worktreesByRepo = {}

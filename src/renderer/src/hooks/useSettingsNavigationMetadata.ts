@@ -19,13 +19,13 @@ import {
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import {
   useChatSettingsTypedPermissions,
   useStructuredAgentSessionHostQueuesMessages
 } from '@/runtime/structured-agent-session-host-capability'
 import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
+import { useAppStore } from '@/store'
 import type { Repo } from '../../../shared/repo-types'
 import {
   buildCapabilitySettingsSections,
@@ -121,7 +121,11 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const { i18n } = useTranslation()
   const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
-  const projectHostSetupProjection = useProjectHostSetupProjection()
+  const projection = useProjectHostSetupProjection()
+  const projectGrouping = useMemo(
+    () => ({ projects: projection.projects, projectHostSetups: projection.setups }),
+    [projection]
+  )
   const settings = useAppStore((state) => state.settings)
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
@@ -186,10 +190,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isDev: import.meta.env.DEV,
         isLinearConnected,
         repos,
-        projectGrouping: {
-          projects: projectHostSetupProjection.projects,
-          projectHostSetups: projectHostSetupProjection.setups
-        }
+        projectGrouping
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
     [
@@ -205,7 +206,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
-      projectHostSetupProjection,
+      projectGrouping,
       activeLocale
     ]
   )

@@ -6,6 +6,9 @@ import type { WorkspacePort } from '../../../../shared/workspace-ports'
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
+      repos: [],
+      endpointProjects: [],
+      endpointProjectHostSetups: [],
       createBrowserTab: vi.fn(),
       setRemoteBrowserPageHandle: vi.fn(),
       replaceWorkspacePortScans: vi.fn(),

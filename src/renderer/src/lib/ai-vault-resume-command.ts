@@ -1,3 +1,4 @@
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   assertAntigravityReferenceTarget,
   buildAntigravityReferenceStartup
@@ -33,11 +34,11 @@ export type AiVaultResumeWorktreeArgs = {
     | 'activeWorktreeId'
     | 'folderWorkspaces'
     | 'projectGroups'
-    | 'projects'
     | 'repos'
     | 'settings'
     | 'worktreesByRepo'
-  >
+  > &
+    ProjectCatalogReadState
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null

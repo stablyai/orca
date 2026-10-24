@@ -50,7 +50,9 @@ async function settle(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.openFiles = []
-  storeState.repos = [{ id: 'repo-b', displayName: 'project-b' }]
+  storeState.repos = [
+    { id: 'repo-b', displayName: 'project-b', path: '/b', badgeColor: '', addedAt: 0 }
+  ]
   // Records each open as the store does, so the hint sees whether the tab is read-only.
   openFileMock.mockImplementation(
     (file: { filePath: string; worktreeId: string; readOnly?: boolean }) => {

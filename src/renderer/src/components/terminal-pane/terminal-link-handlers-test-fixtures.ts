@@ -1,5 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store/types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 export type TerminalLinkStoreSettings = {
@@ -15,7 +16,10 @@ export type TerminalLinkOpenFile = {
   readOnly?: boolean
 }
 
-export type TerminalLinkStoreState = {
+export type TerminalLinkStoreState = Pick<
+  AppState,
+  'repos' | 'endpointProjects' | 'endpointProjectHostSetups'
+> & {
   settings: TerminalLinkStoreSettings | undefined
   setActiveWorktree: Mock
   createBrowserTab: Mock
@@ -42,7 +46,6 @@ export type TerminalLinkStoreState = {
     }[]
   >
   folderWorkspaces: []
-  repos?: { id: string; displayName: string }[]
 }
 
 export type TerminalLinkTestDoubles = {
@@ -105,6 +108,9 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
     }
   )
   const storeState: TerminalLinkStoreState = {
+    repos: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,

@@ -32,7 +32,6 @@ import {
 import { listedRow } from './automations-page-listed-items'
 import { makeAutomation, REPO_ID, WORKSPACE_ID } from './automations-page-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
 
 installAutomationsPageHarness()
 
@@ -61,7 +60,7 @@ function addSshHost(): void {
 
 /** A project checked out on that SSH host rather than locally. */
 function addSshProject(): void {
-  const repo = {
+  const repo: Repo = {
     id: SSH_REPO_ID,
     displayName: 'orca',
     path: '/repos/orca',
@@ -69,13 +68,24 @@ function addSshProject(): void {
     addedAt: 1,
     worktreeBaseRef: 'main',
     connectionId: SSH_TARGET_ID
-  } as Repo
+  }
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.repoMap.set(SSH_REPO_ID, repo)
   // Without a ready setup on that host the project has no run context, and a
   // save against it is refused before any destination is stated.
-  mocks.state.projectHostSetups = [
-    ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
+  mocks.state.endpointProjects = [
+    ...mocks.state.endpointProjects,
+    {
+      id: 'project-ssh',
+      displayName: 'orca',
+      badgeColor: '#222222',
+      sourceRepoIds: [SSH_REPO_ID],
+      createdAt: 1,
+      updatedAt: 1
+    }
+  ]
+  mocks.state.endpointProjectHostSetups = [
+    ...mocks.state.endpointProjectHostSetups,
     {
       id: 'setup-ssh',
       projectId: 'project-ssh',
@@ -93,7 +103,7 @@ function addSshProject(): void {
 
 /** A runtime project with the same host-local id as the desktop project. */
 function addCollidingRuntimeProject(): void {
-  const repo = {
+  const repo: Repo = {
     id: REPO_ID,
     displayName: 'orca on m4-air',
     path: '/repos/orca',
@@ -101,10 +111,21 @@ function addCollidingRuntimeProject(): void {
     addedAt: 1,
     worktreeBaseRef: 'main',
     executionHostId: `runtime:${RUNTIME_ID}`
-  } as Repo
+  }
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
-  mocks.state.projectHostSetups = [
-    ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
+  mocks.state.endpointProjects = [
+    ...mocks.state.endpointProjects,
+    {
+      id: 'project-runtime-collision',
+      displayName: 'orca on m4-air',
+      badgeColor: '#111111',
+      sourceRepoIds: [REPO_ID],
+      createdAt: 1,
+      updatedAt: 1
+    }
+  ]
+  mocks.state.endpointProjectHostSetups = [
+    ...mocks.state.endpointProjectHostSetups,
     {
       id: 'setup-runtime-collision',
       projectId: 'project-runtime-collision',

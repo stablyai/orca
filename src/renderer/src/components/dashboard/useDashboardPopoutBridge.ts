@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
 import {
-  type AgentLaunchRouteView,
+  type AgentLaunchRouteWatchState,
   agentLaunchRouteInputsChanged,
   selectAgentLaunchRouteView
 } from '@/lib/agent-launch-route-input'
@@ -45,7 +45,7 @@ export function repoIconsUnchanged(
 
 type DashboardSnapshotWatchState = DashboardSnapshotState &
   Pick<AppState, 'agentStatusEpoch'> &
-  AgentLaunchRouteView
+  AgentLaunchRouteWatchState
 
 export function dashboardSnapshotInputsChanged(
   state: DashboardSnapshotWatchState,

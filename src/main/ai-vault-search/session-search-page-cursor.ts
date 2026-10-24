@@ -17,6 +17,7 @@ export class SessionSearchCursorError extends Error {
 
 type CursorPayload = {
   /** Database incarnation; changes when the index is rebuilt. */
+  p?: string
   i: string
   /** Index generation. */
   g: number
@@ -35,7 +36,8 @@ export function sessionSearchPageKey(request: SessionSearchRequest): string {
     filters.sort ?? 'relevance',
     filters.since ?? null,
     [...(filters.agents ?? [])].sort(),
-    [...(filters.scopePaths ?? [])].sort()
+    [...(filters.scopePaths ?? [])].sort(),
+    ...(filters.ownership ? [filters.ownership.projectKey] : [])
   ])
   return createHash('sha256').update(identity).digest('base64url').slice(0, 16)
 }
@@ -44,9 +46,16 @@ export function encodeSessionSearchCursor(
   generation: number,
   offset: number,
   key: string,
-  incarnation: string
+  incarnation: string,
+  ownership?: string
 ): string {
-  const payload: CursorPayload = { i: incarnation, g: generation, o: offset, k: key }
+  const payload: CursorPayload = {
+    i: incarnation,
+    g: generation,
+    o: offset,
+    k: key,
+    ...(ownership ? { p: ownership } : {})
+  }
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url')
 }
 
@@ -55,7 +64,8 @@ export function decodeSessionSearchCursor(
   cursor: string,
   generation: number,
   key: string,
-  incarnation: string
+  incarnation: string,
+  ownership?: string
 ): number {
   let payload: CursorPayload
   try {
@@ -82,6 +92,9 @@ export function decodeSessionSearchCursor(
   }
   // Cursors without incarnation fencing cannot survive a possible rebuild.
   if (payload.i !== incarnation) {
+    throw new SessionSearchCursorError('stale-generation', generation, claimed)
+  }
+  if (payload.p !== ownership) {
     throw new SessionSearchCursorError('stale-generation', generation, claimed)
   }
   if (payload.k !== key) {

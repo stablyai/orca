@@ -1,3 +1,7 @@
+import {
+  getProjectHostSetupProjectionFromState,
+  type ProjectCatalogReadState
+} from '@/store/project-host-setup-selector'
 import type { AppState } from '../../store/types'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -25,7 +29,6 @@ export type NativeChatSkillStateInputs = Pick<
   | 'floatingWorkspacePath'
   | 'folderWorkspaces'
   | 'projectGroups'
-  | 'projects'
   | 'repos'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'settings'
@@ -33,7 +36,8 @@ export type NativeChatSkillStateInputs = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
->
+> &
+  ProjectCatalogReadState
 
 type NativeChatSkillTab = { id: string; startupCwd?: string }
 
@@ -59,7 +63,7 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
     floatingWorkspacePath: state.floatingWorkspacePath,
     folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
-    projects: state.projects,
+    projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
     repos: state.repos,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     settings: state.settings,

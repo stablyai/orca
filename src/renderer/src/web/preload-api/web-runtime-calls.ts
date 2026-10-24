@@ -124,7 +124,8 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   params?: unknown,
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
-  expectedEnvironmentRuntimeId?: string
+  expectedEnvironmentRuntimeId?: string,
+  isActive: () => boolean = () => true
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
   const assertPairing = () => assertEnvironmentPairing(selector, expectedEnvironmentPairingRevision)
@@ -133,6 +134,9 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
     return manuallyDisconnectedResponse(environment)
   }
   const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
+    if (!isActive()) {
+      throw new Error('Session search retired')
+    }
     assertPairing()
     if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
       return Promise.resolve(manuallyDisconnectedResponse(environment))

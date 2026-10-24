@@ -8,6 +8,13 @@ const mocks = vi.hoisted(() => {
   > = {
     repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'runtime:env-1' }]
   }
+  const endpointProjects: {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[] = [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
   return {
     toastLoading: vi.fn(() => 'toast-1'),
     toastDismiss: vi.fn(),
@@ -19,18 +26,21 @@ const mocks = vi.hoisted(() => {
       activeRepoId: 'repo1',
       activeWorktreeId: 'wt-1',
       settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
-      projects: [
+      endpointProjects,
+      endpointProjectHostSetups: [
         {
           id: 'repo1',
-          localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+          repoId: 'repo1',
+          projectId: 'repo1',
+          hostId: 'local' as const,
+          path: '/remote/repo',
+          displayName: 'repo',
+          setupState: 'ready' as const,
+          setupMethod: 'legacy-repo' as const,
+          createdAt: 0,
+          updatedAt: 0
         }
-      ] as {
-        id: string
-        localWindowsRuntimePreference:
-          | { kind: 'inherit-global' }
-          | { kind: 'windows-host' }
-          | { kind: 'wsl'; distro: string | null }
-      }[],
+      ],
       repos: [
         {
           id: 'repo1',
@@ -107,7 +117,7 @@ describe('handleTerminalFileDrop', () => {
       }
     })
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
-    mocks.storeState.projects = [
+    mocks.storeState.endpointProjects = [
       {
         id: 'repo1',
         localWindowsRuntimePreference: { kind: 'inherit-global' }
@@ -374,7 +384,7 @@ describe('handleTerminalFileDrop', () => {
 
   it('pastes Linux-readable paths for local Windows-path projects forced to WSL', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    mocks.storeState.projects = [
+    mocks.storeState.endpointProjects = [
       {
         id: 'repo1',
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
@@ -432,7 +442,7 @@ describe('handleTerminalFileDrop', () => {
 
   it('pastes a spaced image from a Windows-path project forced to WSL with POSIX escaping', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.projects = [
+    mocks.storeState.endpointProjects = [
       { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
     ]
     mocks.storeState.repos = [

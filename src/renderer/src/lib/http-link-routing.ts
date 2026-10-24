@@ -1,3 +1,11 @@
+import {
+  getProjectHostSetupProjectionFromState,
+  type ProjectCatalogReadState
+} from '@/store/project-host-setup-selector'
+import {
+  getProjectHostSetupLookup,
+  type WorkspaceProjectOwner
+} from '../../../shared/project-host-setup-lookup'
 import { translate } from '@/i18n/i18n'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import {
@@ -38,26 +46,25 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-type StoreAccessor = () => HttpLinkBrowserTabState & {
-  settings?: Partial<
-    Pick<
-      GlobalSettings,
-      | 'openLinksInApp'
-      | 'openLinksInAppModifierInverts'
-      | 'activeRuntimeEnvironmentId'
-      | 'localhostWorktreeLabelsEnabled'
-    >
-  > | null
-  setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
-  activeWorktreeId?: string | null
-  activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  repos?: readonly LocalhostLinkRepo[]
-  projects?: readonly LocalhostLinkProject[]
-  worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
-  allWorktrees?: () => LocalhostLinkWorktree[]
-  workspacePortScan?: { result: WorkspacePortScanResult } | null
-  workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
-}
+type StoreAccessor = () => ProjectCatalogReadState &
+  HttpLinkBrowserTabState & {
+    settings?: Partial<
+      Pick<
+        GlobalSettings,
+        | 'openLinksInApp'
+        | 'openLinksInAppModifierInverts'
+        | 'activeRuntimeEnvironmentId'
+        | 'localhostWorktreeLabelsEnabled'
+      >
+    > | null
+    setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+    activeWorktreeId?: string | null
+    activeWorkspaceExecutionHostId?: ExecutionHostId | null
+    worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
+    allWorktrees?: () => LocalhostLinkWorktree[]
+    workspacePortScan?: { result: WorkspacePortScanResult } | null
+    workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
+  }
 
 type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   workspaceId: string
@@ -72,17 +79,7 @@ type WorkspaceHttpLinkBrowserOpener = (
   request: WorkspaceHttpLinkBrowserRequest
 ) => Promise<string | null>
 
-type LocalhostLinkRepo = {
-  id: string
-  displayName: string
-}
-
-type LocalhostLinkProject = LocalhostLinkRepo
-
-type LocalhostLinkWorktree = {
-  id: string
-  projectId?: string
-}
+type LocalhostLinkWorktree = { id: string } & Partial<WorkspaceProjectOwner>
 
 // Why: store access is injected via registerHttpLinkStoreAccessor rather than
 // a direct `import '@/store'` to avoid a circular import — store/slices/editor.ts
@@ -306,10 +303,14 @@ function localhostLabelRouteForTerminalLink(
     return null
   }
   const worktree = findWorktreeById(state, port.owner.worktreeId)
-  const project =
-    worktree?.projectId && state.projects
-      ? (state.projects.find((entry) => entry.id === worktree.projectId) ?? null)
-      : null
+  const projection = getProjectHostSetupProjectionFromState(state)
+  const projectId = getProjectHostSetupLookup(projection.setups).projectId({
+    ...worktree,
+    repoId: port.owner.repoId
+  })
+  const project = projectId
+    ? (projection.projects.find((entry) => entry.id === projectId) ?? null)
+    : null
   const projectSource = project ?? repo
   return {
     targetUrl: parsed.toString(),

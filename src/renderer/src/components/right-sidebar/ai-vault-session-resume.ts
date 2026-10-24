@@ -10,6 +10,8 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
+import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
@@ -22,11 +24,9 @@ import {
 } from './ai-vault-session-worktree'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-export type AiVaultSessionResumeTargetState = Pick<
-  AppState,
-  'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
-> &
-  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings'>>
+export type AiVaultSessionResumeTargetState = ProjectCatalogReadState &
+  Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'worktreesByRepo'> &
+  Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'settings'>>
 
 export type AiVaultSessionResumeState = {
   blocked: boolean
@@ -227,10 +227,12 @@ function resolveAiVaultResumeTargetState(args: {
   for (const worktree of args.worktrees) {
     worktreesByRepo[worktree.repoId] = [...(worktreesByRepo[worktree.repoId] ?? []), worktree]
   }
+  const repos = [...args.repos]
   return {
     folderWorkspaces: [],
     projectGroups: [],
-    repos: [...args.repos],
+    repos,
+    projectHostSetupProjection: projectHostSetupProjectionFromRepos(repos),
     worktreesByRepo
   }
 }

@@ -64,6 +64,8 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     reorderRepos: vi.fn(),
     reportVisibleGitHubPRRefreshCandidates: vi.fn(),
     retainedAgentsByPaneKey: {},
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     repos: [repo],
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),

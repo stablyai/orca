@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
     repos: [] as Repo[],
-    projects: [],
-    projectHostSetups: []
+    endpointProjects: [],
+    endpointProjectHostSetups: []
   },
   cloneLocal: vi.fn(),
   pickDirectory: vi.fn(),
@@ -94,8 +94,8 @@ describe('useAddRepoCloneFlow', () => {
     mocks.refValues = []
     mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', false, null, null]
     mocks.storeState.repos = []
-    mocks.storeState.projects = []
-    mocks.storeState.projectHostSetups = []
+    mocks.storeState.endpointProjects = []
+    mocks.storeState.endpointProjectHostSetups = []
     vi.stubGlobal('window', {
       api: {
         repos: {

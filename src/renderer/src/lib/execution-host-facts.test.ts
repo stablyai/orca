@@ -36,7 +36,8 @@ function state(): State {
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
     projectGroups: [],
-    projects: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     activeRepoId: null,
     activeWorktreeId: null,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no other setting.

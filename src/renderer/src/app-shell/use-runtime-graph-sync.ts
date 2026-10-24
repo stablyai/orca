@@ -59,8 +59,8 @@ export function useRuntimeGraphSync(): void {
         // Why: the graph carries the sidebar's Project catalog to paired phones; republish on change.
         if (
           state.repos !== previousState.repos ||
-          state.projects !== previousState.projects ||
-          state.projectHostSetups !== previousState.projectHostSetups ||
+          state.endpointProjects !== previousState.endpointProjects ||
+          state.endpointProjectHostSetups !== previousState.endpointProjectHostSetups ||
           state.projectOrderBy !== previousState.projectOrderBy
         ) {
           scheduleRuntimeGraphSync()

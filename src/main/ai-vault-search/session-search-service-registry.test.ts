@@ -4,6 +4,11 @@ import {
   unavailableSessionSearchStatus,
   createSessionSearchClient
 } from '../../shared/ai-vault-search-client'
+import {
+  installSessionSearchScopeCatalogSource,
+  resetSessionSearchScopeCatalogForTests
+} from './session-search-scope-catalog'
+import * as ownership from './session-search-project-ownership'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import {
   setSessionSearchService,
@@ -12,6 +17,8 @@ import {
 } from './session-search-service-registry'
 
 afterEach(() => {
+  resetSessionSearchScopeCatalogForTests()
+  vi.restoreAllMocks()
   setSessionSearchService(null)
   vi.useRealTimers()
 })
@@ -132,6 +139,33 @@ describe('session search service registry', () => {
       )
     }
   )
+  it('does no canonical preparation for unscoped or legacy requests', async () => {
+    const source = vi.fn(() => ({
+      repos: [],
+      projects: [],
+      projectHostSetups: [],
+      worktreeMeta: {},
+      settings: { workspaceDir: '', nestWorkspaces: false }
+    }))
+    installSessionSearchScopeCatalogSource(source)
+    const materialize = vi.spyOn(ownership, 'materializeSessionSearchOwnership')
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    for (const reason of ['disabled', 'not-ready'] as const) {
+      service.search.mockResolvedValue({ kind: 'unavailable', reason })
+      expect(await searchSessionService({ query: 'needle' }, 'ipc')).toEqual({
+        kind: 'unavailable',
+        reason
+      })
+    }
+    expect(source).not.toHaveBeenCalled()
+    await searchSessionService(
+      { query: 'needle', within: { kind: 'project', projectKey: 'repo:absent' } },
+      'ipc'
+    )
+    expect(source).toHaveBeenCalledTimes(1)
+    expect(materialize).not.toHaveBeenCalled()
+  })
   it('waits for reconcile before search, and clears its timeout', async () => {
     vi.useFakeTimers()
     const service = fakeSearchService()

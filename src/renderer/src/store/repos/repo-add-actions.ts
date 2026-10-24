@@ -1,3 +1,4 @@
+import { selectCanonicalProjects } from '../project-host-setup-selector'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -108,7 +109,10 @@ export function createRepoAddActions(
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
+              previous: {
+                endpointProjects: s.endpointProjects,
+                endpointProjectHostSetups: s.endpointProjectHostSetups
+              },
               nextRepos,
               hostId
             }),
@@ -131,7 +135,11 @@ export function createRepoAddActions(
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
-          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
+          warnIfProjectCrossesWslFilesystemBoundary(
+            repo,
+            selectCanonicalProjects(get()),
+            get().settings
+          )
         }
         return repo
       } catch (err) {

@@ -232,10 +232,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
+    configureAiVaultSessionSources({
+      getProjectOwnershipCatalog: deps?.getProjectOwnershipCatalog,
+      getAdditionalCodexHomePaths: deps?.getAdditionalAiVaultCodexHomePaths
+    })
     if (deps?.getAdditionalAiVaultCodexHomePaths) {
-      configureAiVaultSessionSources({
-        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
-      })
       configureHostReadableTranscriptPathSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })

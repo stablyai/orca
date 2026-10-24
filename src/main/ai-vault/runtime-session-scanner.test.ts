@@ -53,6 +53,7 @@ describe('runtime AI Vault session scanner', () => {
       {
         limit: 25,
         force: true,
+        historyOwnership: {},
         scopePaths: ['/srv/app']
       },
       { timeoutMs: 3000 }
@@ -65,6 +66,7 @@ describe('runtime AI Vault session scanner', () => {
       {
         limit: 25,
         force: true,
+        historyOwnership: {},
         scopePaths: ['/srv/app'],
         executionHostId: 'runtime:env-1'
       },

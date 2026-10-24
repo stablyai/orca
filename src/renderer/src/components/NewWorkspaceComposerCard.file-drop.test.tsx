@@ -16,7 +16,8 @@ vi.mock('@/runtime/runtime-file-import-client', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
-    (selector: (state: unknown) => unknown) => selector({ settings: {}, projects: [], repos: [] }),
+    (selector: (state: unknown) => unknown) =>
+      selector({ settings: {}, endpointProjects: [], endpointProjectHostSetups: [], repos: [] }),
     {
       getState: () => ({
         sshConnectionStates: connections,

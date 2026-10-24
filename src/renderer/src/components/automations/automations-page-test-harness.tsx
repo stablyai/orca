@@ -1,3 +1,4 @@
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 /* oxlint-disable anti-slop/no-module-mocking -- Vitest support module for the 10 AutomationsPage specs, not shipped code, and it falls outside
    the *.test / *.spec / tests glob set. Inlining these 13 stubs would duplicate them into all 10 specs and push the largest
    past the max-lines ratchet. */
@@ -104,7 +105,10 @@ export type DeleteDialogProps = {
 }
 
 type AutomationsPageMocks = {
-  state: Record<string, unknown>
+  state: Record<string, unknown> & {
+    endpointProjects: Project[]
+    endpointProjectHostSetups: ProjectHostSetup[]
+  }
   repoMap: Map<string, unknown>
   worktreeMap: Map<string, unknown>
   listPanel: ListPanelProps | null
@@ -123,7 +127,7 @@ type AutomationsPageMocks = {
 // Not `vi.hoisted`: the mock factories below only close over this, and a hoisted
 // binding cannot be exported.
 export const mocks: AutomationsPageMocks = {
-  state: {},
+  state: { endpointProjects: [], endpointProjectHostSetups: [] },
   repoMap: new Map<string, unknown>(),
   worktreeMap: new Map<string, unknown>(),
   listPanel: null,

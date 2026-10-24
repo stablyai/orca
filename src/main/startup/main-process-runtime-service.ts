@@ -116,6 +116,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     getPairedDeviceName: (pairedDeviceId) =>
       state.runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
+    getProjectOwnershipCatalog: () =>
+      sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID),
     getAdditionalAiVaultCodexHomePaths: () =>
       state.codexRuntimeHome?.getHostCodexHomePathsForSessionDiscovery() ?? [],
     prepareAiVaultSessionResume: codexAiVaultSessionResumePreparation(() => ({

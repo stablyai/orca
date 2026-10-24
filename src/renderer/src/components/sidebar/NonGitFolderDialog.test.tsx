@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
     addNonGitFolder: vi.fn(),
     runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }],
     repos: [] as Repo[],
-    projects: [],
-    projectHostSetups: [],
+    endpointProjects: [],
+    endpointProjectHostSetups: [],
     worktreesByRepo: {} as Record<string, Worktree[]>,
     fetchWorktrees: vi.fn(),
     settings: {}
@@ -130,8 +130,8 @@ describe('NonGitFolderDialog', () => {
     }
     mocks.state.runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     mocks.state.repos = []
-    mocks.state.projects = []
-    mocks.state.projectHostSetups = []
+    mocks.state.endpointProjects = []
+    mocks.state.endpointProjectHostSetups = []
     mocks.state.worktreesByRepo = {}
     mocks.state.fetchWorktrees.mockResolvedValue(true)
     mocks.onboardingGet.mockResolvedValue(null)
