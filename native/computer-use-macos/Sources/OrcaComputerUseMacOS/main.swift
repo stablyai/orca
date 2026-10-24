@@ -502,6 +502,7 @@ final class Provider {
                 ],
                 "actions": [
                     "click": true,
+                    "accessibilityOnlyClick": true,
                     "typeText": true,
                     "pressKey": true,
                     "hotkey": true,
@@ -726,6 +727,10 @@ final class Provider {
     }
 
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
+        let accessibilityOnly = params["accessibilityOnly"]?.bool == true
+        if accessibilityOnly && params["elementIndex"]?.number == nil {
+            throw ProviderError.coded("invalid_argument", "accessibilityOnly requires elementIndex")
+        }
         let snapshot = try currentSnapshot(params: params)
         let button = try mouseButton(params["mouseButton"]?.string)
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
@@ -746,6 +751,9 @@ final class Provider {
                button.hasAccessibilityAction,
                let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
+            }
+            if accessibilityOnly {
+                throw ProviderError.coded("action_not_supported", "element \(record.index) cannot perform this click through accessibility; synthetic input was not sent")
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(

@@ -132,6 +132,12 @@ export class DesktopScriptProviderClient {
     params: Record<string, unknown>
   ): Promise<ComputerActionResult> {
     const app = await validateComputerProviderActionParams(method, params)
+    if (method === 'click' && params.accessibilityOnly === true) {
+      throw new RuntimeClientError(
+        'unsupported_capability',
+        'This provider does not support accessibility-only clicks'
+      )
+    }
     const explicitWindowId = optionalNumberParam(params, 'windowId')
     const explicitWindowIndex = optionalNumberParam(params, 'windowIndex')
     const current = this.snapshotStore.current(app, explicitWindowId, params)
