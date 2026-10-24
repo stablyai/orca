@@ -17102,12 +17102,17 @@
                 "chatPaneRight": "chat pane right",
                 "splitChatDown": "split chat down",
                 "newChatBelow": "new chat below",
-                "chatPaneBelow": "chat pane below"
+                "chatPaneBelow": "chat pane below",
+                "togglePin": "toggle pin",
+                "pinWorkspace": "pin workspace",
+                "unpinWorkspace": "unpin workspace"
               },
               "splitChatRight": "Split Chat Right",
               "splitChatRightDescription": "Open a new chat in a split pane to the right.",
               "splitChatDown": "Split Chat Down",
-              "splitChatDownDescription": "Open a new chat in a split pane below."
+              "splitChatDownDescription": "Open a new chat in a split pane below.",
+              "togglePinWorkspace": "Toggle Pin for Current Workspace",
+              "togglePinWorkspaceDescription": "Pin or unpin the current workspace in the sidebar."
             }
           },
           "palette": {
