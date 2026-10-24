@@ -10,6 +10,10 @@ import type {
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
+// Why: a large write yields between its 16 KiB chunks, so without a tail a later frame lands inside
+// it (a paste's ESC[201~ ahead of its tail, which a shell runs as typed lines). The ledger orders sequenced input.
+const unsequencedInputTails = new WeakMap<TerminalMultiplexStream, Promise<unknown>>()
+
 export function handleMultiplexInputFrame(
   state: TerminalMultiplexConnection,
   inputSequenceLedger: TerminalInputSequenceLedger,
@@ -50,7 +54,10 @@ export function handleMultiplexInputFrame(
         : 'delivery-unknown'
   }
   if (inputSessionId === null) {
-    void deliver()
+    const tail = (unsequencedInputTails.get(stream) ?? Promise.resolve())
+      .then(deliver)
+      .catch(() => undefined)
+    unsequencedInputTails.set(stream, tail)
     return
   }
   // Why every frame is answered, duplicates too: the client resends until acked, and an earlier
