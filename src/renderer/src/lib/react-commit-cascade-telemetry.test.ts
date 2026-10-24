@@ -10,6 +10,7 @@ import {
   createReactCommitCascadeState,
   recordReactCommit,
   resetReactCommitCascadeTelemetryForTests,
+  settleReactCommitState,
   type ReactCommitCascadeState
 } from './react-commit-cascade-telemetry'
 import {
@@ -29,6 +30,8 @@ const OTHER_ROOT = { pendingLanes: 2 }
 const SYNC_LANE = 2
 /** Any lane outside React's nested-update mask ends the cascade. */
 const IDLE_LANE = 1_073_741_824
+
+const readNowMs = (): number => 1_000
 
 function cascadePayload(callIndex = 0): Record<string, unknown> {
   const call = recordBreadcrumb.mock.calls[callIndex]
@@ -112,6 +115,7 @@ describe('recordReactCommit', () => {
     driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT - 1 })
 
     driveCommits({ state, count: 1, lanes: 0 })
+    settleReactCommitState(state)
 
     expect(state.commits).toBe(0)
     expect(state.cascadeRoot).toBeNull()
@@ -119,9 +123,81 @@ describe('recordReactCommit', () => {
     expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 
+  // Why: react-dom flushes useEffect synchronously between onCommitFiberRoot
+  // and its counter, so a passive store write is only visible post-commit.
+  it('counts a quiet commit whose synchronous passive flush leaves cascading lanes', () => {
+    const state = createReactCommitCascadeState()
+    for (let index = 0; index < REACT_COMMIT_CASCADE_NOTICE_LIMIT; index += 1) {
+      driveCommits({ state, count: 1, lanes: 0 })
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: SYNC_LANE,
+        readNowMs,
+        passiveFlush: true
+      })
+    }
+
+    expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
+    expect(cascadePayload().commits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
+  })
+
+  it('does not count a passive flush on top of an already cascading commit', () => {
+    const state = createReactCommitCascadeState()
+    for (let index = 0; index < 10; index += 1) {
+      driveCommits({ state, count: 1 })
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: SYNC_LANE,
+        readNowMs,
+        passiveFlush: true
+      })
+    }
+
+    expect(state.commits).toBe(10)
+  })
+
+  // Why: a flush after the commit's stack returned ran after React reset its counter.
+  it('ignores a passive flush once the commit has settled', () => {
+    const state = createReactCommitCascadeState()
+    for (let index = 0; index < REACT_COMMIT_CASCADE_NOTICE_LIMIT; index += 1) {
+      driveCommits({ state, count: 1, lanes: 0 })
+      settleReactCommitState(state)
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: SYNC_LANE,
+        readNowMs,
+        passiveFlush: true
+      })
+    }
+
+    expect(state.commits).toBe(0)
+    expect(recordBreadcrumb).not.toHaveBeenCalled()
+  })
+
+  it('ignores a passive flush for a root other than the one that just committed', () => {
+    const state = createReactCommitCascadeState()
+    driveCommits({ state, count: 1, lanes: 0 })
+    recordReactCommit({
+      state,
+      root: OTHER_ROOT,
+      pendingLanes: SYNC_LANE,
+      readNowMs,
+      passiveFlush: true
+    })
+
+    expect(state.commits).toBe(0)
+  })
+
   it('ignores lanes outside React nested-update mask', () => {
     const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT * 2, lanes: IDLE_LANE })
+    driveCommits({
+      state,
+      count: REACT_COMMIT_CASCADE_NOTICE_LIMIT * 2,
+      lanes: IDLE_LANE
+    })
 
     expect(state.commits).toBe(0)
     expect(recordBreadcrumb).not.toHaveBeenCalled()
@@ -161,7 +237,12 @@ describe('recordReactCommit', () => {
     const state = createReactCommitCascadeState()
     const readNowMs = vi.fn(() => 1_000)
     for (let index = 0; index < REACT_COMMIT_CASCADE_NOTICE_LIMIT; index += 1) {
-      recordReactCommit({ state, root: ROOT, pendingLanes: SYNC_LANE, readNowMs })
+      recordReactCommit({
+        state,
+        root: ROOT,
+        pendingLanes: SYNC_LANE,
+        readNowMs
+      })
     }
 
     expect(readNowMs).toHaveBeenCalledTimes(2)
@@ -223,9 +304,10 @@ describe('driver attribution', () => {
       (key) => key !== 'driverFrame' && String(payload[key]).includes(String(payload.driverFrame))
     )
     expect(stackKey).toBeDefined()
+    const key = stackKey ?? ''
     const longFrames = 'a'.repeat(600)
-    const sanitized = sanitizeCrashReportDetails({ ...payload, [stackKey as string]: longFrames })
-    expect(String(sanitized[stackKey as string])).toHaveLength(longFrames.length)
+    const sanitized = sanitizeCrashReportDetails({ ...payload, [key]: longFrames })
+    expect(String(sanitized[key])).toHaveLength(longFrames.length)
   })
 
   it('clears samples when a cascade ends', () => {
@@ -305,6 +387,7 @@ describe('repeated arm and end cycles', () => {
       }
     })
     driveCommits({ state, count: 1, lanes: 0 })
+    settleReactCommitState(state)
   }
 
   it('leaves nothing behind across a thousand cascades', () => {
